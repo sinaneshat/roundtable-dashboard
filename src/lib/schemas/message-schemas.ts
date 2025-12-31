@@ -24,7 +24,7 @@ import { MESSAGE_STATUSES, MessagePartTypes, ReasoningPartTypeSchema } from '@/a
 
 /**
  * ✅ FILE PART: For multi-modal messages (images, PDFs, etc.)
- * AI SDK v5 format for file attachments in messages.
+ * AI SDK v6 format for file attachments in messages.
  *
  * SINGLE SOURCE OF TRUTH for file parts used by:
  * - MessagePartSchema (discriminated union member)
@@ -140,7 +140,7 @@ export function getFilenameFromPart(part: unknown): string | undefined {
 
 /**
  * Safely extract mimeType from a part object
- * ✅ TYPE-SAFE: Uses Zod validation, checks both mimeType and mediaType (AI SDK v5 uses mediaType)
+ * ✅ TYPE-SAFE: Uses Zod validation, checks both mimeType and mediaType (AI SDK v6 uses mediaType)
  *
  * @param part - Part object that may have a mimeType or mediaType property
  * @returns mimeType string or default
@@ -318,10 +318,10 @@ export const MessagePartSchema = z
         example: false,
       }),
     }),
-    // ✅ AI SDK v5 FILE PART: Reuse extracted FilePartSchema
+    // ✅ AI SDK v6 FILE PART: Reuse extracted FilePartSchema
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
     FilePartSchema,
-    // ✅ AI SDK v5 STEP-START PART: Marks beginning of a step in streaming
+    // ✅ AI SDK v6 STEP-START PART: Marks beginning of a step in streaming
     z.object({
       type: z.literal('step-start'),
     }),
@@ -597,7 +597,7 @@ export function hasText(parts: MessagePart[]): boolean {
 /**
  * ✅ UTILITY: Check if text content is renderable (not placeholder/encrypted)
  *
- * AI SDK v5 Pattern: Some reasoning models (GPT-5 Nano, o3-mini, etc.) output
+ * AI SDK v6 Pattern: Some reasoning models (GPT-5 Nano, o3-mini, etc.) output
  * encrypted reasoning as `[REDACTED]` which should not be considered renderable content.
  *
  * Use this utility to consistently filter out non-renderable text across:
@@ -625,7 +625,7 @@ export function isRenderableContent(text: string): boolean {
  * Combines hasText/hasReasoning with isRenderableContent check.
  * Returns true only if there's actual content to display (not just [REDACTED]).
  *
- * AI SDK v5 Pattern: Use this for determining if a response was successful
+ * AI SDK v6 Pattern: Use this for determining if a response was successful
  * and has content worth displaying to the user.
  *
  * @param parts - Array of message parts

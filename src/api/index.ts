@@ -305,7 +305,7 @@ app.use('*', timing());
 // Apply timeout to all routes except streaming endpoints
 app.use('*', async (c, next) => {
   // Skip timeout for streaming endpoints (chat streaming and round summary)
-  // AI SDK v5 PATTERN: Reasoning models (DeepSeek-R1, Claude 4, etc.) need 10+ minutes
+  // AI SDK v6 PATTERN: Reasoning models (DeepSeek-R1, Claude 4, etc.) need 10+ minutes
   // Reference: https://sdk.vercel.ai/docs/providers/community-providers/claude-code#extended-thinking
   if (c.req.path.includes('/stream') || c.req.path.includes('/moderator') || c.req.path.includes('/chat')) {
     return next();
@@ -437,7 +437,7 @@ app.use('/billing/subscriptions/:id/cancel', csrfProtection, requireSession);
 app.on('POST', '/chat/threads', csrfProtection, requireSession);
 app.on('GET', '/chat/threads', requireSession);
 
-// POST /chat - stream AI response (AI SDK v5 pattern - requires auth + CSRF)
+// POST /chat - stream AI response (AI SDK v6 pattern - requires auth + CSRF)
 // This is the OFFICIAL AI SDK endpoint for streaming chat responses
 app.on('POST', '/chat', csrfProtection, requireSession);
 

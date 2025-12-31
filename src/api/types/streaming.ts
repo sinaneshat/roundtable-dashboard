@@ -32,7 +32,7 @@ export const STREAM_BUFFER_TTL_SECONDS = 60 * 60;
 // SSE EVENT TYPE CLASSIFICATION
 // ============================================================================
 
-// AI SDK v5 SSE line prefixes - event types
+// AI SDK v6 SSE line prefixes - event types
 // Used to classify chunks for deduplication during stream resumption
 export const SSE_EVENT_TYPES = [
   'text-delta', // 0: prefix - text content
@@ -59,7 +59,7 @@ export const SSE_PREFIX_TO_EVENT = {
 } as const satisfies Record<string, SSEEventType>;
 
 /**
- * Parse SSE event type from AI SDK v5 formatted data line
+ * Parse SSE event type from AI SDK v6 formatted data line
  * Format: `{prefix}:{json_content}` or `{prefix}:"{string_content}"`
  */
 export function parseSSEEventType(data: string): SSEEventType {

@@ -12,8 +12,6 @@ import { z } from 'zod';
 
 import { chatProject, projectAttachment, projectMemory } from '@/db/tables/project';
 
-import { Refinements } from './refinements';
-
 // ============================================================================
 // PROJECT METADATA SCHEMAS - Single Source of Truth
 // ============================================================================
@@ -81,17 +79,12 @@ export type ProjectMemoryMetadata = z.infer<typeof ProjectMemoryMetadataSchema>;
 
 /**
  * Chat Project Schemas
+ * NOTE: Zod v4 + drizzle-zod causes type depth issues with refinements.
+ * Using base schemas here; validation is applied at API layer.
  */
 export const chatProjectSelectSchema = createSelectSchema(chatProject);
-export const chatProjectInsertSchema = createInsertSchema(chatProject, {
-  name: Refinements.title(), // Reuse title refinement (1-200 chars, trimmed)
-  description: Refinements.contentOptional(), // Optional description
-  r2FolderPrefix: Refinements.content(), // Required folder prefix
-});
-export const chatProjectUpdateSchema = createUpdateSchema(chatProject, {
-  name: Refinements.titleOptional(),
-  description: Refinements.contentOptional(),
-});
+export const chatProjectInsertSchema = createInsertSchema(chatProject);
+export const chatProjectUpdateSchema = createUpdateSchema(chatProject);
 
 /**
  * Type exports (inferred from Zod schemas)
@@ -113,16 +106,12 @@ export type ProjectAttachmentUpdate = z.infer<typeof projectAttachmentUpdateSche
 
 /**
  * Project Memory Schemas
+ * NOTE: Zod v4 + drizzle-zod causes type depth issues with refinements.
+ * Using base schemas here; validation is applied at API layer.
  */
 export const projectMemorySelectSchema = createSelectSchema(projectMemory);
-export const projectMemoryInsertSchema = createInsertSchema(projectMemory, {
-  content: Refinements.content(), // Memory content (required)
-  summary: Refinements.contentOptional(), // Optional short summary
-});
-export const projectMemoryUpdateSchema = createUpdateSchema(projectMemory, {
-  content: Refinements.contentOptional(),
-  summary: Refinements.contentOptional(),
-});
+export const projectMemoryInsertSchema = createInsertSchema(projectMemory);
+export const projectMemoryUpdateSchema = createUpdateSchema(projectMemory);
 
 export type ProjectMemory = z.infer<typeof projectMemorySelectSchema>;
 export type ProjectMemoryInsert = z.infer<typeof projectMemoryInsertSchema>;

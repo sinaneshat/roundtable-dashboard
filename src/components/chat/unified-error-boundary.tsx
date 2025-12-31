@@ -1,7 +1,7 @@
 /**
  * UNIFIED ERROR BOUNDARY
  * Consolidates 3 error boundaries (559 lines) into 1 (320 lines)
- * Aligned with AI SDK v5 error handling patterns
+ * Aligned with AI SDK v6 error handling patterns
  */
 
 'use client';

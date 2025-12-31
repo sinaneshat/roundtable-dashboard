@@ -1089,8 +1089,8 @@ async function generateImageDescriptions(
               };
             }
 
-            // ✅ FIX: Use AI SDK v5 multimodal pattern with actual vision API
-            // Reference: AI SDK v5 documentation - multimodal messages
+            // ✅ FIX: Use AI SDK v6 multimodal pattern with actual vision API
+            // Reference: AI SDK v6 documentation - multimodal messages
             // https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#multi-modal-messages
             // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
             const result = await generateText({
@@ -1111,7 +1111,7 @@ async function generateImageDescriptions(
                 },
               ],
               temperature: 0.3, // Low temperature for factual descriptions
-              // Note: maxTokens not supported in AI SDK v5 generateText with messages
+              // Note: maxTokens not supported in AI SDK v6 generateText with messages
             });
 
             // ✅ CACHE: Store generated description for future use

@@ -395,10 +395,10 @@ export const streamChatRoute = createRoute({
   method: 'post',
   path: '/chat',
   tags: ['chat'],
-  summary: 'Stream AI chat responses (AI SDK v5)',
+  summary: 'Stream AI chat responses (AI SDK v6)',
   description: `**Real-time AI streaming endpoint using Server-Sent Events (SSE)**
 ## Overview
-Official AI SDK v5 streaming endpoint with multi-participant orchestration support. Streams AI responses token-by-token using the \`toUIMessageStreamResponse()\` format from Vercel AI SDK.
+Official AI SDK v6 streaming endpoint with multi-participant orchestration support. Streams AI responses token-by-token using the \`toUIMessageStreamResponse()\` format from Vercel AI SDK.
 **Key Features:**
 - Real-time token streaming (characters appear as generated)
 - Multi-participant support (sequential model responses)
@@ -407,7 +407,7 @@ Official AI SDK v5 streaming endpoint with multi-participant orchestration suppo
 - Reasoning and text parts support
 - Error recovery with structured metadata
 ## Request Pattern
-**Send Only Last Message (Official AI SDK v5 Pattern):**
+**Send Only Last Message (Official AI SDK v6 Pattern):**
 \`\`\`typescript
 POST /chat {
   "message": { id: "msg_1", role: "user", parts: [...] },
@@ -486,7 +486,7 @@ Includes:
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: `**Server-Sent Events (SSE) stream with AI SDK v5 protocol**
+      description: `**Server-Sent Events (SSE) stream with AI SDK v6 protocol**
 Stream returns real-time tokens using AI SDK's custom protocol:
 **Event Types:**
 - \`data: 0:"text"\` - Text chunk (append to message)

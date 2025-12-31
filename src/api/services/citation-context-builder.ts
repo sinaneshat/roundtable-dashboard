@@ -15,7 +15,7 @@
  * 4. IF AI naturally includes [source_id] markers, parse and resolve them
  * 5. Store resolved citations in message metadata for UI display
  *
- * Note: Following AI SDK v5 patterns - we provide clean context but don't force
+ * Note: Following AI SDK v6 patterns - we provide clean context but don't force
  * citation markers. Models naturally reference information by describing it.
  *
  * @see /src/api/types/citations.ts for type definitions

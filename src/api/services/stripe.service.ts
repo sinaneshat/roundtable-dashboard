@@ -70,7 +70,7 @@ class StripeService {
     }
 
     this.stripe = new Stripe(config.secretKey, {
-      apiVersion: config.apiVersion || '2025-11-17.clover',
+      apiVersion: config.apiVersion || '2025-12-15.clover',
       typescript: true,
       httpClient: Stripe.createFetchHttpClient(), // Use fetch for Cloudflare Workers
     });

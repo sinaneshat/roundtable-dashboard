@@ -11,7 +11,7 @@
  * - Orchestrating participant streaming flow
  */
 
-import type { CoreMessage, UIMessage } from 'ai';
+import type { ModelMessage, UIMessage } from 'ai';
 import { convertToModelMessages, validateUIMessages } from 'ai';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { ulid } from 'ulid';
@@ -109,7 +109,7 @@ export type PrepareValidatedMessagesParams = {
 };
 
 export type PrepareValidatedMessagesResult = {
-  modelMessages: CoreMessage[];
+  modelMessages: ModelMessage[];
   attachmentErrors?: Array<{ uploadId: string; error: string }>;
 };
 
@@ -745,9 +745,9 @@ function collectFileDataFromMessages(
 }
 
 function injectFileDataIntoModelMessages(
-  modelMessages: CoreMessage[],
+  modelMessages: ModelMessage[],
   fileDataMap: Map<string, FileDataEntry>,
-): CoreMessage[] {
+): ModelMessage[] {
   if (fileDataMap.size === 0) {
     return modelMessages;
   }
@@ -1386,7 +1386,7 @@ export async function prepareValidatedMessages(
 
   let modelMessages;
   try {
-    modelMessages = convertToModelMessages(nonEmptyMessages);
+    modelMessages = await convertToModelMessages(nonEmptyMessages);
   } catch (error) {
     throw createError.badRequest(
       `Failed to convert messages for model: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -1396,7 +1396,7 @@ export async function prepareValidatedMessages(
 
   modelMessages = injectFileDataIntoModelMessages(modelMessages, fileDataMap);
 
-  // ✅ AI SDK v5 PATTERN: Filter out ALL messages with empty content arrays
+  // ✅ AI SDK v6 PATTERN: Filter out ALL messages with empty content arrays
   // convertToModelMessages() filters out reasoning/step-start parts from UIMessage
   // This can result in assistant messages with empty content (e.g., reasoning-only responses)
   // Reference: https://ai-sdk.dev/docs/reference/ai-sdk-ui/convert-to-model-messages
@@ -1445,7 +1445,7 @@ export async function prepareValidatedMessages(
       );
     }
 
-    modelMessages = convertToModelMessages([
+    modelMessages = await convertToModelMessages([
       ...nonEmptyMessages,
       {
         id: `user-continuation-${ulid()}`,

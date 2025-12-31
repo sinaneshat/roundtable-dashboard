@@ -1,10 +1,10 @@
 ---
-name: ai-sdk-v5
-description: Enforce Vercel AI SDK v5 patterns for building AI-powered applications. Use when implementing streamText, generateText, useChat, tools, streaming, multi-provider support, or any AI functionality.
+name: ai-sdk-v6
+description: Enforce Vercel AI SDK v6 patterns for building AI-powered applications. Use when implementing streamText, generateText, useChat, tools, streaming, multi-provider support, or any AI functionality.
 allowed-tools: Read, Grep, Glob, Edit, Write
 ---
 
-# Vercel AI SDK v5 Patterns
+# Vercel AI SDK v6 Patterns
 
 ## Documentation Links
 
@@ -26,7 +26,7 @@ allowed-tools: Read, Grep, Glob, Edit, Write
 ```
 
 **Project-Specific Reference:**
-- `.context/ai-sdk-v5-crash-course-full-digest.txt` - Comprehensive crash course with exercises
+- `.context/ai-sdk-v6-crash-course-full-digest.txt` - Comprehensive crash course with exercises
 
 **Fetch latest docs:** Use `mcp__context7__get-library-docs` with topics like "streamText", "useChat tools", "generateObject", "streaming"
 
@@ -513,7 +513,7 @@ return result.toUIMessageStreamResponse()
 
 ## Crash Course Exercises Reference
 
-The `.context/ai-sdk-v5-crash-course-full-digest.txt` contains comprehensive exercises:
+The `.context/ai-sdk-v6-crash-course-full-digest.txt` contains comprehensive exercises:
 
 ```
 01-ai-sdk-basics/     # Fundamentals: generateText, streamText, UI streams

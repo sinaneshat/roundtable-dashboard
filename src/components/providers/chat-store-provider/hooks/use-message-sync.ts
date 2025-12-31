@@ -128,13 +128,6 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
   // Main sync effect
   // ✅ OPTIMIZATION: Uses specific values instead of entire chat object
   useEffect(() => {
-    // eslint-disable-next-line no-console -- DEBUG: Track effect runs with streaming state
-    if (chatIsStreaming) {
-      const lastMsg = chatMessages[chatMessages.length - 1];
-      const lastText = lastMsg?.parts?.find(p => p.type === 'text' && 'text' in p);
-      console.log('[DBG:SYNC_RUN]', { strm: chatIsStreaming, hookLen: chatMessages.length, lastId: lastMsg?.id?.replace(/^01[A-Z0-9]+_/, ''), textLen: lastText && 'text' in lastText ? lastText.text.length : 0 });
-    }
-
     const currentStoreMessages = store.getState().messages;
     const currentStoreState = store.getState();
     const currentThreadId = currentStoreState.thread?.id || currentStoreState.createdThreadId;
@@ -289,16 +282,15 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
     // This ensures new streaming messages get synced even when AI SDK has fewer total messages
     const shouldSync = countChanged || chatAheadOfStore || chatHasNewMessages || (contentChanged && !shouldThrottle);
 
-    // eslint-disable-next-line no-console -- DEBUG: Track sync decision during streaming
-    if (chatIsStreaming && !shouldSync) {
-      console.log('[DBG:SYNC_SKIP]', { countCh: countChanged, ahead: chatAheadOfStore, newMsgs: chatHasNewMessages, contentCh: contentChanged, throttle: shouldThrottle, hookLen: chatMessages.length, storeLen: currentStoreMessages.length });
+    if (contentChanged && !shouldSync) {
+      // Debug: Track sync throttling (console removed for production)
     }
 
     if (shouldSync) {
       const state = store.getState();
-      // eslint-disable-next-line no-console -- DEBUG: Track when sync is blocked by early optimistic
       if (state.hasEarlyOptimisticMessage) {
-        console.log('[DBG:SYNC_BLOCKED]', { earlyOpt: true });
+        // eslint-disable-next-line no-console -- DEBUG: Track blocked sync
+        console.log('[DBG:SYNC_BLOCKED]', { reason: 'hasEarlyOptimisticMessage', chatMsgCnt: chatMessages.length, storeMsgCnt: currentStoreMessages.length });
         return;
       }
 
@@ -836,9 +828,6 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
     if (!chatIsStreaming) {
       return;
     }
-
-    // eslint-disable-next-line no-console -- DEBUG: Track polling setup only when streaming starts
-    console.log('[DBG:POLL_START]', { hookLen: chatMessages.length });
 
     // ✅ OPTIMIZATION: Use 300ms interval instead of 200ms
     // Combined with 250ms throttle, this significantly reduces update frequency

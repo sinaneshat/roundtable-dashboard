@@ -1,7 +1,7 @@
 /**
  * Cloudflare KV Pub/Sub Resumable Streams Tests
  *
- * Comprehensive tests for the AI SDK v5 resumable stream pattern adapted for Cloudflare KV.
+ * Comprehensive tests for the AI SDK v6 resumable stream pattern adapted for Cloudflare KV.
  * Based on AI SDK documentation: useChat with resume: true option.
  *
  * Key Features Tested:

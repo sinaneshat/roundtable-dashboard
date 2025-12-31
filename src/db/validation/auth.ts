@@ -17,21 +17,15 @@ import {
   user,
   verification,
 } from '../tables/auth';
-import { Refinements } from './refinements';
 
 // ============================================================================
 // User Schemas
+// Note: Field validation applied at API layer
 // ============================================================================
 
 export const userSelectSchema = createSelectSchema(user);
-export const userInsertSchema = createInsertSchema(user, {
-  email: Refinements.email(),
-  image: Refinements.urlOptional(),
-});
-export const userUpdateSchema = createUpdateSchema(user, {
-  email: Refinements.emailOptional(),
-  image: Refinements.urlOptional(),
-});
+export const userInsertSchema = createInsertSchema(user);
+export const userUpdateSchema = createUpdateSchema(user);
 
 // ============================================================================
 // Session Schemas

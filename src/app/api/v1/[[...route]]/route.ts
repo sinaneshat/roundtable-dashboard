@@ -118,7 +118,7 @@ function createApiHandler() {
     const response = await api.fetch(request, env, executionCtx);
 
     // For streaming responses, we need to ensure Next.js doesn't buffer the response
-    // AI SDK v5 streaming uses various content types depending on the protocol
+    // AI SDK v6 streaming uses various content types depending on the protocol
     const contentType = response.headers.get('content-type') || '';
     const transferEncoding = response.headers.get('transfer-encoding') || '';
 

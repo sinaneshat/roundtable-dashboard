@@ -1,7 +1,7 @@
 /**
  * AI SDK Related Enums
  *
- * Defines schemas based on Vercel AI SDK v5 conventions
+ * Defines schemas based on Vercel AI SDK v6 conventions
  * Reference: https://github.com/vercel/ai
  *
  * @see packages/ai/src/ui/chat.ts - ChatStatus
@@ -11,13 +11,13 @@
 import { z } from '@hono/zod-openapi';
 
 // ============================================================================
-// AI SDK STATUS (AI SDK v5 useChat hook status values)
+// AI SDK STATUS (AI SDK v6 useChat hook status values)
 // ============================================================================
 
 export const AI_SDK_STATUSES = ['ready', 'submitted', 'streaming', 'error'] as const;
 
 export const AiSdkStatusSchema = z.enum(AI_SDK_STATUSES).openapi({
-  description: 'AI SDK v5 ChatStatus values - matches AI SDK exactly',
+  description: 'AI SDK v6 ChatStatus values - matches AI SDK exactly',
   example: 'streaming',
 });
 
@@ -77,7 +77,7 @@ export function isCompletionFinishReason(
 }
 
 // ============================================================================
-// UI MESSAGE ROLE (AI SDK v5 - only 'user', 'assistant', 'system')
+// UI MESSAGE ROLE (AI SDK v6 - only 'user', 'assistant', 'system')
 // ============================================================================
 
 export const UI_MESSAGE_ROLES = ['user', 'assistant', 'system'] as const;
@@ -98,7 +98,7 @@ export const UIMessageRoles = {
 } as const;
 
 // ============================================================================
-// MESSAGE PART TYPE (AI SDK v5 message part types)
+// MESSAGE PART TYPE (AI SDK v6 message part types)
 // ============================================================================
 
 export const MESSAGE_PART_TYPES = ['text', 'reasoning', 'tool-call', 'tool-result', 'file', 'step-start'] as const;
@@ -144,13 +144,13 @@ export const ReasoningPartTypes = {
 } as const;
 
 // ============================================================================
-// TEXT PART STATE (AI SDK v5 streaming state for text/reasoning parts)
+// TEXT PART STATE (AI SDK v6 streaming state for text/reasoning parts)
 // ============================================================================
 
 export const TEXT_PART_STATES = ['streaming', 'done'] as const;
 
 export const TextPartStateSchema = z.enum(TEXT_PART_STATES).openapi({
-  description: 'AI SDK v5 streaming state for text and reasoning parts',
+  description: 'AI SDK v6 streaming state for text and reasoning parts',
   example: 'done',
 });
 

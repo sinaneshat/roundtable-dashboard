@@ -80,7 +80,7 @@ export const ModelFilePartSchema = z.object({
   data: z.custom<Uint8Array>(val => val instanceof Uint8Array, {
     message: 'data must be Uint8Array',
   }),
-  /** MIME type of the file (AI SDK v5 LanguageModelV2 format) */
+  /** MIME type of the file (AI SDK v6 LanguageModelV2 format) */
   mimeType: z.string(),
   /** Original filename for reference */
   filename: z.string().optional(),

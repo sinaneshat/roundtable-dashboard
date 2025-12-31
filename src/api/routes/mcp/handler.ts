@@ -827,7 +827,7 @@ async function toolGenerateResponses(
 
     const typedMessages = await validateUIMessages({ messages: allMessages });
     const nonEmptyMessages = filterNonEmptyMessages(typedMessages);
-    const modelMessages = convertToModelMessages(nonEmptyMessages);
+    const modelMessages = await convertToModelMessages(nonEmptyMessages);
 
     const modelInfo = getModelById(participant.modelId);
     const modelContextLength = modelInfo?.context_length || 16000;

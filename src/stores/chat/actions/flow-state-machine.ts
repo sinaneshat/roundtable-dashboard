@@ -333,7 +333,7 @@ export function useFlowStateMachine(
     // Don't count them as "responded" or moderator will trigger prematurely
     const completedMessagesInRound = participantMessagesInRound.filter((m) => {
       // ✅ STREAMING CHECK: Don't count messages that still have streaming parts
-      // AI SDK v5 marks parts with state: 'streaming' while content is being generated
+      // AI SDK v6 marks parts with state: 'streaming' while content is being generated
       // A message with content but streaming parts is still in-flight
       const hasStreamingParts = m.parts?.some(
         p => 'state' in p && p.state === 'streaming',

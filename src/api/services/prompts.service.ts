@@ -1,5 +1,5 @@
 /**
- * AI SDK v5 Prompt Utilities
+ * AI SDK v6 Prompt Utilities
  *
  * Helpers for building structured system prompts and prompt templates.
  * Reduces boilerplate and ensures consistent prompt formatting.
@@ -877,7 +877,7 @@ export function createRoleSystemPrompt(roleName: string, mode?: ChatMode | null)
 /**
  * Build formatted prompt for thread attachments
  *
- * Following AI SDK v5 patterns: Uses clean XML-style formatting with citation IDs.
+ * Following AI SDK v6 patterns: Uses clean XML-style formatting with citation IDs.
  * AI can reference files using [att_xxxxx] markers for inline citations.
  *
  * @param attachments - Attachment metadata with citation IDs

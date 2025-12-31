@@ -432,7 +432,7 @@ export function filterToPreSearchMessages(
 /**
  * Filter messages with no meaningful content
  *
- * AI SDK v5 Pattern: Pass messages through for conversion, filter AFTER convertToModelMessages.
+ * AI SDK v6 Pattern: Pass messages through for conversion, filter AFTER convertToModelMessages.
  * Reference: https://ai-sdk.dev/docs/reference/ai-sdk-ui/convert-to-model-messages
  *
  * This function:
@@ -667,7 +667,7 @@ export function mergeParticipantMetadata(
   const skipPartsCheck = options?.hasGeneratedText === true;
 
   // ✅ RACE CONDITION FIX: Check for REASONING parts (DeepSeek R1, Claude thinking, etc.)
-  // AI SDK v5 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
+  // AI SDK v6 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
   const textParts
     = message.parts?.filter(
       p =>

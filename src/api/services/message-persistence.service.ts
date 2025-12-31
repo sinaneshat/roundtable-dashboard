@@ -71,7 +71,7 @@ export type SaveMessageParams = {
  * Priority:
  * 1. Accumulated reasoning deltas from stream chunks (extractReasoningMiddleware output)
  * 2. finishResult.reasoning as string (some models)
- * 3. finishResult.reasoning as array (Claude extended thinking, AI SDK v5)
+ * 3. finishResult.reasoning as array (Claude extended thinking, AI SDK v6)
  * 4. finishResult.reasoningText (Claude 4 models)
  * 5. providerMetadata reasoning fields
  */

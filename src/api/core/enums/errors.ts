@@ -42,7 +42,7 @@ export const ErrorTypes = {
 } as const;
 
 // ============================================================================
-// STREAM ERROR TYPES (AI SDK v5 Error Handling)
+// STREAM ERROR TYPES (AI SDK v6 Error Handling)
 // ============================================================================
 
 export const STREAM_ERROR_TYPES = [

@@ -15,7 +15,6 @@ import {
   creditTransaction,
   userCreditBalance,
 } from '../tables/credits';
-import { Refinements } from './refinements';
 
 // ============================================================================
 // Credit Transaction Metadata Schema - Single Source of Truth
@@ -55,17 +54,10 @@ export type CreditTransactionMetadata = z.infer<typeof CreditTransactionMetadata
 // User Credit Balance Schemas
 // ============================================================================
 
+// Note: Field validation applied at API layer
 export const userCreditBalanceSelectSchema = createSelectSchema(userCreditBalance);
-export const userCreditBalanceInsertSchema = createInsertSchema(userCreditBalance, {
-  balance: Refinements.nonNegativeInt(),
-  reservedCredits: Refinements.nonNegativeInt(),
-  monthlyCredits: Refinements.nonNegativeInt(),
-});
-export const userCreditBalanceUpdateSchema = createUpdateSchema(userCreditBalance, {
-  balance: Refinements.nonNegativeIntOptional(),
-  reservedCredits: Refinements.nonNegativeIntOptional(),
-  monthlyCredits: Refinements.nonNegativeIntOptional(),
-});
+export const userCreditBalanceInsertSchema = createInsertSchema(userCreditBalance);
+export const userCreditBalanceUpdateSchema = createUpdateSchema(userCreditBalance);
 
 export type UserCreditBalance = z.infer<typeof userCreditBalanceSelectSchema>;
 export type UserCreditBalanceInsert = z.infer<typeof userCreditBalanceInsertSchema>;
@@ -75,13 +67,9 @@ export type UserCreditBalanceUpdate = z.infer<typeof userCreditBalanceUpdateSche
 // Credit Transaction Schemas
 // ============================================================================
 
+// Note: Field validation applied at API layer
 export const creditTransactionSelectSchema = createSelectSchema(creditTransaction);
-export const creditTransactionInsertSchema = createInsertSchema(creditTransaction, {
-  inputTokens: Refinements.nonNegativeIntOptional(),
-  outputTokens: Refinements.nonNegativeIntOptional(),
-  totalTokens: Refinements.nonNegativeIntOptional(),
-  creditsUsed: Refinements.nonNegativeIntOptional(),
-});
+export const creditTransactionInsertSchema = createInsertSchema(creditTransaction);
 
 export type CreditTransaction = z.infer<typeof creditTransactionSelectSchema>;
 export type CreditTransactionInsert = z.infer<typeof creditTransactionInsertSchema>;

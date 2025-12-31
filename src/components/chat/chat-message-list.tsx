@@ -416,7 +416,7 @@ function AssistantGroupCard({
 }
 
 /**
- * AI SDK v5 Pattern: Determine participant info from message metadata
+ * AI SDK v6 Pattern: Determine participant info from message metadata
  *
  * Messages flow through 3 states:
  * 1. Streaming (no metadata yet) - use current participant index
@@ -457,7 +457,7 @@ function getParticipantInfoForMessage({
   const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
 
   // ✅ SIMPLIFIED: Check for visible content to determine if message has received data
-  // AI SDK v5 Pattern: Reasoning parts count as visible for UI (model-message-card handles rendering)
+  // AI SDK v6 Pattern: Reasoning parts count as visible for UI (model-message-card handles rendering)
   const hasVisibleContent = message.parts?.some(
     p =>
       (p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0)
@@ -485,7 +485,7 @@ function getParticipantInfoForMessage({
     };
   }
 
-  // AI SDK v5 Pattern: Only messages WITHOUT visible content can be considered streaming
+  // AI SDK v6 Pattern: Only messages WITHOUT visible content can be considered streaming
   const isLastMessage = messageIndex === totalMessages - 1;
   const isThisMessageStreaming = !hasVisibleContent && isGlobalStreaming && isLastMessage && message.role === MessageRoles.ASSISTANT;
 

@@ -32,7 +32,7 @@ export type StreamChatResponse = InferResponseType<
  *
  * This endpoint returns a streaming response for real-time AI chat:
  * 1. Saves user message immediately
- * 2. Streams AI response token-by-token using AI SDK v5
+ * 2. Streams AI response token-by-token using AI SDK v6
  * 3. Saves assistant message on completion
  * 4. Returns SSE stream (compatible with useChat hook)
  *

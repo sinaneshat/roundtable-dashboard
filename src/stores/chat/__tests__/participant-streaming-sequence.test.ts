@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
  * - Sequential participant execution (P0 → P1 → P2 → ...)
  * - Context accumulation (later participants see earlier responses)
  * - Streaming state transitions per participant
- * - AI SDK v5 toUIMessageStreamResponse patterns
+ * - AI SDK v6 toUIMessageStreamResponse patterns
  * - Message metadata injection via messageMetadata callback
  */
 

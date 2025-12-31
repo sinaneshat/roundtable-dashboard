@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
  * - State consistency across multiple rounds
  * - Configuration changes between rounds
  *
- * Based on FLOW_DOCUMENTATION.md patterns and AI SDK v5 streaming behavior
+ * Based on FLOW_DOCUMENTATION.md patterns and AI SDK v6 streaming behavior
  */
 
 // Types matching the actual implementation

@@ -240,7 +240,7 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
  * Chat Messages
  * Individual messages in threads (user input + model responses)
  *
- * ✅ AI SDK v5 ALIGNMENT: Schema matches UIMessage format from @ai-sdk/react
+ * ✅ AI SDK v6 ALIGNMENT: Schema matches UIMessage format from @ai-sdk/react
  * - parts[] array stores message content (text, reasoning, tool-result, etc.)
  * - Direct mapping to/from UIMessage without transformation overhead
  * - Supports multi-part messages (text + reasoning in single message)
@@ -258,7 +258,7 @@ export const chatMessage = sqliteTable('chat_message', {
     .notNull()
     .default('assistant'),
 
-  // ✅ AI SDK v5 PATTERN: Store parts[] array matching UIMessage.parts structure
+  // ✅ AI SDK v6 PATTERN: Store parts[] array matching UIMessage.parts structure
   // Eliminates transformation overhead - direct pass-through to/from frontend
   // Supports: text parts, reasoning parts (Claude extended thinking), tool parts
   // Tool parts: tool-call (function invocation) and tool-result (execution result)
@@ -282,14 +282,14 @@ export const chatMessage = sqliteTable('chat_message', {
       isError?: boolean;
     }
     // ✅ MULTI-MODAL: File attachments (images, PDFs) for AI model consumption
-    // Reference: AI SDK v5 FilePart - https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
+    // Reference: AI SDK v6 FilePart - https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
     | {
       type: 'file';
       url: string;
       mediaType: string;
       filename?: string;
     }
-    // ✅ AI SDK v5 STREAMING: Step start marker for streaming lifecycle
+    // ✅ AI SDK v6 STREAMING: Step start marker for streaming lifecycle
     | { type: 'step-start' }
   >>(),
 

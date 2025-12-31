@@ -114,8 +114,13 @@ export function usePendingMessage({
       if (!preSearchForRound) {
         const currentState = store.getState();
         if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
+          // eslint-disable-next-line no-console -- DEBUG: Track pre-search wait
+          console.log('[DBG:PS_WAIT]', { rnd: newRoundNumber, reason: 'already_triggered' });
           return;
         }
+
+        // eslint-disable-next-line no-console -- DEBUG: Track pre-search creation
+        console.log('[DBG:PS_CREATE]', { rnd: newRoundNumber });
 
         // Add placeholder pre-search to store - PreSearchStream will execute
         // Execute endpoint auto-creates DB record, so no separate create call needed
@@ -137,15 +142,20 @@ export function usePendingMessage({
       // Pre-search exists but not complete - wait for PreSearchStream to finish
       if (preSearchForRound.status === MessageStatuses.STREAMING
         || preSearchForRound.status === MessageStatuses.PENDING) {
+        // eslint-disable-next-line no-console -- DEBUG: Track pre-search wait
+        console.log('[DBG:PS_WAIT]', { rnd: newRoundNumber, status: preSearchForRound.status });
         return;
       }
+
+      // eslint-disable-next-line no-console -- DEBUG: Pre-search complete, ready to stream
+      console.log('[DBG:PS_DONE]', { rnd: newRoundNumber, status: preSearchForRound.status });
     }
 
     // Send message
     const { setHasSentPendingMessage, setStreamingRoundNumber, setHasPendingConfigChanges } = store.getState();
 
-    // eslint-disable-next-line no-console -- DEBUG
-    console.log('[DBG:SEND]', { rnd: newRoundNumber, msg: pendingMessage?.slice(0, 30), webSearch: webSearchEnabled });
+    // eslint-disable-next-line no-console -- DEBUG: Track sendMessage trigger
+    console.log('[DBG:PM_SEND]', { rnd: newRoundNumber, pendingMsg: pendingMessage?.slice(0, 30) });
 
     setHasSentPendingMessage(true);
     setStreamingRoundNumber(newRoundNumber);

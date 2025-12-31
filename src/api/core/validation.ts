@@ -113,38 +113,34 @@ export function createPartialSchema<T extends z.ZodRawShape>(
 
 /**
  * Create an update schema that omits certain fields
+ * NOTE: Zod v4 has stricter pick/omit types, using type assertion for flexibility
  */
 export function createUpdateSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   omitFields: readonly K[],
 ) {
-  // Build the omit object with proper type safety
-  const omitObj = omitFields.reduce<Partial<Record<keyof T, true>>>(
-    (acc, key) => {
-      acc[key] = true;
-      return acc;
-    },
-    {} as Partial<Record<keyof T, true>>,
+  // Build the omit object - Zod v4 requires exact key matching
+  // Using unknown cast to bypass strict type checking
+  const omitObj = Object.fromEntries(
+    omitFields.map(key => [key, true]),
   );
-  return schema.omit(omitObj as Record<keyof T, true>);
+  return schema.omit(omitObj as unknown as Parameters<typeof schema.omit>[0]);
 }
 
 /**
  * Create a pick schema with only specific fields
+ * NOTE: Zod v4 has stricter pick/omit types, using type assertion for flexibility
  */
 export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   pickFields: readonly K[],
 ) {
-  // Build the pick object with proper type safety
-  const pickObj = pickFields.reduce<Partial<Record<keyof T, true>>>(
-    (acc, key) => {
-      acc[key] = true;
-      return acc;
-    },
-    {} as Partial<Record<keyof T, true>>,
+  // Build the pick object - Zod v4 requires exact key matching
+  // Using unknown cast to bypass strict type checking
+  const pickObj = Object.fromEntries(
+    pickFields.map(key => [key, true]),
   );
-  return schema.pick(pickObj as Record<keyof T, true>);
+  return schema.pick(pickObj as unknown as Parameters<typeof schema.pick>[0]);
 }
 
 /**

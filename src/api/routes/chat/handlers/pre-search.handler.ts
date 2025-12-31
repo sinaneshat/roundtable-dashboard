@@ -10,7 +10,7 @@
  * **REFACTOR NOTES**:
  * - Removed callback-based performPreSearches() function
  * - Direct integration with streamSearchQuery() and performWebSearch()
- * - Aligned with AI SDK v5 streamObject pattern
+ * - Aligned with AI SDK v6 streamObject pattern
  * - Maintained PreSearchDataPayloadSchema compatibility
  *
  * Architecture matches: src/api/routes/chat/handlers/moderator.handler.ts
@@ -338,7 +338,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     // ✅ REFACTORED: Direct streamObject integration (no callbacks)
     // ============================================================================
     // Pattern from moderator.handler.ts:91-120
-    // Uses AI SDK v5 streamObject with partialObjectStream iterator
+    // Uses AI SDK v6 streamObject with partialObjectStream iterator
     // ✅ STREAM BUFFER: Generate stream ID and initialize buffer for resumption
     const streamId = generatePreSearchStreamId(threadId, roundNum);
     await initializePreSearchStreamBuffer(streamId, threadId, roundNum, existingSearch.id, c.env);

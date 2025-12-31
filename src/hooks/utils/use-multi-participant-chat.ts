@@ -178,7 +178,7 @@ type UseMultiParticipantChatReturn = {
  * The hook maintains minimal client state and delegates complex logic to the backend,
  * following the FLOW_DOCUMENTATION.md principle of backend authority.
  *
- * AI SDK v5 Pattern: Message Metadata Flow
+ * AI SDK v6 Pattern: Message Metadata Flow
  * ========================================
  *
  * 1. STREAMING STATE (no metadata yet):
@@ -452,7 +452,7 @@ export function useMultiParticipantChat(
     // Without flushSync, React batches this state update and may re-render with the new index
     // before the first participant's message metadata is properly evaluated, causing both messages
     // to show the second participant's icon/name during the batched render.
-    // AI SDK v5 Pattern: Prevents UI from showing wrong participant info during sequential streaming
+    // AI SDK v6 Pattern: Prevents UI from showing wrong participant info during sequential streaming
     // eslint-disable-next-line react-dom/no-flush-sync -- Required for multi-participant chat synchronization
     flushSync(() => {
       setCurrentParticipantIndex(nextIndex);
@@ -544,7 +544,7 @@ export function useMultiParticipantChat(
   /**
    * Prepare request body for AI SDK chat transport
    *
-   * AI SDK v5 Pattern: Use callback to access refs safely
+   * AI SDK v6 Pattern: Use callback to access refs safely
    * Refs should only be accessed in callbacks/effects, not during render
    *
    * ✅ CRITICAL FIX: Uses FIFO queue with retry protection
@@ -628,10 +628,10 @@ export function useMultiParticipantChat(
     [],
   );
 
-  // AI SDK v5 Pattern: Create transport with callback that accesses refs safely
-  // Reference: https://github.com/vercel/ai/blob/ai_5_0_0/content/cookbook/01-next/80-send-custom-body-from-use-chat.mdx
+  // AI SDK v6 Pattern: Create transport with callback that accesses refs safely
+  // Reference: https://github.com/vercel/ai/blob/ai_6_0_0/content/cookbook/01-next/80-send-custom-body-from-use-chat.mdx
   // The prepareSendMessagesRequest callback is invoked by the transport at request time (not during render),
-  // so accessing refs inside the callback is safe and follows the recommended AI SDK v5 pattern.
+  // so accessing refs inside the callback is safe and follows the recommended AI SDK v6 pattern.
   // The callback is stable (only depends on 'mode') and refs are only accessed during callback invocation.
 
   const transport = useMemo(
@@ -647,7 +647,7 @@ export function useMultiParticipantChat(
         // Frontend doesn't need to construct stream ID - backend looks it up
         prepareReconnectToStreamRequest: ({ id }) => {
           // ✅ FIX: Only include 'api' field when we have a valid ID
-          // AI SDK v5 skips reconnection when 'api' field is omitted from returned object
+          // AI SDK v6 skips reconnection when 'api' field is omitted from returned object
           // This prevents constructing invalid endpoints like /api/v1/chat/threads//stream
           if (!id || id.trim() === '') {
             // Return object without 'api' field to signal SDK to skip reconnection
@@ -773,7 +773,10 @@ export function useMultiParticipantChat(
         ...(process.env.NODE_ENV === 'development' && { fullMetadata: errorMetadata }),
       });
 
-      // Create error message UI only if not already responded
+      // ✅ BUG FIX: Update EXISTING participant message with hasError: true
+      // Previously created a NEW error message with random ID, leaving the original
+      // message (deterministic ID: threadId_r{round}_p{index}) with hasError: false.
+      // This caused infinite retry loops because resumption checked the original message.
       if (participant) {
         const errorKey = `${participant.modelId}-${currentIndex}`;
 
@@ -785,16 +788,50 @@ export function useMultiParticipantChat(
             ? errorCategoryToUIType(errorMetadata.errorCategory)
             : UIMessageErrorTypeSchema.enum.failed;
 
-          const errorUIMessage = createErrorUIMessage(
-            participant,
-            currentIndex,
-            errorMessage,
-            errorType,
-            errorMetadata,
-            currentRoundRef.current,
-          );
+          // ✅ FIX: Update existing message instead of creating new one
+          // The deterministic message ID allows us to find and update the original
+          // ✅ CRITICAL: Use callbackRefs.threadId.current, not threadId prop (stale in closure)
+          const effectiveThreadId = callbackRefs.threadId.current;
+          const expectedMessageId = `${effectiveThreadId}_r${currentRoundRef.current}_p${currentIndex}`;
 
-          setMessages(prev => [...prev, errorUIMessage]);
+          // eslint-disable-next-line no-console -- DEBUG: Track error message update
+          console.log('[DBG:ERR_UPDATE]', { expectedId: expectedMessageId, round: currentRoundRef.current, pIdx: currentIndex });
+
+          setMessages((prev) => {
+            const existingIndex = prev.findIndex(m => m.id === expectedMessageId);
+            // eslint-disable-next-line no-console -- DEBUG: Track if message was found
+            console.log('[DBG:ERR_FIND]', { found: existingIndex >= 0, msgCount: prev.length, ids: prev.map(m => m.id.replace(/^01[A-Z0-9]+_/, '')) });
+            if (existingIndex >= 0) {
+              // Update existing message with error metadata
+              const updated = [...prev];
+              const existing = updated[existingIndex];
+              if (existing) {
+                updated[existingIndex] = {
+                  ...existing,
+                  parts: existing.parts?.length ? existing.parts : [{ type: 'text' as const, text: '' }],
+                  metadata: {
+                    ...(typeof existing.metadata === 'object' ? existing.metadata : {}),
+                    hasError: true,
+                    errorType,
+                    errorMessage,
+                    errorCategory: errorMetadata?.errorCategory || errorType,
+                    finishReason: FinishReasons.FAILED,
+                  },
+                };
+              }
+              return updated;
+            }
+            // Fallback: create new error message if original not found
+            const errorUIMessage = createErrorUIMessage(
+              participant,
+              currentIndex,
+              errorMessage,
+              errorType,
+              errorMetadata,
+              currentRoundRef.current,
+            );
+            return [...prev, errorUIMessage];
+          });
         }
       }
 
@@ -814,7 +851,7 @@ export function useMultiParticipantChat(
 
     /**
      * Handle successful participant response
-     * AI SDK v5 Pattern: Trust the SDK's built-in deduplication
+     * AI SDK v6 Pattern: Trust the SDK's built-in deduplication
      */
     onFinish: async (data) => {
       // ✅ Skip phantom resume completions (no active stream to resume)
@@ -950,7 +987,7 @@ export function useMultiParticipantChat(
         return;
       }
 
-      // AI SDK v5 Pattern: ALWAYS update message metadata on finish
+      // AI SDK v6 Pattern: ALWAYS update message metadata on finish
       // The AI SDK adds the message during streaming; we update it with proper metadata
 
       if (participant && data.message) {
@@ -984,7 +1021,7 @@ export function useMultiParticipantChat(
         // ✅ CRITICAL FIX: Check if message has generated text to avoid false empty_response errors
         // For some fast models (e.g., gemini-flash-lite), parts might not be populated yet when onFinish fires
         // ✅ REASONING MODELS: Include REASONING parts (DeepSeek R1, Claude thinking, etc.)
-        // AI SDK v5 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
+        // AI SDK v6 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
         // ✅ FIX: Filter out [REDACTED]-only reasoning (GPT-5 Nano, o3-mini encrypted reasoning)
         // Uses centralized isRenderableContent from message-schemas.ts for consistency
         const textParts = data.message.parts?.filter(
@@ -1022,7 +1059,7 @@ export function useMultiParticipantChat(
         const isExplicitErrorFinish = finishReason === FinishReasons.FAILED;
 
         // ✅ FIX: Signal 5 - Check if any parts are still streaming
-        // AI SDK v5 marks parts with state: 'streaming' while content is still being generated
+        // AI SDK v6 marks parts with state: 'streaming' while content is still being generated
         // If parts are still streaming, we should NOT set hasError=true yet
         // This prevents premature "No Response Generated" errors while stream is active
         const isStillStreaming = data.message.parts?.some(
@@ -1049,7 +1086,7 @@ export function useMultiParticipantChat(
         );
 
         // Use flushSync to force React to commit metadata update synchronously
-        // AI SDK v5 Pattern: Prevents race conditions between sequential participants
+        // AI SDK v6 Pattern: Prevents race conditions between sequential participants
         // eslint-disable-next-line react-dom/no-flush-sync -- Required for multi-participant chat synchronization
         flushSync(() => {
           setMessages((prev) => {
@@ -1062,24 +1099,54 @@ export function useMultiParticipantChat(
 
             if (needsIdCorrection) {
               // This is expected behavior in multi-round conversations
-              // AI SDK v5 caches messages by threadId and may reuse IDs from previous rounds
+              // AI SDK v6 caches messages by threadId and may reuse IDs from previous rounds
               // We correct this using the backend's deterministic ID format
             }
 
             // ✅ CRITICAL FIX: Ensure all parts have state='done' when onFinish is called
             // AI SDK may leave parts with state='streaming' even after stream completes
             // This causes the participant completion gate to fail, preventing moderator trigger
-            const completedParts = data.message.parts?.map((part) => {
+            const partsWithDone = data.message.parts?.map((part) => {
               if ('state' in part && part.state === 'streaming') {
                 return { ...part, state: 'done' as const };
               }
               return part;
             }) ?? [];
 
+            // ✅ DEDUPLICATION FIX: AI SDK can emit duplicate parts (with and without state)
+            // During streaming, parts may be added without state, then again with state
+            // Keep only the version with state='done', remove stateless duplicates
+            const seenParts = new Map<string, typeof partsWithDone[0]>();
+            for (const part of partsWithDone) {
+              let key: string;
+              if (part.type === 'text' && 'text' in part) {
+                key = `text:${part.text}`;
+              } else if (part.type === 'reasoning' && 'text' in part) {
+                key = `reasoning:${part.text}`;
+              } else if (part.type === 'step-start') {
+                key = 'step-start';
+              } else {
+                // For other part types, keep all of them
+                key = `other:${Math.random()}`;
+              }
+              const existing = seenParts.get(key);
+              if (!existing) {
+                seenParts.set(key, part);
+              } else {
+                // Keep the one with state='done', discard the one without state
+                const existingHasState = 'state' in existing && existing.state === 'done';
+                const currentHasState = 'state' in part && part.state === 'done';
+                if (currentHasState && !existingHasState) {
+                  seenParts.set(key, part);
+                }
+              }
+            }
+            const completedParts = Array.from(seenParts.values());
+
             const completeMessage: UIMessage = {
               ...data.message,
               id: correctId, // ✅ Use correct ID from backend metadata
-              parts: completedParts, // ✅ Ensure all parts have state='done'
+              parts: completedParts, // ✅ Ensure all parts have state='done' and deduplicated
               metadata: completeMetadata, // ✅ Now uses strictly typed metadata
             };
 
@@ -1347,7 +1414,7 @@ export function useMultiParticipantChat(
   /**
    * Start a new round with existing participants
    *
-   * AI SDK v5 Pattern: Used when initializing a thread with existing messages
+   * AI SDK v6 Pattern: Used when initializing a thread with existing messages
    * (e.g., from backend after thread creation) and need to trigger streaming
    * for the first participant. This is the pattern from Exercise 01.07, 04.02, 04.03.
    *
@@ -1770,7 +1837,7 @@ export function useMultiParticipantChat(
         return;
       }
 
-      // AI SDK v5 Pattern: Simple, straightforward participant filtering
+      // AI SDK v6 Pattern: Simple, straightforward participant filtering
       const uniqueParticipants = deduplicateParticipants(participants);
       const enabled = getEnabledParticipants(uniqueParticipants);
 
@@ -1832,7 +1899,7 @@ export function useMultiParticipantChat(
       // isExplicitlyStreaming is committed, so streaming content doesn't update gradually.
       // eslint-disable-next-line react-dom/no-flush-sync -- Required for proper streaming sync
       flushSync(() => {
-        // AI SDK v5 Pattern: Synchronization for proper message ordering
+        // AI SDK v6 Pattern: Synchronization for proper message ordering
         // Reset all state for new round - INSIDE flushSync so they commit immediately
         setIsExplicitlyStreaming(true);
         setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
@@ -1864,7 +1931,7 @@ export function useMultiParticipantChat(
           // Send message without custom ID - let backend generate unique IDs
           await aiSendMessage({
             text: trimmed,
-            // ✅ AI SDK v5: Include files so user message has file parts
+            // ✅ AI SDK v6: Include files so user message has file parts
             ...(fileParts.length > 0 && { files: fileParts }),
             metadata: {
               role: UIMessageRoles.USER,
@@ -1895,7 +1962,7 @@ export function useMultiParticipantChat(
 
   /**
    * Retry the last round (regenerate entire round from scratch)
-   * AI SDK v5 Pattern: Clean state management for round regeneration
+   * AI SDK v6 Pattern: Clean state management for round regeneration
    *
    * This completely removes ALL messages from the round (user + assistant)
    * and re-sends the user's prompt to regenerate the round from ground up.
@@ -2265,7 +2332,7 @@ export function useMultiParticipantChat(
   }, [status, isExplicitlyStreaming, setMessages]);
 
   // ✅ CRITICAL FIX: Derive isStreaming from manual flag as primary source of truth
-  // AI SDK v5 Pattern: status can be 'ready' | 'submitted' | 'streaming' | 'error'
+  // AI SDK v6 Pattern: status can be 'ready' | 'submitted' | 'streaming' | 'error'
   // - isExplicitlyStreaming: Our manual flag for participant orchestration
   // - We rely primarily on isExplicitlyStreaming which is set/cleared by our logic
   // - This prevents false positives on initial mount

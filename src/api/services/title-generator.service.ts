@@ -54,7 +54,7 @@ export async function generateTitleFromMessage(
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      // Using AI SDK v5 UIMessage format with consolidated config
+      // Using AI SDK v6 UIMessage format with consolidated config
       const result = await openRouterService.generateText({
         modelId: titleModel,
         messages: [

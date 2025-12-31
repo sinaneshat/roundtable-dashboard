@@ -912,7 +912,7 @@ export const TITLE_GENERATION_CONFIG = {
 /**
  * AI timeout configuration
  */
-// ✅ AI SDK v5 PATTERN: Reasoning models need extended timeouts
+// ✅ AI SDK v6 PATTERN: Reasoning models need extended timeouts
 // Reference: https://sdk.vercel.ai/docs/providers/community-providers/claude-code#extended-thinking
 // DeepSeek-R1, Claude 4, Gemini 2.0 reasoning models can take 5-10 minutes
 export const AI_TIMEOUT_CONFIG = {

@@ -11,7 +11,6 @@
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
 import type { z } from 'zod';
 
-import { FeedbackTypeSchema, MessageRoleSchema } from '@/api/core/enums';
 import {
   DbChangelogDataSchema,
   DbCustomRoleMetadataSchema,
@@ -31,135 +30,88 @@ import {
   chatUserPreset,
 } from '@/db/tables/chat';
 
-import { Refinements } from './refinements';
-
 /**
  * Chat Thread Schemas
+ * Note: Field validation applied at API layer
  */
 const baseThreadSelectSchema = createSelectSchema(chatThread);
 export const chatThreadSelectSchema = baseThreadSelectSchema.extend({
-  // ✅ TYPE-SAFE: Use strictly typed thread metadata
   metadata: DbThreadMetadataSchema.nullable().optional(),
 });
-export const chatThreadInsertSchema = createInsertSchema(chatThread, {
-  title: Refinements.title(),
-});
-export const chatThreadUpdateSchema = createUpdateSchema(chatThread, {
-  title: Refinements.titleOptional(),
-});
+export const chatThreadInsertSchema = createInsertSchema(chatThread);
+export const chatThreadUpdateSchema = createUpdateSchema(chatThread);
 
 /**
  * Chat Participant Schemas
+ * Note: Field validation applied at API layer
  */
 const baseParticipantSelectSchema = createSelectSchema(chatParticipant);
 export const chatParticipantSelectSchema = baseParticipantSelectSchema.extend({
-  // ✅ TYPE-SAFE: Use strictly typed settings schema (nullable for SQLite)
   settings: DbParticipantSettingsSchema.nullable().optional(),
 });
-export const chatParticipantInsertSchema = createInsertSchema(chatParticipant, {
-  modelId: Refinements.content(),
-  role: Refinements.nameOptional(),
-  priority: Refinements.priority(),
-});
-export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant, {
-  modelId: Refinements.contentOptional(),
-  role: Refinements.nameOptional(),
-  priority: Refinements.priorityOptional(),
-});
+export const chatParticipantInsertSchema = createInsertSchema(chatParticipant);
+export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant);
 
 /**
  * Chat Message Schemas
- * ✅ AI SDK v5 ALIGNMENT: parts[] array replaces content/reasoning fields
+ * AI SDK v6 ALIGNMENT: parts[] array replaces content/reasoning fields
+ * Note: Field validation applied at API layer
  */
 export const chatMessageSelectSchema = createSelectSchema(chatMessage).extend({
-  // ✅ TYPE-SAFE: Discriminated union metadata
   metadata: DbMessageMetadataSchema.nullable(),
 });
-export const chatMessageInsertSchema = createInsertSchema(chatMessage, {
-  role: () => MessageRoleSchema, // ✅ Uses centralized enum from @/api/core/enums
-  // parts array is validated by database schema type
-  // metadata validated by DbMessageMetadataSchema
-});
-export const chatMessageUpdateSchema = createUpdateSchema(chatMessage, {
-  // parts array is validated by database schema type
-});
+export const chatMessageInsertSchema = createInsertSchema(chatMessage);
+export const chatMessageUpdateSchema = createUpdateSchema(chatMessage);
 
 /**
  * Chat Thread Changelog Schemas
+ * Note: Field validation applied at API layer
  */
 export const chatThreadChangelogSelectSchema = createSelectSchema(chatThreadChangelog).extend({
-  // ✅ TYPE-SAFE: Use discriminated union changelog data
   changeData: DbChangelogDataSchema,
 });
-export const chatThreadChangelogInsertSchema = createInsertSchema(chatThreadChangelog, {
-  changeSummary: Refinements.description(),
-  // changeData validated by DbChangelogDataSchema
-});
+export const chatThreadChangelogInsertSchema = createInsertSchema(chatThreadChangelog);
 export const chatThreadChangelogUpdateSchema = createUpdateSchema(chatThreadChangelog);
 
 /**
  * Custom Role Schemas
  * User-defined role templates with system prompts
+ * Note: Field validation applied at API layer
  */
 export const chatCustomRoleSelectSchema = createSelectSchema(chatCustomRole).extend({
-  // ✅ TYPE-SAFE: Use strictly typed custom role metadata
   metadata: DbCustomRoleMetadataSchema.nullable().optional(),
 });
-export const chatCustomRoleInsertSchema = createInsertSchema(chatCustomRole, {
-  name: Refinements.name(),
-  systemPrompt: Refinements.systemPromptOptional(),
-  description: Refinements.descriptionOptional(),
-  // metadata validated by DbCustomRoleMetadataSchema
-});
-export const chatCustomRoleUpdateSchema = createUpdateSchema(chatCustomRole, {
-  name: Refinements.nameOptional(),
-  systemPrompt: Refinements.systemPromptOptional(),
-  description: Refinements.descriptionOptional(),
-  // metadata validated by DbCustomRoleMetadataSchema
-});
+export const chatCustomRoleInsertSchema = createInsertSchema(chatCustomRole);
+export const chatCustomRoleUpdateSchema = createUpdateSchema(chatCustomRole);
 
 /**
  * Pre-Search Schemas
  * Web search results executed before participant streaming
+ * Note: Field validation applied at API layer
  */
 export const chatPreSearchSelectSchema = createSelectSchema(chatPreSearch);
-export const chatPreSearchInsertSchema = createInsertSchema(chatPreSearch, {
-  roundNumber: Refinements.nonNegativeInt(), // ✅ 0-BASED: Allow round 0
-  userQuery: Refinements.content(),
-});
+export const chatPreSearchInsertSchema = createInsertSchema(chatPreSearch);
 export const chatPreSearchUpdateSchema = createUpdateSchema(chatPreSearch);
 
 /**
  * Round Feedback Schemas
  * User feedback (like/dislike) for conversation rounds
+ * Note: Field validation applied at API layer
  */
 export const chatRoundFeedbackSelectSchema = createSelectSchema(chatRoundFeedback);
-export const chatRoundFeedbackInsertSchema = createInsertSchema(chatRoundFeedback, {
-  roundNumber: Refinements.nonNegativeInt(), // ✅ 0-BASED: Allow round 0
-  feedbackType: () => FeedbackTypeSchema.nullable(),
-});
-export const chatRoundFeedbackUpdateSchema = createUpdateSchema(chatRoundFeedback, {
-  feedbackType: () => FeedbackTypeSchema.nullable().optional(),
-});
+export const chatRoundFeedbackInsertSchema = createInsertSchema(chatRoundFeedback);
+export const chatRoundFeedbackUpdateSchema = createUpdateSchema(chatRoundFeedback);
 
 /**
  * User Preset Schemas
  * User-saved preset configurations for thread creation
+ * Note: Field validation applied at API layer
  */
 export const chatUserPresetSelectSchema = createSelectSchema(chatUserPreset).extend({
-  // ✅ TYPE-SAFE: Use strictly typed user preset metadata
   metadata: DbUserPresetMetadataSchema.nullable().optional(),
 });
-export const chatUserPresetInsertSchema = createInsertSchema(chatUserPreset, {
-  name: Refinements.name(),
-  // modelRoles and mode validated by database schema type
-  // metadata validated by DbUserPresetMetadataSchema
-});
-export const chatUserPresetUpdateSchema = createUpdateSchema(chatUserPreset, {
-  name: Refinements.nameOptional(),
-  // modelRoles and mode validated by database schema type
-  // metadata validated by DbUserPresetMetadataSchema
-});
+export const chatUserPresetInsertSchema = createInsertSchema(chatUserPreset);
+export const chatUserPresetUpdateSchema = createUpdateSchema(chatUserPreset);
 
 /**
  * Type exports

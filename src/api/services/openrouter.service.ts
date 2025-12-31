@@ -7,7 +7,7 @@
  * - Multi-model orchestration
  * - Message formatting and conversation management
  *
- * Based on AI SDK v5 patterns from official documentation
+ * Based on AI SDK v6 patterns from official documentation
  */
 
 /**
@@ -149,7 +149,7 @@ class OpenRouterService {
 
   /**
    * Generate text completion from a single model (non-streaming)
-   * Following AI SDK v5 patterns - uses UIMessage format and convertToModelMessages()
+   * Following AI SDK v6 patterns - uses UIMessage format and convertToModelMessages()
    */
   async generateText(params: GenerateTextParams): Promise<{
     text: string;
@@ -173,7 +173,7 @@ class OpenRouterService {
     try {
       const result = await generateText({
         model: client.chat(params.modelId),
-        messages: convertToModelMessages(params.messages),
+        messages: await convertToModelMessages(params.messages),
         system: systemPrompt,
         // Use provided params or defaults from consolidated config
         temperature: params.temperature ?? DEFAULT_AI_PARAMS.temperature,

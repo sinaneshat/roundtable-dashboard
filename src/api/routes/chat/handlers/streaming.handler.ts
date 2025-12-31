@@ -661,7 +661,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       );
 
       // =========================================================================
-      // STEP 11: ✅ OFFICIAL AI SDK v5 STREAMING PATTERN
+      // STEP 11: ✅ OFFICIAL AI SDK v6 STREAMING PATTERN
       // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
       // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
       // =========================================================================
@@ -729,7 +729,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // - onFinish callback handles response-level errors (empty responses, content filters)
       // - No double API calls, no validation overhead, faster response times
       //
-      // ✅ AI SDK v5 REASONING: Model-specific reasoning handling
+      // ✅ AI SDK v6 REASONING: Model-specific reasoning handling
       // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/middleware#extract-reasoning-middleware
       // Reference: https://sdk.vercel.ai/providers/ai-sdk-providers/google-vertex (thinkingConfig)
       //
@@ -749,9 +749,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // ✅ REASONING MIDDLEWARE: Only apply to DeepSeek models that use XML tag-based reasoning
       // DeepSeek uses <think> tags that must be extracted via middleware
       // All other models (Google, OpenAI, xAI, Anthropic) have native reasoning support
+      // NOTE: Type assertion needed - OpenRouter provider uses v2 spec, AI SDK v6 expects v3
+      // TODO: Remove cast when @openrouter/ai-sdk-provider supports AI SDK v6
       const modelForStreaming = isDeepSeekModel
         ? wrapLanguageModel({
-            model: baseModel,
+            model: baseModel as unknown as Parameters<typeof wrapLanguageModel>[0]['model'],
             middleware: extractReasoningMiddleware({ tagName: 'think' }),
           })
         : baseModel;
@@ -784,7 +786,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // This allows AI generation to continue even if client disconnects
         // Chunks are buffered to KV via consumeSseStream for resumption
         abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
-        // ✅ AI SDK V5 TELEMETRY: Enable experimental telemetry for OpenTelemetry integration
+        // ✅ AI SDK V6 TELEMETRY: Enable experimental telemetry for OpenTelemetry integration
         // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/telemetry
         // This enables automatic trace generation that can be exported to any OpenTelemetry-compatible backend
         experimental_telemetry: {
@@ -988,14 +990,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       });
 
       // =========================================================================
-      // ✅ AI SDK V5 BUILT-IN RETRY LOGIC
+      // ✅ AI SDK V6 BUILT-IN RETRY LOGIC
       // =========================================================================
       // Use AI SDK's built-in retry mechanism instead of custom retry loop
       // Benefits:
       // 1. No duplicate messages on frontend (retries happen internally)
       // 2. Exponential backoff for transient errors
       // 3. Single stream to frontend (cleaner UX)
-      // 4. Follows official AI SDK v5 patterns
+      // 4. Follows official AI SDK v6 patterns
       //
       // The AI SDK automatically retries:
       // - Network errors
@@ -1054,13 +1056,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const finalResult = streamText({
         ...streamParams,
 
-        // ✅ AI SDK V5 BUILT-IN RETRY: Configure retry behavior
+        // ✅ AI SDK V6 BUILT-IN RETRY: Configure retry behavior
         // maxRetries: Maximum number of automatic retries for transient errors
         // Default is 2, which gives us 3 total attempts (1 initial + 2 retries)
         maxRetries: AI_RETRY_CONFIG.maxAttempts - 1, // -1 because maxRetries doesn't count initial attempt
 
         onChunk: async ({ chunk }) => {
-          // ✅ AI SDK v5: Capture reasoning deltas from extractReasoningMiddleware
+          // ✅ AI SDK v6: Capture reasoning deltas from extractReasoningMiddleware
           // For models with native reasoning (Claude, OpenAI o1/o3), reasoning is captured via
           // finishResult.reasoning in onFinish and handled by extractReasoning() in message-persistence
           if (chunk.type === 'reasoning-delta') {
@@ -1080,7 +1082,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
         // ✅ ERROR HANDLING: Catch and propagate streaming errors
         // This includes errors thrown from onFinish (like empty response errors)
-        // AI SDK v5 will automatically handle these errors and propagate them to the client
+        // AI SDK v6 will automatically handle these errors and propagate them to the client
         onError: async ({ error }) => {
           // ✅ CREDIT RELEASE: Release reserved credits on error
           // We don't know how many credits were reserved, so we pass estimatedCredits
@@ -1252,11 +1254,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                   typeof msg.content === 'string'
                     ? msg.content
                     : Array.isArray(msg.content)
-                      ? msg.content.map((part) => {
-                          if ('text' in part) {
+                      ? msg.content.map((part: { type: string; text?: string }) => {
+                          if ('text' in part && part.text) {
                             return { type: 'text', text: part.text };
                           }
-                          if ('image' in part) {
+                          if (part.type === 'image') {
                             return { type: 'image', text: '[image content]' };
                           }
                           return { type: 'unknown', text: '[content]' };
@@ -1265,9 +1267,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               };
             });
 
-            // ✅ AI SDK V5 TOKEN USAGE: Extract both usage (final step) and totalUsage (cumulative)
-            // Reference: https://sdk.vercel.ai/docs/migration-guides/migration-guide-5-0#distinguish-ai-sdk-usage-reporting-in-50
-            // In AI SDK 5.0:
+            // ✅ AI SDK V6 TOKEN USAGE: Extract both usage (final step) and totalUsage (cumulative)
+            // Reference: https://sdk.vercel.ai/docs/migration-guides/migration-guide-6-0#distinguish-ai-sdk-usage-reporting-in-60
+            // In AI SDK 6.0:
             // - usage: Contains token usage from the FINAL STEP only
             // - totalUsage: Contains CUMULATIVE token usage across ALL STEPS (multi-step reasoning)
             const usage = finishResult.usage
@@ -1278,11 +1280,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                     finishResult.usage.totalTokens
                     ?? (finishResult.usage.inputTokens ?? 0)
                     + (finishResult.usage.outputTokens ?? 0),
-                  cachedInputTokens: finishResult.usage.cachedInputTokens,
+                  cacheReadTokens: finishResult.usage.inputTokenDetails?.cacheReadTokens,
                 }
               : undefined;
 
-            // ✅ AI SDK V5 MULTI-STEP TRACKING: Use totalUsage for cumulative metrics (if available)
+            // ✅ AI SDK V6 MULTI-STEP TRACKING: Use totalUsage for cumulative metrics (if available)
             // For single-step generations, totalUsage === usage
             // For multi-step reasoning (e.g., o1, o3, DeepSeek R1), totalUsage includes ALL steps
             const totalUsage
@@ -1298,7 +1300,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 : usage; // Fallback to usage if totalUsage not available
 
             // ✅ REASONING TOKENS: Use AI SDK's reasoning token count if available
-            // AI SDK v5 tracks reasoning tokens for o1/o3/DeepSeek models
+            // AI SDK v6 tracks reasoning tokens for o1/o3/DeepSeek models
             // Fallback to manual calculation from reasoningDeltas if SDK doesn't provide it
             const reasoningText = reasoningDeltas.join('');
             const reasoningTokens
@@ -1319,10 +1321,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                   {
                     text: finishResult.text,
                     finishReason: finishResult.finishReason,
-                    // AI SDK V5: Use usage (final step only)
+                    // AI SDK V6: Use usage (final step only)
                     usage,
                     reasoning: finishResult.reasoning,
-                    // AI SDK v5: toolCalls and toolResults are already in correct format (ToolCallPart/ToolResultPart)
+                    // AI SDK v6: toolCalls and toolResults are already in correct format (ToolCallPart/ToolResultPart)
                     toolCalls: finishResult.toolCalls,
                     toolResults: finishResult.toolResults,
                     response: finishResult.response,
@@ -1349,7 +1351,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                       systemPromptTokens,
                     },
 
-                    // ✅ AI SDK V5: Pass totalUsage for cumulative metrics
+                    // ✅ AI SDK V6: Pass totalUsage for cumulative metrics
                     totalUsage,
 
                     // ✅ REASONING TOKENS: Pass calculated reasoning tokens
@@ -1371,7 +1373,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                         && finishResult.reasoning.length > 0
                       ),
                       rag_context_used: systemPrompt !== baseSystemPrompt,
-                      sdk_version: 'ai-sdk-v5',
+                      sdk_version: 'ai-sdk-v6',
                       is_first_participant: participantIndex === 0,
                       total_participants: participants.length,
                       message_persisted: true,
@@ -1417,7 +1419,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         },
       });
 
-      // ✅ AI SDK V5 OFFICIAL PATTERN: No need to manually consume stream
+      // ✅ AI SDK V6 OFFICIAL PATTERN: No need to manually consume stream
       // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
       // The toUIMessageStreamResponse() method handles stream consumption automatically.
       // The onFinish callback will run when the stream completes successfully or on error.
@@ -1464,7 +1466,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // No collision risk - each participant can only respond once per round
         generateMessageId: () => streamMessageId,
 
-        // ✅ AI SDK V5 OFFICIAL PATTERN: Inject participant metadata at stream lifecycle events
+        // ✅ AI SDK V6 OFFICIAL PATTERN: Inject participant metadata at stream lifecycle events
         // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/25-message-metadata
         // The callback receives { part } with type: 'start' | 'finish' | 'start-step' | 'finish-step'
         // Send metadata on 'start' to ensure frontend receives participant info immediately
@@ -1635,8 +1637,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             return '';
           }
 
-          // ✅ AI SDK V5 PATTERN: Detect RetryError for retry exhaustion
-          // Reference: ai-sdk-v5-crash-course exercise 07.04 - Error Handling in Streaming
+          // ✅ AI SDK V6 PATTERN: Detect RetryError for retry exhaustion
+          // Reference: ai-sdk-v6-crash-course exercise 07.04 - Error Handling in Streaming
           // When all retry attempts are exhausted, AI SDK throws RetryError
           if (RetryError.isInstance(error)) {
             return JSON.stringify({

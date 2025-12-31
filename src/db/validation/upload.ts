@@ -14,8 +14,6 @@ import {
   upload,
 } from '@/db/tables/upload';
 
-import { Refinements } from './refinements';
-
 // ============================================================================
 // UPLOAD METADATA SCHEMA - Single Source of Truth
 // ============================================================================
@@ -62,20 +60,15 @@ export const uploadSelectSchema = baseUploadSelectSchema.extend({
 
 /**
  * Upload insert schema
+ * Note: Field validation applied at API layer
  */
-export const uploadInsertSchema = createInsertSchema(upload, {
-  filename: Refinements.name(),
-  r2Key: Refinements.content(),
-  mimeType: Refinements.content(),
-  fileSize: Refinements.nonNegativeInt(),
-});
+export const uploadInsertSchema = createInsertSchema(upload);
 
 /**
  * Upload update schema
+ * Note: Field validation applied at API layer
  */
-export const uploadUpdateSchema = createUpdateSchema(upload, {
-  filename: Refinements.nameOptional(),
-});
+export const uploadUpdateSchema = createUpdateSchema(upload);
 
 // ============================================================================
 // THREAD UPLOAD SCHEMAS (Junction Table)
@@ -88,17 +81,15 @@ export const threadUploadSelectSchema = createSelectSchema(threadUpload);
 
 /**
  * Thread upload insert schema
+ * Note: Field validation applied at API layer
  */
-export const threadUploadInsertSchema = createInsertSchema(threadUpload, {
-  context: Refinements.descriptionOptional(),
-});
+export const threadUploadInsertSchema = createInsertSchema(threadUpload);
 
 /**
  * Thread upload update schema
+ * Note: Field validation applied at API layer
  */
-export const threadUploadUpdateSchema = createUpdateSchema(threadUpload, {
-  context: Refinements.descriptionOptional(),
-});
+export const threadUploadUpdateSchema = createUpdateSchema(threadUpload);
 
 // ============================================================================
 // MESSAGE UPLOAD SCHEMAS (Junction Table)
@@ -111,17 +102,15 @@ export const messageUploadSelectSchema = createSelectSchema(messageUpload);
 
 /**
  * Message upload insert schema
+ * Note: Field validation applied at API layer
  */
-export const messageUploadInsertSchema = createInsertSchema(messageUpload, {
-  displayOrder: Refinements.nonNegativeInt(),
-});
+export const messageUploadInsertSchema = createInsertSchema(messageUpload);
 
 /**
  * Message upload update schema
+ * Note: Field validation applied at API layer
  */
-export const messageUploadUpdateSchema = createUpdateSchema(messageUpload, {
-  displayOrder: Refinements.nonNegativeIntOptional(),
-});
+export const messageUploadUpdateSchema = createUpdateSchema(messageUpload);
 
 // ============================================================================
 // TYPE EXPORTS

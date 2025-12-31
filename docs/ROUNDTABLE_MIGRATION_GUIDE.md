@@ -33,7 +33,7 @@ Your current backend has **85% of the infrastructure** needed for the old Roundt
 - Cursor-based pagination for performance
 
 **Service Integration**
-- OpenRouter integration via AI SDK v5
+- OpenRouter integration via AI SDK v6
 - Streaming support (SSE) for real-time responses
 - Proper authentication and authorization
 - Rate limiting and CSRF protection

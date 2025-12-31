@@ -8,7 +8,7 @@
  * Key principle: All conversion happens on the backend.
  * The frontend only sends upload IDs, never base64 data.
  *
- * Reference: AI SDK v5 Multi-Modal Messages
+ * Reference: AI SDK v6 Multi-Modal Messages
  * https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
  *
  * @see /src/api/types/uploads.ts for type definitions

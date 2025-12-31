@@ -10,7 +10,7 @@
  * - Stream resumption after refresh
  * - Configuration changes between rounds
  *
- * Based on AI SDK v5 patterns:
+ * Based on AI SDK v6 patterns:
  * - onFinish callback guarantees stream completion
  * - UIMessage → ModelMessage conversion
  * - Stream consumption before persistence

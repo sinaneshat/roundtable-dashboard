@@ -8,7 +8,7 @@ import type { ChatMessage } from '@/db/validation';
 /**
  * Convert database chat messages to UI Message format
  *
- * ✅ AI SDK V5 OFFICIAL PATTERN - Database Message Validation
+ * ✅ AI SDK V6 OFFICIAL PATTERN - Database Message Validation
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#validating-messages-from-database
  *
  * Transforms messages from database format to the UIMessage format expected by the AI SDK.
@@ -43,7 +43,7 @@ export async function chatMessagesToUIMessages(
     // Ensure parts is an array and properly typed
     const parts = Array.isArray(msg.parts) ? msg.parts : [];
 
-    // ✅ AI SDK V5 PATTERN: metadata is optional (metadata?: METADATA)
+    // ✅ AI SDK V6 PATTERN: metadata is optional (metadata?: METADATA)
     // When null/undefined in database, we should omit it entirely
     // Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/ui-message
 
@@ -70,7 +70,7 @@ export async function chatMessagesToUIMessages(
     return result as UIMessage;
   });
 
-  // ✅ AI SDK V5 VALIDATION: Use official validateUIMessages() instead of custom Zod
+  // ✅ AI SDK V6 VALIDATION: Use official validateUIMessages() instead of custom Zod
   // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
   //
   // NOTE: We don't validate metadata here because:
@@ -85,7 +85,7 @@ export async function chatMessagesToUIMessages(
       // metadataSchema validation requires all messages to have metadata
     });
   } catch (error) {
-    // ✅ AI SDK V5 PATTERN: Handle TypeValidationError gracefully
+    // ✅ AI SDK V6 PATTERN: Handle TypeValidationError gracefully
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#validating-messages-from-database
     if (TypeValidationError.isInstance(error)) {
       // Re-throw with more context for debugging

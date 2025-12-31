@@ -230,7 +230,7 @@ export const ModelMessageCard = memo(({
                 Previous bug: shimmer hid when status=STREAMING before parts arrived
                 Now shimmer stays visible until renderableParts.length > 0 */}
             {/* ✅ SCROLL FIX: data-message-content enables CSS scroll anchoring */}
-            {/* ✅ AI SDK v5: Handle messages with only non-renderable parts (e.g., [REDACTED] reasoning) */}
+            {/* ✅ AI SDK v6: Handle messages with only non-renderable parts (e.g., [REDACTED] reasoning) */}
             <div className="grid" style={{ gridTemplateColumns: '1fr' }} data-message-content>
               {/* Shimmer - stays visible until content actually arrives */}
               <div

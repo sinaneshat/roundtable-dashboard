@@ -12,27 +12,15 @@ import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'driz
 import type { z } from 'zod';
 
 import { apiKey } from '../tables/auth';
-import { Refinements } from './refinements';
 
 // ============================================================================
 // Base Drizzle-Zod Schemas
+// Note: Field validation applied at API layer
 // ============================================================================
 
 export const apiKeySelectSchema = createSelectSchema(apiKey);
-
-export const apiKeyInsertSchema = createInsertSchema(apiKey, {
-  name: Refinements.shortName(),
-  remaining: Refinements.positiveIntNullable(),
-  refillAmount: Refinements.positiveIntNullable(),
-  refillInterval: Refinements.positiveIntNullable(),
-});
-
-export const apiKeyUpdateSchema = createUpdateSchema(apiKey, {
-  name: Refinements.shortNameOptional(),
-  remaining: Refinements.positiveIntNullableOptional(),
-  refillAmount: Refinements.positiveIntNullableOptional(),
-  refillInterval: Refinements.positiveIntNullableOptional(),
-});
+export const apiKeyInsertSchema = createInsertSchema(apiKey);
+export const apiKeyUpdateSchema = createUpdateSchema(apiKey);
 
 // ============================================================================
 // Type Exports

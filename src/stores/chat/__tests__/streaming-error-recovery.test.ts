@@ -9,7 +9,7 @@
  * - Error state cleanup
  * - Recovery and retry scenarios
  *
- * Based on AI SDK v5 patterns:
+ * Based on AI SDK v6 patterns:
  * - Error events in SSE streams
  * - finishReason handling (stop, error, length, etc.)
  * - onFinish callback guarantees

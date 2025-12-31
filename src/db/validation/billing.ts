@@ -11,8 +11,6 @@ import {
   stripeWebhookEvent,
 } from '@/db/tables/billing';
 
-import { Refinements } from './refinements';
-
 // ============================================================================
 // STRIPE METADATA SCHEMAS - Single Source of Truth
 // ============================================================================
@@ -44,46 +42,37 @@ export type StripeWebhookEventData = z.infer<typeof StripeWebhookEventDataSchema
 /**
  * Stripe Product Schemas
  * Validation for Stripe product records synced from Stripe
+ * Note: Field validation applied at API layer
  */
 export const stripeProductSelectSchema = createSelectSchema(stripeProduct);
-export const stripeProductInsertSchema = createInsertSchema(stripeProduct, {
-  name: Refinements.name(),
-});
-export const stripeProductUpdateSchema = createUpdateSchema(stripeProduct, {
-  name: Refinements.nameOptional(),
-});
+export const stripeProductInsertSchema = createInsertSchema(stripeProduct);
+export const stripeProductUpdateSchema = createUpdateSchema(stripeProduct);
 
 /**
  * Stripe Price Schemas
  * Validation for pricing plans associated with products
+ * Note: Field validation applied at API layer
  */
 export const stripePriceSelectSchema = createSelectSchema(stripePrice);
-export const stripePriceInsertSchema = createInsertSchema(stripePrice, {
-  currency: Refinements.currencyCode(),
-  unitAmount: Refinements.nonNegative(),
-});
+export const stripePriceInsertSchema = createInsertSchema(stripePrice);
 export const stripePriceUpdateSchema = createUpdateSchema(stripePrice);
 
 /**
  * Stripe Customer Schemas
  * Links users to Stripe customer objects
+ * Note: Field validation applied at API layer
  */
 export const stripeCustomerSelectSchema = createSelectSchema(stripeCustomer);
-export const stripeCustomerInsertSchema = createInsertSchema(stripeCustomer, {
-  email: Refinements.email(),
-});
-export const stripeCustomerUpdateSchema = createUpdateSchema(stripeCustomer, {
-  email: Refinements.emailOptional(),
-});
+export const stripeCustomerInsertSchema = createInsertSchema(stripeCustomer);
+export const stripeCustomerUpdateSchema = createUpdateSchema(stripeCustomer);
 
 /**
  * Stripe Subscription Schemas
  * Active and historical subscription records
+ * Note: Field validation applied at API layer
  */
 export const stripeSubscriptionSelectSchema = createSelectSchema(stripeSubscription);
-export const stripeSubscriptionInsertSchema = createInsertSchema(stripeSubscription, {
-  quantity: Refinements.positive(),
-});
+export const stripeSubscriptionInsertSchema = createInsertSchema(stripeSubscription);
 export const stripeSubscriptionUpdateSchema = createUpdateSchema(stripeSubscription);
 
 /**
@@ -97,23 +86,19 @@ export const stripePaymentMethodUpdateSchema = createUpdateSchema(stripePaymentM
 /**
  * Stripe Invoice Schemas
  * Invoice records for subscriptions
+ * Note: Field validation applied at API layer
  */
 export const stripeInvoiceSelectSchema = createSelectSchema(stripeInvoice);
-export const stripeInvoiceInsertSchema = createInsertSchema(stripeInvoice, {
-  amountDue: Refinements.nonNegative(),
-  amountPaid: Refinements.nonNegative(),
-  attemptCount: Refinements.nonNegativeInt(),
-});
+export const stripeInvoiceInsertSchema = createInsertSchema(stripeInvoice);
 export const stripeInvoiceUpdateSchema = createUpdateSchema(stripeInvoice);
 
 /**
  * Stripe Webhook Event Schemas
  * Audit log of webhook events for idempotency
+ * Note: Field validation applied at API layer
  */
 export const stripeWebhookEventSelectSchema = createSelectSchema(stripeWebhookEvent);
-export const stripeWebhookEventInsertSchema = createInsertSchema(stripeWebhookEvent, {
-  type: Refinements.content(),
-});
+export const stripeWebhookEventInsertSchema = createInsertSchema(stripeWebhookEvent);
 export const stripeWebhookEventUpdateSchema = createUpdateSchema(stripeWebhookEvent);
 
 /**

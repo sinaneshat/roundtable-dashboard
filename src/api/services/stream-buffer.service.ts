@@ -7,7 +7,7 @@
  * **PURPOSE**:
  * - Buffer SSE chunks from AI SDK streams into Cloudflare KV
  * - Enable resumption after page reload/connection loss
- * - Compatible with AI SDK v5 `consumeSseStream` callback
+ * - Compatible with AI SDK v6 `consumeSseStream` callback
  *
  * **ARCHITECTURE**:
  * - Stream ID matches message ID: `{threadId}_r{roundNumber}_p{participantIndex}`
@@ -317,7 +317,7 @@ export async function failStreamBuffer(
     };
 
     // ✅ FIX: Append error chunk so frontend receives error event on resume
-    // AI SDK v5 error format: 3:{"error":"..."}
+    // AI SDK v6 error format: 3:{"error":"..."}
     try {
       const chunksKey = getChunksKey(streamId);
       // ✅ TYPE-SAFE: Use safe parser instead of force casting
@@ -736,7 +736,7 @@ export function createLiveParticipantResumeStream(
           // Check if original stream appears to be dead (no new data for a while)
           const timeSinceLastNewData = Date.now() - lastNewDataTime;
           if (timeSinceLastNewData > noNewDataTimeoutMs) {
-            // ✅ AI SDK v5 FORMAT: Send synthetic finish event
+            // ✅ AI SDK v6 FORMAT: Send synthetic finish event
             // Format matches the SSE format used by other chunks (data: + JSON)
             // The 'unknown' finishReason signals the stream was interrupted
             // This allows AI SDK to call onFinish so frontend can handle recovery

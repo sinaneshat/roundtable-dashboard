@@ -109,19 +109,19 @@ export type ClearPreSearchActivity = (roundNumber: number) => void;
 
 /**
  * Send message to selected participants
- * Bound from AI SDK v5 chat hook - handles streaming and message generation
+ * Bound from AI SDK v6 chat hook - handles streaming and message generation
  */
 export type SendMessage = (message: string) => Promise<void>;
 
 /**
  * Start a new round with selected participants
- * Bound from AI SDK v5 chat hook - orchestrates multi-participant conversation
+ * Bound from AI SDK v6 chat hook - orchestrates multi-participant conversation
  */
 export type StartRound = () => Promise<void>;
 
 /**
  * Manually set messages (for syncing with AI SDK state)
- * Bound from AI SDK v5 setMessages function
+ * Bound from AI SDK v6 setMessages function
  */
 export type ChatSetMessages = (messages: UIMessage[]) => void;
 

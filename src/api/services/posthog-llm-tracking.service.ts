@@ -6,7 +6,7 @@
  * - Links to Session Replay via $session_id (Better Auth session ID)
  * - Supports prompt versioning for A/B testing
  * - Captures token usage, costs, and performance metrics
- * - AI SDK v5 compatible (usage + totalUsage distinction)
+ * - AI SDK v6 compatible (usage + totalUsage distinction)
  *
  * ✅ SINGLE SOURCE OF TRUTH for LLM tracking:
  * - All PostHog event tracking logic centralized here
@@ -16,10 +16,9 @@
  * - Follows established service architecture patterns
  *
  * Reference: https://posthog.com/docs/llm-analytics/generations
- * AI SDK v5: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
+ * AI SDK v6: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
  */
 
-import type { LanguageModelUsage } from 'ai';
 import { ulid } from 'ulid';
 
 import { MessageRoles } from '@/api/core/enums';
@@ -31,7 +30,7 @@ import { isObject, isToolCall } from '@/lib/utils';
 // ============================================================================
 
 /**
- * ✅ AI SDK V5 TYPE REUSE: Use LanguageModelUsage from AI SDK
+ * ✅ AI SDK V6 TYPE REUSE: Use LanguageModelUsage from AI SDK
  * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/language-model-usage
  *
  * Import LanguageModelUsage directly from 'ai' package for single source of truth
@@ -39,7 +38,7 @@ import { isObject, isToolCall } from '@/lib/utils';
  */
 
 /**
- * ✅ AI SDK V5 TOOL TYPES: Use official AI SDK tool types
+ * ✅ AI SDK V6 TOOL TYPES: Use official AI SDK tool types
  * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-call-part
  *
  * Import tool types directly from 'ai' package for single source of truth
@@ -76,14 +75,35 @@ export type LLMTrackingContext = {
 };
 
 /**
- * LLM generation result from AI SDK v5
+ * Simplified usage type for tracking purposes
+ * AI SDK v6 LanguageModelUsage requires inputTokenDetails/outputTokenDetails
+ * We use a subset for PostHog tracking which only needs token counts
+ */
+export type LLMTrackingUsage = {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  // AI SDK v6: use inputTokenDetails.cacheReadTokens instead of deprecated cachedInputTokens
+  inputTokenDetails?: {
+    noCacheTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  };
+  outputTokenDetails?: {
+    textTokens?: number;
+    reasoningTokens?: number;
+  };
+};
+
+/**
+ * LLM generation result from AI SDK v6
  *
  * ✅ AI SDK TYPE FLEXIBILITY: Uses flexible types to accommodate different AI SDK return types
  */
 export type LLMGenerationResult = {
   text: string;
   finishReason: string;
-  usage?: LanguageModelUsage;
+  usage?: LLMTrackingUsage;
   reasoning?: Array<{ type: 'reasoning'; text: string }>;
   toolCalls?: unknown; // Flexible type to accommodate different AI SDK versions
   toolResults?: unknown; // Flexible type to accommodate different AI SDK versions
@@ -147,8 +167,8 @@ export type LLMTrackingOptions = {
   // ✅ PostHog Official: Anthropic cache creation tokens (write to cache)
   cacheCreationInputTokens?: number;
 
-  // ✅ AI SDK v5: Total usage across all steps (uses LanguageModelUsage type)
-  totalUsage?: LanguageModelUsage;
+  // ✅ AI SDK v6: Total usage across all steps
+  totalUsage?: LLMTrackingUsage;
 
   // Reasoning tokens (from AI SDK or estimated)
   reasoningTokens?: number;
@@ -408,13 +428,13 @@ export function createTrackingContext(
  * - Captures cache tokens (Anthropic/OpenAI prompt caching)
  * - Tracks reasoning tokens (o1/o3/DeepSeek models)
  * - Supports dynamic pricing via OpenRouter API
- * - AI SDK v5 compatible (handles both usage and totalUsage)
+ * - AI SDK v6 compatible (handles both usage and totalUsage)
  *
  * Reference: https://posthog.com/docs/llm-analytics/generations
- * AI SDK v5: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
+ * AI SDK v6: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
  *
  * @param context - Tracking context (user, thread, participant, session)
- * @param finishResult - AI SDK v5 finish result from streamText/generateText
+ * @param finishResult - AI SDK v6 finish result from streamText/generateText
  * @param inputMessages - Input messages (PostHog best practice - always include)
  * @param traceId - Unique trace identifier
  * @param startTime - Timestamp when generation started (performance.now())
@@ -449,9 +469,9 @@ export async function trackLLMGeneration(
     const provider = context.modelId.split('/')[0] || 'unknown';
 
     // =========================================================================
-    // AI SDK V5 TOKEN USAGE (Final Step Only)
+    // AI SDK V6 TOKEN USAGE (Final Step Only)
     // =========================================================================
-    // In AI SDK v5:
+    // In AI SDK v6:
     // - usage: Contains token usage from the FINAL STEP only
     // - totalUsage: Contains CUMULATIVE token usage across ALL STEPS (multi-step reasoning)
     const inputTokens = finishResult.usage?.inputTokens || 0;
@@ -459,10 +479,11 @@ export async function trackLLMGeneration(
     const totalTokens = finishResult.usage?.totalTokens || (inputTokens + outputTokens);
 
     // Cache tokens (Anthropic/OpenAI prompt caching)
-    const cachedInputTokens = finishResult.usage?.cachedInputTokens;
+    // AI SDK v6: use inputTokenDetails.cacheReadTokens instead of deprecated cachedInputTokens
+    const cacheReadTokens = finishResult.usage?.inputTokenDetails?.cacheReadTokens;
 
     // =========================================================================
-    // AI SDK V5 MULTI-STEP TRACKING (Cumulative Usage)
+    // AI SDK V6 MULTI-STEP TRACKING (Cumulative Usage)
     // =========================================================================
     // Use totalUsage for cumulative metrics (if available)
     // For single-step generations, totalUsage === usage
@@ -495,7 +516,7 @@ export async function trackLLMGeneration(
     const hasReasoning = reasoningTokens > 0;
 
     // =========================================================================
-    // TOOL CALLS (AI SDK v5)
+    // TOOL CALLS (AI SDK v6)
     // =========================================================================
     // ✅ TYPE GUARD: Validate tool calls array with runtime check
     const rawToolCalls = Array.isArray(finishResult.toolCalls) ? finishResult.toolCalls : [];
@@ -534,8 +555,9 @@ export async function trackLLMGeneration(
       }),
 
       // Cache token tracking (Anthropic/OpenAI prompt caching)
-      ...(cachedInputTokens !== undefined && {
-        $ai_cache_read_input_tokens: cachedInputTokens,
+      // AI SDK v6: use cacheReadTokens from inputTokenDetails
+      ...(cacheReadTokens !== undefined && {
+        $ai_cache_read_input_tokens: cacheReadTokens,
       }),
 
       // REQUIRED: Performance metrics
@@ -566,7 +588,7 @@ export async function trackLLMGeneration(
         $ai_tool_calls_count: toolCalls.length,
         $ai_tool_calls: toolCalls.map(tc => ({
           name: tc.toolName,
-          arguments: JSON.stringify(tc.input), // AI SDK v5: uses 'input' not 'args'
+          arguments: JSON.stringify(tc.input), // AI SDK v6: uses 'input' not 'args'
         })),
       }),
 
@@ -639,7 +661,7 @@ export async function trackLLMGeneration(
       tokens_per_second: latencySeconds > 0 ? totalOutputTokens / latencySeconds : 0,
       total_tokens: totalTokens,
 
-      // ✅ AI SDK V5 MULTI-STEP TRACKING: Include totalUsage for cumulative metrics
+      // ✅ AI SDK V6 MULTI-STEP TRACKING: Include totalUsage for cumulative metrics
       // This is essential for cost tracking and analytics of multi-step reasoning models
       total_input_tokens: totalInputTokens,
       total_output_tokens: totalOutputTokens,
@@ -658,16 +680,17 @@ export async function trackLLMGeneration(
       cost_per_second: latencySeconds > 0 ? (inputCost + outputCost) / latencySeconds : 0,
 
       // ✅ CACHING METRICS: Track cache hit rate for cost optimization
-      cache_hit_tokens: cachedInputTokens || 0,
-      cache_hit_rate: cachedInputTokens && inputTokens
-        ? cachedInputTokens / inputTokens
+      // AI SDK v6: use cacheReadTokens from inputTokenDetails
+      cache_hit_tokens: cacheReadTokens || 0,
+      cache_hit_rate: cacheReadTokens && inputTokens
+        ? cacheReadTokens / inputTokens
         : 0,
-      has_cache_hit: !!(cachedInputTokens && cachedInputTokens > 0),
+      has_cache_hit: !!(cacheReadTokens && cacheReadTokens > 0),
 
       // Pricing source indicator
       uses_dynamic_pricing: !!options?.modelPricing,
 
-      // AI SDK v5 response metadata
+      // AI SDK v6 response metadata
       ...(finishResult.response?.id && {
         response_id: finishResult.response.id,
       }),
