@@ -30,13 +30,13 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
-import type { Session, User } from '@/lib/auth/types';
+import type { SessionData } from '@/lib/auth/types';
 import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   /** Server-side session for hydration - prevents mismatch */
-  initialSession?: { session: Session; user: User } | null;
+  initialSession?: SessionData | null;
 };
 
 function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {

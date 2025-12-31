@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 
+import { AiSdkStatuses } from '@/api/core/enums';
 import { CardConnectionAlert } from '@/components/chat/card-connection-alert';
 import {
   ChatInputAttachments,
@@ -104,7 +105,7 @@ export const ChatInput = memo(({
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const isStreaming = status !== 'ready';
+  const isStreaming = status !== AiSdkStatuses.READY;
 
   // Check if credits are exhausted or card connection needed
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();

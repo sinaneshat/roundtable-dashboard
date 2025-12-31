@@ -441,7 +441,7 @@ function generateModeratorSummary(
                 threadMode: mode,
               },
               finishData,
-              [{ role: 'user', content: 'Analyze this conversation and produce the summary in markdown format.' }],
+              [{ role: MessageRoles.USER, content: 'Analyze this conversation and produce the summary in markdown format.' }],
               llmTraceId,
               llmStartTime,
               {

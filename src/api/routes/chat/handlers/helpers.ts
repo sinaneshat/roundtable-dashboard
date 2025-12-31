@@ -2,6 +2,7 @@ import type { UIMessage } from 'ai';
 import { TypeValidationError, validateUIMessages } from 'ai';
 
 import { createError } from '@/api/common/error-handling';
+import { MessageRoles } from '@/api/core/enums';
 import type { ChatMessage } from '@/db/validation';
 
 /**
@@ -48,7 +49,7 @@ export async function chatMessagesToUIMessages(
 
     // ✅ TYPE-SAFE ROLE MAPPING: Convert 'tool' to 'assistant' for UI compatibility
     // UI SDK only accepts 'user' | 'assistant' | 'system', not 'tool'
-    const uiRole: UIMessage['role'] = msg.role === 'tool' ? 'assistant' : (msg.role as UIMessage['role']);
+    const uiRole: UIMessage['role'] = msg.role === MessageRoles.TOOL ? MessageRoles.ASSISTANT : (msg.role as UIMessage['role']);
 
     const result: UIMessage & { createdAt?: Date } = {
       id: msg.id,

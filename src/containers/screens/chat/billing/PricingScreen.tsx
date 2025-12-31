@@ -29,7 +29,7 @@ export default function PricingScreen() {
   const [isManagingBilling, setIsManagingBilling] = useState(false);
 
   const { data: productsData, isLoading: isLoadingProducts, error: productsError } = useProductsQuery();
-  const { data: subscriptionsData, isLoading: isLoadingSubscriptions } = useSubscriptionsQuery();
+  const { data: subscriptionsData } = useSubscriptionsQuery();
   const { data: usageStatsData } = useUsageStatsQuery();
 
   // Check if user has a card connected (has payment method or subscription)
@@ -132,7 +132,8 @@ export default function PricingScreen() {
     }
   };
 
-  const isLoading = isLoadingProducts || isLoadingSubscriptions;
+  // Only block on products loading (prefetched via SSG, should be instant)
+  // Subscriptions load client-side but shouldn't block product display
 
   return (
     <ChatPage>
@@ -144,7 +145,7 @@ export default function PricingScreen() {
       <PricingContent
         products={products}
         subscriptions={subscriptions}
-        isLoading={isLoading}
+        isLoading={isLoadingProducts}
         error={productsError}
         processingPriceId={processingPriceId}
         cancelingSubscriptionId={cancelingSubscriptionId}

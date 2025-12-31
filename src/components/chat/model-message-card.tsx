@@ -5,7 +5,7 @@ import { Streamdown } from 'streamdown';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { MessageStatus } from '@/api/core/enums';
-import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
+import { MessagePartTypes, MessageStatuses, TextPartStates } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
@@ -116,7 +116,7 @@ export const ModelMessageCard = memo(({
 
   // Check if parts have streaming state (only trust when PARTICIPANTS actively streaming)
   const hasActualStreamingParts = globalIsStreaming && parts.some(
-    p => 'state' in p && p.state === 'streaming',
+    p => 'state' in p && p.state === TextPartStates.STREAMING,
   );
 
   // ✅ MODEL NORMALIZATION: Filter non-renderable reasoning to prevent layout shifts
@@ -337,9 +337,9 @@ export const ModelMessageCard = memo(({
 
         // ✅ FIX: Use the reasoning part's own state, not the message's overall status
         // When text is still streaming but reasoning is done, reasoning animation should stop
-        // part.state can be 'streaming' | 'done' | undefined (undefined = historical/complete)
+        // part.state can be TextPartStates.STREAMING | TextPartStates.DONE | undefined (undefined = historical/complete)
         const reasoningPartState = 'state' in part ? part.state : undefined;
-        const isReasoningStreaming = reasoningPartState === 'streaming';
+        const isReasoningStreaming = reasoningPartState === TextPartStates.STREAMING;
 
         return (
           <Reasoning

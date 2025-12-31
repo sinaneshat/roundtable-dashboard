@@ -26,7 +26,7 @@ import {
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast, showApiWarningToast } from '@/lib/toast';
-import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, devLog, getParticipantModelIds, getRoundNumber, isVisionRequiredMimeType, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
+import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getParticipantModelIds, getRoundNumber, isVisionRequiredMimeType, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 
 import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';
@@ -423,8 +423,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // Use the already calculated and validated round number
       const nextRoundNumber = pendingRoundNumber;
 
-      // Debug: Track new round initiation (debounced)
-      devLog.d('NewRound', { rnd: nextRoundNumber, msgs: threadState.messages.length, parts: formState.selectedParticipants.length });
+      // eslint-disable-next-line no-console -- DEBUG
+      console.log('[DBG:ROUND]', { rnd: nextRoundNumber, msgCnt: threadState.messages.length, prompt: trimmed.slice(0, 30) });
 
       // Set streamingRoundNumber IMMEDIATELY for accordion collapse
       actions.setStreamingRoundNumber(nextRoundNumber);

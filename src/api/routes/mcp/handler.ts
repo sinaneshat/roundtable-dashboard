@@ -732,7 +732,7 @@ async function toolSendMessage(
   const userMessages = await db.query.chatMessage.findMany({
     where: and(
       eq(tables.chatMessage.threadId, input.threadId),
-      eq(tables.chatMessage.role, 'user'),
+      eq(tables.chatMessage.role, MessageRoles.USER),
     ),
     columns: { id: true },
   });
@@ -999,7 +999,7 @@ async function toolGetRoundSummary(
     where: and(
       eq(tables.chatMessage.threadId, input.threadId),
       eq(tables.chatMessage.roundNumber, input.roundNumber),
-      eq(tables.chatMessage.role, 'assistant'),
+      eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
     ),
     orderBy: [desc(tables.chatMessage.createdAt)],
   });

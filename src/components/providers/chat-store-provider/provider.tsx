@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
-import { MessageRoles } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses, TextPartStates } from '@/api/core/enums';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { showApiErrorToast } from '@/lib/toast';
 import { getCurrentRoundNumber, getMessageMetadata, getRoundNumber } from '@/lib/utils';
@@ -131,7 +131,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
       const allComplete = participantMessages.every((msg) => {
         const hasStreamingParts = msg.parts?.some(
-          p => 'state' in p && p.state === 'streaming',
+          p => 'state' in p && p.state === TextPartStates.STREAMING,
         );
         return !hasStreamingParts;
       });
@@ -189,7 +189,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             if (!meta || meta.role !== MessageRoles.ASSISTANT || 'isModerator' in meta) {
               return false;
             }
-            return m.parts?.some(p => 'state' in p && p.state === 'streaming') ?? false;
+            return m.parts?.some(p => 'state' in p && p.state === TextPartStates.STREAMING) ?? false;
           });
           if (hasAnyStreamingParts) {
             return;
@@ -198,7 +198,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           const webSearchEnabled = latestState.thread?.enableWebSearch || latestState.enableWebSearch;
           if (webSearchEnabled) {
             const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === roundNumber);
-            if (preSearchForRound && preSearchForRound.status !== 'complete') {
+            if (preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE) {
               return;
             }
           }

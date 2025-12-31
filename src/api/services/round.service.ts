@@ -13,6 +13,7 @@
 
 import { and, desc, eq } from 'drizzle-orm';
 
+import { MessageRoles } from '@/api/core/enums';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import {
@@ -125,7 +126,7 @@ export async function calculateRoundNumber(
     const existingUserMessages = await db.query.chatMessage.findMany({
       where: and(
         eq(tables.chatMessage.threadId, threadId),
-        eq(tables.chatMessage.role, 'user'),
+        eq(tables.chatMessage.role, MessageRoles.USER),
       ),
       columns: { roundNumber: true },
       orderBy: desc(tables.chatMessage.roundNumber),
@@ -169,7 +170,7 @@ export async function calculateRoundNumber(
   const lastUserMessage = await db.query.chatMessage.findFirst({
     where: and(
       eq(tables.chatMessage.threadId, threadId),
-      eq(tables.chatMessage.role, 'user'),
+      eq(tables.chatMessage.role, MessageRoles.USER),
     ),
     columns: { roundNumber: true, createdAt: true },
     orderBy: desc(tables.chatMessage.createdAt),
@@ -188,7 +189,7 @@ export async function calculateRoundNumber(
   const assistantInRound = await db.query.chatMessage.findFirst({
     where: and(
       eq(tables.chatMessage.threadId, threadId),
-      eq(tables.chatMessage.role, 'assistant'),
+      eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
       eq(tables.chatMessage.roundNumber, expectedRoundNumber),
     ),
     columns: { roundNumber: true, createdAt: true },

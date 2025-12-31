@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import type React from 'react';
 
-import ChatLayout from '@/components/layouts/chat-layout';
 import { BRAND } from '@/constants/brand';
 import { createMetadata } from '@/utils/metadata';
 
@@ -9,14 +8,20 @@ export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: `Chat - ${BRAND.fullName}`,
     description: 'Manage your conversations and chat history.',
-    robots: 'noindex, nofollow', // Chat is private, don't index
+    robots: 'noindex, nofollow',
   });
 }
 
-export default async function ChatLayoutPage({
+/**
+ * Root Chat Layout - Simple passthrough
+ * Auth and prefetching handled by route group layouts:
+ * - (authenticated) - For protected pages
+ * - (static) - For SSG pages like pricing
+ */
+export default function ChatRootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <ChatLayout>{children}</ChatLayout>;
+  return children;
 }

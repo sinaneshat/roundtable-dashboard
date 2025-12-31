@@ -7,7 +7,7 @@
 import type { UIMessage } from 'ai';
 import type { AbstractIntlMessages } from 'next-intl';
 
-import { MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 
 export type TestUserMessage = UIMessage & {
@@ -41,7 +41,7 @@ export function createAssistantMetadata(
     participantIndex,
     participantRole: null,
     model: 'gpt-4',
-    finishReason: 'stop',
+    finishReason: FinishReasons.STOP,
     usage: {
       promptTokens: 100,
       completionTokens: 50,
@@ -112,7 +112,7 @@ export function createTestAssistantMessage(data: {
       participantIndex: data.participantIndex,
       participantRole: null,
       model: data.model ?? 'gpt-4',
-      finishReason: data.finishReason ?? 'stop',
+      finishReason: data.finishReason ?? FinishReasons.STOP,
       usage: {
         promptTokens: 100,
         completionTokens: 50,
@@ -146,7 +146,7 @@ export function createTestModeratorMessage(data: {
       isModerator: true,
       roundNumber: data.roundNumber,
       model: data.model ?? 'gemini-2.0-flash-thinking-exp-1219',
-      finishReason: data.finishReason ?? 'stop',
+      finishReason: data.finishReason ?? FinishReasons.STOP,
       usage: {
         promptTokens: 100,
         completionTokens: 50,

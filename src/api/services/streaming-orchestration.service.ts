@@ -753,7 +753,7 @@ function injectFileDataIntoModelMessages(
   }
 
   return modelMessages.map((msg) => {
-    if (msg.role !== 'user' || !Array.isArray(msg.content)) {
+    if (msg.role !== MessageRoles.USER || !Array.isArray(msg.content)) {
       return msg;
     }
 

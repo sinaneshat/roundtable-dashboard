@@ -10,7 +10,8 @@
  * Location: /src/lib/utils/metadata-builder.ts
  */
 
-import type { CitationSourceType } from '@/api/core/enums';
+import type { CitationSourceType, ErrorType, FinishReason } from '@/api/core/enums';
+import { FinishReasons, MessageRoles } from '@/api/core/enums';
 import type {
   DbAssistantMessageMetadata,
   DbCitation,
@@ -38,15 +39,7 @@ export type ParticipantMetadataParams = {
   model: string;
 
   // AI SDK core fields (will have defaults if not provided)
-  finishReason?:
-    | 'stop'
-    | 'length'
-    | 'content-filter'
-    | 'tool-calls'
-    | 'error'
-    | 'failed'
-    | 'other'
-    | 'unknown';
+  finishReason?: FinishReason;
   usage?: {
     promptTokens: number;
     completionTokens: number;
@@ -55,15 +48,7 @@ export type ParticipantMetadataParams = {
 
   // Error state (defaults to false if not provided)
   hasError?: boolean;
-  errorType?:
-    | 'rate_limit'
-    | 'context_length'
-    | 'api_error'
-    | 'network'
-    | 'timeout'
-    | 'model_unavailable'
-    | 'empty_response'
-    | 'unknown';
+  errorType?: ErrorType;
   errorMessage?: string;
   errorCategory?: string;
 
@@ -126,7 +111,7 @@ export function createParticipantMetadata(
   // TypeScript ensures this object matches the Zod schema structure
   return {
     // ✅ DISCRIMINATOR: Required 'role' field for type-safe metadata
-    role: 'assistant' as const,
+    role: MessageRoles.ASSISTANT,
 
     // Required fields (no defaults)
     roundNumber: params.roundNumber,
@@ -136,7 +121,7 @@ export function createParticipantMetadata(
     model: params.model,
 
     // AI SDK fields with defaults
-    finishReason: params.finishReason ?? 'unknown',
+    finishReason: params.finishReason ?? FinishReasons.UNKNOWN,
     usage: params.usage ?? {
       promptTokens: 0,
       completionTokens: 0,
@@ -223,7 +208,7 @@ export function createStreamingMetadata(
 ): DbAssistantMessageMetadata {
   return createParticipantMetadata({
     ...params,
-    finishReason: 'unknown',
+    finishReason: FinishReasons.UNKNOWN,
     usage: {
       promptTokens: 0,
       completionTokens: 0,
@@ -239,14 +224,7 @@ export function createStreamingMetadata(
 export function completeStreamingMetadata(
   streamMetadata: DbAssistantMessageMetadata,
   finishResult: {
-    finishReason:
-      | 'stop'
-      | 'length'
-      | 'content-filter'
-      | 'tool-calls'
-      | 'error'
-      | 'other'
-      | 'unknown';
+    finishReason: FinishReason;
     usage?: {
       promptTokens?: number;
       completionTokens?: number;
@@ -263,14 +241,7 @@ export function completeStreamingMetadata(
   const usageData = finishResult.usage || finishResult.totalUsage;
 
   return updateParticipantMetadata(streamMetadata, {
-    finishReason: finishResult.finishReason as
-    | 'stop'
-    | 'length'
-    | 'content-filter'
-    | 'tool-calls'
-    | 'failed'
-    | 'other'
-    | 'unknown',
+    finishReason: finishResult.finishReason,
     usage: usageData
       ? {
           promptTokens: usageData.promptTokens ?? 0,
@@ -293,7 +264,7 @@ export function createStreamErrorMetadata(
   streamMetadata: DbAssistantMessageMetadata,
   error: {
     message: string;
-    errorType?: string;
+    errorType?: ErrorType;
     errorCategory?: string;
     isTransient?: boolean;
     statusCode?: number;
@@ -303,16 +274,7 @@ export function createStreamErrorMetadata(
   return updateParticipantMetadata(streamMetadata, {
     hasError: true,
     errorMessage: error.message,
-    errorType: error.errorType as
-    | 'rate_limit'
-    | 'context_length'
-    | 'api_error'
-    | 'network'
-    | 'timeout'
-    | 'model_unavailable'
-    | 'empty_response'
-    | 'unknown'
-    | undefined,
+    errorType: error.errorType,
     errorCategory: error.errorCategory,
     isTransient: error.isTransient ?? false,
     isPartialResponse: false,

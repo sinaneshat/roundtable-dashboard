@@ -6,6 +6,7 @@ import {
   CREDIT_TRANSACTION_TYPES,
   PLAN_TYPES,
 } from '@/api/core/enums';
+import type { CreditTransactionMetadata } from '@/db/validation/credits';
 
 import { user } from './auth';
 import { chatThread } from './chat';
@@ -149,7 +150,8 @@ export const creditTransaction = sqliteTable(
     // METADATA
     // ============================================================================
     description: text('description'),
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
+    // ✅ TYPE-SAFE: Strictly typed metadata using Zod schema
+    metadata: text('metadata', { mode: 'json' }).$type<CreditTransactionMetadata>(),
 
     // ============================================================================
     // TIMESTAMP

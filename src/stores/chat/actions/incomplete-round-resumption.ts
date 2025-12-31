@@ -40,7 +40,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { FinishReasons, MessageRoles, MessageStatuses, RoundPhases } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers';
-import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantIndex, getParticipantModelIds, getRoundNumber, rlog } from '@/lib/utils';
+import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantIndex, getParticipantModelIds, getRoundNumber, isObject, rlog } from '@/lib/utils';
 
 import {
   getMessageStreamingStatus,
@@ -388,6 +388,14 @@ export function useIncompleteRoundResumption(
         const modelId = assistantMetadata?.model;
 
         if (msgRound === currentRoundNumber && participantIndex !== null) {
+          // ✅ ERROR MESSAGE FIX: Check if this is an error message
+          // Error messages have hasError: true in metadata. These participants
+          // have already "responded" with an error and should NOT be re-triggered.
+          // Check both validated metadata AND raw metadata (for error messages that don't pass Zod)
+          const rawMeta = isObject(msg.metadata) ? msg.metadata as Record<string, unknown> : null;
+          const isErrorMessage = (assistantMetadata && 'hasError' in assistantMetadata && assistantMetadata.hasError === true)
+            || (rawMeta && rawMeta.hasError === true);
+
           // ✅ STRICT COMPLETION GATE: Use isMessageComplete() as the single source of truth
           // This function checks:
           // 1. No parts with `state: 'streaming'`
@@ -396,7 +404,7 @@ export function useIncompleteRoundResumption(
           // A message is ONLY counted as "responded" if it passes this strict check.
           // Messages with streaming parts are NEVER counted as "responded" regardless
           // of isStreaming flag - they are either "in progress" or not counted.
-          const messageComplete = isMessageComplete(msg);
+          const messageComplete = isMessageComplete(msg) || isErrorMessage;
 
           // Check for streaming parts (for in-progress detection)
           const hasStreamingParts = msg.parts?.some(
@@ -1358,7 +1366,8 @@ export function useIncompleteRoundResumption(
     actions.setStreamingRoundNumber(currentRoundNumber);
     actions.setIsCreatingModerator(true);
     // ✅ FIX: Also set the resumption phase so use-moderator-trigger's effect can run
-    actions.transitionToModeratorPhase();
+    // ✅ BUG FIX: Pass roundNumber to set resumptionRoundNumber, otherwise moderator trigger deadlocks
+    actions.transitionToModeratorPhase(currentRoundNumber);
   }, [
     isCreatingModerator,
     isStreaming,

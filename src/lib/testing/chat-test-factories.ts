@@ -5,7 +5,7 @@
  */
 
 import type { MessageStatus, StreamStatus } from '@/api/core/enums';
-import { ChatModes, MessageStatuses, StreamStatuses } from '@/api/core/enums';
+import { ChatModes, MessageStatuses, StreamStatuses, ThreadStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
@@ -21,7 +21,7 @@ export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
     userId: 'user-123',
     title: 'Test Thread',
     mode: ChatModes.DEBATING,
-    status: 'active',
+    status: ThreadStatuses.ACTIVE,
     enableWebSearch: false,
     ...overrides,
   });
@@ -186,7 +186,7 @@ export function createOptimisticTestMessage(content: string, tempId: string): Op
   return {
     id: tempId,
     tempId,
-    role: 'user',
+    role: UIMessageRoles.USER,
     content,
     createdAt: new Date(),
     isOptimistic: true,
@@ -203,7 +203,7 @@ export function createConfirmedTestMessage(
   return {
     id: serverId,
     serverId,
-    role: 'user',
+    role: UIMessageRoles.USER,
     content,
     createdAt: new Date(),
     isOptimistic: false,

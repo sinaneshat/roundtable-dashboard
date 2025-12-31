@@ -37,7 +37,6 @@ import { ChatModes, SUBSCRIPTION_TIERS, SubscriptionTiers } from '@/api/core/enu
 import { TITLE_GENERATION_PROMPT } from '@/api/services/prompts.service';
 import type { CreditPlanType } from '@/lib/config/credit-config';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
-import { isTransientErrorFromObject } from '@/lib/utils';
 
 // ============================================================================
 // MODEL TYPE FOR PRICING LOGIC
@@ -964,18 +963,4 @@ export function getExponentialBackoff(attempt: number): number {
   // Exponential backoff (attempts 1-10)
   const delay = INFINITE_RETRY_CONFIG.initialDelay * 2 ** (attempt - 1);
   return Math.min(delay, INFINITE_RETRY_CONFIG.maxDelay);
-}
-
-/**
- * Check if error is transient (should retry) or permanent (skip to next participant)
- *
- * Permanent errors require user action (e.g., fix OpenRouter settings, upgrade plan)
- * Transient errors can be resolved by retrying (e.g., network issues, rate limits)
- *
- * @param error Error to check
- * @returns True if error is transient and should be retried
- * @see isTransientErrorFromObject in error-metadata-builders (consolidated implementation)
- */
-export function isTransientError(error: unknown): boolean {
-  return isTransientErrorFromObject(error);
 }

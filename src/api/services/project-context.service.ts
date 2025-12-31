@@ -19,6 +19,7 @@
 
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 
+import { MessageRoles } from '@/api/core/enums';
 import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -318,11 +319,11 @@ export async function getProjectModeratorContext(
   const threadTitleMap = new Map(projectThreads.map(t => [t.id, t.title]));
 
   // ✅ TEXT STREAMING: Query chatMessage for moderator messages
-  // Moderator messages have role: 'assistant' and metadata.isModerator: true
+  // Moderator messages have role: MessageRoles.ASSISTANT and metadata.isModerator: true
   const allMessages = await db.query.chatMessage.findMany({
     where: and(
       inArray(tables.chatMessage.threadId, threadIds),
-      eq(tables.chatMessage.role, 'assistant'),
+      eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
     ),
     orderBy: [desc(tables.chatMessage.createdAt)],
     columns: {
@@ -343,7 +344,7 @@ export async function getProjectModeratorContext(
   const userMessages = await db.query.chatMessage.findMany({
     where: and(
       inArray(tables.chatMessage.threadId, threadIds),
-      eq(tables.chatMessage.role, 'user'),
+      eq(tables.chatMessage.role, MessageRoles.USER),
     ),
     columns: {
       threadId: true,

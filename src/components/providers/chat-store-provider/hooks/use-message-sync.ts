@@ -3,7 +3,7 @@
 import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 
-import { DevLogMsgEvents, MessageRoles } from '@/api/core/enums';
+import { DevLogMsgEvents, MessageRoles, TextPartStates } from '@/api/core/enums';
 import { devLog, getParticipantIndex, getRoundNumber, rlog } from '@/lib/utils';
 import { getMessageMetadata } from '@/lib/utils/metadata';
 import type { ChatStoreApi } from '@/stores/chat';
@@ -128,6 +128,13 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
   // Main sync effect
   // ✅ OPTIMIZATION: Uses specific values instead of entire chat object
   useEffect(() => {
+    // eslint-disable-next-line no-console -- DEBUG: Track effect runs with streaming state
+    if (chatIsStreaming) {
+      const lastMsg = chatMessages[chatMessages.length - 1];
+      const lastText = lastMsg?.parts?.find(p => p.type === 'text' && 'text' in p);
+      console.log('[DBG:SYNC_RUN]', { strm: chatIsStreaming, hookLen: chatMessages.length, lastId: lastMsg?.id?.replace(/^01[A-Z0-9]+_/, ''), textLen: lastText && 'text' in lastText ? lastText.text.length : 0 });
+    }
+
     const currentStoreMessages = store.getState().messages;
     const currentStoreState = store.getState();
     const currentThreadId = currentStoreState.thread?.id || currentStoreState.createdThreadId;
@@ -282,10 +289,18 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
     // This ensures new streaming messages get synced even when AI SDK has fewer total messages
     const shouldSync = countChanged || chatAheadOfStore || chatHasNewMessages || (contentChanged && !shouldThrottle);
 
+    // eslint-disable-next-line no-console -- DEBUG: Track sync decision during streaming
+    if (chatIsStreaming && !shouldSync) {
+      console.log('[DBG:SYNC_SKIP]', { countCh: countChanged, ahead: chatAheadOfStore, newMsgs: chatHasNewMessages, contentCh: contentChanged, throttle: shouldThrottle, hookLen: chatMessages.length, storeLen: currentStoreMessages.length });
+    }
+
     if (shouldSync) {
       const state = store.getState();
-      if (state.hasEarlyOptimisticMessage)
+      // eslint-disable-next-line no-console -- DEBUG: Track when sync is blocked by early optimistic
+      if (state.hasEarlyOptimisticMessage) {
+        console.log('[DBG:SYNC_BLOCKED]', { earlyOpt: true });
         return;
+      }
 
       const filteredMessages = chatMessages.filter((m) => {
         if (m.id?.startsWith('pre-search-'))
@@ -669,8 +684,8 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           if (!existing) {
             seenParts.set(key, part);
           } else {
-            const existingHasState = 'state' in existing && existing.state === 'done';
-            const currentHasState = 'state' in part && part.state === 'done';
+            const existingHasState = 'state' in existing && existing.state === TextPartStates.DONE;
+            const currentHasState = 'state' in part && part.state === TextPartStates.DONE;
             if (currentHasState && !existingHasState) {
               seenParts.set(key, part);
             }
@@ -821,6 +836,9 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
     if (!chatIsStreaming) {
       return;
     }
+
+    // eslint-disable-next-line no-console -- DEBUG: Track polling setup only when streaming starts
+    console.log('[DBG:POLL_START]', { hookLen: chatMessages.length });
 
     // ✅ OPTIMIZATION: Use 300ms interval instead of 200ms
     // Combined with 250ms throttle, this significantly reduces update frequency

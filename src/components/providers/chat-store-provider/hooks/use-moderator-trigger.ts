@@ -83,6 +83,8 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       return;
     }
 
+    // eslint-disable-next-line no-console -- DEBUG
+    console.log('[DBG:MOD_TRIG]', { rnd: roundNumber, pMsgCnt: participantMessageIds.length, modId: moderatorId });
     rlog.moderator('TRIGGER', `r${roundNumber} pMsgs=${participantMessageIds.length}`);
     state.markModeratorStreamTriggered(moderatorId, roundNumber);
     triggeringRoundRef.current = roundNumber;

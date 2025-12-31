@@ -25,6 +25,7 @@ import {
   FinishReasonSchema,
   MessagePartTypes,
   MessageRoles,
+  TextPartStates,
   UIMessageErrorTypeSchema,
   UIMessageRoles,
 } from '@/api/core/enums';
@@ -132,8 +133,8 @@ function normalizeMessagePartStates<T extends unknown[]>(parts: T): T {
 
   return parts.map((part) => {
     // If part has a 'state' property, normalize 'streaming' to 'done'
-    if (typeof part === 'object' && part !== null && 'state' in part && part.state === 'streaming') {
-      return { ...part, state: 'done' as const };
+    if (typeof part === 'object' && part !== null && 'state' in part && part.state === TextPartStates.STREAMING) {
+      return { ...part, state: TextPartStates.DONE };
     }
     return part;
   }) as T;

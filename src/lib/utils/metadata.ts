@@ -20,6 +20,7 @@ import type { UIMessage } from 'ai';
 import type { Metadata } from 'next';
 import { z } from 'zod';
 
+import { MessageRoles } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
 import type {
   DbAssistantMessageMetadata,
@@ -510,7 +511,7 @@ export function buildAssistantMetadata(
 ): DbAssistantMessageMetadata {
   // Build the metadata object with role as discriminator
   const metadata = {
-    role: 'assistant' as const,
+    role: MessageRoles.ASSISTANT,
     // Base metadata fields
     ...(baseMetadata.finishReason && { finishReason: baseMetadata.finishReason }),
     ...(baseMetadata.usage && { usage: baseMetadata.usage }),
@@ -623,7 +624,7 @@ export function enrichMessageWithParticipant(
     throw new Error(`Invalid participant data for enrichment: ${enrichmentResult.error.message}`);
   }
 
-  const base = baseMetadata || { role: 'assistant' as const };
+  const base = baseMetadata || { role: MessageRoles.ASSISTANT };
 
   // Build enriched metadata with validated participant data
   return {

@@ -1,5 +1,5 @@
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import {
   stripeCustomer,
@@ -12,6 +12,34 @@ import {
 } from '@/db/tables/billing';
 
 import { Refinements } from './refinements';
+
+// ============================================================================
+// STRIPE METADATA SCHEMAS - Single Source of Truth
+// ============================================================================
+
+/**
+ * Stripe Metadata Schema
+ *
+ * Stripe's metadata is always string-to-string (max 50 keys, 500 char values/40 char keys)
+ * This matches Stripe.Metadata type from stripe-js SDK
+ */
+export const StripeMetadataSchema = z.record(z.string(), z.string()).nullable();
+
+export type StripeMetadataType = z.infer<typeof StripeMetadataSchema>;
+
+/**
+ * Stripe Webhook Event Data Schema
+ *
+ * The full event data from Stripe webhooks.
+ * This represents the event.data.object which is the actual Stripe object
+ * that triggered the event (customer, subscription, invoice, etc.)
+ *
+ * Uses z.record for Stripe's dynamic object structure while maintaining type safety.
+ * The schema is permissive because different event types have different object shapes.
+ */
+export const StripeWebhookEventDataSchema = z.record(z.string(), z.unknown()).nullable();
+
+export type StripeWebhookEventData = z.infer<typeof StripeWebhookEventDataSchema>;
 
 /**
  * Stripe Product Schemas

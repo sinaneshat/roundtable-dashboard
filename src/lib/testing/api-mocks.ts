@@ -4,7 +4,7 @@
  * Type-safe mocks following Zod schema patterns from backend routes.
  */
 
-import { ChatModes, MessageRoles, PreSearchStatuses, ThreadStatuses } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageRoles, PreSearchStatuses, ThreadStatuses } from '@/api/core/enums';
 import type {
   MessagesListResponse,
   PreSearchListResponse,
@@ -100,7 +100,7 @@ export function createMockAssistantMessage(
       participantIndex,
       participantRole: null,
       model: 'gpt-4',
-      finishReason: 'stop',
+      finishReason: FinishReasons.STOP,
       usage: {
         promptTokens: 100,
         completionTokens: 50,

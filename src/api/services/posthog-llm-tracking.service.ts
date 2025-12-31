@@ -22,6 +22,7 @@
 import type { LanguageModelUsage } from 'ai';
 import { ulid } from 'ulid';
 
+import { MessageRoles } from '@/api/core/enums';
 import { getPostHogClient } from '@/lib/posthog-server';
 import { isObject, isToolCall } from '@/lib/utils';
 
@@ -518,7 +519,7 @@ export async function trackLLMGeneration(
       // POSTHOG BEST PRACTICE: Always include input/output for observability
       $ai_input: inputMessages,
       $ai_output_choices: [{
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         content: [{ type: 'text', text: finishResult.text }],
       }],
 

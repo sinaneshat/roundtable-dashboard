@@ -74,7 +74,7 @@ import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
-import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses } from '@/api/core/enums';
+import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses, UploadStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview, UploadItem } from '@/hooks/utils';
@@ -721,12 +721,15 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
   // ✅ PHASE TRANSITION FIX: Transition from participants to moderator phase
   // Called when all participants are complete but moderator hasn't started
   // This handles the case where server prefilled 'participants' phase but all are done
-  transitionToModeratorPhase: () =>
+  transitionToModeratorPhase: (roundNumber?: number) =>
     set({
       currentResumptionPhase: RoundPhases.MODERATOR,
       // ✅ FIX: Also set isModeratorStreaming to trigger the moderator trigger hook
       // The hook requires BOTH currentResumptionPhase='moderator' AND isModeratorStreaming=true
       isModeratorStreaming: true,
+      // ✅ BUG FIX: Must set resumptionRoundNumber or moderator trigger effect exits early
+      // Without this, isModeratorStreaming blocks normal flow but resumption can't run either
+      ...(roundNumber !== undefined && { resumptionRoundNumber: roundNumber }),
     }, false, 'streamResumption/transitionToModeratorPhase'),
 
   // ✅ RESUMABLE STREAMS: Pre-fill store with server-side KV state
@@ -885,7 +888,7 @@ const createAttachmentsSlice: SliceCreator<AttachmentsSlice> = (set, get) => ({
         draft.pendingAttachments.push({
           id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           file,
-          status: 'pending',
+          status: UploadStatuses.PENDING,
         });
       });
     }, false, 'attachments/addAttachments'),

@@ -9,13 +9,47 @@
  */
 
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import {
   creditTransaction,
   userCreditBalance,
 } from '../tables/credits';
 import { Refinements } from './refinements';
+
+// ============================================================================
+// Credit Transaction Metadata Schema - Single Source of Truth
+// ============================================================================
+
+/**
+ * Credit Transaction Metadata Zod schema
+ *
+ * SINGLE SOURCE OF TRUTH for credit transaction metadata type
+ * Replaces Record<string, unknown> with strictly typed fields
+ */
+export const CreditTransactionMetadataSchema = z.object({
+  // Error context (for failed transactions)
+  errorCode: z.string().optional(),
+  errorMessage: z.string().optional(),
+
+  // Reservation tracking
+  reservationId: z.string().optional(),
+  reservationExpiry: z.string().datetime().optional(),
+
+  // Stream context
+  streamStartedAt: z.string().datetime().optional(),
+  streamCompletedAt: z.string().datetime().optional(),
+
+  // Admin context (for adjustments)
+  adjustedBy: z.string().optional(),
+  adjustmentReason: z.string().optional(),
+
+  // Purchase context
+  stripePaymentIntentId: z.string().optional(),
+  stripePriceId: z.string().optional(),
+}).strict();
+
+export type CreditTransactionMetadata = z.infer<typeof CreditTransactionMetadataSchema>;
 
 // ============================================================================
 // User Credit Balance Schemas

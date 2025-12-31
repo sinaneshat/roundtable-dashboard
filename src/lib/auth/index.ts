@@ -12,5 +12,6 @@ export { auth } from './server';
 // Centralized types - single source of truth
 export type {
   Session,
+  SessionData,
   User,
 } from './types';

@@ -144,6 +144,9 @@ export function usePendingMessage({
     // Send message
     const { setHasSentPendingMessage, setStreamingRoundNumber, setHasPendingConfigChanges } = store.getState();
 
+    // eslint-disable-next-line no-console -- DEBUG
+    console.log('[DBG:SEND]', { rnd: newRoundNumber, msg: pendingMessage?.slice(0, 30), webSearch: webSearchEnabled });
+
     setHasSentPendingMessage(true);
     setStreamingRoundNumber(newRoundNumber);
     setHasPendingConfigChanges(false);

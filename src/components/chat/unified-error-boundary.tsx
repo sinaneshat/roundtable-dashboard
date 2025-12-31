@@ -7,8 +7,8 @@
 'use client';
 
 import { AlertCircle, RefreshCw } from 'lucide-react';
-import type { ErrorInfo, ReactNode } from 'react';
-import React, { Component } from 'react';
+import type { ComponentType, ErrorInfo, ReactNode } from 'react';
+import { Component } from 'react';
 
 import type { ErrorBoundaryContext } from '@/api/core/enums';
 import { ErrorBoundaryContexts } from '@/api/core/enums';
@@ -23,7 +23,7 @@ type UnifiedErrorBoundaryProps = {
   children: ReactNode;
   context?: ErrorBoundaryContext;
   onReset?: () => void;
-  fallbackComponent?: React.ComponentType<ErrorFallbackProps>;
+  fallbackComponent?: ComponentType<ErrorFallbackProps>;
 };
 
 type UnifiedErrorBoundaryState = {
@@ -60,12 +60,12 @@ function getContextMessage(context: ErrorBoundaryContext): string {
   }
 }
 
-const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
+function DefaultErrorFallback({
   error,
   errorInfo,
   context,
   onReset,
-}) => {
+}: ErrorFallbackProps) {
   const contextMessage = getContextMessage(context);
 
   return (
@@ -220,21 +220,25 @@ export class UnifiedErrorBoundary extends Component<
  * Inline error display for message-level errors
  * Aligns with FLOW_DOCUMENTATION Part 9
  */
-export const InlineErrorDisplay: React.FC<{
+type InlineErrorDisplayProps = {
   error: string;
   participantName?: string;
   onRetry?: () => void;
-}> = ({ error, participantName, onRetry }) => (
-  <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3">
-    <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
-    <div className="flex-1">
-      <span className="font-medium">{participantName || 'Participant'}</span>
-      <span className="text-sm text-muted-foreground ml-2">{error}</span>
+};
+
+export function InlineErrorDisplay({ error, participantName, onRetry }: InlineErrorDisplayProps) {
+  return (
+    <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3">
+      <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+      <div className="flex-1">
+        <span className="font-medium">{participantName || 'Participant'}</span>
+        <span className="text-sm text-muted-foreground ml-2">{error}</span>
+      </div>
+      {onRetry && (
+        <Button onClick={onRetry} size="sm" variant="ghost">
+          <RefreshCw className="h-3 w-3" />
+        </Button>
+      )}
     </div>
-    {onRetry && (
-      <Button onClick={onRetry} size="sm" variant="ghost">
-        <RefreshCw className="h-3 w-3" />
-      </Button>
-    )}
-  </div>
-);
+  );
+}

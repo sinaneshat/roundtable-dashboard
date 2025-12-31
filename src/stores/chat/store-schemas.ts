@@ -473,7 +473,7 @@ export const StreamResumptionActionsSchema = z.object({
   clearStreamResumption: z.custom<ClearStreamResumption>(),
   prefillStreamResumptionState: z.custom<PrefillStreamResumptionState>(),
   transitionToParticipantsPhase: z.custom<() => void>(),
-  transitionToModeratorPhase: z.custom<() => void>(),
+  transitionToModeratorPhase: z.custom<(roundNumber?: number) => void>(),
 });
 
 export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);

@@ -1321,7 +1321,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     const messages = await Promise.all(
       rawMessages.map(async (msg) => {
         const attachments = attachmentsByMessage.get(msg.id);
-        if (!attachments || attachments.length === 0 || msg.role !== 'user') {
+        if (!attachments || attachments.length === 0 || msg.role !== MessageRoles.USER) {
           return msg;
         }
 
