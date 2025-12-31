@@ -1,22 +1,11 @@
 {
   "accessibility": {
-    "accessibility": "Accessibility",
-    "disableHighContrast": "DisableHighContrast",
-    "disableMotion": "DisableMotion",
-    "enableHighContrast": "EnableHighContrast",
-    "enableMotion": "EnableMotion",
-    "highContrast": "HighContrast",
-    "largeText": "LargeText",
     "morePages": "More pages",
     "nextPage": "Go to next page",
-    "normalText": "NormalText",
-    "openToolbar": "OpenToolbar",
     "pagination": "pagination",
     "previousPage": "Go to previous page",
-    "reducedMotion": "ReducedMotion",
     "selectAll": "Select all",
     "selectRow": "Select row",
-    "settings": "Settings",
     "toggleSidebar": "Toggle Sidebar"
   },
   "actions": {
@@ -34,9 +23,9 @@
     "retry": "Retry",
     "scrollToBottom": "Scroll to bottom",
     "select": "Select",
+    "toggleSidebar": "Toggle Sidebar",
     "tryAgain": "Try Again",
-    "updating": "Updating",
-    "toggleSidebar": "Toggle Sidebar"
+    "updating": "Updating"
   },
   "apiKeys": {
     "modal": {
@@ -90,6 +79,7 @@
       "copied": "Copied!",
       "copyWarning": "This is your only chance to copy this key. Store it securely - we cannot recover it later.",
       "createButton": "Create API Key",
+      "createError": "Failed to create API key",
       "doneButton": "Done",
       "limitReached": {
         "title": "API Key Limit Reached",
@@ -1022,9 +1012,9 @@
   },
   "forms": {
     "loading": "Loading",
-    "noOptionsAvailable": "NoOptionsAvailable",
-    "noResultsFound": "NoResultsFound",
-    "pickDate": "PickDate",
+    "noOptionsAvailable": "No options available",
+    "noResultsFound": "No results found",
+    "pickDate": "Pick a date",
     "searchPlaceholder": "Search...",
     "selectOption": "Select an option",
     "hidePassword": "Hide password",
@@ -1062,7 +1052,6 @@
         "content": "We use cookies and similar tracking technologies to track activity on our service and hold certain information to improve and analyze our service.",
         "title": "5. Cookies and Tracking"
       },
-      "lastUpdated": "Last updated: {date}",
       "rights": {
         "content": "You have the right to access, update, or delete your personal information. You may also opt-out of certain communications from us.",
         "title": "6. Your Rights"
@@ -1100,7 +1089,6 @@
         "content": "These Terms shall be governed and construed in accordance with the laws of the jurisdiction in which the company is established, without regard to its conflict of law provisions.",
         "title": "7. Governing Law"
       },
-      "lastUpdated": "Last updated: {date}",
       "liability": {
         "content": "In no event shall Roundtable, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential, or punitive damages.",
         "title": "6. Limitation of Liability"
@@ -1267,10 +1255,6 @@
     "updateDescription": "A new version is ready. Update now for the latest features and improvements.",
     "updateNow": "Update"
   },
-  "privacy": {
-    "description": "Description",
-    "title": "Title"
-  },
   "processing": "Processing",
   "seo": {
     "keywords": {
@@ -1368,10 +1352,6 @@
     "searchPlaceholder": "Search {field}...",
     "selectAllRows": "Select all rows",
     "selectRow": "Select row {id}"
-  },
-  "terms": {
-    "description": "Description",
-    "title": "Title"
   },
   "time": {
     "today": "Today",

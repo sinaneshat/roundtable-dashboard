@@ -1,7 +1,5 @@
-// components/RHFSelect.tsx
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
-
-import type { FormOptions, GeneralFormProps } from '@/types/general';
 
 import {
   FormControl,
@@ -10,31 +8,36 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '../ui/form';
+} from '@/components/ui/form';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../ui/select';
+} from '@/components/ui/select';
+import type { FormOptions } from '@/lib/schemas';
 
-type Props = {
+type RHFSelectProps<TFieldValues extends FieldValues = FieldValues> = {
+  name: FieldPath<TFieldValues>;
+  title: string;
   options: FormOptions;
-} & GeneralFormProps;
+  placeholder?: string;
+  description?: string;
+  required?: boolean;
+  disabled?: boolean;
+};
 
-function RHFSelect({
+export function RHFSelect<TFieldValues extends FieldValues = FieldValues>({
   name,
   options,
   placeholder,
   title,
   description,
-  value: externalValue,
-  onChange: externalOnChange,
   required,
   disabled,
-}: Props) {
-  const { control } = useFormContext();
+}: RHFSelectProps<TFieldValues>) {
+  const { control } = useFormContext<TFieldValues>();
 
   return (
     <FormField
@@ -47,13 +50,8 @@ function RHFSelect({
             disabled={disabled}
             required={required}
             data-testid={field.name}
-            onValueChange={(e) => {
-              if (externalOnChange) {
-                return externalOnChange?.({ target: { value: e } });
-              }
-              return field.onChange(e);
-            }}
-            value={field.value || externalValue || undefined}
+            onValueChange={field.onChange}
+            value={field.value}
           >
             <FormControl>
               <SelectTrigger>
@@ -67,23 +65,15 @@ function RHFSelect({
                   value={item.value}
                   disabled={item.value === ''}
                 >
-                  <p>{item.label}</p>
+                  {item.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {description && (
-            <FormDescription>
-              {description}
-              {' '}
-            </FormDescription>
-          )}
-          {' '}
+          {description && <FormDescription>{description}</FormDescription>}
           <FormMessage />
         </FormItem>
       )}
     />
   );
 }
-
-export default RHFSelect;

@@ -1,12 +1,9 @@
-// components/TextInput.tsx
 import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
 
-import { cn } from '@/lib/ui/cn';
-import type { FormOptions, GeneralFormProps } from '@/types/general';
-
-import { Button } from '../ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Command,
   CommandEmpty,
@@ -14,7 +11,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '../ui/command';
+} from '@/components/ui/command';
 import {
   FormControl,
   FormDescription,
@@ -22,23 +19,27 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '../ui/form';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+} from '@/components/ui/form';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import type { FormOptions } from '@/lib/schemas';
+import { cn } from '@/lib/ui/cn';
 
-type Props = {
+type RHFComboBoxProps<TFieldValues extends FieldValues = FieldValues> = {
+  name: FieldPath<TFieldValues>;
+  title: string;
   options: FormOptions;
+  description?: string;
   loading?: boolean;
-} & GeneralFormProps;
+};
 
-function RHFComboBox({
+export function RHFComboBox<TFieldValues extends FieldValues = FieldValues>({
   name,
   title,
   description,
-
   loading = false,
   options,
-}: Props) {
-  const { control, setValue } = useFormContext();
+}: RHFComboBoxProps<TFieldValues>) {
+  const { control } = useFormContext<TFieldValues>();
   const t = useTranslations();
 
   return (
@@ -60,8 +61,7 @@ function RHFComboBox({
                   )}
                 >
                   {field.value
-                    ? options.find(option => option.value === field.value)
-                      ?.label
+                    ? options.find(option => option.value === field.value)?.label
                     : t('forms.selectOption', { option: title })}
                   <ChevronsUpDown className="ms-2 size-4 shrink-0 opacity-50" />
                 </Button>
@@ -75,51 +75,45 @@ function RHFComboBox({
                 </CommandEmpty>
                 <CommandGroup>
                   <CommandList>
-                    {!loading
-                      && options.length
-                      && options.map(option => (
-                        <CommandItem
-                          data-testid={field.name}
-                          value={option.label}
-                          key={option.value}
-                          onSelect={() => {
-                            setValue(field.name, option.value);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              'me-2 h-4 w-4',
-                              option.value === field.value
-                                ? 'opacity-100'
-                                : 'opacity-0',
-                            )}
-                          />
-                          <p>{option.label}</p>
-                        </CommandItem>
-                      ))}
-                    {!loading && !options.length && (
-                      <CommandItem value="empty" disabled>
-                        <Check className={cn('me-2 h-4 w-4')} />
-                        {t('forms.noOptionsAvailable')}
-                      </CommandItem>
-                    )}
                     {loading && (
                       <CommandItem value="loading" disabled>
-                        <Loader2 className={cn('me-2 h-4 w-4 animate-spin')} />
+                        <Loader2 className="me-2 h-4 w-4 animate-spin" />
                         {t('forms.loading')}
                       </CommandItem>
                     )}
+                    {!loading && options.length === 0 && (
+                      <CommandItem value="empty" disabled>
+                        <Check className="me-2 h-4 w-4" />
+                        {t('forms.noOptionsAvailable')}
+                      </CommandItem>
+                    )}
+                    {!loading && options.length > 0 && options.map(option => (
+                      <CommandItem
+                        data-testid={field.name}
+                        value={option.label}
+                        key={option.value}
+                        onSelect={() => {
+                          field.onChange(option.value);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            'me-2 h-4 w-4',
+                            option.value === field.value ? 'opacity-100' : 'opacity-0',
+                          )}
+                        />
+                        {option.label}
+                      </CommandItem>
+                    ))}
                   </CommandList>
                 </CommandGroup>
               </Command>
             </PopoverContent>
           </Popover>
-          <FormDescription>{description}</FormDescription>
+          {description && <FormDescription>{description}</FormDescription>}
           <FormMessage />
         </FormItem>
       )}
     />
   );
 }
-
-export default RHFComboBox;

@@ -21,7 +21,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { StoredModeratorSummary } from '@/api/routes/chat/schema';
 import type { TestAssistantMessage, TestUserMessage } from '@/lib/testing';
 import {
@@ -45,7 +45,7 @@ type TestMessage = TestUserMessage | TestAssistantMessage;
  * Type guard for assistant messages
  */
 function isAssistantMessage(msg: TestMessage): msg is TestAssistantMessage {
-  return msg.role === 'assistant';
+  return msg.role === UIMessageRoles.ASSISTANT;
 }
 
 /**

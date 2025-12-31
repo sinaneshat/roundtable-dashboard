@@ -18,10 +18,17 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes, FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils';
-import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage, renderHook } from '@/lib/testing';
+import {
+  createTestAssistantMessage,
+  createTestModeratorMessage,
+  createTestUserMessage,
+  getParticipantIndex,
+  getRoundNumber,
+  renderHook,
+} from '@/lib/testing';
 
 import { createChatStore } from '../store';
 
@@ -164,7 +171,7 @@ describe('round Start Behavior', () => {
       const messages = store.getState().messages;
       expect(messages).toHaveLength(1);
       expect(messages[0]?.role).toBe('user');
-      expect((messages[0]?.metadata as { roundNumber: number }).roundNumber).toBe(0);
+      expect(getRoundNumber(messages[0]?.metadata)).toBe(0);
     });
 
     it('subsequent rounds start when user sends follow-up message', () => {
@@ -201,7 +208,7 @@ describe('round Start Behavior', () => {
 
       const messages = store.getState().messages;
       const round1UserMsg = messages.find(
-        m => m.role === 'user' && (m.metadata as { roundNumber: number }).roundNumber === 1,
+        m => m.role === UIMessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
       expect(round1UserMsg).toBeDefined();
     });
@@ -232,7 +239,7 @@ describe('web Search Blocking Behavior', () => {
       expect(preSearch?.status).toBe(MessageStatuses.PENDING);
 
       // No assistant messages should exist yet
-      const assistantMessages = store.getState().messages.filter(m => m.role === 'assistant');
+      const assistantMessages = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(assistantMessages).toHaveLength(0);
     });
 
@@ -253,7 +260,7 @@ describe('web Search Blocking Behavior', () => {
       expect(preSearch?.status).toBe(MessageStatuses.STREAMING);
 
       // No assistant messages should exist yet
-      const assistantMessages = store.getState().messages.filter(m => m.role === 'assistant');
+      const assistantMessages = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(assistantMessages).toHaveLength(0);
     });
 
@@ -282,7 +289,7 @@ describe('web Search Blocking Behavior', () => {
       expect(preSearch?.status).toBe(MessageStatuses.COMPLETE);
 
       // Assistant message should exist
-      const assistantMessages = store.getState().messages.filter(m => m.role === 'assistant');
+      const assistantMessages = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(assistantMessages).toHaveLength(1);
     });
 
@@ -310,7 +317,7 @@ describe('web Search Blocking Behavior', () => {
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
       expect(preSearch?.status).toBe(MessageStatuses.FAILED);
 
-      const assistantMessages = store.getState().messages.filter(m => m.role === 'assistant');
+      const assistantMessages = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(assistantMessages).toHaveLength(1);
     });
   });
@@ -339,7 +346,7 @@ describe('web Search Blocking Behavior', () => {
         }),
       ]);
 
-      const assistantMessages = store.getState().messages.filter(m => m.role === 'assistant');
+      const assistantMessages = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(assistantMessages).toHaveLength(1);
     });
   });
@@ -390,13 +397,11 @@ describe('participant Response Order', () => {
         }),
       ]);
 
-      const assistantMessages = store.getState().messages.filter(m => m.role === 'assistant');
+      const assistantMessages = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(assistantMessages).toHaveLength(3);
 
       // Verify order by participantIndex
-      const indices = assistantMessages.map(
-        m => (m.metadata as { participantIndex: number }).participantIndex,
-      );
+      const indices = assistantMessages.map(m => getParticipantIndex(m.metadata));
       expect(indices).toEqual([0, 1, 2]);
     });
 
@@ -429,9 +434,9 @@ describe('participant Response Order', () => {
       ]);
 
       // Only one assistant message (participant 0 streaming)
-      const assistantMessages = store.getState().messages.filter(m => m.role === 'assistant');
+      const assistantMessages = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(assistantMessages).toHaveLength(1);
-      expect((assistantMessages[0]?.metadata as { participantIndex: number }).participantIndex).toBe(0);
+      expect(getParticipantIndex(assistantMessages[0]?.metadata)).toBe(0);
     });
   });
 });
@@ -922,10 +927,8 @@ describe('race Condition Prevention', () => {
       expect(messagesItem).toBeDefined();
 
       // useThreadTimeline sorts messages by participantIndex
-      const sortedMessages = messagesItem?.data.filter(m => m.role === 'assistant');
-      const indices = sortedMessages?.map(
-        m => (m.metadata as { participantIndex?: number })?.participantIndex,
-      );
+      const sortedMessages = messagesItem?.data.filter(m => m.role === UIMessageRoles.ASSISTANT);
+      const indices = sortedMessages?.map(m => getParticipantIndex(m.metadata));
       expect(indices).toEqual([0, 1, 2]);
     });
   });

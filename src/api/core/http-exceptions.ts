@@ -18,11 +18,12 @@ import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import type { ErrorCode } from '@/api/common/error-handling';
-import { ERROR_CODES } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import type { ApiErrorSeverity } from '@/api/core/enums';
-import { ApiErrorSeverities as ERROR_SEVERITY } from '@/api/core/enums';
+import type { ApiErrorSeverity, ErrorCode } from '@/api/core/enums';
+import { ApiErrorSeverities, ErrorCodes } from '@/api/core/enums';
+
+const ERROR_SEVERITY = ApiErrorSeverities;
+const ERROR_CODES = ErrorCodes;
 
 // ============================================================================
 // TYPE-SAFE STATUS CODE MAPPING
@@ -122,7 +123,6 @@ function isContentfulStatusCode(status: number): status is ContentfulStatusCode 
 
 /**
  * Type-safe exception details using discriminated unions
- * ✅ FIX: Replaces Record<string, unknown> with specific detail types
  */
 export type ExceptionDetails
   = {
@@ -175,7 +175,6 @@ export type ExceptionDetails
 
 /**
  * Options for creating HTTP exceptions with enhanced type safety
- * ✅ FIX: Uses discriminated union for details instead of Record<string, unknown>
  */
 export type HTTPExceptionFactoryOptions = {
   message: string;
@@ -189,7 +188,6 @@ export type HTTPExceptionFactoryOptions = {
 
 /**
  * Enhanced HTTP exception with additional metadata
- * ✅ FIX: Uses discriminated union for details
  */
 export class EnhancedHTTPException extends HTTPException {
   public readonly errorCode?: ErrorCode;

@@ -1,17 +1,3 @@
-/**
- * Unified Handler System - Context7 Best Practices
- *
- * Modern, type-safe route handler factory following official HONO patterns.
- * Replaces the existing route-handler-factory with improved type safety.
- *
- * Features:
- * - Maximum type safety with proper inference
- * - Integrated validation system
- * - Consistent error handling
- * - Transaction management
- * - OpenAPI compatibility
- */
-
 import type { RouteConfig, RouteHandler } from '@hono/zod-openapi';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { Context } from 'hono';
@@ -20,8 +6,8 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
 import { executeBatch, validateBatchSize } from '@/api/common/batch-operations';
-import type { ErrorCode } from '@/api/common/error-handling';
 import { AppError } from '@/api/common/error-handling';
+import type { ErrorCode } from '@/api/core/enums';
 import type { ApiEnv, AuthenticatedContext } from '@/api/types';
 import { getDbAsync } from '@/db';
 import { auth } from '@/lib/auth/server';
@@ -36,13 +22,6 @@ import { validateWithSchema } from './validation';
 // CENTRALIZED ERROR HANDLING
 // ============================================================================
 
-/**
- * Convert AppError to appropriate HTTP Response
- * Handles ALL error codes defined in ErrorCodeSchema with correct HTTP status codes
- *
- * ✅ SINGLE SOURCE OF TRUTH for error → response mapping
- * Both createHandler and createHandlerWithBatch use this function
- */
 function appErrorToResponse(c: Context, error: AppError): Response {
   switch (error.code) {
     // Authentication & Authorization (401, 403)
@@ -107,22 +86,13 @@ function appErrorToResponse(c: Context, error: AppError): Response {
 // PERFORMANCE UTILITIES
 // ============================================================================
 
-/**
- * Performance mark type - single performance measurement
- */
 type PerformanceMark = {
   label: string;
   time: number;
 };
 
-/**
- * Performance marks collection - map of label to timestamp
- */
 type PerformanceMarks = Map<string, number>;
 
-/**
- * Performance tracker interface
- */
 type PerformanceTracker = {
   startTime: number;
   getElapsed: () => number;
@@ -132,9 +102,6 @@ type PerformanceTracker = {
   now: () => number;
 };
 
-/**
- * Simple performance tracking utility for request timing
- */
 function createPerformanceTracker(): PerformanceTracker {
   const startTime = Date.now();
   const marks: PerformanceMarks = new Map();
@@ -179,9 +146,6 @@ export type HandlerConfig<
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
 };
 
-/**
- * Enhanced context with validated data
- */
 export type HandlerContext<
   TEnv extends ApiEnv = ApiEnv,
   TBody extends z.ZodSchema = never,
@@ -193,14 +157,8 @@ export type HandlerContext<
     query: [TQuery] extends [never] ? undefined : z.infer<TQuery>;
     params: [TParams] extends [never] ? undefined : z.infer<TParams>;
   };
-  /**
-   * Get authenticated user and session (use when auth: 'session')
-   * @throws Error if user or session is null
-   */
   auth: () => AuthenticatedContext;
 };
-
-// Handler function types
 export type RegularHandler<
   _TRoute extends RouteConfig,
   TEnv extends ApiEnv = ApiEnv,
@@ -211,20 +169,9 @@ export type RegularHandler<
   c: HandlerContext<TEnv, TBody, TQuery, TParams>,
 ) => Promise<Response>;
 
-/**
- * D1 Batch Context - Provides utilities for building batch operations
- *
- * ✅ DRIZZLE BEST PRACTICE: Uses BatchItem type for full type safety
- * - insert(), update(), delete(), select() builders are all valid
- * - Runtime validation ensures correctness
- * - Type safety maintained through Drizzle's query builder API
- */
 export type BatchContext = {
-  /** Add a prepared statement to the batch */
   add: (statement: BatchItem<'sqlite'>) => void;
-  /** Execute all statements in the batch and return results */
   execute: () => Promise<unknown[]>;
-  /** Get the database instance for read operations */
   db: Awaited<ReturnType<typeof getDbAsync>>;
 };
 

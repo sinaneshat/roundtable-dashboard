@@ -1,7 +1,5 @@
-// components/TextInput.tsx
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
-
-import type { GeneralFormProps } from '@/types/general';
 
 import {
   FormControl,
@@ -10,26 +8,31 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '../ui/form';
-import { Input } from '../ui/input';
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
 
-type Props = {
+type RHFTextFieldProps<TFieldValues extends FieldValues = FieldValues> = {
+  name: FieldPath<TFieldValues>;
+  title?: string;
+  description?: string;
+  placeholder?: string;
+  required?: boolean;
+  disabled?: boolean;
+  className?: string;
   fieldType?: 'number' | 'text' | 'email' | 'password';
-} & GeneralFormProps;
+};
 
-function RHFTextField({
+export function RHFTextField<TFieldValues extends FieldValues = FieldValues>({
   name,
   title,
   description,
   placeholder,
-  value: externalValue,
-  onChange: externalOnChange,
   required,
   disabled,
   fieldType = 'text',
   className,
-}: Props) {
-  const { control } = useFormContext();
+}: RHFTextFieldProps<TFieldValues>) {
+  const { control } = useFormContext<TFieldValues>();
 
   return (
     <FormField
@@ -51,16 +54,9 @@ function RHFTextField({
                 const value = fieldType === 'number' && rawValue !== ''
                   ? Number(rawValue)
                   : rawValue;
-
-                // Call field.onChange with the processed value
                 field.onChange(value);
-
-                // If there's an external onChange, call it with the event
-                if (externalOnChange) {
-                  externalOnChange(e);
-                }
               }}
-              value={field.value !== undefined ? field.value : externalValue}
+              value={field.value ?? ''}
             />
           </FormControl>
           {description && <FormDescription>{description}</FormDescription>}
@@ -70,5 +66,3 @@ function RHFTextField({
     />
   );
 }
-
-export default RHFTextField;

@@ -1,57 +1,21 @@
 import { z } from '@hono/zod-openapi';
 
+import type { ModelId } from '@/api/core/enums';
 import {
   ModelCategorySchema,
+  ModelIdSchema,
   ModelProviderSchema,
   PROVIDER_STREAMING_DEFAULTS,
   StreamingBehaviors,
   StreamingBehaviorSchema,
 } from '@/api/core/enums';
 
-export const ModelIdEnum = z.enum([
-  'openai/gpt-oss-120b',
-  'openai/gpt-5-nano',
-  'google/gemini-2.0-flash-001',
-  'openai/gpt-4.1-nano',
-  'openai/gpt-4o-mini',
-  'x-ai/grok-4-fast',
-  'x-ai/grok-4.1-fast',
-  'x-ai/grok-code-fast-1',
-  'deepseek/deepseek-chat-v3-0324',
-  'deepseek/deepseek-r1-0528',
-  'deepseek/deepseek-v3.2',
-  'google/gemini-2.5-flash',
-  'openai/gpt-5-mini',
-  'openai/gpt-4.1-mini',
-  'mistralai/mistral-large-2512',
-  'google/gemini-3-flash-preview',
-  'anthropic/claude-haiku-4.5',
-  'openai/o3-mini',
-  'openai/o4-mini',
-  'google/gemini-2.5-pro',
-  'openai/gpt-5',
-  'openai/gpt-5.1',
-  'openai/gpt-5.2',
-  'openai/o3',
-  'openai/gpt-4.1',
-  'google/gemini-3-pro-preview',
-  'x-ai/grok-3',
-  'x-ai/grok-4',
-  'anthropic/claude-sonnet-4',
-  'anthropic/claude-sonnet-4.5',
-  'anthropic/claude-opus-4.5',
-  'openai/o1',
-  'anthropic/claude-opus-4',
-]);
-
-export type ModelId = z.infer<typeof ModelIdEnum>;
-
 // ============================================================================
 // HARDCODED MODEL SCHEMA
 // ============================================================================
 
 export const HardcodedModelSchema = z.object({
-  id: ModelIdEnum,
+  id: ModelIdSchema,
   name: z.string(),
   description: z.string().optional(),
   context_length: z.number(),
@@ -856,7 +820,11 @@ export function getModelStreamingBehavior(modelId: string) {
     return model.streaming_behavior;
 
   const provider = modelId.split('/')[0] || '';
-  return PROVIDER_STREAMING_DEFAULTS[provider] ?? StreamingBehaviors.TOKEN;
+  // Type-safe provider lookup using the enum's type guard
+  if (provider in PROVIDER_STREAMING_DEFAULTS) {
+    return PROVIDER_STREAMING_DEFAULTS[provider as keyof typeof PROVIDER_STREAMING_DEFAULTS];
+  }
+  return StreamingBehaviors.TOKEN;
 }
 
 /**
@@ -867,4 +835,52 @@ export function getModelStreamingBehavior(modelId: string) {
  */
 export function needsSmoothStream(modelId: string) {
   return getModelStreamingBehavior(modelId) === StreamingBehaviors.BUFFERED;
+}
+
+// ============================================================================
+// MODEL FAMILY DETECTION HELPERS
+// ============================================================================
+
+/**
+ * ✅ IS DEEPSEEK MODEL: Checks if model uses DeepSeek provider
+ *
+ * DeepSeek models use XML <think> tags for reasoning that require
+ * extractReasoningMiddleware to extract properly.
+ */
+export function isDeepSeekModel(modelId: string): boolean {
+  const model = getModelById(modelId);
+  if (model) {
+    return model.provider === 'deepseek';
+  }
+  // Fallback for models not in hardcoded list
+  return modelId.toLowerCase().startsWith('deepseek/');
+}
+
+/**
+ * ✅ IS O-SERIES MODEL: Checks if model is OpenAI O-series reasoning model
+ *
+ * O-series models (o1, o3, o4) are reasoning-first and use native
+ * reasoning via provider - no extractReasoningMiddleware needed.
+ */
+export function isOSeriesModel(modelId: string): boolean {
+  const model = getModelById(modelId);
+  if (model) {
+    // O-series models have is_reasoning_model=true and provider='openai'
+    // Check if the model ID matches o1/o3/o4 pattern
+    const modelName = modelId.split('/')[1] || '';
+    return model.provider === 'openai' && /^o[134](?:-|$)/.test(modelName);
+  }
+  // Fallback for models not in hardcoded list
+  return /^openai\/o[134](?:-|$)/.test(modelId);
+}
+
+/**
+ * ✅ IS NANO OR MINI VARIANT: Checks if model is a lightweight variant
+ *
+ * Nano/mini variants have limited token budgets and should use
+ * minimal reasoning effort to preserve tokens for output.
+ */
+export function isNanoOrMiniVariant(modelId: string): boolean {
+  const lowerModelId = modelId.toLowerCase();
+  return lowerModelId.includes('nano') || lowerModelId.includes('mini');
 }

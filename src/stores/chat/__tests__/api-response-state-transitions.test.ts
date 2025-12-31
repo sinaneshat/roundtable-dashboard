@@ -24,7 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { MessageStatuses, StreamStatuses } from '@/api/core/enums';
+import { MessageStatuses, StreamStatuses, UIMessageRoles } from '@/api/core/enums';
 import {
   createInitialStoreState,
   createMockStoredPreSearch,
@@ -304,7 +304,7 @@ describe('message Streaming API', () => {
       const event = {
         type: 'start',
         messageMetadata: {
-          role: 'assistant',
+          role: UIMessageRoles.ASSISTANT,
           roundNumber: 0,
           participantIndex: 0,
         },

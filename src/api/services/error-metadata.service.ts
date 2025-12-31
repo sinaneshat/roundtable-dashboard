@@ -1,21 +1,15 @@
 /**
  * Error Metadata Service - Unified Error Extraction and Categorization
  *
- * ✅ SINGLE SOURCE OF TRUTH: Uses schemas from @/lib/schemas/error-schemas.ts
- * ✅ ZERO-CASTING PRINCIPLE: All type validations via Zod schemas
- * ✅ TYPE-SAFE: No any types, strict null checks, comprehensive error metadata
- * ✅ ENUM-BASED PATTERNS: Uses ErrorCategorySchema.enum.* for constants
+ * Uses schemas from @/lib/schemas/error-schemas.ts as single source of truth.
+ * All type validations use Zod schemas - no type casting.
  *
- * This service provides:
+ * Provides:
  * - Unified error metadata extraction from AI provider responses
  * - Error categorization following ErrorCategorySchema
  * - Transient error detection for retry logic
  * - Empty response error building with context-aware messages
  * - Provider-specific error extraction (OpenRouter, OpenAI, etc.)
- *
- * @see /docs/backend-patterns.md - Service layer patterns
- * @see /src/lib/schemas/error-schemas.ts - Error category schemas (SINGLE SOURCE OF TRUTH)
- * @see /src/lib/schemas/message-metadata.ts - Finish reason schemas
  */
 
 import { z } from 'zod';
@@ -24,6 +18,7 @@ import type { ErrorCategory } from '@/api/core/enums';
 import { ErrorCategorySchema, FinishReasonSchema } from '@/api/core/enums';
 import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
 import { isObject } from '@/lib/utils';
+import { isTransientError } from '@/lib/utils/error-metadata-builders';
 
 // ============================================================================
 // TYPE DEFINITIONS (Zod Schemas - Single Source of Truth)
@@ -95,75 +90,13 @@ export type ProviderErrorResult = z.infer<typeof ProviderErrorResultSchema>;
 
 /**
  * Categorize error based on error message content
- *
- * ✅ DELEGATED: Uses categorizeErrorMessage from @/lib/schemas/error-schemas.ts
- * ✅ SINGLE SOURCE OF TRUTH: No duplicate logic
+ * Delegates to categorizeErrorMessage from @/lib/schemas/error-schemas.ts
  *
  * @param errorMessage - Raw error message from provider
  * @returns Typed error category from ErrorCategorySchema
- *
- * @example
- * ```typescript
- * const category = categorizeError('Rate limit exceeded');
- * // Returns: 'rate_limit'
- * ```
  */
 export function categorizeError(errorMessage: string): ErrorCategory {
   return categorizeErrorMessage(errorMessage);
-}
-
-// ============================================================================
-// TRANSIENT ERROR DETECTION
-// ============================================================================
-
-/**
- * Determine if error is transient (worth retrying)
- *
- * ✅ CENTRALIZED LOGIC: Single source for retry decision
- * ✅ TYPE-SAFE: Uses Zod enum values for categories and finish reasons
- *
- * Transient errors include:
- * - Provider errors (server issues)
- * - Network errors (connectivity)
- * - Rate limits (temporary quota)
- * - Empty responses with non-stop finish reasons (incomplete generation)
- *
- * @param errorCategory - Categorized error type
- * @param finishReason - AI SDK finish reason
- * @returns Whether error is transient
- *
- * @example
- * ```typescript
- * const shouldRetry = isTransientError('rate_limit', 'other');
- * // Returns: true
- * ```
- */
-export function isTransientError(
-  errorCategory: ErrorCategory | undefined,
-  finishReason: string,
-): boolean {
-  if (!errorCategory) {
-    return false;
-  }
-
-  // Transient error categories (always worth retrying)
-  const transientCategories: ErrorCategory[] = [
-    ErrorCategorySchema.enum.provider_error,
-    ErrorCategorySchema.enum.network,
-    ErrorCategorySchema.enum.rate_limit,
-  ];
-
-  if (transientCategories.includes(errorCategory)) {
-    return true;
-  }
-
-  // Empty response errors are transient unless finish reason is 'stop'
-  // (stop = model intentionally completed with no output, likely content filter)
-  if (errorCategory === ErrorCategorySchema.enum.empty_response) {
-    return finishReason !== FinishReasonSchema.enum.stop;
-  }
-
-  return false;
 }
 
 // ============================================================================
@@ -172,26 +105,18 @@ export function isTransientError(
 
 /**
  * Extract provider-specific error details from metadata and response
- *
- * ✅ TYPE-SAFE: Uses isObject type guard instead of casting
- * ✅ COMPREHENSIVE: Checks multiple error field locations
+ * Uses isObject type guard for type-safe extraction
  *
  * Checks for errors in:
- * 1. providerMetadata.error
- * 2. providerMetadata.errorMessage
- * 3. providerMetadata.moderation (content filter)
- * 4. providerMetadata.contentFilter
- * 5. response.error
+ * - providerMetadata.error
+ * - providerMetadata.errorMessage
+ * - providerMetadata.moderation (content filter)
+ * - providerMetadata.contentFilter
+ * - response.error
  *
  * @param providerMetadata - Provider metadata from AI SDK
  * @param response - Raw response object from provider
  * @returns Provider error result with raw error and category
- *
- * @example
- * ```typescript
- * const { rawError, category } = extractProviderError(metadata, response);
- * // Returns: { rawError: 'Model not found', category: 'model_not_found' }
- * ```
  */
 export function extractProviderError(
   providerMetadata: unknown,
@@ -200,7 +125,7 @@ export function extractProviderError(
   let rawError: string | undefined;
   let category: ErrorCategory | undefined;
 
-  // ✅ TYPE-SAFE: Check providerMetadata with type guard
+  // Check providerMetadata with type guard
   if (isObject(providerMetadata)) {
     // Extract error field (string or object)
     if (providerMetadata.error) {
@@ -222,7 +147,7 @@ export function extractProviderError(
     }
   }
 
-  // ✅ TYPE-SAFE: Check response with type guard
+  // Check response with type guard
   if (!rawError && isObject(response)) {
     if (response.error) {
       rawError
@@ -247,10 +172,6 @@ export function extractProviderError(
 /**
  * Build context-aware error messages for empty responses
  *
- * ✅ DESCRIPTIVE: Provides detailed messages based on finish reason
- * ✅ ACTIONABLE: Suggests next steps for users
- * ✅ TYPE-SAFE: Uses Zod enum values for finish reasons
- *
  * Empty response scenarios:
  * - stop: Model completed but filtered (content filter)
  * - length: Hit token limit without output (configuration issue)
@@ -260,16 +181,6 @@ export function extractProviderError(
  *
  * @param params - Empty response context (tokens and finish reason)
  * @returns Error metadata with detailed messages
- *
- * @example
- * ```typescript
- * const error = buildEmptyResponseError({
- *   inputTokens: 150,
- *   outputTokens: 0,
- *   finishReason: 'stop',
- * });
- * // Returns error with content_filter category and descriptive message
- * ```
  */
 export function buildEmptyResponseError(
   params: BuildEmptyResponseErrorParams,
@@ -284,7 +195,7 @@ export function buildEmptyResponseError(
   let errorCategory: ErrorCategory;
   let isTransientError: boolean;
 
-  // ✅ TYPE-SAFE: Use Zod enum values for finish reason comparison
+  // Use Zod enum values for finish reason comparison
   if (finishReason === FinishReasonSchema.enum.stop) {
     // stop = Model completed intentionally with no output (likely content filter)
     providerMessage = `Model completed but returned no content. ${baseStats}. This may indicate content filtering, safety constraints, or the model chose not to respond.`;
@@ -338,10 +249,6 @@ export function buildEmptyResponseError(
 /**
  * Extract comprehensive error metadata from AI provider response
  *
- * ✅ UNIFIED: Single function for all error detection and categorization
- * ✅ COMPREHENSIVE: Handles provider errors, empty responses, and partial responses
- * ✅ TYPE-SAFE: Uses Zod schemas and type guards throughout
- *
  * Detection flow:
  * 1. Extract provider errors from metadata/response
  * 2. Check for empty response (no output tokens)
@@ -352,18 +259,6 @@ export function buildEmptyResponseError(
  *
  * @param params - Error extraction parameters
  * @returns Comprehensive error metadata
- *
- * @example
- * ```typescript
- * const errorMetadata = extractErrorMetadata({
- *   providerMetadata: finishResult.providerMetadata,
- *   response: finishResult.response,
- *   finishReason: finishResult.finishReason,
- *   usage: { inputTokens: 150, outputTokens: 0 },
- *   text: '',
- * });
- * // Returns: { hasError: true, errorCategory: 'empty_response', ... }
- * ```
  */
 export function extractErrorMetadata(
   params: ExtractErrorMetadataParams,
@@ -377,27 +272,17 @@ export function extractErrorMetadata(
     response,
   );
 
-  // ✅ CRITICAL: Handle cases where usage is missing
-  // Some models (like DeepSeek) don't return usage in the expected format
-  // If usage is missing but text was generated, don't mark as empty response
+  // Handle cases where usage is missing (some models like DeepSeek don't return usage)
   const outputTokens = usage?.outputTokens || 0;
   const inputTokens = usage?.inputTokens || 0;
   const hasGeneratedText = (text?.trim().length || 0) > 0;
 
-  // ✅ CRITICAL FIX: Check reasoning content for o1/o3 models
-  // These models may output all content as reasoning instead of text
-  // Both text OR reasoning should count as generated content
+  // Check reasoning content for o1/o3 models that output reasoning instead of text
   const hasGeneratedReasoning = (reasoning?.trim().length || 0) > 0;
   const hasGeneratedContent = hasGeneratedText || hasGeneratedReasoning;
 
-  // Empty response detection: no output tokens AND no generated content (text or reasoning)
-  // ✅ ROOT CAUSE FIX: Detect empty response REGARDLESS of finishReason
-  // Previous bug: Skipped detection when finishReason='unknown'
-  // But 'unknown' with no content means stream ended abnormally - this IS an error
-  // finishReason='unknown' is NOT "streaming init" - it's a failed stream completion
-  //
-  // If onFinish fires with finishReason='unknown' and no content, the stream failed
-  // This happens with models like gemini-2.5-flash-lite that abort early
+  // Empty response detection: no output tokens AND no generated content
+  // Detects regardless of finishReason - 'unknown' with no content is a failed stream
   const isEmptyResponse = outputTokens === 0 && !hasGeneratedContent;
 
   // Error occurred if we have provider error OR empty response
@@ -437,26 +322,3 @@ export function extractErrorMetadata(
 
   return emptyResponseError;
 }
-
-// ============================================================================
-// EXPORTS
-// ============================================================================
-
-/**
- * Default export: All error metadata functions
- *
- * Usage:
- * ```typescript
- * import ErrorMetadataService from '@/api/services/error-metadata.service';
- *
- * const metadata = ErrorMetadataService.extractErrorMetadata({ ... });
- * const isRetryable = ErrorMetadataService.isTransientError(category, reason);
- * ```
- */
-export default {
-  extractErrorMetadata,
-  categorizeError,
-  isTransientError,
-  buildEmptyResponseError,
-  extractProviderError,
-};

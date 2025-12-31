@@ -22,6 +22,7 @@ import type { UIMessage } from 'ai';
 import type { ErrorType, FinishReason, UIMessageErrorType } from '@/api/core/enums';
 import {
   ErrorTypeSchema,
+  FinishReasons,
   FinishReasonSchema,
   MessagePartTypes,
   MessageRoles,
@@ -117,22 +118,12 @@ export function isParticipantMessage(
 // Format Conversion
 // ============================================================================
 
-/**
- * Normalize message part states to 'done'
- *
- * ✅ STATE CONSISTENCY FIX: When loading messages from server/store, normalize
- * any stale 'streaming' states to 'done'. The 'state' property is a runtime-only
- * AI SDK concept that shouldn't persist across page refreshes.
- *
- * This prevents inconsistency where isStreaming=false but message parts have state='streaming'.
- */
 function normalizeMessagePartStates<T extends unknown[]>(parts: T): T {
-  if (!parts || parts.length === 0) {
+  if (!parts?.length) {
     return parts;
   }
 
   return parts.map((part) => {
-    // If part has a 'state' property, normalize 'streaming' to 'done'
     if (typeof part === 'object' && part !== null && 'state' in part && part.state === TextPartStates.STREAMING) {
       return { ...part, state: TextPartStates.DONE };
     }
@@ -162,16 +153,12 @@ export function chatMessageToUIMessage(
       ? message.createdAt.toISOString()
       : message.createdAt;
 
-  // ✅ TYPE-SAFE: Check for pre-search metadata without force casting
   const isPreSearchMsg
     = message.metadata !== null
       && typeof message.metadata === 'object'
       && 'isPreSearch' in message.metadata
       && message.metadata.isPreSearch === true;
 
-  // ✅ CRITICAL FIX: Always preserve roundNumber from database column
-  // Even when metadata exists, ensure roundNumber from column takes precedence
-  // This prevents inconsistencies when metadata is outdated or incomplete
   const metadata = isPreSearchMsg
     ? message.metadata
     : message.roundNumber !== null && message.roundNumber !== undefined
@@ -180,14 +167,12 @@ export function chatMessageToUIMessage(
           role: message.role,
           participantId: message.participantId || undefined,
           createdAt,
-          roundNumber: message.roundNumber, // Database column is source of truth
+          roundNumber: message.roundNumber,
         }
       : null;
 
-  // ✅ STATE CONSISTENCY FIX: Normalize any stale 'streaming' states to 'done'
-  // Cast to UIMessage['parts'] - internal format is compatible with AI SDK at runtime
   const normalizedParts = normalizeMessagePartStates(
-    (message.parts || []),
+    message.parts || [],
   ) as UIMessage['parts'];
 
   return {
@@ -225,11 +210,9 @@ export function chatMessagesToUIMessages(
     ? new Map(participants.map(p => [p.id, p]))
     : null;
 
-  // Ensure all messages have roundNumber and participant enrichment
   let currentRound = 0;
   const messagesWithRoundNumber = uiMessages.map((message) => {
     const explicitRound = getRoundNumber(message.metadata);
-    // ✅ 0-BASED FIX: Accept round 0 as valid (was: explicitRound > 0)
     const hasRoundNumber
       = explicitRound !== null
         && explicitRound !== undefined
@@ -252,7 +235,6 @@ export function chatMessagesToUIMessages(
 
           if (participant && !hasParticipantEnrichment(message.metadata)) {
             const baseMetadata = getAssistantMetadata(message.metadata);
-            // Use buildAssistantMetadata to create valid metadata
             const metadataForEnrichment = buildAssistantMetadata(
               baseMetadata || {},
               {
@@ -283,14 +265,9 @@ export function chatMessagesToUIMessages(
       return message;
     }
 
-    // Message missing roundNumber - assign based on current round
-    // ✅ ZOD-FIRST PATTERN: Use validated extraction functions
-
-    // Check if message already has validated metadata
     if (message.role === MessageRoles.ASSISTANT) {
       const validMetadata = getAssistantMetadata(message.metadata);
       if (validMetadata) {
-        // Metadata validates, just update roundNumber
         const updated: DbAssistantMessageMetadata = {
           ...validMetadata,
           roundNumber: currentRound ?? 0,
@@ -318,8 +295,6 @@ export function chatMessagesToUIMessages(
       }
     }
 
-    // Message lacks valid metadata - create minimal metadata
-    // This path should rarely execute for database-loaded messages
     let enrichedMetadata: DbMessageMetadata | null;
 
     if (participantMap && message.role === MessageRoles.ASSISTANT) {
@@ -343,7 +318,6 @@ export function chatMessagesToUIMessages(
           enrichedMetadata = null;
         }
       } else {
-        // isPreSearchMsg is true - validate and use pre-search metadata
         const preSearchMeta = getPreSearchMetadata(message.metadata);
         enrichedMetadata = preSearchMeta;
       }
@@ -351,8 +325,6 @@ export function chatMessagesToUIMessages(
       enrichedMetadata = null;
     }
 
-    // ✅ CRITICAL FIX: Increment currentRound AFTER assigning it to the message
-    // This ensures the first user message gets roundNumber: 0, not 1
     if (message.role === MessageRoles.USER) {
       currentRound += 1;
     }
@@ -429,22 +401,8 @@ export function filterToPreSearchMessages(
   return messages.filter(isPreSearchMessage);
 }
 
-/**
- * Filter messages with no meaningful content
- *
- * AI SDK v6 Pattern: Pass messages through for conversion, filter AFTER convertToModelMessages.
- * Reference: https://ai-sdk.dev/docs/reference/ai-sdk-ui/convert-to-model-messages
- *
- * This function:
- * - Removes user messages with only empty text
- * - Keeps all assistant messages (let convertToModelMessages handle the conversion)
- *
- * Post-conversion filtering happens in prepareValidatedMessages to remove
- * any messages that result in empty content after SDK conversion.
- */
 export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
   return messages.filter((message) => {
-    // Keep all assistant messages - post-conversion filtering handles empty content
     if (message.role === MessageRoles.ASSISTANT)
       return true;
 
@@ -477,15 +435,13 @@ export function getParticipantMessagesForRound(
       return false;
     }
 
-    // Multiple checks for defense-in-depth
-    if (m.id && m.id.startsWith('pre-search-')) {
+    if (m.id?.startsWith('pre-search-')) {
       return false;
     }
     if (isPreSearch(m.metadata)) {
       return false;
     }
 
-    // ✅ TYPE-SAFE: Check role field without force casting, using enum constants
     if (
       m.metadata
       && typeof m.metadata === 'object'
@@ -601,7 +557,7 @@ export function createErrorUIMessage(
 ): UIMessage {
   const validatedMetadata = errorMetadata
     ? ErrorMetadataSchema.safeParse(errorMetadata)
-    : { success: false, data: undefined };
+    : { success: false as const, data: undefined };
 
   const metadata = validatedMetadata.success
     ? validatedMetadata.data
@@ -655,19 +611,11 @@ export function mergeParticipantMetadata(
 ): Extract<DbMessageMetadata, { role: 'assistant' }> {
   const validatedMetadata = getAssistantMetadata(message.metadata);
 
-  // Trust backend error flags - these are authoritative
   const hasBackendErrorFlag = validatedMetadata?.hasError === true;
   const hasBackendNoErrorFlag = validatedMetadata?.hasError === false;
 
-  // Note: Explicit error type/message detection removed - backend hasError flag is authoritative
-  // Previously checked for explicit error types but this caused false positives
-  // Now we rely on: backend flags, finish reasons, and content presence
-
-  // Skip parts check when called from onFinish with hasGeneratedText=true
   const skipPartsCheck = options?.hasGeneratedText === true;
 
-  // ✅ RACE CONDITION FIX: Check for REASONING parts (DeepSeek R1, Claude thinking, etc.)
-  // AI SDK v6 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
   const textParts
     = message.parts?.filter(
       p =>
@@ -683,26 +631,14 @@ export function mergeParticipantMetadata(
   const hasToolCalls
     = message.parts?.some(p => p.type === MessagePartTypes.TOOL_CALL) || false;
 
-  // ✅ CRITICAL FIX: Multiple signals for content presence
-  // Signal 1: Has text or reasoning content in parts
-  // Signal 2: Has tool calls
-  // Signal 3: Output tokens > 0 (backend reported content generation)
-  // Signal 4: Caller said content was generated (skipPartsCheck)
   const hasOutputTokens = (validatedMetadata?.usage?.completionTokens ?? 0) > 0;
   const hasAnyContent
     = skipPartsCheck || hasTextContent || hasToolCalls || hasOutputTokens;
 
-  // ✅ CRITICAL FIX: Multiple signals for successful completion
-  // Signal 1: finishReason='stop' indicates successful completion
-  const hasSuccessfulFinish = validatedMetadata?.finishReason === 'stop';
+  const hasSuccessfulFinish = validatedMetadata?.finishReason === FinishReasons.STOP;
 
-  // Signal 2: Backend explicitly marked as no error
   const backendMarkedSuccess = hasBackendNoErrorFlag;
 
-  // ✅ RACE CONDITION FIX: Determine hasError with defensive logic
-  // Error if: Backend explicitly marked error
-  // No error if: Backend marked success, OR caller confirmed content, OR successful finish, OR has content
-  // Default: ERROR when no content (stream completed but produced nothing)
   const hasNoErrorSignal
     = backendMarkedSuccess
       || skipPartsCheck
@@ -710,7 +646,6 @@ export function mergeParticipantMetadata(
       || hasAnyContent;
   const hasError = hasBackendErrorFlag || !hasNoErrorSignal;
 
-  // Generate error message if needed
   let errorMessage: string | undefined;
   if (
     validatedMetadata?.errorMessage
@@ -722,7 +657,6 @@ export function mergeParticipantMetadata(
     errorMessage = `The model (${participant.modelId}) did not generate a response.`;
   }
 
-  // Parse usage data
   const usageResult = UsageSchema.partial().safeParse(validatedMetadata?.usage);
   const usage = {
     promptTokens: usageResult.success
@@ -734,7 +668,6 @@ export function mergeParticipantMetadata(
     totalTokens: usageResult.success ? (usageResult.data.totalTokens ?? 0) : 0,
   };
 
-  // Parse finish reason
   const finishReasonRaw = validatedMetadata?.finishReason
     ? String(validatedMetadata.finishReason)
     : 'unknown';
@@ -743,7 +676,6 @@ export function mergeParticipantMetadata(
     ? finishReasonResult.data
     : 'unknown';
 
-  // Parse error type
   const errorTypeRaw
     = typeof validatedMetadata?.errorType === 'string'
       ? validatedMetadata.errorType
@@ -755,11 +687,6 @@ export function mergeParticipantMetadata(
     ? errorTypeResult.data
     : 'unknown';
 
-  // ✅ BUG FIX: Prefer backend's participantId over frontend's temp UUID
-  // When user applies recommended action, frontend creates participants with temp UUIDs.
-  // Backend creates real ULID IDs and includes them in stream metadata.
-  // Previously, this function overwrote backend's real ID with frontend's temp UUID.
-  // Now we check if backend sent a participantId and prefer it.
   const backendParticipantId = validatedMetadata?.participantId;
   const effectiveParticipantId = (typeof backendParticipantId === 'string' && backendParticipantId.length > 0)
     ? backendParticipantId

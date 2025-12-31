@@ -12,6 +12,8 @@ import { z } from '@hono/zod-openapi';
 
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'] as const;
 
+export const DEFAULT_HTTP_METHOD: HttpMethod = 'GET';
+
 export const HttpMethodSchema = z.enum(HTTP_METHODS).openapi({
   description: 'HTTP request method',
   example: 'POST',
@@ -35,6 +37,8 @@ export const HttpMethods = {
 
 export const DATABASE_OPERATIONS = ['select', 'insert', 'update', 'delete', 'batch'] as const;
 
+export const DEFAULT_DATABASE_OPERATION: DatabaseOperation = 'select';
+
 export const DatabaseOperationSchema = z.enum(DATABASE_OPERATIONS).openapi({
   description: 'Database operation type',
   example: 'insert',
@@ -56,6 +60,8 @@ export const DatabaseOperations = {
 
 export const HEALTH_STATUSES = ['healthy', 'degraded', 'unhealthy'] as const;
 
+export const DEFAULT_HEALTH_STATUS: HealthStatus = 'healthy';
+
 export const HealthStatusSchema = z.enum(HEALTH_STATUSES).openapi({
   description: 'System health status',
   example: 'healthy',
@@ -74,6 +80,8 @@ export const HealthStatuses = {
 // ============================================================================
 
 export const ENVIRONMENTS = ['development', 'preview', 'production', 'test', 'local'] as const;
+
+export const DEFAULT_ENVIRONMENT: Environment = 'development';
 
 export const EnvironmentSchema = z.enum(ENVIRONMENTS).openapi({
   description: 'Application runtime environment',
@@ -94,17 +102,22 @@ export const Environments = {
 // SORT DIRECTION
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const SORT_DIRECTIONS = ['asc', 'desc'] as const;
 
-export const SortDirectionSchema = z.enum(SORT_DIRECTIONS).default('desc').openapi({
+// 2. ZOD SCHEMA
+export const SortDirectionSchema = z.enum(SORT_DIRECTIONS).openapi({
   description: 'Sort order direction',
   example: 'desc',
 });
 
+// 3. TYPESCRIPT TYPE
 export type SortDirection = z.infer<typeof SortDirectionSchema>;
 
+// 4. DEFAULT VALUE
 export const DEFAULT_SORT_DIRECTION: SortDirection = 'desc';
 
+// 5. CONSTANT OBJECT
 export const SortDirections = {
   ASC: 'asc' as const,
   DESC: 'desc' as const,
@@ -125,6 +138,8 @@ export const SORT_DIRECTION_LABELS: Record<SortDirection, string> = {
 
 export const BOOLEAN_STRINGS = ['true', 'false'] as const;
 
+export const DEFAULT_BOOLEAN_STRING: BooleanString = 'false';
+
 export const BooleanStringSchema = z.enum(BOOLEAN_STRINGS).openapi({
   description: 'Boolean value as string (for query parameters)',
   example: 'true',
@@ -138,40 +153,10 @@ export const BooleanStrings = {
 } as const;
 
 // ============================================================================
-// VALIDATION HELPERS
-// ============================================================================
-
-export function isValidSortDirection(value: unknown): value is SortDirection {
-  return typeof value === 'string' && SORT_DIRECTIONS.includes(value as SortDirection);
-}
-
-export function isValidDatabaseOperation(value: unknown): value is DatabaseOperation {
-  return typeof value === 'string' && DATABASE_OPERATIONS.includes(value as DatabaseOperation);
-}
-
-export function isValidHealthStatus(value: unknown): value is HealthStatus {
-  return typeof value === 'string' && HEALTH_STATUSES.includes(value as HealthStatus);
-}
-
-export function isValidEnvironment(value: unknown): value is Environment {
-  return typeof value === 'string' && ENVIRONMENTS.includes(value as Environment);
-}
-
-export function isValidHttpMethod(value: unknown): value is HttpMethod {
-  return typeof value === 'string' && HTTP_METHODS.includes(value as HttpMethod);
-}
-
-export function isValidBooleanString(value: unknown): value is BooleanString {
-  return typeof value === 'string' && BOOLEAN_STRINGS.includes(value as BooleanString);
-}
-
-// ============================================================================
 // DATABASE CONNECTION STATUS
 // ============================================================================
 
 export const DATABASE_CONNECTION_STATUSES = ['connected', 'disconnected', 'pending'] as const;
-
-export const DEFAULT_DATABASE_CONNECTION_STATUS: DatabaseConnectionStatus = 'pending';
 
 export const DatabaseConnectionStatusSchema = z.enum(DATABASE_CONNECTION_STATUSES).openapi({
   description: 'Database connection status for health checks',
@@ -179,6 +164,8 @@ export const DatabaseConnectionStatusSchema = z.enum(DATABASE_CONNECTION_STATUSE
 });
 
 export type DatabaseConnectionStatus = z.infer<typeof DatabaseConnectionStatusSchema>;
+
+export const DEFAULT_DATABASE_CONNECTION_STATUS: DatabaseConnectionStatus = 'pending';
 
 export const DatabaseConnectionStatuses = {
   CONNECTED: 'connected' as const,
@@ -192,14 +179,14 @@ export const DatabaseConnectionStatuses = {
 
 export const OAUTH_STATUSES = ['configured', 'missing', 'invalid'] as const;
 
-export const DEFAULT_OAUTH_STATUS: OAuthStatus = 'missing';
-
 export const OAuthStatusSchema = z.enum(OAUTH_STATUSES).openapi({
   description: 'OAuth configuration status for environment validation',
   example: 'configured',
 });
 
 export type OAuthStatus = z.infer<typeof OAuthStatusSchema>;
+
+export const DEFAULT_OAUTH_STATUS: OAuthStatus = 'missing';
 
 export const OAuthStatuses = {
   CONFIGURED: 'configured' as const,
@@ -385,4 +372,32 @@ export const WithOptionsVariants = {
   SELECT: 'select' as const,
   COMBOBOX: 'combobox' as const,
   TRIGGER_SCHEDULE: 'trigger_schedule' as const,
+} as const;
+
+// ============================================================================
+// CACHE OPTION (Next.js cache configuration)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const CACHE_OPTIONS = ['default', 'no-store', 'reload', 'force-cache', 'only-if-cached'] as const;
+
+// 2. ZOD SCHEMA
+export const CacheOptionSchema = z.enum(CACHE_OPTIONS).openapi({
+  description: 'Next.js fetch cache option',
+  example: 'no-store',
+});
+
+// 3. TYPESCRIPT TYPE
+export type CacheOption = z.infer<typeof CacheOptionSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_CACHE_OPTION: CacheOption = 'default';
+
+// 5. CONSTANT OBJECT
+export const CacheOptions = {
+  DEFAULT: 'default' as const,
+  NO_STORE: 'no-store' as const,
+  RELOAD: 'reload' as const,
+  FORCE_CACHE: 'force-cache' as const,
+  ONLY_IF_CACHED: 'only-if-cached' as const,
 } as const;

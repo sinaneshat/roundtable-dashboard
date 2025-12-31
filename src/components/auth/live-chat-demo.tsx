@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -171,7 +171,7 @@ function createParticipantMessage(index: number, text: string): ChatMessage {
       participantIndex: index,
       participantRole: DEMO_PARTICIPANTS_DATA[index]?.role ?? null,
       model: DEMO_PARTICIPANTS_DATA[index]?.modelId ?? '',
-      finishReason: 'stop' as const,
+      finishReason: FinishReasons.STOP,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       hasError: false,
       isTransient: false,
@@ -195,7 +195,7 @@ function createModeratorMessage(text: string): ChatMessage {
       isModerator: true,
       participantIndex: -99,
       model: 'Council Moderator',
-      finishReason: 'stop' as const,
+      finishReason: FinishReasons.STOP,
       hasError: false,
     },
   };

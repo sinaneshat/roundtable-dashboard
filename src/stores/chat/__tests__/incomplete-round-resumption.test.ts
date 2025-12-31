@@ -19,7 +19,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { act, createTestAssistantMessage, createTestUserMessage, renderHook, waitFor } from '@/lib/testing';
@@ -1086,7 +1086,7 @@ describe('useIncompleteRoundResumption', () => {
         messages: [
           {
             id: `optimistic-user-123-r${roundNumber}`,
-            role: 'user' as const,
+            role: UIMessageRoles.USER as const,
             parts: [{ type: 'text' as const, text: 'New message' }],
             metadata: {
               role: MessageRoles.USER,

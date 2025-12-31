@@ -1,29 +1,28 @@
 import type { ComponentProps } from 'react';
 
-import type { ComponentVariant } from "@/api/core/enums"
+import type { CardVariant } from "@/api/core/enums"
+import { CardVariants, DEFAULT_CARD_VARIANT } from "@/api/core/enums"
 import { cn } from "@/lib/ui/cn"
 import { glassCard } from "@/lib/ui/glassmorphism"
-
-type CardVariant = Extract<ComponentVariant, 'default'> | "glass" | "glass-subtle" | "glass-strong";
 
 type CardProps = ComponentProps<"div"> & {
   variant?: CardVariant;
 };
 
-function Card({ className, variant = "default", ...props }: CardProps) {
-  const variantClasses = {
-    default: "bg-card text-card-foreground rounded-2xl border py-6 shadow-sm",
-    glass: cn(glassCard("medium"), "rounded-2xl py-6"),
-    "glass-subtle": cn(glassCard("subtle"), "rounded-2xl py-6"),
-    "glass-strong": cn(glassCard("strong"), "rounded-2xl py-6"),
-  };
+const CARD_VARIANT_CLASSES: Record<CardVariant, string> = {
+  [CardVariants.DEFAULT]: "bg-card text-card-foreground rounded-2xl border py-6 shadow-sm",
+  [CardVariants.GLASS]: cn(glassCard("medium"), "rounded-2xl py-6"),
+  [CardVariants.GLASS_SUBTLE]: cn(glassCard("subtle"), "rounded-2xl py-6"),
+  [CardVariants.GLASS_STRONG]: cn(glassCard("strong"), "rounded-2xl py-6"),
+};
 
+function Card({ className, variant = DEFAULT_CARD_VARIANT, ...props }: CardProps) {
   return (
     <div
       data-slot="card"
       className={cn(
         "flex flex-col gap-6 w-full min-w-0 overflow-hidden",
-        variantClasses[variant],
+        CARD_VARIANT_CLASSES[variant],
         className
       )}
       {...props}

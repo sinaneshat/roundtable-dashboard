@@ -1,15 +1,3 @@
-/**
- * Moderator Stream Hook
- *
- * Triggers and manages the moderator stream after participants complete.
- * Uses text streaming via fetch to consume the backend's streamText() response.
- *
- * ✅ UNIFIED RENDERING: Uses same message-based path as participants
- * Moderator message is added to messages array during streaming (just like participants)
- * and rendered via the same ModelMessageCard component with no special handling.
- * Uses throttled updates to match participant streaming behavior.
- */
-
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
@@ -17,7 +5,7 @@ import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { MessagePartTypes, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
+import { MessagePartTypes, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, UIMessageRoles } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers';
 import { queryKeys } from '@/lib/data/query-keys';
 import { chatMessagesToUIMessages } from '@/lib/utils';
@@ -48,8 +36,6 @@ type UseModeratorStreamOptions = {
 export function useModeratorStream({ threadId, enabled = true }: UseModeratorStreamOptions) {
   const queryClient = useQueryClient();
 
-  // ✅ ZUSTAND v5 BEST PRACTICE: Batch all store subscriptions with useShallow
-  // Prevents 7 individual subscriptions that can trigger cascading re-renders
   const {
     participants,
     messages,
@@ -77,7 +63,6 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  // Track current messages ref to avoid stale closure in streaming loop
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -90,9 +75,6 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
     };
   }, []);
 
-  /**
-   * Trigger the moderator stream for a specific round
-   */
   const triggerModeratorStream = useCallback(async (
     roundNumber: number,
     participantMessageIds: string[],
@@ -100,17 +82,14 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
     if (!enabled || !threadId)
       return;
 
-    // Check if already triggered
     const moderatorId = `${threadId}_r${roundNumber}_moderator`;
     if (hasModeratorStreamBeenTriggered(moderatorId, roundNumber)) {
       return;
     }
 
-    // Mark as triggered
     markModeratorStreamTriggered(moderatorId, roundNumber);
     setIsModeratorStreaming(true);
 
-    // Abort any existing stream
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -124,15 +103,10 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
       roundNumber,
     });
 
-    // ✅ UNIFIED RENDERING: Update existing moderator placeholder to streaming state
-    // The placeholder was already added in use-streaming-trigger.ts or use-pending-message.ts when round started
-    // Now we update it to show streaming state with empty text
-    // Use function updater to reduce race conditions with concurrent updates
     setMessages((currentMessages) => {
       const hasExistingPlaceholder = currentMessages.some(msg => msg.id === moderatorId);
 
       if (hasExistingPlaceholder) {
-        // Update existing placeholder to streaming state
         return currentMessages.map(msg =>
           msg.id === moderatorId
             ? {
@@ -142,11 +116,10 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
             : msg,
         );
       } else {
-        // Fallback: Add moderator message if placeholder doesn't exist (e.g., resumption)
         const streamingModeratorMessage: UIMessage = {
           id: moderatorId,
-          role: 'assistant',
-          parts: [{ type: 'text', text: '' }],
+          role: UIMessageRoles.ASSISTANT,
+          parts: [{ type: MessagePartTypes.TEXT, text: '' }],
           metadata: {
             isModerator: true,
             roundNumber,
@@ -182,9 +155,6 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
 
       const decoder = new TextDecoder();
       let accumulatedText = '';
-
-      // ✅ UNIFIED RENDERING: Throttle UI updates to match participant behavior
-      // Without throttling, per-chunk updates create a "typing effect"
       let lastUpdateTime = 0;
       let pendingUpdate = false;
 
@@ -206,7 +176,6 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
         }
       };
 
-      // Read the stream
       while (true) {
         const { done, value } = await reader.read();
         if (done)
@@ -214,40 +183,34 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
 
         const chunk = decoder.decode(value, { stream: true });
 
-        // Parse SSE format from AI SDK
         const lines = chunk.split('\n');
         for (const line of lines) {
           if (line.startsWith('0:')) {
-            // Text chunk from streamText
             try {
               const textData = JSON.parse(line.slice(2));
               if (typeof textData === 'string') {
                 accumulatedText += textData;
                 pendingUpdate = true;
 
-                // ✅ UNIFIED RENDERING: Throttle updates to match AI SDK batching behavior
                 const now = Date.now();
                 if (now - lastUpdateTime >= UPDATE_THROTTLE_MS) {
                   flushUpdate();
                 }
               }
             } catch {
-              // Ignore parse errors
             }
           }
         }
       }
 
-      // Flush any pending update at stream end
       if (pendingUpdate) {
         flushUpdate();
       }
 
-      // Stream completed - fetch fresh messages to get the saved moderator message with full metadata
       const result = await queryClient.fetchQuery({
         queryKey: queryKeys.threads.messages(threadId),
         queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
-        staleTime: 0, // Force fresh fetch
+        staleTime: 0,
       });
 
       if (result.success && result.data?.messages) {
@@ -261,7 +224,6 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
       }));
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        // Aborted - not an error
         setState(prev => ({
           ...prev,
           isStreaming: false,
@@ -276,8 +238,6 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
       }));
     } finally {
       setIsModeratorStreaming(false);
-      // ✅ CRITICAL FIX: Call completeStreaming to clear pendingMessage and streamingRoundNumber
-      // Without this, the chat input remains disabled because pendingMessage is never cleared
       completeStreaming();
       abortControllerRef.current = null;
     }

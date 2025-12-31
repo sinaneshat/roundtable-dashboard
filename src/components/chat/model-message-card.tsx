@@ -295,11 +295,11 @@ export const ModelMessageCard = memo(({
   // ✅ Helper function to render content parts (extracted for ScrollArea wrapping)
   function renderContentParts() {
     // ✅ MODEL NORMALIZATION: Uses pre-filtered renderableParts (non-renderable reasoning excluded)
+    // ✅ TYPE-SAFE: Use Record type with known keys and validate before access
+    const order: Record<string, number> = { 'reasoning': 0, 'text': 1, 'tool-call': 2, 'tool-result': 3 };
+    const getOrder = (type: string): number => order[type] ?? 4;
     const sortedParts = [...renderableParts].sort((a, b) => {
-      const order = { 'reasoning': 0, 'text': 1, 'tool-call': 2, 'tool-result': 3 };
-      const aOrder = order[a.type as keyof typeof order] ?? 4;
-      const bOrder = order[b.type as keyof typeof order] ?? 4;
-      return aOrder - bOrder;
+      return getOrder(a.type) - getOrder(b.type);
     });
 
     return sortedParts.map((part, partIndex) => {

@@ -15,7 +15,12 @@ import { ulid } from 'ulid';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses } from '@/api/core';
-import { DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import {
+  DEFAULT_CHAT_MODE,
+  MessagePartTypes,
+  MessageRoles,
+  ProjectIndexStatusSchema,
+} from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { getAllModels, getModelById } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
@@ -108,9 +113,8 @@ import {
 // Helper: Build MCP Response
 // ============================================================================
 
-function mcpResult(data: unknown, _toolName?: string): ToolCallResult {
+function mcpResult(data: unknown): ToolCallResult {
   const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-  // ✅ TYPE-SAFE: Use isObject type guard for Record<string, unknown> narrowing
   const structuredContent = isObject(data) ? data : undefined;
   return {
     content: [{ type: 'text', text }],
@@ -183,7 +187,6 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
         }
 
         case 'resources/read': {
-          // ✅ TYPE-SAFE: Use Zod schema validation instead of forced casting
           const resourceParams = ResourceReadParamsSchema.safeParse(request.params);
           if (!resourceParams.success) {
             return jsonRpcResponse(undefined, {
@@ -343,7 +346,6 @@ async function executeToolInternal(
 
   const db = await getDbAsync();
 
-  // ✅ TYPE-SAFE: Use Zod validation for tool inputs instead of force casts
   try {
     switch (toolName) {
       // ----------------------------------------------------------------------
@@ -637,30 +639,21 @@ async function toolGetThread(
     throw createError.unauthorized('Access denied');
   }
 
-  // ✅ TYPE-SAFE: Explicitly type messages instead of unknown[]
-  type ThreadMessage = {
-    id: string;
-    role: string;
-    content: string;
-    roundNumber: number | null;
-    participantId: string | null;
-  };
-
-  let messages: ThreadMessage[] = [];
-  if (input.includeMessages !== false) {
-    const dbMessages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, input.threadId),
-      orderBy: [asc(tables.chatMessage.createdAt)],
-      limit: input.maxMessages || 50,
-    });
-    messages = dbMessages.map(m => ({
-      id: m.id,
-      role: m.role,
-      content: m.parts.map(p => p.type === 'text' ? p.text : '').join(''),
-      roundNumber: m.roundNumber,
-      participantId: m.participantId,
-    }));
-  }
+  const messages = input.includeMessages !== false
+    ? await db.query.chatMessage.findMany({
+        where: eq(tables.chatMessage.threadId, input.threadId),
+        orderBy: [asc(tables.chatMessage.createdAt)],
+        limit: input.maxMessages || 50,
+      }).then(dbMessages =>
+        dbMessages.map(m => ({
+          id: m.id,
+          role: m.role,
+          content: m.parts.map(p => p.type === MessagePartTypes.TEXT ? p.text : '').join(''),
+          roundNumber: m.roundNumber,
+          participantId: m.participantId,
+        })),
+      )
+    : [];
 
   return mcpResult({
     thread: {
@@ -778,8 +771,6 @@ async function toolGenerateResponses(
     throw createError.badRequest('No enabled participants');
   }
 
-  // Calculate round number
-  // Message parameter accepts unknown type - no cast needed
   const roundResult = await calculateRoundNumber({
     threadId: input.threadId,
     participantIndex: DEFAULT_PARTICIPANT_INDEX,
@@ -835,7 +826,7 @@ async function toolGenerateResponses(
     const maxOutputTokens = getSafeMaxOutputTokens(modelContextLength, estimatedInputTokens, userTier);
 
     const systemPrompt = participant.settings?.systemPrompt || buildParticipantSystemPrompt(participant.role);
-    const supportsTemp = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
+    const supportsTemperature = modelInfo?.supports_temperature ?? true;
 
     const streamMessageId = ulid();
     const finishResult = await streamText({
@@ -843,7 +834,7 @@ async function toolGenerateResponses(
       system: systemPrompt,
       messages: modelMessages,
       maxOutputTokens,
-      ...(supportsTemp && { temperature: participant.settings?.temperature ?? 0.7 }),
+      ...(supportsTemperature && { temperature: participant.settings?.temperature ?? 0.7 }),
       maxRetries: AI_RETRY_CONFIG.maxAttempts,
       abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
     });
@@ -994,7 +985,6 @@ async function toolGetRoundSummary(
 ): Promise<ToolCallResult> {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
-  // ✅ TEXT STREAMING: Query chatMessage for moderator messages
   const messages = await db.query.chatMessage.findMany({
     where: and(
       eq(tables.chatMessage.threadId, input.threadId),
@@ -1004,7 +994,6 @@ async function toolGetRoundSummary(
     orderBy: [desc(tables.chatMessage.createdAt)],
   });
 
-  // Find the moderator message (has metadata.isModerator: true)
   const moderatorMessage = messages.find((msg) => {
     const metadata = msg.metadata;
     return metadata && typeof metadata === 'object' && 'isModerator' in metadata && metadata.isModerator === true;
@@ -1014,9 +1003,8 @@ async function toolGetRoundSummary(
     return mcpError(`No summary found for round ${input.roundNumber}`);
   }
 
-  // Extract text content from parts
   const textParts = (moderatorMessage.parts || []).filter(
-    (p): p is { type: 'text'; text: string } => p && typeof p === 'object' && 'type' in p && p.type === 'text',
+    (p): p is { type: 'text'; text: string } => p && typeof p === 'object' && 'type' in p && p.type === MessagePartTypes.TEXT,
   );
   const summaryText = textParts.map(p => p.text).join('\n');
 
@@ -1083,7 +1071,6 @@ async function toolUpdateParticipant(
   if (!participant)
     throw createError.notFound('Participant not found');
 
-  // ✅ TYPE-SAFE: Build typed update object instead of Record<string, unknown>
   const updates = {
     updatedAt: new Date(),
     ...(input.role !== undefined && { role: input.role }),
@@ -1123,7 +1110,6 @@ async function toolListModels(
   let models = getAllModels();
 
   if (input.provider) {
-    // ✅ TYPE-SAFE: Capture provider in local const for type narrowing in filter callback
     const providerFilter = input.provider.toLowerCase();
     models = models.filter(m => m.provider.toLowerCase() === providerFilter);
   }
@@ -1292,7 +1278,6 @@ async function toolUpdateProject(
   if (!existing)
     throw createError.notFound(`Project not found: ${input.projectId}`);
 
-  // ✅ TYPE-SAFE: Build typed update object instead of Record<string, unknown>
   const updates = {
     updatedAt: new Date(),
     ...(input.name !== undefined && { name: input.name }),
@@ -1331,14 +1316,11 @@ async function toolDeleteProject(
   if (!project)
     throw createError.notFound(`Project not found: ${input.projectId}`);
 
-  // Count attachments before deletion for response
   const attachments = await db.query.projectAttachment.findMany({
     where: eq(tables.projectAttachment.projectId, input.projectId),
     columns: { id: true },
   });
 
-  // Delete project (cascades projectAttachment and projectMemory via FK)
-  // Note: We don't delete R2 files here since they're managed via the upload table
   await db.delete(tables.chatProject).where(eq(tables.chatProject.id, input.projectId));
 
   return mcpResult({
@@ -1404,10 +1386,10 @@ async function toolListKnowledgeFiles(
   if (!project)
     throw createError.notFound(`Project not found: ${input.projectId}`);
 
-  // Build filters
   const filters = [eq(tables.projectAttachment.projectId, input.projectId)];
   if (input.status) {
-    filters.push(eq(tables.projectAttachment.indexStatus, input.status as 'pending' | 'indexing' | 'indexed' | 'failed'));
+    const validatedStatus = ProjectIndexStatusSchema.parse(input.status);
+    filters.push(eq(tables.projectAttachment.indexStatus, validatedStatus));
   }
 
   const attachments = await db.query.projectAttachment.findMany({
@@ -1462,7 +1444,6 @@ async function toolDeleteKnowledgeFile(
   if (!attachment)
     throw createError.notFound(`Attachment not found: ${input.fileId}`);
 
-  // Remove reference (not the underlying file - S3/R2 best practice)
   await db.delete(tables.projectAttachment).where(eq(tables.projectAttachment.id, input.fileId));
 
   return mcpResult({

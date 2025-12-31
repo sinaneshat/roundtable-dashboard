@@ -189,7 +189,8 @@ export function CodeBlockCopyButton({
       }
       timeoutRef.current = setTimeout(() => setIsCopied(false), timeout);
     } catch (error) {
-      onError?.(error as Error);
+      // ✅ TYPE-SAFE: Use proper error type guard instead of force cast
+      onError?.(error instanceof Error ? error : new Error(String(error)));
     }
   };
 

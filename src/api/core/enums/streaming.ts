@@ -7,20 +7,25 @@
 import { z } from '@hono/zod-openapi';
 
 // ============================================================================
-// GENERIC OPERATION STATUS
+// OPERATION STATUS (Generic async operation lifecycle)
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const OPERATION_STATUSES = ['idle', 'pending', 'active', 'streaming', 'complete', 'failed'] as const;
 
-export const DEFAULT_OPERATION_STATUS: OperationStatus = 'idle';
-
+// 2. ZOD SCHEMA
 export const OperationStatusSchema = z.enum(OPERATION_STATUSES).openapi({
   description: 'Generic async operation lifecycle status',
   example: 'streaming',
 });
 
+// 3. TYPESCRIPT TYPE
 export type OperationStatus = z.infer<typeof OperationStatusSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_OPERATION_STATUS: OperationStatus = 'idle';
+
+// 5. CONSTANT OBJECT
 export const OperationStatuses = {
   IDLE: 'idle' as const,
   PENDING: 'pending' as const,
@@ -34,15 +39,22 @@ export const OperationStatuses = {
 // STREAMING EVENT TYPE
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const STREAMING_EVENT_TYPES = ['start', 'chunk', 'complete', 'failed'] as const;
 
+// 2. ZOD SCHEMA
 export const StreamingEventTypeSchema = z.enum(STREAMING_EVENT_TYPES).openapi({
   description: 'Streaming event lifecycle type',
   example: 'chunk',
 });
 
+// 3. TYPESCRIPT TYPE
 export type StreamingEventType = z.infer<typeof StreamingEventTypeSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_STREAMING_EVENT_TYPE: StreamingEventType = 'start';
+
+// 5. CONSTANT OBJECT
 export const StreamingEventTypes = {
   START: 'start' as const,
   CHUNK: 'chunk' as const,
@@ -54,17 +66,22 @@ export const StreamingEventTypes = {
 // STREAM BUFFER STATUS (Resumable Streams)
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const STREAM_STATUSES = ['pending', 'initializing', 'streaming', 'completing', 'active', 'completed', 'failed', 'expired', 'timeout'] as const;
 
-export const DEFAULT_STREAM_STATUS: StreamStatus = 'pending';
-
+// 2. ZOD SCHEMA
 export const StreamStatusSchema = z.enum(STREAM_STATUSES).openapi({
   description: 'Stream buffer status for resumable AI SDK streams',
   example: 'streaming',
 });
 
+// 3. TYPESCRIPT TYPE
 export type StreamStatus = z.infer<typeof StreamStatusSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_STREAM_STATUS: StreamStatus = 'pending';
+
+// 5. CONSTANT OBJECT
 export const StreamStatuses = {
   PENDING: 'pending' as const,
   INITIALIZING: 'initializing' as const,
@@ -81,17 +98,22 @@ export const StreamStatuses = {
 // PARTICIPANT STREAM STATUS (Round-Level Stream Tracking)
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const PARTICIPANT_STREAM_STATUSES = ['active', 'completed', 'failed'] as const;
 
-export const DEFAULT_PARTICIPANT_STREAM_STATUS: ParticipantStreamStatus = 'active';
-
+// 2. ZOD SCHEMA
 export const ParticipantStreamStatusSchema = z.enum(PARTICIPANT_STREAM_STATUSES).openapi({
   description: 'Individual participant stream status within a round',
   example: 'active',
 });
 
+// 3. TYPESCRIPT TYPE
 export type ParticipantStreamStatus = z.infer<typeof ParticipantStreamStatusSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_PARTICIPANT_STREAM_STATUS: ParticipantStreamStatus = 'active';
+
+// 5. CONSTANT OBJECT
 export const ParticipantStreamStatuses = {
   ACTIVE: 'active' as const,
   COMPLETED: 'completed' as const,
@@ -102,17 +124,22 @@ export const ParticipantStreamStatuses = {
 // FLOW STATE (Chat conversation flow lifecycle)
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const FLOW_STATES = ['idle', 'creating_thread', 'streaming_participants', 'creating_moderator', 'streaming_moderator', 'completing', 'navigating', 'complete'] as const;
 
-export const DEFAULT_FLOW_STATE: FlowState = 'idle';
-
+// 2. ZOD SCHEMA
 export const FlowStateSchema = z.enum(FLOW_STATES).openapi({
   description: 'Chat conversation flow lifecycle state',
   example: 'streaming_participants',
 });
 
+// 3. TYPESCRIPT TYPE
 export type FlowState = z.infer<typeof FlowStateSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_FLOW_STATE: FlowState = 'idle';
+
+// 5. CONSTANT OBJECT
 export const FlowStates = {
   IDLE: 'idle' as const,
   CREATING_THREAD: 'creating_thread' as const,
@@ -128,15 +155,22 @@ export const FlowStates = {
 // CHAIN OF THOUGHT STEP STATUS
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const CHAIN_OF_THOUGHT_STEP_STATUSES = ['pending', 'active', 'complete'] as const;
 
+// 2. ZOD SCHEMA
 export const ChainOfThoughtStepStatusSchema = z.enum(CHAIN_OF_THOUGHT_STEP_STATUSES).openapi({
   description: 'Chain of thought reasoning step status',
   example: 'active',
 });
 
+// 3. TYPESCRIPT TYPE
 export type ChainOfThoughtStepStatus = z.infer<typeof ChainOfThoughtStepStatusSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_CHAIN_OF_THOUGHT_STEP_STATUS: ChainOfThoughtStepStatus = 'pending';
+
+// 5. CONSTANT OBJECT
 export const ChainOfThoughtStepStatuses = {
   PENDING: 'pending' as const,
   ACTIVE: 'active' as const,
@@ -147,6 +181,7 @@ export const ChainOfThoughtStepStatuses = {
 // PENDING MESSAGE VALIDATION REASON
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const PENDING_MESSAGE_VALIDATION_REASONS = [
   'public screen mode',
   'no pending message or expected participants',
@@ -158,13 +193,19 @@ export const PENDING_MESSAGE_VALIDATION_REASONS = [
   'waiting for pre-search',
 ] as const;
 
+// 2. ZOD SCHEMA
 export const PendingMessageValidationReasonSchema = z.enum(PENDING_MESSAGE_VALIDATION_REASONS).openapi({
   description: 'Reason why pending message cannot be sent',
   example: 'waiting for pre-search',
 });
 
+// 3. TYPESCRIPT TYPE
 export type PendingMessageValidationReason = z.infer<typeof PendingMessageValidationReasonSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_PENDING_MESSAGE_VALIDATION_REASON: PendingMessageValidationReason = 'no pending message or expected participants';
+
+// 5. CONSTANT OBJECT
 export const PendingMessageValidationReasons = {
   PUBLIC_SCREEN_MODE: 'public screen mode' as const,
   NO_PENDING_MESSAGE: 'no pending message or expected participants' as const,
@@ -180,28 +221,22 @@ export const PendingMessageValidationReasons = {
 // ROUND PHASE (Unified stream resumption phase tracking)
 // ============================================================================
 
-/**
- * Round Phase - Current phase of a conversation round for resumption
- *
- * Order of phases in a complete round:
- * 1. pre_search - Web search is executing (if enabled)
- * 2. participants - AI participants are streaming responses
- * 3. moderator - Moderator message is being generated
- * 4. complete - All phases finished successfully
- *
- * Used by ThreadStreamResumptionState to determine where to resume.
- */
+// 1. ARRAY CONSTANT
 export const ROUND_PHASES = ['idle', 'pre_search', 'participants', 'moderator', 'complete'] as const;
 
-export const DEFAULT_ROUND_PHASE: RoundPhase = 'idle';
-
+// 2. ZOD SCHEMA
 export const RoundPhaseSchema = z.enum(ROUND_PHASES).openapi({
   description: 'Current phase of a conversation round for stream resumption',
   example: 'participants',
 });
 
+// 3. TYPESCRIPT TYPE
 export type RoundPhase = z.infer<typeof RoundPhaseSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_ROUND_PHASE: RoundPhase = 'idle';
+
+// 5. CONSTANT OBJECT
 export const RoundPhases = {
   IDLE: 'idle' as const,
   PRE_SEARCH: 'pre_search' as const,
@@ -214,23 +249,29 @@ export const RoundPhases = {
 // STREAM PHASE (Active streaming phases for API)
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const STREAM_PHASES = ['presearch', 'participant', 'moderator'] as const;
 
+// 2. ZOD SCHEMA
 export const StreamPhaseSchema = z.enum(STREAM_PHASES).openapi({
   description: 'Current phase of an active stream',
   example: 'participant',
 });
 
+// 3. TYPESCRIPT TYPE
 export type StreamPhase = z.infer<typeof StreamPhaseSchema>;
 
+// 4. DEFAULT VALUE
 export const DEFAULT_STREAM_PHASE: StreamPhase = 'participant';
 
+// 5. CONSTANT OBJECT
 export const StreamPhases = {
   PRESEARCH: 'presearch' as const,
   PARTICIPANT: 'participant' as const,
   MODERATOR: 'moderator' as const,
 } as const;
 
+// 6. TYPE GUARD (optional helper)
 export function isStreamPhase(value: unknown): value is StreamPhase {
   return typeof value === 'string' && STREAM_PHASES.includes(value as StreamPhase);
 }
@@ -239,17 +280,22 @@ export function isStreamPhase(value: unknown): value is StreamPhase {
 // POLLING STATUS (API Responses)
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const POLLING_STATUSES = ['pending', 'streaming', 'processing'] as const;
 
-export const DEFAULT_POLLING_STATUS: PollingStatus = 'pending';
-
+// 2. ZOD SCHEMA
 export const PollingStatusSchema = z.enum(POLLING_STATUSES).openapi({
   description: 'Status of a polling operation for async API responses',
   example: 'pending',
 });
 
+// 3. TYPESCRIPT TYPE
 export type PollingStatus = z.infer<typeof PollingStatusSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_POLLING_STATUS: PollingStatus = 'pending';
+
+// 5. CONSTANT OBJECT
 export const PollingStatuses = {
   PENDING: 'pending' as const,
   STREAMING: 'streaming' as const,

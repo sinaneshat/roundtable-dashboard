@@ -18,101 +18,128 @@
  */
 
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { z } from 'zod';
 
-import { MessageRoles } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 
 // ============================================================================
-// Type Definitions
+// ZOD SCHEMAS - SINGLE SOURCE OF TRUTH
 // ============================================================================
 
-export type ProjectContextParams = {
-  projectId: string;
-  currentThreadId: string; // Exclude current thread from context
-  userQuery: string;
-  maxMemories?: number;
-  maxMessagesPerThread?: number;
-  maxSearchResults?: number;
-  maxModerators?: number;
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-};
+const ProjectMemoryItemSchema = z.object({
+  id: z.string().min(1),
+  content: z.string(),
+  summary: z.string().nullable(),
+  source: z.string(),
+  importance: z.number().int().nonnegative(),
+  sourceThreadId: z.string().nullable(),
+});
 
-export type ProjectMemoryContext = {
-  memories: Array<{
-    id: string;
-    content: string;
-    summary: string | null;
-    source: string;
-    importance: number;
-    sourceThreadId: string | null;
-  }>;
-  totalCount: number;
-};
+export const ProjectMemoryContextSchema = z.object({
+  memories: z.array(ProjectMemoryItemSchema),
+  totalCount: z.number().int().nonnegative(),
+});
 
-export type ProjectChatContext = {
-  threads: Array<{
-    id: string;
-    title: string;
-    messages: Array<{
-      role: string;
-      content: string;
-      roundNumber: number;
-    }>;
-  }>;
-  totalThreads: number;
-};
+const ProjectChatMessageSchema = z.object({
+  role: z.string(),
+  content: z.string(),
+  roundNumber: z.number().int().nonnegative(),
+});
 
-export type ProjectSearchContext = {
-  searches: Array<{
-    threadId: string;
-    threadTitle: string;
-    roundNumber: number;
-    userQuery: string;
-    summary: string | null;
-    results: Array<{
-      query: string;
-      answer: string | null;
-    }>;
-  }>;
-  totalCount: number;
-};
+const ProjectChatThreadSchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  messages: z.array(ProjectChatMessageSchema),
+});
 
-export type ProjectModeratorContext = {
-  moderators: Array<{
-    threadId: string;
-    threadTitle: string;
-    roundNumber: number;
-    userQuestion: string;
-    moderator: string;
-    recommendations: string[];
-    keyThemes: string | null;
-  }>;
-  totalCount: number;
-};
+export const ProjectChatContextSchema = z.object({
+  threads: z.array(ProjectChatThreadSchema),
+  totalThreads: z.number().int().nonnegative(),
+});
 
-export type ProjectAttachmentContext = {
-  attachments: Array<{
-    id: string;
-    filename: string;
-    mimeType: string;
-    fileSize: number;
-    r2Key: string;
-    threadId: string | null;
-    threadTitle: string | null;
-  }>;
-  totalCount: number;
-};
+const ProjectSearchResultSchema = z.object({
+  query: z.string(),
+  answer: z.string().nullable(),
+});
 
-export type AggregatedProjectContext = {
-  memories: ProjectMemoryContext;
-  chats: ProjectChatContext;
-  searches: ProjectSearchContext;
-  moderators: ProjectModeratorContext;
-  attachments: ProjectAttachmentContext;
-};
+const ProjectSearchItemSchema = z.object({
+  threadId: z.string().min(1),
+  threadTitle: z.string(),
+  roundNumber: z.number().int().nonnegative(),
+  userQuery: z.string(),
+  summary: z.string().nullable(),
+  results: z.array(ProjectSearchResultSchema),
+});
+
+export const ProjectSearchContextSchema = z.object({
+  searches: z.array(ProjectSearchItemSchema),
+  totalCount: z.number().int().nonnegative(),
+});
+
+const ProjectModeratorItemSchema = z.object({
+  threadId: z.string().min(1),
+  threadTitle: z.string(),
+  roundNumber: z.number().int().nonnegative(),
+  userQuestion: z.string(),
+  moderator: z.string(),
+  recommendations: z.array(z.string()),
+  keyThemes: z.string().nullable(),
+});
+
+export const ProjectModeratorContextSchema = z.object({
+  moderators: z.array(ProjectModeratorItemSchema),
+  totalCount: z.number().int().nonnegative(),
+});
+
+const ProjectAttachmentItemSchema = z.object({
+  id: z.string().min(1),
+  filename: z.string(),
+  mimeType: z.string(),
+  fileSize: z.number().int().nonnegative(),
+  r2Key: z.string(),
+  threadId: z.string().nullable(),
+  threadTitle: z.string().nullable(),
+});
+
+export const ProjectAttachmentContextSchema = z.object({
+  attachments: z.array(ProjectAttachmentItemSchema),
+  totalCount: z.number().int().nonnegative(),
+});
+
+export const AggregatedProjectContextSchema = z.object({
+  memories: ProjectMemoryContextSchema,
+  chats: ProjectChatContextSchema,
+  searches: ProjectSearchContextSchema,
+  moderators: ProjectModeratorContextSchema,
+  attachments: ProjectAttachmentContextSchema,
+});
+
+export const ProjectContextParamsSchema = z.object({
+  projectId: z.string().min(1),
+  currentThreadId: z.string().min(1),
+  userQuery: z.string(),
+  maxMemories: z.number().int().positive().optional(),
+  maxMessagesPerThread: z.number().int().positive().optional(),
+  maxSearchResults: z.number().int().positive().optional(),
+  maxModerators: z.number().int().positive().optional(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+});
+
+// ============================================================================
+// TYPE DEFINITIONS - INFERRED FROM ZOD SCHEMAS
+// ============================================================================
+
+export type ProjectContextParams = z.infer<typeof ProjectContextParamsSchema>;
+export type ProjectMemoryContext = z.infer<typeof ProjectMemoryContextSchema>;
+export type ProjectChatContext = z.infer<typeof ProjectChatContextSchema>;
+export type ProjectSearchContext = z.infer<typeof ProjectSearchContextSchema>;
+export type ProjectModeratorContext = z.infer<typeof ProjectModeratorContextSchema>;
+export type ProjectAttachmentContext = z.infer<typeof ProjectAttachmentContextSchema>;
+export type AggregatedProjectContext = z.infer<typeof AggregatedProjectContextSchema>;
 
 // ============================================================================
 // Memory Context
@@ -358,7 +385,7 @@ export async function getProjectModeratorContext(
   for (const msg of userMessages) {
     const key = `${msg.threadId}_${msg.roundNumber}`;
     const textParts = (msg.parts || []).filter(
-      (p): p is { type: 'text'; text: string } => p && typeof p === 'object' && 'type' in p && p.type === 'text',
+      (p): p is { type: 'text'; text: string } => p && typeof p === 'object' && 'type' in p && p.type === MessagePartTypes.TEXT,
     );
     if (textParts.length > 0) {
       userQuestionMap.set(key, textParts.map(p => p.text).join(' '));
@@ -368,7 +395,7 @@ export async function getProjectModeratorContext(
   const moderators = moderatorMessages.slice(0, maxModerators).map((msg) => {
     // Extract text from parts
     const textParts = (msg.parts || []).filter(
-      (p): p is { type: 'text'; text: string } => p && typeof p === 'object' && 'type' in p && p.type === 'text',
+      (p): p is { type: 'text'; text: string } => p && typeof p === 'object' && 'type' in p && p.type === MessagePartTypes.TEXT,
     );
     const moderatorText = textParts.map(p => p.text).join('\n');
 

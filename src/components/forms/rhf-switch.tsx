@@ -1,8 +1,5 @@
-// components/TextInput.tsx
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
-
-import { cn } from '@/lib/ui/cn';
-import type { GeneralFormProps } from '@/types/general';
 
 import {
   FormControl,
@@ -10,25 +7,28 @@ import {
   FormField,
   FormItem,
   FormLabel,
-} from '../ui/form';
-import { Switch } from '../ui/switch';
+} from '@/components/ui/form';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/ui/cn';
 
-type Props = {
+type RHFSwitchProps<TFieldValues extends FieldValues = FieldValues> = {
+  name: FieldPath<TFieldValues>;
+  title: string;
+  description?: string;
+  required?: boolean;
+  disabled?: boolean;
   className?: string;
-} & GeneralFormProps;
+};
 
-function RHFSwitch({
+export function RHFSwitch<TFieldValues extends FieldValues = FieldValues>({
   name,
   title,
   description,
-  value: externalValue,
-  onChange: externalOnChange,
   className,
   required,
-
   disabled = false,
-}: Props) {
-  const { control } = useFormContext();
+}: RHFSwitchProps<TFieldValues>) {
+  const { control } = useFormContext<TFieldValues>();
 
   return (
     <FormField
@@ -47,13 +47,8 @@ function RHFSwitch({
               required={required}
               data-testid={field.name}
               disabled={disabled}
-              onCheckedChange={(e) => {
-                if (externalOnChange) {
-                  return externalOnChange?.({ target: { value: e } });
-                }
-                return field.onChange(e);
-              }}
-              checked={field.value !== undefined ? field.value : externalValue}
+              checked={field.value === true}
+              onCheckedChange={field.onChange}
             />
           </FormControl>
         </FormItem>
@@ -61,5 +56,3 @@ function RHFSwitch({
     />
   );
 }
-
-export default RHFSwitch;

@@ -20,8 +20,8 @@ import { z } from 'zod';
 
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import type { CreditAction, CreditTransactionType, PlanType } from '@/api/core/enums';
-import { CreditActionSchema, CreditTransactionTypes, PlanTypes, PlanTypeSchema, StripeSubscriptionStatuses } from '@/api/core/enums';
+import type { CreditAction, CreditTransactionType } from '@/api/core/enums';
+import { CreditActionSchema, CreditTransactionTypes, getGrantTransactionType, parsePlanType, PlanTypes, PlanTypeSchema, StripeSubscriptionStatuses } from '@/api/core/enums';
 import {
   calculateActualCredits,
   getActionCreditCost,
@@ -139,7 +139,13 @@ export async function ensureUserCreditRecord(userId: string): Promise<UserCredit
       return retryResults[0];
     }
 
-    throw new Error('Failed to create credit balance record');
+    const errorContext: ErrorContext = {
+      errorType: 'database',
+      operation: 'insert',
+      table: 'userCreditBalance',
+      userId,
+    };
+    throw createError.database('Failed to create credit balance record', errorContext);
   } catch (error) {
     // Handle unique constraint violation (race condition)
     const retryResults = await db
@@ -173,7 +179,8 @@ export async function getUserCreditBalance(userId: string): Promise<CreditBalanc
     balance: record.balance,
     reserved: record.reservedCredits,
     available: Math.max(0, record.balance - record.reservedCredits),
-    planType: record.planType as PlanType,
+    // TYPE-SAFE: Use parsePlanType instead of type casting
+    planType: parsePlanType(record.planType),
     monthlyCredits: record.monthlyCredits,
     nextRefillAt: record.nextRefillAt,
     payAsYouGoEnabled: record.payAsYouGoEnabled,
@@ -596,9 +603,10 @@ export async function grantCredits(
   }
 
   // Record grant transaction
+  // TYPE-SAFE: Use getGrantTransactionType instead of runtime string manipulation + casting
   await recordTransaction({
     userId,
-    type: CreditTransactionTypes[type.toUpperCase() as keyof typeof CreditTransactionTypes] as CreditTransactionType,
+    type: getGrantTransactionType(type),
     amount,
     balanceAfter: result[0].balance,
     action: type === 'monthly_refill' ? 'monthly_renewal' : type === 'purchase' ? 'credit_purchase' : 'signup_bonus',

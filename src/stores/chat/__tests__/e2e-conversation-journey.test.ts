@@ -19,7 +19,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses, ScreenModes, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { TestAssistantMessage, TestUserMessage } from '@/lib/testing';
 import {
@@ -39,7 +39,7 @@ import {
  * ✅ ENUM PATTERN: Uses role literal for type narrowing
  */
 function isAssistantMessage(msg: TestUserMessage | TestAssistantMessage): msg is TestAssistantMessage {
-  return msg.role === 'assistant';
+  return msg.role === UIMessageRoles.ASSISTANT;
 }
 
 /**
@@ -164,7 +164,7 @@ describe('complete Round 1 Journey', () => {
       state.isStreaming = false;
       state.currentParticipantIndex = 0;
 
-      expect(state.messages.filter(m => m.role === 'assistant')).toHaveLength(2);
+      expect(state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(2);
       expect(state.isStreaming).toBe(false);
 
       // Step 11: Moderator created and streaming
@@ -361,8 +361,8 @@ describe('multi-Round Conversation Journey', () => {
       // Verify round 1 messages
       const round1Messages = state.messages.filter(m => m.metadata.roundNumber === 1);
       expect(round1Messages).toHaveLength(3);
-      expect(round1Messages.filter(m => m.role === 'user')).toHaveLength(1);
-      expect(round1Messages.filter(m => m.role === 'assistant')).toHaveLength(2);
+      expect(round1Messages.filter(m => m.role === UIMessageRoles.USER)).toHaveLength(1);
+      expect(round1Messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(2);
     });
 
     it('round numbers increment sequentially', () => {
@@ -388,7 +388,7 @@ describe('multi-Round Conversation Journey', () => {
       }
 
       // Verify round numbers
-      const userMessages = state.messages.filter(m => m.role === 'user');
+      const userMessages = state.messages.filter(m => m.role === UIMessageRoles.USER);
       userMessages.forEach((msg, idx) => {
         expect(msg.metadata.roundNumber).toBe(idx);
       });
@@ -461,7 +461,7 @@ describe('stop Button Journey', () => {
       // Participant 0 partially streaming
       state.messages.push({
         id: 'p0-r0',
-        role: 'assistant' as const,
+        role: UIMessageRoles.ASSISTANT,
         parts: [{ type: 'text' as const, text: 'Partial response being str...' }],
         metadata: {
           role: MessageRoles.ASSISTANT,
@@ -513,7 +513,7 @@ describe('stop Button Journey', () => {
 
       // Should NOT trigger moderator
       const allParticipantsComplete = state.messages.filter(
-        m => m.role === 'assistant' && m.metadata.roundNumber === 0,
+        m => m.role === UIMessageRoles.ASSISTANT && m.metadata.roundNumber === 0,
       ).length === state.participants.length;
 
       expect(allParticipantsComplete).toBe(false);
@@ -672,12 +672,12 @@ describe('error Recovery Journey', () => {
       // User clicks retry
       // Step 1: Delete all assistant messages for round 0
       state.messages = state.messages.filter(
-        m => !(m.role === 'assistant' && m.metadata.roundNumber === 0),
+        m => !(m.role === UIMessageRoles.ASSISTANT && m.metadata.roundNumber === 0),
       );
 
       // Step 2: Delete moderator for round 0
 
-      expect(state.messages.filter(m => m.role === 'assistant')).toHaveLength(0);
+      expect(state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(0);
 
       // Step 3: Re-stream all participants
       state.isStreaming = true;
@@ -705,7 +705,7 @@ describe('error Recovery Journey', () => {
 
       // Round number stays the same
       const round0Messages = state.messages.filter(m => m.metadata.roundNumber === 0);
-      expect(round0Messages.filter(m => m.role === 'assistant')).toHaveLength(2);
+      expect(round0Messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(2);
     });
   });
 });
@@ -776,7 +776,7 @@ describe('navigation Timing Journey', () => {
       // Helper to check if moderator message exists for round 0
       const hasCompletedModerator = () => {
         return state.messages.some(
-          m => m.role === 'assistant'
+          m => m.role === UIMessageRoles.ASSISTANT
             && m.metadata
             && 'isModerator' in m.metadata
             && m.metadata.isModerator === true

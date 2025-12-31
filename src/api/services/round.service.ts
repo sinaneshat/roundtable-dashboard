@@ -13,6 +13,8 @@
 
 import { and, desc, eq } from 'drizzle-orm';
 
+import { createError } from '@/api/common/error-handling';
+import type { ErrorContext } from '@/api/core';
 import { MessageRoles } from '@/api/core/enums';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -177,8 +179,14 @@ export async function calculateRoundNumber(
   });
 
   if (!lastUserMessage) {
-    throw new Error(
-      `Cannot determine round number for participant ${participantIndex}: No user messages found in thread ${threadId}`,
+    const errorContext: ErrorContext = {
+      errorType: 'resource',
+      resource: 'chatMessage',
+      resourceId: threadId,
+    };
+    throw createError.notFound(
+      `Cannot determine round number for participant ${participantIndex}: No user messages found`,
+      errorContext,
     );
   }
 
@@ -231,8 +239,13 @@ export async function validateRegenerateRound(
   const maxRoundNumber = maxRound?.roundNumber ?? DEFAULT_ROUND_NUMBER;
 
   if (regenerateRound !== maxRoundNumber) {
-    throw new Error(
+    const errorContext: ErrorContext = {
+      errorType: 'validation',
+      field: 'regenerateRound',
+    };
+    throw createError.badRequest(
       `Can only regenerate the most recent round (${maxRoundNumber}). Attempted to regenerate round ${regenerateRound}.`,
+      errorContext,
     );
   }
 }

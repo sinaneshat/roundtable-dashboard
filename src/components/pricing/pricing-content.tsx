@@ -271,7 +271,11 @@ export function PricingContent({
                         .filter(p => !p.interval) // Only one-time prices
                         .sort((a, b) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0))
                         .map((price, index) => {
-                          const creditsAmount = CREDIT_CONFIG.CUSTOM_CREDITS.packages[price.id as keyof typeof CREDIT_CONFIG.CUSTOM_CREDITS.packages] ?? 0;
+                          // ✅ TYPE-SAFE: Validate price.id exists in packages before access
+                          const packages = CREDIT_CONFIG.CUSTOM_CREDITS.packages;
+                          const creditsAmount = price.id in packages
+                            ? packages[price.id as keyof typeof packages]
+                            : 0;
                           return (
                             <motion.div
                               key={price.id}

@@ -25,6 +25,8 @@ import type { Context } from 'hono';
 import { jwtVerify, SignJWT } from 'jose';
 import { z } from 'zod';
 
+import { createError } from '@/api/common/error-handling';
+import type { ErrorContext } from '@/api/core';
 import type { ApiEnv } from '@/api/types';
 
 // ============================================================================
@@ -200,7 +202,11 @@ export async function createUploadTicket(
   // Get signing secret
   const secret = c.env.BETTER_AUTH_SECRET;
   if (!secret) {
-    throw new Error('BETTER_AUTH_SECRET not configured');
+    const errorContext: ErrorContext = {
+      errorType: 'validation',
+      field: 'BETTER_AUTH_SECRET',
+    };
+    throw createError.internal('BETTER_AUTH_SECRET not configured', errorContext);
   }
 
   // Generate ticket

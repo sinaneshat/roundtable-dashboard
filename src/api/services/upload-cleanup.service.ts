@@ -11,6 +11,8 @@
  * @see /src/api/types/uploads.ts for type definitions
  */
 
+import { createError } from '@/api/common/error-handling';
+import type { ErrorContext } from '@/api/core';
 import type {
   CancelCleanupResult,
   GetCleanupStateResult,
@@ -46,7 +48,11 @@ export async function scheduleUploadCleanup(
   if (!response.ok) {
     const error = await response.text();
     console.error(`[UploadCleanup] Failed to schedule cleanup for ${uploadId}:`, error);
-    throw new Error(`Failed to schedule upload cleanup: ${error}`);
+    const errorContext: ErrorContext = {
+      errorType: 'external_service',
+      serviceName: 'UploadCleanupScheduler',
+    };
+    throw createError.internal(`Failed to schedule upload cleanup: ${error}`, errorContext);
   }
 
   return response.json();

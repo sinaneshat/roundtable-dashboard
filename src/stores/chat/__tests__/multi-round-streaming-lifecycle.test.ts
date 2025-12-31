@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import type { UIMessageRole } from '@/api/core/enums';
+import { UIMessageRoles } from '@/api/core/enums';
+
 /**
  * Multi-Round Streaming Lifecycle Tests
  *
@@ -22,15 +25,17 @@ type Participant = {
   isEnabled: boolean;
 };
 
+type MessageStatus = 'pending' | 'streaming' | 'complete' | 'error';
+
 type Message = {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: UIMessageRole;
   content: string;
   roundNumber: number;
   participantId?: string;
   participantIndex?: number;
   createdAt: Date;
-  status: 'pending' | 'streaming' | 'complete' | 'error';
+  status: MessageStatus;
 };
 
 type PreSearchStatus = {
@@ -153,7 +158,7 @@ function addStreamingMessage(
 
   const message: Message = {
     id: messageId,
-    role: 'assistant',
+    role: UIMessageRoles.ASSISTANT,
     content: '',
     roundNumber,
     participantId: participant.id,
@@ -255,7 +260,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       let state = createInitialState('thread-123', defaultParticipants);
       const userMessage: Message = {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'What is AI?',
         roundNumber: 0,
         createdAt: new Date(),
@@ -278,7 +283,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Round 0
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'First question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -289,7 +294,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Round 1
       state = initializeRound(state, {
         id: 'user-msg-2',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Second question',
         roundNumber: 1,
         createdAt: new Date(),
@@ -308,7 +313,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Search query',
         roundNumber: 0,
         createdAt: new Date(),
@@ -331,7 +336,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Search query',
         roundNumber: 0,
         createdAt: new Date(),
@@ -358,7 +363,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -380,7 +385,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -427,7 +432,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -456,7 +461,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -489,7 +494,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -521,7 +526,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -561,7 +566,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Complete Round 0
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'First question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -582,7 +587,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Complete Round 1
       state = initializeRound(state, {
         id: 'user-msg-2',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Second question',
         roundNumber: 1,
         createdAt: new Date(),
@@ -603,7 +608,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Complete Round 2
       state = initializeRound(state, {
         id: 'user-msg-3',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Third question',
         roundNumber: 2,
         createdAt: new Date(),
@@ -639,7 +644,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Complete Round 0 with specific content
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'What is machine learning?',
         roundNumber: 0,
         createdAt: new Date(),
@@ -671,7 +676,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Start Round 1
       state = initializeRound(state, {
         id: 'user-msg-2',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'What about deep learning?',
         roundNumber: 1,
         createdAt: new Date(),
@@ -692,7 +697,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Round 0
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Q1',
         roundNumber: 0,
         createdAt: new Date(),
@@ -711,7 +716,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Round 1
       state = initializeRound(state, {
         id: 'user-msg-2',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Q2',
         roundNumber: 1,
         createdAt: new Date(),
@@ -749,7 +754,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -785,7 +790,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -833,7 +838,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -863,7 +868,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -897,7 +902,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Round 0 without web search
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'First question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -918,7 +923,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Round 1 with web search
       state = initializeRound(state, {
         id: 'user-msg-2',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'Search-enabled question',
         roundNumber: 1,
         createdAt: new Date(),
@@ -943,7 +948,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Round 0 with web search
       state = initializeRound(state, {
         id: 'user-msg-1',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'First question',
         roundNumber: 0,
         createdAt: new Date(),
@@ -966,7 +971,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Round 1 without web search
       state = initializeRound(state, {
         id: 'user-msg-2',
-        role: 'user',
+        role: UIMessageRoles.USER,
         content: 'No search question',
         roundNumber: 1,
         createdAt: new Date(),

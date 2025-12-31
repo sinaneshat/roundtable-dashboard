@@ -17,7 +17,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { FinishReasons, MessagePartTypes } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, UIMessageRoles } from '@/api/core/enums';
 
 import { createChatStore } from '../store';
 
@@ -39,7 +39,7 @@ describe('streaming Update Frequency', () => {
       // Simulate rapid streaming chunks (10 chunks in 100ms = 10ms per chunk)
       const baseMessage = {
         id: 'thread-1_r0_p0',
-        role: 'assistant' as const,
+        role: UIMessageRoles.ASSISTANT,
         metadata: { roundNumber: 0, participantIndex: 0 },
         createdAt: new Date(),
       };
@@ -48,7 +48,7 @@ describe('streaming Update Frequency', () => {
       store.getState().setMessages([
         {
           ...baseMessage,
-          parts: [{ type: 'text' as const, text: 'Hello' }],
+          parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }],
         },
       ]);
 
@@ -60,7 +60,7 @@ describe('streaming Update Frequency', () => {
         store.getState().setMessages([
           {
             ...baseMessage,
-            parts: [{ type: 'text' as const, text: 'Hello'.repeat(i + 2) }],
+            parts: [{ type: MessagePartTypes.TEXT, text: 'Hello'.repeat(i + 2) }],
           },
         ]);
       }
@@ -87,8 +87,8 @@ describe('streaming Update Frequency', () => {
 
       const message = {
         id: 'thread-1_r0_p0',
-        role: 'assistant' as const,
-        parts: [{ type: 'text' as const, text: 'Hello world' }],
+        role: UIMessageRoles.ASSISTANT,
+        parts: [{ type: MessagePartTypes.TEXT, text: 'Hello world' }],
         metadata: { roundNumber: 0, participantIndex: 0 },
         createdAt: new Date(),
       };
@@ -112,8 +112,8 @@ describe('streaming Update Frequency', () => {
 
       const createMessage = (text: string) => ({
         id: 'thread-1_r0_p0',
-        role: 'assistant' as const,
-        parts: [{ type: 'text' as const, text }],
+        role: UIMessageRoles.ASSISTANT,
+        parts: [{ type: MessagePartTypes.TEXT, text }],
         metadata: { roundNumber: 0, participantIndex: 0 },
         createdAt: new Date(),
       });
@@ -148,22 +148,22 @@ describe('streaming Update Frequency', () => {
       const messages = [
         {
           id: 'msg-user-0',
-          role: 'user' as const,
-          parts: [{ type: 'text' as const, text: 'User message' }],
+          role: UIMessageRoles.USER,
+          parts: [{ type: MessagePartTypes.TEXT, text: 'User message' }],
           metadata: { roundNumber: 0 },
           createdAt: new Date(),
         },
         {
           id: 'thread-1_r0_p0',
-          role: 'assistant' as const,
-          parts: [{ type: 'text' as const, text: 'Participant 0 complete message' }],
+          role: UIMessageRoles.ASSISTANT,
+          parts: [{ type: MessagePartTypes.TEXT, text: 'Participant 0 complete message' }],
           metadata: { roundNumber: 0, participantIndex: 0 },
           createdAt: new Date(),
         },
         {
           id: 'thread-1_r0_p1',
-          role: 'assistant' as const,
-          parts: [{ type: 'text' as const, text: 'Streaming...' }], // Currently streaming
+          role: UIMessageRoles.ASSISTANT,
+          parts: [{ type: MessagePartTypes.TEXT, text: 'Streaming...' }], // Currently streaming
           metadata: { roundNumber: 0, participantIndex: 1 },
           createdAt: new Date(),
         },
@@ -177,7 +177,7 @@ describe('streaming Update Frequency', () => {
         ...messages.slice(0, 2), // Same earlier messages
         {
           ...messages[2],
-          parts: [{ type: 'text' as const, text: 'Streaming more...' }],
+          parts: [{ type: MessagePartTypes.TEXT, text: 'Streaming more...' }],
         },
       ];
 
@@ -249,16 +249,16 @@ describe('streaming Update Frequency', () => {
 
       const message1 = {
         id: 'thread-1_r0_p0',
-        role: 'assistant' as const,
-        parts: [{ type: 'text' as const, text: 'Hello' }],
+        role: UIMessageRoles.ASSISTANT,
+        parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }],
         metadata: { roundNumber: 0, participantIndex: 0 },
         createdAt: new Date(),
       };
 
       const message2 = {
         id: 'thread-1_r0_p0',
-        role: 'assistant' as const,
-        parts: [{ type: 'text' as const, text: 'Hello World' }],
+        role: UIMessageRoles.ASSISTANT,
+        parts: [{ type: MessagePartTypes.TEXT, text: 'Hello World' }],
         metadata: { roundNumber: 0, participantIndex: 0 },
         createdAt: new Date(),
       };
@@ -277,7 +277,7 @@ describe('streaming Update Frequency', () => {
           const newPart = newMsg.parts[i];
           if (oldPart?.type !== newPart?.type)
             return true;
-          if (oldPart?.type === 'text' && newPart?.type === 'text') {
+          if (oldPart?.type === MessagePartTypes.TEXT && newPart?.type === MessagePartTypes.TEXT) {
             if ('text' in oldPart && 'text' in newPart && oldPart.text !== newPart.text) {
               return true;
             }
@@ -298,8 +298,8 @@ describe('streaming Update Frequency', () => {
 
       const createStreamingMessage = (textLength: number) => ({
         id: 'thread-1_r0_p0',
-        role: 'assistant' as const,
-        parts: [{ type: 'text' as const, text: 'A'.repeat(textLength) }],
+        role: UIMessageRoles.ASSISTANT,
+        parts: [{ type: MessagePartTypes.TEXT, text: 'A'.repeat(textLength) }],
         metadata: { roundNumber: 0, participantIndex: 0 },
         createdAt: new Date(),
       });
@@ -315,7 +315,7 @@ describe('streaming Update Frequency', () => {
       const textPart1 = msg1?.parts?.[0];
       const textPart2 = msg2.parts[0];
 
-      const lengthChanged = textPart1?.type === 'text' && textPart2.type === 'text'
+      const lengthChanged = textPart1?.type === MessagePartTypes.TEXT && textPart2.type === MessagePartTypes.TEXT
         && 'text' in textPart1 && 'text' in textPart2
         && textPart1.text.length !== textPart2.text.length;
 
@@ -377,9 +377,9 @@ describe('streaming Update Frequency', () => {
       for (let i = 1; i <= 10; i++) {
         const moderatorMessage = {
           id: 'thread_r0_moderator',
-          role: 'assistant' as const,
+          role: UIMessageRoles.ASSISTANT,
           parts: [{ type: MessagePartTypes.TEXT, text: `Chunk ${i} ` }],
-          metadata: { role: 'assistant' as const, roundNumber: 0, isModerator: true },
+          metadata: { role: UIMessageRoles.ASSISTANT, roundNumber: 0, isModerator: true },
         };
         store.getState().setMessages([moderatorMessage]);
       }
@@ -400,10 +400,10 @@ describe('streaming Update Frequency', () => {
 
       const moderatorMessage = {
         id: 'thread_r0_moderator',
-        role: 'assistant' as const,
+        role: UIMessageRoles.ASSISTANT,
         parts: [{ type: MessagePartTypes.TEXT, text: 'Summary complete' }],
         metadata: {
-          role: 'assistant' as const,
+          role: UIMessageRoles.ASSISTANT,
           roundNumber: 0,
           isModerator: true,
           finishReason: FinishReasons.UNKNOWN,
@@ -450,10 +450,10 @@ describe('streaming Update Frequency', () => {
       // Participant 0 finishes
       const p0Message = {
         id: 'thread_r0_p0',
-        role: 'assistant' as const,
+        role: UIMessageRoles.ASSISTANT,
         parts: [{ type: MessagePartTypes.TEXT, text: 'Response 0' }],
         metadata: {
-          role: 'assistant' as const,
+          role: UIMessageRoles.ASSISTANT,
           roundNumber: 0,
           participantIndex: 0,
           finishReason: FinishReasons.STOP,
@@ -469,10 +469,10 @@ describe('streaming Update Frequency', () => {
       // Participant 1 starts streaming
       const p1Message = {
         id: 'thread_r0_p1',
-        role: 'assistant' as const,
+        role: UIMessageRoles.ASSISTANT,
         parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }],
         metadata: {
-          role: 'assistant' as const,
+          role: UIMessageRoles.ASSISTANT,
           roundNumber: 0,
           participantIndex: 1,
           finishReason: FinishReasons.UNKNOWN,
@@ -494,10 +494,10 @@ describe('streaming Update Frequency', () => {
       // Participant 0 complete
       const p0Complete = {
         id: 'thread_r0_p0',
-        role: 'assistant' as const,
+        role: UIMessageRoles.ASSISTANT,
         parts: [{ type: MessagePartTypes.TEXT, text: 'P0 complete' }],
         metadata: {
-          role: 'assistant' as const,
+          role: UIMessageRoles.ASSISTANT,
           roundNumber: 0,
           participantIndex: 0,
           participantId: 'participant-0',
@@ -513,10 +513,10 @@ describe('streaming Update Frequency', () => {
 
       const p1Streaming = {
         id: 'thread_r0_p1',
-        role: 'assistant' as const,
+        role: UIMessageRoles.ASSISTANT,
         parts: [{ type: MessagePartTypes.TEXT, text: 'P1 streaming...' }],
         metadata: {
-          role: 'assistant' as const,
+          role: UIMessageRoles.ASSISTANT,
           roundNumber: 0,
           participantIndex: 1,
           participantId: 'participant-1',
@@ -631,9 +631,9 @@ describe('streaming Update Frequency', () => {
       // Simulate complete round: user message + 3 participants + moderator
       const userMessage = {
         id: 'user_r0',
-        role: 'user' as const,
+        role: UIMessageRoles.USER,
         parts: [{ type: MessagePartTypes.TEXT, text: 'Question' }],
-        metadata: { role: 'user' as const, roundNumber: 0 },
+        metadata: { role: UIMessageRoles.USER, roundNumber: 0 },
       };
 
       store.getState().setMessages([userMessage]);
@@ -644,9 +644,9 @@ describe('streaming Update Frequency', () => {
       for (let i = 1; i <= 5; i++) {
         const p0 = {
           id: 'thread_r0_p0',
-          role: 'assistant' as const,
+          role: UIMessageRoles.ASSISTANT,
           parts: [{ type: MessagePartTypes.TEXT, text: 'Response '.repeat(i) }],
-          metadata: { role: 'assistant' as const, roundNumber: 0, participantIndex: 0 },
+          metadata: { role: UIMessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 0 },
           createdAt: new Date(),
         };
         store.getState().setMessages([userMessage, p0]);
@@ -656,18 +656,18 @@ describe('streaming Update Frequency', () => {
       store.getState().setCurrentParticipantIndex(1);
       const p0Final = {
         id: 'thread_r0_p0',
-        role: 'assistant' as const,
+        role: UIMessageRoles.ASSISTANT,
         parts: [{ type: MessagePartTypes.TEXT, text: 'Response '.repeat(5) }],
-        metadata: { role: 'assistant' as const, roundNumber: 0, participantIndex: 0, finishReason: FinishReasons.STOP },
+        metadata: { role: UIMessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 0, finishReason: FinishReasons.STOP },
         createdAt: new Date(),
       };
 
       for (let i = 1; i <= 5; i++) {
         const p1 = {
           id: 'thread_r0_p1',
-          role: 'assistant' as const,
+          role: UIMessageRoles.ASSISTANT,
           parts: [{ type: MessagePartTypes.TEXT, text: 'Another '.repeat(i) }],
-          metadata: { role: 'assistant' as const, roundNumber: 0, participantIndex: 1 },
+          metadata: { role: UIMessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 1 },
           createdAt: new Date(),
         };
         store.getState().setMessages([userMessage, p0Final, p1]);
@@ -679,18 +679,18 @@ describe('streaming Update Frequency', () => {
 
       const p1Final = {
         id: 'thread_r0_p1',
-        role: 'assistant' as const,
+        role: UIMessageRoles.ASSISTANT,
         parts: [{ type: MessagePartTypes.TEXT, text: 'Another '.repeat(5) }],
-        metadata: { role: 'assistant' as const, roundNumber: 0, participantIndex: 1, finishReason: FinishReasons.STOP },
+        metadata: { role: UIMessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 1, finishReason: FinishReasons.STOP },
         createdAt: new Date(),
       };
 
       for (let i = 1; i <= 3; i++) {
         const moderator = {
           id: 'thread_r0_moderator',
-          role: 'assistant' as const,
+          role: UIMessageRoles.ASSISTANT,
           parts: [{ type: MessagePartTypes.TEXT, text: `Summary ${i}` }],
-          metadata: { role: 'assistant' as const, roundNumber: 0, isModerator: true },
+          metadata: { role: UIMessageRoles.ASSISTANT, roundNumber: 0, isModerator: true },
         };
         store.getState().setMessages([userMessage, p0Final, p1Final, moderator]);
       }

@@ -20,7 +20,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageStatuses } from '@/api/core/enums';
+import { FinishReasons, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { TestAssistantMessage, TestUserMessage } from '@/lib/testing';
 import {
@@ -39,7 +39,7 @@ import {
  * ✅ ENUM PATTERN: Uses role literal for type narrowing
  */
 function isAssistantMessage(msg: TestUserMessage | TestAssistantMessage): msg is TestAssistantMessage {
-  return msg.role === 'assistant';
+  return msg.role === UIMessageRoles.ASSISTANT;
 }
 
 /**
@@ -156,7 +156,7 @@ describe('round Numbering', () => {
       ];
 
       // User messages should be at indices 0 (round 0) and 3 (round 1)
-      const userMessages = allMessages.filter(m => m.role === 'user');
+      const userMessages = allMessages.filter(m => m.role === UIMessageRoles.USER);
       expect(userMessages).toHaveLength(2);
       expect(userMessages[0]?.metadata.roundNumber).toBe(0);
       expect(userMessages[1]?.metadata.roundNumber).toBe(1);
@@ -482,8 +482,8 @@ describe('multi-Round Conversations', () => {
       ];
 
       // Should have 2 user messages and 4 assistant messages
-      const userMessages = conversation.filter(m => m.role === 'user');
-      const assistantMessages = conversation.filter(m => m.role === 'assistant');
+      const userMessages = conversation.filter(m => m.role === UIMessageRoles.USER);
+      const assistantMessages = conversation.filter(m => m.role === UIMessageRoles.ASSISTANT);
 
       expect(userMessages).toHaveLength(2);
       expect(assistantMessages).toHaveLength(4);

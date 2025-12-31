@@ -15,12 +15,15 @@ import type { ModelMessage, UIMessage } from 'ai';
 import { convertToModelMessages, validateUIMessages } from 'ai';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { ulid } from 'ulid';
+import { z } from 'zod';
 
 import { createError } from '@/api/common/error-handling';
+import { getErrorMessage } from '@/api/common/error-types';
 import {
   CitationSourcePrefixes,
   CitationSourceTypes,
   MAX_TEXT_CONTENT_SIZE,
+  MessagePartTypes,
   MessageRoles,
   TEXT_EXTRACTABLE_MIME_TYPES,
   UIMessageRoles,
@@ -63,55 +66,74 @@ import { filterNonEmptyMessages, getRoundNumber } from '@/lib/utils';
 import { chatMessagesToUIMessages } from '../routes/chat/handlers/helpers';
 
 // ============================================================================
-// Type Definitions
+// ZOD SCHEMAS - SINGLE SOURCE OF TRUTH
 // ============================================================================
 
-export type LoadParticipantConfigParams = {
-  threadId: string;
-  participantIndex: number;
-  hasPersistedParticipants?: boolean;
-  thread: ChatThread & { participants: ChatParticipant[] };
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-  logger?: TypedLogger;
-};
+const AttachmentErrorSchema = z.object({
+  uploadId: z.string().min(1),
+  error: z.string(),
+});
 
-export type LoadParticipantConfigResult = {
-  participants: ChatParticipant[];
-  participant: ChatParticipant;
-};
+export const LoadParticipantConfigParamsSchema = z.object({
+  threadId: z.string().min(1),
+  participantIndex: z.number().int().nonnegative(),
+  hasPersistedParticipants: z.boolean().optional(),
+  thread: z.custom<ChatThread & { participants: ChatParticipant[] }>(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  logger: z.custom<TypedLogger>().optional(),
+});
 
-export type BuildSystemPromptParams = {
-  participant: ChatParticipant;
-  allParticipants: ChatParticipant[];
-  thread: Pick<ChatThread, 'id' | 'projectId' | 'enableWebSearch' | 'mode'>;
-  userQuery: string;
-  previousDbMessages: ChatMessage[];
-  currentRoundNumber: number;
-  env: { AI?: Ai; UPLOADS_R2_BUCKET?: R2Bucket };
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-  logger?: TypedLogger;
-  attachmentIds?: string[];
-};
+export const LoadParticipantConfigResultSchema = z.object({
+  participants: z.array(z.custom<ChatParticipant>()),
+  participant: z.custom<ChatParticipant>(),
+});
 
-export type BuildSystemPromptResult = {
-  systemPrompt: string;
-  citationSourceMap: CitationSourceMap;
-  citableSources: CitableSource[];
-};
+export const BuildSystemPromptParamsSchema = z.object({
+  participant: z.custom<ChatParticipant>(),
+  allParticipants: z.array(z.custom<ChatParticipant>()),
+  thread: z.custom<Pick<ChatThread, 'id' | 'projectId' | 'enableWebSearch' | 'mode'>>(),
+  userQuery: z.string(),
+  previousDbMessages: z.array(z.custom<ChatMessage>()),
+  currentRoundNumber: z.number().int().nonnegative(),
+  env: z.object({
+    AI: z.custom<Ai>().optional(),
+    UPLOADS_R2_BUCKET: z.custom<R2Bucket>().optional(),
+  }),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  logger: z.custom<TypedLogger>().optional(),
+  attachmentIds: z.array(z.string()).optional(),
+});
 
-export type PrepareValidatedMessagesParams = {
-  previousDbMessages: ChatMessage[];
-  newMessage: UIMessage;
-  logger?: TypedLogger;
-  r2Bucket?: R2Bucket;
-  db?: Awaited<ReturnType<typeof getDbAsync>>;
-  attachmentIds?: string[];
-};
+export const BuildSystemPromptResultSchema = z.object({
+  systemPrompt: z.string(),
+  citationSourceMap: z.custom<CitationSourceMap>(),
+  citableSources: z.array(z.custom<CitableSource>()),
+});
 
-export type PrepareValidatedMessagesResult = {
-  modelMessages: ModelMessage[];
-  attachmentErrors?: Array<{ uploadId: string; error: string }>;
-};
+export const PrepareValidatedMessagesParamsSchema = z.object({
+  previousDbMessages: z.array(z.custom<ChatMessage>()),
+  newMessage: z.custom<UIMessage>(),
+  logger: z.custom<TypedLogger>().optional(),
+  r2Bucket: z.custom<R2Bucket>().optional(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>().optional(),
+  attachmentIds: z.array(z.string()).optional(),
+});
+
+export const PrepareValidatedMessagesResultSchema = z.object({
+  modelMessages: z.array(z.custom<ModelMessage>()),
+  attachmentErrors: z.array(AttachmentErrorSchema).optional(),
+});
+
+// ============================================================================
+// TYPE DEFINITIONS - INFERRED FROM ZOD SCHEMAS
+// ============================================================================
+
+export type LoadParticipantConfigParams = z.infer<typeof LoadParticipantConfigParamsSchema>;
+export type LoadParticipantConfigResult = z.infer<typeof LoadParticipantConfigResultSchema>;
+export type BuildSystemPromptParams = z.infer<typeof BuildSystemPromptParamsSchema>;
+export type BuildSystemPromptResult = z.infer<typeof BuildSystemPromptResultSchema>;
+export type PrepareValidatedMessagesParams = z.infer<typeof PrepareValidatedMessagesParamsSchema>;
+export type PrepareValidatedMessagesResult = z.infer<typeof PrepareValidatedMessagesResultSchema>;
 
 // ============================================================================
 // Thread Attachment Context Functions
@@ -223,7 +245,7 @@ export async function loadThreadAttachmentContext(params: {
               logType: 'operation',
               operationName: 'loadThreadAttachmentContext',
               uploadId: upload.id,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: getErrorMessage(error),
             });
           }
         } else {
@@ -316,8 +338,7 @@ export async function loadThreadAttachmentContext(params: {
                   logType: 'operation',
                   operationName: 'loadThreadAttachmentContext',
                   uploadId: upload.id,
-                  error:
-                    error instanceof Error ? error.message : 'Unknown error',
+                  error: getErrorMessage(error),
                 },
               );
             }
@@ -383,7 +404,7 @@ export async function loadThreadAttachmentContext(params: {
       logType: 'operation',
       operationName: 'loadThreadAttachmentContext',
       threadId,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: getErrorMessage(error),
     });
 
     return {
@@ -447,7 +468,10 @@ export async function loadParticipantConfiguration(
     });
 
     if (!reloadedThread || reloadedThread.participants.length === 0) {
-      throw createError.badRequest('No enabled participants after persistence');
+      throw createError.badRequest('No enabled participants after persistence', {
+        errorType: 'validation',
+        schemaName: 'ParticipantConfiguration',
+      });
     }
 
     participants = reloadedThread.participants;
@@ -456,13 +480,20 @@ export async function loadParticipantConfiguration(
   }
 
   if (participants.length === 0) {
-    throw createError.badRequest('No enabled participants in this thread');
+    throw createError.badRequest('No enabled participants in this thread', {
+      errorType: 'validation',
+      schemaName: 'ParticipantConfiguration',
+    });
   }
 
   const participant = participants[participantIndex];
   if (!participant) {
     throw createError.badRequest(
       `Participant at index ${participantIndex} not found`,
+      {
+        errorType: 'validation',
+        schemaName: 'ParticipantConfiguration',
+      },
     );
   }
 
@@ -497,7 +528,7 @@ export async function buildSystemPromptWithContext(
       || buildParticipantSystemPrompt(participant.role, thread.mode);
 
   const participantRoster = allParticipants
-    .map(p => p.role || p.modelId.split('/').pop() || 'Unknown')
+    .map((p: ChatParticipant) => p.role || p.modelId.split('/').pop() || 'Unknown')
     .join(', ');
   systemPrompt = systemPrompt.replace(PARTICIPANT_ROSTER_PLACEHOLDER, participantRoster);
 
@@ -547,10 +578,10 @@ export async function buildSystemPromptWithContext(
 
             if (ragResponse.data && ragResponse.data.length > 0) {
               const sourceFiles = ragResponse.data
-                .map((result) => {
+                .map((result: { content: Array<{ type: string; text: string }>; file_id: string; filename: string; score: number }) => {
                   const contentText = result.content
-                    .filter(c => c.type === 'text')
-                    .map(c => c.text)
+                    .filter((c: { type: string; text: string }) => c.type === 'text')
+                    .map((c: { type: string; text: string }) => c.text)
                     .join('\n');
                   const score = (result.score * 100).toFixed(1);
                   const citationId = `${CitationSourcePrefixes[CitationSourceTypes.RAG]}_${result.file_id.slice(0, 8)}`;
@@ -596,7 +627,7 @@ export async function buildSystemPromptWithContext(
               logType: 'operation',
               operationName: 'buildSystemPromptWithContext',
               projectId: thread.projectId,
-              error: error instanceof Error ? error.message : String(error),
+              error: getErrorMessage(error),
             });
           }
         }
@@ -632,7 +663,7 @@ export async function buildSystemPromptWithContext(
             logType: 'operation',
             operationName: 'buildSystemPromptWithContext',
             projectId: thread.projectId,
-            error,
+            error: getErrorMessage(error),
           });
         }
       }
@@ -641,7 +672,7 @@ export async function buildSystemPromptWithContext(
         logType: 'operation',
         operationName: 'buildSystemPromptWithContext',
         projectId: thread.projectId,
-        error,
+        error: getErrorMessage(error),
       });
     }
   }
@@ -660,7 +691,7 @@ export async function buildSystemPromptWithContext(
       logger?.warn('Search context building failed', {
         logType: 'operation',
         operationName: 'buildSystemPromptWithContext',
-        error,
+        error: getErrorMessage(error),
       });
     }
   }
@@ -697,7 +728,7 @@ export async function buildSystemPromptWithContext(
       logType: 'operation',
       operationName: 'buildSystemPromptWithContext',
       threadId: thread.id,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: getErrorMessage(error),
     });
   }
 
@@ -712,11 +743,26 @@ export async function buildSystemPromptWithContext(
 // Message Preparation
 // ============================================================================
 
+// File data entry for storing binary attachments during message preparation
 type FileDataEntry = {
   data: Uint8Array;
   mimeType: string;
   filename?: string;
 };
+
+function extractUrlFromFilePart(part: unknown): string | null {
+  if (
+    typeof part === 'object'
+    && part !== null
+    && 'type' in part
+    && part.type === 'file'
+    && 'url' in part
+    && typeof part.url === 'string'
+  ) {
+    return part.url;
+  }
+  return null;
+}
 
 function collectFileDataFromMessages(
   messages: UIMessage[],
@@ -733,7 +779,8 @@ function collectFileDataFromMessages(
           = part.filename || `file_${part.mimeType}_${fileDataMap.size}`;
 
         fileDataMap.set(key, {
-          data: part.data,
+          // Create new Uint8Array for ArrayBuffer type (TS 5.6 compatibility)
+          data: new Uint8Array(part.data),
           mimeType: part.mimeType,
           filename: part.filename,
         });
@@ -890,15 +937,16 @@ export async function prepareValidatedMessages(
         });
       }
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
       console.error('[Streaming] Failed to load attachment content:', {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
         attachmentIds,
         stack: error instanceof Error ? error.stack : undefined,
       });
       logger?.error('Failed to load attachment content', {
         logType: 'operation',
         operationName: 'prepareValidatedMessages',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
         attachmentIds,
       });
     }
@@ -908,21 +956,6 @@ export async function prepareValidatedMessages(
     const existingParts = Array.isArray(newMessage.parts)
       ? newMessage.parts
       : [];
-
-    // Helper to extract URL from parts (custom extension to AI SDK - file parts with URL property)
-    function extractUrlFromFilePart(part: unknown): string | null {
-      if (
-        typeof part === 'object'
-        && part !== null
-        && 'type' in part
-        && part.type === 'file'
-        && 'url' in part
-        && typeof part.url === 'string'
-      ) {
-        return part.url;
-      }
-      return null;
-    }
 
     const httpUrlFileParts = existingParts.filter((part) => {
       const url = extractUrlFromFilePart(part);
@@ -942,7 +975,7 @@ export async function prepareValidatedMessages(
           const match = url.match(/\/uploads\/([A-Z0-9]+)\//i);
           return match?.[1] ?? null;
         })
-        .filter((id): id is string => id !== null && id !== undefined);
+        .filter((id: string | null): id is string => id !== null && id !== undefined);
 
       if (uploadIdsFromUrls.length > 0) {
         logger?.debug(
@@ -995,17 +1028,20 @@ export async function prepareValidatedMessages(
             );
           }
         } catch (error) {
+          const errorMessage = getErrorMessage(error);
           console.error(
             '[Streaming] Failed to load participant 1+ attachment content:',
             {
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage,
               uploadIds: uploadIdsFromUrls,
             },
           );
           logger?.error(
             'Failed to load participant 1+ attachment content',
             {
-              error: error instanceof Error ? error.message : 'Unknown error',
+              logType: 'operation',
+              operationName: 'prepareValidatedMessages',
+              error: errorMessage,
               uploadIds: uploadIdsFromUrls,
             },
           );
@@ -1077,17 +1113,20 @@ export async function prepareValidatedMessages(
             );
           }
         } catch (error) {
+          const errorMessage = getErrorMessage(error);
           console.error(
             '[Streaming] Failed to load participant 1+ uploadId attachment content:',
             {
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage,
               uploadIds: uploadIdsFromParts,
             },
           );
           logger?.error(
             'Failed to load participant 1+ uploadId attachment content',
             {
-              error: error instanceof Error ? error.message : 'Unknown error',
+              logType: 'operation',
+              operationName: 'prepareValidatedMessages',
+              error: errorMessage,
               uploadIds: uploadIdsFromParts,
             },
           );
@@ -1100,21 +1139,6 @@ export async function prepareValidatedMessages(
 
   if (db) {
     try {
-      // Helper to extract URL from parts (reused from above)
-      function extractUrlFromFilePart(part: unknown): string | null {
-        if (
-          typeof part === 'object'
-          && part !== null
-          && 'type' in part
-          && part.type === 'file'
-          && 'url' in part
-          && typeof part.url === 'string'
-        ) {
-          return part.url;
-        }
-        return null;
-      }
-
       const messageIdsToCheck = previousMessages
         .filter((msg) => {
           if (msg.role === MessageRoles.USER) {
@@ -1224,7 +1248,7 @@ export async function prepareValidatedMessages(
       logger?.warn('Failed to load previous message attachments', {
         logType: 'operation',
         operationName: 'prepareValidatedMessages',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: getErrorMessage(error),
       });
     }
   }
@@ -1328,7 +1352,8 @@ export async function prepareValidatedMessages(
             const key
               = filename || `file_${part.mimeType}_${fileDataFromHistory.size}`;
             fileDataFromHistory.set(key, {
-              data: part.data,
+              // Create new Uint8Array for ArrayBuffer type (TS 5.6 compatibility)
+              data: new Uint8Array(part.data),
               mimeType: part.mimeType,
               filename,
             });
@@ -1345,7 +1370,7 @@ export async function prepareValidatedMessages(
         logger?.warn('Fallback file data loading failed', {
           logType: 'operation',
           operationName: 'prepareValidatedMessages',
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: getErrorMessage(error),
         });
       }
     }
@@ -1364,15 +1389,21 @@ export async function prepareValidatedMessages(
     });
   } catch (error) {
     throw createError.badRequest(
-      `Invalid message format: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      { errorType: 'validation' },
+      `Invalid message format: ${getErrorMessage(error)}`,
+      {
+        errorType: 'validation',
+        schemaName: 'UIMessage',
+      },
     );
   }
 
   const nonEmptyMessages = filterNonEmptyMessages(typedMessages);
 
   if (nonEmptyMessages.length === 0) {
-    throw createError.badRequest('No valid messages to send to AI model');
+    throw createError.badRequest('No valid messages to send to AI model', {
+      errorType: 'validation',
+      schemaName: 'UIMessage',
+    });
   }
 
   if (fileDataMap.size > 0) {
@@ -1389,8 +1420,11 @@ export async function prepareValidatedMessages(
     modelMessages = await convertToModelMessages(nonEmptyMessages);
   } catch (error) {
     throw createError.badRequest(
-      `Failed to convert messages for model: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      { errorType: 'validation' },
+      `Failed to convert messages for model: ${getErrorMessage(error)}`,
+      {
+        errorType: 'validation',
+        schemaName: 'ModelMessage',
+      },
     );
   }
 
@@ -1437,7 +1471,7 @@ export async function prepareValidatedMessages(
     }
 
     const lastUserText = lastUserMessage.parts?.find(
-      p => p.type === 'text' && 'text' in p,
+      p => p.type === MessagePartTypes.TEXT && 'text' in p,
     );
     if (!lastUserText || !('text' in lastUserText)) {
       throw createError.badRequest(

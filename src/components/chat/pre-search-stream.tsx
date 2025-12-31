@@ -4,11 +4,12 @@ import { Search, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, use, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
+import { z } from 'zod';
 import { useShallow } from 'zustand/react/shallow';
 
 import { MessageStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
-import { PreSearchResponseSchema } from '@/api/routes/chat/schema';
+import { PreSearchDataPayloadSchema, PreSearchResponseSchema } from '@/api/routes/chat/schema';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { ChatStoreContext, useChatStore } from '@/components/providers';
@@ -177,18 +178,21 @@ function PreSearchStreamComponent({
         //      BUT if data.status is 'complete', the pre-search finished during our retries!
         if (response.status === 202) {
           let retryDelayMs = DEFAULT_RETRY_DELAY_MS;
-          type ResponseData = {
-            data?: {
-              status?: string;
-              searchData?: PreSearchDataPayload;
-              retryAfterMs?: number;
-            };
-          };
+          // ✅ TYPE-SAFE: Use Zod schema for 202 response validation
+          const Response202Schema = z.object({
+            data: z.object({
+              status: z.string().optional(),
+              searchData: PreSearchDataPayloadSchema.optional(),
+              retryAfterMs: z.number().optional(),
+            }).optional(),
+          });
+          type ResponseData = z.infer<typeof Response202Schema>;
           let responseData: ResponseData | undefined;
 
           try {
             const json = await response.json();
-            responseData = json as ResponseData;
+            const parseResult = Response202Schema.safeParse(json);
+            responseData = parseResult.success ? parseResult.data : undefined;
             if (responseData?.data?.retryAfterMs) {
               retryDelayMs = responseData.data.retryAfterMs;
             }

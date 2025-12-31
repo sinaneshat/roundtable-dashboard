@@ -1,31 +1,21 @@
 import type { FormEventHandler, ReactNode } from 'react';
 import type { FieldValues, UseFormReturn } from 'react-hook-form';
-import { FormProvider as Form } from 'react-hook-form';
+import { FormProvider as RHFFormProvider } from 'react-hook-form';
 
-type Props<
-  TFieldValues extends FieldValues = FieldValues,
-  TContext = object,
-  TTransformedValues = TFieldValues,
-> = {
+type FormProviderProps<TFieldValues extends FieldValues = FieldValues> = {
   children: ReactNode;
-  methods: UseFormReturn<TFieldValues, TContext, TTransformedValues>;
+  methods: UseFormReturn<TFieldValues>;
   onSubmit?: FormEventHandler<HTMLFormElement>;
 };
 
-function FormProvider<
-  TFieldValues extends FieldValues = FieldValues,
-  TContext = object,
-  TTransformedValues = TFieldValues,
->({
+export function FormProvider<TFieldValues extends FieldValues = FieldValues>({
   children,
   onSubmit,
   methods,
-}: Props<TFieldValues, TContext, TTransformedValues>) {
+}: FormProviderProps<TFieldValues>) {
   return (
-    <Form {...methods}>
+    <RHFFormProvider {...methods}>
       <form onSubmit={onSubmit}>{children}</form>
-    </Form>
+    </RHFFormProvider>
   );
 }
-
-export default FormProvider;

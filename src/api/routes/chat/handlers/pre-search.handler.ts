@@ -32,7 +32,7 @@ import {
   deductCreditsForAction,
   enforceCredits,
 } from '@/api/services/credit.service';
-import ErrorMetadataService from '@/api/services/error-metadata.service';
+import { buildEmptyResponseError, extractErrorMetadata } from '@/api/services/error-metadata.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import type { PreSearchTrackingContext } from '@/api/services/posthog-llm-tracking.service';
 import {
@@ -98,9 +98,10 @@ async function analyzeImagesForSearchContext(
   }>,
   env: ApiEnv['Bindings'],
 ): Promise<string> {
-  // Filter for image files only - use includes() for string comparison
+  // Filter for image files only
   const imageFileParts = fileParts.filter(
-    part => part.mimeType && (IMAGE_MIME_TYPES as readonly string[]).includes(part.mimeType),
+    (part): part is typeof part & { mimeType: string } =>
+      !!part.mimeType && IMAGE_MIME_TYPES.includes(part.mimeType as typeof IMAGE_MIME_TYPES[number]),
   );
 
   if (imageFileParts.length === 0) {
@@ -112,25 +113,19 @@ async function analyzeImagesForSearchContext(
 
   try {
     // Build message parts for vision model
-    // Use literal types to satisfy UIMessagePart type requirements
-    // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
     const textPart = {
       type: 'text' as const,
       text: IMAGE_ANALYSIS_FOR_SEARCH_PROMPT,
     };
 
     // Build file parts for images
-    // FileUIPart requires: type, mediaType, url (and optionally data)
     const filePartsList = imageFileParts
       .filter(part => part.data && part.mimeType)
       .map((part) => {
-        // Convert Uint8Array to base64 for data URL
-        // NOTE: Using chunk-based conversion to avoid stack overflow with large files
-        // The spread operator (...part.data!) causes "Maximum call stack size exceeded"
-        // for images larger than a few KB because it passes millions of bytes as args
+        // Convert Uint8Array to base64 using chunked approach
         const bytes = part.data!;
         let binary = '';
-        const chunkSize = 8192; // Process 8KB at a time to avoid stack issues
+        const chunkSize = 8192;
         for (let i = 0; i < bytes.length; i += chunkSize) {
           const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
           binary += String.fromCharCode(...chunk);
@@ -139,7 +134,7 @@ async function analyzeImagesForSearchContext(
         const dataUrl = `data:${part.mimeType};base64,${base64}`;
         return {
           type: 'file' as const,
-          mediaType: part.mimeType!,
+          mediaType: part.mimeType,
           url: dataUrl,
         };
       });
@@ -485,9 +480,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                   }
                 }
               }
-            } catch {
-              // ✅ CAPTURE streaming errors but don't throw yet - try to use partial result
-              // Errors are handled by falling back to partial results below
+            } catch (streamErr) {
+              console.error('[Pre-search] Query streaming error:', streamErr);
             }
 
             // ✅ GRACEFUL OBJECT RETRIEVAL: Try to get final object, fall back to partial
@@ -1068,7 +1062,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         } else {
           // Mark as failed if no successful searches
           // ✅ UNIFIED ERROR HANDLING: Use ErrorMetadataService for consistent error categorization
-          const errorMetadata = ErrorMetadataService.buildEmptyResponseError({
+          const errorMetadata = buildEmptyResponseError({
             inputTokens: 0,
             outputTokens: 0,
             finishReason: 'failed',
@@ -1119,7 +1113,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         }
       } catch (error) {
         // ✅ UNIFIED ERROR HANDLING: Use ErrorMetadataService for consistent error categorization
-        const errorMetadata = ErrorMetadataService.extractErrorMetadata({
+        const errorMetadata = extractErrorMetadata({
           providerMetadata: {},
           response: error,
           finishReason: 'error',

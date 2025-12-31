@@ -44,22 +44,14 @@ export const ModeratorConstants = {
 
 export const CHAT_MODES = ['analyzing', 'brainstorming', 'debating', 'solving'] as const;
 
-export const DEFAULT_CHAT_MODE: ChatMode = 'debating';
-
-export const DEFAULT_THREAD_STATUS: ThreadStatus = 'active';
-
-export const DEFAULT_MESSAGE_STATUS: MessageStatus = 'pending';
-
-export const DEFAULT_MESSAGE_ROLE: MessageRole = 'user';
-
-export const DEFAULT_CHANGELOG_TYPE: ChangelogType = 'added';
-
 export const ChatModeSchema = z.enum(CHAT_MODES).openapi({
   description: 'Conversation mode for roundtable discussions',
   example: CHAT_MODES[1], // 'brainstorming'
 });
 
 export type ChatMode = z.infer<typeof ChatModeSchema>;
+
+export const DEFAULT_CHAT_MODE: ChatMode = 'debating';
 
 export const ChatModes = {
   ANALYZING: 'analyzing' as const,
@@ -81,6 +73,8 @@ export const ThreadStatusSchema = z.enum(THREAD_STATUSES).openapi({
 
 export type ThreadStatus = z.infer<typeof ThreadStatusSchema>;
 
+export const DEFAULT_THREAD_STATUS: ThreadStatus = 'active';
+
 export const ThreadStatuses = {
   ACTIVE: 'active' as const,
   ARCHIVED: 'archived' as const,
@@ -99,6 +93,8 @@ export const MessageStatusSchema = z.enum(MESSAGE_STATUSES).openapi({
 });
 
 export type MessageStatus = z.infer<typeof MessageStatusSchema>;
+
+export const DEFAULT_MESSAGE_STATUS: MessageStatus = 'pending';
 
 export const MessageStatuses = {
   PENDING: 'pending' as const,
@@ -120,6 +116,8 @@ export const MessageRoleSchema = z.enum(MESSAGE_ROLES).openapi({
 
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
 
+export const DEFAULT_MESSAGE_ROLE: MessageRole = 'user';
+
 export const MessageRoles = {
   USER: 'user' as const,
   ASSISTANT: 'assistant' as const,
@@ -138,6 +136,8 @@ export const ChangelogTypeSchema = z.enum(CHANGELOG_TYPES).openapi({
 });
 
 export type ChangelogType = z.infer<typeof ChangelogTypeSchema>;
+
+export const DEFAULT_CHANGELOG_TYPE: ChangelogType = 'added';
 
 export const ChangelogTypes = {
   ADDED: 'added' as const,
@@ -168,17 +168,22 @@ export const ChangelogChangeTypes = {
 // SCREEN MODE
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const SCREEN_MODES = ['overview', 'thread', 'public'] as const;
 
-export const DEFAULT_SCREEN_MODE: ScreenMode = 'overview';
-
+// 2. ZOD SCHEMA
 export const ScreenModeSchema = z.enum(SCREEN_MODES).openapi({
   description: 'Chat interface screen mode',
   example: 'thread',
 });
 
+// 3. TYPESCRIPT TYPE
 export type ScreenMode = z.infer<typeof ScreenModeSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_SCREEN_MODE: ScreenMode = 'overview';
+
+// 5. CONSTANT OBJECT
 export const ScreenModes = {
   OVERVIEW: 'overview' as const,
   THREAD: 'thread' as const,
@@ -189,17 +194,22 @@ export const ScreenModes = {
 // PARTICIPANT COMPARISON MODE
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const PARTICIPANT_COMPARISON_MODES = ['modelIds', 'strict'] as const;
 
-export const DEFAULT_PARTICIPANT_COMPARISON_MODE: ParticipantComparisonMode = 'strict';
-
+// 2. ZOD SCHEMA
 export const ParticipantComparisonModeSchema = z.enum(PARTICIPANT_COMPARISON_MODES).openapi({
   description: 'Strategy for comparing participant configurations',
   example: 'strict',
 });
 
+// 3. TYPESCRIPT TYPE
 export type ParticipantComparisonMode = z.infer<typeof ParticipantComparisonModeSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_PARTICIPANT_COMPARISON_MODE: ParticipantComparisonMode = 'strict';
+
+// 5. CONSTANT OBJECT
 export const ParticipantComparisonModes = {
   MODEL_IDS: 'modelIds' as const,
   STRICT: 'strict' as const,

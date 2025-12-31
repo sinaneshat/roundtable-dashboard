@@ -7,7 +7,7 @@ import { useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState
 import { flushSync } from 'react-dom';
 import { z } from 'zod';
 
-import { AiSdkStatuses, FinishReasons, MessagePartTypes, MessageRoles, UIMessageErrorTypeSchema, UIMessageRoles } from '@/api/core/enums';
+import { AiSdkStatuses, FinishReasons, MessagePartTypes, MessageRoles, TextPartStates, UIMessageErrorTypeSchema, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
@@ -794,13 +794,8 @@ export function useMultiParticipantChat(
           const effectiveThreadId = callbackRefs.threadId.current;
           const expectedMessageId = `${effectiveThreadId}_r${currentRoundRef.current}_p${currentIndex}`;
 
-          // eslint-disable-next-line no-console -- DEBUG: Track error message update
-          console.log('[DBG:ERR_UPDATE]', { expectedId: expectedMessageId, round: currentRoundRef.current, pIdx: currentIndex });
-
           setMessages((prev) => {
             const existingIndex = prev.findIndex(m => m.id === expectedMessageId);
-            // eslint-disable-next-line no-console -- DEBUG: Track if message was found
-            console.log('[DBG:ERR_FIND]', { found: existingIndex >= 0, msgCount: prev.length, ids: prev.map(m => m.id.replace(/^01[A-Z0-9]+_/, '')) });
             if (existingIndex >= 0) {
               // Update existing message with error metadata
               const updated = [...prev];
@@ -1037,7 +1032,7 @@ export function useMultiParticipantChat(
         const metadataObj = metadata && typeof metadata === 'object' ? metadata : {};
 
         // Signal 1: finishReason='stop' indicates successful completion
-        const hasSuccessfulFinish = 'finishReason' in metadataObj && metadataObj.finishReason === 'stop';
+        const hasSuccessfulFinish = 'finishReason' in metadataObj && metadataObj.finishReason === FinishReasons.STOP;
 
         // Signal 2: Backend explicitly marked hasError=false (successful generation)
         const backendMarkedSuccess = 'hasError' in metadataObj && metadataObj.hasError === false;
@@ -1063,7 +1058,7 @@ export function useMultiParticipantChat(
         // If parts are still streaming, we should NOT set hasError=true yet
         // This prevents premature "No Response Generated" errors while stream is active
         const isStillStreaming = data.message.parts?.some(
-          p => 'state' in p && p.state === 'streaming',
+          p => 'state' in p && p.state === TextPartStates.STREAMING,
         ) || false;
 
         // ✅ CRITICAL: Consider it successful if ANY positive signal is present
@@ -1107,8 +1102,8 @@ export function useMultiParticipantChat(
             // AI SDK may leave parts with state='streaming' even after stream completes
             // This causes the participant completion gate to fail, preventing moderator trigger
             const partsWithDone = data.message.parts?.map((part) => {
-              if ('state' in part && part.state === 'streaming') {
-                return { ...part, state: 'done' as const };
+              if ('state' in part && part.state === TextPartStates.STREAMING) {
+                return { ...part, state: TextPartStates.DONE };
               }
               return part;
             }) ?? [];
@@ -1119,11 +1114,11 @@ export function useMultiParticipantChat(
             const seenParts = new Map<string, typeof partsWithDone[0]>();
             for (const part of partsWithDone) {
               let key: string;
-              if (part.type === 'text' && 'text' in part) {
+              if (part.type === MessagePartTypes.TEXT && 'text' in part) {
                 key = `text:${part.text}`;
-              } else if (part.type === 'reasoning' && 'text' in part) {
+              } else if (part.type === MessagePartTypes.REASONING && 'text' in part) {
                 key = `reasoning:${part.text}`;
-              } else if (part.type === 'step-start') {
+              } else if (part.type === MessagePartTypes.STEP_START) {
                 key = 'step-start';
               } else {
                 // For other part types, keep all of them
@@ -1134,8 +1129,8 @@ export function useMultiParticipantChat(
                 seenParts.set(key, part);
               } else {
                 // Keep the one with state='done', discard the one without state
-                const existingHasState = 'state' in existing && existing.state === 'done';
-                const currentHasState = 'state' in part && part.state === 'done';
+                const existingHasState = 'state' in existing && existing.state === TextPartStates.DONE;
+                const currentHasState = 'state' in part && part.state === TextPartStates.DONE;
                 if (currentHasState && !existingHasState) {
                   seenParts.set(key, part);
                 }
@@ -2218,7 +2213,7 @@ export function useMultiParticipantChat(
     }
 
     // Check if the last assistant message completed properly
-    const assistantMessages = messagesRef.current.filter(m => m.role === 'assistant');
+    const assistantMessages = messagesRef.current.filter(m => m.role === UIMessageRoles.ASSISTANT);
     const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
 
     if (!lastAssistantMessage) {
@@ -2230,7 +2225,7 @@ export function useMultiParticipantChat(
     const finishReason = metadata && typeof metadata === 'object' && 'finishReason' in metadata && typeof metadata.finishReason === 'string'
       ? metadata.finishReason
       : undefined;
-    const isComplete = finishReason === 'stop' || finishReason === 'length';
+    const isComplete = finishReason === FinishReasons.STOP || finishReason === FinishReasons.LENGTH;
 
     // If participant completed, normal orchestration will handle next steps
     if (isComplete) {

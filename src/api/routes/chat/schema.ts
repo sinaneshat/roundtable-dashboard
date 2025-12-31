@@ -356,7 +356,7 @@ const UIMessageSchema = z.object({
       type: z.literal('file'),
       url: z.string(),
       filename: z.string().optional(),
-      mediaType: z.string().optional(),
+      mediaType: z.string().default('application/octet-stream'),
     }),
   ])).openapi({
     description: 'Message parts array (text, reasoning, file, etc.)',

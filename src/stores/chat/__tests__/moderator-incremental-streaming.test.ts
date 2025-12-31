@@ -19,7 +19,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
+import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, UIMessageRoles } from '@/api/core/enums';
 
 import { createChatStore } from '../store';
 
@@ -33,14 +33,14 @@ import { createChatStore } from '../store';
 function createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: 'assistant',
+    role: UIMessageRoles.ASSISTANT,
     parts: [], // Empty parts = pending state
     metadata: {
       isModerator: true,
       roundNumber,
       participantIndex: MODERATOR_PARTICIPANT_INDEX,
       model: MODERATOR_NAME,
-      role: 'assistant',
+      role: UIMessageRoles.ASSISTANT,
     },
   };
 }
@@ -214,18 +214,18 @@ describe('moderator Incremental Streaming Updates', () => {
       const initialMessages: UIMessage[] = [
         {
           id: 'user-1',
-          role: 'user',
+          role: UIMessageRoles.USER,
           parts: [{ type: 'text', text: 'User question' }],
         },
         {
           id: 'thread-1_r0_p0',
-          role: 'assistant',
+          role: UIMessageRoles.ASSISTANT,
           parts: [{ type: 'text', text: 'Participant 1 response' }],
           metadata: { participantIndex: 0, roundNumber: 0 },
         },
         {
           id: 'thread-1_r0_p1',
-          role: 'assistant',
+          role: UIMessageRoles.ASSISTANT,
           parts: [{ type: 'text', text: 'Participant 2 response' }],
           metadata: { participantIndex: 1, roundNumber: 0 },
         },
@@ -299,10 +299,10 @@ describe('moderator Streaming Race Condition Prevention', () => {
       const store = createChatStore();
 
       const initialMessages: UIMessage[] = [
-        { id: 'msg-1', role: 'user', parts: [{ type: 'text', text: '1' }] },
-        { id: 'msg-2', role: 'assistant', parts: [{ type: 'text', text: '2' }] },
+        { id: 'msg-1', role: UIMessageRoles.USER, parts: [{ type: 'text', text: '1' }] },
+        { id: 'msg-2', role: UIMessageRoles.ASSISTANT, parts: [{ type: 'text', text: '2' }] },
         createModeratorPlaceholder('thread-1', 0),
-        { id: 'msg-4', role: 'user', parts: [{ type: 'text', text: '4' }] },
+        { id: 'msg-4', role: UIMessageRoles.USER, parts: [{ type: 'text', text: '4' }] },
       ];
 
       store.getState().setMessages(initialMessages);

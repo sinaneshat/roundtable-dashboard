@@ -1,5 +1,7 @@
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
 
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   FormControl,
   FormDescription,
@@ -7,19 +9,21 @@ import {
   FormItem,
   FormLabel,
 } from '@/components/ui/form';
-import type { GeneralFormProps } from '@/types/general';
 
-import { Checkbox } from '../ui/checkbox';
+type RHFCheckboxProps<TFieldValues extends FieldValues = FieldValues> = {
+  name: FieldPath<TFieldValues>;
+  title: string;
+  description?: string;
+  required?: boolean;
+};
 
-function RHFCheckbox({
+export function RHFCheckbox<TFieldValues extends FieldValues = FieldValues>({
   name,
   title,
   description,
-  value: externalValue,
   required,
-  onChange: externalOnChange,
-}: GeneralFormProps) {
-  const { control } = useFormContext();
+}: RHFCheckboxProps<TFieldValues>) {
+  const { control } = useFormContext<TFieldValues>();
 
   return (
     <FormField
@@ -31,13 +35,8 @@ function RHFCheckbox({
             <Checkbox
               required={required}
               data-testid={field.name}
-              onCheckedChange={(checked: boolean | 'indeterminate') => {
-                if (externalOnChange) {
-                  return externalOnChange?.({ target: { value: checked } });
-                }
-                return field.onChange(checked);
-              }}
-              checked={field.value !== undefined ? field.value : externalValue}
+              checked={field.value === true}
+              onCheckedChange={field.onChange}
             />
           </FormControl>
           <div className="space-y-1 leading-none">
@@ -49,5 +48,3 @@ function RHFCheckbox({
     />
   );
 }
-
-export default RHFCheckbox;

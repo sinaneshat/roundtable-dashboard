@@ -24,10 +24,11 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MessageRoles, MessageStatuses } from '@/api/core/enums';
-import type { StoredPreSearch } from '@/api/routes/chat/schema';
-import type { ChatParticipant, ChatThread } from '@/db/validation';
+import { AiSdkStatuses, FinishReasons, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import {
+  createMockParticipants,
+  createMockStoredPreSearch,
+  createMockThread,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
@@ -64,63 +65,13 @@ vi.mock('@/components/providers/chat-store-provider', () => ({
 // TEST HELPERS
 // ============================================================================
 
-function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
-  return {
-    id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
-    mode: 'analyzing',
-    status: 'active',
-    enableWebSearch: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  } as ChatThread;
-}
-
-function createMockParticipants(count: number = 4): ChatParticipant[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `participant-${i}`,
-    threadId: 'thread-123',
-    modelId: 'gpt-4',
-    role: '',
-    customRoleId: null,
-    isEnabled: true,
-    priority: i,
-    settings: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  })) as ChatParticipant[];
-}
-
-function createMockPreSearch(
-  roundNumber: number,
-  status: typeof MessageStatuses[keyof typeof MessageStatuses],
-  overrides?: Partial<StoredPreSearch>,
-): StoredPreSearch {
-  return {
-    id: `presearch-${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    status,
-    userQuery: `Query for round ${roundNumber}`,
-    searchData: status === MessageStatuses.COMPLETE
-      ? { queries: [], results: [], summary: 'Test', successCount: 1, failureCount: 0, totalResults: 1, totalTime: 1000 }
-      : null,
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
-    ...overrides,
-  } as StoredPreSearch;
-}
-
 /**
  * Creates an optimistic user message (simulating stale Zustand persist)
  */
 function createOptimisticUserMessage(roundNumber: number, content: string): UIMessage {
   return {
     id: `optimistic-user-${Date.now()}-r${roundNumber}`,
-    role: 'user' as const,
+    role: UIMessageRoles.USER,
     parts: [{ type: 'text' as const, text: content }],
     metadata: {
       role: MessageRoles.USER,
@@ -150,7 +101,7 @@ function createCompleteRoundMessages(
         roundNumber,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: 'stop',
+        finishReason: FinishReasons.STOP,
       }),
     );
   }
@@ -181,12 +132,11 @@ function setupMockStore(overrides?: Partial<ChatStore>): void {
     hasSentPendingMessage: false,
     hasEarlyOptimisticMessage: false,
     enableWebSearch: true,
-    thread: createMockThread(),
+    thread: createMockThread({ enableWebSearch: true }),
     streamResumptionPrefilled: false,
     currentResumptionPhase: null,
     resumptionRoundNumber: null,
     prefilledForThreadId: null,
-    isCreatingSummary: false,
     nextParticipantToTrigger: null,
     ...defaultActions,
     ...overrides,
@@ -221,7 +171,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       setupMockStore({
         messages: [...round0Messages, ...round1Messages, round2UserMessage],
         participants: createMockParticipants(4),
-        preSearches: [createMockPreSearch(2, MessageStatuses.COMPLETE)],
+        preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
         pendingMessage: 'Round 2 query', // Stale from Zustand persist
         streamResumptionPrefilled: true, // Prefill ran - this is resumption
         currentResumptionPhase: 'participants',
@@ -278,12 +228,12 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       setupMockStore({
         messages: [...round0Messages, ...round1Messages, round2OptimisticUser],
         participants: createMockParticipants(4),
-        preSearches: [createMockPreSearch(2, MessageStatuses.COMPLETE)],
+        preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
         streamResumptionPrefilled: true,
       });
 
       const state = mockStore.getState();
-      const lastUserMessage = state.messages?.findLast(m => m.role === 'user');
+      const lastUserMessage = state.messages?.findLast(m => m.role === UIMessageRoles.USER);
       const lastUserMessageIsOptimistic = lastUserMessage?.metadata
         && typeof lastUserMessage.metadata === 'object'
         && 'isOptimistic' in lastUserMessage.metadata
@@ -307,7 +257,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       const round1Messages = createCompleteRoundMessages(1, 4);
       const round2OptimisticUser = createOptimisticUserMessage(2, 'Round 2 query');
 
-      const completedPreSearch = createMockPreSearch(2, MessageStatuses.COMPLETE);
+      const completedPreSearch = createMockStoredPreSearch(2, MessageStatuses.COMPLETE);
 
       setupMockStore({
         messages: [...round0Messages, ...round1Messages, round2OptimisticUser],
@@ -320,7 +270,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       const currentRoundNumber = 2;
       const preSearches = state.preSearches || [];
 
-      const lastUserMessage = state.messages?.findLast(m => m.role === 'user');
+      const lastUserMessage = state.messages?.findLast(m => m.role === UIMessageRoles.USER);
       const lastUserMessageIsOptimistic = lastUserMessage?.metadata
         && typeof lastUserMessage.metadata === 'object'
         && 'isOptimistic' in lastUserMessage.metadata
@@ -359,7 +309,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       const currentRoundNumber = 1;
       const preSearches = state.preSearches || [];
 
-      const lastUserMessage = state.messages?.findLast(m => m.role === 'user');
+      const lastUserMessage = state.messages?.findLast(m => m.role === UIMessageRoles.USER);
       const lastUserMessageIsOptimistic = lastUserMessage?.metadata
         && typeof lastUserMessage.metadata === 'object'
         && 'isOptimistic' in lastUserMessage.metadata
@@ -399,13 +349,13 @@ describe('non-Initial Round Resumption Edge Cases', () => {
         roundNumber: 2,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: 'stop',
+        finishReason: FinishReasons.STOP,
       });
 
       setupMockStore({
         messages: [...round0Messages, ...round1Messages, round2UserMessage, round2Participant0],
         participants: createMockParticipants(4),
-        preSearches: [createMockPreSearch(2, MessageStatuses.COMPLETE)],
+        preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
         streamResumptionPrefilled: true,
         currentResumptionPhase: 'participants',
       });
@@ -413,7 +363,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       const state = mockStore.getState();
       const enabledParticipants = state.participants?.filter(p => p.isEnabled) || [];
       const round2Responses = state.messages?.filter(m =>
-        m.role === 'assistant'
+        m.role === UIMessageRoles.ASSISTANT
         && m.metadata
         && typeof m.metadata === 'object'
         && 'roundNumber' in m.metadata
@@ -440,7 +390,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
         roundNumber: 2,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: 'stop',
+        finishReason: FinishReasons.STOP,
       });
       const round2Participant1 = createTestAssistantMessage({
         id: 'thread-123_r2_p1',
@@ -448,7 +398,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
         roundNumber: 2,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: 'stop',
+        finishReason: FinishReasons.STOP,
       });
 
       setupMockStore({
@@ -460,26 +410,29 @@ describe('non-Initial Round Resumption Edge Cases', () => {
           round2Participant1,
         ],
         participants: createMockParticipants(4),
-        preSearches: [createMockPreSearch(2, MessageStatuses.COMPLETE)],
+        preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
       });
 
       const state = mockStore.getState();
       const enabledParticipants = state.participants?.filter(p => p.isEnabled) || [];
       const round2Responses = state.messages?.filter(m =>
-        m.role === 'assistant'
+        m.role === UIMessageRoles.ASSISTANT
         && m.metadata
         && typeof m.metadata === 'object'
         && 'roundNumber' in m.metadata
         && m.metadata.roundNumber === 2
         && 'finishReason' in m.metadata
-        && m.metadata.finishReason === 'stop',
+        && m.metadata.finishReason === FinishReasons.STOP,
       ) || [];
 
       // Find indices of responded participants
       const respondedIndices = new Set<number>();
       for (const msg of round2Responses) {
         if (msg.metadata && typeof msg.metadata === 'object' && 'participantIndex' in msg.metadata) {
-          respondedIndices.add(msg.metadata.participantIndex as number);
+          const index = msg.metadata.participantIndex;
+          if (typeof index === 'number') {
+            respondedIndices.add(index);
+          }
         }
       }
 
@@ -507,20 +460,20 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       //
       // BUG FIXED: This contradiction blocked continueFromParticipant
 
-      const aiSdkStatus = 'ready';
+      const aiSdkStatus = AiSdkStatuses.READY;
       const isExplicitlyStreaming = true;
 
       // The fix: if status is ready and isExplicitlyStreaming is true, clear stale state
-      const shouldClearStaleState = aiSdkStatus === 'ready' && isExplicitlyStreaming;
+      const shouldClearStaleState = aiSdkStatus === AiSdkStatuses.READY && isExplicitlyStreaming;
 
       expect(shouldClearStaleState).toBe(true);
     });
 
     it('should not clear streaming state when AI SDK is actually streaming', () => {
-      const aiSdkStatus = 'streaming';
+      const aiSdkStatus = AiSdkStatuses.STREAMING;
       const isExplicitlyStreaming = true;
 
-      const shouldClearStaleState = aiSdkStatus === 'ready' && isExplicitlyStreaming;
+      const shouldClearStaleState = aiSdkStatus === AiSdkStatuses.READY && isExplicitlyStreaming;
 
       expect(shouldClearStaleState).toBe(false);
     });
@@ -535,12 +488,12 @@ describe('non-Initial Round Resumption Edge Cases', () => {
         roundNumber: 1,
       }));
 
-      const aiSdkStatus = 'ready';
+      const aiSdkStatus = AiSdkStatuses.READY;
       const messagesLength = messages.length;
 
       // Guard check (after clearing isExplicitlyStreaming)
       // isExplicitlyStreaming is no longer in the guard after the fix
-      const guardPasses = messagesLength > 0 && aiSdkStatus === 'ready';
+      const guardPasses = messagesLength > 0 && aiSdkStatus === AiSdkStatuses.READY;
 
       expect(guardPasses).toBe(true);
     });
@@ -576,7 +529,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
             roundNumber: 2,
             participantId: `participant-${i}`,
             participantIndex: i,
-            finishReason: 'stop',
+            finishReason: FinishReasons.STOP,
           }));
         }
 
@@ -584,7 +537,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
         setupMockStore({
           messages: [...round0Messages, ...round1Messages, round2UserMessage, ...round2Responses],
           participants: createMockParticipants(4),
-          preSearches: [createMockPreSearch(2, MessageStatuses.COMPLETE)],
+          preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
           streamResumptionPrefilled: true,
           currentResumptionPhase: 'participants',
         });
@@ -596,7 +549,10 @@ describe('non-Initial Round Resumption Edge Cases', () => {
         const respondedIndices = new Set<number>();
         for (const msg of round2Responses) {
           if (msg.metadata && typeof msg.metadata === 'object' && 'participantIndex' in msg.metadata) {
-            respondedIndices.add(msg.metadata.participantIndex as number);
+            const index = msg.metadata.participantIndex;
+            if (typeof index === 'number') {
+              respondedIndices.add(index);
+            }
           }
         }
 

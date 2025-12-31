@@ -1,19 +1,24 @@
-/**
- * Upload Mutation Hooks
- *
- * TanStack Mutation hooks for file upload operations
- * Following patterns from project-mutations.ts and api-key-mutations.ts
- *
- * Uses secure ticket-based upload (S3 presigned URL pattern)
- */
-
 'use client';
 
-import type { QueryClient } from '@tanstack/react-query';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { shouldRetryMutation } from '@/hooks/utils/mutation-retry';
+import { shouldRetryMutation } from '@/hooks/utils';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
+import type {
+  AbortMultipartUploadRequest,
+  AbortMultipartUploadResponse,
+  CompleteMultipartUploadRequest,
+  CompleteMultipartUploadResponse,
+  CreateMultipartUploadRequest,
+  CreateMultipartUploadResponse,
+  DeleteAttachmentRequest,
+  DeleteAttachmentResponse,
+  ListAttachmentsResponse,
+  UpdateAttachmentRequest,
+  UpdateAttachmentResponse,
+  UploadPartRequestWithBody,
+  UploadPartResponse,
+} from '@/services/api';
 import {
   abortMultipartUploadService,
   completeMultipartUploadService,
@@ -24,112 +29,52 @@ import {
   uploadPartService,
 } from '@/services/api';
 
-/**
- * Safe wrapper for useQueryClient that handles edge cases during SSR/HMR
- *
- * ✅ HYDRATION FIX: During page refresh or HMR, the component might render
- * before QueryClientProvider is fully mounted. This wrapper catches the error
- * and returns null, allowing mutations to work without invalidation.
- *
- * The proper fix is architectural (ensure provider mounts first), but this
- * provides graceful degradation for edge cases.
- */
-function useSafeQueryClient(): QueryClient | null {
-  try {
-    return useQueryClient();
-  } catch {
-    // QueryClient not available - during SSR edge cases or before provider mounts
-    // This is transient and self-corrects on next render
-    return null;
-  }
-}
+type SecureUploadResponse = Awaited<ReturnType<typeof secureUploadService>>;
 
-// ============================================================================
-// Secure Upload Mutation (Ticket-Based)
-// ============================================================================
-
-/**
- * Hook to upload a file using secure ticket-based flow
- * Protected endpoint - requires authentication
- *
- * Uses S3 presigned URL pattern:
- * 1. Requests upload ticket with signed token
- * 2. Uploads file with validated token
- *
- * For files < 100MB. After successful upload:
- * - Invalidates upload lists
- *
- * Note: Thread/message associations are created via junction tables after upload
- */
 export function useSecureUploadMutation() {
-  const queryClient = useSafeQueryClient();
+  const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: (file: File) => secureUploadService(file),
+  return useMutation<SecureUploadResponse, Error, File>({
+    mutationFn: secureUploadService,
     onSuccess: () => {
-      // Invalidate upload queries (skip if queryClient unavailable during hydration)
-      if (queryClient) {
-        invalidationPatterns.afterUpload().forEach((key) => {
-          queryClient.invalidateQueries({ queryKey: key });
-        });
-      }
+      invalidationPatterns.afterUpload().forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
     },
     retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to update attachment metadata or associations
- * Protected endpoint - requires authentication
- *
- * After successful update:
- * - Immediately updates the attachments list cache
- * - Invalidates specific attachment and lists
- */
 export function useUpdateAttachmentMutation() {
-  const queryClient = useSafeQueryClient();
+  const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<UpdateAttachmentResponse, Error, UpdateAttachmentRequest>({
     mutationFn: updateAttachmentService,
     onSuccess: (response, variables) => {
-      // Skip cache operations if queryClient unavailable during hydration
-      if (!queryClient)
-        return;
-
-      // Immediately update cache with updated data
       if (response.success && response.data) {
         const updatedAttachment = response.data;
 
-        queryClient.setQueryData(
+        queryClient.setQueryData<ListAttachmentsResponse>(
           queryKeys.uploads.list(),
-          (oldData: unknown) => {
-            if (!oldData || typeof oldData !== 'object' || !('success' in oldData) || !oldData.success) {
+          (oldData) => {
+            if (!oldData?.success || !oldData.data?.items) {
               return oldData;
             }
-            if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object') {
-              return oldData;
-            }
-            if (!('items' in oldData.data) || !Array.isArray(oldData.data.items)) {
-              return oldData;
-            }
-
-            const updatedItems = oldData.data.items.map(
-              item => (typeof item === 'object' && item && 'id' in item && item.id === updatedAttachment.id) ? updatedAttachment : item,
-            );
 
             return {
               ...oldData,
               data: {
                 ...oldData.data,
-                items: updatedItems,
+                items: oldData.data.items.map(
+                  item => (item.id === updatedAttachment.id ? updatedAttachment : item),
+                ),
               },
             };
           },
         );
       }
 
-      // Invalidate to ensure UI consistency
       invalidationPatterns.uploadDetail(variables.param.id).forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
@@ -139,57 +84,32 @@ export function useUpdateAttachmentMutation() {
   });
 }
 
-/**
- * Hook to delete an attachment
- * Protected endpoint - requires authentication
- *
- * After successful deletion:
- * - Optimistically removes the attachment from cache
- * - Invalidates attachment lists
- */
 export function useDeleteAttachmentMutation() {
-  const queryClient = useSafeQueryClient();
+  const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<DeleteAttachmentResponse, Error, DeleteAttachmentRequest, { previousAttachments?: ListAttachmentsResponse }>({
     mutationFn: deleteAttachmentService,
     onMutate: async (data) => {
-      // Skip optimistic updates if queryClient unavailable during hydration
-      if (!queryClient)
-        return;
-
       const attachmentId = data.param?.id;
       if (!attachmentId)
-        return;
+        return { previousAttachments: undefined };
 
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.uploads.all });
 
-      // Snapshot previous value for rollback
-      const previousAttachments = queryClient.getQueryData(queryKeys.uploads.list());
+      const previousAttachments = queryClient.getQueryData<ListAttachmentsResponse>(queryKeys.uploads.list());
 
-      // Optimistically remove from list
-      queryClient.setQueryData(
+      queryClient.setQueryData<ListAttachmentsResponse>(
         queryKeys.uploads.list(),
-        (oldData: unknown) => {
-          if (!oldData || typeof oldData !== 'object' || !('success' in oldData) || !oldData.success) {
+        (oldData) => {
+          if (!oldData?.success || !oldData.data?.items) {
             return oldData;
           }
-          if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object') {
-            return oldData;
-          }
-          if (!('items' in oldData.data) || !Array.isArray(oldData.data.items)) {
-            return oldData;
-          }
-
-          const filteredItems = oldData.data.items.filter(
-            item => !(typeof item === 'object' && item && 'id' in item && item.id === attachmentId),
-          );
 
           return {
             ...oldData,
             data: {
               ...oldData.data,
-              items: filteredItems,
+              items: oldData.data.items.filter(item => item.id !== attachmentId),
             },
           };
         },
@@ -197,12 +117,7 @@ export function useDeleteAttachmentMutation() {
 
       return { previousAttachments };
     },
-    onError: (_error, _data, context) => {
-      // Skip rollback if queryClient unavailable
-      if (!queryClient)
-        return;
-
-      // Rollback on error
+    onError: (_error, _variables, context) => {
       if (context?.previousAttachments) {
         queryClient.setQueryData(
           queryKeys.uploads.list(),
@@ -211,11 +126,6 @@ export function useDeleteAttachmentMutation() {
       }
     },
     onSettled: () => {
-      // Skip invalidation if queryClient unavailable
-      if (!queryClient)
-        return;
-
-      // Ensure server state is in sync
       void queryClient.invalidateQueries({
         queryKey: queryKeys.uploads.all,
         refetchType: 'active',
@@ -226,100 +136,53 @@ export function useDeleteAttachmentMutation() {
   });
 }
 
-// ============================================================================
-// Multipart Upload Mutations (for large files)
-// ============================================================================
-
-/**
- * Hook to create a multipart upload
- * Protected endpoint - requires authentication
- *
- * Returns uploadId and attachmentId needed for subsequent parts
- */
 export function useCreateMultipartUploadMutation() {
-  return useMutation({
+  return useMutation<CreateMultipartUploadResponse, Error, CreateMultipartUploadRequest>({
     mutationFn: createMultipartUploadService,
     retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to upload a part of a multipart upload
- * Protected endpoint - requires authentication
- *
- * Returns etag needed for completing the upload
- */
 export function useUploadPartMutation() {
-  return useMutation({
+  return useMutation<UploadPartResponse, Error, UploadPartRequestWithBody>({
     mutationFn: uploadPartService,
-    // No cache invalidation - intermediate step
-    retry: 3, // Retry parts as they can fail transiently
+    retry: 3,
     retryDelay: attempt => Math.min(1000 * 2 ** attempt, 30000),
     throwOnError: false,
   });
 }
 
-/**
- * Hook to complete a multipart upload
- * Protected endpoint - requires authentication
- *
- * After successful completion:
- * - Invalidates attachment lists
- */
 export function useCompleteMultipartUploadMutation() {
-  const queryClient = useSafeQueryClient();
+  const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<CompleteMultipartUploadResponse, Error, CompleteMultipartUploadRequest>({
     mutationFn: completeMultipartUploadService,
     onSuccess: () => {
-      // Skip invalidation if queryClient unavailable during hydration
-      if (queryClient) {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.uploads.all,
-        });
-      }
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.uploads.all,
+      });
     },
     retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to abort a multipart upload
- * Protected endpoint - requires authentication
- *
- * Cleans up any uploaded parts
- */
 export function useAbortMultipartUploadMutation() {
-  const queryClient = useSafeQueryClient();
+  const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<AbortMultipartUploadResponse, Error, AbortMultipartUploadRequest>({
     mutationFn: abortMultipartUploadService,
     onSuccess: () => {
-      // Skip invalidation if queryClient unavailable during hydration
-      if (queryClient) {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.uploads.all,
-        });
-      }
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.uploads.all,
+      });
     },
     retry: false,
     throwOnError: false,
   });
 }
 
-// ============================================================================
-// Utility Hook: Multipart Upload Orchestrator
-// ============================================================================
-
-/**
- * Combined hook for managing the full multipart upload lifecycle
- * Provides state and methods for:
- * - Creating the upload
- * - Uploading parts with progress
- * - Completing or aborting
- */
 export function useMultipartUpload() {
   const createMutation = useCreateMultipartUploadMutation();
   const uploadPartMutation = useUploadPartMutation();

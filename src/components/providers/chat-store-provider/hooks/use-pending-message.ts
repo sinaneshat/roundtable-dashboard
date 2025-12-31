@@ -1,12 +1,5 @@
 'use client';
 
-/**
- * Pending Message Hook
- *
- * Watches for pending message conditions and triggers send.
- * Adds placeholder pre-search for web search rounds (no API call - execute auto-creates).
- */
-
 import type { MutableRefObject } from 'react';
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
@@ -24,15 +17,6 @@ type UsePendingMessageParams = {
   sendMessageRef: MutableRefObject<ChatHook['sendMessage']>;
 };
 
-/**
- * Handles pending message send with pre-search orchestration
- *
- * When web search is enabled, adds a placeholder pre-search to the store.
- * PreSearchStream component handles execution via executePreSearchStreamService,
- * which auto-creates the DB record if it doesn't exist.
- *
- * This eliminates the separate create API call - execute handles everything.
- */
 export function usePendingMessage({
   store,
   chat,
@@ -55,39 +39,30 @@ export function usePendingMessage({
   useEffect(() => {
     const newRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
 
-    // Guard: Only send on overview/thread screens (not public)
     if (screenMode === ScreenModes.PUBLIC) {
       return;
     }
 
-    // Check if we should send pending message
     if (!pendingMessage || !expectedParticipantIds || hasSentPendingMessage || isStreaming) {
       return;
     }
 
-    // Race condition guards
     if (chat.isStreamingRef.current || chat.isTriggeringRef.current) {
       return;
     }
 
-    // ✅ FIX: Wait for AI SDK to be ready before sending
-    // Without this, sendMessage may reference a destroyed Chat instance
-    // causing "Cannot read properties of undefined (reading 'state')" error
     if (!chat.isReady) {
       return;
     }
 
-    // Round 0 guard - skip when waitingToStartStreaming is true on overview
     if (waitingToStart && screenMode === ScreenModes.OVERVIEW) {
       return;
     }
 
-    // Guard: Wait for sendMessage to be available
     if (!sendMessageRef.current) {
       return;
     }
 
-    // Compare participant model IDs
     const currentModelIds = getEnabledParticipantModelIds(participants).sort().join(',');
     const expectedModelIds = [...expectedParticipantIds].sort().join(',');
 
@@ -95,35 +70,23 @@ export function usePendingMessage({
       return;
     }
 
-    // Check changelog wait state
     const isInitialThreadCreation = screenMode === ScreenModes.OVERVIEW && waitingToStart;
     if (isWaitingForChangelog && !isInitialThreadCreation) {
       return;
     }
 
-    // newRoundNumber already calculated at top of effect
-    // Thread state is source of truth for existing threads; form state for new chats
     const webSearchEnabled = getEffectiveWebSearchEnabled(thread, formEnableWebSearch);
     const preSearchForRound = Array.isArray(preSearches)
       ? preSearches.find(ps => ps.roundNumber === newRoundNumber)
       : undefined;
 
-    // Handle web search: add placeholder or wait for completion
     if (webSearchEnabled) {
-      // No pre-search yet - add placeholder (execute endpoint auto-creates DB record)
       if (!preSearchForRound) {
         const currentState = store.getState();
         if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
-          // eslint-disable-next-line no-console -- DEBUG: Track pre-search wait
-          console.log('[DBG:PS_WAIT]', { rnd: newRoundNumber, reason: 'already_triggered' });
           return;
         }
 
-        // eslint-disable-next-line no-console -- DEBUG: Track pre-search creation
-        console.log('[DBG:PS_CREATE]', { rnd: newRoundNumber });
-
-        // Add placeholder pre-search to store - PreSearchStream will execute
-        // Execute endpoint auto-creates DB record, so no separate create call needed
         const effectiveThreadId = thread?.id || currentState.createdThreadId || '';
         currentState.addPreSearch({
           id: `placeholder-presearch-${effectiveThreadId}-${newRoundNumber}`,
@@ -139,33 +102,17 @@ export function usePendingMessage({
         return;
       }
 
-      // Pre-search exists but not complete - wait for PreSearchStream to finish
       if (preSearchForRound.status === MessageStatuses.STREAMING
         || preSearchForRound.status === MessageStatuses.PENDING) {
-        // eslint-disable-next-line no-console -- DEBUG: Track pre-search wait
-        console.log('[DBG:PS_WAIT]', { rnd: newRoundNumber, status: preSearchForRound.status });
         return;
       }
-
-      // eslint-disable-next-line no-console -- DEBUG: Pre-search complete, ready to stream
-      console.log('[DBG:PS_DONE]', { rnd: newRoundNumber, status: preSearchForRound.status });
     }
 
-    // Send message
     const { setHasSentPendingMessage, setStreamingRoundNumber, setHasPendingConfigChanges } = store.getState();
-
-    // eslint-disable-next-line no-console -- DEBUG: Track sendMessage trigger
-    console.log('[DBG:PM_SEND]', { rnd: newRoundNumber, pendingMsg: pendingMessage?.slice(0, 30) });
 
     setHasSentPendingMessage(true);
     setStreamingRoundNumber(newRoundNumber);
     setHasPendingConfigChanges(false);
-
-    // ✅ RACE CONDITION FIX: Moderator placeholder is now added in useModeratorTrigger
-    // AFTER all participants complete streaming. Adding it here caused the moderator
-    // to appear BEFORE participants in the UI, leading to incorrect timeline ordering.
-    // The old pattern: User → Moderator → Participants (wrong)
-    // The new pattern: User → Participants → Moderator (correct)
 
     queueMicrotask(() => {
       if (chat.isStreamingRef.current) {

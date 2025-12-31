@@ -4,7 +4,7 @@ import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases, TextPartStates } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases, TextPartStates, UIMessageRoles } from '@/api/core/enums';
 import { getRoundNumber, rlog } from '@/lib/utils';
 import { isObject } from '@/lib/utils/type-guards';
 import type { ChatStoreApi } from '@/stores/chat';
@@ -89,7 +89,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
 
     const moderatorPlaceholder: UIMessage = {
       id: moderatorId,
-      role: 'assistant',
+      role: UIMessageRoles.ASSISTANT,
       parts: [],
       metadata: {
         isModerator: true,
@@ -227,10 +227,10 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
               msg.id === moderatorMessageId
                 ? {
                     ...msg,
-                    parts: [{ type: 'text' as const, text: finalText, state: 'done' as const }],
+                    parts: [{ type: 'text' as const, text: finalText, state: TextPartStates.DONE }],
                     metadata: {
                       ...(msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}),
-                      finishReason: 'stop',
+                      finishReason: FinishReasons.STOP,
                     },
                   }
                 : msg,
@@ -238,14 +238,14 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
           } else {
             const moderatorMessage = {
               id: moderatorMessageId,
-              role: 'assistant' as const,
-              parts: [{ type: 'text' as const, text: finalText, state: 'done' as const }],
+              role: UIMessageRoles.ASSISTANT,
+              parts: [{ type: 'text' as const, text: finalText, state: TextPartStates.DONE }],
               metadata: {
-                role: 'assistant',
+                role: MessageRoles.ASSISTANT,
                 roundNumber,
                 isModerator: true,
                 model: 'anthropic/claude-sonnet-4',
-                finishReason: 'stop',
+                finishReason: FinishReasons.STOP,
               },
             };
             return [...currentMessages, moderatorMessage];
@@ -258,10 +258,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
         return;
       }
       rlog.moderator('error', `r${roundNumber}`);
-      // Error is silent - moderator failure is non-critical
     } finally {
-      // ✅ FIX: Only call completeStreaming() - it already includes MODERATOR_STATE_RESET
-      // Previously calling both caused a duplicate state update and unnecessary re-renders
       rlog.phase('MOD→DONE', `r${roundNumber} complete`);
       store.getState().completeStreaming();
       triggeringRoundRef.current = null;
@@ -283,8 +280,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
   const messages = useStore(store, s => s.messages);
   const participants = useStore(store, s => s.participants);
   const resumptionTriggerAttemptedRef = useRef<string | null>(null);
-
-  // ✅ PREMATURE MODERATOR FIX: Subscribe to resumption state
   const waitingToStartStreaming = useStore(store, s => s.waitingToStartStreaming);
   const nextParticipantToTrigger = useStore(store, s => s.nextParticipantToTrigger);
 
@@ -301,8 +296,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       return;
     }
 
-    // ✅ PREMATURE MODERATOR FIX: Don't trigger if participant resumption in progress
-    // Messages from DB might show all participants "complete" but they're about to be re-streamed
     if (waitingToStartStreaming || nextParticipantToTrigger !== null) {
       return;
     }
@@ -355,7 +348,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     participants,
     store,
     triggerModerator,
-    // ✅ PREMATURE MODERATOR FIX: Include resumption state in dependencies
     waitingToStartStreaming,
     nextParticipantToTrigger,
   ]);

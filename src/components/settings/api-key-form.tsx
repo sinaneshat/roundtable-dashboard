@@ -1,11 +1,3 @@
-/**
- * API Key Form Component
- *
- * ✅ REUSES: API route schema from @/api/routes/api-keys/schema
- * Form for creating new API keys using RHF patterns
- * Following patterns from other forms in @/components/forms/
- */
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,9 +8,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { CreateApiKeyRequestSchema } from '@/api/routes/api-keys/schema';
-import FormProvider from '@/components/forms/form-provider';
-import RHFSelect from '@/components/forms/rhf-select';
-import RHFTextField from '@/components/forms/rhf-text-field';
+import { FormProvider, RHFSelect, RHFTextField } from '@/components/forms';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,29 +16,20 @@ import { useCreateApiKeyMutation } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
 import { showApiErrorToast } from '@/lib/toast';
 
+const MAX_API_KEYS = 5;
+
 type ApiKeyFormProps = {
   onCreated: () => void;
+  currentKeyCount?: number;
 };
 
-// ============================================================================
-// Form Schema (Reusing API Schema)
-// ============================================================================
-
-/**
- * ✅ REUSE: API schema for creating API keys
- * Extends with frontend-specific field transformation (expiresIn as string for select input)
- */
 const formSchema = CreateApiKeyRequestSchema.omit({ expiresIn: true }).extend({
-  expiresIn: z.string().optional(), // Stored as string in form, converted to number on submit
+  expiresIn: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-// ============================================================================
-// Component
-// ============================================================================
-
-export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps & { currentKeyCount?: number }) {
+export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) {
   const t = useTranslations();
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const copied = useBoolean(false);
@@ -63,9 +44,7 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps &
   });
 
   const { handleSubmit, reset } = methods;
-
-  // Check if user has reached the maximum number of API keys (5)
-  const hasReachedLimit = currentKeyCount >= 5;
+  const hasReachedLimit = currentKeyCount >= MAX_API_KEYS;
 
   const expirationOptions = [
     { label: t('apiKeys.form.expiresIn.never'), value: 'never' },
@@ -92,14 +71,11 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps &
         },
       });
 
-      // Check if successful
       if (result.success && result.data?.apiKey) {
         setCreatedKey(result.data.apiKey.key);
-        // Success is obvious from the success UI showing the key - no toast needed
-        // Don't reset form or call onCreated() yet - let user see and copy the key first
       }
     } catch (error) {
-      showApiErrorToast('Failed to create API key', error);
+      showApiErrorToast(t('apiKeys.form.createError'), error);
     }
   };
 
@@ -114,12 +90,10 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps &
     if (createdKey) {
       await navigator.clipboard.writeText(createdKey);
       copied.onTrue();
-      // Success is obvious from the button changing to "Copied" - no toast needed
       setTimeout(() => copied.onFalse(), 2000);
     }
   };
 
-  // If key was created, show success state with the key
   if (createdKey) {
     return (
       <div className="grid gap-6 py-4">
@@ -195,7 +169,6 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps &
     );
   }
 
-  // If user has reached the limit, show a warning
   if (hasReachedLimit) {
     return (
       <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-6 text-center">

@@ -33,6 +33,7 @@ import {
 } from 'ai';
 
 import { createError, normalizeError } from '@/api/common/error-handling';
+import type { ErrorContext } from '@/api/core';
 import { AIModels } from '@/api/core';
 import type {
   WebSearchActiveAnswerMode,
@@ -270,7 +271,11 @@ export async function generateSearchQuery(
       || !result.output.queries
       || result.output.queries.length === 0
     ) {
-      throw new Error('Generated object does not contain valid queries');
+      const errorContext: ErrorContext = {
+        errorType: 'validation',
+        field: 'queries',
+      };
+      throw createError.badRequest('Generated object does not contain valid queries', errorContext);
     }
 
     // ✅ VALIDATE: Clamp totalQueries to valid range (1-3)

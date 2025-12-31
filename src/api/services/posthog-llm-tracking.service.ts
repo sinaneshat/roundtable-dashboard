@@ -24,6 +24,7 @@ import { ulid } from 'ulid';
 import { MessageRoles } from '@/api/core/enums';
 import { getPostHogClient } from '@/lib/posthog-server';
 import { isObject, isToolCall } from '@/lib/utils';
+import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders';
 
 // ============================================================================
 // TYPE DEFINITIONS (Using AI SDK Types)
@@ -83,7 +84,7 @@ export type LLMTrackingUsage = {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
-  // AI SDK v6: use inputTokenDetails.cacheReadTokens instead of deprecated cachedInputTokens
+  // AI SDK v6: inputTokenDetails contains cache metrics
   inputTokenDetails?: {
     noCacheTokens?: number;
     cacheReadTokens?: number;
@@ -96,17 +97,40 @@ export type LLMTrackingUsage = {
 };
 
 /**
+ * AI SDK v6 Tool Call structure
+ * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-call-part
+ */
+export type ToolCall = {
+  type: 'tool-call';
+  toolCallId: string;
+  toolName: string;
+  input: unknown;
+};
+
+/**
+ * AI SDK v6 Tool Result structure
+ * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-result-part
+ * Note: result is optional to match AI SDK's DynamicToolResult
+ */
+export type ToolResult = {
+  type: 'tool-result';
+  toolCallId: string;
+  toolName: string;
+  result?: unknown;
+};
+
+/**
  * LLM generation result from AI SDK v6
  *
- * ✅ AI SDK TYPE FLEXIBILITY: Uses flexible types to accommodate different AI SDK return types
+ * ✅ AI SDK TYPE SAFETY: Uses explicit types from AI SDK patterns
  */
 export type LLMGenerationResult = {
   text: string;
   finishReason: string;
   usage?: LLMTrackingUsage;
   reasoning?: Array<{ type: 'reasoning'; text: string }>;
-  toolCalls?: unknown; // Flexible type to accommodate different AI SDK versions
-  toolResults?: unknown; // Flexible type to accommodate different AI SDK versions
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
   response?: {
     id?: string;
     modelId?: string;
@@ -155,12 +179,18 @@ export type LLMTrackingOptions = {
   };
 
   // ✅ PostHog Official: Available tools/functions for the LLM
+  // JSON Schema for function parameters (standard JSON Schema object)
   tools?: Array<{
     type: string;
     function: {
       name: string;
       description?: string;
-      parameters?: Record<string, unknown>;
+      parameters?: {
+        type?: string;
+        properties?: Record<string, { type?: string; description?: string }>;
+        required?: string[];
+        [key: string]: unknown;
+      };
     };
   }>;
 
@@ -245,7 +275,19 @@ type LLMGenerationProperties = {
   $ai_request_url?: string; // Full URL of the request
 
   // Tool tracking
-  $ai_tools?: Array<{ type: string; function: { name: string; description?: string; parameters?: Record<string, unknown> } }>; // ✅ Available tools
+  $ai_tools?: Array<{
+    type: string;
+    function: {
+      name: string;
+      description?: string;
+      parameters?: {
+        type?: string;
+        properties?: Record<string, { type?: string; description?: string }>;
+        required?: string[];
+        [key: string]: unknown;
+      };
+    };
+  }>; // ✅ Available tools
   $ai_tools_count?: number;
   $ai_tool_calls?: Array<{ name: string; arguments: string }>;
   $ai_tool_calls_count?: number;
@@ -479,7 +521,7 @@ export async function trackLLMGeneration(
     const totalTokens = finishResult.usage?.totalTokens || (inputTokens + outputTokens);
 
     // Cache tokens (Anthropic/OpenAI prompt caching)
-    // AI SDK v6: use inputTokenDetails.cacheReadTokens instead of deprecated cachedInputTokens
+    // AI SDK v6: cache metrics in inputTokenDetails
     const cacheReadTokens = finishResult.usage?.inputTokenDetails?.cacheReadTokens;
 
     // =========================================================================
@@ -797,7 +839,7 @@ export async function trackLLMError(
 
         // Categorization
         error_category: 'llm_error',
-        is_transient: isTransientError(error),
+        is_transient: isTransientErrorFromObject(error),
       },
     });
 
@@ -805,28 +847,6 @@ export async function trackLLMError(
   } catch {
     // Silently fail - don't break the application
   }
-}
-
-/**
- * Determine if an error is transient (retriable)
- */
-function isTransientError(error: Error): boolean {
-  // ✅ TYPE GUARD: Check for status code property
-  const statusCode = isObject(error) && 'statusCode' in error && typeof error.statusCode === 'number'
-    ? error.statusCode
-    : undefined;
-
-  // Rate limits and server errors are transient
-  if (statusCode === 429 || statusCode === 503 || statusCode === 502) {
-    return true;
-  }
-
-  // Network errors are transient
-  if (error.message.includes('network') || error.message.includes('timeout')) {
-    return true;
-  }
-
-  return false;
 }
 
 // ============================================================================

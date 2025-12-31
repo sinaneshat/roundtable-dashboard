@@ -1,8 +1,9 @@
 'use client';
 
+import type { QueryClient } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useLayoutEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -27,12 +28,14 @@ import {
 } from './hooks';
 import type { ChatStoreProviderProps } from './types';
 
+type TriggerModeratorFn = (roundNumber: number, participantMessageIds: string[]) => Promise<void>;
+
 export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const queryClient = useQueryClient();
   const storeRef = useRef<ChatStoreApi | null>(null);
   const prevPathnameRef = useRef<string | null>(null);
-  const queryClientRef = useRef(queryClient);
-  const triggerModeratorRef = useRef<((roundNumber: number, participantMessageIds: string[]) => Promise<void>) | null>(null);
+  const queryClientRef = useRef<QueryClient>(queryClient);
+  const triggerModeratorRef = useRef<TriggerModeratorFn | null>(null);
 
   if (storeRef.current === null) {
     storeRef.current = createChatStore();
@@ -68,13 +71,12 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   const effectiveThreadId = thread?.id || createdThreadId || '';
 
-  // Error handling callback
   const handleError = useCallback((error: Error) => {
     showApiErrorToast('Chat error', error);
   }, []);
 
   const waitForStoreSync = useCallback(async (
-    sdkMessages: UIMessage[],
+    sdkMessages: readonly UIMessage[],
     roundNumber: number,
     maxWaitMs = 2000,
   ): Promise<boolean> => {
@@ -147,7 +149,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     return false;
   }, [store]);
 
-  const handleComplete = useCallback(async (sdkMessages: UIMessage[]) => {
+  const handleComplete = useCallback(async (sdkMessages: readonly UIMessage[]) => {
     const currentState = store.getState();
 
     if (currentState.thread || currentState.createdThreadId) {
@@ -163,11 +165,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             return;
           }
 
-          // ✅ PREMATURE MODERATOR FIX: Don't trigger moderator if resumption is in progress
-          // When page refreshes mid-stream, participants are triggered sequentially via resumption.
-          // The AI SDK's onComplete fires after each participant, but we shouldn't trigger moderator
-          // until ALL participants have ACTUALLY finished streaming in THIS session.
-          // Check: waitingToStartStreaming or nextParticipantToTrigger indicates pending resumption.
           if (currentState.waitingToStartStreaming || currentState.nextParticipantToTrigger !== null) {
             return;
           }
@@ -177,13 +174,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
           const latestState = store.getState();
 
-          // ✅ PREMATURE MODERATOR FIX: Re-check after await in case resumption started
           if (latestState.waitingToStartStreaming || latestState.nextParticipantToTrigger !== null) {
             return;
           }
 
-          // ✅ STREAMING PARTS CHECK: Don't trigger moderator if ANY participant is still streaming
-          // This is a direct check on the actual message parts, not relying on state flags
+          const storeIsStreaming = latestState.isStreaming;
           const hasAnyStreamingParts = sdkMessages.some((m) => {
             const meta = getMessageMetadata(m.metadata);
             if (!meta || meta.role !== MessageRoles.ASSISTANT || 'isModerator' in meta) {
@@ -191,7 +186,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             }
             return m.parts?.some(p => 'state' in p && p.state === TextPartStates.STREAMING) ?? false;
           });
-          if (hasAnyStreamingParts) {
+
+          if (hasAnyStreamingParts && storeIsStreaming) {
             return;
           }
 
@@ -252,13 +248,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const sendMessageRef = useRef(chat.sendMessage);
   const startRoundRef = useRef(chat.startRound);
   const setMessagesRef = useRef(chat.setMessages);
-
-  const prevCreatedThreadIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (createdThreadId !== prevCreatedThreadIdRef.current) {
-      prevCreatedThreadIdRef.current = createdThreadId;
-    }
-  }, [createdThreadId]);
 
   useStateSync({
     store,

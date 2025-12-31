@@ -13,4 +13,4 @@ export {
   useModelPreferencesHydrated,
   useModelPreferencesStore,
 } from './preferences-store-provider';
-export { default as QueryClientProvider } from './query-client-provider';
+export { QueryClientProvider } from './query-client-provider';

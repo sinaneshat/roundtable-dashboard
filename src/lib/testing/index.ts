@@ -38,4 +38,5 @@ export * from './test-providers';
 // Testing Library Utilities (imported from canonical sources)
 // ============================================================================
 export { act, screen, waitFor, within } from '@testing-library/react';
+// External library re-export: userEvent is exported from @testing-library/user-event as default
 export { default as userEvent } from '@testing-library/user-event';

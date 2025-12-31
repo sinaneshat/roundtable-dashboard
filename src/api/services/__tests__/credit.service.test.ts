@@ -1,16 +1,9 @@
-/**
- * Credit Service Tests
- *
- * Tests for credit enforcement, card connection detection, and credit grants.
- * Focuses on edge cases that could cause runtime errors.
- */
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PlanType } from '@/api/core/enums';
+import { SubscriptionTiers } from '@/api/core/enums';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
-// Mock the database module
 vi.mock('@/db', async () => {
   return {
     getDbAsync: vi.fn(),
@@ -19,22 +12,30 @@ vi.mock('@/db', async () => {
   };
 });
 
-// Mock the credit service functions with simplified implementations for unit testing
-const mockUserCreditData = {
+type MockUserCreditData = {
+  balance: number;
+  reservedCredits: number;
+  planType: PlanType;
+  monthlyCredits: number;
+  payAsYouGoEnabled: boolean;
+  nextRefillAt: null;
+  hasCardConnectionTransaction: boolean;
+};
+
+const mockUserCreditData: MockUserCreditData = {
   balance: 0,
   reservedCredits: 0,
-  planType: 'free' as PlanType,
+  planType: SubscriptionTiers.FREE,
   monthlyCredits: 0,
   payAsYouGoEnabled: false,
   nextRefillAt: null,
   hasCardConnectionTransaction: false,
 };
 
-// Reset mock data before each test
 beforeEach(() => {
   mockUserCreditData.balance = 0;
   mockUserCreditData.reservedCredits = 0;
-  mockUserCreditData.planType = 'free';
+  mockUserCreditData.planType = SubscriptionTiers.FREE;
   mockUserCreditData.monthlyCredits = 0;
   mockUserCreditData.hasCardConnectionTransaction = false;
 });
@@ -127,21 +128,16 @@ describe('credit.service', () => {
   });
 
   describe('needsCardConnection logic (unit tests)', () => {
-    /**
-     * These tests verify the LOGIC of needsCardConnection without mocking the database.
-     * They test the decision tree based on simulated user states.
-     */
-
-    function simulateNeedsCardConnection(userData: typeof mockUserCreditData): boolean {
+    function simulateNeedsCardConnection(userData: MockUserCreditData): boolean {
       // Simulate the needsCardConnection logic
-      if (userData.planType !== 'free' || userData.balance > 0) {
+      if (userData.planType !== SubscriptionTiers.FREE || userData.balance > 0) {
         return false;
       }
       return !userData.hasCardConnectionTransaction;
     }
 
     it('returns false for paid plan users', () => {
-      mockUserCreditData.planType = 'paid';
+      mockUserCreditData.planType = SubscriptionTiers.PRO;
       mockUserCreditData.balance = 0;
       mockUserCreditData.hasCardConnectionTransaction = false;
 
@@ -149,7 +145,7 @@ describe('credit.service', () => {
     });
 
     it('returns false for free users with positive balance', () => {
-      mockUserCreditData.planType = 'free';
+      mockUserCreditData.planType = SubscriptionTiers.FREE;
       mockUserCreditData.balance = 5000;
       mockUserCreditData.hasCardConnectionTransaction = false;
 
@@ -157,7 +153,7 @@ describe('credit.service', () => {
     });
 
     it('returns false for free users who already connected card', () => {
-      mockUserCreditData.planType = 'free';
+      mockUserCreditData.planType = SubscriptionTiers.FREE;
       mockUserCreditData.balance = 0;
       mockUserCreditData.hasCardConnectionTransaction = true;
 
@@ -165,7 +161,7 @@ describe('credit.service', () => {
     });
 
     it('returns true for new free users with 0 balance and no card connection', () => {
-      mockUserCreditData.planType = 'free';
+      mockUserCreditData.planType = SubscriptionTiers.FREE;
       mockUserCreditData.balance = 0;
       mockUserCreditData.hasCardConnectionTransaction = false;
 
@@ -174,11 +170,6 @@ describe('credit.service', () => {
   });
 
   describe('enforceCredits error messages (unit tests)', () => {
-    /**
-     * These tests verify the ERROR MESSAGE LOGIC without mocking the database.
-     * They test that the correct error message is returned based on user state.
-     */
-
     function getEnforceCreditsError(
       available: number,
       required: number,
@@ -195,23 +186,23 @@ describe('credit.service', () => {
       }
 
       return `Insufficient credits. Required: ${required}, Available: ${available}. `
-        + `${planType === 'free' ? 'Upgrade to Pro or ' : ''}Purchase additional credits to continue.`;
+        + `${planType === SubscriptionTiers.FREE ? 'Upgrade to Pro or ' : ''}Purchase additional credits to continue.`;
     }
 
     it('returns null when user has sufficient credits', () => {
-      const error = getEnforceCreditsError(100, 50, 'free', false);
+      const error = getEnforceCreditsError(100, 50, SubscriptionTiers.FREE, false);
       expect(error).toBeNull();
     });
 
     it('returns card connection message for new users', () => {
-      const error = getEnforceCreditsError(0, 1, 'free', true);
+      const error = getEnforceCreditsError(0, 1, SubscriptionTiers.FREE, true);
       expect(error).toContain('Connect a payment method');
       expect(error).toContain('10,000 credits');
       expect(error).toContain('No charges until you exceed');
     });
 
     it('returns insufficient credits message for free users who exhausted credits', () => {
-      const error = getEnforceCreditsError(0, 100, 'free', false);
+      const error = getEnforceCreditsError(0, 100, SubscriptionTiers.FREE, false);
       expect(error).toContain('Insufficient credits');
       expect(error).toContain('Required: 100');
       expect(error).toContain('Available: 0');
@@ -219,7 +210,7 @@ describe('credit.service', () => {
     });
 
     it('returns insufficient credits message for paid users without upgrade suggestion', () => {
-      const error = getEnforceCreditsError(50, 100, 'paid', false);
+      const error = getEnforceCreditsError(50, 100, SubscriptionTiers.PRO, false);
       expect(error).toContain('Insufficient credits');
       expect(error).toContain('Required: 100');
       expect(error).toContain('Available: 50');
@@ -228,11 +219,6 @@ describe('credit.service', () => {
   });
 
   describe('grantCardConnectionCredits logic (unit tests)', () => {
-    /**
-     * These tests verify the LOGIC of grantCardConnectionCredits without mocking the database.
-     * They test the decision tree based on simulated user states.
-     */
-
     function simulateGrantCardConnectionCredits(
       hasExistingTransaction: boolean,
       cardConnectionCredits: number,
@@ -284,7 +270,6 @@ describe('credit.service', () => {
       expect(CREDIT_CONFIG.DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE).toBe(2000);
     });
 
-    // Test tokensToCredits logic
     function tokensToCredits(tokens: number): number {
       return Math.ceil(tokens / CREDIT_CONFIG.TOKENS_PER_CREDIT);
     }
@@ -301,7 +286,6 @@ describe('credit.service', () => {
       expect(tokensToCredits(1)).toBe(1);
     });
 
-    // Test estimateStreamingCredits logic
     function estimateStreamingCredits(
       participantCount: number,
       estimatedInputTokens: number = 500,
@@ -318,50 +302,34 @@ describe('credit.service', () => {
     });
 
     it('estimates credits for 3 participants', () => {
-      // 500 input + (2000 * 3) output = 6500 tokens * 1.5 = 9750 tokens = 10 credits
       expect(estimateStreamingCredits(3)).toBe(10);
     });
 
     it('estimates credits with custom input tokens', () => {
-      // 1000 input + 2000 output = 3000 tokens * 1.5 = 4500 tokens = 5 credits
       expect(estimateStreamingCredits(1, 1000)).toBe(5);
     });
   });
 
   describe('edge cases that could cause thread creation failures', () => {
-    /**
-     * These tests document the specific edge cases that can cause 400 errors
-     * when creating threads, ensuring we handle them gracefully.
-     */
-
     it('new user with 0 signup credits gets clear card connection message', () => {
-      // This is the exact scenario from the bug report:
-      // - User signs up (gets 0 credits per CREDIT_CONFIG.PLANS.free.signupCredits)
-      // - User tries to create thread (requires credits)
-      // - User should see "Connect payment method" message, not generic "insufficient credits"
-
       const signupCredits = CREDIT_CONFIG.PLANS.free.signupCredits;
       expect(signupCredits).toBe(0);
 
       const cardConnectionCredits = CREDIT_CONFIG.PLANS.free.cardConnectionCredits;
       expect(cardConnectionCredits).toBe(10_000);
 
-      // The system should detect this is a new user needing card connection
       const needsCard = signupCredits === 0 && cardConnectionCredits > 0;
       expect(needsCard).toBe(true);
     });
 
     it('thread creation cost is less than card connection credits', () => {
-      // Ensure users can create threads after connecting card
       const threadCost = CREDIT_CONFIG.ACTION_COSTS.threadCreation;
       const cardConnectionCredits = CREDIT_CONFIG.PLANS.free.cardConnectionCredits;
 
       expect(threadCost).toBeLessThan(cardConnectionCredits);
-      // 100 tokens << 10,000 credits
     });
 
     it('estimated streaming credits for 3 participants fits within card connection credits', () => {
-      // Users should be able to have at least one conversation with 3 participants
       function estimateStreamingCredits(participantCount: number): number {
         const estimatedOutputTokens = CREDIT_CONFIG.DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE * participantCount;
         const totalTokens = 500 + estimatedOutputTokens;
@@ -372,7 +340,6 @@ describe('credit.service', () => {
       const estimatedCredits = estimateStreamingCredits(3);
       const cardConnectionCredits = CREDIT_CONFIG.PLANS.free.cardConnectionCredits;
 
-      // Should fit comfortably
       expect(estimatedCredits).toBeLessThan(cardConnectionCredits);
     });
   });

@@ -124,6 +124,101 @@ export const CoreSchemas = {
     example: 'desc',
     description: 'Sort order',
   }),
+  // String fields with common limits (Single Source of Truth)
+  /**
+   * Name field (1-100 chars)
+   * Used for: role names, preset names, custom role names, model roles
+   */
+  name: (opts?: { min?: number; max?: number }) => z.string()
+    .min(opts?.min ?? 1, 'Name is required')
+    .max(opts?.max ?? 100, `Name must be at most ${opts?.max ?? 100} characters`)
+    .openapi({
+      description: 'Name field (1-100 chars)',
+      example: 'My Name',
+    }),
+
+  /**
+   * Title field (1-200 chars)
+   * Used for: thread titles, project names, preset names
+   */
+  title: (opts?: { min?: number; max?: number }) => z.string()
+    .min(opts?.min ?? 1, 'Title is required')
+    .max(opts?.max ?? 200, `Title must be at most ${opts?.max ?? 200} characters`)
+    .openapi({
+      description: 'Title field (1-200 chars)',
+      example: 'My Title',
+    }),
+
+  /**
+   * Description field (max 500 chars)
+   * Used for: project descriptions, role descriptions
+   */
+  description: (opts?: { max?: number }) => z.string()
+    .max(opts?.max ?? 500, `Description must be at most ${opts?.max ?? 500} characters`)
+    .openapi({
+      description: 'Description field (max 500 chars)',
+      example: 'A helpful description',
+    }),
+
+  /**
+   * Long description field (max 1000 chars)
+   * Used for: project descriptions, memory summaries
+   */
+  longDescription: (opts?: { max?: number }) => z.string()
+    .max(opts?.max ?? 1000, `Description must be at most ${opts?.max ?? 1000} characters`)
+    .openapi({
+      description: 'Long description field (max 1000 chars)',
+      example: 'A longer, more detailed description',
+    }),
+
+  /**
+   * Content field (1-10000 chars)
+   * Used for: system prompts, memory content, message content
+   */
+  content: (opts?: { min?: number; max?: number }) => z.string()
+    .min(opts?.min ?? 1, 'Content is required')
+    .max(opts?.max ?? 10000, `Content must be at most ${opts?.max ?? 10000} characters`)
+    .openapi({
+      description: 'Content field (1-10000 chars)',
+      example: 'Content text',
+    }),
+
+  /**
+   * Role field (nullable, 1-100 chars when present)
+   * Used for: participant roles, custom roles
+   */
+  role: () => z.string()
+    .min(1, 'Role is required when specified')
+    .max(100, 'Role must be at most 100 characters')
+    .nullish()
+    .openapi({
+      description: 'Role field (nullable, 1-100 chars)',
+      example: 'The Ideator',
+    }),
+
+  /**
+   * Filename field (1-255 chars)
+   * Used for: upload filenames
+   */
+  filename: () => z.string()
+    .min(1, 'Filename is required')
+    .max(255, 'Filename must be at most 255 characters')
+    .openapi({
+      description: 'Filename (1-255 chars)',
+      example: 'document.pdf',
+    }),
+
+  /**
+   * Change summary field (1-500 chars)
+   * Used for: changelog summaries
+   */
+  changeSummary: () => z.string()
+    .min(1, 'Summary is required')
+    .max(500, 'Summary must be at most 500 characters')
+    .openapi({
+      description: 'Change summary (1-500 chars)',
+      example: 'Added new participant',
+    }),
 } as const;
 
 // ============================================================================

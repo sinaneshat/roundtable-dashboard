@@ -7,6 +7,28 @@
 import { z } from '@hono/zod-openapi';
 
 // ============================================================================
+// CARD VARIANT
+// ============================================================================
+
+export const CARD_VARIANTS = ['default', 'glass', 'glass-subtle', 'glass-strong'] as const;
+
+export const DEFAULT_CARD_VARIANT: CardVariant = 'default';
+
+export const CardVariantSchema = z.enum(CARD_VARIANTS).openapi({
+  description: 'Card component visual variant',
+  example: 'default',
+});
+
+export type CardVariant = z.infer<typeof CardVariantSchema>;
+
+export const CardVariants = {
+  DEFAULT: 'default' as const,
+  GLASS: 'glass' as const,
+  GLASS_SUBTLE: 'glass-subtle' as const,
+  GLASS_STRONG: 'glass-strong' as const,
+} as const;
+
+// ============================================================================
 // COMPONENT VARIANT
 // ============================================================================
 
@@ -766,4 +788,8 @@ export function isValidAvatarSize(value: unknown): value is AvatarSize {
 
 export function isValidModelSelectionTab(value: unknown): value is ModelSelectionTab {
   return typeof value === 'string' && MODEL_SELECTION_TABS.includes(value as ModelSelectionTab);
+}
+
+export function isValidCardVariant(value: unknown): value is CardVariant {
+  return typeof value === 'string' && CARD_VARIANTS.includes(value as CardVariant);
 }

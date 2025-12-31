@@ -50,6 +50,8 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type { DrizzleD1Database } from 'drizzle-orm/d1';
 
+import { createError } from '@/api/common/error-handling';
+
 /**
  * Type alias for any Drizzle query builder that can be batched
  *
@@ -238,9 +240,13 @@ export async function executeBatch<
  */
 export function validateBatchSize(operationCount: number, maxBatchSize: number = 100): void {
   if (operationCount > maxBatchSize) {
-    throw new Error(
+    throw createError.badRequest(
       `Batch size limit exceeded: ${operationCount} operations (max: ${maxBatchSize}). `
       + `Consider splitting into multiple batches or refactoring logic.`,
+      {
+        errorType: 'validation',
+        schemaName: 'BatchOperations',
+      },
     );
   }
 }

@@ -32,8 +32,9 @@ export type AISdkError = z.infer<typeof AISdkErrorSchema>;
 /**
  * Network/HTTP Error Schema
  * Covers fetch failures, HTTP errors, and network issues
+ * Internal only - used by extractNetworkError
  */
-export const NetworkErrorSchema = z.object({
+const NetworkErrorSchema = z.object({
   message: z.string(),
   statusCode: z.number().optional(),
   status: z.number().optional(),
@@ -43,20 +44,21 @@ export const NetworkErrorSchema = z.object({
   stack: z.string().optional(),
 });
 
-export type NetworkError = z.infer<typeof NetworkErrorSchema>;
+type NetworkError = z.infer<typeof NetworkErrorSchema>;
 
 /**
  * Generic Error Schema
  * Fallback for standard Error objects
+ * Internal only - used by extractGenericError
  */
-export const GenericErrorSchema = z.object({
+const GenericErrorSchema = z.object({
   message: z.string(),
   name: z.string().optional(),
   stack: z.string().optional(),
   cause: z.unknown().optional(),
 });
 
-export type GenericError = z.infer<typeof GenericErrorSchema>;
+type GenericError = z.infer<typeof GenericErrorSchema>;
 
 // ============================================================================
 // Type-Safe Error Extraction Functions
@@ -85,28 +87,18 @@ export function extractAISdkError(error: unknown): AISdkError | null {
 
 /**
  * Extract error information from network/HTTP errors
- *
- * @param error - Unknown error object
- * @returns Type-safe NetworkError or null
+ * Internal only - used by getErrorStatusCode
  */
-export function extractNetworkError(error: unknown): NetworkError | null {
+function extractNetworkError(error: unknown): NetworkError | null {
   const result = NetworkErrorSchema.safeParse(error);
   return result.success ? result.data : null;
 }
 
 /**
  * Extract basic error information (always succeeds)
- *
- * @param error - Unknown error object
- * @returns Type-safe GenericError with at least a message
- *
- * @example
- * ```typescript
- * const err = extractGenericError(error);
- * console.error(err.message); // Always defined
- * ```
+ * Internal only - used by getErrorMessage and getErrorName
  */
-export function extractGenericError(error: unknown): GenericError {
+function extractGenericError(error: unknown): GenericError {
   // Try to parse as error object
   const result = GenericErrorSchema.safeParse(error);
   if (result.success) {

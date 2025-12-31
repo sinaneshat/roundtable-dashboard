@@ -25,7 +25,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RoundPhase } from '@/api/core/enums';
-import { FinishReasons, MessageStatuses, RoundPhases } from '@/api/core/enums';
+import { FinishReasons, MessageStatuses, RoundPhases, UIMessageRoles } from '@/api/core/enums';
 import {
   createMockParticipant,
   createMockStoredPreSearch,
@@ -1042,7 +1042,7 @@ describe('multi-Round Resumption', () => {
 
     const maxRound = Math.max(...messages.map(m => m.metadata.roundNumber));
     const latestRoundAssistants = messages.filter(
-      m => m.metadata.roundNumber === maxRound && m.role === 'assistant',
+      m => m.metadata.roundNumber === maxRound && m.role === UIMessageRoles.ASSISTANT,
     );
 
     expect(maxRound).toBe(1);
@@ -1080,7 +1080,7 @@ describe('multi-Round Resumption', () => {
 
     const maxRound = Math.max(...messages.map(m => m.metadata.roundNumber));
     const latestRoundAssistants = messages.filter(
-      m => m.metadata.roundNumber === maxRound && m.role === 'assistant',
+      m => m.metadata.roundNumber === maxRound && m.role === UIMessageRoles.ASSISTANT,
     );
 
     // Round 1 has 2 assistants, is complete

@@ -3,6 +3,7 @@
 import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
+import type { ReactNode } from 'react';
 import { Suspense, useEffect } from 'react';
 
 import { VersionUpdateModal } from '@/components/changelog-modal';
@@ -13,10 +14,10 @@ import { ChatStoreProvider } from './chat-store-provider';
 import { PostHogPageview } from './posthog-pageview';
 import PostHogProvider from './posthog-provider';
 import { PreferencesStoreProvider } from './preferences-store-provider';
-import QueryClientProvider from './query-client-provider';
+import { QueryClientProvider } from './query-client-provider';
 
 type AppProvidersProps = {
-  children: React.ReactNode;
+  children: ReactNode;
   locale: string;
   messages: AbstractIntlMessages;
   timeZone: string;
@@ -75,11 +76,7 @@ export function AppProviders({
                 timeZone={timeZone}
                 now={now}
               >
-                {env.NEXT_PUBLIC_MAINTENANCE !== 'true'
-                  ? children
-                  : (
-                      <div>Maintenance</div>
-                    )}
+                {env.NEXT_PUBLIC_MAINTENANCE === 'true' ? <div>Maintenance</div> : children}
                 <VersionUpdateModal />
                 <Toaster />
               </NextIntlClientProvider>
@@ -90,5 +87,3 @@ export function AppProviders({
     </PostHogProvider>
   );
 }
-
-export default AppProviders;

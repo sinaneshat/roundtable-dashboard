@@ -21,7 +21,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles, MessageStatuses, RoundPhases } from '@/api/core/enums';
+import { FinishReasons, MessageStatuses, RoundPhases, UIMessageRoles } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import {
@@ -77,12 +77,12 @@ function createStreamingMessage(
 ): UIMessage {
   return {
     id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
-    role: 'assistant' as const,
+    role: UIMessageRoles.ASSISTANT,
     parts: hasPartialContent
       ? [{ type: 'text' as const, text: 'Partial response...', state: 'streaming' as const }]
       : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
+      role: UIMessageRoles.ASSISTANT,
       roundNumber,
       participantId: `participant-${participantIndex}`,
       participantIndex,
@@ -701,7 +701,7 @@ describe('multi-Round Resumption', () => {
       });
 
       // Should have round 0 complete messages + round 1 user message
-      const userMessages = messages.filter(m => m.role === 'user');
+      const userMessages = messages.filter(m => m.role === UIMessageRoles.USER);
       expect(userMessages).toHaveLength(2); // r0 + r1
 
       const round0Messages = messages.filter((m) => {
@@ -820,7 +820,7 @@ describe('message Isolation - No Leakage Between Participants', () => {
       moderatorComplete: false,
     });
 
-    const assistantMessages = messages.filter(m => m.role === 'assistant');
+    const assistantMessages = messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
     expect(assistantMessages).toHaveLength(4);
 
     assistantMessages.forEach((msg, index) => {

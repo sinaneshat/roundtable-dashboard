@@ -88,18 +88,6 @@ export function createMockStoredPreSearch(
   } as StoredPreSearch;
 }
 
-export type StreamKVEntry = {
-  streamId: string;
-  threadId: string;
-  roundNumber: number;
-  participantIndex: number;
-  status: StreamStatus;
-  messageId?: string;
-  createdAt: string;
-  completedAt?: string;
-  errorMessage?: string;
-};
-
 export function generateStreamId(threadId: string, roundNumber: number, participantIndex: number): string {
   return `${threadId}_r${roundNumber}_p${participantIndex}`;
 }
@@ -109,8 +97,13 @@ export function createStreamKVEntry(
   roundNumber: number,
   participantIndex: number,
   status: StreamStatus = StreamStatuses.ACTIVE,
-  overrides?: Partial<StreamKVEntry>,
-): StreamKVEntry {
+  overrides?: {
+    messageId?: string;
+    createdAt?: string;
+    completedAt?: string;
+    errorMessage?: string;
+  },
+) {
   const streamId = generateStreamId(threadId, roundNumber, participantIndex);
   return {
     streamId,
@@ -123,24 +116,22 @@ export function createStreamKVEntry(
   };
 }
 
-export type TestStoreState = {
-  isStreaming: boolean;
-  waitingToStartStreaming: boolean;
-  streamingRoundNumber: number | null;
-  currentParticipantIndex: number;
-  currentRoundNumber: number | null;
-  isModeratorStreaming: boolean;
-  isWaitingForChangelog: boolean;
-  hasSentPendingMessage: boolean;
-  error: Error | null;
-  preSearches: StoredPreSearch[];
-  triggeredPreSearchRounds: Set<number>;
-  createdModeratorRounds: Set<number>;
-  triggeredModeratorRounds: Set<number>;
-  triggeredModeratorIds: Set<string>;
-};
-
-export function createInitialStoreState(overrides?: Partial<TestStoreState>): TestStoreState {
+export function createInitialStoreState(overrides?: {
+  isStreaming?: boolean;
+  waitingToStartStreaming?: boolean;
+  streamingRoundNumber?: number | null;
+  currentParticipantIndex?: number;
+  currentRoundNumber?: number | null;
+  isModeratorStreaming?: boolean;
+  isWaitingForChangelog?: boolean;
+  hasSentPendingMessage?: boolean;
+  error?: Error | null;
+  preSearches?: StoredPreSearch[];
+  triggeredPreSearchRounds?: Set<number>;
+  createdModeratorRounds?: Set<number>;
+  triggeredModeratorRounds?: Set<number>;
+  triggeredModeratorIds?: Set<string>;
+}) {
   return {
     isStreaming: false,
     waitingToStartStreaming: false,
@@ -160,37 +151,15 @@ export function createInitialStoreState(overrides?: Partial<TestStoreState>): Te
   };
 }
 
-export type BaseTestMessage = {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  createdAt: Date;
-};
-
-export type OptimisticTestMessage = BaseTestMessage & {
-  isOptimistic: true;
-  tempId: string;
-  status: 'pending' | 'sending' | 'failed';
-};
-
-export type ConfirmedTestMessage = BaseTestMessage & {
-  isOptimistic: false;
-  serverId: string;
-  threadId: string;
-  roundNumber: number;
-};
-
-export type TestUIMessage = OptimisticTestMessage | ConfirmedTestMessage;
-
-export function createOptimisticTestMessage(content: string, tempId: string): OptimisticTestMessage {
+export function createOptimisticTestMessage(content: string, tempId: string) {
   return {
     id: tempId,
     tempId,
     role: UIMessageRoles.USER,
     content,
     createdAt: new Date(),
-    isOptimistic: true,
-    status: 'pending',
+    isOptimistic: true as const,
+    status: 'pending' as const,
   };
 }
 
@@ -199,54 +168,37 @@ export function createConfirmedTestMessage(
   serverId: string,
   threadId: string,
   roundNumber: number,
-): ConfirmedTestMessage {
+) {
   return {
     id: serverId,
     serverId,
     role: UIMessageRoles.USER,
     content,
     createdAt: new Date(),
-    isOptimistic: false,
+    isOptimistic: false as const,
     threadId,
     roundNumber,
   };
 }
 
-export type TestStreamState = {
-  streamId: string;
-  threadId: string;
-  roundNumber: number;
-  currentParticipantIndex: number;
-  completedParticipants: string[];
-  pendingParticipants: string[];
-  preSearchComplete: boolean;
-  moderatorComplete: boolean;
-  messages: Array<{
+export function createTestStreamState(overrides?: {
+  streamId?: string;
+  threadId?: string;
+  roundNumber?: number;
+  currentParticipantIndex?: number;
+  completedParticipants?: string[];
+  pendingParticipants?: string[];
+  preSearchComplete?: boolean;
+  moderatorComplete?: boolean;
+  messages?: Array<{
     id: string;
     participantId: string;
     content: string;
     status: 'streaming' | 'complete' | 'error';
   }>;
-  lastEventId: string;
-  timestamp: number;
-};
-
-export type TestKVStreamData = {
-  state: TestStreamState;
-  events: Array<{
-    id: string;
-    type: string;
-    data: unknown;
-    timestamp: number;
-  }>;
-  metadata: {
-    version: string;
-    createdAt: number;
-    updatedAt: number;
-  };
-};
-
-export function createTestStreamState(overrides?: Partial<TestStreamState>): TestStreamState {
+  lastEventId?: string;
+  timestamp?: number;
+}) {
   return {
     streamId: 'stream-123',
     threadId: 'thread-123',
@@ -264,9 +216,21 @@ export function createTestStreamState(overrides?: Partial<TestStreamState>): Tes
 }
 
 export function createTestKVStreamData(
-  state?: Partial<TestStreamState>,
-  overrides?: Partial<Omit<TestKVStreamData, 'state'>>,
-): TestKVStreamData {
+  state?: Parameters<typeof createTestStreamState>[0],
+  overrides?: {
+    events?: Array<{
+      id: string;
+      type: string;
+      data: unknown;
+      timestamp: number;
+    }>;
+    metadata?: {
+      version: string;
+      createdAt: number;
+      updatedAt: number;
+    };
+  },
+) {
   const now = Date.now();
   return {
     state: createTestStreamState(state),
@@ -280,19 +244,12 @@ export function createTestKVStreamData(
   };
 }
 
-export type TestModeratorMetrics = {
-  engagement: number;
-  insight: number;
-  balance: number;
-  clarity: number;
-};
-
-export type TestModeratorPayload = {
-  summary: string;
-  metrics: TestModeratorMetrics;
-};
-
-export function createMockModeratorMetrics(overrides?: Partial<TestModeratorMetrics>): TestModeratorMetrics {
+export function createMockModeratorMetrics(overrides?: {
+  engagement?: number;
+  insight?: number;
+  balance?: number;
+  clarity?: number;
+}) {
   return {
     engagement: 85,
     insight: 78,
@@ -302,7 +259,10 @@ export function createMockModeratorMetrics(overrides?: Partial<TestModeratorMetr
   };
 }
 
-export function createMockModeratorPayload(overrides?: Partial<TestModeratorPayload>): TestModeratorPayload {
+export function createMockModeratorPayload(overrides?: {
+  summary?: string;
+  metrics?: ReturnType<typeof createMockModeratorMetrics>;
+}) {
   return {
     summary: 'The participants provided diverse perspectives on the topic, reaching consensus on key factors.',
     metrics: createMockModeratorMetrics(),
@@ -310,7 +270,12 @@ export function createMockModeratorPayload(overrides?: Partial<TestModeratorPayl
   };
 }
 
-export function createPartialModeratorPayload(overrides?: Partial<TestModeratorPayload>): Partial<TestModeratorPayload> {
+export type TestModeratorMetrics = ReturnType<typeof createMockModeratorMetrics>;
+
+export function createPartialModeratorPayload(overrides?: {
+  summary?: string;
+  metrics?: Partial<TestModeratorMetrics>;
+}) {
   return {
     ...overrides,
   };

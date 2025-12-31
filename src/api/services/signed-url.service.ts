@@ -15,6 +15,8 @@
 
 import type { Context } from 'hono';
 
+import { createError } from '@/api/common/error-handling';
+import type { ErrorContext } from '@/api/core';
 import type { ApiEnv } from '@/api/types';
 import type { SignedUrlOptions, ValidateSignatureResult } from '@/api/types/uploads';
 import {
@@ -114,7 +116,11 @@ export async function generateSignedDownloadUrl(
   // Get signing secret from environment
   const secret = c.env.BETTER_AUTH_SECRET;
   if (!secret) {
-    throw new Error('BETTER_AUTH_SECRET not configured - cannot generate signed URLs');
+    const errorContext: ErrorContext = {
+      errorType: 'validation',
+      field: 'BETTER_AUTH_SECRET',
+    };
+    throw createError.internal('BETTER_AUTH_SECRET not configured - cannot generate signed URLs', errorContext);
   }
 
   // Generate signature

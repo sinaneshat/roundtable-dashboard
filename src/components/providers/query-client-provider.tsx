@@ -13,7 +13,7 @@ import { getQueryClient } from '@/lib/data/query-client';
  * Note: This is ONLY for API data fetching with TanStack Query
  * Better Auth has its own client and doesn't use TanStack Query
  */
-function QueryClientProvider({ children }: { children: ReactNode }) {
+export function QueryClientProvider({ children }: { children: ReactNode }) {
   // Use useState to ensure we only create the client once on the client side
   const [queryClient] = useState(() => getQueryClient());
 
@@ -23,5 +23,3 @@ function QueryClientProvider({ children }: { children: ReactNode }) {
     </QueryClientProviderWrapper>
   );
 }
-
-export default QueryClientProvider;

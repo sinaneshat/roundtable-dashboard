@@ -54,6 +54,8 @@ export const STREAM_ERROR_TYPES = [
   'unknown',
 ] as const;
 
+export const DEFAULT_STREAM_ERROR_TYPE: StreamErrorType = 'unknown';
+
 export const StreamErrorTypeSchema = z.enum(STREAM_ERROR_TYPES).openapi({
   description: 'Type of error that occurred during AI streaming',
   example: 'validation',
@@ -82,6 +84,8 @@ export const AUTH_FAILURE_REASONS = [
   'session_required',
   'session_expired',
 ] as const;
+
+export const DEFAULT_AUTH_FAILURE_REASON: AuthFailureReason = 'invalid_credentials';
 
 export const AuthFailureReasonSchema = z.enum(AUTH_FAILURE_REASONS).openapi({
   description: 'Reason for authentication failure',
@@ -127,6 +131,8 @@ export const ResourceUnavailableReasons = {
 
 export const AUTH_ACTIONS = ['login', 'logout', 'token_refresh', 'permission_check', 'registration'] as const;
 
+export const DEFAULT_AUTH_ACTION: AuthAction = 'login';
+
 export const AuthActionSchema = z.enum(AUTH_ACTIONS).openapi({
   description: 'Authentication action type',
   example: 'login',
@@ -147,6 +153,8 @@ export const AuthActions = {
 // ============================================================================
 
 export const VALIDATION_TYPES = ['body', 'query', 'params', 'headers'] as const;
+
+export const DEFAULT_VALIDATION_TYPE: ValidationType = 'body';
 
 export const ValidationTypeSchema = z.enum(VALIDATION_TYPES).openapi({
   description: 'Request validation context type',
@@ -181,6 +189,8 @@ export const ERROR_CATEGORIES = [
   'provider_network',
   'model_content_filter',
 ] as const;
+
+export const DEFAULT_ERROR_CATEGORY: ErrorCategory = 'unknown';
 
 export const ErrorCategorySchema = z.enum(ERROR_CATEGORIES).openapi({
   description: 'Error category for UI display and handling',
@@ -223,6 +233,8 @@ export const UI_MESSAGE_ERROR_TYPES = [
   'unknown',
 ] as const;
 
+export const DEFAULT_UI_MESSAGE_ERROR_TYPE: UIMessageErrorType = 'unknown';
+
 export const UIMessageErrorTypeSchema = z.enum(UI_MESSAGE_ERROR_TYPES).openapi({
   description: 'Error type for UI message display',
   example: 'failed',
@@ -250,6 +262,8 @@ export const UIMessageErrorTypes = {
 
 export const AI_HISTORY_STATUSES = ['aborted', 'success', 'failed'] as const;
 
+export const DEFAULT_AI_HISTORY_STATUS: AIHistoryStatus = 'failed';
+
 export const AIHistoryStatusSchema = z.enum(AI_HISTORY_STATUSES).openapi({
   description: 'AI operation result status',
   example: 'success',
@@ -261,4 +275,101 @@ export const AIHistoryStatuses = {
   ABORTED: 'aborted' as const,
   SUCCESS: 'success' as const,
   FAILED: 'failed' as const,
+} as const;
+
+// ============================================================================
+// ERROR CODE (Standard API Error Codes)
+// ============================================================================
+
+export const ERROR_CODES = [
+  // Authentication & Authorization
+  'UNAUTHENTICATED',
+  'UNAUTHORIZED',
+  'TOKEN_EXPIRED',
+  'TOKEN_INVALID',
+  'INSUFFICIENT_PERMISSIONS',
+
+  // Validation & Input
+  'VALIDATION_ERROR',
+  'INVALID_INPUT',
+  'MISSING_REQUIRED_FIELD',
+  'INVALID_FORMAT',
+  'INVALID_ENUM_VALUE',
+
+  // Resource Management
+  'RESOURCE_NOT_FOUND',
+  'RESOURCE_ALREADY_EXISTS',
+  'RESOURCE_CONFLICT',
+  'RESOURCE_LOCKED',
+  'RESOURCE_EXPIRED',
+
+  // Business Logic
+  'BUSINESS_RULE_VIOLATION',
+
+  // External Services
+  'EXTERNAL_SERVICE_ERROR',
+  'EMAIL_SERVICE_ERROR',
+  'STORAGE_SERVICE_ERROR',
+
+  // System & Infrastructure
+  'INTERNAL_SERVER_ERROR',
+  'DATABASE_ERROR',
+  'NETWORK_ERROR',
+  'TIMEOUT_ERROR',
+  'RATE_LIMIT_EXCEEDED',
+  'SERVICE_UNAVAILABLE',
+  'MAINTENANCE_MODE',
+  'BATCH_FAILED',
+  'BATCH_SIZE_EXCEEDED',
+] as const;
+
+export const DEFAULT_ERROR_CODE: ErrorCode = 'INTERNAL_SERVER_ERROR';
+
+export const ErrorCodeSchema = z.enum(ERROR_CODES).openapi({
+  description: 'Standard API error code',
+  example: 'VALIDATION_ERROR',
+});
+
+export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
+
+export const ErrorCodes = {
+  // Authentication & Authorization
+  UNAUTHENTICATED: 'UNAUTHENTICATED' as const,
+  UNAUTHORIZED: 'UNAUTHORIZED' as const,
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED' as const,
+  TOKEN_INVALID: 'TOKEN_INVALID' as const,
+  INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS' as const,
+
+  // Validation & Input
+  VALIDATION_ERROR: 'VALIDATION_ERROR' as const,
+  INVALID_INPUT: 'INVALID_INPUT' as const,
+  MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD' as const,
+  INVALID_FORMAT: 'INVALID_FORMAT' as const,
+  INVALID_ENUM_VALUE: 'INVALID_ENUM_VALUE' as const,
+
+  // Resource Management
+  RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND' as const,
+  RESOURCE_ALREADY_EXISTS: 'RESOURCE_ALREADY_EXISTS' as const,
+  RESOURCE_CONFLICT: 'RESOURCE_CONFLICT' as const,
+  RESOURCE_LOCKED: 'RESOURCE_LOCKED' as const,
+  RESOURCE_EXPIRED: 'RESOURCE_EXPIRED' as const,
+
+  // Business Logic
+  BUSINESS_RULE_VIOLATION: 'BUSINESS_RULE_VIOLATION' as const,
+
+  // External Services
+  EXTERNAL_SERVICE_ERROR: 'EXTERNAL_SERVICE_ERROR' as const,
+  EMAIL_SERVICE_ERROR: 'EMAIL_SERVICE_ERROR' as const,
+  STORAGE_SERVICE_ERROR: 'STORAGE_SERVICE_ERROR' as const,
+
+  // System & Infrastructure
+  INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR' as const,
+  DATABASE_ERROR: 'DATABASE_ERROR' as const,
+  NETWORK_ERROR: 'NETWORK_ERROR' as const,
+  TIMEOUT_ERROR: 'TIMEOUT_ERROR' as const,
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED' as const,
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE' as const,
+  MAINTENANCE_MODE: 'MAINTENANCE_MODE' as const,
+  BATCH_FAILED: 'BATCH_FAILED' as const,
+  BATCH_SIZE_EXCEEDED: 'BATCH_SIZE_EXCEEDED' as const,
 } as const;

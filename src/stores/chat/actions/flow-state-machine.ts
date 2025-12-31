@@ -14,13 +14,14 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { FlowState, ScreenMode } from '@/api/core/enums';
+import type { FlowState, MessageStatus, ScreenMode } from '@/api/core/enums';
 import {
   FlowStates,
   MessagePartTypes,
   MessageRoles,
   MessageStatuses,
   ScreenModes,
+  TextPartStates,
 } from '@/api/core/enums';
 import { useChatStore, useChatStoreApi } from '@/components/providers';
 import { getAssistantMetadata, getCurrentRoundNumber, getRoundNumber } from '@/lib/utils';
@@ -32,7 +33,6 @@ import {
 } from '../utils/participant-completion-gate';
 
 export type FlowContext = {
-  // Thread state
   threadId: string | null;
   threadSlug: string | null;
   hasAiGeneratedTitle: boolean;
@@ -40,9 +40,7 @@ export type FlowContext = {
   hasMessages: boolean;
   participantCount: number;
   allParticipantsResponded: boolean;
-  moderatorStatus:
-    | (typeof MessageStatuses)[keyof typeof MessageStatuses]
-    | null;
+  moderatorStatus: MessageStatus | null;
   moderatorExists: boolean;
   isAiSdkStreaming: boolean;
   streamingJustCompleted: boolean;
@@ -53,31 +51,26 @@ export type FlowContext = {
   screenMode: ScreenMode | null;
 };
 
-// ============================================================================
-// FLOW ACTION TYPE ENUM (Simplified - internal use only)
-// ============================================================================
-
-// CONSTANT OBJECT - For usage in code
 const FlowActionTypes = {
-  CREATE_THREAD: 'CREATE_THREAD' as const,
-  START_PARTICIPANT_STREAMING: 'START_PARTICIPANT_STREAMING' as const,
-  CREATE_MODERATOR: 'CREATE_MODERATOR' as const,
-  START_MODERATOR_STREAMING: 'START_MODERATOR_STREAMING' as const,
-  INVALIDATE_CACHE: 'INVALIDATE_CACHE' as const,
-  NAVIGATE: 'NAVIGATE' as const,
-  COMPLETE_FLOW: 'COMPLETE_FLOW' as const,
-  RESET: 'RESET' as const,
+  CREATE_THREAD: 'CREATE_THREAD',
+  START_PARTICIPANT_STREAMING: 'START_PARTICIPANT_STREAMING',
+  CREATE_MODERATOR: 'CREATE_MODERATOR',
+  START_MODERATOR_STREAMING: 'START_MODERATOR_STREAMING',
+  INVALIDATE_CACHE: 'INVALIDATE_CACHE',
+  NAVIGATE: 'NAVIGATE',
+  COMPLETE_FLOW: 'COMPLETE_FLOW',
+  RESET: 'RESET',
 } as const;
 
 export type FlowAction
-  = | { type: typeof FlowActionTypes.CREATE_THREAD }
-    | { type: typeof FlowActionTypes.START_PARTICIPANT_STREAMING }
-    | { type: typeof FlowActionTypes.CREATE_MODERATOR }
-    | { type: typeof FlowActionTypes.START_MODERATOR_STREAMING }
-    | { type: typeof FlowActionTypes.INVALIDATE_CACHE }
-    | { type: typeof FlowActionTypes.NAVIGATE; slug: string }
-    | { type: typeof FlowActionTypes.COMPLETE_FLOW }
-    | { type: typeof FlowActionTypes.RESET };
+  = | { type: 'CREATE_THREAD' }
+    | { type: 'START_PARTICIPANT_STREAMING' }
+    | { type: 'CREATE_MODERATOR' }
+    | { type: 'START_MODERATOR_STREAMING' }
+    | { type: 'INVALIDATE_CACHE' }
+    | { type: 'NAVIGATE'; slug: string }
+    | { type: 'COMPLETE_FLOW' }
+    | { type: 'RESET' };
 
 function determineFlowState(context: FlowContext): FlowState {
   if (context.hasNavigated) {
@@ -247,17 +240,11 @@ export function useFlowStateMachine(
   // Track navigation state
   const [hasNavigated, setHasNavigated] = useState(false);
 
-  // ============================================================================
-  // ✅ FIX: Track streaming completion using frame-based async instead of timeouts
-  // When streaming ends, the UI needs time to render the final content.
-  // Uses requestAnimationFrame to wait for actual browser paint completion.
-  // ============================================================================
   const [streamingJustCompleted, setStreamingJustCompleted] = useState(false);
   const rafIdRef = useRef<number | null>(null);
   const wasStreamingRef = useRef(false);
 
   useEffect(() => {
-    // Clean up RAF on unmount
     return () => {
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
@@ -265,29 +252,22 @@ export function useFlowStateMachine(
     };
   }, []);
 
-  // Streaming lifecycle state machine - tracks streaming completion for UI timing
   useEffect(() => {
     if (isAiSdkStreaming) {
-      // Streaming started - track it and clear any pending completion
       wasStreamingRef.current = true;
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Streaming state machine transition
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- State machine transition
       setStreamingJustCompleted(false);
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
       }
     } else if (wasStreamingRef.current && messages.length > 0) {
-      // Streaming just ended - set flag and wait for UI to render
-      // Use double-rAF pattern to ensure browser has painted the final frame
       wasStreamingRef.current = false;
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Streaming state machine transition
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- State machine transition
       setStreamingJustCompleted(true);
 
-      // First rAF: scheduled for next frame
       rafIdRef.current = requestAnimationFrame(() => {
-        // Second rAF: ensures previous frame was painted
         rafIdRef.current = requestAnimationFrame(() => {
-          // Third rAF: extra safety for complex renders
           rafIdRef.current = requestAnimationFrame(() => {
             setStreamingJustCompleted(false);
             rafIdRef.current = null;
@@ -296,7 +276,6 @@ export function useFlowStateMachine(
       });
     }
 
-    // ✅ FIX: Cleanup RAF chain on unmount to prevent orphan callbacks
     return () => {
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
@@ -305,22 +284,13 @@ export function useFlowStateMachine(
     };
   }, [isAiSdkStreaming, messages.length]);
 
-  // ============================================================================
-  // BUILD FLOW CONTEXT
-  // ============================================================================
-
   const context = useMemo((): FlowContext => {
     const threadId = thread?.id || createdThreadId;
     const currentRound
       = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
 
-    // ✅ TEXT STREAMING: Check for moderator message for CURRENT round
-    // Moderator messages have metadata.isModerator: true
     const currentRoundModeratorMessage = getModeratorMessageForRound(messages, currentRound);
 
-    // ✅ FIX: Count participant messages for CURRENT round only
-    // ✅ TYPE-SAFE: Use extraction utility instead of manual metadata access
-    // ✅ ENUM PATTERN: Use MessageRoles constant instead of hardcoded string
     const participantMessagesInRound = messages.filter((m) => {
       return (
         m.role === MessageRoles.ASSISTANT
@@ -328,29 +298,19 @@ export function useFlowStateMachine(
       );
     });
 
-    // ✅ FIX: Only count messages that have ACTUAL CONTENT or finished with a reason
-    // Empty messages (parts: []) are placeholders created by AI SDK before streaming completes
-    // Don't count them as "responded" or moderator will trigger prematurely
     const completedMessagesInRound = participantMessagesInRound.filter((m) => {
-      // ✅ STREAMING CHECK: Don't count messages that still have streaming parts
-      // AI SDK v6 marks parts with state: 'streaming' while content is being generated
-      // A message with content but streaming parts is still in-flight
       const hasStreamingParts = m.parts?.some(
-        p => 'state' in p && p.state === 'streaming',
+        p => 'state' in p && p.state === TextPartStates.STREAMING,
       ) ?? false;
       if (hasStreamingParts)
         return false;
 
-      // Check for text content
       const hasTextContent = m.parts?.some(
         p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
       );
       if (hasTextContent)
         return true;
 
-      // Check for finishReason (streaming complete, even if empty due to error)
-      // ✅ FIX: Accept ANY finishReason (including 'unknown') as completion signal
-      // 'unknown' finishReason means the stream ended (possibly abnormally) but is no longer active
       const metadata = getAssistantMetadata(m.metadata);
       const finishReason = metadata?.finishReason;
       if (finishReason)
@@ -363,9 +323,7 @@ export function useFlowStateMachine(
       = completedMessagesInRound.length >= participants.length
         && participants.length > 0;
 
-    // ✅ TEXT STREAMING: Determine moderator message status
-    // Check if the message is still streaming by looking for streaming parts
-    let moderatorStatus: FlowContext['moderatorStatus'] = null;
+    let moderatorStatus: MessageStatus | null = null;
     if (currentRoundModeratorMessage) {
       moderatorStatus = getMessageStreamingStatus(currentRoundModeratorMessage);
     }
@@ -402,14 +360,7 @@ export function useFlowStateMachine(
     screenMode,
   ]);
 
-  // ============================================================================
-  // COMPUTE CURRENT STATE
-  // ============================================================================
-
   const flowState = useMemo(() => determineFlowState(context), [context]);
-  // Initialize prevState as idle instead of current flowState
-  // This ensures we detect the transition TO creating_moderator even if component
-  // mounts after streaming has finished (fast streaming race condition)
   const prevStateRef = useRef<FlowState>(FlowStates.IDLE);
 
   // ============================================================================

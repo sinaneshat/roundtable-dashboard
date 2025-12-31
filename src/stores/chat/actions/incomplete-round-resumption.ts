@@ -1,36 +1,7 @@
 /**
  * Incomplete Round Resumption Hook
  *
- * Zustand v5 Pattern: Store-specific action hook co-located with store
  * Detects and resumes incomplete rounds when user navigates to a thread page.
- *
- * USE CASE:
- * When a user leaves a page during participant streaming and returns later:
- * - Some participants may have responded
- * - Other participants may not have had a chance to respond
- * - This hook detects incomplete rounds and triggers remaining participants
- *
- * ORPHANED PRE-SEARCH USE CASE (NEW):
- * When a user refreshes during pre-search/changelog phase:
- * - Pre-search for round N is complete
- * - But NO user message for round N exists (lost on refresh)
- * - This hook detects this state and recovers the userQuery from pre-search
- * - Sets pendingMessage to resume the round normally
- *
- * FLOW:
- * 1. On page load, check if current round has all expected participants
- * 2. ✅ FIX: Check backend for active streams BEFORE triggering new participants
- * 3. If incomplete and no active stream, determine which participant is next
- * 4. Set nextParticipantToTrigger in store
- * 5. Provider effect will detect this and trigger the participant
- *
- * IMPORTANT:
- * - ✅ FIX: This hook NOW checks for active streams via backend before triggering
- * - This prevents triggering new AI calls when a stream is being resumed by AI SDK
- * - Works for ALL scenarios: analyze, search, and participant streams
- *
- * Location: /src/stores/chat/actions/incomplete-round-resumption.ts
- * Used by: useScreenInitialization (internal composition)
  */
 
 'use client';
@@ -38,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { FinishReasons, MessageRoles, MessageStatuses, RoundPhases } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers';
 import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantIndex, getParticipantModelIds, getRoundNumber, isObject, rlog } from '@/lib/utils';
 
@@ -77,55 +48,17 @@ export type UseIncompleteRoundResumptionOptions = {
 };
 
 export type UseIncompleteRoundResumptionReturn = {
-  /**
-   * Whether the current round is incomplete
-   */
   isIncomplete: boolean;
-
-  /**
-   * Index of the next participant that needs to speak
-   */
   nextParticipantIndex: number | null;
-
-  /**
-   * The round number being resumed (if any)
-   */
   resumingRoundNumber: number | null;
-
-  /**
-   * ✅ UNIFIED PHASES: Current phase being resumed (if any)
-   * - 'pre_search': Resuming pre-search/web search phase
-   * - 'participants': Resuming participant streaming phase
-   * - 'moderator': Resuming moderator phase
-   * - null: No phase resumption in progress
-   */
   currentResumptionPhase: 'idle' | 'pre_search' | 'participants' | 'moderator' | 'complete' | null;
 };
 
-/**
- * Hook for detecting and resuming incomplete rounds
- *
- * This hook runs on mount and checks if the current round has all expected
- * participant responses. If not, it sets up the store state to trigger
- * the remaining participants.
- *
- * @example
- * const { isIncomplete, nextParticipantIndex } = useIncompleteRoundResumption({
- *   threadId: thread.id,
- *   enabled: !isStreaming && !!thread
- * })
- */
 export function useIncompleteRoundResumption(
   options: UseIncompleteRoundResumptionOptions,
 ): UseIncompleteRoundResumptionReturn {
   const { threadId, enabled = true } = options;
 
-  // ============================================================================
-  // ✅ REACT 19 PATTERN: Batched store selectors with useShallow
-  // Reduces re-renders by batching related state subscriptions
-  // ============================================================================
-
-  // State subscriptions (batched)
   const {
     messages,
     participants,
@@ -408,14 +341,14 @@ export function useIncompleteRoundResumption(
 
           // Check for streaming parts (for in-progress detection)
           const hasStreamingParts = msg.parts?.some(
-            p => 'state' in p && p.state === 'streaming',
+            p => 'state' in p && p.state === TextPartStates.STREAMING,
           ) || false;
 
           // ✅ FIX: Check for truly empty interrupted responses
           // When a stream is interrupted (e.g., page refresh), the backend sends a synthetic
           // finish event with finishReason: 'unknown' and 0 tokens.
           const hasTextContent = msg.parts?.some(
-            p => (p.type === 'text' || p.type === 'reasoning')
+            p => (p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING)
               && 'text' in p
               && typeof p.text === 'string'
               && p.text.trim().length > 0,
@@ -961,7 +894,7 @@ export function useIncompleteRoundResumption(
       // Check if the existing message is complete (has content and valid finish reason)
       const existingMetadata = getAssistantMetadata(existingMessage.metadata);
       const hasContent = existingMessage.parts?.some(
-        p => p.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0,
+        p => p.type === MessagePartTypes.TEXT && typeof p.text === 'string' && p.text.trim().length > 0,
       ) || false;
       const isComplete = hasContent && existingMetadata?.finishReason !== FinishReasons.UNKNOWN;
 

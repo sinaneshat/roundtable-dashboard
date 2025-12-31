@@ -12,33 +12,6 @@ import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
 import { toast as baseToast } from '@/hooks/utils';
 
-/**
- * Type-safe factory for creating ToastActionElement
- *
- * TYPE ASSERTION EXPLANATION:
- * - ToastActionElement = ReactElement<typeof ToastAction>
- * - React.createElement returns FunctionComponentElement (has props but not displayName)
- * - TypeScript correctly identifies structural mismatch (missing displayName)
- *
- * WHY THIS IS RUNTIME-SAFE:
- * 1. React.createElement(ToastAction, props, children) creates valid ToastAction element
- * 2. displayName is only used for debugging/devtools, not runtime behavior
- * 3. The element is structurally compatible with ToastActionElement at runtime
- * 4. ToastAction component accepts these exact props
- * 5. Element works correctly in toast rendering
- *
- * WHY DOUBLE CAST IS REQUIRED:
- * - Single cast fails: TS2352 "types don't sufficiently overlap"
- * - FunctionComponentElement and ReactElement<typeof Component> have different shapes
- * - Double cast acknowledges we're bridging React's createElement return type
- *
- * ALTERNATIVE REJECTED:
- * - JSX syntax: requires different file setup, less flexible
- * - Manual type guards: adds complexity without safety benefit
- * - Modifying ToastActionElement type: breaks component library contract
- *
- * PATTERN: Standard React.createElement type assertion for component elements
- */
 function createToastActionElement(label: string, onClick: () => void): ToastActionElement {
   return React.createElement(
     ToastAction,
@@ -150,12 +123,21 @@ function showToastInternal(options: ToastOptions): void {
     ? createToastActionElement(action.label, action.onClick)
     : undefined;
 
+  // Normalize custom variants (warning, info, loading) to default for base toast
+  // Only DEFAULT, SUCCESS, DESTRUCTIVE are supported by the base toast component
+  type BaseToastVariant = 'default' | 'success' | 'destructive';
+  const normalizedVariant: BaseToastVariant = (
+    variant === ToastVariants.WARNING
+    || variant === ToastVariants.INFO
+    || variant === ToastVariants.LOADING
+  )
+    ? ToastVariants.DEFAULT
+    : variant;
+
   const toastConfig = {
     title,
     description,
-    variant: variant === ToastVariants.SUCCESS || variant === ToastVariants.WARNING || variant === ToastVariants.INFO || variant === ToastVariants.LOADING
-      ? ToastVariants.DEFAULT
-      : variant,
+    variant: normalizedVariant,
     duration,
     ...(actionElement && { action: actionElement }),
   };
@@ -168,7 +150,7 @@ function showToastInternal(options: ToastOptions): void {
     const timeout = setTimeout(() => {
       activeToasts.delete(toastId);
       toastTimeouts.delete(toastId);
-      processToastQueue(); // Process next toast in queue
+      processToastQueue();
     }, duration);
 
     toastTimeouts.set(toastId, timeout);
@@ -244,7 +226,6 @@ export function createProgressToast(options: ProgressToastOptions): {
       });
     },
     error: (error: Error) => {
-      console.error('Progress toast error:', error);
       progressToasts.delete(toastId);
       dismissToast(toastId);
       options.onError?.(error);
@@ -323,7 +304,7 @@ export const toastManager = {
     });
   },
 
-  loading: (message: string = 'Loading...', description?: string, options?: Partial<ToastOptions>) => {
+  loading: (message = 'Loading...', description?: string, options?: Partial<ToastOptions>) => {
     return toast({
       title: message,
       description,
@@ -357,10 +338,9 @@ export const toastManager = {
       toastManager.success(messages.success(result));
       return result;
     } catch (error) {
-      console.error('Progress toast error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
-      progressToast.error(error instanceof Error ? error : new Error(errorMessage));
-      toastManager.error(messages.error(error instanceof Error ? error : new Error(errorMessage)));
+      const errorInstance = error instanceof Error ? error : new Error('An error occurred');
+      progressToast.error(errorInstance);
+      toastManager.error(messages.error(errorInstance));
       throw error;
     }
   },
@@ -453,8 +433,6 @@ export const toastManager = {
     return createProgressToast(options);
   },
 };
-
-export default toastManager;
 
 let queueProcessingInterval: NodeJS.Timeout | null = null;
 

@@ -1,18 +1,6 @@
 'use client';
 
-/**
- * ChatThreadScreen - Thread Detail Page
- *
- * Receives thread data from server props, initializes the store, and delegates
- * all rendering to ChatView for consistent behavior with the overview screen.
- *
- * ARCHITECTURE:
- * - Server data initialization via useScreenInitialization
- * - Store sync from SSR props
- * - Delete dialog (thread-specific action)
- * - ChatView handles all content rendering (same as overview screen)
- */
-
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -22,9 +10,16 @@ import type { ChatMessage, ChatParticipant, ChatThread, ThreadStreamResumptionSt
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
-import { useChatStore } from '@/components/providers';
+import { useChatStore, useModelPreferencesStore } from '@/components/providers';
+import { useModelsQuery } from '@/hooks/queries';
 import { useBoolean, useChatAttachments } from '@/hooks/utils';
-import { chatMessagesToUIMessages } from '@/lib/utils';
+import { toastManager } from '@/lib/toast';
+import {
+  chatMessagesToUIMessages,
+  getIncompatibleModelIds,
+  isVisionRequiredMimeType,
+  threadHasVisionRequiredFiles,
+} from '@/lib/utils';
 import {
   useChatFormActions,
   useScreenInitialization,
@@ -45,11 +40,6 @@ type ChatThreadScreenProps = {
   streamResumptionState?: ThreadStreamResumptionState | null;
 };
 
-/**
- * Memoized thread header updater to prevent infinite render loops
- * ✅ ZUSTAND PATTERN: Thread title comes from store - only set threadActions here
- * ✅ REACT 19: Effect is valid - syncing with context (external to this component)
- */
 function useThreadHeaderUpdater({
   thread,
   slug,
@@ -61,7 +51,6 @@ function useThreadHeaderUpdater({
 }) {
   const { setThreadActions } = useThreadHeader();
 
-  // Memoize to prevent unnecessary context updates
   const threadActions = useMemo(
     () => (
       <ChatThreadActions
@@ -73,7 +62,6 @@ function useThreadHeaderUpdater({
     [thread, slug, onDeleteClick],
   );
 
-  // Sync to context - valid effect per React 19 (external system synchronization)
   useEffect(() => {
     setThreadActions(threadActions);
   }, [threadActions, setThreadActions]);
@@ -87,24 +75,20 @@ export default function ChatThreadScreen({
   user,
   streamResumptionState,
 }: ChatThreadScreenProps) {
-  // Delete dialog
+  const t = useTranslations();
   const isDeleteDialogOpen = useBoolean(false);
-
-  // Chat attachments
   const chatAttachments = useChatAttachments();
 
-  // Thread header
   useThreadHeaderUpdater({
     thread,
     slug,
     onDeleteClick: isDeleteDialogOpen.onTrue,
   });
 
-  // ============================================================================
-  // STORE STATE
-  // ============================================================================
+  const { setSelectedModelIds } = useModelPreferencesStore(useShallow(s => ({
+    setSelectedModelIds: s.setSelectedModelIds,
+  })));
 
-  // ✅ ZUSTAND v5: Batch all store selectors with useShallow
   const {
     isStreaming,
     isModeratorStreaming,
@@ -113,6 +97,8 @@ export default function ChatThreadScreen({
     inputValue,
     selectedParticipants,
     prefillStreamResumptionState,
+    messages,
+    setSelectedParticipants,
   } = useChatStore(
     useShallow(s => ({
       isStreaming: s.isStreaming,
@@ -122,6 +108,8 @@ export default function ChatThreadScreen({
       inputValue: s.inputValue,
       selectedParticipants: s.selectedParticipants,
       prefillStreamResumptionState: s.prefillStreamResumptionState,
+      messages: s.messages,
+      setSelectedParticipants: s.setSelectedParticipants,
     })),
   );
 
@@ -131,23 +119,72 @@ export default function ChatThreadScreen({
     }
   }, [streamResumptionState, thread?.id, prefillStreamResumptionState]);
 
-  // ============================================================================
-  // MEMOIZED DATA
-  // ============================================================================
-
-  // Transform initial messages once
   const uiMessages = useMemo(
     () => chatMessagesToUIMessages(initialMessages, participants),
     [initialMessages, participants],
   );
 
-  // ============================================================================
-  // HOOKS
-  // ============================================================================
+  const { data: modelsData } = useModelsQuery();
+  const allEnabledModels = useMemo(
+    () => modelsData?.data?.items || [],
+    [modelsData?.data?.items],
+  );
+
+  const incompatibleModelIds = useMemo(() => {
+    const existingVisionFiles = threadHasVisionRequiredFiles(messages);
+    const newVisionFiles = chatAttachments.attachments.some(att =>
+      isVisionRequiredMimeType(att.file.type),
+    );
+
+    if (!existingVisionFiles && !newVisionFiles) {
+      return new Set<string>();
+    }
+
+    const files = [{ mimeType: 'image/png' }];
+    return getIncompatibleModelIds(allEnabledModels, files);
+  }, [messages, chatAttachments.attachments, allEnabledModels]);
+
+  useEffect(() => {
+    if (incompatibleModelIds.size === 0)
+      return;
+
+    const incompatibleSelected = selectedParticipants.filter(
+      p => incompatibleModelIds.has(p.modelId),
+    );
+
+    if (incompatibleSelected.length === 0)
+      return;
+
+    const incompatibleModelNames = incompatibleSelected
+      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .filter((name): name is string => Boolean(name));
+
+    const compatibleParticipants = selectedParticipants.filter(
+      p => !incompatibleModelIds.has(p.modelId),
+    );
+
+    const reindexed = compatibleParticipants.map((p, index) => ({
+      ...p,
+      priority: index,
+    }));
+
+    setSelectedParticipants(reindexed);
+    setSelectedModelIds(reindexed.map(p => p.modelId));
+
+    if (incompatibleModelNames.length > 0) {
+      const modelList = incompatibleModelNames.length <= 2
+        ? incompatibleModelNames.join(' and ')
+        : `${incompatibleModelNames.slice(0, 2).join(', ')} and ${incompatibleModelNames.length - 2} more`;
+
+      toastManager.warning(
+        t('chat.models.modelsDeselected'),
+        t('chat.models.modelsDeselectedDescription', { models: modelList }),
+      );
+    }
+  }, [incompatibleModelIds, selectedParticipants, setSelectedParticipants, setSelectedModelIds, allEnabledModels, t]);
 
   const formActions = useChatFormActions();
 
-  // ✅ ZUSTAND v5: Batch regeneration state selectors with useShallow
   const { isRegenerating, regeneratingRoundNumber } = useChatStore(
     useShallow(s => ({
       isRegenerating: s.isRegenerating,
@@ -155,7 +192,6 @@ export default function ChatThreadScreen({
     })),
   );
 
-  // ✅ TEXT STREAMING: isModeratorStreaming flag tracks moderator streaming
   useScreenInitialization({
     mode: 'thread',
     thread,
@@ -167,32 +203,21 @@ export default function ChatThreadScreen({
     enableOrchestrator: !isRegenerating && !isModeratorStreaming,
   });
 
-  // Input blocking for submit guard only (ChatView handles its own input state)
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage);
-
-  // ✅ SIMPLIFIED: Removed duplicate initialization useEffect
-  // All state setup now happens in initializeThread (called by useScreenInitialization)
-
-  // ============================================================================
-  // CALLBACKS
-  // ============================================================================
 
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
 
-      // Guard: prevent double submission
       if (!inputValue.trim() || selectedParticipants.length === 0 || isSubmitBlocked) {
         return;
       }
 
-      // Wait for all uploads to complete before sending
       if (!chatAttachments.allUploaded) {
         return;
       }
 
       const attachmentIds = chatAttachments.getUploadIds();
-      // Build attachment info for optimistic message file parts
       const attachmentInfos = chatAttachments.attachments
         .filter(att => att.status === UploadStatuses.COMPLETED && att.uploadId)
         .map(att => ({
@@ -202,16 +227,10 @@ export default function ChatThreadScreen({
           previewUrl: att.preview?.url,
         }));
       await formActions.handleUpdateThreadAndSend(thread.id, attachmentIds, attachmentInfos);
-      // ✅ Clear store attachments is called inside handleUpdateThreadAndSend
-      // ✅ Clear hook local state AFTER message is sent (keeps UI consistent with overview)
       chatAttachments.clearAttachments();
     },
     [inputValue, selectedParticipants, formActions, thread.id, isSubmitBlocked, chatAttachments],
   );
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
 
   return (
     <>

@@ -21,7 +21,7 @@ import {
   MessagePartTypes,
   MessageRoles,
 } from '@/api/core/enums';
-import ErrorMetadataService from '@/api/services/error-metadata.service';
+import { extractErrorMetadata } from '@/api/services/error-metadata.service';
 import type { AvailableSource, CitationSourceMap } from '@/api/types/citations';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -234,7 +234,7 @@ export async function saveStreamedMessage(
     };
     const usageData = finishResult.usage || getTotalUsage();
 
-    const errorMetadata = ErrorMetadataService.extractErrorMetadata({
+    const errorMetadata = extractErrorMetadata({
       providerMetadata: finishResult.providerMetadata,
       response: finishResult.response,
       finishReason: finishResult.finishReason,

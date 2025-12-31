@@ -33,6 +33,7 @@ import {
 } from '@/api/common/error-types';
 import { createHandler } from '@/api/core';
 import {
+  FinishReasons,
   MessagePartTypes,
   MessageRoles,
   ParticipantStreamStatuses,
@@ -44,7 +45,13 @@ import {
   reserveCredits,
 } from '@/api/services/credit.service';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
-import { getModelById, needsSmoothStream } from '@/api/services/models-config.service';
+import {
+  getModelById,
+  isDeepSeekModel,
+  isNanoOrMiniVariant,
+  isOSeriesModel,
+  needsSmoothStream,
+} from '@/api/services/models-config.service';
 import {
   initializeOpenRouter,
   openRouterService,
@@ -93,6 +100,7 @@ import {
   getUserTier,
 } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
+import type { CitableSource } from '@/api/types/citations';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
@@ -408,18 +416,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // =========================================================================
       // STEP 9: Save New User Message (ONLY first participant)
       // =========================================================================
+      const typedMessage = message as UIMessage;
       if (
-        (message as UIMessage).role === UIMessageRoles.USER
+        typedMessage.role === UIMessageRoles.USER
         && participantIndex === 0
       ) {
-        const lastMessage = message as UIMessage;
+        const lastMessage = typedMessage;
         const existsInDb = await db.query.chatMessage.findFirst({
           where: eq(tables.chatMessage.id, lastMessage.id),
         });
 
         if (!existsInDb) {
           const textParts
-            = lastMessage.parts?.filter(part => part.type === 'text') || [];
+            = lastMessage.parts?.filter(part => part.type === MessagePartTypes.TEXT) || [];
           if (textParts.length > 0) {
             const content = textParts
               .map((part) => {
@@ -585,43 +594,27 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         : undefined;
 
       // Prepare and validate messages
-      // ✅ MULTI-MODAL: Pass R2 bucket and attachmentIds to enable image/file processing
-      // The conversion to base64 data URLs happens inside prepareValidatedMessages (backend only)
-      const { modelMessages: rawModelMessages }
-        = await prepareValidatedMessages({
-          previousDbMessages,
-          newMessage: message as UIMessage,
-          r2Bucket: c.env.UPLOADS_R2_BUCKET,
-          db,
-          attachmentIds,
-        });
-
-      // ✅ ALL MODELS RECEIVE ALL FILES: No vision capability filtering
-      // File content is extracted and exposed to all models via system prompt context
-      // Models that can't process visual content will still see extracted text content
-      // Never limit what's exposed to models based on vision flags
-      const modelMessages = rawModelMessages;
+      const modelMessages = await prepareValidatedMessages({
+        previousDbMessages,
+        newMessage: typedMessage,
+        r2Bucket: c.env.UPLOADS_R2_BUCKET,
+        db,
+        attachmentIds,
+      }).then(result => result.modelMessages);
 
       // Build system prompt with RAG context and citation support
       const userQuery = extractUserQuery([
         ...previousMessages,
-        message as UIMessage,
+        typedMessage,
       ]);
       const baseSystemPrompt
         = participant.settings?.systemPrompt
           || buildParticipantSystemPrompt(participant.role, thread.mode);
 
-      // ✅ AI BINDING: Pass Cloudflare AI for RAG-enhanced prompts
-      // Uses global Ai type from cloudflare-env.d.ts - no type cast needed
-      // Service handles undefined AI gracefully (falls back to non-RAG prompt)
-      // ✅ CITATIONS: buildSystemPromptWithContext returns citation source map for resolution
-      // citationSourceMap is passed to saveStreamedMessage to resolve [source_id] markers
-      // ✅ AVAILABLE SOURCES: citableSources converted to availableSources for "Sources" UI
-      // ✅ ATTACHMENTS: Pass attachmentIds for AI to access uploaded file content
       const { systemPrompt, citationSourceMap, citableSources }
         = await buildSystemPromptWithContext({
           participant,
-          allParticipants: participants, // ✅ V2.4: Inject roster for mandatory named positioning
+          allParticipants: participants,
           thread,
           userQuery,
           previousDbMessages,
@@ -634,11 +627,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           attachmentIds,
         });
 
-      // ✅ AVAILABLE SOURCES: Convert citableSources to availableSources format for "Sources" UI
-      // This ensures the UI can show what files/context the AI had access to
-      // Even if the AI doesn't cite inline, users see what sources were available
       const availableSources = citableSources
-        .filter(source => source.type === 'attachment') // Only show attachments in Sources UI for now
+        .filter((source): source is CitableSource => source.type === 'attachment')
         .map(source => ({
           id: source.id,
           sourceType: source.type,
@@ -660,54 +650,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         userTier,
       );
 
-      // =========================================================================
-      // STEP 11: ✅ OFFICIAL AI SDK v6 STREAMING PATTERN
-      // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
-      // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
-      // =========================================================================
-      //
-      // OFFICIAL PATTERN: Direct streamText() → toUIMessageStreamResponse()
-      // - NO content validation (models return what they return)
-      // - NO custom retry loops (AI SDK maxRetries handles all retries)
-      // - NO minimum length checking (accept all model responses)
-      //
-      // CUSTOMIZATION: Multi-participant routing via participantIndex (application-specific)
-      //
-
-      // ✅ TEMPERATURE SUPPORT: Use config flag from model definition (Single Source of Truth)
-      // Some reasoning models (o1, o3-mini, o4-mini) don't support temperature parameter
       const modelSupportsTemperature = modelInfo?.supports_temperature ?? true;
       const temperatureValue = modelSupportsTemperature
         ? (participant.settings?.temperature ?? 0.7)
         : undefined;
 
-      // ✅ REASONING MODEL SUPPORT: Use config flag from model definition (Single Source of Truth)
-      // Reference: https://openrouter.ai/docs/use-cases/reasoning-tokens
-      // Reference: https://github.com/OpenRouterTeam/ai-sdk-provider
-      const supportsReasoningStream
-        = modelInfo?.supports_reasoning_stream ?? false;
+      const supportsReasoningStream = modelInfo?.supports_reasoning_stream ?? false;
 
-      // Build providerOptions for reasoning models ONLY if they support streaming reasoning
-      // - OpenAI o3-mini/o4-mini: Support streaming reasoning with effort-based config
-      // - OpenAI o1: Does NOT stream reasoning (internal) - don't configure reasoning options
-      // - DeepSeek R1: Enable reasoning mode
-      // - Claude :thinking models: Handled automatically by model ID suffix
-      //
-      // ✅ REASONING EFFORT OPTIMIZATION: Prevent models from exhausting tokens on reasoning
-      // Many reasoning models (GPT-5 nano, gpt-oss-120b, etc.) hit token limits during reasoning
-      // before generating actual text output. Lower effort preserves tokens for response.
-      // Reference: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
-      // - minimal = ~10% tokens for reasoning, ~90% for output text
-      // - low = ~20% tokens for reasoning, ~80% for output text
-      // - medium = ~50% tokens for reasoning (too high, causes token exhaustion)
-      // NOTE: o-series models (o1, o3, o4) are reasoning-first and can use higher effort
-      const modelIdLower = participant.modelId.toLowerCase();
-      const isOSeriesModel = /\bo[134]-/.test(modelIdLower); // o1-, o3-, o4-
-      const isNanoOrMiniVariant = modelIdLower.includes('nano') || modelIdLower.includes('mini');
-      // o-series: medium (reasoning is the point), nano/mini: minimal, others: low
-      const reasoningEffort = isOSeriesModel
+      const isOSeries = isOSeriesModel(participant.modelId);
+      const isNanoOrMini = isNanoOrMiniVariant(participant.modelId);
+      const reasoningEffort = isOSeries
         ? 'medium'
-        : isNanoOrMiniVariant
+        : isNanoOrMini
           ? 'minimal'
           : 'low';
 
@@ -721,37 +675,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           }
         : undefined;
 
-      // ✅ STREAMING APPROACH: Direct streamText() without validation
-      //
-      // PHILOSOPHY:
-      // - Stream responses immediately without pre-validation
-      // - AI SDK built-in retry handles transient errors (network, rate limits)
-      // - onFinish callback handles response-level errors (empty responses, content filters)
-      // - No double API calls, no validation overhead, faster response times
-      //
-      // ✅ AI SDK v6 REASONING: Model-specific reasoning handling
-      // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/middleware#extract-reasoning-middleware
-      // Reference: https://sdk.vercel.ai/providers/ai-sdk-providers/google-vertex (thinkingConfig)
-      //
-      // CRITICAL: extractReasoningMiddleware is ONLY for models that embed reasoning in XML tags
-      // - DeepSeek R1: Uses <think> tags → needs extractReasoningMiddleware
-      // - Google/Gemini: Native reasoning via provider (thought: true) → NO middleware needed
-      // - OpenAI o-series: Native reasoning via provider → NO middleware needed
-      // - xAI/Grok: Native reasoning via provider → NO middleware needed
-      // - Anthropic Claude: Native reasoning via providerOptions.anthropic.thinking → NO middleware needed
-      //
-      // Applying extractReasoningMiddleware to models with native reasoning causes duplicate/conflicting parts
       const baseModel = client.chat(participant.modelId);
+      const isDeepSeek = isDeepSeekModel(participant.modelId);
 
-      // ✅ MODEL DETECTION: DeepSeek needs extractReasoningMiddleware for XML <think> tags
-      const isDeepSeekModel = participant.modelId.toLowerCase().includes('deepseek');
-
-      // ✅ REASONING MIDDLEWARE: Only apply to DeepSeek models that use XML tag-based reasoning
-      // DeepSeek uses <think> tags that must be extracted via middleware
-      // All other models (Google, OpenAI, xAI, Anthropic) have native reasoning support
-      // NOTE: Type assertion needed - OpenRouter provider uses v2 spec, AI SDK v6 expects v3
-      // TODO: Remove cast when @openrouter/ai-sdk-provider supports AI SDK v6
-      const modelForStreaming = isDeepSeekModel
+      const modelForStreaming = isDeepSeek
         ? wrapLanguageModel({
             model: baseModel as unknown as Parameters<typeof wrapLanguageModel>[0]['model'],
             middleware: extractReasoningMiddleware({ tagName: 'think' }),
@@ -1180,7 +1107,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // - deepseek/deepseek-r1: finishReason='stop', 0 tokens, no text
           // - gpt-5-nano with finishReason='length': exhausted tokens on reasoning
           const emptyResponseError = !hasContent
-            ? (isOnlyRedactedReasoning && finishResult.finishReason === 'length'
+            ? (isOnlyRedactedReasoning && finishResult.finishReason === FinishReasons.LENGTH
                 ? `Model exhausted token limit during reasoning and could not generate a response.`
                 : `Model did not generate a response.`)
             : null;
@@ -1247,14 +1174,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           try {
             // Convert recent model messages to PostHog input format (last 5 for context)
             const recentModelMessages = modelMessages.slice(-5);
-            const inputMessages = recentModelMessages.map((msg) => {
+            const inputMessages = recentModelMessages.map((msg): { role: string; content: string | Array<{ type: string; text: string }> } => {
               return {
                 role: msg.role,
                 content:
                   typeof msg.content === 'string'
                     ? msg.content
                     : Array.isArray(msg.content)
-                      ? msg.content.map((part: { type: string; text?: string }) => {
+                      ? msg.content.map((part: { type: string; text?: string }): { type: string; text: string } => {
                           if ('text' in part && part.text) {
                             return { type: 'text', text: part.text };
                           }
@@ -1280,9 +1207,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                     finishResult.usage.totalTokens
                     ?? (finishResult.usage.inputTokens ?? 0)
                     + (finishResult.usage.outputTokens ?? 0),
-                  // AI SDK v6: inputTokenDetails replaces deprecated cachedInputTokens
+                  // AI SDK v6: inputTokenDetails contains cache metrics
                   inputTokenDetails: finishResult.usage.inputTokenDetails,
-                  // AI SDK v6: outputTokenDetails replaces deprecated reasoningTokens
+                  // AI SDK v6: outputTokenDetails contains reasoning token metrics
                   outputTokenDetails: finishResult.usage.outputTokenDetails,
                 }
               : undefined;
@@ -1430,19 +1357,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Client disconnects are handled by the Response stream - onFinish will still fire.
 
       // Get the base stream response
-      // ✅ CRITICAL FIX: Filter out assistant messages from current round
-      // AI SDK Bug: toUIMessageStreamResponse() reuses the last assistant message ID
-      // instead of calling generateMessageId() when originalMessages ends with assistant
-      // For multi-participant: exclude concurrent assistant responses (same round)
       const filteredOriginalMessages = previousMessages.filter((m) => {
-        // Exclude the new user message (frontend already has it)
-        if (m.id === (message as UIMessage).id)
+        if (m.id === message.id)
           return false;
 
         // ✅ CRITICAL: Exclude assistant messages from current round
         // These are concurrent participant responses, not conversation history
         if (m.role === UIMessageRoles.ASSISTANT) {
-          // ✅ TYPE-SAFE: Use getRoundNumber for proper metadata extraction
           const msgRoundNumber = getRoundNumber(m.metadata);
           if (msgRoundNumber === currentRoundNumber) {
             return false;
@@ -1453,15 +1374,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       });
 
       const baseStreamResponse = finalResult.toUIMessageStreamResponse({
-        sendReasoning: true, // Stream reasoning for o1/o3/DeepSeek models
+        sendReasoning: true,
 
-        // ✅ OFFICIAL PATTERN: Pass original messages for type-safe metadata
-        // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/25-message-metadata
-        // ✅ CRITICAL FIX: Use previousMessages but exclude the new user message
-        // The frontend's aiSendMessage() already adds the user message to state
-        // Backend shouldn't re-send it in originalMessages to avoid duplication
-        // Filter out the new message by ID to handle race conditions where subsequent
-        // participants might query the DB after participant 0 saved the message
         originalMessages: filteredOriginalMessages,
 
         // ✅ DETERMINISTIC MESSAGE ID: Server-side generation using composite key

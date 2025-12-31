@@ -21,92 +21,17 @@
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { z } from 'zod';
 
-import type { ApiErrorSeverity } from '@/api/core/enums';
-import { API_ERROR_SEVERITIES, ApiErrorSeverities } from '@/api/core/enums';
+import type { ApiErrorSeverity, ErrorCode } from '@/api/core/enums';
+import { ApiErrorSeverities, ApiErrorSeveritySchema, ErrorCodes, ErrorCodeSchema } from '@/api/core/enums';
 import type { ErrorContext } from '@/api/core/schemas';
-// Import directly from source to avoid circular dependency
-// (error-handling.ts → @/api/core → errors.ts → error-handling.ts)
 import { ErrorContextSchema } from '@/api/core/schemas';
 
-// ============================================================================
-// ZOD SCHEMAS FOR ERROR TYPES
-// ============================================================================
-
-/**
- * Standard error codes schema - Zod enum for validation
- */
-export const ErrorCodeSchema = z.enum([
-  // Authentication & Authorization
-  'UNAUTHENTICATED',
-  'UNAUTHORIZED',
-  'TOKEN_EXPIRED',
-  'TOKEN_INVALID',
-  'INSUFFICIENT_PERMISSIONS',
-
-  // Validation & Input
-  'VALIDATION_ERROR',
-  'INVALID_INPUT',
-  'MISSING_REQUIRED_FIELD',
-  'INVALID_FORMAT',
-  'INVALID_ENUM_VALUE',
-
-  // Resource Management
-  'RESOURCE_NOT_FOUND',
-  'RESOURCE_ALREADY_EXISTS',
-  'RESOURCE_CONFLICT',
-  'RESOURCE_LOCKED',
-  'RESOURCE_EXPIRED',
-
-  // Business Logic
-  'BUSINESS_RULE_VIOLATION',
-
-  // External Services
-  'EXTERNAL_SERVICE_ERROR',
-  'EMAIL_SERVICE_ERROR',
-  'STORAGE_SERVICE_ERROR',
-
-  // System & Infrastructure
-  'INTERNAL_SERVER_ERROR',
-  'DATABASE_ERROR',
-  'NETWORK_ERROR',
-  'TIMEOUT_ERROR',
-  'RATE_LIMIT_EXCEEDED',
-  'SERVICE_UNAVAILABLE',
-  'MAINTENANCE_MODE',
-  'BATCH_FAILED',
-  'BATCH_SIZE_EXCEEDED',
-]);
-
-/**
- * Inferred type from Zod schema - replaces hard-coded type
- */
-export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
-
-/**
- * Error codes constant for easy access (derived from schema)
- */
-export const ERROR_CODES = ErrorCodeSchema.enum;
-
-/**
- * Error severity constant object for easy access
- * Uses centralized enum pattern from @/api/core/enums
- * For type import: use `import type { ApiErrorSeverity } from '@/api/core/enums'`
- */
-export const ERROR_SEVERITY = ApiErrorSeverities;
-
-/**
- * Local schema reference for this module's use
- */
-const ApiErrorSeveritySchema = z.enum(API_ERROR_SEVERITIES);
+import { extractAISdkError, getErrorMessage, getErrorName } from './error-types';
 
 // ============================================================================
 // ERROR CONFIGURATION SCHEMA
 // ============================================================================
 
-/**
- * Schema for AppError constructor parameters
- * Uses Zod for validation and type inference
- */
 export const AppErrorConfigSchema = z.object({
   message: z.string().min(1),
   code: ErrorCodeSchema,
@@ -117,20 +42,12 @@ export const AppErrorConfigSchema = z.object({
   correlationId: z.string().optional(),
 });
 
-/**
- * Inferred type from schema - replaces hard-coded interface
- * Note: severity is optional due to default value
- */
 export type AppErrorConfig = z.input<typeof AppErrorConfigSchema>;
 
 // ============================================================================
 // ERROR CLASSES
 // ============================================================================
 
-/**
- * Base application error class with enhanced metadata
- * Constructor parameters validated via Zod schema
- */
 class AppError extends Error {
   public readonly code: ErrorCode;
   public readonly statusCode: number;
@@ -141,7 +58,6 @@ class AppError extends Error {
   public readonly correlationId?: string;
 
   constructor(config: AppErrorConfig) {
-    // Validate configuration via Zod schema (runtime validation)
     const validated = AppErrorConfigSchema.parse(config);
 
     super(validated.message);
@@ -154,15 +70,11 @@ class AppError extends Error {
     this.timestamp = new Date();
     this.correlationId = validated.correlationId;
 
-    // Maintain proper stack trace
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
     }
   }
 
-  /**
-   * Convert error to JSON for logging
-   */
   toJSON() {
     return {
       name: this.name,
@@ -178,16 +90,11 @@ class AppError extends Error {
     };
   }
 
-  /**
-   * Remove sensitive data from context for logging
-   * Now uses discriminated union for type safety
-   */
   private sanitizeContext(): ErrorContext | undefined {
-    if (!this.context)
+    if (!this.context) {
       return undefined;
+    }
 
-    // The discriminated union ensures type safety - no need for generic Record
-    // Each error type has its own sanitization logic
     switch (this.context.errorType) {
       case 'authentication':
         return {
@@ -200,9 +107,6 @@ class AppError extends Error {
   }
 }
 
-/**
- * External service error class for third-party service failures
- */
 class ExternalServiceError extends AppError {
   public readonly serviceName: string;
   public readonly originalError?: Error;
@@ -210,7 +114,7 @@ class ExternalServiceError extends AppError {
   constructor({
     message,
     serviceName,
-    code = ERROR_CODES.EXTERNAL_SERVICE_ERROR,
+    code = ErrorCodes.EXTERNAL_SERVICE_ERROR,
     originalError,
     context,
     correlationId,
@@ -226,7 +130,7 @@ class ExternalServiceError extends AppError {
       message,
       code,
       statusCode: HttpStatusCodes.BAD_GATEWAY,
-      severity: ERROR_SEVERITY.HIGH,
+      severity: ApiErrorSeverities.HIGH,
       details: {
         detailType: 'service_error',
         serviceName,
@@ -245,19 +149,13 @@ class ExternalServiceError extends AppError {
 // ERROR FACTORY FUNCTIONS
 // ============================================================================
 
-/**
- * Factory functions for creating common errors
- */
 export const createError = {
-  /**
-   * Authentication errors
-   */
   unauthenticated: (message = 'Authentication required', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message,
-      code: ERROR_CODES.UNAUTHENTICATED,
+      code: ErrorCodes.UNAUTHENTICATED,
       statusCode: HttpStatusCodes.UNAUTHORIZED,
-      severity: ERROR_SEVERITY.MEDIUM,
+      severity: ApiErrorSeverities.MEDIUM,
       context,
       correlationId,
     }),
@@ -265,9 +163,9 @@ export const createError = {
   unauthorized: (message = 'Insufficient permissions', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message,
-      code: ERROR_CODES.UNAUTHORIZED,
+      code: ErrorCodes.UNAUTHORIZED,
       statusCode: HttpStatusCodes.FORBIDDEN,
-      severity: ERROR_SEVERITY.MEDIUM,
+      severity: ApiErrorSeverities.MEDIUM,
       context,
       correlationId,
     }),
@@ -275,22 +173,19 @@ export const createError = {
   tokenExpired: (message = 'Authentication token has expired', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message,
-      code: ERROR_CODES.TOKEN_EXPIRED,
+      code: ErrorCodes.TOKEN_EXPIRED,
       statusCode: HttpStatusCodes.UNAUTHORIZED,
-      severity: ERROR_SEVERITY.LOW,
+      severity: ApiErrorSeverities.LOW,
       context,
       correlationId,
     }),
 
-  /**
-   * Resource errors
-   */
   notFound: (resource = 'Resource', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message: `${resource} not found`,
-      code: ERROR_CODES.RESOURCE_NOT_FOUND,
+      code: ErrorCodes.RESOURCE_NOT_FOUND,
       statusCode: HttpStatusCodes.NOT_FOUND,
-      severity: ERROR_SEVERITY.LOW,
+      severity: ApiErrorSeverities.LOW,
       context,
       correlationId,
     }),
@@ -298,9 +193,9 @@ export const createError = {
   alreadyExists: (resource = 'Resource', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message: `${resource} already exists`,
-      code: ERROR_CODES.RESOURCE_ALREADY_EXISTS,
+      code: ErrorCodes.RESOURCE_ALREADY_EXISTS,
       statusCode: HttpStatusCodes.CONFLICT,
-      severity: ERROR_SEVERITY.LOW,
+      severity: ApiErrorSeverities.LOW,
       context,
       correlationId,
     }),
@@ -308,37 +203,29 @@ export const createError = {
   conflict: (message = 'Resource conflict', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message,
-      code: ERROR_CODES.RESOURCE_CONFLICT,
+      code: ErrorCodes.RESOURCE_CONFLICT,
       statusCode: HttpStatusCodes.CONFLICT,
-      severity: ERROR_SEVERITY.MEDIUM,
+      severity: ApiErrorSeverities.MEDIUM,
       context,
       correlationId,
     }),
 
-  /**
-   * SEO-friendly 410 Gone error for resources that existed but are no longer available
-   * Use this for deleted or permanently unavailable resources to help search engines
-   * remove them from their index
-   */
   gone: (message = 'Resource no longer available', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message,
-      code: ERROR_CODES.RESOURCE_NOT_FOUND,
+      code: ErrorCodes.RESOURCE_NOT_FOUND,
       statusCode: HttpStatusCodes.GONE,
-      severity: ERROR_SEVERITY.LOW,
+      severity: ApiErrorSeverities.LOW,
       context,
       correlationId,
     }),
 
-  /**
-   * Validation errors
-   */
   badRequest: (message = 'Invalid request', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message,
-      code: ERROR_CODES.VALIDATION_ERROR,
+      code: ErrorCodes.VALIDATION_ERROR,
       statusCode: HttpStatusCodes.BAD_REQUEST,
-      severity: ERROR_SEVERITY.LOW,
+      severity: ApiErrorSeverities.LOW,
       context,
       correlationId,
     }),
@@ -346,22 +233,19 @@ export const createError = {
   validation: (message = 'Validation failed', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message,
-      code: ERROR_CODES.VALIDATION_ERROR,
+      code: ErrorCodes.VALIDATION_ERROR,
       statusCode: HttpStatusCodes.BAD_REQUEST,
-      severity: ERROR_SEVERITY.LOW,
+      severity: ApiErrorSeverities.LOW,
       context,
       correlationId,
     }),
 
-  /**
-   * System errors
-   */
   internal: (message = 'Internal server error', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message,
-      code: ERROR_CODES.INTERNAL_SERVER_ERROR,
+      code: ErrorCodes.INTERNAL_SERVER_ERROR,
       statusCode: HttpStatusCodes.INTERNAL_SERVER_ERROR,
-      severity: ERROR_SEVERITY.CRITICAL,
+      severity: ApiErrorSeverities.CRITICAL,
       context,
       correlationId,
     }),
@@ -369,9 +253,9 @@ export const createError = {
   database: (message = 'Database operation failed', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message,
-      code: ERROR_CODES.DATABASE_ERROR,
+      code: ErrorCodes.DATABASE_ERROR,
       statusCode: HttpStatusCodes.INTERNAL_SERVER_ERROR,
-      severity: ERROR_SEVERITY.CRITICAL,
+      severity: ApiErrorSeverities.CRITICAL,
       context,
       correlationId,
     }),
@@ -379,21 +263,18 @@ export const createError = {
   rateLimit: (message = 'Too many requests', context?: ErrorContext, correlationId?: string) =>
     new AppError({
       message,
-      code: ERROR_CODES.RATE_LIMIT_EXCEEDED,
+      code: ErrorCodes.RATE_LIMIT_EXCEEDED,
       statusCode: HttpStatusCodes.TOO_MANY_REQUESTS,
-      severity: ERROR_SEVERITY.MEDIUM,
+      severity: ApiErrorSeverities.MEDIUM,
       context,
       correlationId,
     }),
 
-  /**
-   * External service errors
-   */
   emailService: (message = 'Email service error', originalError?: Error, context?: ErrorContext, correlationId?: string) =>
     new ExternalServiceError({
       message,
       serviceName: 'Email',
-      code: ERROR_CODES.EMAIL_SERVICE_ERROR,
+      code: ErrorCodes.EMAIL_SERVICE_ERROR,
       originalError,
       context,
       correlationId,
@@ -405,24 +286,6 @@ export const createError = {
 // ERROR UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Normalize an unknown error value to an Error instance
- *
- * This helper ensures consistent error handling by converting any thrown value
- * into a proper Error instance. Useful in catch blocks where the error type is unknown.
- *
- * @param error - The error value to normalize (can be anything)
- * @returns A proper Error instance
- *
- * @example
- * ```typescript
- * try {
- *   await somethingDangerous();
- * } catch {
- *   throw createError.internal('Operation failed', context);
- * }
- * ```
- */
 export function normalizeError(error: unknown): Error {
   if (error instanceof Error) {
     return error;
@@ -431,161 +294,128 @@ export function normalizeError(error: unknown): Error {
 }
 
 // ============================================================================
-// AI PROVIDER ERROR METADATA (OpenRouter, Anthropic, OpenAI, etc.)
+// AI PROVIDER ERROR METADATA
 // ============================================================================
 
-/**
- * Error category types for AI provider errors
- * Follows OpenRouter error categorization: https://openrouter.ai/docs#errors
- */
-export type AIProviderErrorCategory
-  = 'provider_rate_limit' // Rate limiting (429, quota exceeded) - retry aggressively
-    | 'provider_network' // Network/connectivity issues (502, 503, 504) - retry aggressively
-    | 'provider_service' // Service unavailable - retry aggressively
-    | 'model_not_found' // Model unavailable (404) - don't retry
-    | 'model_content_filter' // Content policy violation - don't retry
-    | 'authentication' // API key invalid (401, 403) - don't retry
-    | 'validation' // Bad request (400) - don't retry
-    | 'unknown'; // Unknown error - cautious retry
+export const AI_PROVIDER_ERROR_CATEGORIES = [
+  'provider_rate_limit', // Rate limiting (429, quota exceeded) - retry aggressively
+  'provider_network', // Network/connectivity issues (502, 503, 504) - retry aggressively
+  'provider_service', // Service unavailable - retry aggressively
+  'model_not_found', // Model unavailable (404) - don't retry
+  'model_content_filter', // Content policy violation - don't retry
+  'authentication', // API key invalid (401, 403) - don't retry
+  'validation', // Bad request (400) - don't retry
+  'unknown', // Unknown error - cautious retry
+] as const;
 
-/**
- * Structured metadata from AI provider errors (OpenRouter, Anthropic, OpenAI, etc.)
- * Used for comprehensive error logging and user-facing error messages
- */
-export type AIProviderErrorMetadata = {
-  // Error identification
-  errorName: string;
-  errorType: string;
-  errorCategory: AIProviderErrorCategory;
+export const AIProviderErrorCategorySchema = z.enum(AI_PROVIDER_ERROR_CATEGORIES);
 
-  // User-facing message
-  errorMessage: string;
+export type AIProviderErrorCategory = z.infer<typeof AIProviderErrorCategorySchema>;
 
-  // Provider-specific details (OpenRouter, Anthropic, OpenAI format)
-  openRouterError?: string;
-  openRouterCode?: string;
-  openRouterType?: string;
-  openRouterMetadata?: Record<string, unknown>;
+export const AIProviderErrorCategories = {
+  PROVIDER_RATE_LIMIT: 'provider_rate_limit' as const,
+  PROVIDER_NETWORK: 'provider_network' as const,
+  PROVIDER_SERVICE: 'provider_service' as const,
+  MODEL_NOT_FOUND: 'model_not_found' as const,
+  MODEL_CONTENT_FILTER: 'model_content_filter' as const,
+  AUTHENTICATION: 'authentication' as const,
+  VALIDATION: 'validation' as const,
+  UNKNOWN: 'unknown' as const,
+} as const;
 
-  // HTTP details
-  statusCode?: number;
-  requestId?: string;
+export const ProviderErrorDetailsSchema = z.object({
+  message: z.string().optional(),
+  code: z.string().optional(),
+  type: z.string().optional(),
+  metadata: z.unknown().optional(),
+});
 
-  // Technical details for debugging
-  rawErrorMessage: string;
-  responseBody?: string;
-  cause?: string;
-  traceId?: string; // ✅ LLM trace ID for PostHog/debugging correlation
+export type ProviderErrorDetails = z.infer<typeof ProviderErrorDetailsSchema>;
 
-  // Retry decision
-  isTransient: boolean;
-  shouldRetry: boolean;
+export const AIProviderErrorMetadataSchema = z.object({
+  errorName: z.string(),
+  errorType: z.string(),
+  errorCategory: AIProviderErrorCategorySchema,
+  errorMessage: z.string(),
+  openRouterError: z.string().optional(),
+  openRouterCode: z.string().optional(),
+  openRouterType: z.string().optional(),
+  openRouterMetadata: z.unknown().optional(),
+  statusCode: z.number().optional(),
+  requestId: z.string().optional(),
+  rawErrorMessage: z.string(),
+  responseBody: z.string().optional(),
+  cause: z.string().optional(),
+  traceId: z.string().optional(),
+  isTransient: z.boolean(),
+  shouldRetry: z.boolean(),
+  participantId: z.string().optional(),
+  participantRole: z.string().nullable().optional(),
+  modelId: z.string().optional(),
+});
 
-  // Participant context (for multi-model scenarios)
-  participantId?: string;
-  participantRole?: string | null;
-  modelId?: string;
-};
+export type AIProviderErrorMetadata = z.infer<typeof AIProviderErrorMetadataSchema>;
 
-/**
- * ✅ AI PROVIDER ERROR METADATA: Extract comprehensive error details from AI SDK errors
- *
- * PATTERN: Shared utility for OpenRouter/Anthropic/OpenAI error parsing
- * REFERENCE: backend-patterns.md:1415-1437 (normalizeError pattern)
- *
- * This utility follows the established error handling pattern in error-handling.ts
- * and extends it specifically for AI provider errors (OpenRouter, Anthropic, OpenAI).
- *
- * OpenRouter/AI providers return errors in multiple formats:
- * 1. Standard HTTP errors with JSON body: { error: { message, code, metadata } }
- * 2. AI SDK errors with responseBody containing provider JSON
- * 3. Model-specific errors from underlying providers
- *
- * @param error - Error from AI SDK (unknown type for safety)
- * @param participantContext - Optional participant information for context
- * @param participantContext.id - Participant ID for error tracking
- * @param participantContext.modelId - Model ID being used (e.g., "anthropic/claude-3.5-sonnet")
- * @param participantContext.role - Role description of the participant (nullable)
- * @returns Comprehensive structured error metadata for logging and display
- *
- * @example
- * ```typescript
- * try {
- *   await streamText({ model, prompt });
- * } catch {
- *   const metadata = structureAIProviderError(error, {
- *     id: participant.id,
- *     modelId: participant.modelId,
- *     role: participant.role
- *   });
- *   // Log or display structured error
- *   logger.error('AI provider error', metadata);
- * }
- * ```
- */
 export function structureAIProviderError(
   error: unknown,
   participantContext?: { id: string; modelId: string; role: string | null },
   traceId?: string,
 ): AIProviderErrorMetadata {
-  // ✅ STEP 1: Extract base error fields from AI SDK error object
-  const err = error as Error & {
-    cause?: unknown;
-    statusCode?: number;
-    responseBody?: string;
-    responseHeaders?: Record<string, string>;
-    code?: string;
-    data?: unknown;
-  };
+  const aiError = extractAISdkError(error);
 
-  const errorName = err?.name || 'UnknownError';
-  let errorMessage = err?.message || 'An unexpected error occurred';
-  const errorType = err?.constructor?.name || 'Error';
-  const statusCode = err?.statusCode;
-  const responseBody = err?.responseBody;
-  const responseHeaders = err?.responseHeaders;
-  const cause = err?.cause;
+  const errorName = getErrorName(error) ?? 'UnknownError';
+  let errorMessage = getErrorMessage(error);
+  const errorType = error instanceof Error ? error.constructor.name : 'Error';
+  const statusCode = aiError?.statusCode;
+  const responseBody = aiError?.responseBody;
+  const cause = aiError?.cause;
 
-  // ✅ STEP 2: Parse provider-specific error from response body (JSON format)
-  let providerError: {
-    message?: string;
-    code?: string;
-    type?: string;
-    metadata?: Record<string, unknown>;
-  } | null = null;
+  let responseHeaders: Record<string, string> | undefined;
+  if (error instanceof Error && 'responseHeaders' in error) {
+    const headers = (error as { responseHeaders?: unknown }).responseHeaders;
+    if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
+      responseHeaders = headers as Record<string, string>;
+    }
+  }
+
+  let providerError: ProviderErrorDetails | null = null;
 
   if (responseBody) {
     try {
-      const parsed = JSON.parse(responseBody);
-      // Provider standard error format: { error: { message, code, metadata } }
-      if (parsed.error) {
-        providerError = {
-          message: parsed.error.message || parsed.error,
-          code: parsed.error.code,
-          type: parsed.error.type,
-          metadata: parsed.error.metadata,
-        };
-        // Override error message with provider's detailed message
-        if (providerError.message) {
-          errorMessage = String(providerError.message);
+      const parsed: unknown = JSON.parse(responseBody);
+      // Type-safe extraction of provider error
+      if (parsed && typeof parsed === 'object') {
+        const parsedObj = parsed as Record<string, unknown>;
+        // Provider standard error format: { error: { message, code, metadata } }
+        if (parsedObj.error && typeof parsedObj.error === 'object') {
+          const errorObj = parsedObj.error as Record<string, unknown>;
+          providerError = ProviderErrorDetailsSchema.parse({
+            message: typeof errorObj.message === 'string' ? errorObj.message : String(parsedObj.error),
+            code: typeof errorObj.code === 'string' ? errorObj.code : undefined,
+            type: typeof errorObj.type === 'string' ? errorObj.type : undefined,
+            metadata: errorObj.metadata,
+          });
+          if (providerError.message) {
+            errorMessage = providerError.message;
+          }
+        } else if (typeof parsedObj.message === 'string') {
+          // Alternative format: { message, code }
+          providerError = ProviderErrorDetailsSchema.parse({
+            message: parsedObj.message,
+            code: typeof parsedObj.code === 'string' ? parsedObj.code : undefined,
+          });
+          errorMessage = parsedObj.message;
         }
-      } else if (parsed.message) {
-        // Alternative format: { message, error }
-        providerError = {
-          message: parsed.message,
-          code: parsed.code,
-        };
-        errorMessage = parsed.message;
       }
     } catch {
-      // responseBody is not JSON - may be plain text error
+      // responseBody is not valid JSON or schema parse failed - use as plain text
       if (responseBody.length > 0 && responseBody.length < 500) {
         errorMessage = responseBody;
       }
     }
   }
 
-  // ✅ STEP 3: Categorize error and determine retry strategy
+  // Categorize error and determine retry strategy
   let errorCategory: AIProviderErrorCategory = 'unknown';
   let errorIsTransient: boolean;
   let shouldRetry: boolean;
@@ -601,7 +431,7 @@ export function structureAIProviderError(
     || errorLower.includes('quota')
     || errorLower.includes('too many requests')
   ) {
-    errorCategory = 'provider_rate_limit';
+    errorCategory = AIProviderErrorCategories.PROVIDER_RATE_LIMIT;
     errorIsTransient = true;
     shouldRetry = true;
   } else if (
@@ -618,7 +448,7 @@ export function structureAIProviderError(
     || errorLower.includes('service unavailable')
     || errorLower.includes('gateway')
   ) {
-    errorCategory = 'provider_network';
+    errorCategory = AIProviderErrorCategories.PROVIDER_NETWORK;
     errorIsTransient = true;
     shouldRetry = true;
   } else if (
@@ -631,7 +461,7 @@ export function structureAIProviderError(
     || errorLower.includes('model is not available')
     || errorLower.includes('model does not support')
   ) {
-    errorCategory = 'model_not_found';
+    errorCategory = AIProviderErrorCategories.MODEL_NOT_FOUND;
     errorIsTransient = false;
     shouldRetry = false;
   } else if (
@@ -642,7 +472,7 @@ export function structureAIProviderError(
     || errorLower.includes('policy')
     || errorLower.includes('inappropriate')
   ) {
-    errorCategory = 'model_content_filter';
+    errorCategory = AIProviderErrorCategories.MODEL_CONTENT_FILTER;
     errorIsTransient = false;
     shouldRetry = false;
   } else if (
@@ -655,7 +485,7 @@ export function structureAIProviderError(
     || errorLower.includes('api key')
     || errorLower.includes('authentication')
   ) {
-    errorCategory = 'authentication';
+    errorCategory = AIProviderErrorCategories.AUTHENTICATION;
     errorIsTransient = false;
     shouldRetry = false;
   } else if (
@@ -665,20 +495,18 @@ export function structureAIProviderError(
     || errorLower.includes('malformed')
     || errorLower.includes('bad request')
   ) {
-    errorCategory = 'validation';
+    errorCategory = AIProviderErrorCategories.VALIDATION;
     errorIsTransient = false;
     shouldRetry = false;
   } else {
-    // Intentionally empty
-    errorCategory = 'unknown';
+    errorCategory = AIProviderErrorCategories.UNKNOWN;
     errorIsTransient = true;
     shouldRetry = true;
   }
 
-  // ✅ STEP 4: Extract provider request/response IDs for debugging
+  // Extract provider request/response IDs for debugging
   const requestId = responseHeaders?.['x-request-id'] || responseHeaders?.['x-trace-id'];
 
-  // ✅ STEP 5: Return comprehensive metadata
   return {
     errorName,
     errorType,
@@ -693,7 +521,7 @@ export function structureAIProviderError(
     rawErrorMessage: errorMessage,
     responseBody: responseBody?.substring(0, 1000),
     cause: cause ? String(cause) : undefined,
-    traceId, // ✅ Include LLM trace ID for debugging correlation
+    traceId,
     isTransient: errorIsTransient,
     shouldRetry,
     participantId: participantContext?.id,
@@ -710,7 +538,5 @@ export {
   AppError,
   ExternalServiceError,
 };
-
-// ERROR_CODES, ERROR_SEVERITY, ErrorCode, ErrorSeverity are already exported above
 
 export default createError;

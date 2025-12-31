@@ -21,6 +21,7 @@ import {
   StreamStatusSchema,
 } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
+import { TypedLoggerSchema } from '@/api/types/logger';
 
 // ============================================================================
 // CONSTANTS
@@ -87,8 +88,6 @@ export function parseSSEEventType(data: string): SSEEventType {
 export const StreamChunkSchema = z.object({
   data: z.string(),
   timestamp: z.number(),
-  // ✅ FIX: Added event type to enable deduplication during stream resumption
-  // Reasoning chunks can be filtered to prevent duplicate thinking tags
   event: SSEEventTypeSchema.optional(),
 });
 
@@ -176,8 +175,8 @@ export const InitializeStreamBufferParamsSchema = z.object({
   threadId: z.string(),
   roundNumber: z.number(),
   participantIndex: z.number(),
-  env: z.any(),
-  logger: z.any().optional(),
+  env: z.custom<ApiEnv['Bindings']>(),
+  logger: TypedLoggerSchema.optional(),
 });
 
 export type InitializeStreamBufferParams = z.infer<typeof InitializeStreamBufferParamsSchema>;
@@ -185,16 +184,16 @@ export type InitializeStreamBufferParams = z.infer<typeof InitializeStreamBuffer
 export const AppendStreamChunkParamsSchema = z.object({
   streamId: z.string(),
   chunk: StreamChunkSchema,
-  env: z.any(),
-  logger: z.any().optional(),
+  env: z.custom<ApiEnv['Bindings']>(),
+  logger: TypedLoggerSchema.optional(),
 });
 
 export type AppendStreamChunkParams = z.infer<typeof AppendStreamChunkParamsSchema>;
 
 export const CompleteStreamBufferParamsSchema = z.object({
   streamId: z.string(),
-  env: z.any(),
-  logger: z.any().optional(),
+  env: z.custom<ApiEnv['Bindings']>(),
+  logger: TypedLoggerSchema.optional(),
 });
 
 export type CompleteStreamBufferParams = z.infer<typeof CompleteStreamBufferParamsSchema>;
@@ -202,8 +201,8 @@ export type CompleteStreamBufferParams = z.infer<typeof CompleteStreamBufferPara
 export const FailStreamBufferParamsSchema = z.object({
   streamId: z.string(),
   errorMessage: z.string(),
-  env: z.any(),
-  logger: z.any().optional(),
+  env: z.custom<ApiEnv['Bindings']>(),
+  logger: TypedLoggerSchema.optional(),
 });
 
 export type FailStreamBufferParams = z.infer<typeof FailStreamBufferParamsSchema>;
@@ -342,10 +341,6 @@ export function isThreadActiveStream(value: unknown): value is ThreadActiveStrea
 // UNIFIED STREAM ID UTILITIES
 // ============================================================================
 
-// Stream phase enums (STREAM_PHASES, StreamPhase, StreamPhases, StreamPhaseSchema)
-// are imported from @/api/core/enums - the canonical source of truth
-
-// METADATA - Phase information and ordering (unique to this file)
 export const StreamPhaseMetadata: Record<StreamPhase, {
   label: string;
   order: number;

@@ -1,7 +1,5 @@
-// components/TextInput.tsx
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
-
-import type { FormOptions, GeneralFormProps } from '@/types/general';
 
 import {
   FormControl,
@@ -9,21 +7,24 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '../ui/form';
-import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+} from '@/components/ui/form';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import type { FormOptions } from '@/lib/schemas';
 
-type Props = {
+type RHFRadioGroupProps<TFieldValues extends FieldValues = FieldValues> = {
+  name: FieldPath<TFieldValues>;
+  title: string;
   options: FormOptions;
-} & GeneralFormProps;
-function RHFRadioGroup({
+  required?: boolean;
+};
+
+export function RHFRadioGroup<TFieldValues extends FieldValues = FieldValues>({
   name,
   options,
   title,
   required,
-  value: externalValue,
-  onChange: externalOnChange,
-}: Props) {
-  const { control } = useFormContext();
+}: RHFRadioGroupProps<TFieldValues>) {
+  const { control } = useFormContext<TFieldValues>();
 
   return (
     <FormField
@@ -35,23 +36,13 @@ function RHFRadioGroup({
           <FormControl>
             <RadioGroup
               data-testid={field.name}
-              onValueChange={(value: string) => {
-                if (externalOnChange) {
-                  return externalOnChange?.({ target: { value } });
-                }
-                return field.onChange(value);
-              }}
+              onValueChange={field.onChange}
+              value={field.value}
               required={required}
-              defaultValue={
-                field.value !== undefined ? field.value : externalValue
-              }
               className="flex flex-col space-y-3"
             >
               {options.map((item, index) => (
-                <FormItem
-                  key={item.value}
-                  className="space-y-0"
-                >
+                <FormItem key={item.value} className="space-y-0">
                   <FormLabel
                     htmlFor={`${field.name}-${index}`}
                     className="flex cursor-pointer items-start space-x-3 rounded-2xl border p-4 hover:bg-accent hover:text-accent-foreground transition-colors [&:has([data-state=checked])]:border-primary [&:has([data-state=checked])]:bg-primary/5"
@@ -66,7 +57,7 @@ function RHFRadioGroup({
                     </FormControl>
                     <div className="flex-1 space-y-1">
                       <div className="font-medium text-sm leading-none">
-                        {typeof item.label === 'string' ? item.label : item.label}
+                        {item.label}
                       </div>
                       {item.description && (
                         <p
@@ -88,5 +79,3 @@ function RHFRadioGroup({
     />
   );
 }
-
-export default RHFRadioGroup;

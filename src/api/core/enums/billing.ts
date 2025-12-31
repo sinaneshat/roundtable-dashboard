@@ -243,6 +243,22 @@ export const PlanTypes = {
   PAID: 'paid' as const,
 } as const;
 
+/**
+ * Type guard for PlanType validation
+ * Use instead of type casting for type-safe validation
+ */
+export function isPlanType(value: unknown): value is PlanType {
+  return typeof value === 'string' && PLAN_TYPES.includes(value as PlanType);
+}
+
+/**
+ * Parse and validate PlanType with fallback to default
+ * Use for database values that should already be valid
+ */
+export function parsePlanType(value: unknown): PlanType {
+  return isPlanType(value) ? value : DEFAULT_PLAN_TYPE;
+}
+
 // ============================================================================
 // CREDIT TRANSACTION TYPE
 // ============================================================================
@@ -275,6 +291,32 @@ export const CreditTransactionTypes = {
   RELEASE: 'release' as const,
   ADJUSTMENT: 'adjustment' as const,
 } as const;
+
+/**
+ * Type guard for CreditTransactionType validation
+ */
+export function isCreditTransactionType(value: unknown): value is CreditTransactionType {
+  return typeof value === 'string' && CREDIT_TRANSACTION_TYPES.includes(value as CreditTransactionType);
+}
+
+/**
+ * Type-safe map from grant type literals to CreditTransactionType
+ * Use instead of runtime string manipulation + casting
+ */
+const GRANT_TYPE_TO_TRANSACTION: Record<'credit_grant' | 'monthly_refill' | 'purchase', CreditTransactionType> = {
+  credit_grant: CreditTransactionTypes.CREDIT_GRANT,
+  monthly_refill: CreditTransactionTypes.MONTHLY_REFILL,
+  purchase: CreditTransactionTypes.PURCHASE,
+};
+
+/**
+ * Convert grant type to CreditTransactionType without type casting
+ */
+export function getGrantTransactionType(
+  grantType: 'credit_grant' | 'monthly_refill' | 'purchase',
+): CreditTransactionType {
+  return GRANT_TYPE_TO_TRANSACTION[grantType];
+}
 
 // ============================================================================
 // CREDIT ACTION TYPE

@@ -21,6 +21,16 @@ export {
   isUIMessageErrorType,
 } from './error-schemas';
 
+// Form option schemas
+export type { FormOption, FormOptions, NavItem } from './form-option-schemas';
+export {
+  FormOptionSchema,
+  FormOptionsSchema,
+  isFormOption,
+  isFormOptions,
+  NavItemBaseSchema,
+} from './form-option-schemas';
+
 // Message metadata schemas
 export type {
   PartialAssistantMetadata,

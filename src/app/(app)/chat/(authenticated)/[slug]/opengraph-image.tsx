@@ -1,17 +1,11 @@
-/**
- * Dynamic Open Graph Image for Chat Thread pages
- * Following official Next.js patterns: https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image
- *
- * Note: This file uses Next.js Metadata API which requires named exports.
- * The react-refresh warning is disabled as this is not a React component file.
- */
 /* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
 
+import type { ChatMode } from '@/api/core/enums';
+import { ChatModes, DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
 import { getThreadBySlugService } from '@/services/api';
 
-// Image metadata - must be exported as string literals (not imported)
 export const alt = 'Chat Thread';
 export const size = {
   width: 1200,
@@ -19,13 +13,13 @@ export const size = {
 };
 export const contentType = 'image/png';
 
-// DO NOT export runtime - ImageResponse works without it
-// Next.js requires runtime to be a string literal, and it's not needed for opengraph-image.tsx
+const MODE_COLORS: Record<ChatMode, string> = {
+  [ChatModes.ANALYZING]: '#3b82f6',
+  [ChatModes.BRAINSTORMING]: '#8b5cf6',
+  [ChatModes.DEBATING]: '#ef4444',
+  [ChatModes.SOLVING]: '#10b981',
+} as const;
 
-/**
- * Dynamic Open Graph Image generation
- * Fetches actual thread data to display the thread title
- */
 export default async function Image({
   params,
 }: {
@@ -33,30 +27,20 @@ export default async function Image({
 }) {
   const { slug } = await params;
 
-  // Fetch thread data to get the actual title
   let threadTitle = 'Chat Thread';
-  let threadMode = 'solving';
+  let threadMode = DEFAULT_CHAT_MODE;
 
   try {
     const threadResult = await getThreadBySlugService({ param: { slug } });
     if (threadResult?.success && threadResult.data?.thread) {
       threadTitle = threadResult.data.thread.title || 'Chat Thread';
-      threadMode = threadResult.data.thread.mode || 'solving';
+      threadMode = threadResult.data.thread.mode || DEFAULT_CHAT_MODE;
     }
   } catch {
-    // Fallback to generic title if fetch fails
-
+    // Intentionally silent - fallback to defaults
   }
 
-  // Mode-specific colors for visual distinction
-  const modeColors = {
-    analyzing: '#3b82f6', // blue
-    brainstorming: '#8b5cf6', // purple
-    debating: '#ef4444', // red
-    solving: '#10b981', // green
-  };
-
-  const accentColor = modeColors[threadMode as keyof typeof modeColors] || modeColors.solving;
+  const accentColor = MODE_COLORS[threadMode];
 
   return new ImageResponse(
     (
@@ -73,7 +57,6 @@ export default async function Image({
           padding: '60px',
         }}
       >
-        {/* Brand Logo/Icon Area */}
         <div
           style={{
             display: 'flex',
@@ -93,7 +76,6 @@ export default async function Image({
           </div>
         </div>
 
-        {/* Main Title - Dynamic thread title */}
         <div
           style={{
             fontSize: threadTitle.length > 50 ? 48 : 56,
@@ -112,7 +94,6 @@ export default async function Image({
           {threadTitle}
         </div>
 
-        {/* Mode Badge */}
         <div
           style={{
             display: 'flex',
@@ -132,7 +113,6 @@ export default async function Image({
           Mode
         </div>
 
-        {/* Description */}
         <div
           style={{
             fontSize: 24,
@@ -145,7 +125,6 @@ export default async function Image({
           Collaborate with AI models in real-time conversations
         </div>
 
-        {/* Footer Badge */}
         <div
           style={{
             position: 'absolute',

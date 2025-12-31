@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 import type { AuthStep } from '@/api/core/enums';
 import { AuthSteps } from '@/api/core/enums';
-import RHFTextField from '@/components/forms/rhf-text-field';
+import { RHFTextField } from '@/components/forms';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { useBoolean } from '@/hooks/utils';
@@ -34,7 +34,6 @@ function AuthFormContent() {
   const [step, setStep] = useState<AuthStep>(AuthSteps.METHOD);
   const [sentEmail, setSentEmail] = useState('');
 
-  // Handle toast messages from URL params
   useEffect(() => {
     const toastType = searchParams.get('toast');
     const message = searchParams.get('message');
@@ -94,7 +93,6 @@ function AuthFormContent() {
   return (
     <div className="w-full">
       <AnimatePresence mode="wait" initial={false}>
-        {/* Step 1: Method Selection - pt-10 compensates for email step's extra height */}
         {step === AuthSteps.METHOD && (
           <motion.div
             key="method"
@@ -116,7 +114,6 @@ function AuthFormContent() {
           </motion.div>
         )}
 
-        {/* Step 2: Email Input - pb-5 matches method step total height (152px) */}
         {step === AuthSteps.EMAIL && (
           <motion.div
             key="email"
@@ -165,7 +162,6 @@ function AuthFormContent() {
           </motion.div>
         )}
 
-        {/* Step 3: Email Sent Success - pt-3 aligns height with other steps */}
         {step === AuthSteps.SENT && (
           <motion.div
             key="sent"
