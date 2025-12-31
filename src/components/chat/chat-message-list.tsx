@@ -1,7 +1,7 @@
 'use client';
 import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { MessageStatus } from '@/api/core/enums';
@@ -228,14 +228,6 @@ const ParticipantMessageWrapper = memo(({
   const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
   const hasError = status === MessageStatuses.FAILED || assistantMetadata?.hasError;
 
-  // Track status transitions
-  const prevStatusRef = useRef(status);
-  useEffect(() => {
-    if (prevStatusRef.current !== status) {
-      prevStatusRef.current = status;
-    }
-  }, [status, participantIndex, parts.length]);
-
   return (
     <div className="flex justify-start">
       <div className="w-full">
@@ -341,14 +333,14 @@ function AssistantGroupCard({
               isStreaming: participantInfo.isStreaming,
               hasAnyContent,
             });
+
             const filteredParts = safeParts
               .filter(p =>
-                p && (p.type === MessagePartTypes.TEXT
+                !!p && (p.type === MessagePartTypes.TEXT
                   || p.type === MessagePartTypes.REASONING
                   || p.type === MessagePartTypes.TOOL_CALL
                   || p.type === MessagePartTypes.TOOL_RESULT),
-              )
-              .map(p => p as MessagePart);
+              ) as MessagePart[];
             const sourceParts = safeParts.filter(p =>
               p && 'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
             );
@@ -1350,47 +1342,30 @@ export const ChatMessageList = memo(
                           // ✅ ANIMATION FIX: Still streaming if content exists but not finished
                           // This keeps the pulsating animation showing during active streaming
                           status = hasActuallyFinished ? MessageStatuses.COMPLETE : MessageStatuses.STREAMING;
+                          // Type boundary: AI SDK parts → MessagePart schema
                           parts = (participantMessage.parts || [])
                             .filter(p =>
                               p && (p.type === MessagePartTypes.TEXT
                                 || p.type === MessagePartTypes.REASONING
                                 || p.type === MessagePartTypes.TOOL_CALL
                                 || p.type === MessagePartTypes.TOOL_RESULT),
-                            )
-                            .map(p => p as MessagePart);
+                            ) as MessagePart[];
                         } else {
-                          // ✅ FIX: Keep PENDING status until first content chunk arrives
-                          // Previously, we set STREAMING when isCurrentlyStreaming=true but no content
-                          // This caused a flash because the shimmer placeholder (which shows for PENDING
-                          // with no parts) would disappear before content arrived.
-                          //
-                          // Now: status stays PENDING until actual content arrives
-                          // The loadingText ("Gathering thoughts" vs "Waiting for X") indicates
-                          // whether it's this participant's turn or not.
                           status = MessageStatuses.PENDING;
                         }
 
-                        // ✅ Compute context-aware loading text for pending participants
                         let loadingText: string | undefined;
                         if (!hasContent) {
-                          // ✅ FIX: Handle null currentParticipantIndex during stream resumption
-                          // During early resumption phase, currentParticipantIndex may still be null
-                          // In this case, assume first participant (index 0) is current
                           const effectiveCurrentIndex = currentParticipantIndex ?? 0;
-
-                          // Check if it's this participant's turn
                           const isTheirTurn = participantIdx <= effectiveCurrentIndex;
 
                           if (isTheirTurn) {
-                            // It's their turn - check pre-search status for first participant
                             if (participantIdx === 0 && preSearchActive) {
                               loadingText = tParticipant('waitingForWebResults');
                             } else {
-                              // Their turn but no content yet - "Gathering thoughts"
                               loadingText = tParticipant('gatheringThoughts');
                             }
                           } else {
-                            // Not their turn yet - show who they're waiting for
                             const currentSpeaker = enabledParticipants[effectiveCurrentIndex];
                             const currentSpeakerModel = currentSpeaker ? findModel(currentSpeaker.modelId) : null;
                             const currentSpeakerName = currentSpeakerModel?.name || currentSpeaker?.modelId || 'AI';
@@ -1398,8 +1373,6 @@ export const ChatMessageList = memo(
                           }
                         }
 
-                        // ✅ Use ParticipantMessageWrapper for consistent header rendering
-                        // ✅ ANIMATION: Staggered entrance + scroll magnifier effect
                         return (
                           <ScrollAwareParticipant
                             key={`participant-${participant.id}`}
@@ -1426,21 +1399,7 @@ export const ChatMessageList = memo(
                   );
                 })()}
 
-                {/* ✅ MODERATOR RENDERING: Handle both placeholder and streaming content
-                    This renders the moderator during the entire streaming round lifecycle:
-                    1. Placeholder when waiting for moderator to start
-                    2. Streaming content as chunks arrive
-                    3. Only stops when round is complete (messageGroups takes over)
-
-                    ✅ PLACEHOLDER TIMING FIX: Moderator should only show AFTER participants complete
-                    RACE CONDITION BUG: Previously used `isStreamingRound` which triggered immediately
-                    at submission time, BEFORE participants started streaming. This caused the moderator
-                    placeholder to appear first while participant placeholders appeared with a delay.
-                    FIX: Moderator only shows when isModeratorStreaming=true OR moderator has content OR
-                    all participants have finished (isStreaming=false but roundComplete check).
-                    Participants are responsible for showing during active streaming. */}
                 {(() => {
-                  // Only show for latest round
                   const maxRoundInMessages = Math.max(
                     0,
                     _streamingRoundNumber ?? 0,
@@ -1449,7 +1408,6 @@ export const ChatMessageList = memo(
                   const isActuallyLatestRound = roundNumber >= maxRoundInMessages;
                   const isRoundComplete = completedRoundNumbers.has(roundNumber);
 
-                  // Find moderator message for this round
                   const moderatorMessage = messages.find((m) => {
                     const meta = m.metadata;
                     return meta && typeof meta === 'object' && 'isModerator' in meta
@@ -1460,17 +1418,7 @@ export const ChatMessageList = memo(
                     p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0,
                   ) ?? false;
 
-                  // ✅ UNIFIED PLACEHOLDER TIMING: All placeholders appear together after submission
-                  // Both participants AND moderator show immediately when streamingRoundNumber is set.
-                  // - Participants show "thinking" / "waiting for..." text
-                  // - Moderator shows "observing" text
-                  // This creates a consistent visual where all participants are visible from the start.
                   const isStreamingRound = roundNumber === _streamingRoundNumber;
-
-                  // ✅ DEMO FIX: Only show moderator in this section when streaming is active
-                  // When streaming ends, moderator renders via normal messageGroups path
-                  // Without this check, moderator renders BOTH here (before participants) AND
-                  // in messageGroups (after participants), causing wrong order + duplication
                   const isAnyStreamingActive = isStreaming || isModeratorStreaming || isStreamingRound;
                   const shouldShowModerator = isActuallyLatestRound
                     && !isRoundComplete
@@ -1478,21 +1426,14 @@ export const ChatMessageList = memo(
 
                   const enabledParticipants = getEnabledParticipants(participants);
 
-                  // ✅ FLASH FIX: Use stable key and single component for all moderator states
-                  // Previously used different keys (moderator-streaming vs moderator-pending)
-                  // which caused React to unmount/remount = FLASH
-                  // Now use stable key and let ParticipantMessageWrapper handle transitions
-
-                  // Extract renderable parts for streaming moderator
                   const moderatorParts = moderatorHasContent && moderatorMessage
                     ? (moderatorMessage.parts || [])
                         .filter(p =>
-                          p && (p.type === MessagePartTypes.TEXT
+                          !!p && (p.type === MessagePartTypes.TEXT
                             || p.type === MessagePartTypes.REASONING
                             || p.type === MessagePartTypes.TOOL_CALL
                             || p.type === MessagePartTypes.TOOL_RESULT),
-                        )
-                        .map(p => p as MessagePart)
+                        ) as MessagePart[]
                     : [];
 
                   // Determine status: pending → streaming → complete

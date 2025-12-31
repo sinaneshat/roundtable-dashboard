@@ -117,12 +117,8 @@ export function CitedMessageContent({
         }
         const { citation } = segment;
         const resolvedCitation = citationMap.get(citation.sourceId);
-        // Use citation sourceId + displayNumber for stable key
         const citationKey = `citation-${citation.sourceId}-${citation.displayNumber}`;
 
-        // ✅ During streaming without resolved metadata, show minimal citation badge
-        // The trigger badge always shows (display number + source type icon)
-        // The card body shows resolved data when available
         return (
           <InlineCitation key={citationKey}>
             <InlineCitationCard>

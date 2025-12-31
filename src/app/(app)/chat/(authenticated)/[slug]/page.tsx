@@ -8,7 +8,7 @@ import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadBySlugService, getThreadChangelogService, getThreadPreSearchesService, getThreadStreamResumptionStateService } from '@/services/api';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 export const dynamic = 'force-dynamic';
 export async function generateMetadata({

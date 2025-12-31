@@ -2,6 +2,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
+import { z } from 'zod';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode } from '@/api/core/enums';
@@ -20,12 +21,18 @@ import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToC
 import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';
 
-export type AttachmentInfo = {
-  uploadId: string;
-  filename: string;
-  mimeType: string;
-  previewUrl?: string;
-};
+// ============================================================================
+// Zod Schemas - Single Source of Truth
+// ============================================================================
+
+export const AttachmentInfoSchema = z.object({
+  uploadId: z.string(),
+  filename: z.string(),
+  mimeType: z.string(),
+  previewUrl: z.string().optional(),
+});
+
+export type AttachmentInfo = z.infer<typeof AttachmentInfoSchema>;
 
 export type UseChatFormActionsReturn = {
   handleCreateThread: (attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => Promise<void>;

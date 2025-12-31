@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { BRAND } from '@/constants/brand';
 import AuthErrorScreen from '@/containers/screens/errors/AuthErrorScreen';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 export const dynamic = 'force-static';
 

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { BRAND } from '@/constants/brand';
 import { SubscriptionChangedClient } from '@/containers/screens/chat/billing/SubscriptionChangedClient';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 // ============================================================================
 // Dynamic - Parent layout requires authentication

@@ -294,9 +294,9 @@ export async function syncStripeDataFromStripe(
     });
   }
 
-  // After deletion check, we know this is a valid Customer object
-  // Type assertion is safe here since Stripe API guarantees the type after deletion check
-  const customerData = stripeCustomer as Stripe.Customer;
+  // After deletion check, TypeScript narrows the type to Stripe.Customer
+  // No cast needed - type guard eliminates DeletedCustomer from union
+  const customerData = stripeCustomer;
 
   // Prepare customer update operation
   const customerUpdate = db.update(tables.stripeCustomer)
@@ -353,6 +353,7 @@ export async function syncStripeDataFromStripe(
   // Prepare invoice upsert operations
   const invoiceUpserts = invoices.data.map((invoice) => {
     // ✅ TYPE GUARD: Extract subscription ID (can be string or Stripe.Subscription object or null)
+    // Access subscription from invoice properties (may not be in core type, but exists at runtime)
     const subscription = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null }).subscription;
     const subscriptionId = subscription
       ? typeof subscription === 'string'
@@ -405,10 +406,16 @@ export async function syncStripeDataFromStripe(
   const paymentMethodUpserts = paymentMethods.data.map((pm) => {
     const isDefault = pm.id === defaultPaymentMethodId;
 
+    // ✅ TYPE-SAFE: Validate payment method type against allowed values
+    const allowedTypes = ['card', 'bank_account', 'sepa_debit'] as const;
+    const paymentType = allowedTypes.includes(pm.type as typeof allowedTypes[number])
+      ? (pm.type as 'card' | 'bank_account' | 'sepa_debit')
+      : 'card'; // Default fallback
+
     return db.insert(tables.stripePaymentMethod).values({
       id: pm.id,
       customerId,
-      type: pm.type as 'card' | 'bank_account' | 'sepa_debit',
+      type: paymentType,
       cardBrand: pm.card?.brand || null,
       cardLast4: pm.card?.last4 || null,
       cardExpMonth: pm.card?.exp_month || null,

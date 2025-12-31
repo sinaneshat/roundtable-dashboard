@@ -418,12 +418,11 @@ export class HTTPExceptionFactory {
   }
 
   // ============================================================================
-  // MIGRATION AND COMPATIBILITY UTILITIES
+  // GENERIC FACTORY METHODS
   // ============================================================================
 
   /**
-   * Direct replacement for `new HTTPException(HttpStatusCodes.XXX, options)`
-   * This provides a drop-in replacement for existing code without type casting
+   * Create an HTTP exception from stoker status code with simple options
    */
   static create(
     stokerStatus: number,
@@ -499,68 +498,6 @@ export class HTTPExceptionFactory {
     return { valid, invalid, mapped };
   }
 }
-
-// ============================================================================
-// MIGRATION HELPERS FOR EXISTING CODE
-// ============================================================================
-
-/**
- * Drop-in replacement function for existing `new HTTPException()` calls
- * Usage: Replace `new HTTPException(status, options)` with `createHTTPException(status, options)`
- */
-export function createHTTPException(
-  status: number,
-  options: { message: string; cause?: unknown } = { message: 'An error occurred' },
-): EnhancedHTTPException {
-  return HTTPExceptionFactory.create(status, options);
-}
-
-/**
- * Type-safe factory method aliases for common patterns
- */
-export const HttpExceptions = {
-  // Direct status code creators
-  badRequest: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.badRequest({ message, context }),
-
-  unauthorized: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.unauthorized({ message, context }),
-
-  forbidden: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.forbidden({ message, context }),
-
-  notFound: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.notFound({ message, context }),
-
-  conflict: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.conflict({ message, context }),
-
-  unprocessableEntity: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.unprocessableEntity({ message, context }),
-
-  tooManyRequests: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.tooManyRequests({ message, context }),
-
-  internalServerError: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.internalServerError({ message, context }),
-
-  badGateway: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.badGateway({ message, context }),
-
-  serviceUnavailable: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.serviceUnavailable({ message, context }),
-
-  gatewayTimeout: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.gatewayTimeout({ message, context }),
-
-  // Generic creator with automatic inference
-  create: (status: number, message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.createWithInferredCode(status, message, context),
-
-  // Direct replacement for existing patterns
-  fromStatusCode: (status: number, message: string, cause?: unknown) =>
-    HTTPExceptionFactory.create(status, { message, cause }),
-} as const;
 
 // ============================================================================
 // EXPORTS

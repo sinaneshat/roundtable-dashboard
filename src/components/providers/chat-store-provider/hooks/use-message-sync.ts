@@ -3,7 +3,7 @@
 import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 
-import { DevLogMsgEvents, FinishReasons, MessagePartTypes, MessageRoles, TextPartStates } from '@/api/core/enums';
+import { DevLogMsgEvents, FinishReasons, MessagePartTypes, MessageRoles, TextPartStates, UIMessageRoles } from '@/api/core/enums';
 import { devLog, getParticipantIndex, getRoundNumber, rlog } from '@/lib/utils';
 import { getMessageMetadata } from '@/lib/utils/metadata';
 import type { ChatStoreApi } from '@/stores/chat';
@@ -229,8 +229,8 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
         if (m.role === MessageRoles.ASSISTANT && m.id?.includes('_moderator')) {
           const metadata = getMessageMetadata(m.metadata);
-          const hasModeratorFlag = metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true;
-          const hasParticipantMetadata = metadata?.role === 'assistant' && 'participantIndex' in metadata && typeof metadata.participantIndex === 'number';
+          const hasModeratorFlag = metadata?.role === UIMessageRoles.ASSISTANT && 'isModerator' in metadata && metadata.isModerator === true;
+          const hasParticipantMetadata = metadata?.role === UIMessageRoles.ASSISTANT && 'participantIndex' in metadata && typeof metadata.participantIndex === 'number';
 
           if (!hasModeratorFlag && hasParticipantMetadata)
             return false;
@@ -238,12 +238,12 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
         if (m.role === MessageRoles.USER) {
           const metadata = getMessageMetadata(m.metadata);
-          if (metadata?.role === 'user' && metadata.isParticipantTrigger === true)
+          if (metadata?.role === UIMessageRoles.USER && metadata.isParticipantTrigger === true)
             return false;
         }
 
         const metadata = getMessageMetadata(m.metadata);
-        if (metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true) {
+        if (metadata?.role === UIMessageRoles.ASSISTANT && 'isModerator' in metadata && metadata.isModerator === true) {
           const hasParts = m.parts && m.parts.length > 0;
           const hasContent = m.parts?.some(p =>
             (p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.length > 0),
@@ -271,7 +271,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
         if (metadata !== undefined && 'isOptimistic' in metadata && metadata.isOptimistic === true)
           return false;
 
-        if (metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true) {
+        if (metadata?.role === UIMessageRoles.ASSISTANT && 'isModerator' in metadata && metadata.isModerator === true) {
           const hasParts = m.parts && m.parts.length > 0;
           const hasContent = m.parts?.some(p =>
             (p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.length > 0),
@@ -286,7 +286,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           return false;
         }
 
-        if (m.role === MessageRoles.USER && metadata?.role === 'user' && metadata.isParticipantTrigger === true) {
+        if (m.role === MessageRoles.USER && metadata?.role === UIMessageRoles.USER && metadata.isParticipantTrigger === true) {
           return false;
         }
 
@@ -351,8 +351,8 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
         const metaA = getMessageMetadata(a.metadata);
         const metaB = getMessageMetadata(b.metadata);
-        const pIdxA = metaA?.role === 'assistant' && 'participantIndex' in metaA ? metaA.participantIndex : undefined;
-        const pIdxB = metaB?.role === 'assistant' && 'participantIndex' in metaB ? metaB.participantIndex : undefined;
+        const pIdxA = metaA?.role === UIMessageRoles.ASSISTANT && 'participantIndex' in metaA ? metaA.participantIndex : undefined;
+        const pIdxB = metaB?.role === UIMessageRoles.ASSISTANT && 'participantIndex' in metaB ? metaB.participantIndex : undefined;
         const adjustedIdxA = pIdxA === undefined ? -1000 : (pIdxA < 0 ? 1000 + pIdxA : pIdxA);
         const adjustedIdxB = pIdxB === undefined ? -1000 : (pIdxB < 0 ? 1000 + pIdxB : pIdxB);
         return adjustedIdxA - adjustedIdxB;
@@ -415,8 +415,8 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
           const existingMeta = getMessageMetadata(existing.metadata);
           const newMeta = getMessageMetadata(msg.metadata);
-          const existingIsModerator = existingMeta?.role === 'assistant' && 'isModerator' in existingMeta && existingMeta.isModerator === true;
-          const newIsModerator = newMeta?.role === 'assistant' && 'isModerator' in newMeta && newMeta.isModerator === true;
+          const existingIsModerator = existingMeta?.role === UIMessageRoles.ASSISTANT && 'isModerator' in existingMeta && existingMeta.isModerator === true;
+          const newIsModerator = newMeta?.role === UIMessageRoles.ASSISTANT && 'isModerator' in newMeta && newMeta.isModerator === true;
           const existingIsParticipant = existing.id.includes('_p') && !existing.id.includes('_moderator');
 
           const newLooksLikeModerator = newTextContent.startsWith('###') || newTextContent.toLowerCase().includes('council concluded');
@@ -434,8 +434,8 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
             }
           }
 
-          const existingFinishReason = existingMeta?.role === 'assistant' ? existingMeta.finishReason : undefined;
-          const newFinishReason = newMeta?.role === 'assistant' ? newMeta.finishReason : undefined;
+          const existingFinishReason = existingMeta?.role === UIMessageRoles.ASSISTANT ? existingMeta.finishReason : undefined;
+          const newFinishReason = newMeta?.role === UIMessageRoles.ASSISTANT ? newMeta.finishReason : undefined;
 
           const existingIsComplete = existingFinishReason === FinishReasons.STOP || existingFinishReason === FinishReasons.LENGTH;
           const newIsComplete = newFinishReason === FinishReasons.STOP || newFinishReason === FinishReasons.LENGTH;
@@ -479,8 +479,8 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
           const isModeratorId = msg.id.includes('_moderator');
           const metadata = getMessageMetadata(msg.metadata);
-          const hasModeratorFlag = metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true;
-          const hasParticipantMetadata = metadata?.role === 'assistant' && 'participantIndex' in metadata && typeof metadata.participantIndex === 'number';
+          const hasModeratorFlag = metadata?.role === UIMessageRoles.ASSISTANT && 'isModerator' in metadata && metadata.isModerator === true;
+          const hasParticipantMetadata = metadata?.role === UIMessageRoles.ASSISTANT && 'participantIndex' in metadata && typeof metadata.participantIndex === 'number';
 
           if (isModeratorId && !hasModeratorFlag && hasParticipantMetadata) {
             return false;
@@ -500,7 +500,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           const participantIndexFromId = Number.parseInt(idMatch[2]!, 10);
           const roundFromMetadata = getRoundNumber(msg.metadata);
           const metadata = getMessageMetadata(msg.metadata);
-          const participantIndexFromMetadata = metadata?.role === 'assistant' && 'participantIndex' in metadata
+          const participantIndexFromMetadata = metadata?.role === UIMessageRoles.ASSISTANT && 'participantIndex' in metadata
             ? metadata.participantIndex
             : null;
 
@@ -527,8 +527,62 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           return msg;
         }
 
-        const seenParts = new Map<string, typeof msg.parts[0]>();
-        for (const part of msg.parts) {
+        // ✅ STREAM RESUMPTION FIX: Detect accumulated reasoning parts that duplicate SDK parts
+        // During stream resumption, messages can have both:
+        // 1. Individual reasoning parts from AI SDK (have providerMetadata)
+        // 2. Accumulated reasoning part from DB (no providerMetadata, text is concatenation)
+        // We need to remove the accumulated part if individual parts cover the same content
+        const reasoningParts = msg.parts.filter(
+          p => p.type === MessagePartTypes.REASONING && 'text' in p,
+        );
+
+        // Identify accumulated parts (no providerMetadata) vs SDK parts (have providerMetadata)
+        const sdkReasoningParts = reasoningParts.filter(
+          p => 'providerMetadata' in p && p.providerMetadata !== undefined,
+        );
+        const accumulatedReasoningParts = reasoningParts.filter(
+          p => !('providerMetadata' in p) || p.providerMetadata === undefined,
+        );
+
+        // If we have both accumulated and SDK parts, check if accumulated is redundant
+        const redundantAccumulatedIndices = new Set<number>();
+        if (sdkReasoningParts.length > 0 && accumulatedReasoningParts.length > 0) {
+          // Build combined text from SDK parts
+          const sdkCombinedText = sdkReasoningParts
+            .map(p => ('text' in p ? String(p.text) : ''))
+            .join('');
+
+          for (const accPart of accumulatedReasoningParts) {
+            const accText = 'text' in accPart ? String(accPart.text).trim() : '';
+            const sdkTrimmed = sdkCombinedText.trim();
+
+            // Check if accumulated text is covered by SDK parts
+            // Conditions for redundancy:
+            // 1. Accumulated text equals SDK combined text
+            // 2. Accumulated text is a prefix of SDK combined text (partial accumulation)
+            // 3. SDK combined text is a prefix of accumulated text (SDK parts are subset)
+            const isRedundant
+              = accText === sdkTrimmed
+                || sdkTrimmed.startsWith(accText)
+                || accText.startsWith(sdkTrimmed);
+
+            if (isRedundant) {
+              const idx = msg.parts.indexOf(accPart);
+              if (idx !== -1) {
+                redundantAccumulatedIndices.add(idx);
+              }
+            }
+          }
+        }
+
+        // Filter out redundant accumulated reasoning parts FIRST
+        const filteredParts = redundantAccumulatedIndices.size > 0
+          ? msg.parts.filter((_, idx) => !redundantAccumulatedIndices.has(idx))
+          : msg.parts;
+
+        // Now apply standard exact-match deduplication
+        const seenParts = new Map<string, typeof filteredParts[0]>();
+        for (const part of filteredParts) {
           let key: string;
           if (part.type === MessagePartTypes.TEXT && 'text' in part) {
             key = `text:${part.text}`;
@@ -591,7 +645,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       if (!isSameMessages) {
         const moderatorMessagesFromStore = currentStoreMessages.filter((msg) => {
           const metadata = getMessageMetadata(msg.metadata);
-          return metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true;
+          return metadata?.role === UIMessageRoles.ASSISTANT && 'isModerator' in metadata && metadata.isModerator === true;
         });
 
         // Build a map of store moderators by ID for quick lookup
@@ -599,7 +653,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
         const updatedDeduplicatedMessages = deduplicatedMessages.map((msg) => {
           const metadata = getMessageMetadata(msg.metadata);
-          const isModerator = metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true;
+          const isModerator = metadata?.role === UIMessageRoles.ASSISTANT && 'isModerator' in metadata && metadata.isModerator === true;
 
           if (!isModerator)
             return msg;
@@ -629,7 +683,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           updatedDeduplicatedMessages
             .filter((msg) => {
               const metadata = getMessageMetadata(msg.metadata);
-              return metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true;
+              return metadata?.role === UIMessageRoles.ASSISTANT && 'isModerator' in metadata && metadata.isModerator === true;
             })
             .map(msg => msg.id),
         );
@@ -656,7 +710,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
         const getMessageSortKey = (msg: UIMessage): string => {
           const round = getRoundNumber(msg.metadata) ?? 0;
           const metadata = getMessageMetadata(msg.metadata);
-          const pIdx = metadata?.role === 'assistant' && 'participantIndex' in metadata ? metadata.participantIndex : undefined;
+          const pIdx = metadata?.role === UIMessageRoles.ASSISTANT && 'participantIndex' in metadata ? metadata.participantIndex : undefined;
           const adjustedIdx = pIdx === undefined ? -1000 : (pIdx < 0 ? 1000 + pIdx : pIdx);
           return `${String(round).padStart(5, '0')}_${String(adjustedIdx + 1000).padStart(5, '0')}`;
         };
@@ -681,7 +735,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
             continue;
 
           const metadata = getMessageMetadata(msg.metadata);
-          if (!metadata || metadata.role !== 'assistant')
+          if (!metadata || metadata.role !== UIMessageRoles.ASSISTANT)
             continue;
 
           const round = getRoundNumber(msg.metadata);
@@ -838,7 +892,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           }
         } else {
           const storeMeta = getMessageMetadata(correspondingStoreMessage.metadata);
-          const storeIsModerator = storeMeta?.role === 'assistant' && 'isModerator' in storeMeta && storeMeta.isModerator === true;
+          const storeIsModerator = storeMeta?.role === UIMessageRoles.ASSISTANT && 'isModerator' in storeMeta && storeMeta.isModerator === true;
 
           if (storeIsModerator) {
             const storeHasContent = correspondingStoreMessage.parts?.some(p =>

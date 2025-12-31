@@ -18,7 +18,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { UIMessage } from '@/lib/schemas/message-schemas';
 import {
   countAssistantMessagesInRound,
@@ -26,8 +26,8 @@ import {
   createMockStoredPreSearch,
   createTestAssistantMessage,
   createTestUserMessage,
-  getRoundNumber,
 } from '@/lib/testing';
+import { getRoundNumber } from '@/lib/utils';
 
 import { createChatStore } from '../store';
 
@@ -157,7 +157,7 @@ describe('non-Initial Round First Participant Duplication', () => {
         {
           id: `optimistic-user-${Date.now()}-r1`,
           role: MessageRoles.USER,
-          parts: [{ type: 'text' as const, text: 'Round 1 question' }],
+          parts: [{ type: MessagePartTypes.TEXT, text: 'Round 1 question' }],
           metadata: {
             role: MessageRoles.USER,
             roundNumber: 1,
@@ -335,7 +335,7 @@ describe('non-Initial Round First Participant Duplication', () => {
         {
           id: `optimistic-user-early-r1`,
           role: MessageRoles.USER,
-          parts: [{ type: 'text' as const, text: 'Early optimistic' }],
+          parts: [{ type: MessagePartTypes.TEXT, text: 'Early optimistic' }],
           metadata: {
             role: MessageRoles.USER,
             roundNumber: 1,
@@ -608,7 +608,7 @@ describe('non-Initial Round First Participant Duplication', () => {
       // Second chunk - UPDATE same message
       const msg2 = {
         ...msg1,
-        parts: [{ type: 'text' as const, text: 'First chunk... second chunk...' }],
+        parts: [{ type: MessagePartTypes.TEXT, text: 'First chunk... second chunk...' }],
       };
       store.getState().setMessages([...baseMessages, msg2]);
 
@@ -623,7 +623,7 @@ describe('non-Initial Round First Participant Duplication', () => {
       // Third chunk
       const msg3 = {
         ...msg1,
-        parts: [{ type: 'text' as const, text: 'First chunk... second chunk... third chunk' }],
+        parts: [{ type: MessagePartTypes.TEXT, text: 'First chunk... second chunk... third chunk' }],
       };
       store.getState().setMessages([...baseMessages, msg3]);
 

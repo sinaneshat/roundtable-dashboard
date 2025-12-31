@@ -1,7 +1,7 @@
 /* eslint-disable simple-import-sort/imports */
+
 import { Html as EmailHtml, Head, pixelBasedPreset, Tailwind } from '@react-email/components';
 import type { ReactNode } from 'react';
-/* eslint-enable simple-import-sort/imports */
 
 type EmailLayoutProps = {
   children: ReactNode;

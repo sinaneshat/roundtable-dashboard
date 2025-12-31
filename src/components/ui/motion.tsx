@@ -26,65 +26,6 @@ export const ANIMATION_EASE = {
 } as const;
 
 // =============================================================================
-// SIMPLE ENTRANCE ANIMATIONS - Following motion/react official patterns
-// =============================================================================
-
-/**
- * User message entrance - fade in
- */
-export const userMessageVariants: Variants = {
-  initial: { opacity: 0 },
-  animate: {
-    opacity: 1,
-    transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
-  },
-};
-
-/**
- * Participant message entrance - fade in
- */
-export const participantMessageVariants: Variants = {
-  initial: { opacity: 0 },
-  animate: {
-    opacity: 1,
-    transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
-  },
-};
-
-/**
- * Moderator/Search cards - fade in
- */
-export const slideUpVariants: Variants = {
-  initial: { opacity: 0 },
-  animate: {
-    opacity: 1,
-    transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
-  },
-};
-
-/**
- * Timeline entrance - fade in
- */
-export const timelineEntranceVariants: Variants = {
-  initial: { opacity: 0 },
-  animate: {
-    opacity: 1,
-    transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
-  },
-};
-
-/**
- * Accordion card entrance (PreSearch, moderator) - fade in
- */
-export const accordionCardVariants: Variants = {
-  initial: { opacity: 0 },
-  animate: {
-    opacity: 1,
-    transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
-  },
-};
-
-// =============================================================================
 // SIMPLE ENTRANCE COMPONENTS
 // =============================================================================
 
@@ -225,37 +166,6 @@ export function ScrollFromBottom({
     >
       {children}
     </motion.div>
-  );
-}
-
-/**
- * User message entrance - alias for ScrollAwareUserMessage
- */
-export function UserMessageEntrance({
-  children,
-  className,
-  skipAnimation = false,
-}: Omit<SimpleEntranceProps, 'index'>) {
-  return (
-    <ScrollAwareUserMessage skipAnimation={skipAnimation} className={className}>
-      {children}
-    </ScrollAwareUserMessage>
-  );
-}
-
-/**
- * Participant entrance - alias for ScrollAwareParticipant
- */
-export function ParticipantEntrance({
-  children,
-  className,
-  skipAnimation = false,
-  index = 0,
-}: SimpleEntranceProps) {
-  return (
-    <ScrollAwareParticipant skipAnimation={skipAnimation} index={index} className={className}>
-      {children}
-    </ScrollAwareParticipant>
   );
 }
 
@@ -435,52 +345,8 @@ export function StreamingMessageContent({
 }
 
 // =============================================================================
-// SECTION ANIMATIONS - Simple entrance
+// STAGGER VARIANTS (used by StaggerContainer/StaggerItem)
 // =============================================================================
-
-type AnimatedSectionProps = {
-  children: ReactNode;
-  className?: string;
-  sectionKey?: string;
-  index?: number;
-  disableLayoutDuringStreaming?: boolean;
-};
-
-/**
- * Animated section - fade in only, no height animations
- */
-export function AnimatedSection({
-  children,
-  className,
-  index = 0,
-}: AnimatedSectionProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{
-        duration: 0.2,
-        delay: index * 0.05,
-        ease: ANIMATION_EASE.enter,
-      }}
-      className={cn(className)}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-// =============================================================================
-// STAGGER CONTAINERS - Simple stagger without layout
-// =============================================================================
-
-type AnimatedStaggerContainerProps = {
-  children: ReactNode;
-  className?: string;
-  staggerDelay?: number;
-  delayChildren?: number;
-  enableLayout?: boolean;
-};
 
 const staggerContainerVariants: Variants = {
   initial: {},
@@ -492,31 +358,6 @@ const staggerContainerVariants: Variants = {
   },
 };
 
-/**
- * Container that staggers children animations
- */
-export function AnimatedStaggerContainer({
-  children,
-  className,
-}: AnimatedStaggerContainerProps) {
-  return (
-    <motion.div
-      variants={staggerContainerVariants}
-      initial="initial"
-      animate="animate"
-      className={cn(className)}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-type AnimatedStaggerItemProps = {
-  children: ReactNode;
-  className?: string;
-  enableLayout?: boolean;
-};
-
 const staggerItemVariants: Variants = {
   initial: { opacity: 0 },
   animate: {
@@ -524,23 +365,6 @@ const staggerItemVariants: Variants = {
     transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
   },
 };
-
-/**
- * Child item for stagger container
- */
-export function AnimatedStaggerItem({
-  children,
-  className,
-}: AnimatedStaggerItemProps) {
-  return (
-    <motion.div
-      variants={staggerItemVariants}
-      className={cn(className)}
-    >
-      {children}
-    </motion.div>
-  );
-}
 
 // =============================================================================
 // BASIC MOTION COMPONENTS
@@ -602,30 +426,6 @@ export function ScaleIn({
 }
 
 /**
- * Fade in (formerly slide in)
- */
-export function SlideIn({
-  children,
-  className,
-  delay = 0,
-  duration = 0.2,
-  ...props
-}: MotionComponentProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration, delay, ease: ANIMATION_EASE.enter }}
-      className={cn(className)}
-      {...props}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-/**
  * Stagger container
  */
 export function StaggerContainer({
@@ -666,19 +466,6 @@ export function StaggerItem({
 }
 
 /**
- * Simple wrapper - no animation
- */
-export function SimpleMotion({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return <div className={cn(className)}>{children}</div>;
-}
-
-/**
  * Page transition
  */
 export function PageTransition({ children, className }: { children: ReactNode; className?: string }) {
@@ -687,28 +474,6 @@ export function PageTransition({ children, className }: { children: ReactNode; c
       {children}
     </FadeIn>
   );
-}
-
-export const layoutTransition = {
-  type: 'spring' as const,
-  stiffness: 500,
-  damping: 40,
-  mass: 1,
-};
-
-export const timelineStaggerVariants: Variants = {
-  initial: {},
-  animate: {
-    transition: {
-      staggerChildren: 0.05,
-      delayChildren: 0.1,
-    },
-  },
-};
-
-// Scroll-related exports - now just simple wrappers
-export function ScrollMagnifier({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('w-full', className)}>{children}</div>;
 }
 
 export function ScrollFadeEntrance({

@@ -171,5 +171,3 @@ export const auth = betterAuth({
     }),
   ],
 });
-
-// Auth types are exported from @/lib/auth/types for consistency

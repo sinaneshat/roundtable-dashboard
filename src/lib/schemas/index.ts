@@ -42,7 +42,6 @@ export type {
   PreSearchResultItem,
 } from './message-metadata';
 export {
-  getRoundNumber,
   messageHasError,
   PartialAssistantMetadataSchema,
   PartialMessageMetadataSchema,

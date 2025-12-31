@@ -26,7 +26,7 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, IdParamSchema, Responses, STREAMING_CONFIG, ThreadRoundParamSchema } from '@/api/core';
-import { IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PollingStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { loadAttachmentContent } from '@/api/services/attachment-content.service';
 import {
   deductCreditsForAction,
@@ -315,7 +315,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         } else {
           // FALLBACK: No active stream ID (KV not available in local dev)
           return Responses.polling(c, {
-            status: 'streaming',
+            status: PollingStatuses.STREAMING,
             resourceId: existingSearch.id,
             message: `Pre-search is in progress (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
             retryAfterMs: 2000,

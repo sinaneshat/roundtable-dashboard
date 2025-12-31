@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import type React from 'react';
 
 import { BRAND } from '@/constants/brand';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({

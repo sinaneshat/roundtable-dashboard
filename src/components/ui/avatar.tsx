@@ -18,27 +18,29 @@
  * - Native browser lazy loading - no JavaScript overhead
  */
 
-import type { ComponentProps, HTMLAttributeReferrerPolicy } from 'react';
+import type { ComponentPropsWithoutRef, ElementRef, HTMLAttributeReferrerPolicy } from 'react';
+import { forwardRef } from 'react';
 
 import * as AvatarPrimitive from "@radix-ui/react-avatar"
 
 import { cn } from "@/lib/ui/cn"
 
-function Avatar({
-  className,
-  ...props
-}: ComponentProps<typeof AvatarPrimitive.Root>) {
-  return (
-    <AvatarPrimitive.Root
-      data-slot="avatar"
-      className={cn(
-        "relative flex size-8 shrink-0 overflow-hidden rounded-full",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+const Avatar = forwardRef<
+  ElementRef<typeof AvatarPrimitive.Root>,
+  ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Root
+    ref={ref}
+    data-slot="avatar"
+    className={cn(
+      "relative flex size-8 shrink-0 overflow-hidden rounded-full",
+      className
+    )}
+    {...props}
+  />
+))
+
+Avatar.displayName = AvatarPrimitive.Root.displayName
 
 /**
  * Avatar Image with Lazy Loading
@@ -52,41 +54,43 @@ function Avatar({
  * Native lazy loading is enabled by default for optimal performance,
  * especially in scrollable lists with many images (e.g., model dropdowns).
  */
-function AvatarImage({
-  className,
-  loading = "lazy", // Default to lazy loading for performance
-  referrerPolicy = "no-referrer", // Bypass hotlink protection for external images
-  ...props
-}: ComponentProps<typeof AvatarPrimitive.Image> & {
+interface AvatarImageProps extends ComponentPropsWithoutRef<typeof AvatarPrimitive.Image> {
   loading?: "lazy" | "eager";
   referrerPolicy?: HTMLAttributeReferrerPolicy;
-}) {
-  return (
-    <AvatarPrimitive.Image
-      data-slot="avatar-image"
-      className={cn("aspect-square size-full", className)}
-      loading={loading}
-      referrerPolicy={referrerPolicy}
-      {...props}
-    />
-  )
 }
 
-function AvatarFallback({
-  className,
-  ...props
-}: ComponentProps<typeof AvatarPrimitive.Fallback>) {
-  return (
-    <AvatarPrimitive.Fallback
-      data-slot="avatar-fallback"
-      className={cn(
-        "bg-muted flex size-full items-center justify-center rounded-full",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+const AvatarImage = forwardRef<
+  ElementRef<typeof AvatarPrimitive.Image>,
+  AvatarImageProps
+>(({ className, loading = "lazy", referrerPolicy = "no-referrer", ...props }, ref) => (
+  <AvatarPrimitive.Image
+    ref={ref}
+    data-slot="avatar-image"
+    className={cn("aspect-square size-full", className)}
+    loading={loading}
+    referrerPolicy={referrerPolicy}
+    {...props}
+  />
+))
+
+AvatarImage.displayName = AvatarPrimitive.Image.displayName
+
+const AvatarFallback = forwardRef<
+  ElementRef<typeof AvatarPrimitive.Fallback>,
+  ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Fallback
+    ref={ref}
+    data-slot="avatar-fallback"
+    className={cn(
+      "bg-muted flex size-full items-center justify-center rounded-full",
+      className
+    )}
+    {...props}
+  />
+))
+
+AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
 
 export { Avatar, AvatarFallback, AvatarImage }
 

@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import { BRAND } from '@/constants/brand';
 import { BillingFailureClient } from '@/containers/screens/chat/billing/BillingFailureClient';
 import { getQueryClient } from '@/lib/data/query-client';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 import { capturePaymentFailure } from './actions';
 

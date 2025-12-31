@@ -171,6 +171,11 @@ export function chatMessageToUIMessage(
         }
       : null;
 
+  /**
+   * DB boundary type assertion: chatMessage.parts is JSON column (unknown)
+   * but at runtime contains valid UIMessage parts structure.
+   * Full Zod validation would add overhead on every message load.
+   */
   const normalizedParts = normalizeMessagePartStates(
     message.parts || [],
   ) as UIMessage['parts'];

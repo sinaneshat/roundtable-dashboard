@@ -19,6 +19,7 @@ import { createError } from '@/api/common/error-handling';
 import { getErrorMessage, getErrorName } from '@/api/common/error-types';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/api/core';
+import type { ChatMode } from '@/api/core/enums';
 import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import {
   deductCreditsForAction,
@@ -52,9 +53,10 @@ import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
 import { requireParticipantMetadata } from '@/lib/utils';
 
 import type { summarizeRoundRoute } from '../route';
-import type { MessageWithParticipant } from '../schema';
+import type { MessageWithParticipant, ModeratorPromptConfig, ParticipantResponse } from '../schema';
 import {
   MessageWithParticipantSchema,
+  ModeratorPromptConfigSchema,
   RoundModeratorRequestSchema,
 } from '../schema';
 
@@ -66,29 +68,43 @@ import {
 const MODERATOR_PARTICIPANT_INDEX = NO_PARTICIPANT_SENTINEL;
 
 // ============================================================================
-// Prompt Building
+// Prompt Building (Schema-Driven)
 // ============================================================================
 
 /**
- * Build system prompt for moderator summary generation
- * Outputs structured markdown summary (no JSON, no metrics)
+ * Build participant list for prompt context
+ * Uses ParticipantResponse schema type for type safety
  */
-function buildModeratorSystemPrompt(config: {
-  roundNumber: number;
-  mode: string;
-  userQuestion: string;
-  participantResponses: Array<{
-    participantIndex: number;
-    participantRole: string;
-    modelId: string;
-    modelName: string;
-    responseContent: string;
-  }>;
-}): string {
-  const { roundNumber, mode, userQuestion, participantResponses } = config;
+function buildParticipantList(participantResponses: ParticipantResponse[]): string {
+  return participantResponses
+    .map(p => `${p.participantRole} (${p.modelName})`)
+    .join(', ');
+}
 
-  const participantList = participantResponses.map(p => `${p.participantRole} (${p.modelName})`).join(', ');
+/**
+ * Build transcript section from participant responses
+ * Uses ParticipantResponse schema type for type safety
+ */
+function buildTranscript(participantResponses: ParticipantResponse[]): string {
+  return participantResponses
+    .map(p => `**${p.participantRole} (${p.modelName}):**\n${p.responseContent}`)
+    .join('\n\n');
+}
+
+/**
+ * Build system prompt for moderator summary generation
+ *
+ * ✅ SCHEMA-DRIVEN: Uses ModeratorPromptConfig schema for validation
+ */
+function buildModeratorSystemPrompt(config: ModeratorPromptConfig): string {
+  // Validate config against schema
+  const validated = ModeratorPromptConfigSchema.parse(config);
+  const { roundNumber, mode, userQuestion, participantResponses } = validated;
+
+  // Build participant context using schema-typed helpers
+  const participantList = buildParticipantList(participantResponses);
   const participantCount = participantResponses.length;
+  const transcript = buildTranscript(participantResponses);
 
   return `# LLM Council — Executive Summary
 
@@ -296,7 +312,7 @@ The reader should be able to stop after the **Summary Conclusion** — or read f
 **Participants (${participantCount}):** ${participantList}
 
 ### Transcript
-${participantResponses.map(p => `**${p.participantRole} (${p.modelName}):**\n${p.responseContent}`).join('\n\n')}
+${transcript}
 
 ---
 
@@ -308,28 +324,27 @@ Respond with a well-structured markdown document following the structure above. 
 // ============================================================================
 
 /**
+ * Extended config for moderator summary generation
+ * Combines schema-validated prompt config with runtime context
+ */
+type ModeratorGenerationConfig = {
+  env: ApiEnv['Bindings'];
+  messageId: string;
+  threadId: string;
+  userId: string;
+  sessionId?: string;
+  executionCtx?: ExecutionContext;
+} & ModeratorPromptConfig;
+
+/**
  * Generate moderator summary using text streaming
- * Follows same pattern as participant streaming (streamText + toUIMessageStreamResponse)
+ *
+ * ✅ SCHEMA-DRIVEN: Uses ModeratorPromptConfig for prompt data
+ * ✅ TYPE-SAFE: All participant responses validated via ParticipantResponseSchema
+ * ✅ PATTERN: Follows same streaming pattern as participant messages
  */
 function generateModeratorSummary(
-  config: {
-    roundNumber: number;
-    mode: string;
-    userQuestion: string;
-    participantResponses: Array<{
-      participantIndex: number;
-      participantRole: string;
-      modelId: string;
-      modelName: string;
-      responseContent: string;
-    }>;
-    env: ApiEnv['Bindings'];
-    messageId: string;
-    threadId: string;
-    userId: string;
-    sessionId?: string;
-    executionCtx?: ExecutionContext;
-  },
+  config: ModeratorGenerationConfig,
   c: { env: ApiEnv['Bindings'] },
 ) {
   const { roundNumber, mode, userQuestion, participantResponses, env, messageId, threadId, userId, sessionId, executionCtx } = config;
@@ -744,9 +759,9 @@ export const summarizeRoundHandler: RouteHandler<typeof summarizeRoundRoute, Api
 
     const userQuestion = extractTextFromParts(userMessage.parts);
 
-    // Build participant responses
-    const participantResponses = participantMessages
-      .map((msg) => {
+    // Build participant responses with schema-typed structure
+    const participantResponses: ParticipantResponse[] = participantMessages
+      .map((msg): ParticipantResponse => {
         const participant = msg.participant!;
         const modelName = extractModeratorModelName(participant.modelId);
         const metadata = requireParticipantMetadata(msg.metadata);
@@ -785,10 +800,11 @@ export const summarizeRoundHandler: RouteHandler<typeof summarizeRoundRoute, Api
     const { session } = c.auth();
 
     // Generate and return streaming response
+    // Mode is validated through ModeratorPromptConfigSchema.parse() in buildModeratorSystemPrompt
     return generateModeratorSummary(
       {
         roundNumber: roundNum,
-        mode: thread.mode,
+        mode: thread.mode as ChatMode,
         userQuestion,
         participantResponses,
         env: c.env,

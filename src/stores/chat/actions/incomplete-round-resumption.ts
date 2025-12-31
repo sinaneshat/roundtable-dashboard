@@ -6,13 +6,14 @@
 
 'use client';
 
+/* eslint-disable perfectionist/sort-named-imports -- alias causes circular conflict */
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { RoundPhase } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers';
-import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantIndex, getParticipantModelIds, getRoundNumber, isObject, rlog } from '@/lib/utils';
+import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantIndex, getParticipantModelIds, getRoundNumber, hasError as checkHasError, rlog } from '@/lib/utils';
 
 import {
   getMessageStreamingStatus,
@@ -22,6 +23,7 @@ import {
 } from '../utils/participant-completion-gate';
 import { createOptimisticUserMessage } from '../utils/placeholder-factories';
 import { getEffectiveWebSearchEnabled, shouldWaitForPreSearch } from '../utils/pre-search-execution';
+/* eslint-enable perfectionist/sort-named-imports */
 
 // ============================================================================
 // AI SDK RESUME PATTERN - NO SEPARATE /resume CALL NEEDED
@@ -325,10 +327,8 @@ export function useIncompleteRoundResumption(
           // ✅ ERROR MESSAGE FIX: Check if this is an error message
           // Error messages have hasError: true in metadata. These participants
           // have already "responded" with an error and should NOT be re-triggered.
-          // Check both validated metadata AND raw metadata (for error messages that don't pass Zod)
-          const rawMeta = isObject(msg.metadata) ? msg.metadata as Record<string, unknown> : null;
-          const isErrorMessage = (assistantMetadata && 'hasError' in assistantMetadata && assistantMetadata.hasError === true)
-            || (rawMeta && rawMeta.hasError === true);
+          // ✅ TYPE-SAFE: Use checkHasError() utility instead of unsafe casting
+          const isErrorMessage = checkHasError(msg.metadata);
 
           // ✅ STRICT COMPLETION GATE: Use isMessageComplete() as the single source of truth
           // This function checks:

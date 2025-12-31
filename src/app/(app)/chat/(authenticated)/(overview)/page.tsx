@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import { BRAND } from '@/constants/brand';
 import ChatOverviewScreen from '@/containers/screens/chat/ChatOverviewScreen';
 import { getQueryClient } from '@/lib/data/query-client';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({

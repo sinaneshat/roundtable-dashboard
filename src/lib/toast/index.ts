@@ -32,7 +32,6 @@
 
 export {
   clearAllToasts,
-  dismissToast,
   showApiErrorToast,
   showApiErrorWithRetry,
   showApiInfoToast,
@@ -40,6 +39,9 @@ export {
   showApiSuccessToast,
   showApiWarningToast,
 } from './api-error-toast';
+
+// Single source of truth for dismissToast - export from toast-manager
+export { dismissToast } from './toast-manager';
 
 // ✅ SINGLE SOURCE OF TRUTH: Export toastManager directly from its source
 export { toastManager } from './toast-manager';

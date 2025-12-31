@@ -201,22 +201,21 @@ function createModeratorMessage(text: string): ChatMessage {
   };
 }
 
-let demoHasCompleted = false;
-
 export function LiveChatDemo() {
-  const [activeParticipant, setActiveParticipant] = useState(() => demoHasCompleted ? 4 : -1);
-  const [streamedText, setStreamedText] = useState(() => demoHasCompleted ? [...DEMO_RESPONSES] : ['', '', '']);
-  const [moderatorText, setModeratorText] = useState(() => demoHasCompleted ? DEMO_MODERATOR_SUMMARY : '');
+  const [activeParticipant, setActiveParticipant] = useState(-1);
+  const [streamedText, setStreamedText] = useState(['', '', '']);
+  const [moderatorText, setModeratorText] = useState('');
+  const [demoCompleted, setDemoCompleted] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (activeParticipant >= 4) {
-      demoHasCompleted = true;
+    if (activeParticipant >= 4 && !demoCompleted) {
+      setDemoCompleted(true);
     }
-  }, [activeParticipant]);
+  }, [activeParticipant, demoCompleted]);
 
   useEffect(() => {
-    if (demoHasCompleted) {
+    if (demoCompleted) {
       return;
     }
 
@@ -225,7 +224,7 @@ export function LiveChatDemo() {
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, []);
+  }, [demoCompleted]);
 
   const runAnimation = useCallback((index: number) => {
     const isModerator = index === 3;

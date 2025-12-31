@@ -24,41 +24,49 @@
  */
 
 import type { UIMessage } from 'ai';
+import { z } from 'zod';
 
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, TextPartStates } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { getAssistantMetadata, getModeratorMetadata, getParticipantId, getRoundNumber, isNonEmptyString, isObject } from '@/lib/utils';
 
 // ============================================================================
-// Types
+// Zod Schemas - Single Source of Truth
 // ============================================================================
 
-export type ParticipantCompletionStatus = {
-  /** Whether all participants have completed for this round */
-  allComplete: boolean;
-  /** Total number of expected participants */
-  expectedCount: number;
-  /** Number of participants with complete messages */
-  completedCount: number;
-  /** Number of participants still streaming */
-  streamingCount: number;
-  /** Participant IDs that are still streaming */
-  streamingParticipantIds: string[];
-  /** Participant IDs that have completed */
-  completedParticipantIds: string[];
-  /** Debug info about each participant's status */
-  debugInfo: ParticipantDebugInfo[];
-};
+export const ParticipantDebugInfoSchema = z.object({
+  participantId: z.string().nullable(),
+  participantIndex: z.number().nullable(),
+  hasMessage: z.boolean(),
+  hasStreamingParts: z.boolean(),
+  hasFinishReason: z.boolean(),
+  hasContent: z.boolean(),
+  isComplete: z.boolean(),
+});
 
-export type ParticipantDebugInfo = {
-  participantId: string | null;
-  participantIndex: number | null;
-  hasMessage: boolean;
-  hasStreamingParts: boolean;
-  hasFinishReason: boolean;
-  hasContent: boolean;
-  isComplete: boolean;
-};
+export const ParticipantCompletionStatusSchema = z.object({
+  /** Whether all participants have completed for this round */
+  allComplete: z.boolean(),
+  /** Total number of expected participants */
+  expectedCount: z.number(),
+  /** Number of participants with complete messages */
+  completedCount: z.number(),
+  /** Number of participants still streaming */
+  streamingCount: z.number(),
+  /** Participant IDs that are still streaming */
+  streamingParticipantIds: z.array(z.string()),
+  /** Participant IDs that have completed */
+  completedParticipantIds: z.array(z.string()),
+  /** Debug info about each participant's status */
+  debugInfo: z.array(ParticipantDebugInfoSchema),
+});
+
+// ============================================================================
+// Type Inference - Derived from Zod schemas
+// ============================================================================
+
+export type ParticipantDebugInfo = z.infer<typeof ParticipantDebugInfoSchema>;
+export type ParticipantCompletionStatus = z.infer<typeof ParticipantCompletionStatusSchema>;
 
 // ============================================================================
 // Core Completion Check

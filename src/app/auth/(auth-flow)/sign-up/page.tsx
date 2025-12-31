@@ -3,7 +3,7 @@ import { getTranslations } from 'next-intl/server';
 
 import { AuthForm } from '@/components/auth/auth-form';
 import { BRAND } from '@/constants/brand';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 // Note: Parent layout uses force-dynamic for auth session checks
 // These pages inherit dynamic rendering from the layout

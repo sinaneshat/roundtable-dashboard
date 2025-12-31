@@ -1,4 +1,4 @@
-import { createJsonLd } from '@/utils/metadata';
+import { createJsonLd } from '@/utils';
 
 /**
  * Props for the StructuredData component

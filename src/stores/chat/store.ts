@@ -83,6 +83,7 @@ import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { getEnabledSortedParticipants, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 
 import type { SendMessage, StartRound } from './store-action-types';
+import type { ResetFormPreferences } from './store-defaults';
 import {
   ANIMATION_DEFAULTS,
   ATTACHMENTS_DEFAULTS,
@@ -1244,7 +1245,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
    * - Resets all state to defaults
    * - Clears tracking Sets
    */
-  resetToNewChat: (preferences) => {
+  resetToNewChat: (preferences?: ResetFormPreferences) => {
     const state = get();
 
     // Clear AI SDK hook's internal messages via chatSetMessages

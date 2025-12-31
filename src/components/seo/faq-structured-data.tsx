@@ -1,4 +1,4 @@
-import { createFaqJsonLd } from '@/utils/metadata';
+import { createFaqJsonLd } from '@/utils';
 
 /**
  * Props for the FaqStructuredData component

@@ -288,15 +288,6 @@ export function showApiErrorWithRetry(
 }
 
 /**
- * ✅ HELPER: Dismiss a toast by ID
- *
- * @param toastId - The ID of the toast to dismiss
- */
-export function dismissToast(toastId: string): void {
-  toastManager.dismiss(toastId);
-}
-
-/**
  * ✅ HELPER: Clear all active toasts
  */
 export function clearAllToasts(): void {

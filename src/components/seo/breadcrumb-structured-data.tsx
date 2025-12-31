@@ -1,4 +1,4 @@
-import { createBreadcrumbJsonLd } from '@/utils/metadata';
+import { createBreadcrumbJsonLd } from '@/utils';
 
 /**
  * Props for the BreadcrumbStructuredData component

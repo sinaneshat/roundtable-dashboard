@@ -113,33 +113,39 @@ export function createPartialSchema<T extends z.ZodRawShape>(
 
 /**
  * Create an update schema that omits certain fields
- * NOTE: Zod v4 has stricter pick/omit types, using type assertion for flexibility
+ *
+ * NOTE: Zod v4 has strict Mask type requirements for omit/pick.
+ * The double cast (as unknown as Mask) is required to satisfy TypeScript's structural typing.
+ * This is a known Zod pattern for dynamic field selection - the runtime behavior is safe.
  */
 export function createUpdateSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   omitFields: readonly K[],
 ) {
-  // Build the omit object - Zod v4 requires exact key matching
-  // Using unknown cast to bypass strict type checking
+  // Build the omit object with Zod v4 Mask type compatibility
   const omitObj = Object.fromEntries(
     omitFields.map(key => [key, true]),
   );
+  // Double cast required for Zod v4's strict Mask type - runtime safe
   return schema.omit(omitObj as unknown as Parameters<typeof schema.omit>[0]);
 }
 
 /**
  * Create a pick schema with only specific fields
- * NOTE: Zod v4 has stricter pick/omit types, using type assertion for flexibility
+ *
+ * NOTE: Zod v4 has strict Mask type requirements for omit/pick.
+ * The double cast (as unknown as Mask) is required to satisfy TypeScript's structural typing.
+ * This is a known Zod pattern for dynamic field selection - the runtime behavior is safe.
  */
 export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   pickFields: readonly K[],
 ) {
-  // Build the pick object - Zod v4 requires exact key matching
-  // Using unknown cast to bypass strict type checking
+  // Build the pick object with Zod v4 Mask type compatibility
   const pickObj = Object.fromEntries(
     pickFields.map(key => [key, true]),
   );
+  // Double cast required for Zod v4's strict Mask type - runtime safe
   return schema.pick(pickObj as unknown as Parameters<typeof schema.pick>[0]);
 }
 

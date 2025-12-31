@@ -19,7 +19,7 @@ import { BRAND } from '@/constants/brand';
 import { spaceGrotesk } from '@/lib/fonts';
 import { cn } from '@/lib/ui/cn';
 import { parsePreferencesCookie, PREFERENCES_COOKIE_NAME } from '@/stores/preferences';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 const VALID_CONTENT_TYPES = ['how-to', 'comparison', 'review', 'guide', 'faq', 'tutorial'] as const;
 type ContentType = (typeof VALID_CONTENT_TYPES)[number];

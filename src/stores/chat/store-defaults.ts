@@ -12,6 +12,8 @@
  * Reference pattern: /src/api/core/enums.ts, /src/stores/chat/store-schemas.ts
  */
 
+import { z } from 'zod';
+
 import { DEFAULT_CHAT_MODE, ScreenModes } from '@/api/core/enums';
 
 import type {
@@ -421,3 +423,27 @@ export const THREAD_NAVIGATION_RESET_STATE = {
   pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
   hasLoadedFeedback: FEEDBACK_DEFAULTS.hasLoadedFeedback,
 };
+
+// ============================================================================
+// FORM PREFERENCES SCHEMA (Zod-first pattern)
+// ============================================================================
+
+/**
+ * Form preferences schema for reset operations
+ * Zod-first pattern: Schema defines shape, type inferred via z.infer
+ *
+ * Used when resetting chat state while preserving user's model selections
+ * from preferences cookie
+ */
+export const ResetFormPreferencesSchema = z.object({
+  /** Selected model IDs from preferences cookie */
+  selectedModelIds: z.array(z.string()).optional(),
+  /** Model order from preferences cookie */
+  modelOrder: z.array(z.string()).optional(),
+  /** Selected mode from preferences cookie */
+  selectedMode: z.string().nullable().optional(),
+  /** Web search enabled from preferences cookie */
+  enableWebSearch: z.boolean().optional(),
+});
+
+export type ResetFormPreferences = z.infer<typeof ResetFormPreferencesSchema>;

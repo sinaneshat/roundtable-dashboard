@@ -4,7 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { BRAND } from '@/constants/brand';
 import PrivacyScreen from '@/containers/screens/legal/PrivacyScreen';
 import { isArrayOf, isNonEmptyString } from '@/lib/utils/type-guards';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 export const dynamic = 'force-static';
 

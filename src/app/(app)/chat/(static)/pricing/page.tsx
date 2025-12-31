@@ -6,7 +6,7 @@ import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getProductsService } from '@/services/api';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 // SSG: Generate at build time only, never revalidate
 export const dynamic = 'force-static';

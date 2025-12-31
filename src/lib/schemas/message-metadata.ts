@@ -115,10 +115,6 @@ export function messageHasError(
   return false;
 }
 
-export function getRoundNumber(metadata: MessageMetadata): number {
-  return metadata.roundNumber;
-}
-
 // ============================================================================
 // Partial Metadata Schemas (for message creation/conversion)
 // ============================================================================

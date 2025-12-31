@@ -373,8 +373,13 @@ export function structureAIProviderError(
   let responseHeaders: Record<string, string> | undefined;
   if (error instanceof Error && 'responseHeaders' in error) {
     const headers = (error as { responseHeaders?: unknown }).responseHeaders;
+    // ✅ TYPE GUARD: Validate headers is a string record
     if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
-      responseHeaders = headers as Record<string, string>;
+      // Validate each value is a string before casting
+      const isValidHeaders = Object.values(headers).every(v => typeof v === 'string');
+      if (isValidHeaders) {
+        responseHeaders = headers as Record<string, string>;
+      }
     }
   }
 
@@ -383,11 +388,11 @@ export function structureAIProviderError(
   if (responseBody) {
     try {
       const parsed: unknown = JSON.parse(responseBody);
-      // Type-safe extraction of provider error
-      if (parsed && typeof parsed === 'object') {
+      // ✅ TYPE GUARD: Validate parsed structure before access
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         const parsedObj = parsed as Record<string, unknown>;
         // Provider standard error format: { error: { message, code, metadata } }
-        if (parsedObj.error && typeof parsedObj.error === 'object') {
+        if (parsedObj.error && typeof parsedObj.error === 'object' && !Array.isArray(parsedObj.error)) {
           const errorObj = parsedObj.error as Record<string, unknown>;
           providerError = ProviderErrorDetailsSchema.parse({
             message: typeof errorObj.message === 'string' ? errorObj.message : String(parsedObj.error),

@@ -104,11 +104,9 @@ export {
   type RegularHandler,
 } from './handlers';
 export {
-  createHTTPException,
   EnhancedHTTPException,
   HTTPExceptionFactory,
   type HTTPExceptionFactoryOptions,
-  HttpExceptions,
   isContentfulStatusCode,
   isValidContentfulStatusCode,
   mapStatusCode,

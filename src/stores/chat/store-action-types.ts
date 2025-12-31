@@ -48,6 +48,7 @@ import type { FilePreview, PendingAttachment, UploadItem } from '@/hooks/utils';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
+import type { ResetFormPreferences } from './store-defaults';
 import type { StreamResumptionState } from './store-schemas';
 
 // ============================================================================
@@ -511,21 +512,6 @@ export type StartRegeneration = (roundNumber: number) => void;
 export type CompleteRegeneration = (roundNumber: number) => void;
 
 /**
- * Form preferences for reset - read from preferences store cookie
- * Allows resetting chat state while preserving user's model selections
- */
-export type ResetFormPreferences = {
-  /** Selected model IDs from preferences cookie */
-  selectedModelIds?: string[];
-  /** Model order from preferences cookie */
-  modelOrder?: string[];
-  /** Selected mode from preferences cookie */
-  selectedMode?: string | null;
-  /** Web search enabled from preferences cookie */
-  enableWebSearch?: boolean;
-};
-
-/**
  * ✅ NAVIGATION CLEANUP: Reset to new chat state
  *
  * Cancels ongoing streams and resets state.
@@ -536,5 +522,7 @@ export type ResetFormPreferences = {
  * - "New Chat" button click
  * - Logo/home link click
  * - Direct navigation to /chat route
+ *
+ * ✅ PATTERN: ResetFormPreferences from store-defaults.ts (Zod schema single source of truth)
  */
 export type ResetToNewChat = (preferences?: ResetFormPreferences) => void;

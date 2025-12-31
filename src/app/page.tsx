@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { BRAND } from '@/constants/brand';
 import HomeScreen from '@/containers/screens/general/HomeScreen';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 export const dynamic = 'force-dynamic';
 

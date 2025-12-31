@@ -17,11 +17,9 @@
  */
 
 import type { UIMessage } from 'ai';
-import type { Metadata } from 'next';
 import { z } from 'zod';
 
 import { MessageRoles } from '@/api/core/enums';
-import { BRAND } from '@/constants/brand';
 import type {
   DbAssistantMessageMetadata,
   DbMessageMetadata,
@@ -39,7 +37,6 @@ import {
   isParticipantMessageMetadata,
 } from '@/db/schemas/chat-metadata';
 import type { ChatMessage } from '@/db/validation';
-import { getBaseUrl } from '@/utils/helpers';
 
 import { isObject } from './type-guards';
 
@@ -491,9 +488,15 @@ export function requirePreSearchMetadata(
  * ```
  */
 /**
- * Builder schema for assistant metadata construction
+ * Builder for assistant metadata construction during streaming
  *
- * ✅ TYPE-SAFE: Type assertion validates against DbAssistantMessageMetadata
+ * JUSTIFIED TYPE ASSERTION: This function builds metadata incrementally during streaming
+ * when not all required fields are available. The type assertion is intentional because:
+ * 1. Accepts Partial<DbAssistantMessageMetadata> as input
+ * 2. Used during message construction when fields arrive progressively
+ * 3. Caller is responsible for ensuring completeness before persistence
+ *
+ * @see docs/type-inference-patterns.md - Builder patterns with justified assertions
  */
 export function buildAssistantMetadata(
   baseMetadata: Partial<DbAssistantMessageMetadata>,
@@ -510,6 +513,7 @@ export function buildAssistantMetadata(
   },
 ): DbAssistantMessageMetadata {
   // Build the metadata object with role as discriminator
+  // Type assertion is justified: this is an incremental builder for streaming metadata
   const metadata = {
     role: MessageRoles.ASSISTANT,
     // Base metadata fields
@@ -522,7 +526,7 @@ export function buildAssistantMetadata(
     ...(options.roundNumber !== undefined && { roundNumber: options.roundNumber }),
     ...(options.participantId && { participantId: options.participantId }),
     ...(options.participantIndex !== undefined && { participantIndex: options.participantIndex }),
-    // ✅ FIX: participantRole can be null, must check undefined not truthiness
+    // participantRole can be null, must check undefined not truthiness
     ...(options.participantRole !== undefined && { participantRole: options.participantRole }),
     ...(options.model && { model: options.model }),
     // Error fields
@@ -603,6 +607,19 @@ const ParticipantEnrichmentSchema = z.object({
   model: z.string().min(1),
 });
 
+/**
+ * Enrich metadata with participant information
+ *
+ * JUSTIFIED TYPE ASSERTION: Merges validated enrichment data with base metadata.
+ * The assertion is intentional because DbMessageMetadata is a discriminated union,
+ * and we're adding assistant-specific fields to potentially incomplete base metadata.
+ *
+ * Type safety is partially preserved via:
+ * 1. Zod validation of participant enrichment fields
+ * 2. Default role discriminator for undefined base
+ *
+ * @see docs/type-inference-patterns.md - Enrichment patterns
+ */
 export function enrichMessageWithParticipant(
   baseMetadata: DbMessageMetadata | undefined,
   participant: {
@@ -626,128 +643,9 @@ export function enrichMessageWithParticipant(
 
   const base = baseMetadata || { role: MessageRoles.ASSISTANT };
 
-  // Build enriched metadata with validated participant data
+  // Type assertion is justified: merging validated data with discriminated union base
   return {
     ...base,
     ...enrichmentResult.data,
   } as DbMessageMetadata;
-}
-
-// ============================================================================
-// Next.js Page Metadata Utilities
-// ============================================================================
-
-export type CreateMetadataProps = {
-  title?: string;
-  description?: string;
-  image?: string;
-  url?: string;
-  type?: 'website' | 'article';
-  siteName?: string;
-  robots?: string;
-  canonicalUrl?: string;
-  keywords?: string[];
-  author?: string;
-  publishedTime?: string;
-  modifiedTime?: string;
-};
-
-/**
- * Create Next.js Metadata for pages
- *
- * **PURPOSE**: Generate consistent SEO metadata across all pages
- * **USE CASE**: Used in generateMetadata() functions in page.tsx files
- *
- * @param props - Metadata properties
- * @param props.title - Page title (defaults to brand name)
- * @param props.description - Page description (defaults to brand description)
- * @param props.image - OG image path (defaults to /static/og-image.png)
- * @param props.url - Page URL path (defaults to /)
- * @param props.type - Page type for OpenGraph (defaults to website)
- * @param props.siteName - Site name for OpenGraph (defaults to brand name)
- * @param props.robots - Robots meta directive (defaults to index, follow)
- * @param props.canonicalUrl - Canonical URL for SEO
- * @param props.keywords - SEO keywords array
- * @param props.author - Content author (defaults to brand name)
- * @param props.publishedTime - ISO timestamp for article publish date
- * @param props.modifiedTime - ISO timestamp for article modification date
- * @returns Next.js Metadata object with OpenGraph and Twitter cards
- *
- * @example
- * ```typescript
- * export async function generateMetadata(): Promise<Metadata> {
- *   return createMetadata({
- *     title: 'My Page',
- *     description: 'Page description',
- *     url: '/my-page',
- *     canonicalUrl: '/my-page',
- *   });
- * }
- * ```
- */
-export function createMetadata({
-  title = BRAND.fullName,
-  description = BRAND.description,
-  image = '/static/og-image.png',
-  url = '/',
-  type = 'website',
-  siteName = BRAND.fullName,
-  robots = 'index, follow',
-  canonicalUrl,
-  keywords = ['AI collaboration', 'dashboard', 'brainstorming', 'multiple models', 'Roundtable'],
-  author = BRAND.name,
-  publishedTime,
-  modifiedTime,
-}: CreateMetadataProps = {}): Metadata {
-  const baseUrl = getBaseUrl();
-  const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
-  const fullImage = image.startsWith('http') ? image : `${baseUrl}${image}`;
-
-  const openGraph: Metadata['openGraph'] = {
-    title,
-    description,
-    url: fullUrl,
-    siteName,
-    images: [
-      {
-        url: fullImage,
-        width: 1200,
-        height: 630,
-        alt: title,
-      },
-    ],
-    locale: 'en_US',
-    type,
-    ...(publishedTime && { publishedTime }),
-    ...(modifiedTime && { modifiedTime }),
-  };
-
-  const twitter: Metadata['twitter'] = {
-    card: 'summary_large_image',
-    title,
-    description,
-    images: [fullImage],
-    creator: '@roundtablenow',
-    site: '@roundtablenow',
-  };
-
-  return {
-    title,
-    description,
-    keywords: keywords.join(', '),
-    authors: [{ name: author }],
-    openGraph,
-    twitter,
-    robots,
-    alternates: {
-      canonical: canonicalUrl || fullUrl,
-    },
-    other: {
-      'theme-color': BRAND.colors.primary,
-      'msapplication-TileColor': BRAND.colors.primary,
-      'apple-mobile-web-app-capable': 'yes',
-      'apple-mobile-web-app-status-bar-style': 'default',
-      'format-detection': 'telephone=no',
-    },
-  };
 }

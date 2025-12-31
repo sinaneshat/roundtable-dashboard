@@ -1,18 +1,20 @@
+import type { ComponentSize } from '@/api/core/enums';
+import { ComponentSizes } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
 
 import { Spinner } from './spinner';
 
 type LoadingSpinnerProps = {
   className?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: Extract<ComponentSize, 'sm' | 'md' | 'lg'>;
   text?: string;
 };
 
 const sizeClasses = {
-  sm: 'size-4',
-  md: 'size-8',
-  lg: 'size-12',
-};
+  [ComponentSizes.SM]: 'size-4',
+  [ComponentSizes.MD]: 'size-8',
+  [ComponentSizes.LG]: 'size-12',
+} as const;
 
 /**
  * LoadingSpinner - Spinner with optional text label
@@ -20,7 +22,7 @@ const sizeClasses = {
  * Uses the base Spinner component with added text support.
  * For simple spinners without text, use <Spinner /> directly.
  */
-export function LoadingSpinner({ className, size = 'md', text }: LoadingSpinnerProps) {
+export function LoadingSpinner({ className, size = ComponentSizes.MD, text }: LoadingSpinnerProps) {
   if (!text) {
     return <Spinner className={cn(sizeClasses[size], 'text-primary', className)} />;
   }

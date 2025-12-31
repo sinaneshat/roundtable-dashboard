@@ -8,7 +8,6 @@
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
-import type { UIMessage } from 'ai';
 import {
   extractReasoningMiddleware,
   RetryError,
@@ -416,12 +415,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // =========================================================================
       // STEP 9: Save New User Message (ONLY first participant)
       // =========================================================================
-      const typedMessage = message as UIMessage;
+      // ✅ TYPE-SAFE: message already validated via StreamChatRequestSchema/UIMessageSchema
+      // No casting needed - Zod validation ensures message has correct structure
       if (
-        typedMessage.role === UIMessageRoles.USER
+        message.role === UIMessageRoles.USER
         && participantIndex === 0
       ) {
-        const lastMessage = typedMessage;
+        const lastMessage = message;
         const existsInDb = await db.query.chatMessage.findFirst({
           where: eq(tables.chatMessage.id, lastMessage.id),
         });
@@ -596,7 +596,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Prepare and validate messages
       const modelMessages = await prepareValidatedMessages({
         previousDbMessages,
-        newMessage: typedMessage,
+        newMessage: message,
         r2Bucket: c.env.UPLOADS_R2_BUCKET,
         db,
         attachmentIds,
@@ -605,7 +605,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Build system prompt with RAG context and citation support
       const userQuery = extractUserQuery([
         ...previousMessages,
-        typedMessage,
+        message,
       ]);
       const baseSystemPrompt
         = participant.settings?.systemPrompt
@@ -678,6 +678,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const baseModel = client.chat(participant.modelId);
       const isDeepSeek = isDeepSeekModel(participant.modelId);
 
+      /**
+       * Framework type bridge: OpenRouter returns LanguageModelV1 but wrapLanguageModel
+       * expects a narrower LanguageModel type. Both are runtime-compatible for streaming.
+       * @see AI SDK docs: https://sdk.vercel.ai/docs/ai-sdk-core/middleware
+       */
       const modelForStreaming = isDeepSeek
         ? wrapLanguageModel({
             model: baseModel as unknown as Parameters<typeof wrapLanguageModel>[0]['model'],

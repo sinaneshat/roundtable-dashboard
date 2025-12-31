@@ -15,8 +15,9 @@
  * - Automatic signed URL fetching for invalid URLs
  */
 
-/* eslint-disable simple-import-sort/imports -- Circular fix conflict in ESLint config */
+/* eslint-disable simple-import-sort/imports -- circular conflict with alias */
 import { FileCode, File as FileIcon, FileText, ImageIcon, Loader2 } from 'lucide-react';
+/* eslint-enable simple-import-sort/imports */
 import { useTranslations } from 'next-intl';
 import { z } from 'zod';
 
@@ -27,7 +28,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useDownloadUrlQuery } from '@/hooks/queries';
 import { getFileIconName, getFileTypeLabel } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
-/* eslint-enable simple-import-sort/imports */
 
 // ============================================================================
 // TYPE-SAFE SCHEMA DEFINITIONS

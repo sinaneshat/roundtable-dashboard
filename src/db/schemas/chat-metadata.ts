@@ -101,7 +101,7 @@ export type DbCitation = z.infer<typeof DbCitationSchema>;
  * Minimal requirements - only round tracking needed
  */
 export const DbUserMessageMetadataSchema = z.object({
-  role: z.literal('user'),
+  role: z.literal(UIMessageRoles.USER),
   roundNumber: RoundNumberSchema, // ✅ 0-BASED
   createdAt: z.string().datetime().optional(),
   // Frontend-only flag for triggering participants (not persisted)
@@ -123,7 +123,7 @@ export type DbUserMessageMetadata = z.infer<typeof DbUserMessageMetadataSchema>;
  * - Error state (hasError, isTransient, isPartialResponse)
  */
 export const DbAssistantMessageMetadataSchema = z.object({
-  role: z.literal('assistant'),
+  role: z.literal(UIMessageRoles.ASSISTANT),
 
   // ✅ REQUIRED: Round tracking
   roundNumber: RoundNumberSchema, // ✅ 0-BASED
@@ -235,7 +235,7 @@ export type DbPreSearchData = z.infer<typeof DbPreSearchDataSchema>;
  * - Contains preSearch data with web results
  */
 export const DbPreSearchMessageMetadataSchema = z.object({
-  role: z.literal('system'),
+  role: z.literal(UIMessageRoles.SYSTEM),
   roundNumber: RoundNumberSchema, // ✅ 0-BASED
   isPreSearch: z.literal(true),
   preSearch: DbPreSearchDataSchema,
@@ -255,7 +255,7 @@ export type DbPreSearchMessageMetadata = z.infer<typeof DbPreSearchMessageMetada
  * - Streams text like participants (no structured JSON)
  */
 export const DbModeratorMessageMetadataSchema = z.object({
-  role: z.literal('assistant'),
+  role: z.literal(UIMessageRoles.ASSISTANT),
   isModerator: z.literal(true), // Discriminator from participant messages
   roundNumber: RoundNumberSchema, // ✅ 0-BASED
   model: z.string().min(1), // AI model used for summary (e.g., gemini-2.0-flash)

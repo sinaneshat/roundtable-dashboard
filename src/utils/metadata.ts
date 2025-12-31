@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 
-import type { SeoMetadata } from '@/api/types/metadata';
 import { BRAND } from '@/constants/brand';
 
 import { getBaseUrl } from './helpers';
@@ -191,58 +190,6 @@ export function createFaqJsonLd(faqs: Array<{
         'text': faq.answer,
       },
     })),
-  };
-}
-
-/**
- * Convert API SEO metadata to Next.js Metadata
- * Enables reuse of metadata across API and frontend
- */
-export function apiMetadataToNextMetadata(seoData: SeoMetadata): Metadata {
-  const baseUrl = getBaseUrl();
-  const fullUrl = seoData.canonicalUrl || baseUrl;
-  const fullImage = seoData.ogImage.startsWith('http')
-    ? seoData.ogImage
-    : `${baseUrl}${seoData.ogImage}`;
-
-  return {
-    metadataBase: new URL(baseUrl),
-    title: seoData.title,
-    description: seoData.description,
-    keywords: seoData.keywords.join(', '),
-    ...(seoData.author && {
-      authors: [{ name: seoData.author }],
-    }),
-    openGraph: {
-      title: seoData.title,
-      description: seoData.description,
-      url: fullUrl,
-      siteName: BRAND.fullName,
-      images: [
-        {
-          url: fullImage,
-          width: 1200,
-          height: 630,
-          alt: seoData.title,
-        },
-      ],
-      locale: 'en_US',
-      type: seoData.ogType === 'product' ? 'website' : seoData.ogType,
-      ...(seoData.publishedTime && { publishedTime: seoData.publishedTime }),
-      ...(seoData.modifiedTime && { modifiedTime: seoData.modifiedTime }),
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: seoData.title,
-      description: seoData.description,
-      images: [fullImage],
-      creator: '@roundtablenow',
-      site: '@roundtablenow',
-    },
-    robots: seoData.noindex ? 'noindex, nofollow' : 'index, follow',
-    alternates: {
-      canonical: seoData.canonicalUrl || fullUrl,
-    },
   };
 }
 

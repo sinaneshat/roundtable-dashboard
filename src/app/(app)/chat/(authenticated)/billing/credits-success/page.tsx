@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { BRAND } from '@/constants/brand';
 import { CreditsSuccessClient } from '@/containers/screens/chat/billing/CreditsSuccessClient';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 export const metadata: Metadata = createMetadata({
   title: `Credits Added - ${BRAND.fullName}`,

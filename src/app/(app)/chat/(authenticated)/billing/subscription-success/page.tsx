@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { BRAND } from '@/constants/brand';
 import { BillingSuccessClient } from '@/containers/screens/chat/billing/BillingSuccessClient';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 export const metadata: Metadata = createMetadata({
   title: `Subscription Activated - ${BRAND.fullName}`,

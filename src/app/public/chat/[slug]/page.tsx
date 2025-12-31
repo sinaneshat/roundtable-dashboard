@@ -10,7 +10,7 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { GetPublicThreadResponse } from '@/services/api';
 import { getPublicThreadService } from '@/services/api';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 export const revalidate = 86400;
 

@@ -10,7 +10,7 @@
  * - Drag and drop zone overlay
  */
 
-// eslint-disable-next-line simple-import-sort/imports
+/* eslint-disable simple-import-sort/imports */
 import { FileCode, File as FileIcon, FileImage, FileText, Upload, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 

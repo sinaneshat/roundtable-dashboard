@@ -31,10 +31,11 @@ export function MessageErrorDetails({
     return null;
   }
 
-  const providerMessage = metadata.providerMessage ? String(metadata.providerMessage) : null;
-  const errorMessage = providerMessage || String(metadata.errorMessage || 'An unexpected error occurred');
-  const errorType = String(metadata.errorType || 'unknown');
-  const model = String(metadata.model || t('unknownModel'));
+  const providerMessage = metadata.providerMessage ?? null;
+  const errorMessage = providerMessage || metadata.errorMessage || 'An unexpected error occurred';
+  // Use string type to allow comparison against multiple error type enums
+  const errorType: string = metadata.errorType || 'unknown';
+  const model = metadata.model || t('unknownModel');
   const participantIndex = metadata.participantIndex;
   const aborted = metadata.aborted || false;
 

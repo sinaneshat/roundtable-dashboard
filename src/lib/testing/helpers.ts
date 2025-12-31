@@ -7,15 +7,10 @@
 import type { UIMessage } from 'ai';
 import type { AbstractIntlMessages } from 'next-intl';
 
+import type { UIMessageRole } from '@/api/core/enums';
 import { FinishReasons, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import {
-  getAssistantMetadata,
-  getParticipantId,
-  getParticipantIndex,
-  getRoundNumber,
-  getUserMetadata,
-} from '@/lib/utils/metadata';
+import { getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 
 export function createUserMetadata(roundNumber: number): DbUserMessageMetadata {
   return {
@@ -50,7 +45,7 @@ export function createAssistantMetadata(
 
 export function createTestUIMessage(data: {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: UIMessageRole;
   content: string;
   metadata: DbUserMessageMetadata | DbAssistantMessageMetadata;
   parts?: Array<{ type: 'text'; text: string }>;
@@ -190,17 +185,8 @@ export function createMockDate(dateString = '2024-01-01T00:00:00.000Z'): Date {
 // ============================================================================
 // Type-Safe Metadata Test Helpers
 // ============================================================================
-// Re-export metadata utilities for test files to avoid inline type casts
-// Use these instead of `(m.metadata as { roundNumber: number }).roundNumber`
-
-// Re-export metadata utilities (imported at top of file)
-export {
-  getAssistantMetadata,
-  getParticipantId,
-  getParticipantIndex,
-  getRoundNumber,
-  getUserMetadata,
-};
+// SINGLE SOURCE OF TRUTH: Import metadata utilities directly from @/lib/utils/metadata
+// DO NOT re-export here - violates barrel export ground rule
 
 /**
  * Type-safe filter for messages by round number

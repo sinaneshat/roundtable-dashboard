@@ -832,7 +832,7 @@ export const ParticipantInfoSchema = chatParticipantSelectSchema
   .openapi('ParticipantInfo');
 export type ParticipantInfo = z.infer<typeof ParticipantInfoSchema>;
 export const RoundtablePromptConfigSchema = z.object({
-  mode: z.string(),
+  mode: ChatModeSchema,
   currentParticipantIndex: z.number().int().nonnegative(),
   currentParticipant: ParticipantInfoSchema,
   allParticipants: z.array(ParticipantInfoSchema),
@@ -862,13 +862,299 @@ export type ModeratorPayload = z.infer<typeof ModeratorAIContentSchema>;
 
 export const ModeratorDetailPayloadSchema = z.object({
   roundNumber: RoundNumberSchema,
-  mode: z.string(),
+  mode: ChatModeSchema,
   userQuestion: z.string(),
   summary: z.string().describe('Comprehensive structured summary in markdown format'),
   metrics: ModeratorMetricsSchema,
 }).openapi('ModeratorDetailPayload');
 
 export const ModeratorResponseSchema = createApiResponseSchema(ModeratorDetailPayloadSchema).openapi('ModeratorResponse');
+
+// ============================================================================
+// MODERATOR PROMPT CONFIGURATION SCHEMAS (5-part pattern enforcement)
+// ============================================================================
+
+/**
+ * ParticipantResponseSchema - Schema for participant response data in moderator prompt
+ * Enforces structure of participant data passed to moderator for summarization
+ */
+export const ParticipantResponseSchema = z.object({
+  participantIndex: z.number().int().nonnegative().openapi({
+    description: 'Participant index (0-based)',
+    example: 0,
+  }),
+  participantRole: z.string().openapi({
+    description: 'Role/persona of the participant',
+    example: 'The Ideator',
+  }),
+  modelId: z.string().min(1).openapi({
+    description: 'Model ID used by this participant',
+    example: 'anthropic/claude-3.5-sonnet',
+  }),
+  modelName: z.string().openapi({
+    description: 'Human-readable model name',
+    example: 'Claude 3.5 Sonnet',
+  }),
+  responseContent: z.string().openapi({
+    description: 'Full response content from this participant',
+  }),
+}).openapi('ParticipantResponse');
+
+export type ParticipantResponse = z.infer<typeof ParticipantResponseSchema>;
+
+/**
+ * ModeratorPromptConfigSchema - Complete configuration for building moderator prompt
+ * Enforces all required data through schema validation
+ */
+export const ModeratorPromptConfigSchema = z.object({
+  roundNumber: RoundNumberSchema.openapi({
+    description: 'Round number being summarized (0-based)',
+    example: 0,
+  }),
+  mode: ChatModeSchema.openapi({
+    description: 'Chat mode determining summary style',
+    example: ChatModes.DEBATING,
+  }),
+  userQuestion: z.string().min(1).openapi({
+    description: 'Original user question for this round',
+  }),
+  participantResponses: z.array(ParticipantResponseSchema).min(1).openapi({
+    description: 'Array of participant responses to summarize',
+  }),
+}).openapi('ModeratorPromptConfig');
+
+export type ModeratorPromptConfig = z.infer<typeof ModeratorPromptConfigSchema>;
+
+// ============================================================================
+// MODERATOR OUTPUT STRUCTURE SCHEMAS
+// ============================================================================
+
+/**
+ * Summary sections that are REQUIRED in every moderator output
+ */
+export const MODERATOR_REQUIRED_SECTIONS = [
+  'summaryConclusion',
+  'questionOverview',
+  'participants',
+] as const;
+
+export const ModeratorRequiredSectionSchema = z.enum(MODERATOR_REQUIRED_SECTIONS).openapi({
+  description: 'Required moderator summary section',
+  example: 'summaryConclusion',
+});
+
+export type ModeratorRequiredSection = z.infer<typeof ModeratorRequiredSectionSchema>;
+
+/**
+ * Summary sections that are OPTIONAL based on discussion content
+ */
+export const MODERATOR_OPTIONAL_SECTIONS = [
+  'primaryPerspectives',
+  'areasOfAgreement',
+  'coreAssumptionsAndTensions',
+  'tradeOffsAndImplications',
+  'limitationsAndBlindSpots',
+  'consensusStatus',
+  'integratedAnalysis',
+  'keyExchanges',
+  'keyUncertainties',
+] as const;
+
+export const ModeratorOptionalSectionSchema = z.enum(MODERATOR_OPTIONAL_SECTIONS).openapi({
+  description: 'Optional moderator summary section',
+  example: 'primaryPerspectives',
+});
+
+export type ModeratorOptionalSection = z.infer<typeof ModeratorOptionalSectionSchema>;
+
+/**
+ * All moderator summary sections (required + optional)
+ */
+export const MODERATOR_ALL_SECTIONS = [
+  ...MODERATOR_REQUIRED_SECTIONS,
+  ...MODERATOR_OPTIONAL_SECTIONS,
+] as const;
+
+export const ModeratorSectionSchema = z.enum(MODERATOR_ALL_SECTIONS).openapi({
+  description: 'Moderator summary section identifier',
+});
+
+export type ModeratorSection = z.infer<typeof ModeratorSectionSchema>;
+
+/**
+ * Consensus status values for the discussion
+ */
+export const CONSENSUS_STATUSES = [
+  'clear_consensus',
+  'conditional_consensus',
+  'multiple_viable_views',
+  'no_consensus',
+] as const;
+
+export const ConsensusStatusSchema = z.enum(CONSENSUS_STATUSES).openapi({
+  description: 'Consensus status of the discussion',
+  example: 'conditional_consensus',
+});
+
+export type ConsensusStatus = z.infer<typeof ConsensusStatusSchema>;
+
+export const ConsensusStatuses = {
+  CLEAR_CONSENSUS: 'clear_consensus' as const,
+  CONDITIONAL_CONSENSUS: 'conditional_consensus' as const,
+  MULTIPLE_VIABLE_VIEWS: 'multiple_viable_views' as const,
+  NO_CONSENSUS: 'no_consensus' as const,
+} as const;
+
+/**
+ * Limitation importance levels for blind spots section
+ */
+export const LIMITATION_IMPORTANCE_LEVELS = [
+  'critical',
+  'secondary',
+  'out_of_scope',
+] as const;
+
+export const LimitationImportanceSchema = z.enum(LIMITATION_IMPORTANCE_LEVELS).openapi({
+  description: 'Importance level of a limitation or blind spot',
+  example: 'critical',
+});
+
+export type LimitationImportance = z.infer<typeof LimitationImportanceSchema>;
+
+export const LimitationImportances = {
+  CRITICAL: 'critical' as const,
+  SECONDARY: 'secondary' as const,
+  OUT_OF_SCOPE: 'out_of_scope' as const,
+} as const;
+
+/**
+ * ModeratorSummarySectionsSchema - Defines the structure of moderator output
+ * Used for validation and documentation, not for AI structured output
+ */
+export const ModeratorSummarySectionsSchema = z.object({
+  // Required sections
+  summaryConclusion: z.object({
+    required: z.literal(true),
+    description: z.literal('Minimum one-sentence conclusions representing the discussion'),
+    constraints: z.object({
+      maxSentencesIfShared: z.literal(1),
+      multipleSentencesOnlyIf: z.literal('conclusions are irreconcilable'),
+      style: z.literal('no hedging, one sentence per conclusion'),
+    }),
+  }),
+  questionOverview: z.object({
+    required: z.literal(true),
+    description: z.literal('Succinct restatement of the question'),
+    constraints: z.object({
+      includeFraming: z.literal('only if it materially shaped the discussion'),
+    }),
+  }),
+  participants: z.object({
+    required: z.literal(true),
+    description: z.literal('Number of LLMs and distinct perspectives'),
+    constraints: z.object({
+      includePerspectives: z.literal('only if they affect interpretation'),
+    }),
+  }),
+
+  // Optional sections
+  primaryPerspectives: z.object({
+    required: z.literal(false),
+    description: z.literal('Main conceptual approaches that emerged'),
+    perPerspective: z.object({
+      coreClaim: z.literal('required'),
+      primaryEmphasis: z.literal('required'),
+      whatItDeprioritizes: z.literal('required'),
+    }),
+  }).optional(),
+  areasOfAgreement: z.object({
+    required: z.literal(false),
+    description: z.literal('Substantive alignment summary'),
+    includes: z.array(z.enum(['shared assumptions', 'common objectives', 'overlapping conclusions'])),
+    excludes: z.literal('trivial agreement'),
+  }).optional(),
+  coreAssumptionsAndTensions: z.object({
+    required: z.literal(false),
+    description: z.literal('Foundational assumptions and conflicts'),
+    includes: z.array(z.enum([
+      'foundational assumptions behind each perspective',
+      'where assumptions conflict',
+      'why disagreements remain unresolved',
+    ])),
+  }).optional(),
+  tradeOffsAndImplications: z.object({
+    required: z.literal(false),
+    description: z.literal('Unavoidable trade-offs revealed by discussion'),
+    constraints: z.object({
+      doNotResolve: z.literal('unless explicitly resolved by council'),
+    }),
+  }).optional(),
+  limitationsAndBlindSpots: z.object({
+    required: z.literal(false),
+    description: z.literal('Perspectives or considerations not meaningfully explored'),
+    importanceRanking: z.array(LimitationImportanceSchema),
+  }).optional(),
+  consensusStatus: z.object({
+    required: z.literal(false),
+    description: z.literal('State consensus status once only'),
+    allowedValues: z.array(ConsensusStatusSchema),
+  }).optional(),
+  integratedAnalysis: z.object({
+    required: z.literal(false),
+    description: z.literal('Brief synthesis clarifying overall debate structure'),
+    constraints: z.object({
+      mustNotIntroduce: z.literal('new ideas'),
+      reflectDependencies: z.literal('when models extend or rebut each other'),
+    }),
+  }).optional(),
+  keyExchanges: z.object({
+    required: z.literal(false),
+    description: z.literal('Substantive model-to-model challenges or extensions'),
+    constraints: z.object({
+      maxBullets: z.literal(3),
+      maxWordsPerBullet: z.literal(18),
+      noArrowNotation: z.literal(true),
+      useNaturalProse: z.literal(true),
+      includeOnly: z.literal('decision-relevant exchanges'),
+    }),
+  }).optional(),
+  keyUncertainties: z.object({
+    required: z.literal(false),
+    description: z.literal('Unresolved factors that would materially change conclusions'),
+    constraints: z.object({
+      omitIf: z.literal('none exist'),
+    }),
+  }).optional(),
+}).openapi('ModeratorSummarySections');
+
+export type ModeratorSummarySections = z.infer<typeof ModeratorSummarySectionsSchema>;
+
+/**
+ * ModeratorStyleConstraintsSchema - Style rules for moderator output
+ */
+export const MODERATOR_STYLE_CONSTRAINTS = [
+  'precise_restrained_non_performative',
+  'no_emotional_language',
+  'no_internal_system_references',
+  'no_conversation_narration',
+  'treat_cross_model_challenges_as_structural_tensions',
+  'omit_empty_sections',
+] as const;
+
+export const ModeratorStyleConstraintSchema = z.enum(MODERATOR_STYLE_CONSTRAINTS).openapi({
+  description: 'Style constraint for moderator output',
+});
+
+export type ModeratorStyleConstraint = z.infer<typeof ModeratorStyleConstraintSchema>;
+
+export const ModeratorStyleConstraints = {
+  PRECISE_RESTRAINED_NON_PERFORMATIVE: 'precise_restrained_non_performative' as const,
+  NO_EMOTIONAL_LANGUAGE: 'no_emotional_language' as const,
+  NO_INTERNAL_SYSTEM_REFERENCES: 'no_internal_system_references' as const,
+  NO_CONVERSATION_NARRATION: 'no_conversation_narration' as const,
+  TREAT_CROSS_MODEL_CHALLENGES_AS_STRUCTURAL_TENSIONS: 'treat_cross_model_challenges_as_structural_tensions' as const,
+  OMIT_EMPTY_SECTIONS: 'omit_empty_sections' as const,
+} as const;
 
 export function createCacheResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   return z.object({

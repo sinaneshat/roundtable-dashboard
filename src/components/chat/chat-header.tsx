@@ -6,6 +6,8 @@ import type { ReactNode } from 'react';
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+import type { ComponentSize } from '@/api/core/enums';
+import { ComponentSizes } from '@/api/core/enums';
 import { Logo } from '@/components/logo';
 import { useChatStore } from '@/components/providers';
 import {
@@ -206,7 +208,7 @@ type PageHeaderProps = {
   action?: ReactNode;
   children?: ReactNode;
   showSeparator?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: Extract<ComponentSize, 'sm' | 'md' | 'lg'>;
   className?: string;
 };
 export function PageHeader({
@@ -215,21 +217,21 @@ export function PageHeader({
   action,
   children,
   showSeparator = true,
-  size = 'md',
+  size = ComponentSizes.MD,
   className,
 }: PageHeaderProps) {
   const sizeConfig = {
-    sm: {
+    [ComponentSizes.SM]: {
       title: 'text-lg font-semibold tracking-tight',
       description: 'text-xs text-muted-foreground',
       spacing: 'space-y-3',
     },
-    md: {
+    [ComponentSizes.MD]: {
       title: 'text-2xl font-semibold tracking-tight',
       description: 'text-sm text-muted-foreground',
       spacing: 'space-y-6',
     },
-    lg: {
+    [ComponentSizes.LG]: {
       title: 'text-3xl font-bold tracking-tight',
       description: 'text-base text-muted-foreground',
       spacing: 'space-y-8',
@@ -256,7 +258,7 @@ type ChatPageHeaderProps = {
   title: string;
   description: string;
   action?: ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: Extract<ComponentSize, 'sm' | 'md' | 'lg'>;
   className?: string;
 };
 export function ChatPageHeader({
