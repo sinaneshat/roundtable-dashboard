@@ -1,5 +1,5 @@
 import { BRAND } from '@/constants/brand';
-import { getBaseUrl } from '@/utils/helpers';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 /**
  * Props for the HowToSchema component
@@ -72,7 +72,7 @@ export function HowToSchema(props: HowToSchemaProps) {
     video,
   } = props;
 
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
 
   const structuredData = {
     '@context': 'https://schema.org',

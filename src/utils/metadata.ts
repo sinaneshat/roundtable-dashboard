@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 
 import { BRAND } from '@/constants/brand';
-
-import { getBaseUrl } from './helpers';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 export type CreateMetadataProps = {
   title?: string;
@@ -42,9 +41,9 @@ export function createJsonLd(props: {
     name = BRAND.fullName,
     description = BRAND.description,
     baseUrl: providedBaseUrl,
-    url = providedBaseUrl || getBaseUrl(),
-    logo = `${providedBaseUrl || getBaseUrl()}/static/logo.png`,
-    image = `${providedBaseUrl || getBaseUrl()}/static/og-image.png`,
+    url = providedBaseUrl || getAppBaseUrl(),
+    logo = `${providedBaseUrl || getAppBaseUrl()}/static/logo.png`,
+    image = `${providedBaseUrl || getAppBaseUrl()}/static/og-image.png`,
     sameAs = [
       BRAND.social.twitter,
       BRAND.social.linkedin,
@@ -158,7 +157,7 @@ export function createBreadcrumbJsonLd(items: Array<{
   name: string;
   url: string;
 }>) {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
 
   return {
     '@context': 'https://schema.org',
@@ -207,7 +206,7 @@ export function createMetadata({
   publishedTime,
   modifiedTime,
 }: CreateMetadataProps = {}): Metadata {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
   const fullImage = image.startsWith('http') ? image : `${baseUrl}${image}`;
 

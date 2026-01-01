@@ -250,7 +250,8 @@ export function createEnvironmentValidationMiddleware() {
     }
 
     // Skip validation in test environment
-    if (process.env.NODE_ENV === 'test') {
+    // NODE_ENV is inlined at build time, so process.env is acceptable here
+    if (env.NODE_ENV === 'test' || process.env.NODE_ENV === 'test') {
       return next();
     }
 

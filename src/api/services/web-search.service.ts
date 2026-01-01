@@ -353,10 +353,9 @@ export async function generateSearchQuery(
  * @returns Browser instance or null
  */
 async function initBrowser(env: ApiEnv['Bindings']) {
-  const isLocal = process.env.NODE_ENV === 'development';
-
-  // Local: Skip browser, use fallback fetch
-  if (isLocal) {
+  // Check if BROWSER binding is available (only in Cloudflare Workers)
+  // In local dev, BROWSER won't be available, so we skip browser usage
+  if (!env.BROWSER) {
     return null;
   }
 

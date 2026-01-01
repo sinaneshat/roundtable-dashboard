@@ -139,7 +139,7 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
     // Extract validation errors array
     if ('validation' in apiError && Array.isArray(apiError.validation)) {
       result.validationErrors = apiError.validation
-        .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
+        .filter((v): v is { field?: unknown; message?: unknown; code?: unknown } => typeof v === 'object' && v !== null)
         .map(v => ({
           field: 'field' in v && typeof v.field === 'string' ? v.field : 'unknown',
           message: 'message' in v && typeof v.message === 'string' ? v.message : 'Validation failed',

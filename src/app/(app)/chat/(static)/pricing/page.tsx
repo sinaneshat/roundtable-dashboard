@@ -9,6 +9,7 @@ import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
 // SSG: Generate at build time only, never revalidate
+// Products are prefetched from the production API during build
 export const dynamic = 'force-static';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -31,6 +32,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PricingPage() {
   const queryClient = getQueryClient();
 
+  // SSG: Prefetch products at build time from production API
+  // The API client auto-detects localhost during production builds and uses
+  // the production API URL instead (see src/api/client/index.ts)
   await queryClient.prefetchQuery({
     queryKey: queryKeys.products.list(),
     queryFn: getProductsService,

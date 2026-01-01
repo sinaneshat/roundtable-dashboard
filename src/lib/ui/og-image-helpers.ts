@@ -7,27 +7,8 @@
 
 import type { ChatMode } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { getModelIconInfo } from '@/lib/utils';
-
-// ============================================================================
-// BASE URL RESOLUTION
-// ============================================================================
-
-function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
-  }
-
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
-  }
-
-  return 'http://localhost:3000';
-}
 
 // ============================================================================
 // IMAGE CONVERSION
@@ -35,7 +16,7 @@ function getBaseUrl(): string {
 
 export async function getBase64Image(relativePath: string): Promise<string> {
   const cleanPath = relativePath.replace(/^public\//, '');
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
   const imageUrl = `${baseUrl}/${cleanPath}`;
 
   const response = await fetch(imageUrl);

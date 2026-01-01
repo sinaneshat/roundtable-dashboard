@@ -97,8 +97,11 @@ let cleanupInterval: NodeJS.Timeout | null = null;
 
 /**
  * Start cleanup interval for rate limit store
+ * Note: In test environment, cleanup is managed manually via stopCleanup()
  */
 function startCleanup() {
+  // Skip cleanup in test environment (detected at runtime via env)
+  // NEXT_PUBLIC_* vars are inlined at build time, so process.env is acceptable here
   if (cleanupInterval || process.env.NODE_ENV === 'test') {
     return;
   }

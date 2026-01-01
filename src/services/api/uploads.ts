@@ -14,6 +14,7 @@ import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/api/client';
 import { createApiClient } from '@/api/client';
+import { getApiBaseUrl } from '@/lib/config/base-urls';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
@@ -227,7 +228,8 @@ export type UploadWithTicketServiceInput = {
  * infer types for multipart/form-data with query parameters.
  */
 export async function uploadWithTicketService(data: UploadWithTicketServiceInput) {
-  const url = new URL(`${getApiBaseUrl()}/uploads/ticket/upload`);
+  const baseUrl = getApiUrl();
+  const url = new URL(`${baseUrl}/uploads/ticket/upload`);
   url.searchParams.set('token', data.token);
 
   const formData = new FormData();
@@ -307,23 +309,15 @@ export type UploadPartRequestWithBody = {
 };
 
 /**
- * Get base API URL - mirrors the pattern from @/api/client for consistency
+ * Get API base URL - uses centralized config
+ * Client-side: uses same origin for cookie handling
+ * Server-side: uses centralized URL config
  */
-function getApiBaseUrl(): string {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (baseUrl)
-    return baseUrl;
-
-  if (typeof window === 'undefined') {
-    if (process.env.NEXT_PUBLIC_APP_URL) {
-      return `${process.env.NEXT_PUBLIC_APP_URL}/api/v1`;
-    }
-    return process.env.NODE_ENV === 'development'
-      ? 'http://localhost:3000/api/v1'
-      : 'https://app.roundtable.now/api/v1';
+function getApiUrl(): string {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/api/v1`;
   }
-
-  return `${window.location.origin}/api/v1`;
+  return getApiBaseUrl();
 }
 
 /**
@@ -339,7 +333,8 @@ function getApiBaseUrl(): string {
 export async function uploadPartService(data: UploadPartRequestWithBody) {
   const { param, query, body } = data;
 
-  const url = new URL(`${getApiBaseUrl()}/uploads/multipart/${param.id}/parts`);
+  const baseUrl = getApiUrl();
+  const url = new URL(`${baseUrl}/uploads/multipart/${param.id}/parts`);
   url.searchParams.set('uploadId', query.uploadId);
   url.searchParams.set('partNumber', query.partNumber);
 

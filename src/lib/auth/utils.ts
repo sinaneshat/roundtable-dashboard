@@ -6,6 +6,8 @@
 
 import { APIError } from 'better-auth/api';
 
+import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+
 /**
  * Better-auth middleware context type (inferred from createAuthMiddleware)
  */
@@ -64,11 +66,14 @@ const EMAIL_DOMAIN_CONFIG = {
 /**
  * Check if the current environment requires email domain restrictions
  *
+ * Uses centralized environment detection from base-urls config.
+ * @see /src/lib/config/base-urls.ts for environment detection logic
+ *
  * @returns {boolean} True if environment is local or preview
  */
 export function isRestrictedEnvironment(): boolean {
-  const webappEnv = process.env.NEXT_PUBLIC_WEBAPP_ENV;
-  return webappEnv === 'local' || webappEnv === 'preview';
+  const webappEnv = getWebappEnv();
+  return webappEnv === WEBAPP_ENVS.LOCAL || webappEnv === WEBAPP_ENVS.PREVIEW;
 }
 
 /**

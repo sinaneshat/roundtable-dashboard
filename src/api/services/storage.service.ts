@@ -30,9 +30,14 @@ function isWorkersRuntime(): boolean {
  * Forces local storage in local dev to avoid R2 proxy issues
  */
 function shouldUseLocalStorage(r2Bucket: R2Bucket | undefined): boolean {
-  // Force local storage in local development environment
-  // This avoids issues with R2 mock bindings from initOpenNextCloudflareForDev
-  if (process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local' && !isWorkersRuntime()) {
+  // Check if running in local development
+  // In Workers: NEXT_PUBLIC_WEBAPP_ENV is inlined at build time
+  // In Node.js dev: Use NODE_ENV to detect development
+  const isLocalDev = typeof caches === 'undefined'
+    ? process.env.NODE_ENV === 'development'
+    : false; // Workers always use R2 if available
+
+  if (isLocalDev && !isWorkersRuntime()) {
     return true;
   }
   // No R2 bucket and not Workers = local fallback

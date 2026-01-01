@@ -2,6 +2,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { csrf } from 'hono/csrf';
 
 import type { ApiEnv } from '@/api/types';
+import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
 
 /**
  * CSRF Protection Middleware
@@ -12,6 +13,7 @@ import type { ApiEnv } from '@/api/types';
  * - Sec-Fetch-Site header indicates same-origin requests
  *
  * Only validates unsafe methods (POST, PATCH, PUT, DELETE) with form-submittable content types.
+ * Uses centralized URL config from base-urls.ts for allowed origins.
  *
  * @see https://hono.dev/docs/middleware/builtin/csrf
  */
@@ -28,25 +30,8 @@ export const csrfProtection: MiddlewareHandler<ApiEnv> = async (c: Context<ApiEn
     return next();
   }
 
-  // CRITICAL FIX: Use process.env fallback for Next.js dev mode
-  // In Cloudflare Workers: c.env has the bindings
-  // In Next.js dev: c.env may be empty, use process.env
-  const appUrl = c.env?.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
-  const webappEnv = c.env?.NEXT_PUBLIC_WEBAPP_ENV || process.env.NEXT_PUBLIC_WEBAPP_ENV || 'local';
-  const nodeEnv = c.env?.NODE_ENV || process.env.NODE_ENV;
-  const isDevelopment = webappEnv === 'local' || nodeEnv === 'development';
-
-  const allowedOrigins: string[] = [];
-
-  // Only allow localhost in development environment
-  if (isDevelopment) {
-    allowedOrigins.push('http://localhost:3000', 'http://127.0.0.1:3000');
-  }
-
-  // Add current environment URL if available and not localhost
-  if (appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1')) {
-    allowedOrigins.push(appUrl);
-  }
+  // Use centralized URL config for allowed origins
+  const allowedOrigins = getAllowedOriginsFromContext(c);
 
   // Apply CSRF middleware with configured origins
   const middleware = csrf({

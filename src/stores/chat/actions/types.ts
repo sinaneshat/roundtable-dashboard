@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 
-import { Environments, UsageStatusSchema } from '@/api/core/enums';
+import { UsageStatusSchema } from '@/api/core/enums';
 import {
   ChatThreadCacheSchema,
   createCacheResponseSchema,
@@ -85,7 +85,7 @@ export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
 
   const response = ApiResponseSchema.safeParse(data);
   if (!response.success || !response.data.success) {
-    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
+    if (process.env.NODE_ENV === 'development') {
       console.error('Invalid API response structure for usage stats:', response.error);
     }
     return null;
@@ -93,7 +93,7 @@ export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
 
   const usageData = UsageStatsDataSchema.safeParse(response.data.data);
   if (!usageData.success) {
-    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
+    if (process.env.NODE_ENV === 'development') {
       console.error('Invalid usage stats data structure:', usageData.error);
     }
     return null;
@@ -201,7 +201,7 @@ export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPay
 
   const response = ApiResponseSchema.safeParse(data);
   if (!response.success || !response.data.success) {
-    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
+    if (process.env.NODE_ENV === 'development') {
       console.error('Invalid API response structure for thread detail:', response.error);
     }
     return null;
@@ -209,7 +209,7 @@ export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPay
 
   const threadData = ThreadDetailPayloadCacheSchema.safeParse(response.data.data);
   if (!threadData.success) {
-    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
+    if (process.env.NODE_ENV === 'development') {
       // 🔍 DEBUG LOG 2: Thread detail validation failure - check message structure
       // ✅ DEBUG-ONLY TYPE RELAXATION: Use lenient record schema for inspection
       // JUSTIFICATION: Debug logging should not fail due to type safety.
@@ -277,7 +277,7 @@ export function validateInfiniteQueryCache(data: unknown): InfiniteQueryCache | 
 
   const queryData = InfiniteQueryCacheSchema.safeParse(data);
   if (!queryData.success) {
-    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
+    if (process.env.NODE_ENV === 'development') {
       // 🔍 DEBUG LOG 1: Infinite query validation failure
       // ✅ DEBUG-ONLY TYPE RELAXATION: Use lenient record schema for inspection
       // JUSTIFICATION: Debug logging should not fail due to type safety.

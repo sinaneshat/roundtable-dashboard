@@ -60,6 +60,9 @@ export const PROBLEMATIC_EMAIL_CHARS = ['<', '>', '"', '\\', '|'];
 
 /**
  * Email service configuration
+ * Note: NEXT_PUBLIC_* environment variables are inlined at build time by Next.js,
+ * so process.env access is acceptable here. Runtime access to secrets should use
+ * getCloudflareContext() in service implementations (see ses-service.ts).
  */
 export const EMAIL_SERVICE_CONFIG = {
   FROM_ADDRESS: process.env.NEXT_PUBLIC_SES_VERIFIED_EMAIL || 'noreply@roundtable.now',

@@ -1,4 +1,3 @@
-import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { render } from '@react-email/components';
 import { AwsClient } from 'aws4fetch';
 
@@ -9,25 +8,28 @@ import { MagicLink } from '@/emails/templates';
  * Get SES credentials using OpenNext.js pattern
  * Priority: Cloudflare runtime → process.env fallback
  */
-function getSesCredentials(): {
+async function getSesCredentials(): Promise<{
   accessKeyId: string | undefined;
   secretAccessKey: string | undefined;
   region: string;
   fromEmail: string;
   replyToEmail: string;
-} {
-  // Try Cloudflare runtime context first
+}> {
+  // Try Cloudflare runtime context first with dynamic import
   try {
+    const { getCloudflareContext } = await import('@opennextjs/cloudflare');
     const { env } = getCloudflareContext();
     return {
+      // AWS secrets from Cloudflare env (wrangler secrets)
       accessKeyId: (env.AWS_SES_ACCESS_KEY_ID as string) || process.env.AWS_SES_ACCESS_KEY_ID,
       secretAccessKey: (env.AWS_SES_SECRET_ACCESS_KEY as string) || process.env.AWS_SES_SECRET_ACCESS_KEY,
+      // NEXT_PUBLIC_* vars are build-time inlined, but also check runtime env for Workers
       region: (env.NEXT_PUBLIC_AWS_SES_REGION as string) || process.env.NEXT_PUBLIC_AWS_SES_REGION || 'us-east-1',
       fromEmail: (env.NEXT_PUBLIC_FROM_EMAIL as string) || process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@example.com',
       replyToEmail: (env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL as string) || process.env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || 'noreply@example.com',
     };
   } catch {
-    // Fallback to process.env for local dev
+    // Fallback to process.env for local dev and build time
     return {
       accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID,
       secretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY,
@@ -52,15 +54,15 @@ function getSesCredentials(): {
  * @see https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html
  */
 class EmailService {
-  private getAwsClient(): AwsClient | null {
-    const { accessKeyId, secretAccessKey } = getSesCredentials();
+  private async getAwsClient(): Promise<AwsClient | null> {
+    const { accessKeyId, secretAccessKey } = await getSesCredentials();
     if (accessKeyId && secretAccessKey) {
       return new AwsClient({ accessKeyId, secretAccessKey });
     }
     return null;
   }
 
-  private getConfig() {
+  private async getConfig() {
     return getSesCredentials();
   }
 
@@ -76,8 +78,8 @@ class EmailService {
     text?: string;
   }) {
     // Get credentials at runtime (not module load)
-    const awsClient = this.getAwsClient();
-    const config = this.getConfig();
+    const awsClient = await this.getAwsClient();
+    const config = await this.getConfig();
 
     // Validate AWS client is configured
     if (!awsClient) {

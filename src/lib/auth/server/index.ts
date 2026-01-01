@@ -7,7 +7,7 @@ import { apiKey, magicLink } from 'better-auth/plugins';
 
 import { db } from '@/db';
 import * as authSchema from '@/db/tables/auth';
-import { getBaseUrl } from '@/utils/helpers';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 import { validateEmailDomain } from '../utils';
 
@@ -107,7 +107,7 @@ function createAuthAdapter() {
  */
 export const auth = betterAuth({
   secret: getAuthSecret(),
-  baseURL: process.env.BETTER_AUTH_URL || `${getBaseUrl()}/api/auth`,
+  baseURL: process.env.BETTER_AUTH_URL || `${getAppBaseUrl()}/api/auth`,
   database: createAuthAdapter(),
 
   // Email domain restriction for local and preview environments
@@ -143,7 +143,7 @@ export const auth = betterAuth({
 
   // Trusted origins
   trustedOrigins: [
-    getBaseUrl(),
+    getAppBaseUrl(),
     ...(process.env.NODE_ENV === 'development' ? ['http://localhost:3000'] : []),
   ],
 

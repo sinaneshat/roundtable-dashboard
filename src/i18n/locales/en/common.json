@@ -856,6 +856,7 @@
       "removeAttachment": "Remove attachment",
       "attachmentUploadFailed": "Upload failed",
       "noModelsSelected": "Select at least 1 model to send a message",
+      "loadingModels": "Loading models...",
       "messageTooLong": "Message too long. Please shorten to send.",
       "send": "Send message",
       "submitting": "Sending..."

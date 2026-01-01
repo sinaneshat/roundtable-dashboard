@@ -126,14 +126,18 @@ export const ChatInputToolbarMenu = memo(({
               >
                 {hasNoModelsSelected && <Icons.alertCircle className="size-3.5" />}
                 <span>{t('chat.models.models')}</span>
-                {!hasNoModelsSelected && (
-                  <AvatarGroup
-                    participants={selectedParticipants}
-                    allModels={allModels}
-                    size="sm"
-                    maxVisible={3}
-                  />
-                )}
+                {isModelsLoading
+                  ? (
+                      <span className="text-muted-foreground">{selectedParticipants.length}</span>
+                    )
+                  : !hasNoModelsSelected && (
+                      <AvatarGroup
+                        participants={selectedParticipants}
+                        allModels={allModels}
+                        size="sm"
+                        maxVisible={3}
+                      />
+                    )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top">
@@ -283,7 +287,7 @@ export const ChatInputToolbarMenu = memo(({
                   : `${selectedParticipants.length} ${t('chat.toolbar.selected')}`}
               </span>
             </div>
-            {!hasNoModelsSelected && (
+            {!isModelsLoading && !hasNoModelsSelected && (
               <AvatarGroup
                 participants={selectedParticipants}
                 allModels={allModels}

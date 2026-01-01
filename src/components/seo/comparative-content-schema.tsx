@@ -1,5 +1,5 @@
 import { BRAND } from '@/constants/brand';
-import { getBaseUrl } from '@/utils/helpers';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 /**
  * Props for the ComparativeContentSchema component
@@ -67,7 +67,7 @@ export function ComparativeContentSchema(props: ComparativeContentSchemaProps) {
     dateModified,
   } = props;
 
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
 
   // Create Article with ItemList for comparison
   const structuredData = {

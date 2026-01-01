@@ -240,10 +240,12 @@ async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void
     case 'api-key': {
       // API key authentication for cron jobs and external services
       const apiKey = c.req.header('x-api-key') || c.req.header('authorization')?.replace('Bearer ', '');
-      // Use Hono context env bindings with fallback to process.env
+
+      // In Cloudflare Workers: c.env contains bindings and secrets from wrangler
+      // In local dev: c.env contains process.env values via Hono dev server
       // Type assertion for optional secrets not in CloudflareEnv definition
       const env = c.env as Record<string, string | undefined>;
-      const expectedApiKey = env.CRON_SECRET || env.API_SECRET_KEY || process.env.CRON_SECRET || process.env.API_SECRET_KEY;
+      const expectedApiKey = env.CRON_SECRET || env.API_SECRET_KEY;
 
       if (!apiKey || !expectedApiKey || apiKey !== expectedApiKey) {
         throw new HTTPException(HttpStatusCodes.UNAUTHORIZED, {

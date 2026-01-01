@@ -1,9 +1,9 @@
 import type { MetadataRoute } from 'next';
 
-import { getBaseUrl } from '@/utils/helpers';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
 
   // In development, disallow all crawling
   if (process.env.NEXT_PUBLIC_WEBAPP_ENV !== 'prod') {

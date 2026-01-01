@@ -332,28 +332,11 @@ app.use('/uploads', bodyLimit({
   onError: c => c.text('Payload Too Large - max 100MB for uploads', 413),
 }));
 
-// CORS configuration - Use environment variables for dynamic origin configuration
-app.use('*', (c, next) => {
-  // CRITICAL FIX: Use process.env fallback for Next.js dev mode
-  // In Cloudflare Workers: c.env has the bindings
-  // In Next.js dev: c.env may be empty, use process.env
-  const appUrl = c.env?.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
-  const webappEnv = c.env?.NEXT_PUBLIC_WEBAPP_ENV || process.env.NEXT_PUBLIC_WEBAPP_ENV || 'local';
-  const nodeEnv = c.env?.NODE_ENV || process.env.NODE_ENV;
-  const isDevelopment = webappEnv === 'local' || nodeEnv === 'development';
-
-  // Build allowed origins dynamically based on environment
-  const allowedOrigins: string[] = [];
-
-  // Only allow localhost in development environment
-  if (isDevelopment) {
-    allowedOrigins.push('http://localhost:3000', 'http://127.0.0.1:3000');
-  }
-
-  // Add current environment URL if available and not localhost
-  if (appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1')) {
-    allowedOrigins.push(appUrl);
-  }
+// CORS configuration - Uses centralized URL config from base-urls.ts
+app.use('*', async (c, next) => {
+  // Dynamic import for centralized URL config
+  const { getAllowedOriginsFromContext } = await import('@/lib/config/base-urls');
+  const allowedOrigins = getAllowedOriginsFromContext(c);
 
   const middleware = cors({
     origin: (origin) => {

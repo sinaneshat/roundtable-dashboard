@@ -1,5 +1,5 @@
 import { BRAND } from '@/constants/brand';
-import { getBaseUrl } from '@/utils/helpers';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 /**
  * Props for the VideoObjectSchema component
@@ -68,7 +68,7 @@ export function VideoObjectSchema(props: VideoObjectSchemaProps) {
     contentRating,
   } = props;
 
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
 
   const structuredData = {
     '@context': 'https://schema.org',

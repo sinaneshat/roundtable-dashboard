@@ -5,11 +5,10 @@
  * All values are converted to pixels for maximum email client compatibility.
  */
 
-// Environment configuration
-export const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-  || (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://app.roundtable.now');
+import { getAppBaseUrl } from '@/lib/config/base-urls';
+
+// Environment configuration - uses centralized URL config
+export const baseUrl = getAppBaseUrl();
 
 // Brand Colors - Aligned with global.css design system light mode (OKLCH converted to hex)
 export const colors = {

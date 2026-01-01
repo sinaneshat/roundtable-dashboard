@@ -37,6 +37,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BRAND } from '@/constants/brand';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { cn } from '@/lib/ui/cn';
 
 type ShareDialogProps = {
@@ -135,7 +136,7 @@ export function ShareDialog({
   const [confirmingPrivate, setConfirmingPrivate] = useState(false);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+  const baseUrl = getAppBaseUrl();
   const shareUrl = `${baseUrl}/public/chat/${slug}`;
   const ogImageUrl = `${baseUrl}/public/chat/${slug}/opengraph-image`;
   const shareTitle = `${threadTitle} - ${BRAND.displayName}`;

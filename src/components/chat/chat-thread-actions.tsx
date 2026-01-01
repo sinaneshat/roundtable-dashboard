@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations';
 import { useMediaQuery } from '@/hooks/utils';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { cn } from '@/lib/ui/cn';
 
 // Flexible thread type that accepts both Date and string dates (for RPC responses)
@@ -60,7 +61,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       ? togglePublicMutation.variables.isPublic
       : thread.isPublic;
 
-  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/public/chat/${slug}`;
+  const shareUrl = `${getAppBaseUrl()}/public/chat/${slug}`;
 
   const handleToggleFavorite = () => {
     toggleFavoriteMutation.mutate({

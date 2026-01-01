@@ -9,30 +9,18 @@
 import { hc } from 'hono/client';
 
 import type { AppType } from '@/api';
+import { getApiBaseUrl, getProductionApiUrl } from '@/lib/config/base-urls';
 
 /**
- * Base API URL - Context7 consistent pattern for SSR/hydration
- * CRITICAL FIX: Ensures consistent base URL between server and client
+ * Get API base URL for Hono RPC client
+ * Server-side: uses production API URL for SSG builds
+ * Client-side: uses same origin to ensure cookies work
  */
-function getBaseUrl() {
-  // Both server and client should use the same base URL for query consistency
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-
-  if (baseUrl) {
-    return baseUrl;
-  }
-
-  // Fallback logic
+function getClientApiUrl() {
   if (typeof window === 'undefined') {
-    // Server-side: use environment-specific URL
-    if (process.env.NEXT_PUBLIC_APP_URL) {
-      return `${process.env.NEXT_PUBLIC_APP_URL}/api/v1`;
-    }
-    return process.env.NODE_ENV === 'development' ? 'http://localhost:3000/api/v1' : 'https://app.roundtable.now/api/v1';
+    return getProductionApiUrl();
   }
-
-  // Client-side: use same origin
-  return `${window.location.origin}/api/v1`;
+  return getApiBaseUrl();
 }
 
 /**
@@ -68,7 +56,7 @@ export async function createApiClient(options?: { bypassCache?: boolean }) {
       headers.Cookie = cookieHeader;
     }
 
-    return hc<AppType>(getBaseUrl(), { headers });
+    return hc<AppType>(getClientApiUrl(), { headers });
   }
 
   // Client-side: Use standard credentials approach
@@ -81,7 +69,7 @@ export async function createApiClient(options?: { bypassCache?: boolean }) {
     headers.Pragma = 'no-cache';
   }
 
-  return hc<AppType>(getBaseUrl(), {
+  return hc<AppType>(getClientApiUrl(), {
     headers,
     init: {
       credentials: 'include',
@@ -104,7 +92,7 @@ export async function createApiClient(options?: { bypassCache?: boolean }) {
  * type instantiation depth issues. Call without await.
  */
 export function createPublicApiClient() {
-  return hc<AppType>(getBaseUrl(), {
+  return hc<AppType>(getClientApiUrl(), {
     headers: {
       Accept: 'application/json',
     },

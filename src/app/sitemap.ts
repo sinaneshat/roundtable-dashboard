@@ -3,10 +3,10 @@ import type { MetadataRoute } from 'next';
 
 import { ThreadStatuses } from '@/api/core/enums';
 import { chatThread, getDbAsync } from '@/db';
-import { getBaseUrl } from '@/utils/helpers';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
   const currentDate = new Date();
 
   // Static pages

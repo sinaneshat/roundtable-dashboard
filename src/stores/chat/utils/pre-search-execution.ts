@@ -7,7 +7,7 @@
  * @module stores/chat/utils/pre-search-execution
  */
 
-import { Environments, MessageStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
+import { MessageStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { ChatThread, PartialPreSearchData, PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 
@@ -268,7 +268,7 @@ export async function executePreSearch(
     }
 
     if (!response.ok) {
-      if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
+      if (process.env.NODE_ENV === 'development') {
         console.error('[executePreSearch] Pre-search execution failed:', response.status);
       }
       store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.FAILED);
@@ -304,7 +304,7 @@ export async function executePreSearch(
 
     return 'complete';
   } catch (error) {
-    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
+    if (process.env.NODE_ENV === 'development') {
       console.error('[executePreSearch] Failed:', error);
     }
     store.getState().clearPreSearchActivity(roundNumber);
