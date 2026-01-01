@@ -3,7 +3,7 @@
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { UIBillingInterval } from '@/api/core/enums';
 import {
@@ -66,6 +66,12 @@ export function PricingContent({
   const t = useTranslations();
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState<PricingTab>(DEFAULT_UI_BILLING_INTERVAL);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Prevent hydration issues with motion components
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
@@ -139,7 +145,7 @@ export function PricingContent({
   return (
     <div className="mx-auto px-3 sm:px-4 md:px-6">
       <div className="space-y-8">
-        {showSubscriptionBanner && activeSubscription && (
+        {showSubscriptionBanner && activeSubscription && isMounted && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -233,7 +239,7 @@ export function PricingContent({
 
           <TabsContent value={CREDITS_TAB} className="mt-0">
             <div className="w-full max-w-4xl mx-auto space-y-6">
-              {!hasCardConnected && (
+              {!hasCardConnected && isMounted && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -261,56 +267,70 @@ export function PricingContent({
 
               {customCreditsProduct && customCreditsProduct.prices && customCreditsProduct.prices.length > 0
                 ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.4, delay: 0.1 }}
-                      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
-                    >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                       {customCreditsProduct.prices
                         .filter((p: Price) => !p.interval && isCreditPackagePriceId(p.id))
                         .sort((a: Price, b: Price) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0))
                         .map((price: Price, index: number) => {
                           const creditsAmount = CREDIT_CONFIG.CUSTOM_CREDITS.packages[price.id as CreditPackagePriceId];
-                          return (
-                            <motion.div
-                              key={price.id}
-                              initial={{ opacity: 0, scale: 0.98 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ duration: 0.3, delay: 0.05 + index * 0.05 }}
-                              className={!hasCardConnected ? 'opacity-50 pointer-events-none' : ''}
-                            >
-                              <PricingCard
-                                name={`${creditsAmount.toLocaleString()} Credits`}
-                                description={t('plans.pricing.custom.features.neverExpires')}
-                                price={{
-                                  amount: price.unitAmount ?? 0,
-                                  currency: price.currency,
-                                }}
-                                features={[
-                                  t('plans.pricing.custom.features.flexibleCredits'),
-                                  t('plans.pricing.custom.features.neverExpires'),
-                                ]}
-                                isProcessingSubscribe={processingPriceId === price.id}
-                                onSubscribe={() => onSubscribe(price.id)}
-                                delay={0.05 + index * 0.05}
-                                isOneTime={true}
-                                creditsAmount={creditsAmount}
-                                disabled={!hasCardConnected}
-                              />
-                            </motion.div>
-                          );
+                          return isMounted
+                            ? (
+                                <motion.div
+                                  key={price.id}
+                                  initial={{ opacity: 0, scale: 0.98 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  transition={{ duration: 0.3, delay: 0.05 + index * 0.05 }}
+                                  className={!hasCardConnected ? 'opacity-50 pointer-events-none' : ''}
+                                >
+                                  <PricingCard
+                                    name={`${creditsAmount.toLocaleString()} Credits`}
+                                    description={t('plans.pricing.custom.features.neverExpires')}
+                                    price={{
+                                      amount: price.unitAmount ?? 0,
+                                      currency: price.currency,
+                                    }}
+                                    features={[
+                                      t('plans.pricing.custom.features.flexibleCredits'),
+                                      t('plans.pricing.custom.features.neverExpires'),
+                                    ]}
+                                    isProcessingSubscribe={processingPriceId === price.id}
+                                    onSubscribe={() => onSubscribe(price.id)}
+                                    delay={0.05 + index * 0.05}
+                                    isOneTime={true}
+                                    creditsAmount={creditsAmount}
+                                    disabled={!hasCardConnected}
+                                  />
+                                </motion.div>
+                              )
+                            : (
+                                <div key={price.id} className={!hasCardConnected ? 'opacity-50 pointer-events-none' : ''}>
+                                  <PricingCard
+                                    name={`${creditsAmount.toLocaleString()} Credits`}
+                                    description={t('plans.pricing.custom.features.neverExpires')}
+                                    price={{
+                                      amount: price.unitAmount ?? 0,
+                                      currency: price.currency,
+                                    }}
+                                    features={[
+                                      t('plans.pricing.custom.features.flexibleCredits'),
+                                      t('plans.pricing.custom.features.neverExpires'),
+                                    ]}
+                                    isProcessingSubscribe={processingPriceId === price.id}
+                                    onSubscribe={() => onSubscribe(price.id)}
+                                    delay={0.05 + index * 0.05}
+                                    isOneTime={true}
+                                    creditsAmount={creditsAmount}
+                                    disabled={!hasCardConnected}
+                                  />
+                                </div>
+                              );
                         })}
-                    </motion.div>
+                    </div>
                   )
                 : (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-center py-12"
-                    >
+                    <div className="text-center py-12">
                       <p className="text-muted-foreground">{t('plans.noCreditsPackages')}</p>
-                    </motion.div>
+                    </div>
                   )}
             </div>
           </TabsContent>
@@ -350,17 +370,19 @@ function ProductGrid({
   getAnnualSavings,
 }: ProductGridProps) {
   const t = useTranslations();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   if (products.length === 0) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex flex-col items-center justify-center py-16"
-      >
+      <div className="flex flex-col items-center justify-center py-16">
         <p className="text-sm text-muted-foreground">
           {t('billing.noPlansForInterval')}
         </p>
-      </motion.div>
+      </div>
     );
   }
 
@@ -379,38 +401,48 @@ function ProductGrid({
           const isMostPopular = price.unitAmount > 0 && products.length >= 2 && index === 1;
           const isFreeProduct = price.unitAmount === 0;
 
-          return (
-            <motion.div
-              key={product.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: index * 0.1 }}
-            >
-              <PricingCard
-                name={product.name}
-                description={product.description}
-                price={{
-                  amount: price.unitAmount,
-                  currency: price.currency,
-                  interval,
-                  trialDays: price.trialPeriodDays,
-                }}
-                features={product.features}
-                isCurrentPlan={hasSubscription}
-                isMostPopular={isMostPopular}
-                isProcessingSubscribe={processingPriceId === price.id}
-                isProcessingCancel={subscription ? cancelingSubscriptionId === subscription.id : false}
-                isProcessingManageBilling={hasSubscription ? isManagingBilling : false}
-                hasOtherSubscription={hasAnyActiveSubscription && !hasSubscription}
-                onSubscribe={() => onSubscribe(price.id)}
-                onCancel={subscription ? () => onCancel(subscription.id) : undefined}
-                onManageBilling={hasSubscription ? onManageBilling : undefined}
-                delay={index * 0.1}
-                annualSavingsPercent={interval === UIBillingIntervals.YEAR ? getAnnualSavings(product.id) : undefined}
-                isFreeProduct={isFreeProduct}
-              />
-            </motion.div>
+          const cardContent = (
+            <PricingCard
+              name={product.name}
+              description={product.description}
+              price={{
+                amount: price.unitAmount,
+                currency: price.currency,
+                interval,
+                trialDays: price.trialPeriodDays,
+              }}
+              features={product.features}
+              isCurrentPlan={hasSubscription}
+              isMostPopular={isMostPopular}
+              isProcessingSubscribe={processingPriceId === price.id}
+              isProcessingCancel={subscription ? cancelingSubscriptionId === subscription.id : false}
+              isProcessingManageBilling={hasSubscription ? isManagingBilling : false}
+              hasOtherSubscription={hasAnyActiveSubscription && !hasSubscription}
+              onSubscribe={() => onSubscribe(price.id)}
+              onCancel={subscription ? () => onCancel(subscription.id) : undefined}
+              onManageBilling={hasSubscription ? onManageBilling : undefined}
+              delay={index * 0.1}
+              annualSavingsPercent={interval === UIBillingIntervals.YEAR ? getAnnualSavings(product.id) : undefined}
+              isFreeProduct={isFreeProduct}
+            />
           );
+
+          return isMounted
+            ? (
+                <motion.div
+                  key={product.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                >
+                  {cardContent}
+                </motion.div>
+              )
+            : (
+                <div key={product.id}>
+                  {cardContent}
+                </div>
+              );
         })}
       </div>
     </div>

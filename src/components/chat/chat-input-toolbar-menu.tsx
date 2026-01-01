@@ -117,26 +117,33 @@ export const ChatInputToolbarMenu = memo(({
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={disabled}
+                disabled={disabled || isModelsLoading}
                 onClick={onOpenModelModal}
                 className={cn(
                   'h-9 rounded-2xl gap-1.5 text-xs px-3',
                   hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/20',
                 )}
               >
-                {hasNoModelsSelected && <Icons.alertCircle className="size-3.5" />}
-                <span>{t('chat.models.models')}</span>
                 {isModelsLoading
                   ? (
-                      <span className="text-muted-foreground">{selectedParticipants.length}</span>
+                      <>
+                        <Icons.loader className="size-3.5 animate-spin" />
+                        <span>{t('chat.models.models')}</span>
+                      </>
                     )
-                  : !hasNoModelsSelected && (
-                      <AvatarGroup
-                        participants={selectedParticipants}
-                        allModels={allModels}
-                        size="sm"
-                        maxVisible={3}
-                      />
+                  : (
+                      <>
+                        {hasNoModelsSelected && <Icons.alertCircle className="size-3.5" />}
+                        <span>{t('chat.models.models')}</span>
+                        {!hasNoModelsSelected && (
+                          <AvatarGroup
+                            participants={selectedParticipants}
+                            allModels={allModels}
+                            size="sm"
+                            maxVisible={3}
+                          />
+                        )}
+                      </>
                     )}
               </Button>
             </TooltipTrigger>
@@ -253,8 +260,10 @@ export const ChatInputToolbarMenu = memo(({
           <button
             type="button"
             onClick={onOpenModelModal}
+            disabled={isModelsLoading}
             className={cn(
               'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+              isModelsLoading && 'opacity-50 cursor-not-allowed',
               hasNoModelsSelected
                 ? 'bg-destructive/10 border border-destructive/30 hover:bg-destructive/15'
                 : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
@@ -265,9 +274,11 @@ export const ChatInputToolbarMenu = memo(({
               hasNoModelsSelected ? 'bg-destructive/20' : 'bg-cyan-500/10',
             )}
             >
-              {hasNoModelsSelected
-                ? <Icons.alertCircle className="size-5 text-destructive" />
-                : <Icons.sparkles className="size-5 text-cyan-400" />}
+              {isModelsLoading
+                ? <Icons.loader className="size-5 text-cyan-400 animate-spin" />
+                : hasNoModelsSelected
+                  ? <Icons.alertCircle className="size-5 text-destructive" />
+                  : <Icons.sparkles className="size-5 text-cyan-400" />}
             </div>
             <div className="flex flex-col flex-1 min-w-0 text-left">
               <span className={cn(
@@ -282,9 +293,11 @@ export const ChatInputToolbarMenu = memo(({
                 hasNoModelsSelected ? 'text-destructive/70' : 'text-muted-foreground',
               )}
               >
-                {hasNoModelsSelected
-                  ? t('chat.models.minimumRequired.description', { count: 1 })
-                  : `${selectedParticipants.length} ${t('chat.toolbar.selected')}`}
+                {isModelsLoading
+                  ? t('chat.models.loading')
+                  : hasNoModelsSelected
+                    ? t('chat.models.minimumRequired.description', { count: 1 })
+                    : `${selectedParticipants.length} ${t('chat.toolbar.selected')}`}
               </span>
             </div>
             {!isModelsLoading && !hasNoModelsSelected && (

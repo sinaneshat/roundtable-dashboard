@@ -94,7 +94,7 @@ export function HoverBorderGradient({
         initial={{ background: movingMap[direction] }}
         animate={{
           background: hovered
-            ? [movingMap[direction] as string, highlight]
+            ? [movingMap[direction], highlight]
             : movingMap[direction],
         }}
         transition={{ ease: 'linear', duration: duration ?? 1 }}

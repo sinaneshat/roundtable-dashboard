@@ -1,5 +1,5 @@
 import { useTranslations } from 'next-intl';
-import type { FieldPath, FieldValues, PathValue } from 'react-hook-form';
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
 
 import { Icons } from '@/components/icons';
@@ -45,7 +45,7 @@ export function RHFComboBox<
   loading = false,
   options,
 }: RHFComboBoxProps<TFieldValues, TName>) {
-  const { control, setValue } = useFormContext<TFieldValues>();
+  const { control } = useFormContext<TFieldValues>();
   const t = useTranslations();
 
   return (
@@ -88,7 +88,7 @@ export function RHFComboBox<
                           value={option.label}
                           key={option.value}
                           onSelect={() => {
-                            setValue(name, option.value as PathValue<TFieldValues, TName>);
+                            field.onChange(option.value);
                           }}
                         >
                           <Icons.check

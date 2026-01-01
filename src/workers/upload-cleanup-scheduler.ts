@@ -222,7 +222,17 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
         // Remove from cleanup state only on successful check
         this.sql.exec('DELETE FROM cleanup_state WHERE upload_id = ?', uploadId);
       } catch (error) {
-        console.error(`[UploadCleanup] Error processing upload ${uploadId}:`, error);
+        // Structured logging for Cloudflare Workers Logs indexing
+        console.error({
+          log_type: 'alarm_error',
+          timestamp: new Date().toISOString(),
+          durable_object: 'UploadCleanupScheduler',
+          operation: 'processCleanups',
+          upload_id: uploadId,
+          r2_key: r2Key,
+          error_message: error instanceof Error ? error.message : String(error),
+          error_stack: error instanceof Error ? error.stack : undefined,
+        });
         // Don't remove from state - will be retried on next alarm
       }
     }
@@ -252,7 +262,16 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
         const result = await checkUploadOrphaned(uploadId, this.db);
         return result.isOrphaned;
       } catch (error) {
-        console.error(`[UploadCleanup] D1 query attempt ${attempt + 1}/${MAX_D1_RETRIES + 1} failed for ${uploadId}:`, error);
+        console.error({
+          log_type: 'alarm_retry',
+          timestamp: new Date().toISOString(),
+          durable_object: 'UploadCleanupScheduler',
+          operation: 'checkIfOrphanedWithRetry',
+          upload_id: uploadId,
+          attempt: attempt + 1,
+          max_attempts: MAX_D1_RETRIES + 1,
+          error_message: error instanceof Error ? error.message : String(error),
+        });
         if (attempt < MAX_D1_RETRIES) {
           // Exponential backoff: 100ms, 200ms, 400ms...
           await new Promise(resolve => setTimeout(resolve, 100 * 2 ** attempt));
@@ -317,7 +336,16 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
 
       return new Response('Not Found', { status: 404 });
     } catch (error) {
-      console.error('[UploadCleanupScheduler] Error:', error);
+      console.error({
+        log_type: 'do_fetch_error',
+        timestamp: new Date().toISOString(),
+        durable_object: 'UploadCleanupScheduler',
+        operation: 'fetch',
+        path,
+        method: request.method,
+        error_message: error instanceof Error ? error.message : String(error),
+        error_stack: error instanceof Error ? error.stack : undefined,
+      });
       return new Response(
         JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } },

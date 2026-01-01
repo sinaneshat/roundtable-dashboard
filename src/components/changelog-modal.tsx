@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { APP_VERSION } from '@/lib/version';
+import { APP_VERSION } from '@/constants/version';
 
 const VERSION_STORAGE_KEY = 'app-version';
 

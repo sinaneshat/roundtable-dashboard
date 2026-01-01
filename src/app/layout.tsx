@@ -25,7 +25,7 @@ const VALID_CONTENT_TYPES = ['how-to', 'comparison', 'review', 'guide', 'faq', '
 type ContentType = (typeof VALID_CONTENT_TYPES)[number];
 
 function isValidContentType(value: string): value is ContentType {
-  return VALID_CONTENT_TYPES.includes(value as ContentType);
+  return (VALID_CONTENT_TYPES as readonly string[]).includes(value);
 }
 
 export const viewport: Viewport = {

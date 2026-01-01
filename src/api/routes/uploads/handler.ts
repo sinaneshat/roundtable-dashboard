@@ -26,6 +26,7 @@ import {
 } from '@/api/core';
 import {
   ALLOWED_MIME_TYPES,
+  ChatAttachmentStatuses,
   MAX_SINGLE_UPLOAD_SIZE,
   MIN_MULTIPART_PART_SIZE,
 } from '@/api/core/enums';
@@ -423,7 +424,7 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
         r2Key,
         fileSize: file.size,
         mimeType: file.type,
-        status: 'ready',
+        status: ChatAttachmentStatuses.READY,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -825,7 +826,7 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
         r2Key,
         fileSize: body.fileSize,
         mimeType: body.mimeType,
-        status: 'uploading',
+        status: ChatAttachmentStatuses.UPLOADING,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -962,7 +963,7 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
       await db
         .update(tables.upload)
         .set({
-          status: 'failed',
+          status: ChatAttachmentStatuses.FAILED,
           metadata: { errorMessage: error instanceof Error ? error.message : 'Unknown error' },
           updatedAt: new Date(),
         })
@@ -980,7 +981,7 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
     const [updated] = await db
       .update(tables.upload)
       .set({
-        status: 'ready',
+        status: ChatAttachmentStatuses.READY,
         updatedAt: new Date(),
       })
       .where(eq(tables.upload.id, uploadId))

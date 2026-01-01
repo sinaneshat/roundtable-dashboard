@@ -9,6 +9,9 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
+import type { SizeValidationType } from '@/api/core/enums';
+import { SizeValidationTypes } from '@/api/core/enums';
+
 // ============================================================================
 // SIZE LIMIT CONFIGURATIONS
 // ============================================================================
@@ -59,13 +62,13 @@ export type SizeLimitConfig = {
 export type SizeValidationResult = {
   isValid: boolean;
   violations: Array<{
-    type: string;
+    type: SizeValidationType;
     limit: number;
     actual: number;
     message: string;
   }>;
   warnings: Array<{
-    type: string;
+    type: SizeValidationType;
     threshold: number;
     actual: number;
     message: string;
@@ -148,7 +151,7 @@ export function validateRequestSize(
     const url = c.req.raw.url;
     if (url.length > limits.requestUrl!) {
       violations.push({
-        type: 'url_length',
+        type: SizeValidationTypes.URL_LENGTH,
         limit: limits.requestUrl!,
         actual: url.length,
         message: `Request URL too long: ${url.length} bytes exceeds limit of ${formatBytes(limits.requestUrl!)}`,
@@ -161,7 +164,7 @@ export function validateRequestSize(
 
     if (headersSize > limits.requestHeaders!) {
       violations.push({
-        type: 'headers_size',
+        type: SizeValidationTypes.HEADERS_SIZE,
         limit: limits.requestHeaders!,
         actual: headersSize,
         message: `Request headers too large: ${formatBytes(headersSize)} exceeds limit of ${formatBytes(limits.requestHeaders!)}`,
@@ -173,7 +176,7 @@ export function validateRequestSize(
       const headerSize = name.length + value.length;
       if (headerSize > limits.singleHeader!) {
         violations.push({
-          type: 'single_header_size',
+          type: SizeValidationTypes.SINGLE_HEADER_SIZE,
           limit: limits.singleHeader!,
           actual: headerSize,
           message: `Header '${name}' too large: ${formatBytes(headerSize)} exceeds limit of ${formatBytes(limits.singleHeader!)}`,
@@ -186,7 +189,7 @@ export function validateRequestSize(
 
     if (headersSize > limits.requestHeaders! * warningThreshold) {
       warnings.push({
-        type: 'headers_size_warning',
+        type: SizeValidationTypes.HEADERS_SIZE_WARNING,
         threshold: limits.requestHeaders! * warningThreshold,
         actual: headersSize,
         message: `Request headers approaching limit: ${formatBytes(headersSize)} is ${Math.round((headersSize / limits.requestHeaders!) * 100)}% of limit`,
@@ -204,7 +207,7 @@ export function validateRequestSize(
       isValid: true,
       violations: [],
       warnings: [{
-        type: 'validation_error',
+        type: SizeValidationTypes.VALIDATION_ERROR,
         threshold: 0,
         actual: 0,
         message: `Size validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -238,21 +241,21 @@ export async function validateRequestBodySize(
 
       if (Number.isNaN(contentLength) || contentLength < 0) {
         violations.push({
-          type: 'invalid_content_length',
+          type: SizeValidationTypes.INVALID_CONTENT_LENGTH,
           limit: 0,
           actual: 0,
           message: 'Invalid Content-Length header',
         });
       } else if (contentLength > applicableLimit!) {
         violations.push({
-          type: 'body_size_header',
+          type: SizeValidationTypes.BODY_SIZE_HEADER,
           limit: applicableLimit!,
           actual: contentLength,
           message: `Request body too large: ${formatBytes(contentLength)} exceeds limit of ${formatBytes(applicableLimit!)} for ${contentCategory || 'general'} content`,
         });
       } else if (contentLength > applicableLimit! * 0.8) {
         warnings.push({
-          type: 'body_size_warning',
+          type: SizeValidationTypes.BODY_SIZE_WARNING,
           threshold: applicableLimit! * 0.8,
           actual: contentLength,
           message: `Request body approaching limit: ${formatBytes(contentLength)} is ${Math.round((contentLength / applicableLimit!) * 100)}% of limit`,
@@ -270,7 +273,7 @@ export async function validateRequestBodySize(
       isValid: true,
       violations: [],
       warnings: [{
-        type: 'validation_error',
+        type: SizeValidationTypes.VALIDATION_ERROR,
         threshold: 0,
         actual: 0,
         message: `Body size validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -300,7 +303,7 @@ export function validateResponseSize(
 
     if (headersSize > limits.responseHeaders!) {
       violations.push({
-        type: 'response_headers_size',
+        type: SizeValidationTypes.RESPONSE_HEADERS_SIZE,
         limit: limits.responseHeaders!,
         actual: headersSize,
         message: `Response headers too large: ${formatBytes(headersSize)} exceeds limit of ${formatBytes(limits.responseHeaders!)}`,
@@ -314,14 +317,14 @@ export function validateResponseSize(
 
       if (!Number.isNaN(contentLength) && contentLength > limits.responseBody!) {
         violations.push({
-          type: 'response_body_size',
+          type: SizeValidationTypes.RESPONSE_BODY_SIZE,
           limit: limits.responseBody!,
           actual: contentLength,
           message: `Response body too large: ${formatBytes(contentLength)} exceeds limit of ${formatBytes(limits.responseBody!)}`,
         });
       } else if (!Number.isNaN(contentLength) && contentLength > limits.responseBody! * 0.8) {
         warnings.push({
-          type: 'response_body_warning',
+          type: SizeValidationTypes.RESPONSE_BODY_WARNING,
           threshold: limits.responseBody! * 0.8,
           actual: contentLength,
           message: `Response body approaching limit: ${formatBytes(contentLength)} is ${Math.round((contentLength / limits.responseBody!) * 100)}% of limit`,
@@ -339,7 +342,7 @@ export function validateResponseSize(
       isValid: true,
       violations: [],
       warnings: [{
-        type: 'validation_error',
+        type: SizeValidationTypes.VALIDATION_ERROR,
         threshold: 0,
         actual: 0,
         message: `Response size validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

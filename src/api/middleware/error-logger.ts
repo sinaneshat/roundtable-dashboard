@@ -8,6 +8,11 @@
  * and HTTP errors at the Hono framework level. Individual route handlers
  * do NOT need to add logging - it's handled here automatically.
  *
+ * Cloudflare Workers Logs Best Practice:
+ * - Log structured JSON objects for automatic field indexing
+ * - This enables filtering by any field (error_type, path, status, etc.)
+ * - See: https://developers.cloudflare.com/workers/observability/logs/workers-logs/
+ *
  * Location: /src/api/middleware/error-logger.ts
  * Used by: src/api/index.ts (global middleware)
  */
@@ -21,51 +26,65 @@ import type { ApiEnv } from '@/api/types';
 /**
  * Global error logging middleware
  *
- * Logs ALL errors that occur in the API layer to console.error with context.
+ * Logs ALL errors as structured JSON for Cloudflare Workers Logs indexing.
  * Then delegates to Stoker's onError for response formatting.
  *
- * Error Logging Format:
- * - Path: Request path that caused the error
- * - Method: HTTP method (GET, POST, etc.)
- * - Status: HTTP status code
- * - Message: Error message
- * - Stack: Full stack trace (in development)
+ * Logged Fields (auto-indexed by Cloudflare):
+ * - log_type: "api_error" for filtering
+ * - timestamp: ISO timestamp
+ * - method: HTTP method
+ * - path: Request path
+ * - status: HTTP status code
+ * - error_name: Error class name
+ * - error_message: Error message
+ * - error_stack: Stack trace (always included for debugging)
+ * - request_id: CF-Ray header if available
+ * - cf_colo: Cloudflare datacenter
  *
  * @example
  * // In src/api/index.ts:
  * app.onError(errorLogger);
  */
 export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
-  // Extract error details for logging
-  const path = c.req.path;
-  const method = c.req.method;
-  const timestamp = new Date().toISOString();
-
   // Determine status code
   let status = 500;
+  let errorType = 'UnknownError';
+
   if (err instanceof HTTPException) {
     status = err.status;
+    errorType = 'HTTPException';
+  } else if (err instanceof Error) {
+    errorType = err.constructor.name;
   }
 
-  // Build error context for logging
-  const errorContext = {
-    timestamp,
-    method,
-    path,
+  // Extract Cloudflare request context
+  const cfRay = c.req.header('cf-ray');
+  const cf = c.req.raw.cf as Record<string, unknown> | undefined;
+
+  // Build structured error log (Cloudflare auto-indexes JSON fields)
+  const errorLog = {
+    log_type: 'api_error',
+    timestamp: new Date().toISOString(),
+    method: c.req.method,
+    path: c.req.path,
     status,
-    message: err.message,
+    error_type: errorType,
+    error_name: err.name,
+    error_message: err.message,
+    error_stack: err.stack,
+    // Cloudflare context
+    request_id: cfRay,
+    cf_colo: cf?.colo,
+    cf_country: cf?.country,
+    // URL details for debugging
+    url: c.req.url,
+    query: c.req.query(),
   };
 
-  // Log error with full context
-  // ✅ Always log errors - this is the single point of failure tracking
-  console.error(
-    `[API Error] ${method} ${path} → ${status}`,
-    errorContext,
-    // Include stack trace in development
-    c.env.NODE_ENV === 'development' ? err.stack : undefined,
-  );
+  // Log as structured JSON for Cloudflare Workers Logs
+  // Cloudflare automatically indexes all JSON fields for filtering
+  console.error(errorLog);
 
   // Delegate to Stoker's onError for response formatting
-  // Stoker handles proper error response structure and status codes
   return onError(err, c);
 };

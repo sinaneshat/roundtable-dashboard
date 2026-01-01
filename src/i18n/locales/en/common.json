@@ -340,6 +340,7 @@
     "models": {
       "aiModels": "AI Models",
       "models": "Models",
+      "loading": "Loading...",
       "searchModels": "Search AI models...",
       "noModelsFound": "No models found.",
       "selectedModels": "Selected Models",

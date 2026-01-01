@@ -10,6 +10,8 @@ import type { z } from 'zod';
 
 import type { EnhancedHTTPException } from '@/api/core';
 import { HTTPExceptionFactory } from '@/api/core';
+import type { CircuitBreakerState } from '@/api/core/enums';
+import { CircuitBreakerStates } from '@/api/core/enums';
 
 // CloudflareEnv is globally available from cloudflare-env.d.ts
 import { createError } from './error-handling';
@@ -70,22 +72,22 @@ export type UnvalidatedParseResult
 // CIRCUIT BREAKER STATE MANAGEMENT
 // ============================================================================
 
-type CircuitBreakerState = {
+type CircuitBreakerStateData = {
   failures: number;
   lastFailureTime: number;
   nextAttemptTime: number;
-  state: 'closed' | 'open' | 'half-open';
+  state: CircuitBreakerState;
 };
 
-const circuitBreakers = new Map<string, CircuitBreakerState>();
+const circuitBreakers = new Map<string, CircuitBreakerStateData>();
 
-function getCircuitBreakerState(url: string): CircuitBreakerState {
+function getCircuitBreakerState(url: string): CircuitBreakerStateData {
   if (!circuitBreakers.has(url)) {
     circuitBreakers.set(url, {
       failures: 0,
       lastFailureTime: 0,
       nextAttemptTime: 0,
-      state: 'closed',
+      state: CircuitBreakerStates.CLOSED,
     });
   }
   return circuitBreakers.get(url)!;
@@ -102,13 +104,13 @@ function updateCircuitBreakerState(
   if (success) {
     // Reset on success
     state.failures = 0;
-    state.state = 'closed';
+    state.state = CircuitBreakerStates.CLOSED;
   } else if (config.circuitBreaker) {
     state.failures++;
     state.lastFailureTime = now;
 
     if (state.failures >= config.circuitBreaker.failureThreshold) {
-      state.state = 'open';
+      state.state = CircuitBreakerStates.OPEN;
       state.nextAttemptTime = now + config.circuitBreaker.resetTimeoutMs;
     }
   }
@@ -122,15 +124,15 @@ function shouldAllowRequest(url: string, config: FetchConfig): boolean {
   const now = Date.now();
 
   switch (state.state) {
-    case 'closed':
+    case CircuitBreakerStates.CLOSED:
       return true;
-    case 'open':
+    case CircuitBreakerStates.OPEN:
       if (now >= state.nextAttemptTime) {
-        state.state = 'half-open';
+        state.state = CircuitBreakerStates.HALF_OPEN;
         return true;
       }
       return false;
-    case 'half-open':
+    case CircuitBreakerStates.HALF_OPEN:
       return true;
     default:
       return true;

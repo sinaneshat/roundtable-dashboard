@@ -268,20 +268,6 @@ export const ChatInput = memo(({
         <div className="flex flex-col overflow-hidden h-full">
           {showCreditAlert && <QuotaAlertExtension />}
           {needsCardConnection && <CardConnectionAlert />}
-          {isModelsLoading && (
-            <div
-              className={cn(
-                'flex items-center gap-2 px-3 py-2',
-                'border-0 border-b border-border/20 rounded-none rounded-t-2xl',
-                'bg-muted/30',
-              )}
-            >
-              <Icons.loader className="size-3 animate-spin text-muted-foreground" />
-              <p className="text-[10px] leading-tight text-muted-foreground font-medium flex-1 min-w-0">
-                {t('chat.input.loadingModels')}
-              </p>
-            </div>
-          )}
           {showNoModelsError && (
             <div
               className={cn(

@@ -6,6 +6,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { ReactNode } from 'react';
 import { Suspense, useEffect } from 'react';
 
+import { GlobalErrorBoundary } from '@/components/errors/global-error-boundary';
 import { VersionUpdateModal } from '@/components/modals/version-update-modal';
 import { Toaster } from '@/components/ui/toaster';
 import type { ModelPreferencesState } from '@/stores/preferences';
@@ -76,7 +77,9 @@ export function AppProviders({
                 timeZone={timeZone}
                 now={now}
               >
-                {env.NEXT_PUBLIC_MAINTENANCE === 'true' ? <div>Maintenance</div> : children}
+                <GlobalErrorBoundary>
+                  {env.NEXT_PUBLIC_MAINTENANCE === 'true' ? <div>Maintenance</div> : children}
+                </GlobalErrorBoundary>
                 <VersionUpdateModal />
                 <Toaster />
               </NextIntlClientProvider>

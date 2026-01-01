@@ -142,7 +142,7 @@ export {
   isParticipantContext,
   isParticipantUpdatePayload,
   MinimalParticipantSchema,
-  ModelIdSchema,
+  ModelIdReferenceSchema,
   ModelReferenceSchema,
   NO_PARTICIPANT_SENTINEL,
   NonEmptyParticipantsArraySchema,

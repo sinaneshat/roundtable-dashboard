@@ -72,9 +72,10 @@ export const ParticipantIdSchema = z.string().min(1, 'Participant ID required');
 export const ParticipantRoleSchema = z.string().nullable();
 
 /**
- * Model ID schema - validates model ID in message metadata
+ * Model ID reference schema - validates model ID string in message metadata
+ * NOTE: Use ModelIdSchema from @/api/core/enums for strict enum validation
  */
-export const ModelIdSchema = z.string().min(1, 'Model ID required');
+export const ModelIdReferenceSchema = z.string().min(1, 'Model ID required');
 
 // ============================================================================
 // MESSAGE METADATA

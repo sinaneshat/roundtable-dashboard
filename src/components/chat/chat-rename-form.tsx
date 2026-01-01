@@ -83,7 +83,9 @@ export const ChatRenameForm = memo(({
         {...registerProps}
         ref={(e) => {
           registerRef(e);
-          (inputRef as React.MutableRefObject<HTMLInputElement | null>).current = e;
+          if (inputRef.current !== undefined) {
+            inputRef.current = e;
+          }
         }}
         type="text"
         disabled={isPending}

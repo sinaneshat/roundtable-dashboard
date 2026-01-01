@@ -443,12 +443,16 @@ export function createModelPreferencesStore(
               cookieStorage.removeItem(name);
             },
           },
-          partialize: state => ({
-            selectedModelIds: state.selectedModelIds,
-            modelOrder: state.modelOrder,
-            selectedMode: state.selectedMode,
-            enableWebSearch: state.enableWebSearch,
-          }) as ModelPreferencesStore,
+          // Type assertion required: Zustand persist middleware expects PersistedState to extend S,
+          // but we only persist a subset. This is the official Zustand pattern for partial persistence.
+          // @see https://docs.pmnd.rs/zustand/integrations/persisting-store-data#partialize
+          partialize: state =>
+            ({
+              selectedModelIds: state.selectedModelIds,
+              modelOrder: state.modelOrder,
+              selectedMode: state.selectedMode,
+              enableWebSearch: state.enableWebSearch,
+            }) as ModelPreferencesStore,
           // ✅ OFFICIAL PATTERN: skipHydration for SSR
           // Source: persist.md - prevents automatic hydration
           skipHydration: true,
