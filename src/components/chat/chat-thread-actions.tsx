@@ -1,10 +1,10 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import type { ChatThread } from '@/api/routes/chat/schema';
-import { ShareDialog } from '@/components/chat/share-dialog';
 import { SocialShareButton } from '@/components/chat/social-share-button';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,12 @@ import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/muta
 import { useMediaQuery } from '@/hooks/utils';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { cn } from '@/lib/ui/cn';
+
+// Lazy-loaded - ShareDialog contains heavy next-share library (~200KB)
+const ShareDialog = dynamic(
+  () => import('@/components/chat/share-dialog').then(m => m.ShareDialog),
+  { ssr: false },
+);
 
 // Flexible thread type that accepts both Date and string dates (for RPC responses)
 type FlexibleThread = Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {

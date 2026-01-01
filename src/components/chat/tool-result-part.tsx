@@ -1,4 +1,6 @@
 'use client';
+import dynamic from 'next/dynamic';
+
 import { ComponentVariants } from '@/api/core/enums';
 import { WebSearchResultSchema } from '@/api/routes/chat/schema';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +8,11 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
 
-import { WebSearchDisplay } from './web-search-display';
+// Lazy-loaded - only rendered when web_search tool results exist (~180 lines)
+const WebSearchDisplay = dynamic(
+  () => import('./web-search-display').then(m => m.WebSearchDisplay),
+  { ssr: false },
+);
 
 type ToolResultPartProps = {
   part: Extract<MessagePart, { type: 'tool-result' }>;

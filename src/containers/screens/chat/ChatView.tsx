@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -9,8 +10,6 @@ import { ChatModeSchema, MessageStatuses, ScreenModes, SubscriptionTiers } from 
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
-import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
-import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { useChatStore, useChatStoreApi } from '@/components/providers';
@@ -35,6 +34,16 @@ import {
   useFlowLoading,
   useThreadActions,
 } from '@/stores/chat';
+
+// Lazy-loaded modals - only loaded when opened (~1000 lines total)
+const ModelSelectionModal = dynamic(
+  () => import('@/components/chat/model-selection-modal').then(m => m.ModelSelectionModal),
+  { ssr: false },
+);
+const ConversationModeModal = dynamic(
+  () => import('@/components/chat/conversation-mode-modal').then(m => m.ConversationModeModal),
+  { ssr: false },
+);
 
 export type ChatViewProps = {
   user: {

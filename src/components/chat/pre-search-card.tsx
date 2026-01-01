@@ -1,6 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -20,7 +21,11 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { cn } from '@/lib/ui/cn';
 import { AnimationIndices } from '@/stores/chat';
 
-import { PreSearchStream } from './pre-search-stream';
+// Lazy-loaded - only rendered when pre-search streaming is active (~637 lines)
+const PreSearchStream = dynamic(
+  () => import('./pre-search-stream').then(m => m.PreSearchStream),
+  { ssr: false },
+);
 
 // Infer PreSearchDataPayload from StoredPreSearch
 type PreSearchDataPayload = NonNullable<StoredPreSearch['searchData']>;

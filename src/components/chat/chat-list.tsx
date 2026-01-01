@@ -1,5 +1,6 @@
 'use client';
 import { motion } from 'motion/react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
@@ -7,7 +8,6 @@ import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 
 import type { ChatSidebarItem } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatRenameForm } from '@/components/chat/chat-rename-form';
-import { ShareDialog } from '@/components/chat/share-dialog';
 import { Icons } from '@/components/icons';
 import {
   AlertDialog,
@@ -35,6 +35,12 @@ import {
 } from '@/components/ui/sidebar';
 import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations';
 import { useCurrentPathname } from '@/hooks/utils';
+
+// Lazy-loaded - ShareDialog contains heavy next-share library (~200KB)
+const ShareDialog = dynamic(
+  () => import('@/components/chat/share-dialog').then(m => m.ShareDialog),
+  { ssr: false },
+);
 
 /**
  * Check if a chat is active by comparing pathname against both current slug and previousSlug

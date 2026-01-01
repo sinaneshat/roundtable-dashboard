@@ -2,6 +2,7 @@
 
 import type { ChatStatus } from 'ai';
 import { motion } from 'motion/react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -13,8 +14,6 @@ import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
-import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
-import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import {
@@ -49,6 +48,16 @@ import {
 } from '@/stores/chat';
 
 import { ChatView } from './ChatView';
+
+// Lazy-loaded modals - only loaded when opened (~1000 lines total)
+const ModelSelectionModal = dynamic(
+  () => import('@/components/chat/model-selection-modal').then(m => m.ModelSelectionModal),
+  { ssr: false },
+);
+const ConversationModeModal = dynamic(
+  () => import('@/components/chat/conversation-mode-modal').then(m => m.ConversationModeModal),
+  { ssr: false },
+);
 
 export default function ChatOverviewScreen() {
   const t = useTranslations();
