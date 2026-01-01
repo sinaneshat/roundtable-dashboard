@@ -18,6 +18,8 @@ type QuickStartSuggestion = {
   prompt: string;
   mode: ChatMode;
   participants: ParticipantConfig[];
+  /** Participant count for skeleton loading when models not yet available */
+  participantCount?: number;
 };
 type ChatQuickStartProps = {
   onSuggestionClick: (
@@ -33,7 +35,7 @@ export function ChatQuickStart({
 }: ChatQuickStartProps) {
   const { data: usageData } = useUsageStatsQuery();
   const userTier: SubscriptionTier = usageData?.data?.plan?.type === PlanTypes.PAID ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
-  const { data: modelsResponse } = useModelsQuery();
+  const { data: modelsResponse, isPending: isModelsLoading } = useModelsQuery();
 
   const allModels = useMemo(() => {
     const models = modelsResponse?.success ? modelsResponse.data.items : [];
@@ -83,18 +85,15 @@ export function ChatQuickStart({
     [modelsByProvider],
   );
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
-    // Only show suggestions if we have valid models available
     const availableModelIds = accessibleModels
       .map(m => m.id)
       .filter(id => id && id.length > 0);
 
-    // No suggestions if no valid models
-    if (availableModelIds.length === 0) {
-      return [];
-    }
-
     // Helper to get unique models, ensuring we always return models even if not from unique providers
     const getModelsForTier = (idealCount: number): string[] => {
+      if (availableModelIds.length === 0)
+        return [];
+
       // Try to get unique provider models first
       const uniqueProviderModels = selectUniqueProviderModels(idealCount);
 
@@ -127,11 +126,10 @@ export function ChatQuickStart({
 
     const freeTierSuggestions: QuickStartSuggestion[] = (() => {
       const models = freeModels;
-      if (models.length === 0) {
-        return [];
-      }
 
       const buildParticipants = (roles: string[]) => {
+        if (models.length === 0)
+          return [];
         const participants = roles
           .slice(0, models.length)
           .map((role, idx) => {
@@ -161,6 +159,7 @@ export function ChatQuickStart({
             'Security Realist',
             'Legal Scholar',
           ]),
+          participantCount: 3,
         },
         {
           title:
@@ -173,6 +172,7 @@ export function ChatQuickStart({
             'Bioethicist',
             'Ecologist',
           ]),
+          participantCount: 3,
         },
         {
           title: 'Is meritocracy a myth that justifies inequality?',
@@ -184,6 +184,7 @@ export function ChatQuickStart({
             'Economist',
             'Historian',
           ]),
+          participantCount: 3,
         },
       ];
 
@@ -192,10 +193,10 @@ export function ChatQuickStart({
 
     const proTierSuggestions: QuickStartSuggestion[] = (() => {
       const models = proModels;
-      if (models.length === 0)
-        return [];
 
       const buildParticipants = (roles: string[]) => {
+        if (models.length === 0)
+          return [];
         return roles
           .slice(0, models.length)
           .map((role, idx) => {
@@ -225,6 +226,7 @@ export function ChatQuickStart({
             'Disability Rights Advocate',
             'Medical Ethicist',
           ]),
+          participantCount: 4,
         },
         {
           title:
@@ -238,6 +240,7 @@ export function ChatQuickStart({
             'Ethics Philosopher',
             'Systems Architect',
           ]),
+          participantCount: 4,
         },
         {
           title: 'Is infinite economic growth possible on a finite planet?',
@@ -250,6 +253,7 @@ export function ChatQuickStart({
             'Systems Thinker',
             'Resource Analyst',
           ]),
+          participantCount: 4,
         },
       ];
     })();
@@ -307,19 +311,22 @@ export function ChatQuickStart({
                 delay: index * 0.1,
                 ease: [0.25, 0.46, 0.45, 0.94],
               }}
-              onClick={() =>
+              onClick={() => {
+                if (isModelsLoading)
+                  return;
                 onSuggestionClick(
                   suggestion.prompt,
                   suggestion.mode,
                   suggestion.participants,
-                )}
+                );
+              }}
               className={cn(
-                'group/suggestion w-full text-left px-4 py-3 rounded-2xl cursor-pointer focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
-                // Darker hover effect
-                'hover:bg-white/[0.07]',
-                'active:bg-black/20',
+                'group/suggestion w-full text-left px-4 py-3 rounded-2xl focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
                 'transition-all duration-200 ease-out',
                 !isLast && 'border-b border-white/[0.02]',
+                isModelsLoading
+                  ? 'cursor-default opacity-80'
+                  : 'cursor-pointer hover:bg-white/[0.07] active:bg-black/20',
               )}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
@@ -347,6 +354,9 @@ export function ChatQuickStart({
                     allModels={allModels}
                     maxVisible={4}
                     size="sm"
+                    isLoading={isModelsLoading}
+                    skeletonCount={suggestion.participantCount ?? 3}
+                    showCount={false}
                   />
                 </div>
               </div>
