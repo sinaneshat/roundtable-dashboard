@@ -8,8 +8,11 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-// SSG: Generate at build time
-export const dynamic = 'force-static';
+// ISR: Cache for 1 hour, revalidate in background
+// Using ISR instead of SSG because:
+// 1. API is accessible at runtime (not always at build time)
+// 2. Sidebar auth state is consistent (no SSG hydration mismatch)
+export const revalidate = 3600;
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
@@ -31,17 +34,11 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PricingPage() {
   const queryClient = getQueryClient();
 
-  // SSG: Fetch products at build time - use fetchQuery to catch errors
-  try {
-    const data = await queryClient.fetchQuery({
-      queryKey: queryKeys.products.list(),
-      queryFn: getProductsService,
-    });
-    // eslint-disable-next-line no-console
-    console.log('[SSG] Products prefetch success:', data?.success, 'items:', data?.data?.items?.length ?? 0);
-  } catch (error) {
-    console.error('[SSG] Products prefetch failed:', error);
-  }
+  // SSG: Prefetch products at build time
+  await queryClient.prefetchQuery({
+    queryKey: queryKeys.products.list(),
+    queryFn: getProductsService,
+  });
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
