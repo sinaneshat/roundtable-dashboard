@@ -74,15 +74,18 @@
     "bindings": [
       {
         "name": "NEXT_CACHE_DO_QUEUE",
-        "class_name": "DOQueueHandler"
+        "class_name": "DOQueueHandler",
+        "script_name": "roundtable-dashboard"
       },
       {
         "name": "NEXT_CACHE_DO_PURGE",
-        "class_name": "BucketCachePurge"
+        "class_name": "BucketCachePurge",
+        "script_name": "roundtable-dashboard"
       },
       {
         "name": "UPLOAD_CLEANUP_SCHEDULER",
-        "class_name": "UploadCleanupScheduler"
+        "class_name": "UploadCleanupScheduler",
+        "script_name": "roundtable-dashboard"
       }
     ]
   },
@@ -210,15 +213,18 @@
         "bindings": [
           {
             "name": "NEXT_CACHE_DO_QUEUE",
-            "class_name": "DOQueueHandler"
+            "class_name": "DOQueueHandler",
+            "script_name": "roundtable-dashboard-preview"
           },
           {
             "name": "NEXT_CACHE_DO_PURGE",
-            "class_name": "BucketCachePurge"
+            "class_name": "BucketCachePurge",
+            "script_name": "roundtable-dashboard-preview"
           },
           {
             "name": "UPLOAD_CLEANUP_SCHEDULER",
-            "class_name": "UploadCleanupScheduler"
+            "class_name": "UploadCleanupScheduler",
+            "script_name": "roundtable-dashboard-preview"
           }
         ]
       },
@@ -317,15 +323,18 @@
         "bindings": [
           {
             "name": "NEXT_CACHE_DO_QUEUE",
-            "class_name": "DOQueueHandler"
+            "class_name": "DOQueueHandler",
+            "script_name": "roundtable-dashboard-production"
           },
           {
             "name": "NEXT_CACHE_DO_PURGE",
-            "class_name": "BucketCachePurge"
+            "class_name": "BucketCachePurge",
+            "script_name": "roundtable-dashboard-production"
           },
           {
             "name": "UPLOAD_CLEANUP_SCHEDULER",
-            "class_name": "UploadCleanupScheduler"
+            "class_name": "UploadCleanupScheduler",
+            "script_name": "roundtable-dashboard-production"
           }
         ]
       },

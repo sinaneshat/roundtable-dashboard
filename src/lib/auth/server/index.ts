@@ -1,3 +1,4 @@
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { createAuthMiddleware } from 'better-auth/api';
@@ -10,14 +11,37 @@ import { getBaseUrl } from '@/utils/helpers';
 
 import { validateEmailDomain } from '../utils';
 
+/** Build-time placeholder - used when no runtime context available */
+const BUILD_PLACEHOLDER_SECRET = 'build-placeholder-secret-min-32-chars';
+
 /**
- * Get auth secret with build-time fallback.
+ * Get auth secret following OpenNext.js patterns.
  *
- * Wrangler secrets are runtime-only, not available during Next.js SSG build.
- * Fallback prevents BetterAuthError during static generation (auth unused anyway).
+ * Priority:
+ * 1. Cloudflare runtime env (getCloudflareContext) - production/preview
+ * 2. process.env - local dev (.env files) or Cloudflare build vars
+ * 3. Build placeholder - SSG phase when no context available
+ *
+ * @see src/db/index.ts for similar pattern with getCloudflareContext fallbacks
  */
 function getAuthSecret(): string {
-  return process.env.BETTER_AUTH_SECRET || 'build-placeholder-secret-min-32-chars';
+  // 1. Try Cloudflare runtime context (production/preview)
+  try {
+    const { env } = getCloudflareContext();
+    if (env.BETTER_AUTH_SECRET) {
+      return env.BETTER_AUTH_SECRET as string;
+    }
+  } catch {
+    // Context not available (build time or local dev without wrangler)
+  }
+
+  // 2. Fall back to process.env (local dev .env or CI build vars)
+  if (process.env.BETTER_AUTH_SECRET) {
+    return process.env.BETTER_AUTH_SECRET;
+  }
+
+  // 3. Build placeholder (SSG phase - auth not used anyway)
+  return BUILD_PLACEHOLDER_SECRET;
 }
 
 /**
