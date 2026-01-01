@@ -3,7 +3,7 @@
   "main": "custom-worker.ts",
   "name": "roundtable-dashboard",
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
-  "compatibility_date": "2025-03-25",
+  "compatibility_date": "2025-11-06",
   "keep_names": false,
   "compatibility_flags": [
     // Enable Node.js API

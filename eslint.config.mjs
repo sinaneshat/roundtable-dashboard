@@ -19,7 +19,6 @@ export default antfu(
       'cloudflare-env.d.ts',
       '**/*.md',
       '.claude/**/*',
-      '.context/**/*',
       'scripts/**/*',
     ],
     isInEditor: false,

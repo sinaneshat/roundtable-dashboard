@@ -45,6 +45,31 @@ function getAuthSecret(): string {
 }
 
 /**
+ * Get Google OAuth credentials following OpenNext.js patterns.
+ * Priority: Cloudflare runtime → process.env fallback → empty string
+ */
+function getGoogleOAuthCredentials(): { clientId: string; clientSecret: string } {
+  // 1. Try Cloudflare runtime context
+  try {
+    const { env } = getCloudflareContext();
+    if (env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET) {
+      return {
+        clientId: env.AUTH_GOOGLE_ID as string,
+        clientSecret: env.AUTH_GOOGLE_SECRET as string,
+      };
+    }
+  } catch {
+    // Context not available (build time or local dev)
+  }
+
+  // 2. Fall back to process.env
+  return {
+    clientId: process.env.AUTH_GOOGLE_ID || '',
+    clientSecret: process.env.AUTH_GOOGLE_SECRET || '',
+  };
+}
+
+/**
  * Create Better Auth database adapter
  *
  * IMPORTANT: Better Auth is initialized at module load time (not per-request),
@@ -135,18 +160,8 @@ export const auth = betterAuth({
 
   socialProviders: {
     google: {
-      clientId: process.env.AUTH_GOOGLE_ID || '',
-      clientSecret: process.env.AUTH_GOOGLE_SECRET || '',
-      /**
-       * IMPORTANT: For local/preview OAuth domain restriction:
-       * Configure Google Cloud Console to restrict OAuth to @roundtable.now domain
-       * 1. Go to Google Cloud Console > APIs & Services > Credentials
-       * 2. Edit OAuth 2.0 Client ID
-       * 3. Under "Authorized domains", add: roundtable.now
-       * 4. This enforces domain restriction at the OAuth provider level
-       *
-       * This is the recommended approach per better-auth OAuth best practices
-       */
+      clientId: getGoogleOAuthCredentials().clientId,
+      clientSecret: getGoogleOAuthCredentials().clientSecret,
     },
   },
 

@@ -1,16 +1,42 @@
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { render } from '@react-email/components';
 import { AwsClient } from 'aws4fetch';
 
 import { BRAND } from '@/constants';
 import { MagicLink } from '@/emails/templates';
 
-type EmailConfig = {
-  accessKeyId?: string;
-  secretAccessKey?: string;
-  region?: string;
-  fromEmail?: string;
-  replyToEmail?: string;
-};
+/**
+ * Get SES credentials using OpenNext.js pattern
+ * Priority: Cloudflare runtime → process.env fallback
+ */
+function getSesCredentials(): {
+  accessKeyId: string | undefined;
+  secretAccessKey: string | undefined;
+  region: string;
+  fromEmail: string;
+  replyToEmail: string;
+} {
+  // Try Cloudflare runtime context first
+  try {
+    const { env } = getCloudflareContext();
+    return {
+      accessKeyId: (env.AWS_SES_ACCESS_KEY_ID as string) || process.env.AWS_SES_ACCESS_KEY_ID,
+      secretAccessKey: (env.AWS_SES_SECRET_ACCESS_KEY as string) || process.env.AWS_SES_SECRET_ACCESS_KEY,
+      region: (env.NEXT_PUBLIC_AWS_SES_REGION as string) || process.env.NEXT_PUBLIC_AWS_SES_REGION || 'us-east-1',
+      fromEmail: (env.NEXT_PUBLIC_FROM_EMAIL as string) || process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@example.com',
+      replyToEmail: (env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL as string) || process.env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || 'noreply@example.com',
+    };
+  } catch {
+    // Fallback to process.env for local dev
+    return {
+      accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY,
+      region: process.env.NEXT_PUBLIC_AWS_SES_REGION || 'us-east-1',
+      fromEmail: process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@example.com',
+      replyToEmail: process.env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || 'noreply@example.com',
+    };
+  }
+}
 
 /**
  * Email Service using aws4fetch for Cloudflare Workers compatibility
@@ -20,28 +46,22 @@ type EmailConfig = {
  * - aws4fetch uses native Fetch API and SubtleCrypto, which work in edge environments
  * - Reduces bundle size and improves cold start performance
  *
+ * Uses OpenNext.js pattern: getCloudflareContext() with process.env fallback
+ * Credentials are resolved at method call time, not module load time
+ *
  * @see https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html
  */
 class EmailService {
-  private awsClient: AwsClient | null = null;
-  private fromEmail: string;
-  private replyToEmail: string;
-  private region: string;
-
-  constructor(config?: EmailConfig) {
-    const accessKeyId = config?.accessKeyId || process.env.AWS_SES_ACCESS_KEY_ID;
-    const secretAccessKey = config?.secretAccessKey || process.env.AWS_SES_SECRET_ACCESS_KEY;
-    this.region = config?.region || process.env.NEXT_PUBLIC_AWS_SES_REGION || 'us-east-1';
-
+  private getAwsClient(): AwsClient | null {
+    const { accessKeyId, secretAccessKey } = getSesCredentials();
     if (accessKeyId && secretAccessKey) {
-      this.awsClient = new AwsClient({
-        accessKeyId,
-        secretAccessKey,
-      });
+      return new AwsClient({ accessKeyId, secretAccessKey });
     }
+    return null;
+  }
 
-    this.fromEmail = config?.fromEmail || process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@example.com';
-    this.replyToEmail = config?.replyToEmail || process.env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || this.fromEmail;
+  private getConfig() {
+    return getSesCredentials();
   }
 
   private async sendEmail({
@@ -55,8 +75,12 @@ class EmailService {
     html: string;
     text?: string;
   }) {
+    // Get credentials at runtime (not module load)
+    const awsClient = this.getAwsClient();
+    const config = this.getConfig();
+
     // Validate AWS client is configured
-    if (!this.awsClient) {
+    if (!awsClient) {
       throw new Error(
         'Email service not configured. Please provide AWS_SES_ACCESS_KEY_ID and AWS_SES_SECRET_ACCESS_KEY environment variables.',
       );
@@ -90,14 +114,14 @@ class EmailService {
       Destination: {
         ToAddresses: toAddresses,
       },
-      FromEmailAddress: this.fromEmail,
-      ReplyToAddresses: [this.replyToEmail],
+      FromEmailAddress: config.fromEmail,
+      ReplyToAddresses: [config.replyToEmail],
     };
 
     try {
       // Make authenticated request to SES v2 API using aws4fetch
-      const response = await this.awsClient.fetch(
-        `https://email.${this.region}.amazonaws.com/v2/email/outbound-emails`,
+      const response = await awsClient.fetch(
+        `https://email.${config.region}.amazonaws.com/v2/email/outbound-emails`,
         {
           method: 'POST',
           headers: {
