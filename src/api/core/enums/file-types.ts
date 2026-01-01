@@ -71,7 +71,7 @@ export const AllowedMimeTypeSchema = z.enum(ALLOWED_MIME_TYPES).openapi({
   example: 'image/png',
 });
 
-export type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
+export type AllowedMimeType = z.infer<typeof AllowedMimeTypeSchema>;
 
 // ============================================================================
 // IMAGE MIME TYPES
@@ -85,7 +85,20 @@ export const IMAGE_MIME_TYPES = [
   'image/svg+xml',
 ] as const;
 
-export type ImageMimeType = (typeof IMAGE_MIME_TYPES)[number];
+export const ImageMimeTypeSchema = z.enum(IMAGE_MIME_TYPES).openapi({
+  description: 'Image MIME types',
+  example: 'image/png',
+});
+
+export type ImageMimeType = z.infer<typeof ImageMimeTypeSchema>;
+
+export const ImageMimeTypes = {
+  PNG: 'image/png' as const,
+  JPEG: 'image/jpeg' as const,
+  GIF: 'image/gif' as const,
+  WEBP: 'image/webp' as const,
+  SVG: 'image/svg+xml' as const,
+} as const;
 
 // ============================================================================
 // DOCUMENT MIME TYPES
@@ -101,6 +114,23 @@ export const DOCUMENT_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ] as const;
 
+export const DocumentMimeTypeSchema = z.enum(DOCUMENT_MIME_TYPES).openapi({
+  description: 'Document MIME types',
+  example: 'application/pdf',
+});
+
+export type DocumentMimeType = z.infer<typeof DocumentMimeTypeSchema>;
+
+export const DocumentMimeTypes = {
+  PDF: 'application/pdf' as const,
+  DOC: 'application/msword' as const,
+  DOCX: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' as const,
+  XLS: 'application/vnd.ms-excel' as const,
+  XLSX: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' as const,
+  PPT: 'application/vnd.ms-powerpoint' as const,
+  PPTX: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' as const,
+} as const;
+
 // ============================================================================
 // TEXT MIME TYPES
 // ============================================================================
@@ -112,6 +142,21 @@ export const TEXT_MIME_TYPES = [
   'text/html',
   'application/json',
 ] as const;
+
+export const TextMimeTypeSchema = z.enum(TEXT_MIME_TYPES).openapi({
+  description: 'Text MIME types',
+  example: 'text/plain',
+});
+
+export type TextMimeType = z.infer<typeof TextMimeTypeSchema>;
+
+export const TextMimeTypes = {
+  PLAIN: 'text/plain' as const,
+  MARKDOWN: 'text/markdown' as const,
+  CSV: 'text/csv' as const,
+  HTML: 'text/html' as const,
+  JSON: 'application/json' as const,
+} as const;
 
 // ============================================================================
 // CODE MIME TYPES
@@ -126,6 +171,23 @@ export const CODE_MIME_TYPES = [
   'text/x-c',
   'text/x-c++',
 ] as const;
+
+export const CodeMimeTypeSchema = z.enum(CODE_MIME_TYPES).openapi({
+  description: 'Code MIME types',
+  example: 'text/javascript',
+});
+
+export type CodeMimeType = z.infer<typeof CodeMimeTypeSchema>;
+
+export const CodeMimeTypes = {
+  JAVASCRIPT: 'text/javascript' as const,
+  JAVASCRIPT_APP: 'application/javascript' as const,
+  TYPESCRIPT: 'text/typescript' as const,
+  PYTHON: 'text/x-python' as const,
+  JAVA: 'text/x-java-source' as const,
+  C: 'text/x-c' as const,
+  CPP: 'text/x-c++' as const,
+} as const;
 
 // ============================================================================
 // MIME TYPE CATEGORIES (for categorization and validation)
@@ -164,7 +226,12 @@ export const TEXT_EXTRACTABLE_MIME_TYPES = [
   'text/x-typescript',
 ] as const;
 
-export type TextExtractableMimeType = (typeof TEXT_EXTRACTABLE_MIME_TYPES)[number];
+export const TextExtractableMimeTypeSchema = z.enum(TEXT_EXTRACTABLE_MIME_TYPES).openapi({
+  description: 'MIME types that support text extraction for RAG',
+  example: 'text/plain',
+});
+
+export type TextExtractableMimeType = z.infer<typeof TextExtractableMimeTypeSchema>;
 
 export const MAX_TEXT_CONTENT_SIZE = 100 * 1024;
 
@@ -177,7 +244,12 @@ export const VISUAL_MIME_TYPES = [
   'application/pdf',
 ] as const;
 
-export type VisualMimeType = (typeof VISUAL_MIME_TYPES)[number];
+export const VisualMimeTypeSchema = z.enum(VISUAL_MIME_TYPES).openapi({
+  description: 'MIME types that can be visually rendered (images and PDFs)',
+  example: 'image/png',
+});
+
+export type VisualMimeType = z.infer<typeof VisualMimeTypeSchema>;
 
 const VISUAL_MIME_SET = new Set<string>(VISUAL_MIME_TYPES);
 

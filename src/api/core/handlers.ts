@@ -8,15 +8,26 @@ import type { z } from 'zod';
 import { executeBatch, validateBatchSize } from '@/api/common/batch-operations';
 import { AppError } from '@/api/common/error-handling';
 import type { ErrorCode } from '@/api/core/enums';
-import type { ApiEnv, AuthenticatedContext } from '@/api/types';
+import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import { auth } from '@/lib/auth/server';
+import type { Session, User } from '@/lib/auth/types';
 
 import type { AuthMode } from './enums';
 import { HTTPExceptionFactory } from './http-exceptions';
 import { Responses } from './responses';
 import { ValidationErrorDetailsSchema } from './schemas';
 import { validateWithSchema } from './validation';
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+export type AuthenticatedContext = {
+  user: User;
+  session: Session;
+  requestId: string;
+};
 
 // ============================================================================
 // CENTRALIZED ERROR HANDLING

@@ -9,8 +9,6 @@ import { ValidationErrorSchema } from '@/api/core/schemas';
 // ERROR DETAILS SCHEMA
 // ============================================================================
 
-type ErrorContextValue = string | number | boolean | null;
-
 export const ErrorDetailsSchema = z.object({
   errorName: z.string().optional(),
   stack: z.string().optional(),
@@ -19,6 +17,8 @@ export const ErrorDetailsSchema = z.object({
 }).optional();
 
 export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
+
+type ErrorContextValue = string | number | boolean | null;
 
 // ============================================================================
 // REQUEST META SCHEMA

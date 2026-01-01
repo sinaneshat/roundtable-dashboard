@@ -8,8 +8,10 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-// SSG: Generate at build time, never revalidate
-export const dynamic = 'force-static';
+// ISR: Build at runtime on edge (not CI), revalidate every hour
+// Note: Pure SSG doesn't work because build machine can't reach production API
+// ISR ensures the page is built at runtime when API IS accessible
+export const revalidate = 3600; // 1 hour - products rarely change
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
@@ -31,8 +33,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PricingPage() {
   const queryClient = getQueryClient();
 
-  // SSG: Prefetch products at build time with await
-  // Per TanStack docs: use await for SSG to ensure data is ready before dehydration
+  // ISR: Prefetch products at runtime on edge with await
+  // Per TanStack docs: use await to ensure data is ready before dehydration
   await queryClient.prefetchQuery({
     queryKey: queryKeys.products.list(),
     queryFn: getProductsService,

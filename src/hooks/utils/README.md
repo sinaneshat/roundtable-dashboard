@@ -6,7 +6,7 @@ Custom React hooks for common patterns and features.
 
 Hooks are organized by purpose rather than bundled into large files. Each hook has a single responsibility for better discoverability and maintainability.
 
-**Current Status:** 16 hooks (consolidated)
+**Current Status:** 14 hooks (consolidated)
 
 ## Categories
 
@@ -99,21 +99,7 @@ const {
 
 ### Message/Chat Processing
 
-#### `use-message-parts.ts` (142 lines)
-Filter and extract message parts (text, reasoning, tools, sources).
-- **Exports:**
-  - `getMessageParts()` - Pure function for use in callbacks/loops
-  - `useMessageParts()` - Memoized hook for component scope
-- **Usage:** Message rendering, content extraction
-- **Returns:** `{ textParts, displayableParts, sourceParts, hasTextContent, hasToolCalls, hasAnyContent }`
-
-```typescript
-// In component scope (memoized)
-const { displayableParts, hasAnyContent } = useMessageParts({ message });
-
-// In callbacks or loops (pure function)
-const { textParts } = getMessageParts({ message });
-```
+**Note:** Message part extraction is handled by `getMessageParts()` in `@/lib/utils/message-status`, not in hooks.
 
 #### `use-model-lookup.ts` (91 lines)
 Find AI models by ID or slug with fallback handling.
@@ -376,8 +362,8 @@ import { useBoolean } from '@/hooks/utils/use-boolean';
 Hooks that define types export them alongside:
 
 ```typescript
-export type { UseMessagePartsOptions, UseMessagePartsReturn } from './use-message-parts';
-export { getMessageParts, useMessageParts } from './use-message-parts';
+export type { UseBooleanReturn } from './use-boolean';
+export { useBoolean } from './use-boolean';
 ```
 
 ## Testing Recommendations
@@ -438,7 +424,7 @@ useEffect(() => {
 |----------|-------|-------------|-------------|
 | Core Utilities | 4 | 310 | Very High |
 | Responsive/Browser | 2 | 196 | High |
-| Message/Chat Processing | 2 | 232 | Medium (domain-specific) |
+| Message/Chat Processing | 1 | 91 | Medium (domain-specific) |
 | Timeline/Virtualization | 4 | 807 | Medium |
 | Form/Input | 1 | 50 | High |
 | Streaming/SSE | 1 | 936 | Low (app-specific) |

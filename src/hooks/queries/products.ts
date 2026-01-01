@@ -26,8 +26,6 @@ export function useProductsQuery() {
     queryKey: queryKeys.products.list(),
     queryFn: () => getProductsService(),
     staleTime: STALE_TIMES.products, // 1 hour - products rarely change
-    // SSG fallback: if no hydrated data, fetch on mount
-    refetchOnMount: 'always',
     retry: 2, // Retry on failure
     throwOnError: false,
   });

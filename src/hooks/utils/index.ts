@@ -43,11 +43,8 @@ export {
   UseFileValidationOptionsSchema,
 } from './use-file-validation';
 export { useIsMounted } from './use-is-mounted';
-export { useKeyboardAwareScroll } from './use-keyboard-aware-scroll';
 export type { UseMediaQueryReturn } from './use-media-query';
 export { useMediaQuery } from './use-media-query';
-export type { UseMessagePartsOptions } from './use-message-parts';
-export { useMessageParts } from './use-message-parts';
 export type { UseIsMobileReturn } from './use-mobile';
 export { useIsMobile } from './use-mobile';
 export type { UseModelLookupReturn } from './use-model-lookup';

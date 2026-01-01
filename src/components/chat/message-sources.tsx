@@ -103,5 +103,3 @@ function SourceCard({ source, index }: SourceCardProps) {
     </div>
   );
 }
-
-export default MessageSources;
