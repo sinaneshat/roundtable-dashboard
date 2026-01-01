@@ -8,11 +8,8 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-// ISR: Cache for 1 hour, revalidate in background
-// Using ISR instead of SSG because:
-// 1. API is accessible at runtime (not always at build time)
-// 2. Sidebar auth state is consistent (no SSG hydration mismatch)
-export const revalidate = 3600;
+// SSG: Generate at build time
+export const dynamic = 'force-static';
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({

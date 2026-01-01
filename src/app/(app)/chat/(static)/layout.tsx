@@ -1,6 +1,6 @@
 import type React from 'react';
 
-import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
+import { ChatLayoutShellStatic } from '@/components/layouts/chat-layout-shell-static';
 
 type StaticLayoutProps = {
   children: React.ReactNode;
@@ -8,13 +8,13 @@ type StaticLayoutProps = {
 
 /**
  * Static Chat Layout
- * For SSG/ISR pages that don't require authentication (e.g., pricing)
- * No auth check, no HydrationBoundary (pages handle their own hydration)
+ * For SSG pages that don't require authentication (e.g., pricing)
+ * Uses client-only sidebar to prevent hydration mismatch
  */
 export default function StaticChatLayout({ children }: StaticLayoutProps) {
   return (
-    <ChatLayoutShell session={null}>
+    <ChatLayoutShellStatic>
       {children}
-    </ChatLayoutShell>
+    </ChatLayoutShellStatic>
   );
 }
