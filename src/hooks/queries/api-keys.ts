@@ -33,9 +33,9 @@ export function useApiKeysQuery(enabled = true) {
     queryKey: queryKeys.apiKeys.list(),
     queryFn: () => listApiKeysService(),
     staleTime: STALE_TIMES.apiKeys, // 5 minutes - API keys don't change frequently
-    refetchOnMount: true, // Refetch when component mounts to ensure fresh data
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    enabled: isAuthenticated && enabled, // Only fetch when authenticated and enabled
+    refetchOnMount: 'always', // Always refetch when modal opens to ensure fresh data
+    refetchOnWindowFocus: false,
+    enabled: isAuthenticated && enabled,
     retry: false,
     throwOnError: false,
   });

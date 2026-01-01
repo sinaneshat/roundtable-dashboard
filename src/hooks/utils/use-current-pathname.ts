@@ -14,15 +14,22 @@ import { useSyncExternalStore } from 'react';
  * // Updates when URL changes via history.replaceState/pushState
  */
 
-// Store subscribers for URL changes
-const subscribers = new Set<() => void>();
+// ============================================================================
+// SINGLETON PATTERN - App-lifetime global state (intentional, not a memory leak)
+// ============================================================================
+// This module patches window.history methods once and persists for the app lifetime.
+// The popstate listener is never removed because URL tracking must remain active
+// as long as the application is running. Individual component subscriptions are
+// properly cleaned up via the subscribe() return function.
+// ============================================================================
 
-// Track if we've already patched the history methods
+const subscribers = new Set<() => void>();
 let isPatched = false;
 
 /**
- * Patch history methods to notify subscribers on URL changes.
- * This runs once on first subscription and persists for the app lifetime.
+ * Patch history methods once per app lifetime to notify subscribers on URL changes.
+ * The patches and popstate listener persist intentionally - they're cleaned up
+ * when the browser tab closes, not when individual components unmount.
  */
 function patchHistoryMethods() {
   if (typeof window === 'undefined' || isPatched)
@@ -43,9 +50,8 @@ function patchHistoryMethods() {
     return result;
   };
 
-  // Also listen for popstate (back/forward navigation)
+  // Popstate listener persists for app lifetime (back/forward navigation)
   window.addEventListener('popstate', notifySubscribers);
-
   isPatched = true;
 }
 

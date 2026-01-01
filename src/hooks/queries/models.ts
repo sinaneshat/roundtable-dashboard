@@ -26,12 +26,10 @@ export function useModelsQuery() {
     queryKey: queryKeys.models.list(),
     queryFn: () => listModelsService(),
     staleTime: STALE_TIMES.models, // Infinity - models are static, only refetch when invalidated
-    refetchOnWindowFocus: false, // Performance: Don't refetch on focus
-    // Refetch on mount when query is stale (marked by invalidateQueries after plan upgrade)
-    // Using true (not 'always') means it only refetches if the query is marked as stale/invalid
-    // This ensures fresh tier-based model access after subscription changes without wasteful refetching
-    refetchOnMount: true,
-    retry: 2, // Retry failed requests
+    refetchOnWindowFocus: false,
+    // With Infinity staleTime, data is never stale - refetch only via invalidateQueries
+    refetchOnMount: false,
+    retry: 2,
     throwOnError: false,
   });
 }

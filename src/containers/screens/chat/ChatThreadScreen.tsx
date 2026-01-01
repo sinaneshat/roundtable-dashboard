@@ -104,6 +104,7 @@ export default function ChatThreadScreen({
     prefillStreamResumptionState,
     messages,
     setSelectedParticipants,
+    waitingToStartStreaming,
   } = useChatStore(
     useShallow(s => ({
       isStreaming: s.isStreaming,
@@ -115,6 +116,7 @@ export default function ChatThreadScreen({
       prefillStreamResumptionState: s.prefillStreamResumptionState,
       messages: s.messages,
       setSelectedParticipants: s.setSelectedParticipants,
+      waitingToStartStreaming: s.waitingToStartStreaming,
     })),
   );
 
@@ -227,7 +229,10 @@ export default function ChatThreadScreen({
     return allParticipantsComplete && !moderatorExists;
   }, [messages, participants]);
 
-  const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || isAwaitingModerator;
+  // ✅ BUG FIX: Add waitingToStartStreaming to prevent duplicate submissions
+  // Previously, users could submit again during the brief window between
+  // form submission and stream start, causing duplicate user messages
+  const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || isAwaitingModerator || waitingToStartStreaming;
 
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
