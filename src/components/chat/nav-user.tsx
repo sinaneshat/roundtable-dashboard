@@ -1,14 +1,13 @@
 'use client';
 
-import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 
-import type { SubscriptionTier } from '@/api/core/enums';
-import { StripeSubscriptionStatuses } from '@/api/core/enums';
+import { PlanTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { CancelSubscriptionDialog } from '@/components/chat/cancel-subscription-dialog';
 import { UsageMetrics } from '@/components/chat/usage-metrics';
+import { Icons } from '@/components/icons';
 import { ApiKeysModal } from '@/components/modals/api-keys-modal';
 import {
   Accordion,
@@ -45,8 +44,6 @@ type NavUserProps = {
 
 export function NavUser({ initialSession }: NavUserProps) {
   const router = useRouter();
-  // ✅ HYDRATION FIX: Use server-side session for initial render
-  // Client useSession will sync after hydration for real-time updates
   const { data: clientSession } = useSession();
   const t = useTranslations();
   const { data: usageData } = useUsageStatsQuery();
@@ -56,11 +53,8 @@ export function NavUser({ initialSession }: NavUserProps) {
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
 
-  // ✅ HYDRATION: Use initialSession for SSR, fall back to client session after hydration
-  // This ensures server and client render identical HTML initially
   const user = clientSession?.user ?? initialSession?.user;
 
-  // ✅ Compute display values directly from user (no isMounted needed with server-side session)
   const userInitials = useMemo(() => {
     if (!user?.name && !user?.email)
       return 'U';
@@ -112,19 +106,14 @@ export function NavUser({ initialSession }: NavUserProps) {
       showApiErrorToast('Cancellation Failed', error);
     }
   };
-  // ✅ CREDITS-ONLY: Map plan type to tier for display
-  const subscriptionTier: SubscriptionTier = usageData?.data?.plan?.type === 'paid' ? 'pro' : 'free';
+  const subscriptionTier = usageData?.data?.plan?.type === PlanTypes.PAID ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
 
-  // ✅ HYDRATION FIX: Prevent Radix ID mismatch by only rendering DropdownMenu after mount
-  // Radix generates unique IDs that differ between server and client
-  const [mounted, setMounted] = useState(false);
+  const mounted = useBoolean(false);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Required pattern to prevent SSR hydration mismatch
-    setMounted(true);
-  }, []);
+    mounted.onTrue();
+  }, [mounted]);
 
-  // SSR placeholder - matches the SidebarMenuButton structure without Radix components
-  if (!mounted) {
+  if (!mounted.value) {
     return (
       <button
         type="button"
@@ -145,7 +134,7 @@ export function NavUser({ initialSession }: NavUserProps) {
           </span>
           <span className="truncate text-xs">{displayEmail}</span>
         </div>
-        <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+        <Icons.chevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
       </button>
     );
   }
@@ -172,7 +161,7 @@ export function NavUser({ initialSession }: NavUserProps) {
               </span>
               <span className="truncate text-xs">{displayEmail}</span>
             </div>
-            <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+            <Icons.chevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
           </SidebarMenuButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -200,7 +189,6 @@ export function NavUser({ initialSession }: NavUserProps) {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
 
-          {/* Usage Metrics */}
           <div className="px-2">
             <Accordion type="single" collapsible>
               <AccordionItem value="usage" className="border-none">
@@ -217,7 +205,7 @@ export function NavUser({ initialSession }: NavUserProps) {
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={showApiKeysModal.onTrue}>
-              <Key />
+              <Icons.key />
               API Keys
             </DropdownMenuItem>
           </DropdownMenuGroup>
@@ -232,13 +220,13 @@ export function NavUser({ initialSession }: NavUserProps) {
                   {customerPortalMutation.isPending
                     ? (
                         <>
-                          <Loader2 className="size-4 animate-spin" />
+                          <Icons.loader className="size-4 animate-spin" />
                           {t('pricing.card.processing')}
                         </>
                       )
                     : (
                         <>
-                          <CreditCard />
+                          <Icons.creditCard />
                           {t('pricing.card.manageBilling')}
                         </>
                       )}
@@ -248,7 +236,7 @@ export function NavUser({ initialSession }: NavUserProps) {
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSignOut}>
-            <LogOut />
+            <Icons.logOut />
             {t('navigation.signOut')}
           </DropdownMenuItem>
         </DropdownMenuContent>

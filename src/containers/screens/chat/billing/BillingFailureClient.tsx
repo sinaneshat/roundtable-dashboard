@@ -1,40 +1,43 @@
 'use client';
 
-import { AlertCircle, Mail, XCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
+import type { BillingErrorType } from '@/api/core/enums';
+import { BillingErrorTypes } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
 
+type FailureData = {
+  error?: string;
+  errorCode?: string;
+  errorType?: BillingErrorType;
+  stripeError?: string;
+  timestamp?: string;
+};
+
 type BillingFailureClientProps = {
-  failureData?: {
-    error?: string;
-    errorCode?: string;
-    errorType?: 'payment_failed' | 'sync_failed' | 'authentication_failed' | 'unknown';
-    stripeError?: string;
-    timestamp?: string;
-  };
+  failureData?: FailureData;
 };
 
 export function BillingFailureClient({ failureData }: BillingFailureClientProps) {
-  const router = useRouter();
   const t = useTranslations();
 
   const getErrorDetails = () => {
     switch (failureData?.errorType) {
-      case 'payment_failed':
+      case BillingErrorTypes.PAYMENT_FAILED:
         return {
           title: t('billing.failure.paymentFailed'),
           description: t('billing.failure.paymentFailedDescription'),
         };
-      case 'sync_failed':
+      case BillingErrorTypes.SYNC_FAILED:
         return {
           title: t('billing.failure.syncFailed'),
           description: t('billing.failure.syncFailedDescription'),
         };
-      case 'authentication_failed':
+      case BillingErrorTypes.AUTHENTICATION_FAILED:
         return {
           title: t('billing.failure.authFailed'),
           description: t('billing.failure.authFailedDescription'),
@@ -59,7 +62,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
         <StaggerItem>
           <ScaleIn duration={0.3} delay={0}>
             <div className="flex size-20 items-center justify-center rounded-full bg-destructive/10 ring-4 ring-destructive/20 md:size-24">
-              <XCircle className="size-10 text-destructive md:size-12" strokeWidth={2} />
+              <Icons.xCircle className="size-10 text-destructive md:size-12" strokeWidth={2} />
             </div>
           </ScaleIn>
         </StaggerItem>
@@ -76,7 +79,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
         {failureData && (
           <StaggerItem className="w-full">
             <Alert variant="destructive">
-              <AlertCircle className="size-4" />
+              <Icons.alertCircle className="size-4" />
               <AlertTitle>{errorDetails.title}</AlertTitle>
               <AlertDescription>
                 <div className="space-y-2">
@@ -128,7 +131,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
         <StaggerItem className="w-full">
           <div className="rounded-lg border bg-card p-4">
             <div className="flex items-start gap-3">
-              <Mail className="mt-0.5 size-5 text-muted-foreground" />
+              <Icons.mail className="mt-0.5 size-5 text-muted-foreground" />
               <div className="text-left text-sm">
                 <h3 className="mb-1 font-semibold">{t('billing.failure.support.title')}</h3>
                 <p className="mb-2 text-muted-foreground">
@@ -144,20 +147,24 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
 
         <StaggerItem className="flex w-full flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <Button
-            onClick={() => router.replace('/chat/pricing')}
+            asChild
             size="lg"
             className="w-full sm:w-auto sm:min-w-[200px]"
           >
-            {t('billing.failure.tryAgain')}
+            <Link href="/chat/pricing" prefetch={false}>
+              {t('billing.failure.tryAgain')}
+            </Link>
           </Button>
 
           <Button
-            onClick={() => router.replace('/chat')}
+            asChild
             variant="outline"
             size="lg"
             className="w-full sm:w-auto sm:min-w-[200px]"
           >
-            {t('billing.failure.returnHome')}
+            <Link href="/chat" prefetch={false}>
+              {t('billing.failure.returnHome')}
+            </Link>
           </Button>
         </StaggerItem>
       </StaggerContainer>

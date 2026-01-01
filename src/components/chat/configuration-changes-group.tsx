@@ -1,5 +1,4 @@
 'use client';
-import { ArrowRight, Clock, Globe, Minus, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import type { ChangelogType } from '@/api/core/enums';
@@ -13,6 +12,7 @@ import {
   ChainOfThoughtContent,
   ChainOfThoughtHeader,
 } from '@/components/ai-elements/chain-of-thought';
+import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { DbChangelogData } from '@/db/schemas/chat-metadata';
 import {
@@ -27,21 +27,20 @@ import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils';
 
-// No conversion needed - changeType IS the action
 function getChangeAction(changeType: ChatThreadChangelogFlexible['changeType']): ChangelogType {
   return changeType;
 }
-const actionConfig: Record<ChangelogType, { icon: typeof Plus; color: string }> = {
+const actionConfig: Record<ChangelogType, { icon: typeof Icons.plus; color: string }> = {
   [ChangelogTypes.ADDED]: {
-    icon: Plus,
+    icon: Icons.plus,
     color: 'text-green-500',
   },
   [ChangelogTypes.MODIFIED]: {
-    icon: Pencil,
+    icon: Icons.pencil,
     color: 'text-blue-500',
   },
   [ChangelogTypes.REMOVED]: {
-    icon: Minus,
+    icon: Icons.minus,
     color: 'text-red-500',
   },
 };
@@ -83,7 +82,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
       <ChainOfThought defaultOpen={false}>
         <ChainOfThoughtHeader>
           <div className="flex items-center gap-2">
-            <Clock className="size-4 text-muted-foreground flex-shrink-0" />
+            <Icons.clock className="size-4 text-muted-foreground flex-shrink-0" />
             <span className="text-sm">{t('configurationChanged')}</span>
             <span className="hidden md:inline text-xs text-muted-foreground">•</span>
             <span className="hidden md:inline text-xs text-muted-foreground truncate">
@@ -102,7 +101,6 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
               const config = actionConfig[action];
               const Icon = config.icon;
 
-              // Skip if no changes (shouldn't happen due to filter, but TypeScript needs this)
               if (!changes || changes.length === 0) {
                 return null;
               }
@@ -132,25 +130,17 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
   );
 }
 
-/**
- * ChangeItem - Renders individual changelog entries
- * ✅ TYPE-SAFE: Uses DbChangelogData from @/db/schemas/chat-metadata (single source of truth)
- * ✅ TYPE GUARDS: Uses discriminated union type guards instead of unsafe type casts
- */
 function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
   const t = useTranslations('chat.configuration');
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.items || [];
 
-  // ✅ TYPE-SAFE: Validate changeData using Zod schema (single source of truth)
   const changeData: DbChangelogData | undefined = safeParseChangelogData(change.changeData);
 
   if (!changeData) {
-    return null; // Invalid data - Zod validation failed
+    return null;
   }
 
-  // ✅ TYPE-SAFE: Extract data using type guards (no unsafe type casts)
-  // TypeScript automatically narrows the type based on type guard results
   const modelId = isParticipantChange(changeData) || isParticipantRoleChange(changeData)
     ? changeData.modelId
     : undefined;
@@ -164,7 +154,6 @@ function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
   const model = modelId ? allModels.find(m => m.id === modelId) : undefined;
   const showMissingModelFallback = (change.changeType === ChangelogTypes.ADDED || change.changeType === ChangelogTypes.REMOVED) && modelId && !model;
 
-  // ✅ TYPE-SAFE: Use type guards for conditional rendering
   const isParticipantType = isParticipantChange(changeData);
   const isParticipantRoleType = isParticipantRoleChange(changeData);
   const isModeChangeType = isModeChange(changeData);
@@ -172,7 +161,6 @@ function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
 
   return (
     <>
-      {/* Missing model fallback */}
       {showMissingModelFallback && (
         <div
           className={cn(
@@ -189,7 +177,6 @@ function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
         </div>
       )}
 
-      {/* Participant changes (added/removed) */}
       {isParticipantType && model && (
         <div
           className={cn(
@@ -222,7 +209,6 @@ function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
         </div>
       )}
 
-      {/* Participant role changes */}
       {isParticipantRoleType && model && (oldRole || newRole) && (
         <div
           className={cn(
@@ -248,7 +234,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
                 </span>
               )}
               {oldRole && newRole && (
-                <ArrowRight className="size-2 sm:size-2.5 text-muted-foreground/50 shrink-0" />
+                <Icons.arrowRight className="size-2 sm:size-2.5 text-muted-foreground/50 shrink-0" />
               )}
               {newRole && (
                 <span className="text-[9px] sm:text-[10px] text-muted-foreground/70 truncate whitespace-nowrap">
@@ -260,7 +246,6 @@ function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
         </div>
       )}
 
-      {/* Mode changes */}
       {isModeChangeType && (oldMode || newMode) && (
         <div
           className={cn(
@@ -272,14 +257,13 @@ function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
           {oldMode && (
             <span className="text-[10px] sm:text-xs opacity-60">{oldMode}</span>
           )}
-          <ArrowRight className="size-3 text-muted-foreground shrink-0" />
+          <Icons.arrowRight className="size-3 text-muted-foreground shrink-0" />
           {newMode && (
             <span className="text-[10px] sm:text-xs font-medium">{newMode}</span>
           )}
         </div>
       )}
 
-      {/* Web search toggle changes */}
       {isWebSearchChangeType && enabled !== undefined && (
         <div
           className={cn(
@@ -288,7 +272,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
             'bg-background/10 border-white/30 dark:border-white/20',
           )}
         >
-          <Globe className="size-3.5 sm:size-4 text-muted-foreground shrink-0" />
+          <Icons.globe className="size-3.5 sm:size-4 text-muted-foreground shrink-0" />
           <span className="text-[10px] sm:text-xs font-medium">
             {enabled ? t('webSearchEnabled') : t('webSearchDisabled')}
           </span>

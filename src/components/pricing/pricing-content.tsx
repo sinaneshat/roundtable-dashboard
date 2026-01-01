@@ -1,6 +1,5 @@
 'use client';
 
-import { CreditCard, ExternalLink, Loader2, TriangleAlert } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -13,7 +12,8 @@ import {
   StripeSubscriptionStatuses,
   UIBillingIntervals,
 } from '@/api/core/enums';
-import type { Product, Subscription } from '@/api/routes/billing/schema';
+import type { Price, Product, Subscription } from '@/api/routes/billing/schema';
+import { Icons } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,13 +21,18 @@ import { PricingCard } from '@/components/ui/pricing-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
-// Extended tab type to include credits
-type PricingTab = UIBillingInterval | 'credits';
+const CREDITS_TAB = 'credits' as const;
+type PricingTab = UIBillingInterval | typeof CREDITS_TAB;
+
 function isPricingTab(value: string): value is PricingTab {
-  return isUIBillingInterval(value) || value === 'credits';
+  return isUIBillingInterval(value) || value === CREDITS_TAB;
 }
 
-// ✅ Free product is now dynamic from API - no hardcoded tier
+type CreditPackagePriceId = keyof typeof CREDIT_CONFIG.CUSTOM_CREDITS.packages;
+
+function isCreditPackagePriceId(priceId: string): priceId is CreditPackagePriceId {
+  return priceId in CREDIT_CONFIG.CUSTOM_CREDITS.packages;
+}
 
 type PricingContentProps = {
   products: Product[];
@@ -80,7 +85,6 @@ export function PricingContent({
     return !!getSubscriptionForPrice(priceId);
   };
 
-  // ✅ CREDITS: Separate custom credits product from subscription products
   const customCreditsProduct = products.find(
     p => p.id === CREDIT_CONFIG.CUSTOM_CREDITS.stripeProductId,
   );
@@ -91,15 +95,12 @@ export function PricingContent({
   const getProductsForInterval = (interval: UIBillingInterval) => {
     return subscriptionProducts
       .map((product) => {
-        // ✅ Include Free product ($0) in all tabs regardless of interval
-        const filteredPrices = product.prices?.filter((price) => {
-          // Free tier ($0) shows in all tabs - always include regardless of interval
+        const filteredPrices = product.prices?.filter((price: Price) => {
           if (price.unitAmount === 0) {
             return true;
           }
-          // Paid tiers filter by interval
           return price.interval === interval;
-        }) || [];
+        }) ?? [];
         return { ...product, prices: filteredPrices };
       })
       .filter(product => product.prices && product.prices.length > 0);
@@ -114,7 +115,7 @@ export function PricingContent({
     return (
       <div className="flex items-center justify-center py-16">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Icons.loader className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
         </div>
       </div>
@@ -146,7 +147,7 @@ export function PricingContent({
           >
             <Card className="bg-primary/5 border-primary/20">
               <CardContent className="flex items-center gap-3 py-3">
-                <CreditCard className="h-5 w-5 text-primary shrink-0" />
+                <Icons.creditCard className="h-5 w-5 text-primary shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm">{t('billing.currentPlan')}</p>
                   <p className="text-xs text-muted-foreground">
@@ -165,7 +166,7 @@ export function PricingContent({
                     className="gap-2"
                   >
                     {t('billing.manageBilling')}
-                    <ExternalLink className="h-3.5 w-3.5" />
+                    <Icons.externalLink className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </CardContent>
@@ -175,27 +176,31 @@ export function PricingContent({
 
         <Tabs
           value={selectedTab}
-          onValueChange={value => isPricingTab(value) && setSelectedTab(value)}
+          onValueChange={(value) => {
+            if (isPricingTab(value)) {
+              setSelectedTab(value);
+            }
+          }}
           className="space-y-8"
         >
           <div className="flex justify-center">
             <TabsList>
-              <TabsTrigger value="month">
+              <TabsTrigger value={UIBillingIntervals.MONTH}>
                 {t('billing.interval.monthly')}
               </TabsTrigger>
-              <TabsTrigger value="year">
+              <TabsTrigger value={UIBillingIntervals.YEAR}>
                 {t('billing.interval.annual')}
               </TabsTrigger>
-              <TabsTrigger value="credits">
+              <TabsTrigger value={CREDITS_TAB}>
                 {t('billing.interval.credits')}
               </TabsTrigger>
             </TabsList>
           </div>
 
-          <TabsContent value="month" className="mt-0">
+          <TabsContent value={UIBillingIntervals.MONTH} className="mt-0">
             <ProductGrid
               products={getProductsForInterval(UIBillingIntervals.MONTH)}
-              interval="month"
+              interval={UIBillingIntervals.MONTH}
               hasActiveSubscription={hasActiveSubscription}
               getSubscriptionForPrice={getSubscriptionForPrice}
               hasAnyActiveSubscription={hasAnyActiveSubscription}
@@ -206,14 +211,13 @@ export function PricingContent({
               onCancel={onCancel}
               onManageBilling={onManageBilling}
               getAnnualSavings={getAnnualSavings}
-              t={t}
             />
           </TabsContent>
 
-          <TabsContent value="year" className="mt-0">
+          <TabsContent value={UIBillingIntervals.YEAR} className="mt-0">
             <ProductGrid
               products={getProductsForInterval(UIBillingIntervals.YEAR)}
-              interval="year"
+              interval={UIBillingIntervals.YEAR}
               hasActiveSubscription={hasActiveSubscription}
               getSubscriptionForPrice={getSubscriptionForPrice}
               hasAnyActiveSubscription={hasAnyActiveSubscription}
@@ -224,14 +228,11 @@ export function PricingContent({
               onCancel={onCancel}
               onManageBilling={onManageBilling}
               getAnnualSavings={getAnnualSavings}
-              t={t}
             />
           </TabsContent>
 
-          {/* Credits Tab Content */}
-          <TabsContent value="credits" className="mt-0">
+          <TabsContent value={CREDITS_TAB} className="mt-0">
             <div className="w-full max-w-4xl mx-auto space-y-6">
-              {/* Connect card warning using shadcn Alert */}
               {!hasCardConnected && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
@@ -239,7 +240,7 @@ export function PricingContent({
                   transition={{ duration: 0.3 }}
                 >
                   <Alert className="border-amber-500/30 bg-amber-500/10">
-                    <TriangleAlert className="size-4 text-amber-500" />
+                    <Icons.triangleAlert className="size-4 text-amber-500" />
                     <AlertTitle className="text-amber-600 dark:text-amber-400">
                       {t('billing.credits.connectCardRequired')}
                     </AlertTitle>
@@ -258,7 +259,6 @@ export function PricingContent({
                 </motion.div>
               )}
 
-              {/* Credit packages - responsive grid: 1 col mobile, 2 col sm, 3 col md+ */}
               {customCreditsProduct && customCreditsProduct.prices && customCreditsProduct.prices.length > 0
                 ? (
                     <motion.div
@@ -268,14 +268,10 @@ export function PricingContent({
                       className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
                     >
                       {customCreditsProduct.prices
-                        .filter(p => !p.interval) // Only one-time prices
-                        .sort((a, b) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0))
-                        .map((price, index) => {
-                          // ✅ TYPE-SAFE: Validate price.id exists in packages before access
-                          const packages = CREDIT_CONFIG.CUSTOM_CREDITS.packages;
-                          const creditsAmount = price.id in packages
-                            ? packages[price.id as keyof typeof packages]
-                            : 0;
+                        .filter((p: Price) => !p.interval && isCreditPackagePriceId(p.id))
+                        .sort((a: Price, b: Price) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0))
+                        .map((price: Price, index: number) => {
+                          const creditsAmount = CREDIT_CONFIG.CUSTOM_CREDITS.packages[price.id as CreditPackagePriceId];
                           return (
                             <motion.div
                               key={price.id}
@@ -337,7 +333,6 @@ type ProductGridProps = {
   onCancel: (subscriptionId: string) => void | Promise<void>;
   onManageBilling: () => void;
   getAnnualSavings: (productId: string) => number;
-  t: (key: string) => string;
 };
 
 function ProductGrid({
@@ -353,8 +348,8 @@ function ProductGrid({
   onCancel,
   onManageBilling,
   getAnnualSavings,
-  t,
 }: ProductGridProps) {
+  const t = useTranslations();
   if (products.length === 0) {
     return (
       <motion.div
@@ -371,19 +366,16 @@ function ProductGrid({
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      {/* ✅ 2-column grid for subscription plans - cards stretch to fill */}
       <div className="grid grid-cols-1 gap-6 w-full sm:grid-cols-2">
         {products.map((product, index) => {
           const price = product.prices?.[0];
 
-          // ✅ Allow $0 prices (Free tier) - only skip if no price exists
           if (!price || price.unitAmount === undefined || price.unitAmount === null) {
             return null;
           }
 
           const subscription = getSubscriptionForPrice(price.id);
           const hasSubscription = hasActiveSubscription(price.id);
-          // ✅ Free tier (unitAmount === 0) is never "most popular"
           const isMostPopular = price.unitAmount > 0 && products.length >= 2 && index === 1;
           const isFreeProduct = price.unitAmount === 0;
 

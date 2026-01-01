@@ -17,7 +17,7 @@
 import { useRef } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
-import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
 import { ScrollFadeEntrance, ScrollFromTop } from '@/components/ui/motion';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
@@ -25,6 +25,7 @@ import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
 import { messageHasError } from '@/lib/schemas/message-metadata';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
+import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
 import { getModeratorMetadata, isModeratorMessage } from '@/lib/utils';
 
 import { ChatMessageList } from './chat-message-list';
@@ -44,14 +45,14 @@ type ThreadTimelineProps = {
     name: string;
     image: string | null;
   };
-  participants: ChatParticipant[];
+  participants: ChatParticipantWithSettings[];
   threadId: string;
   threadTitle?: string;
 
   // Streaming state
   isStreaming?: boolean;
   currentParticipantIndex?: number;
-  currentStreamingParticipant?: ChatParticipant | null;
+  currentStreamingParticipant?: ChatParticipantWithSettings | null;
   streamingRoundNumber?: number | null;
 
   // Feedback handlers

@@ -1,14 +1,15 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, Copy, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { CreateApiKeyRequestSchema } from '@/api/routes/api-keys/schema';
-import { FormProvider, RHFSelect, RHFTextField } from '@/components/forms';
+import { FormProvider } from '@/components/forms/form-provider';
+import { RHFSelect } from '@/components/forms/rhf-select';
+import { RHFTextField } from '@/components/forms/rhf-text-field';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,18 +17,17 @@ import { useCreateApiKeyMutation } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
 import { showApiErrorToast } from '@/lib/toast';
 
-const MAX_API_KEYS = 5;
-
 type ApiKeyFormProps = {
   onCreated: () => void;
   currentKeyCount?: number;
 };
 
-const formSchema = CreateApiKeyRequestSchema.omit({ expiresIn: true }).extend({
+const ApiKeyFormSchema = z.object({
+  name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name must be at most 50 characters'),
   expiresIn: z.string().optional(),
 });
 
-type FormValues = z.infer<typeof formSchema>;
+type ApiKeyFormValues = z.infer<typeof ApiKeyFormSchema>;
 
 export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) {
   const t = useTranslations();
@@ -35,8 +35,8 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) 
   const copied = useBoolean(false);
   const createMutation = useCreateApiKeyMutation();
 
-  const methods = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+  const methods = useForm<ApiKeyFormValues>({
+    resolver: zodResolver(ApiKeyFormSchema),
     defaultValues: {
       name: '',
       expiresIn: 'never',
@@ -44,7 +44,8 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) 
   });
 
   const { handleSubmit, reset } = methods;
-  const hasReachedLimit = currentKeyCount >= MAX_API_KEYS;
+
+  const hasReachedLimit = currentKeyCount >= 5;
 
   const expirationOptions = [
     { label: t('apiKeys.form.expiresIn.never'), value: 'never' },
@@ -55,7 +56,7 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) 
     { label: t('apiKeys.form.expiresIn.365days'), value: '365' },
   ];
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (values: ApiKeyFormValues) => {
     setCreatedKey(null);
     copied.onFalse();
 
@@ -75,7 +76,7 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) 
         setCreatedKey(result.data.apiKey.key);
       }
     } catch (error) {
-      showApiErrorToast(t('apiKeys.form.createError'), error);
+      showApiErrorToast('Failed to create API key', error);
     }
   };
 
@@ -99,7 +100,7 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) 
       <div className="grid gap-6 py-4">
         <div className="rounded-lg border border-green-500/20 bg-green-500/10 p-4">
           <div className="flex items-start gap-3">
-            <Check className="mt-0.5 size-5 text-green-600 dark:text-green-400" />
+            <Icons.check className="mt-0.5 size-5 text-green-600 dark:text-green-400" />
             <div className="flex-1">
               <h3 className="font-semibold text-green-900 dark:text-green-100">
                 {t('apiKeys.form.successTitle')}
@@ -133,13 +134,13 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) 
               {copied.value
                 ? (
                     <>
-                      <Check className="mr-2 size-4" />
+                      <Icons.check className="mr-2 size-4" />
                       {t('apiKeys.form.copied')}
                     </>
                   )
                 : (
                     <>
-                      <Copy className="mr-2 size-4" />
+                      <Icons.copy className="mr-2 size-4" />
                       {t('apiKeys.form.copyButton')}
                     </>
                   )}
@@ -205,7 +206,7 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) 
           className="w-full"
           disabled={createMutation.isPending}
         >
-          {createMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+          {createMutation.isPending && <Icons.loader className="mr-2 size-4 animate-spin" />}
           {t('apiKeys.form.createButton')}
         </Button>
       </div>

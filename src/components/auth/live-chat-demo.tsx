@@ -4,9 +4,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FinishReasons, MessagePartTypes, MessageRoles } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { ChatMessage, ChatParticipant } from '@/db/validation/chat';
 import { useThreadTimeline } from '@/hooks/utils';
 import { TYPING_CHARS_PER_FRAME, TYPING_FRAME_INTERVAL } from '@/lib/ui/animations';
 import { chatMessagesToUIMessages } from '@/lib/utils';
@@ -148,7 +148,8 @@ function createUserMessage(): ChatMessage {
     threadId: 'demo-thread',
     participantId: null,
     role: MessageRoles.USER,
-    parts: [{ type: 'text', text: DEMO_USER_MESSAGE_CONTENT }],
+    parts: [{ type: MessagePartTypes.TEXT, text: DEMO_USER_MESSAGE_CONTENT }],
+    toolCalls: null,
     roundNumber: 1,
     createdAt: new Date(),
     metadata: { role: MessageRoles.USER, roundNumber: 1 },
@@ -162,6 +163,7 @@ function createParticipantMessage(index: number, text: string): ChatMessage {
     participantId: `participant-${index}`,
     role: MessageRoles.ASSISTANT,
     parts: [{ type: MessagePartTypes.TEXT, text }],
+    toolCalls: null,
     roundNumber: 1,
     createdAt: new Date(),
     metadata: {
@@ -187,6 +189,7 @@ function createModeratorMessage(text: string): ChatMessage {
     participantId: null,
     role: MessageRoles.ASSISTANT,
     parts: [{ type: MessagePartTypes.TEXT, text }],
+    toolCalls: null,
     roundNumber: 1,
     createdAt: new Date(),
     metadata: {

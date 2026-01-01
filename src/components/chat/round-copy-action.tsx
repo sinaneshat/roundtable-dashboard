@@ -1,32 +1,29 @@
 'use client';
 
 import type { UIMessage } from 'ai';
-import { Check, Copy } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useCallback, useState } from 'react';
 
 import { MessageRoles } from '@/api/core/enums';
-import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { Action } from '@/components/ai-elements/actions';
+import { Icons } from '@/components/icons';
+import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
 import { getAssistantMetadata, isTextPart } from '@/lib/utils';
 
 type RoundCopyActionProps = {
   messages: UIMessage[];
-  participants: ChatParticipant[];
+  participants: ChatParticipantWithSettings[];
   roundNumber: number;
   threadTitle?: string;
   moderatorText?: string;
   className?: string;
 };
 
-/**
- * Gets participant for a message from metadata
- */
 function getParticipantFromMessage(
   message: UIMessage,
-  participants: ChatParticipant[],
-): ChatParticipant | undefined {
+  participants: ChatParticipantWithSettings[],
+): ChatParticipantWithSettings | undefined {
   const metadata = getAssistantMetadata(message.metadata);
   if (metadata?.participantId) {
     return participants.find(p => p.id === metadata.participantId);
@@ -34,15 +31,11 @@ function getParticipantFromMessage(
   return undefined;
 }
 
-/**
- * Gets display name for a participant
- */
-function getParticipantDisplayName(participant?: ChatParticipant): string {
+function getParticipantDisplayName(participant?: ChatParticipantWithSettings): string {
   if (!participant)
     return 'Assistant';
   if (participant.role)
     return participant.role;
-  // Extract model name from modelId (e.g., "anthropic/claude-3.5-sonnet" -> "Claude 3.5 Sonnet")
   const modelName = participant.modelId.split('/').pop() || participant.modelId;
   return modelName
     .split('-')
@@ -50,10 +43,6 @@ function getParticipantDisplayName(participant?: ChatParticipant): string {
     .join(' ');
 }
 
-/**
- * Extracts text content from a UIMessage's parts
- * ✅ TYPE-SAFE: Uses isTextPart type guard, no type assertions
- */
 function getMessageTextContent(message: UIMessage): string {
   if (!message.parts || message.parts.length === 0) {
     return '';
@@ -65,12 +54,9 @@ function getMessageTextContent(message: UIMessage): string {
     .join('\n\n');
 }
 
-/**
- * Formats round messages as markdown
- */
 function formatRoundAsMarkdown(
   messages: UIMessage[],
-  participants: ChatParticipant[],
+  participants: ChatParticipantWithSettings[],
   roundNumber: number,
   threadTitle?: string,
   moderatorText?: string,
@@ -78,7 +64,6 @@ function formatRoundAsMarkdown(
   const lines: string[] = [];
   const timestamp = new Date().toISOString().split('T')[0];
 
-  // Header
   if (threadTitle) {
     lines.push(`# ${threadTitle}`);
     lines.push('');
@@ -90,7 +75,6 @@ function formatRoundAsMarkdown(
   lines.push('---');
   lines.push('');
 
-  // Group messages by role for better formatting
   for (const message of messages) {
     const content = getMessageTextContent(message);
     if (!content.trim())
@@ -114,7 +98,6 @@ function formatRoundAsMarkdown(
     }
   }
 
-  // Include moderator text if provided
   if (moderatorText) {
     lines.push('---');
     lines.push('');
@@ -131,9 +114,6 @@ function formatRoundAsMarkdown(
   return lines.join('\n');
 }
 
-/**
- * Copies content to clipboard
- */
 async function copyToClipboard(content: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(content);
@@ -174,7 +154,7 @@ function RoundCopyActionComponent({
       onClick={handleCopy}
       className={className}
     >
-      {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+      {copied ? <Icons.check className="size-3" /> : <Icons.copy className="size-3" />}
     </Action>
   );
 }
@@ -191,5 +171,3 @@ export const RoundCopyAction = memo(
     );
   },
 );
-
-RoundCopyAction.displayName = 'RoundCopyAction';

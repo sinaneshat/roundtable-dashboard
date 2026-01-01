@@ -1,41 +1,28 @@
-/**
- * Role Enums and Mappings
- *
- * Single source of truth for AI participant roles in roundtable discussions.
- * Follows the 5-part enum pattern for maximum type safety and code reduction.
- */
+import { z } from '@hono/zod-openapi';
 
-import type { LucideIcon } from 'lucide-react';
-import {
-  Briefcase,
-  GraduationCap,
-  Hammer,
-  Lightbulb,
-  MessageSquare,
-  Sparkles,
-  Target,
-  TrendingUp,
-  Users,
-} from 'lucide-react';
-import { z } from 'zod';
+import type { Icon } from '@/components/icons';
+import { Icons } from '@/components/icons';
 
 // ============================================================================
-// SHORT ROLE NAMES (Display Categories) - 5-Part Pattern
+// SHORT ROLE NAME
 // ============================================================================
 
-// 1️⃣ ARRAY CONSTANT - Source of truth
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const SHORT_ROLE_NAMES = ['Ideator', 'Strategist', 'Analyst', 'Builder', 'Critic'] as const;
 
-// 2️⃣ DEFAULT VALUE
-export const DEFAULT_SHORT_ROLE_NAME: ShortRoleName = 'Analyst';
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const ShortRoleNameSchema = z.enum(SHORT_ROLE_NAMES).openapi({
+  description: 'Short role name category for participant roles',
+  example: 'Analyst',
+});
 
-// 3️⃣ ZOD SCHEMA - Runtime validation
-export const ShortRoleNameSchema = z.enum(SHORT_ROLE_NAMES);
-
-// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type ShortRoleName = z.infer<typeof ShortRoleNameSchema>;
 
-// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+// 4️⃣ DEFAULT VALUE
+export const DEFAULT_SHORT_ROLE_NAME: ShortRoleName = 'Analyst';
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const ShortRoleNames = {
   IDEATOR: 'Ideator' as const,
   STRATEGIST: 'Strategist' as const,
@@ -44,14 +31,12 @@ export const ShortRoleNames = {
   CRITIC: 'Critic' as const,
 } as const;
 
-// ============================================================================
-// ROLE CATEGORY METADATA
-// ============================================================================
+export const RoleCategoryMetadataSchema = z.object({
+  bgColor: z.string(),
+  iconColor: z.string(),
+});
 
-type RoleCategoryMetadata = {
-  bgColor: string;
-  iconColor: string;
-};
+export type RoleCategoryMetadata = z.infer<typeof RoleCategoryMetadataSchema>;
 
 export const ROLE_CATEGORY_METADATA: Record<ShortRoleName, RoleCategoryMetadata> = {
   Ideator: {
@@ -76,15 +61,7 @@ export const ROLE_CATEGORY_METADATA: Record<ShortRoleName, RoleCategoryMetadata>
   },
 } as const;
 
-// ============================================================================
-// ROLE MAPPINGS - Full role names → Short category names
-// ============================================================================
-
-/**
- * Maps verbose role names to single-word category labels.
- * This is the single source of truth for role name conversions.
- */
-export const ROLE_NAME_MAPPINGS: Record<string, ShortRoleName> = {
+export const ROLE_NAME_MAPPINGS = {
   // Ideation/Creative roles → Ideator
   'The Ideator': ShortRoleNames.IDEATOR,
   'Ideator': ShortRoleNames.IDEATOR,
@@ -132,125 +109,95 @@ export const ROLE_NAME_MAPPINGS: Record<string, ShortRoleName> = {
   'Secondary Theorist': ShortRoleNames.ANALYST,
 } as const;
 
-// ============================================================================
-// PREDEFINED ROLE TEMPLATES
-// ============================================================================
-
 export type PredefinedRoleTemplate = {
   name: string;
-  icon: LucideIcon;
+  icon: Icon;
   description: string;
   category: ShortRoleName;
 };
 
-/**
- * Predefined role templates for the role selection UI.
- * These are default role templates that users can select and customize.
- */
 export const PREDEFINED_ROLE_TEMPLATES: readonly PredefinedRoleTemplate[] = [
   {
     name: 'The Ideator',
-    icon: Lightbulb,
+    icon: Icons.lightbulb,
     description: 'Generate creative ideas and innovative solutions',
     category: ShortRoleNames.IDEATOR,
   },
   {
     name: 'Devil\'s Advocate',
-    icon: MessageSquare,
+    icon: Icons.messageSquare,
     description: 'Challenge assumptions and identify potential issues',
     category: ShortRoleNames.CRITIC,
   },
   {
     name: 'Builder',
-    icon: Hammer,
+    icon: Icons.hammer,
     description: 'Focus on practical implementation and execution',
     category: ShortRoleNames.BUILDER,
   },
   {
     name: 'Practical Evaluator',
-    icon: Target,
+    icon: Icons.target,
     description: 'Assess feasibility and real-world applicability',
     category: ShortRoleNames.CRITIC,
   },
   {
     name: 'Visionary Thinker',
-    icon: Sparkles,
+    icon: Icons.sparkles,
     description: 'Think big picture and long-term strategy',
     category: ShortRoleNames.IDEATOR,
   },
   {
     name: 'Domain Expert',
-    icon: GraduationCap,
+    icon: Icons.graduationCap,
     description: 'Provide deep domain-specific knowledge',
     category: ShortRoleNames.ANALYST,
   },
   {
     name: 'User Advocate',
-    icon: Users,
+    icon: Icons.users,
     description: 'Champion user needs and experience',
     category: ShortRoleNames.ANALYST,
   },
   {
     name: 'Implementation Strategist',
-    icon: Briefcase,
+    icon: Icons.briefcase,
     description: 'Plan execution strategy and implementation',
     category: ShortRoleNames.STRATEGIST,
   },
   {
     name: 'The Data Analyst',
-    icon: TrendingUp,
+    icon: Icons.trendingUp,
     description: 'Analyze data and provide insights',
     category: ShortRoleNames.ANALYST,
   },
 ] as const;
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-/**
- * Get short role name (category) from full role name.
- * Returns the original role name if no mapping exists.
- *
- * @param role - Full role name
- * @returns Short category name or original name if not found
- */
-export function getShortRoleName(role: string): string {
-  return ROLE_NAME_MAPPINGS[role] ?? role;
+function isShortRoleName(role: string): role is ShortRoleName {
+  return SHORT_ROLE_NAMES.includes(role as ShortRoleName);
 }
 
-/**
- * Get role category metadata (colors) from full role name.
- *
- * @param role - Full role name
- * @returns Role category metadata with colors
- */
+export function getShortRoleName(role: string): ShortRoleName | string {
+  if (role in ROLE_NAME_MAPPINGS) {
+    return ROLE_NAME_MAPPINGS[role as keyof typeof ROLE_NAME_MAPPINGS];
+  }
+  return role;
+}
+
 export function getRoleCategoryMetadata(role: string): RoleCategoryMetadata {
   const shortRole = getShortRoleName(role);
 
-  if (shortRole in ROLE_CATEGORY_METADATA) {
-    return ROLE_CATEGORY_METADATA[shortRole as ShortRoleName];
+  if (isShortRoleName(shortRole)) {
+    return ROLE_CATEGORY_METADATA[shortRole];
   }
 
   return ROLE_CATEGORY_METADATA[ShortRoleNames.ANALYST];
 }
 
-/**
- * Get predefined role template by name.
- *
- * @param name - Role template name
- * @returns Role template or undefined
- */
 export function getPredefinedRoleTemplate(name: string): PredefinedRoleTemplate | undefined {
   return PREDEFINED_ROLE_TEMPLATES.find(t => t.name === name);
 }
 
-/**
- * Check if a role name matches a predefined role template.
- *
- * @param name - Role name to check
- * @returns True if the name matches a predefined role template
- */
 export function isPredefinedRole(name: string): boolean {
   return PREDEFINED_ROLE_TEMPLATES.some(t => t.name === name);
 }

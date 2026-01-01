@@ -1,15 +1,8 @@
-/**
- * Credit Alert Extension - Compact alert for credit limits
- *
- * ✅ CREDITS-ONLY: Simplified to only check credit balance
- * Displays when credits are depleted with:
- * - Clear, concise messaging about the limit
- * - Compact design that blends with input
- * - Inline upgrade action
- */
 'use client';
+
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -17,25 +10,15 @@ import { useUsageStatsQuery } from '@/hooks/queries';
 import { cn } from '@/lib/ui/cn';
 
 export function QuotaAlertExtension() {
+  const t = useTranslations('usage');
   const { data: statsData, isLoading } = useUsageStatsQuery();
 
-  // ✅ CREDITS-ONLY: Check if user has run out of credits
   const isBlocked = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
       return false;
     }
     return statsData.data.credits.available <= 0;
   }, [statsData]);
-
-  // Get description message
-  const getDescription = () => {
-    return 'You\'ve run out of credits. Add credits to continue using the platform.';
-  };
-
-  // Get button text
-  const getButtonText = () => {
-    return 'Add Credits';
-  };
 
   if (isLoading || !isBlocked) {
     return null;
@@ -58,7 +41,7 @@ export function QuotaAlertExtension() {
           )}
         >
           <p className="text-[10px] leading-tight text-destructive font-medium text-left flex-1 min-w-0">
-            {getDescription()}
+            {t('quotaAlert.message')}
           </p>
           <Button
             asChild
@@ -66,8 +49,8 @@ export function QuotaAlertExtension() {
             size="sm"
             className="h-6 px-3 text-[10px] font-semibold shrink-0 rounded-full"
           >
-            <Link href="/chat/pricing">
-              {getButtonText()}
+            <Link href="/chat/pricing" prefetch={false}>
+              {t('quotaAlert.action')}
             </Link>
           </Button>
         </div>

@@ -571,6 +571,7 @@ export function ChatView({
                 isUploading={chatAttachments.isUploading}
                 isHydrating={mode === ScreenModes.THREAD && !hasInitiallyLoaded}
                 isSubmitting={formActions.isSubmitting}
+                isModelsLoading={isModelsLoading}
                 toolbar={(
                   <ChatInputToolbarMenu
                     selectedParticipants={selectedParticipants}
@@ -584,6 +585,7 @@ export function ChatView({
                     attachmentCount={chatAttachments.attachments.length}
                     enableAttachments={!isInputBlocked}
                     disabled={isInputBlocked}
+                    isModelsLoading={isModelsLoading}
                   />
                 )}
               />

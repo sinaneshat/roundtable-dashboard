@@ -1,11 +1,10 @@
 'use client';
 
-import { Coins } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
 import { StatusPage, StatusPageActions } from '@/components/billing';
+import { Icons } from '@/components/icons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSyncCreditsAfterCheckoutMutation } from '@/hooks/mutations';
 import { useCountdownRedirect } from '@/hooks/utils';
@@ -17,12 +16,8 @@ type CreditPurchaseCardProps = {
   currentBalance: number;
 };
 
-function CreditPurchaseCard({
-  creditsAdded,
-  amountPaid,
-  currentBalance,
-  currency,
-}: CreditPurchaseCardProps) {
+function CreditPurchaseCard(props: CreditPurchaseCardProps) {
+  const { creditsAdded, amountPaid, currentBalance, currency } = props;
   const t = useTranslations();
 
   const formatCurrency = (cents: number) => {
@@ -38,7 +33,7 @@ function CreditPurchaseCard({
     <Card className="w-full">
       <CardHeader className="pb-4">
         <div className="flex items-center gap-2">
-          <Coins className="size-5 text-green-600" />
+          <Icons.coins className="size-5 text-green-600" />
           <CardTitle className="text-base">{t('billing.success.credits.purchased')}</CardTitle>
         </div>
         <CardDescription className="text-xs">
@@ -52,7 +47,7 @@ function CreditPurchaseCard({
               +
               {formatCredits(creditsAdded)}
             </p>
-            <p className="text-xs text-muted-foreground">Credits Added</p>
+            <p className="text-xs text-muted-foreground">{t('billing.success.credits.creditsAdded')}</p>
           </div>
           <div className="space-y-1">
             <p className="text-lg font-semibold tabular-nums">{formatCurrency(amountPaid)}</p>
@@ -68,19 +63,7 @@ function CreditPurchaseCard({
   );
 }
 
-/**
- * Credits Success Client
- *
- * Simple, focused component for one-time credit purchases.
- * Follows Theo's "Stay Sane with Stripe" - separate from subscription flow.
- *
- * Flow:
- * 1. Sync credits purchase from Stripe
- * 2. Display credits added confirmation
- * 3. Auto-redirect to chat
- */
 export function CreditsSuccessClient() {
-  const router = useRouter();
   const t = useTranslations();
   const [isReady, setIsReady] = useState(false);
 
@@ -93,7 +76,6 @@ export function CreditsSuccessClient() {
 
   const hasInitiatedSync = useRef(false);
 
-  // Extract sync result
   const syncResult = syncMutation.data;
   const creditPurchase = syncResult?.data?.creditPurchase;
   const creditsBalance = syncResult?.data?.creditsBalance ?? 0;
@@ -102,16 +84,13 @@ export function CreditsSuccessClient() {
     if (!hasInitiatedSync.current) {
       syncMutation.mutate(undefined);
       hasInitiatedSync.current = true;
-      // Prefetch /chat early - user will navigate there after success
-      router.prefetch('/chat');
     }
-  }, [syncMutation, router]);
+  }, [syncMutation]);
 
   useEffect(() => {
     if (isReady || !syncMutation.isSuccess) {
       return;
     }
-    // Simple ready state - just wait for sync to complete
     startTransition(() => setIsReady(true));
   }, [syncMutation.isSuccess, isReady]);
 
@@ -134,7 +113,7 @@ export function CreditsSuccessClient() {
         actions={(
           <StatusPageActions
             primaryLabel={t('actions.goHome')}
-            primaryOnClick={() => router.replace('/chat')}
+            primaryHref="/chat"
           />
         )}
       />
@@ -151,7 +130,7 @@ export function CreditsSuccessClient() {
         actions={(
           <StatusPageActions
             primaryLabel={t('billing.success.viewPricing')}
-            primaryOnClick={() => router.replace('/chat/pricing')}
+            primaryHref="/chat/pricing"
           />
         )}
       />
@@ -166,9 +145,9 @@ export function CreditsSuccessClient() {
       actions={(
         <StatusPageActions
           primaryLabel={t('billing.success.startChat')}
-          primaryOnClick={() => router.replace('/chat')}
+          primaryHref="/chat"
           secondaryLabel={t('billing.success.viewPricing')}
-          secondaryOnClick={() => router.replace('/chat/pricing')}
+          secondaryHref="/chat/pricing"
         />
       )}
     >

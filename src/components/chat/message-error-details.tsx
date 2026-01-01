@@ -1,9 +1,9 @@
 'use client';
 
-import { AlertCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { ErrorCategories, ErrorTypes } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useBoolean } from '@/hooks/utils';
@@ -68,7 +68,7 @@ export function MessageErrorDetails({
   return (
     <div className={cn('text-sm text-destructive/90', className)}>
       <div className="flex items-start gap-2">
-        <AlertCircle className="size-4 mt-0.5 flex-shrink-0" />
+        <Icons.alertCircle className="size-4 mt-0.5 flex-shrink-0" />
         <div className="flex-1">
           <p className="font-medium">{getErrorTitle()}</p>
           <p className="text-xs mt-0.5 text-destructive/70">{errorMessage}</p>

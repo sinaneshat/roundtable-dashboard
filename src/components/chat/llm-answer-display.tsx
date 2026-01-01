@@ -1,11 +1,10 @@
 'use client';
 
-import { ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Streamdown } from 'streamdown';
 
-import { streamdownComponents } from '@/components/markdown/streamdown-components';
-import { defaultMarkdownComponents } from '@/components/markdown/unified-markdown-components';
+import { Icons } from '@/components/icons';
+import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { StreamingCursor } from '@/components/ui/streaming-text';
 import { FadeInText } from '@/components/ui/typing-text';
 import { cn } from '@/lib/ui/cn';
@@ -18,21 +17,18 @@ type LLMAnswerDisplayProps = {
 };
 
 export function LLMAnswerDisplay({ answer, isStreaming = false, className, sources }: LLMAnswerDisplayProps) {
-  // Don't show internal loading - unified loading indicator handles this
   if (!answer) {
     return null;
   }
 
   return (
     <div className={cn('space-y-3 mt-3', className)}>
-      {/* Simplified header */}
       <FadeInText delay={0.05}>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
           <span>AI Summary</span>
         </div>
       </FadeInText>
 
-      {/* Markdown content - uses Streamdown for proper streaming animation */}
       <div>
         {isStreaming
           ? (
@@ -43,20 +39,18 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
                 >
                   {answer}
                 </Streamdown>
-                {/* ✅ STREAMING CURSOR: Show blinking cursor while streaming */}
                 <StreamingCursor />
               </div>
             )
           : (
               <div className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-                <ReactMarkdown components={defaultMarkdownComponents}>
+                <ReactMarkdown components={streamdownComponents}>
                   {answer}
                 </ReactMarkdown>
               </div>
             )}
       </div>
 
-      {/* Compact source list - no border */}
       {sources && sources.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-3">
           {sources.map((source, idx) => (
@@ -72,7 +66,7 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
                 {idx + 1}
                 ]
               </span>
-              <ExternalLink className="size-2.5" />
+              <Icons.externalLink className="size-2.5" />
             </a>
           ))}
         </div>

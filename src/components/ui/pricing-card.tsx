@@ -1,10 +1,9 @@
 'use client';
 
-import { Check, CreditCard, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
-import { UIBillingIntervals } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { cn } from '@/lib/ui/cn';
 
 import { GlowingEffect } from './glowing-effect';
@@ -124,7 +123,7 @@ export function PricingCard({
           className="absolute -top-3 left-1/2 z-20 -translate-x-1/2"
         >
           <div className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow-lg">
-            <CreditCard className="size-3" />
+            <Icons.creditCard className="size-3" />
             {t('currentPlan')}
           </div>
         </motion.div>
@@ -243,7 +242,7 @@ export function PricingCard({
               )}
 
               {/* Annual Savings Badge */}
-              {annualSavingsPercent && annualSavingsPercent > 0 && price.interval === UIBillingIntervals.YEAR && (
+              {annualSavingsPercent && annualSavingsPercent > 0 && price.interval === 'year' && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -300,7 +299,7 @@ export function PricingCard({
                     className="flex items-start gap-3"
                   >
                     <div className="mt-0.5 rounded-full bg-primary/10 p-1">
-                      <Check className="size-3.5 text-primary" />
+                      <Icons.check className="size-3.5 text-primary" />
                     </div>
                     <span className="flex-1 text-sm text-muted-foreground">
                       {feature}
@@ -332,7 +331,7 @@ export function PricingCard({
                   {isProcessingManageBilling
                     ? (
                         <span className="flex items-center justify-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Icons.loader className="h-4 w-4 animate-spin" />
                           {t('processing')}
                         </span>
                       )
@@ -362,7 +361,7 @@ export function PricingCard({
                 {isActionButtonLoading
                   ? (
                       <span className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Icons.loader className="h-4 w-4 animate-spin" />
                         {t('processing')}
                       </span>
                     )

@@ -1,12 +1,12 @@
 'use client';
 
-import { Globe, Loader2, MoreVertical, Share2, Star, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import type { ChatThread } from '@/api/routes/chat/schema';
 import { ShareDialog } from '@/components/chat/share-dialog';
 import { SocialShareButton } from '@/components/chat/social-share-button';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -25,8 +25,15 @@ import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/muta
 import { useMediaQuery } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
+// Flexible thread type that accepts both Date and string dates (for RPC responses)
+type FlexibleThread = Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  lastMessageAt: Date | string | null;
+};
+
 type ChatThreadActionsProps = {
-  thread: ChatThread | (Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & { createdAt: string | Date; updatedAt: string | Date; lastMessageAt: string | Date | null });
+  thread: FlexibleThread;
   slug: string;
   onDeleteClick?: () => void;
   isPublicMode?: boolean;
@@ -41,7 +48,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
-  // Optimistic display states
   const displayIsFavorite = toggleFavoriteMutation.isSuccess && toggleFavoriteMutation.data?.success
     ? toggleFavoriteMutation.data.data.thread.isFavorite
     : toggleFavoriteMutation.isPending && toggleFavoriteMutation.variables
@@ -56,7 +62,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
 
   const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/public/chat/${slug}`;
 
-  // Handlers
   const handleToggleFavorite = () => {
     toggleFavoriteMutation.mutate({
       threadId: thread.id,
@@ -86,9 +91,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     setIsShareDialogOpen(true);
   };
 
-  // ==========================================================================
-  // PUBLIC MODE: Copy link button only (for public thread view page)
-  // ==========================================================================
   if (isPublicMode) {
     return (
       <TooltipProvider>
@@ -104,56 +106,47 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     );
   }
 
-  // ==========================================================================
-  // DESKTOP VIEW: Individual icon buttons with tooltips
-  // ==========================================================================
   if (isDesktop) {
     return (
       <TooltipProvider>
         <div className="flex items-center gap-0.5">
-          {/* Share/Visibility button - opens ShareDialog */}
-          <Tooltip delayDuration={300}>
+          <Tooltip delayDuration={800}>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={displayIsPublic ? t('shareThread') : t('makePublicAndShare')}
+                aria-label={t('share')}
                 onClick={handleOpenShareDialog}
                 disabled={togglePublicMutation.isPending}
                 className="transition-all duration-200"
               >
                 {togglePublicMutation.isPending
-                  ? <Loader2 className="size-4 animate-spin" />
-                  : displayIsPublic
-                    ? <Globe className="size-4 text-green-500" />
-                    : <Share2 className="size-4" />}
+                  ? <Icons.loader className="size-4 animate-spin" />
+                  : <Icons.share className="size-4" />}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p className="text-sm">
-                {displayIsPublic ? t('shareThread') : t('makePublicAndShare')}
-              </p>
+              <p className="text-sm">{t('share')}</p>
             </TooltipContent>
           </Tooltip>
 
-          {/* Favorite button */}
-          <Tooltip delayDuration={300}>
+          <Tooltip delayDuration={800}>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={displayIsFavorite ? t('removeFromFavorites') : t('addToFavorites')}
+                aria-label={displayIsFavorite ? t('unpin') : t('pin')}
                 onClick={handleToggleFavorite}
                 disabled={toggleFavoriteMutation.isPending}
                 className={cn(
                   'transition-all duration-200',
-                  displayIsFavorite && 'text-amber-500',
+                  displayIsFavorite && 'text-primary',
                 )}
               >
                 {toggleFavoriteMutation.isPending
-                  ? <Loader2 className="size-4 animate-spin" />
+                  ? <Icons.loader className="size-4 animate-spin" />
                   : (
-                      <Star
+                      <Icons.pin
                         className={cn(
                           'size-4',
                           displayIsFavorite && 'fill-current',
@@ -164,14 +157,13 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
             </TooltipTrigger>
             <TooltipContent side="bottom">
               <p className="text-sm">
-                {displayIsFavorite ? t('removeFromFavorites') : t('addToFavorites')}
+                {displayIsFavorite ? t('unpin') : t('pin')}
               </p>
             </TooltipContent>
           </Tooltip>
 
-          {/* Delete button */}
           {onDeleteClick && (
-            <Tooltip delayDuration={300}>
+            <Tooltip delayDuration={800}>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
@@ -180,7 +172,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                   onClick={onDeleteClick}
                   className="transition-all duration-200 text-muted-foreground hover:text-destructive"
                 >
-                  <Trash2 className="size-4" />
+                  <Icons.trash className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
@@ -189,7 +181,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
             </Tooltip>
           )}
 
-          {/* Share Dialog */}
           <ShareDialog
             open={isShareDialogOpen}
             onOpenChange={setIsShareDialogOpen}
@@ -206,16 +197,12 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     );
   }
 
-  // ==========================================================================
-  // MOBILE VIEW: Three-dot menu with all actions
-  // ==========================================================================
   return (
     <TooltipProvider>
       <div className="flex items-center gap-1">
-        {/* Public status indicator (visible when public) */}
         {displayIsPublic && (
           <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
-            <Globe className="size-3" />
+            <Icons.globe className="size-3" />
             <span className="text-xs font-medium">{t('shareDialog.publicStatus')}</span>
           </div>
         )}
@@ -228,46 +215,41 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               aria-label={t('moreOptions')}
               className="transition-all duration-200"
             >
-              <MoreVertical className="size-4 text-muted-foreground" />
+              <Icons.moreVertical className="size-4 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" className="w-56">
-            {/* Share */}
             <DropdownMenuItem
               onClick={handleOpenShareDialog}
               className="cursor-pointer"
             >
-              {displayIsPublic
-                ? <Globe className="size-4 text-green-500" />
-                : <Share2 className="size-4" />}
-              <span>{displayIsPublic ? t('shareThread') : t('makePublicAndShare')}</span>
+              <Icons.share className="size-4" />
+              <span>{t('share')}</span>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
 
-            {/* Favorite */}
             <DropdownMenuItem
               onClick={handleToggleFavorite}
               disabled={toggleFavoriteMutation.isPending}
               className={cn(
                 'cursor-pointer',
-                displayIsFavorite && 'text-amber-500',
+                displayIsFavorite && 'text-primary',
               )}
             >
               {toggleFavoriteMutation.isPending
-                ? <Loader2 className="size-4 animate-spin" />
+                ? <Icons.loader className="size-4 animate-spin" />
                 : (
-                    <Star
+                    <Icons.pin
                       className={cn(
                         'size-4',
                         displayIsFavorite && 'fill-current',
                       )}
                     />
                   )}
-              <span>{displayIsFavorite ? t('removeFromFavorites') : t('addToFavorites')}</span>
+              <span>{displayIsFavorite ? t('unpin') : t('pin')}</span>
             </DropdownMenuItem>
 
-            {/* Delete */}
             {onDeleteClick && (
               <>
                 <DropdownMenuSeparator />
@@ -276,7 +258,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                   variant="destructive"
                   className="cursor-pointer"
                 >
-                  <Trash2 className="size-4" />
+                  <Icons.trash className="size-4" />
                   <span>{t('deleteThread')}</span>
                 </DropdownMenuItem>
               </>
@@ -284,7 +266,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Share Dialog */}
         <ShareDialog
           open={isShareDialogOpen}
           onOpenChange={setIsShareDialogOpen}

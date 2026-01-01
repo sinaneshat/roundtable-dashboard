@@ -1,37 +1,12 @@
 'use client';
 
-/**
- * InlineCitation Component System
- *
- * Provides inline citations for AI-generated content that references sources from
- * project context (memories, threads, files, searches, analyses).
- *
- * Usage:
- * ```tsx
- * <InlineCitation>
- *   <InlineCitationCard>
- *     <InlineCitationCardTrigger displayNumber={1} sourceType="memory" />
- *     <InlineCitationCardBody>
- *       <InlineCitationSource
- *         title="Project Requirements"
- *         sourceType="memory"
- *         description="Key requirements from project setup"
- *       />
- *       <InlineCitationQuote>
- *         "The authentication must use OAuth 2.0 protocol..."
- *       </InlineCitationQuote>
- *     </InlineCitationCardBody>
- *   </InlineCitationCard>
- * </InlineCitation>
- * ```
- */
-
-import { Database, Download, ExternalLink, FileText, Globe, MessageSquare, Search, Sparkles } from 'lucide-react';
-import type { ComponentPropsWithoutRef, ElementType, ReactNode } from 'react';
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 import { createContext, use, useMemo, useState } from 'react';
 
 import type { CitationSourceType } from '@/api/core/enums';
 import { CitationSourceTypes } from '@/api/core/enums';
+import type { Icon } from '@/components/icons';
+import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/ui/cn';
@@ -41,8 +16,8 @@ import { cn } from '@/lib/ui/cn';
 // ============================================================================
 
 type InlineCitationContextValue = {
-  isOpen: boolean;
-  setIsOpen: (open: boolean) => void;
+  readonly isOpen: boolean;
+  readonly setIsOpen: (open: boolean) => void;
 };
 
 const InlineCitationContext = createContext<InlineCitationContextValue | null>(null);
@@ -59,38 +34,40 @@ function useInlineCitation() {
 // Source Type Icons & Labels
 // ============================================================================
 
-const SOURCE_TYPE_CONFIG: Record<CitationSourceType, {
-  icon: ElementType;
-  label: string;
-  color: string;
-}> = {
+type SourceTypeConfig = {
+  readonly icon: Icon;
+  readonly label: string;
+  readonly color: string;
+};
+
+const SOURCE_TYPE_CONFIG: Record<CitationSourceType, SourceTypeConfig> = {
   [CitationSourceTypes.MEMORY]: {
-    icon: Sparkles,
+    icon: Icons.sparkles,
     label: 'Memory',
     color: 'text-purple-500',
   },
   [CitationSourceTypes.THREAD]: {
-    icon: MessageSquare,
+    icon: Icons.messageSquare,
     label: 'Thread',
     color: 'text-blue-500',
   },
   [CitationSourceTypes.ATTACHMENT]: {
-    icon: FileText,
+    icon: Icons.fileText,
     label: 'File',
     color: 'text-green-500',
   },
   [CitationSourceTypes.SEARCH]: {
-    icon: Globe,
+    icon: Icons.globe,
     label: 'Search',
     color: 'text-amber-500',
   },
   [CitationSourceTypes.MODERATOR]: {
-    icon: Search,
+    icon: Icons.search,
     label: 'Moderator',
     color: 'text-cyan-500',
   },
   [CitationSourceTypes.RAG]: {
-    icon: Database,
+    icon: Icons.database,
     label: 'Indexed File',
     color: 'text-indigo-500',
   },
@@ -100,7 +77,10 @@ const SOURCE_TYPE_CONFIG: Record<CitationSourceType, {
 // InlineCitation Root
 // ============================================================================
 
-type InlineCitationProps = ComponentPropsWithoutRef<'span'>;
+type InlineCitationProps = {
+  readonly className?: string;
+  readonly children?: ReactNode;
+} & Omit<ComponentPropsWithoutRef<'span'>, 'className' | 'children'>;
 
 function InlineCitation({ className, children, ...props }: InlineCitationProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -112,11 +92,7 @@ function InlineCitation({ className, children, ...props }: InlineCitationProps) 
 
   return (
     <InlineCitationContext value={contextValue}>
-      <span
-        data-slot="inline-citation"
-        className={cn('inline', className)}
-        {...props}
-      >
+      <span data-slot="inline-citation" className={cn('inline', className)} {...props}>
         {children}
       </span>
     </InlineCitationContext>
@@ -128,7 +104,7 @@ function InlineCitation({ className, children, ...props }: InlineCitationProps) 
 // ============================================================================
 
 type InlineCitationCardProps = {
-  children: ReactNode;
+  readonly children: ReactNode;
 };
 
 function InlineCitationCard({ children }: InlineCitationCardProps) {
@@ -146,9 +122,9 @@ function InlineCitationCard({ children }: InlineCitationCardProps) {
 // ============================================================================
 
 type InlineCitationCardTriggerProps = {
-  displayNumber: number;
-  sourceType: CitationSourceType;
-  className?: string;
+  readonly displayNumber: number;
+  readonly sourceType: CitationSourceType;
+  readonly className?: string;
 };
 
 function InlineCitationCardTrigger({
@@ -189,23 +165,14 @@ function InlineCitationCardTrigger({
 // ============================================================================
 
 type InlineCitationCardBodyProps = {
-  children: ReactNode;
-  className?: string;
+  readonly children: ReactNode;
+  readonly className?: string;
 };
 
 function InlineCitationCardBody({ children, className }: InlineCitationCardBodyProps) {
   return (
-    <PopoverContent
-      className={cn(
-        'w-80 p-0 backdrop-blur-lg bg-popover/95',
-        className,
-      )}
-      align="start"
-      sideOffset={8}
-    >
-      <div className="p-3 space-y-3">
-        {children}
-      </div>
+    <PopoverContent className={cn('w-80 p-0 backdrop-blur-lg bg-popover/95', className)} align="start" sideOffset={8}>
+      <div className="p-3 space-y-3">{children}</div>
     </PopoverContent>
   );
 }
@@ -215,17 +182,16 @@ function InlineCitationCardBody({ children, className }: InlineCitationCardBodyP
 // ============================================================================
 
 type InlineCitationSourceProps = {
-  title: string;
-  sourceType: CitationSourceType;
-  description?: string;
-  url?: string;
-  threadTitle?: string;
-  className?: string;
-  // Attachment-specific props
-  downloadUrl?: string;
-  filename?: string;
-  mimeType?: string;
-  fileSize?: number;
+  readonly title: string;
+  readonly sourceType: CitationSourceType;
+  readonly description?: string;
+  readonly url?: string;
+  readonly threadTitle?: string;
+  readonly className?: string;
+  readonly downloadUrl?: string;
+  readonly filename?: string;
+  readonly mimeType?: string;
+  readonly fileSize?: number;
 };
 
 function InlineCitationSource({
@@ -243,8 +209,7 @@ function InlineCitationSource({
   const config = SOURCE_TYPE_CONFIG[sourceType];
   const Icon = config.icon;
 
-  // Format file size for display
-  const formatFileSize = (bytes: number | undefined) => {
+  const formatFileSize = (bytes: number | undefined): string | null => {
     if (!bytes)
       return null;
     if (bytes < 1024)
@@ -259,13 +224,8 @@ function InlineCitationSource({
 
   return (
     <div className={cn('space-y-2', className)}>
-      {/* Source Header */}
       <div className="flex items-start gap-2">
-        <div className={cn(
-          'shrink-0 p-1.5 rounded-md bg-muted/50',
-          config.color,
-        )}
-        >
+        <div className={cn('shrink-0 p-1.5 rounded-md bg-muted/50', config.color)}>
           <Icon className="size-3.5" />
         </div>
         <div className="flex-1 min-w-0">
@@ -279,10 +239,7 @@ function InlineCitationSource({
               </span>
             )}
           </div>
-          <h4 className="text-sm font-medium leading-tight mt-0.5 line-clamp-2">
-            {displayTitle}
-          </h4>
-          {/* File metadata for attachments */}
+          <h4 className="text-sm font-medium leading-tight mt-0.5 line-clamp-2">{displayTitle}</h4>
           {isAttachment && (mimeType || fileSize) && (
             <p className="text-[10px] text-muted-foreground mt-0.5">
               {mimeType && <span>{mimeType}</span>}
@@ -292,15 +249,9 @@ function InlineCitationSource({
           )}
         </div>
       </div>
-
-      {/* Description */}
       {description && (
-        <p className="text-xs text-muted-foreground line-clamp-3">
-          {description}
-        </p>
+        <p className="text-xs text-muted-foreground line-clamp-3">{description}</p>
       )}
-
-      {/* Download Link (for file attachments) */}
       {isAttachment && downloadUrl && (
         <a
           href={downloadUrl}
@@ -311,15 +262,13 @@ function InlineCitationSource({
             'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
           )}
         >
-          <Download className="size-3" />
+          <Icons.download className="size-3" />
           <span>
             Download
             {filename || 'file'}
           </span>
         </a>
       )}
-
-      {/* URL Link (for search results and external links) */}
       {url && !isAttachment && (
         <a
           href={url}
@@ -330,7 +279,7 @@ function InlineCitationSource({
             'hover:underline focus:outline-none focus-visible:underline',
           )}
         >
-          <ExternalLink className="size-3" />
+          <Icons.externalLink className="size-3" />
           <span className="truncate max-w-[200px]">{new URL(url).hostname}</span>
         </a>
       )}
@@ -343,20 +292,13 @@ function InlineCitationSource({
 // ============================================================================
 
 type InlineCitationQuoteProps = {
-  children: ReactNode;
-  className?: string;
+  readonly children: ReactNode;
+  readonly className?: string;
 };
 
 function InlineCitationQuote({ children, className }: InlineCitationQuoteProps) {
   return (
-    <blockquote
-      className={cn(
-        'border-l-2 border-primary/30 pl-3 py-1',
-        'text-xs text-muted-foreground italic',
-        'line-clamp-4',
-        className,
-      )}
-    >
+    <blockquote className={cn('border-l-2 border-primary/30 pl-3 py-1 text-xs text-muted-foreground italic line-clamp-4', className)}>
       {children}
     </blockquote>
   );
@@ -366,16 +308,12 @@ function InlineCitationQuote({ children, className }: InlineCitationQuoteProps) 
 // InlineCitationText (Inline Text with Citation)
 // ============================================================================
 
-type InlineCitationTextProps = ComponentPropsWithoutRef<'span'>;
+type InlineCitationTextProps = {
+  readonly className?: string;
+} & Omit<ComponentPropsWithoutRef<'span'>, 'className'>;
 
 function InlineCitationText({ className, ...props }: InlineCitationTextProps) {
-  return (
-    <span
-      data-slot="inline-citation-text"
-      className={cn('inline', className)}
-      {...props}
-    />
-  );
+  return <span data-slot="inline-citation-text" className={cn('inline', className)} {...props} />;
 }
 
 // ============================================================================

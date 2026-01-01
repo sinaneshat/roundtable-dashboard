@@ -33,11 +33,6 @@ export function AvatarGroup({
 
   const totalCount = participants.length;
 
-  // Dynamic classes based on size for spacing
-  const overlapClass = size === 'sm' ? '-ml-2' : '-ml-3';
-  const gapClass = size === 'sm' ? 'ml-2' : 'ml-3';
-  const badgeGapClass = size === 'sm' ? 'ml-2' : 'ml-3';
-
   return (
     <div className={cn('flex items-center', className)}>
       {visibleParticipants.map((participant, index) => {
@@ -45,13 +40,14 @@ export function AvatarGroup({
         if (!model)
           return null;
 
-        const zIndexClass = overlap ? `z-[${visibleParticipants.length - index}]` : '';
-        const spacingClass = index === 0 ? '' : overlap ? overlapClass : gapClass;
-
         return (
           <div
             key={participant.id}
-            className={cn('relative', zIndexClass, spacingClass)}
+            className="relative"
+            style={{
+              zIndex: overlap ? index + 1 : undefined,
+              marginLeft: index === 0 ? '0px' : overlap ? `${sizeMetadata.overlapOffset}px` : `${sizeMetadata.gapSize}px`,
+            }}
           >
             <Avatar
               className={cn(
@@ -78,7 +74,7 @@ export function AvatarGroup({
           className={cn(
             sizeMetadata.container,
             'flex items-center justify-center rounded-full bg-white text-black font-bold border-2 border-card',
-            badgeGapClass,
+            sizeMetadata.gapSize === 8 ? 'ml-2' : 'ml-3',
           )}
         >
           <span className={cn(sizeMetadata.text, 'tabular-nums')}>

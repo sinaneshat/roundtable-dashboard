@@ -1,19 +1,10 @@
-/**
- * API Keys List Component
- *
- * Displays list of user's API keys with delete functionality
- * Following patterns from chat-list.tsx and chat-nav.tsx for ScrollArea usage
- * Uses reusable ApiKeyCard component for consistent design
- */
-
 'use client';
 
-import { Key, Loader2, Plus } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import type { ApiKey } from '@/api/routes/api-keys/schema';
+import { Icons } from '@/components/icons';
 import { ApiKeyCard } from '@/components/settings/api-key-card';
 import {
   AlertDialog,
@@ -36,27 +27,18 @@ import {
 } from '@/components/ui/empty';
 import { useDeleteApiKeyMutation } from '@/hooks';
 import { showApiErrorToast } from '@/lib/toast';
+import type { ListApiKeysResponse } from '@/services/api';
 
-// ============================================================================
-// Types
-// ============================================================================
+// RPC-inferred type for API keys from service response
+type ApiKeyItem = NonNullable<Extract<ListApiKeysResponse, { success: true }>['data']>['items'][number];
 
 type ApiKeysListProps = {
-  apiKeys: ApiKey[];
+  apiKeys: ApiKeyItem[];
   isLoading: boolean;
-  error?: Error | string | null;
+  error?: Error | null;
   onCreateNew: () => void;
 };
 
-// ============================================================================
-// Component
-// ============================================================================
-
-/**
- * Displays API keys in a scrollable list with compact card design
- * Following chat-nav.tsx pattern for ScrollArea usage
- * Reuses ApiKeyCard for consistency
- */
 export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysListProps) {
   const t = useTranslations();
   const [deleteKeyId, setDeleteKeyId] = useState<string | null>(null);
@@ -68,7 +50,6 @@ export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysL
 
     try {
       await deleteMutation.mutateAsync({ param: { keyId: deleteKeyId } });
-      // Success is obvious from the item disappearing - no toast needed
     } catch (error) {
       showApiErrorToast(t('apiKeys.list.deleteFailed'), error);
     } finally {
@@ -76,40 +57,36 @@ export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysL
     }
   };
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        <Icons.loader className="size-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  // Error state
   if (error) {
-    const errorMessage = typeof error === 'string' ? error : error.message;
     return (
       <Empty className="border-dashed border-destructive/50">
         <EmptyHeader>
           <EmptyMedia variant="icon">
-            <Key className="text-destructive" />
+            <Icons.key className="text-destructive" />
           </EmptyMedia>
           <EmptyTitle>{t('apiKeys.list.errorTitle')}</EmptyTitle>
           <EmptyDescription className="text-destructive">
-            {errorMessage}
+            {error.message}
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
   }
 
-  // Empty state
   if (apiKeys.length === 0) {
     return (
       <Empty className="border-dashed">
         <EmptyHeader>
           <EmptyMedia variant="icon">
-            <Key />
+            <Icons.key />
           </EmptyMedia>
           <EmptyTitle>{t('apiKeys.list.noKeys')}</EmptyTitle>
           <EmptyDescription>
@@ -118,7 +95,7 @@ export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysL
         </EmptyHeader>
         <EmptyContent>
           <Button onClick={onCreateNew} size="sm">
-            <Plus className="mr-2 size-4" />
+            <Icons.plus className="mr-2 size-4" />
             {t('apiKeys.list.createNew')}
           </Button>
         </EmptyContent>
@@ -126,7 +103,6 @@ export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysL
     );
   }
 
-  // List - parent modal handles scrolling
   return (
     <div className="space-y-4">
       <div className="space-y-3">
@@ -152,7 +128,6 @@ export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysL
         </AnimatePresence>
       </div>
 
-      {/* Delete Confirmation Dialog - Following chat-delete-dialog.tsx pattern */}
       <AlertDialog open={!!deleteKeyId} onOpenChange={() => setDeleteKeyId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -173,7 +148,7 @@ export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysL
               {deleteMutation.isPending
                 ? (
                     <>
-                      <Loader2 className="size-4 animate-spin mr-2" />
+                      <Icons.loader className="size-4 animate-spin mr-2" />
                       {t('actions.deleting')}
                     </>
                   )

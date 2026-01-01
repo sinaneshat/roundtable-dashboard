@@ -1,11 +1,12 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense } from 'react';
 
+import { AuthErrorTypes, isValidAuthErrorType } from '@/api/core/enums/auth';
+import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,79 +18,36 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 
-/**
- * Internal component that uses useSearchParams
- * Separated to allow Suspense wrapping per Next.js 15 requirements
- */
+const AUTH_ERROR_I18N_KEYS = {
+  [AuthErrorTypes.CONFIGURATION]: { title: 'auth.errors.configuration', desc: 'auth.errors.configurationDesc' },
+  [AuthErrorTypes.ACCESS_DENIED]: { title: 'auth.errors.accessDenied', desc: 'auth.errors.accessDeniedDesc' },
+  [AuthErrorTypes.VERIFICATION]: { title: 'auth.errors.verification', desc: 'auth.errors.verificationDesc' },
+  [AuthErrorTypes.OAUTH_SIGNIN]: { title: 'auth.errors.oauthSignin', desc: 'auth.errors.oauthSigninDesc' },
+  [AuthErrorTypes.OAUTH_CALLBACK]: { title: 'auth.errors.oauthCallback', desc: 'auth.errors.oauthCallbackDesc' },
+  [AuthErrorTypes.OAUTH_CREATE_ACCOUNT]: { title: 'auth.errors.oauthCreateAccount', desc: 'auth.errors.oauthCreateAccountDesc' },
+  [AuthErrorTypes.EMAIL_CREATE_ACCOUNT]: { title: 'auth.errors.emailCreateAccount', desc: 'auth.errors.emailCreateAccountDesc' },
+  [AuthErrorTypes.CALLBACK]: { title: 'auth.errors.callback', desc: 'auth.errors.callbackDesc' },
+  [AuthErrorTypes.PLEASE_RESTART_PROCESS]: { title: 'auth.errors.restartProcess', desc: 'auth.errors.restartProcessDesc' },
+  [AuthErrorTypes.DEFAULT]: { title: 'auth.errors.default', desc: 'auth.errors.defaultDesc' },
+} as const;
+
 function AuthErrorContent() {
   const t = useTranslations();
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const error = searchParams?.get('failed') || 'Default';
+  const rawError = searchParams?.get('failed')?.toLowerCase() ?? AuthErrorTypes.DEFAULT;
+  const errorType = isValidAuthErrorType(rawError) ? rawError : AuthErrorTypes.DEFAULT;
 
-  const getErrorInfo = (errorType: string) => {
-    const errorKey = errorType.toLowerCase();
-    switch (errorKey) {
-      case 'configuration':
-        return {
-          title: t('auth.errors.configuration'),
-          description: t('auth.errors.configurationDesc'),
-        };
-      case 'accessdenied':
-        return {
-          title: t('auth.errors.accessDenied'),
-          description: t('auth.errors.accessDeniedDesc'),
-        };
-      case 'verification':
-        return {
-          title: t('auth.errors.verification'),
-          description: t('auth.errors.verificationDesc'),
-        };
-      case 'oauthsignin':
-        return {
-          title: t('auth.errors.oauthSignin'),
-          description: t('auth.errors.oauthSigninDesc'),
-        };
-      case 'oauthcallback':
-        return {
-          title: t('auth.errors.oauthCallback'),
-          description: t('auth.errors.oauthCallbackDesc'),
-        };
-      case 'oauthcreateaccount':
-        return {
-          title: t('auth.errors.oauthCreateAccount'),
-          description: t('auth.errors.oauthCreateAccountDesc'),
-        };
-      case 'emailcreateaccount':
-        return {
-          title: t('auth.errors.emailCreateAccount'),
-          description: t('auth.errors.emailCreateAccountDesc'),
-        };
-      case 'callback':
-        return {
-          title: t('auth.errors.callback'),
-          description: t('auth.errors.callbackDesc'),
-        };
-      case 'please_restart_the_process':
-        return {
-          title: t('auth.errors.restartProcess'),
-          description: t('auth.errors.restartProcessDesc'),
-        };
-      default:
-        return {
-          title: t('auth.errors.default'),
-          description: t('auth.errors.defaultDesc'),
-        };
-    }
+  const errorKeys = AUTH_ERROR_I18N_KEYS[errorType];
+  const errorInfo = {
+    title: t(errorKeys.title),
+    description: t(errorKeys.desc),
   };
-
-  const errorInfo = getErrorInfo(error);
 
   return (
     <Empty className="w-full max-w-sm border-none">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <AlertCircle className="text-destructive" />
+          <Icons.alertCircle className="text-destructive" />
         </EmptyMedia>
         <EmptyTitle className="text-xl font-semibold">
           {errorInfo.title}
@@ -104,18 +62,20 @@ function AuthErrorContent() {
             {t('auth.errors.errorCode')}
             {' '}
             <Badge variant="secondary" className="font-mono text-xs">
-              {error}
+              {errorType}
             </Badge>
           </p>
         </div>
         <div className="flex flex-col gap-2 w-full">
-          <Button onClick={() => router.back()} className="w-full">
-            <RefreshCw className="me-2 h-4 w-4" />
-            {t('auth.errors.tryAgain')}
+          <Button asChild className="w-full">
+            <Link href="/auth/sign-in" prefetch={false}>
+              <Icons.refreshCw className="me-2 h-4 w-4" />
+              {t('auth.errors.tryAgain')}
+            </Link>
           </Button>
           <Button asChild variant="outline" className="w-full">
-            <Link href="/auth/sign-in" className="flex items-center justify-center">
-              <ArrowLeft className="me-2 h-4 w-4" />
+            <Link href="/auth/sign-in" prefetch={false}>
+              <Icons.arrowLeft className="me-2 h-4 w-4" />
               {t('auth.errors.backToSignIn')}
             </Link>
           </Button>
@@ -125,26 +85,25 @@ function AuthErrorContent() {
   );
 }
 
-/**
- * Auth Error Screen wrapper component with Suspense boundary
- * Following Next.js 15 pattern for useSearchParams usage
- */
+function AuthErrorFallback() {
+  const t = useTranslations();
+  return (
+    <Empty className="w-full max-w-sm border-none">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Icons.alertCircle className="text-destructive" />
+        </EmptyMedia>
+        <EmptyTitle className="text-xl font-semibold">
+          {t('states.loading.default')}
+        </EmptyTitle>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
 export default function AuthErrorScreen() {
   return (
-    <Suspense
-      fallback={(
-        <Empty className="w-full max-w-sm border-none">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <AlertCircle className="text-destructive" />
-            </EmptyMedia>
-            <EmptyTitle className="text-xl font-semibold">
-              Loading...
-            </EmptyTitle>
-          </EmptyHeader>
-        </Empty>
-      )}
-    >
+    <Suspense fallback={<AuthErrorFallback />}>
       <AuthErrorContent />
     </Suspense>
   );

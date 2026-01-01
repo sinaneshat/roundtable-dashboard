@@ -211,7 +211,10 @@ export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPay
   if (!threadData.success) {
     if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       // 🔍 DEBUG LOG 2: Thread detail validation failure - check message structure
-      // ✅ TYPE-SAFE: Use lenient record schema for debug inspection only
+      // ✅ DEBUG-ONLY TYPE RELAXATION: Use lenient record schema for inspection
+      // JUSTIFICATION: Debug logging should not fail due to type safety.
+      // This code only runs in development and doesn't affect production behavior.
+      // The lenient schema allows us to inspect malformed data for debugging.
       const debugData = z.record(z.string(), z.unknown()).safeParse(response.data.data);
       const rawData = debugData.success ? debugData.data : {};
       const messages = Array.isArray(rawData.messages) ? rawData.messages : [];
@@ -276,7 +279,10 @@ export function validateInfiniteQueryCache(data: unknown): InfiniteQueryCache | 
   if (!queryData.success) {
     if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       // 🔍 DEBUG LOG 1: Infinite query validation failure
-      // ✅ TYPE-SAFE: Use lenient record schema for debug inspection only
+      // ✅ DEBUG-ONLY TYPE RELAXATION: Use lenient record schema for inspection
+      // JUSTIFICATION: Debug logging should not fail due to type safety.
+      // This code only runs in development and doesn't affect production behavior.
+      // The lenient schema allows us to inspect malformed data for debugging.
       const debugData = z.record(z.string(), z.unknown()).safeParse(data);
       const rawData = debugData.success ? debugData.data : {};
 

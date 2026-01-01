@@ -1,66 +1,66 @@
 /**
- * Chat Modes UI Configuration
+ * Chat Mode Configuration
  *
- * Frontend-specific UI configuration for chat modes including icons, colors, and descriptions.
- * Imports enum definitions from centralized backend source.
- *
- * ✅ ENUM SOURCE: /src/api/core/enums.ts - Single source of truth for enum values
- * ✅ UI METADATA: This file ONLY contains UI-specific metadata (icons, colors, placeholders)
- * ✅ HELPER FUNCTIONS: UI utility functions for chat mode selection and display
- * ✅ NO DUPLICATION: All enums imported from /src/api/core/enums.ts
- *
- * Reference: COMPREHENSIVE REFACTORING ANALYSIS:2.1
+ * UI metadata and configuration for chat modes.
+ * Enums defined in @/api/core/enums/chat, this file provides UI metadata.
  */
 
-import type { LucideIcon } from 'lucide-react';
-import { Lightbulb, Scale, Search, Target } from 'lucide-react';
+import { z } from 'zod';
 
 import type { ChatMode } from '@/api/core/enums';
-import { ChatModes, DEFAULT_CHAT_MODE as DEFAULT_MODE_FROM_ENUM } from '@/api/core/enums';
+import { ChatModes, ChatModeSchema, DEFAULT_CHAT_MODE } from '@/api/core/enums';
+import type { Icon } from '@/components/icons';
+import { Icons } from '@/components/icons';
 
 // ============================================================================
-// Chat Mode Configuration Types
+// CHAT MODE METADATA TYPES (Zod-first)
 // ============================================================================
 
-export type ChatModeMetadata = {
-  icon: LucideIcon;
-  color: string;
-  description: string;
-  systemPromptHint: string;
-  placeholder: string;
+export const ChatModeMetadataSchema = z.object({
+  color: z.string(),
+  description: z.string(),
+  systemPromptHint: z.string(),
+  placeholder: z.string(),
+});
+
+// Non-serializable fields that can't be in Zod schema
+export type ChatModeMetadataExtensions = {
+  icon: Icon;
 };
 
-export type ChatModeConfig = {
-  id: ChatMode;
-  label: string;
-  value: ChatMode;
-  icon: LucideIcon;
+export type ChatModeMetadata = z.infer<typeof ChatModeMetadataSchema> & ChatModeMetadataExtensions;
+
+export const ChatModeConfigSchema = z.object({
+  id: ChatModeSchema,
+  label: z.string(),
+  value: ChatModeSchema,
+  isEnabled: z.boolean(),
+  order: z.number().int(),
+  metadata: ChatModeMetadataSchema,
+});
+
+// Non-serializable fields that can't be in Zod schema
+export type ChatModeConfigExtensions = {
+  icon: Icon;
   metadata: ChatModeMetadata;
-  isEnabled: boolean;
-  order: number;
 };
 
+export type ChatModeConfig = z.infer<typeof ChatModeConfigSchema> & ChatModeConfigExtensions;
+
 // ============================================================================
-// Chat Modes Configuration
+// CHAT MODE CONFIGURATIONS
 // ============================================================================
 
-/**
- * Chat Modes Configuration
- * All available conversation modes with their UI and behavior settings
- *
- * ✅ Uses Zod-inferred ChatModeId for type safety
- * ✅ Compile-time validation of all mode IDs
- */
-export const CHAT_MODE_CONFIGS: ChatModeConfig[] = [
+export const CHAT_MODE_CONFIGS: readonly ChatModeConfig[] = [
   {
     id: ChatModes.BRAINSTORMING,
     label: 'Brainstorming',
     value: ChatModes.BRAINSTORMING,
-    icon: Lightbulb,
+    icon: Icons.lightbulb,
     isEnabled: true,
     order: 1,
     metadata: {
-      icon: Lightbulb,
+      icon: Icons.lightbulb,
       color: '#F59E0B',
       description: 'Generate creative ideas and explore possibilities together',
       systemPromptHint: 'Creative ideation with multiple perspectives',
@@ -71,11 +71,11 @@ export const CHAT_MODE_CONFIGS: ChatModeConfig[] = [
     id: ChatModes.ANALYZING,
     label: 'Analyzing',
     value: ChatModes.ANALYZING,
-    icon: Search,
+    icon: Icons.search,
     isEnabled: true,
     order: 2,
     metadata: {
-      icon: Search,
+      icon: Icons.search,
       color: '#3B82F6',
       description: 'Deep dive into topics with analytical perspectives',
       systemPromptHint: 'Detailed analysis from multiple angles',
@@ -86,11 +86,11 @@ export const CHAT_MODE_CONFIGS: ChatModeConfig[] = [
     id: ChatModes.DEBATING,
     label: 'Debating',
     value: ChatModes.DEBATING,
-    icon: Scale,
+    icon: Icons.scale,
     isEnabled: true,
     order: 3,
     metadata: {
-      icon: Scale,
+      icon: Icons.scale,
       color: '#EF4444',
       description: 'Explore different viewpoints through structured debate',
       systemPromptHint: 'Critical discussion with opposing viewpoints',
@@ -101,83 +101,61 @@ export const CHAT_MODE_CONFIGS: ChatModeConfig[] = [
     id: ChatModes.SOLVING,
     label: 'Problem Solving',
     value: ChatModes.SOLVING,
-    icon: Target,
+    icon: Icons.target,
     isEnabled: true,
     order: 4,
     metadata: {
-      icon: Target,
+      icon: Icons.target,
       color: '#10B981',
       description: 'Work together to find practical solutions',
       systemPromptHint: 'Collaborative problem solving with action plans',
       placeholder: 'What problem would you like to solve?',
     },
   },
-];
+] as const;
 
 // ============================================================================
-// Utility Functions
+// UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Get chat mode configuration by ID
- */
 export function getChatModeById(modeId: string): ChatModeConfig | undefined {
   return CHAT_MODE_CONFIGS.find(mode => mode.id === modeId || mode.value === modeId);
 }
 
-/**
- * Get enabled chat modes only
- */
 export function getEnabledChatModes(): ChatModeConfig[] {
   return CHAT_MODE_CONFIGS.filter(mode => mode.isEnabled);
 }
 
-/**
- * Get chat mode label by ID
- */
 export function getChatModeLabel(modeId: ChatMode): string {
   const mode = getChatModeById(modeId);
   return mode?.label ?? modeId;
 }
 
-/**
- * Get chat mode icon by ID
- */
-export function getChatModeIcon(modeId: ChatMode): LucideIcon | undefined {
+export function getChatModeIcon(modeId: ChatMode): Icon | undefined {
   const mode = getChatModeById(modeId);
   return mode?.icon;
 }
 
-/**
- * Default chat mode constant
- * Value from @/api/core/enums.ts (single source of truth)
- */
-export const DEFAULT_CHAT_MODE: ChatMode = DEFAULT_MODE_FROM_ENUM;
-
-/**
- * Get default chat mode
- * ✅ Returns constant from enum file
- */
 export function getDefaultChatMode(): ChatMode {
   return DEFAULT_CHAT_MODE;
 }
 
 // ============================================================================
-// UI Component Types
+// CHAT MODE OPTIONS (for selectors, Zod-first)
 // ============================================================================
 
-/**
- * Chat mode selection option for UI components
- */
-export type ChatModeOption = {
-  value: ChatMode;
-  label: string;
-  icon: LucideIcon;
+export const ChatModeOptionSchema = z.object({
+  value: ChatModeSchema,
+  label: z.string(),
+});
+
+// Non-serializable fields that can't be in Zod schema
+export type ChatModeOptionExtensions = {
+  icon: Icon;
 };
 
-/**
- * Get chat mode options for select components
- */
+export type ChatModeOption = z.infer<typeof ChatModeOptionSchema> & ChatModeOptionExtensions;
+
 export function getChatModeOptions(): ChatModeOption[] {
   return getEnabledChatModes().map(mode => ({
     value: mode.value,

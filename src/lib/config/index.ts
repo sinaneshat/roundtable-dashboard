@@ -8,7 +8,6 @@
 export type { ChatModeConfig, ChatModeMetadata, ChatModeOption } from './chat-modes';
 export {
   CHAT_MODE_CONFIGS,
-  DEFAULT_CHAT_MODE,
   getChatModeById,
   getChatModeIcon,
   getChatModeLabel,

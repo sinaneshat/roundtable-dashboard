@@ -10,17 +10,22 @@ import { z } from '@hono/zod-openapi';
 // BILLING INTERVAL
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const BILLING_INTERVALS = ['month', 'year', 'week', 'day'] as const;
 
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const BillingIntervalSchema = z.enum(BILLING_INTERVALS).openapi({
   description: 'Subscription billing cycle interval',
   example: 'month',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type BillingInterval = z.infer<typeof BillingIntervalSchema>;
 
+// 4️⃣ DEFAULT VALUE
 export const DEFAULT_BILLING_INTERVAL: BillingInterval = 'month';
 
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const BillingIntervals = {
   MONTH: 'month' as const,
   YEAR: 'year' as const,
@@ -32,17 +37,22 @@ export const BillingIntervals = {
 // UI BILLING INTERVAL (subset for pricing UI)
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const UI_BILLING_INTERVALS = ['month', 'year'] as const;
 
-export const DEFAULT_UI_BILLING_INTERVAL: UIBillingInterval = 'month';
-
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const UIBillingIntervalSchema = z.enum(UI_BILLING_INTERVALS).openapi({
   description: 'UI billing cycle interval (monthly/annual)',
   example: 'month',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type UIBillingInterval = z.infer<typeof UIBillingIntervalSchema>;
 
+// 4️⃣ DEFAULT VALUE
+export const DEFAULT_UI_BILLING_INTERVAL: UIBillingInterval = 'month';
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const UIBillingIntervals = {
   MONTH: 'month' as const,
   YEAR: 'year' as const,
@@ -56,17 +66,22 @@ export function isUIBillingInterval(value: string): value is UIBillingInterval {
 // SUBSCRIPTION CHANGE TYPE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const SUBSCRIPTION_CHANGE_TYPES = ['upgrade', 'downgrade', 'change'] as const;
 
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const SubscriptionChangeTypeSchema = z.enum(SUBSCRIPTION_CHANGE_TYPES).openapi({
   description: 'Type of subscription change',
   example: 'upgrade',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type SubscriptionChangeType = z.infer<typeof SubscriptionChangeTypeSchema>;
 
+// 4️⃣ DEFAULT VALUE
 export const DEFAULT_SUBSCRIPTION_CHANGE_TYPE: SubscriptionChangeType = 'change';
 
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const SubscriptionChangeTypes = {
   UPGRADE: 'upgrade' as const,
   DOWNGRADE: 'downgrade' as const,
@@ -77,6 +92,7 @@ export const SubscriptionChangeTypes = {
 // STRIPE SUBSCRIPTION STATUS
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const STRIPE_SUBSCRIPTION_STATUSES = [
   'active',
   'trialing',
@@ -88,15 +104,19 @@ export const STRIPE_SUBSCRIPTION_STATUSES = [
   'paused',
 ] as const;
 
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const StripeSubscriptionStatusSchema = z.enum(STRIPE_SUBSCRIPTION_STATUSES).openapi({
   description: 'Stripe subscription status matching Stripe API values',
   example: 'active',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type StripeSubscriptionStatus = z.infer<typeof StripeSubscriptionStatusSchema>;
 
+// 4️⃣ DEFAULT VALUE
 export const DEFAULT_STRIPE_SUBSCRIPTION_STATUS: StripeSubscriptionStatus = 'active';
 
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const StripeSubscriptionStatuses = {
   ACTIVE: 'active' as const,
   TRIALING: 'trialing' as const,
@@ -125,17 +145,22 @@ export const StripeSubscriptionStatuses = {
 // This architecture ensures compile-time enforcement of tier consistency.
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const SUBSCRIPTION_TIERS = ['free', 'pro'] as const;
 
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const SubscriptionTierSchema = z.enum(SUBSCRIPTION_TIERS).openapi({
   description: 'Subscription tier for user account',
   example: 'pro',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type SubscriptionTier = z.infer<typeof SubscriptionTierSchema>;
 
+// 4️⃣ DEFAULT VALUE
 export const DEFAULT_SUBSCRIPTION_TIER: SubscriptionTier = 'free';
 
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const SubscriptionTiers = {
   FREE: 'free' as const,
   PRO: 'pro' as const,
@@ -164,17 +189,22 @@ export function assertNeverTier(tier: never): never {
 // USAGE STATUS
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const USAGE_STATUSES = ['default', 'warning', 'critical'] as const;
 
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const UsageStatusSchema = z.enum(USAGE_STATUSES).openapi({
   description: 'Visual status indicator for usage metrics',
   example: 'default',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type UsageStatus = z.infer<typeof UsageStatusSchema>;
 
+// 4️⃣ DEFAULT VALUE
 export const DEFAULT_USAGE_STATUS: UsageStatus = 'default';
 
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const UsageStatuses = {
   DEFAULT: 'default' as const,
   WARNING: 'warning' as const,
@@ -227,17 +257,22 @@ export function getUsageStatusFromPercentage(remaining: number, total: number): 
 // PLAN TYPE (Credit-based system - replaces tiers)
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const PLAN_TYPES = ['free', 'paid'] as const;
 
-export const DEFAULT_PLAN_TYPE: PlanType = 'free';
-
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const PlanTypeSchema = z.enum(PLAN_TYPES).openapi({
   description: 'User plan type: free (10K signup credits) or paid ($100/month, 1M credits)',
   example: 'free',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type PlanType = z.infer<typeof PlanTypeSchema>;
 
+// 4️⃣ DEFAULT VALUE
+export const DEFAULT_PLAN_TYPE: PlanType = 'free';
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const PlanTypes = {
   FREE: 'free' as const,
   PAID: 'paid' as const,
@@ -263,6 +298,7 @@ export function parsePlanType(value: unknown): PlanType {
 // CREDIT TRANSACTION TYPE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const CREDIT_TRANSACTION_TYPES = [
   'credit_grant',
   'monthly_refill',
@@ -273,15 +309,19 @@ export const CREDIT_TRANSACTION_TYPES = [
   'adjustment',
 ] as const;
 
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const CreditTransactionTypeSchema = z.enum(CREDIT_TRANSACTION_TYPES).openapi({
   description: 'Type of credit transaction in the ledger',
   example: 'deduction',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type CreditTransactionType = z.infer<typeof CreditTransactionTypeSchema>;
 
+// 4️⃣ DEFAULT VALUE
 export const DEFAULT_CREDIT_TRANSACTION_TYPE: CreditTransactionType = 'deduction';
 
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const CreditTransactionTypes = {
   CREDIT_GRANT: 'credit_grant' as const,
   MONTHLY_REFILL: 'monthly_refill' as const,
@@ -322,6 +362,7 @@ export function getGrantTransactionType(
 // CREDIT ACTION TYPE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const CREDIT_ACTIONS = [
   'user_message',
   'ai_response',
@@ -335,15 +376,19 @@ export const CREDIT_ACTIONS = [
   'card_connection',
 ] as const;
 
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const CreditActionSchema = z.enum(CREDIT_ACTIONS).openapi({
   description: 'Action that triggered a credit transaction',
   example: 'ai_response',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type CreditAction = z.infer<typeof CreditActionSchema>;
 
+// 4️⃣ DEFAULT VALUE
 export const DEFAULT_CREDIT_ACTION: CreditAction = 'ai_response';
 
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const CreditActions = {
   USER_MESSAGE: 'user_message' as const,
   AI_RESPONSE: 'ai_response' as const,
@@ -361,17 +406,22 @@ export const CreditActions = {
 // PURCHASE TYPE (checkout result classification)
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const PURCHASE_TYPES = ['subscription', 'credits', 'none'] as const;
 
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const PurchaseTypeSchema = z.enum(PURCHASE_TYPES).openapi({
   description: 'Type of purchase made during checkout',
   example: 'subscription',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type PurchaseType = z.infer<typeof PurchaseTypeSchema>;
 
+// 4️⃣ DEFAULT VALUE
 export const DEFAULT_PURCHASE_TYPE: PurchaseType = 'none';
 
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const PurchaseTypes = {
   SUBSCRIPTION: 'subscription' as const,
   CREDITS: 'credits' as const,
@@ -386,17 +436,22 @@ export function isPurchaseType(value: unknown): value is PurchaseType {
 // SUBSCRIPTION PLAN TYPE (billing cycle for subscriptions)
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const SUBSCRIPTION_PLAN_TYPES = ['monthly', 'yearly', 'lifetime'] as const;
 
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const SubscriptionPlanTypeSchema = z.enum(SUBSCRIPTION_PLAN_TYPES).openapi({
   description: 'Subscription plan billing cycle type',
   example: 'monthly',
 });
 
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type SubscriptionPlanType = z.infer<typeof SubscriptionPlanTypeSchema>;
 
+// 4️⃣ DEFAULT VALUE
 export const DEFAULT_SUBSCRIPTION_PLAN_TYPE: SubscriptionPlanType = 'monthly';
 
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const SubscriptionPlanTypes = {
   MONTHLY: 'monthly' as const,
   YEARLY: 'yearly' as const,
@@ -406,3 +461,35 @@ export const SubscriptionPlanTypes = {
 export function isSubscriptionPlanType(value: unknown): value is SubscriptionPlanType {
   return SUBSCRIPTION_PLAN_TYPES.includes(value as SubscriptionPlanType);
 }
+
+// ============================================================================
+// BILLING ERROR TYPE (Checkout/Payment Error Classification)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const BILLING_ERROR_TYPES = [
+  'payment_failed',
+  'sync_failed',
+  'authentication_failed',
+  'unknown',
+] as const;
+
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const BillingErrorTypeSchema = z.enum(BILLING_ERROR_TYPES).openapi({
+  description: 'Type of billing/payment error',
+  example: 'payment_failed',
+});
+
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type BillingErrorType = z.infer<typeof BillingErrorTypeSchema>;
+
+// 4️⃣ DEFAULT VALUE
+export const DEFAULT_BILLING_ERROR_TYPE: BillingErrorType = 'unknown';
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const BillingErrorTypes = {
+  PAYMENT_FAILED: 'payment_failed' as const,
+  SYNC_FAILED: 'sync_failed' as const,
+  AUTHENTICATION_FAILED: 'authentication_failed' as const,
+  UNKNOWN: 'unknown' as const,
+} as const;

@@ -1,11 +1,11 @@
 'use client';
 
-import { ArrowDown } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import type { ScrollButtonVariant } from '@/api/core/enums';
 import { ScrollButtonVariants } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
 
@@ -88,7 +88,7 @@ export function ChatScrollButton({
           onClick={scrollToBottom}
           aria-label={t('scrollToBottom')}
         >
-          <ArrowDown className="size-4" />
+          <Icons.arrowDown className="size-4" />
         </Button>
       </div>
     );
@@ -108,7 +108,7 @@ export function ChatScrollButton({
         onClick={scrollToBottom}
         aria-label={t('scrollToBottom')}
       >
-        <ArrowDown className="size-4" />
+        <Icons.arrowDown className="size-4" />
       </Button>
     );
   }
@@ -130,7 +130,7 @@ export function ChatScrollButton({
       onClick={scrollToBottom}
       aria-label={t('scrollToBottom')}
     >
-      <ArrowDown className="size-5" />
+      <Icons.arrowDown className="size-5" />
     </Button>
   );
 }

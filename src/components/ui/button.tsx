@@ -3,9 +3,8 @@ import { forwardRef } from 'react';
 
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
-import { Loader2 } from "lucide-react"
 
-import type { ComponentVariant, ComponentSize } from "@/api/core/enums"
+import { Icons } from "@/components/icons"
 import { cn } from "@/lib/ui/cn"
 
 const buttonVariants = cva(
@@ -18,11 +17,11 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+          "border bg-background shadow-xs hover:bg-white/[0.07] hover:text-accent-foreground dark:bg-input/30 dark:border-input",
         secondary:
           "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
         ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+          "hover:bg-white/[0.07] hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         white:
           "bg-white text-black shadow-xs hover:bg-white/90",
@@ -31,8 +30,8 @@ const buttonVariants = cva(
         warning:
           "bg-amber-600 text-white shadow-xs hover:bg-amber-600/90 focus-visible:ring-amber-600/20 dark:focus-visible:ring-amber-600/40",
         glass:
-          "bg-white/10 backdrop-blur-md border border-white/20 shadow-xs hover:bg-white/20",
-      } satisfies Record<ComponentVariant, string>,
+          "bg-white/5 backdrop-blur-md border border-white/10 shadow-xs hover:bg-white/[0.07]",
+      },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
         sm: "h-8 gap-1.5 px-3 has-[>svg]:px-2.5",
@@ -40,7 +39,7 @@ const buttonVariants = cva(
         lg: "h-11 px-6 has-[>svg]:px-4",
         xl: "h-12 px-8 has-[>svg]:px-5",
         icon: "size-9",
-      } satisfies Record<ComponentSize, string>,
+      },
     },
     defaultVariants: {
       variant: "default",
@@ -49,46 +48,14 @@ const buttonVariants = cva(
   }
 )
 
-/**
- * Enhanced Button component following shadcn/ui v4 best practices
- *
- * Production-ready features:
- * - Built-in loading state with spinner animation
- * - Start and end icon support with consistent spacing
- * - Custom loading text support
- * - Proper accessibility attributes (aria-busy, aria-describedby)
- * - Maintains spacing consistency during state transitions
- * - Support for all shadcn button variants and sizes
- * - Automatic disabled state when loading
- * - Proper shrink-0 classes for icon consistency
- *
- * @example
- * // Basic usage
- * <Button>Click me</Button>
- *
- * // With loading state
- * <Button loading>Processing...</Button>
- *
- * // With custom loading text
- * <Button loading loadingText="Saving...">Save Document</Button>
- *
- * // With icons
- * <Button startIcon={<Save />}>Save</Button>
- * <Button endIcon={<ArrowRight />}>Continue</Button>
- *
- * // Combined features
- * <Button loading variant="secondary" size="lg">Loading...</Button>
- */
-interface ButtonProps extends ComponentProps<"button">, VariantProps<typeof buttonVariants> {
-  /** Render as child component using Radix Slot */
+type ButtonBaseProps = ComponentProps<"button">;
+type ButtonVariantProps = VariantProps<typeof buttonVariants>;
+
+interface ButtonProps extends ButtonBaseProps, ButtonVariantProps {
   asChild?: boolean
-  /** Show loading spinner and disable button */
   loading?: boolean
-  /** Custom text to show when loading (overrides children) */
   loadingText?: string
-  /** Icon to display at the start of the button */
   startIcon?: ReactNode
-  /** Icon to display at the end of the button */
   endIcon?: ReactNode
 }
 
@@ -123,7 +90,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {loading ? (
           <span className="inline-flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <Icons.loader className="h-4 w-4 animate-spin" aria-hidden="true" />
             {buttonChildren}
           </span>
         ) : (

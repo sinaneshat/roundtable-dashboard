@@ -1,17 +1,12 @@
 'use client';
-import {
-  EyeOff,
-  GripVertical,
-  Lock,
-  Plus,
-  X,
-} from 'lucide-react';
+
 import { Reorder, useDragControls } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { getShortRoleName } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -24,7 +19,7 @@ import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon, getRoleBadgeStyle } from '@/lib/utils';
 
-type PendingRole = {
+type PendingRoleConfig = {
   role: string;
   customRoleId?: string;
 };
@@ -34,7 +29,6 @@ type RoleBadgeDisplayProps = {
   onOpenRolePanel?: () => void;
   onClearRole: () => void;
   tModels: (key: string) => string;
-  tAccessibility: (key: string) => string;
 };
 
 function RoleBadgeDisplay({
@@ -42,7 +36,6 @@ function RoleBadgeDisplay({
   onOpenRolePanel,
   onClearRole,
   tModels,
-  tAccessibility,
 }: RoleBadgeDisplayProps) {
   return (
     <div
@@ -72,23 +65,23 @@ function RoleBadgeDisplay({
                   e.stopPropagation();
                   onClearRole();
                 }}
-                className="shrink-0 p-0.5 rounded-full hover:bg-black/20 transition-colors"
-                aria-label={tAccessibility('clearRole')}
+                className="shrink-0 p-0.5 rounded-full hover:bg-white/[0.07] transition-colors"
+                aria-label={tModels('clearRole')}
               >
-                <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                <Icons.x className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               </button>
             </Badge>
           )
         : (
             <button
               type="button"
-              className="inline-flex items-center gap-0.5 sm:gap-1 h-4 sm:h-5 px-1.5 sm:px-2 rounded-full text-[8px] sm:text-[10px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
+              className="inline-flex items-center gap-0.5 sm:gap-1 h-4 sm:h-5 px-1.5 sm:px-2 rounded-full text-[8px] sm:text-[10px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/15 transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenRolePanel?.();
               }}
             >
-              <Plus className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
+              <Icons.plus className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
               {tModels('addRole')}
             </button>
           )}
@@ -105,7 +98,7 @@ export type ModelItemProps = {
   enableDrag?: boolean;
   onOpenRolePanel?: () => void;
   isIncompatibleWithFiles?: boolean;
-  pendingRole?: PendingRole;
+  pendingRole?: PendingRoleConfig;
 };
 
 export function ModelItem({
@@ -120,7 +113,6 @@ export function ModelItem({
   pendingRole,
 }: ModelItemProps) {
   const tModels = useTranslations('chat.models');
-  const tAccessibility = useTranslations('accessibility');
   const dragControls = useDragControls();
   const [isDragging, setIsDragging] = useState(false);
   const { model, participant } = orderedModel;
@@ -143,7 +135,7 @@ export function ModelItem({
             dragControls.start(e);
           }}
         >
-          <GripVertical className="size-4 sm:size-5" />
+          <Icons.gripVertical className="size-4 sm:size-5" />
         </div>
       )}
       <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden">
@@ -171,7 +163,7 @@ export function ModelItem({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Badge variant="outline" className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1">
-                    <EyeOff className="size-2.5 sm:size-3" />
+                    <Icons.eyeOff className="size-2.5 sm:size-3" />
                     {tModels('noVision')}
                   </Badge>
                 </TooltipTrigger>
@@ -187,7 +179,6 @@ export function ModelItem({
                 onOpenRolePanel={onOpenRolePanel}
                 onClearRole={onClearRole}
                 tModels={tModels}
-                tAccessibility={tAccessibility}
               />
             )}
           </div>
@@ -205,7 +196,7 @@ export function ModelItem({
               onClick={e => e.stopPropagation()}
               aria-label={tModels('upgradeToUnlock')}
             >
-              <Lock className="size-4 sm:size-5 text-amber-400" />
+              <Icons.lock className="size-4 sm:size-5 text-amber-400" />
             </Link>
           )
         : (
@@ -235,8 +226,8 @@ export function ModelItem({
           'p-3 sm:p-4 w-full rounded-xl block touch-manipulation cursor-pointer',
           'transition-[background-color,backdrop-filter,box-shadow] duration-150',
           isDisabled && 'opacity-50 cursor-not-allowed',
-          !isDisabled && !isDragging && 'hover:bg-white/[0.08] hover:backdrop-blur-md',
-          isDragging && 'bg-white/[0.1] backdrop-blur-xl shadow-[0px_8px_24px_rgba(0,0,0,0.4)] cursor-grabbing',
+          !isDisabled && !isDragging && 'hover:bg-white/[0.07]',
+          isDragging && 'bg-black/20 backdrop-blur-xl shadow-[0px_8px_24px_rgba(0,0,0,0.4)] cursor-grabbing',
         )}
         onDragStart={() => setIsDragging(true)}
         onDragEnd={() => setIsDragging(false)}
@@ -256,7 +247,7 @@ export function ModelItem({
         'p-3 sm:p-4 w-full rounded-xl block touch-manipulation',
         'border border-transparent',
         'cursor-pointer transition-all duration-200 ease-out',
-        !isDisabled && 'hover:bg-white/[0.08] hover:backdrop-blur-md hover:border-white/[0.12] active:bg-white/[0.12]',
+        !isDisabled && 'hover:bg-white/[0.07] active:bg-black/20',
         isDisabled && 'opacity-50 cursor-not-allowed',
       )}
       onClick={isDisabled ? undefined : onToggle}

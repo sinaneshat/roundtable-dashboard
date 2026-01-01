@@ -1,7 +1,7 @@
 'use client';
-import { AlertCircle, Calendar, Loader2, X, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { Icons } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,7 +43,7 @@ export function CancelSubscriptionDialog({
         <AlertDialogHeader>
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-full bg-destructive/10">
-              <XCircle className="size-5 text-destructive" />
+              <Icons.xCircle className="size-5 text-destructive" />
             </div>
             <AlertDialogTitle className="text-xl">
               {t('billing.cancelSubscription.title')}
@@ -59,7 +59,7 @@ export function CancelSubscriptionDialog({
                 </Badge>
                 {endDate && (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Calendar className="size-3.5" />
+                    <Icons.calendar className="size-3.5" />
                     <span>
                       {t('billing.cancelSubscription.activeUntil')}
                       {' '}
@@ -80,26 +80,26 @@ export function CancelSubscriptionDialog({
             <div className="rounded-lg border border-destructive/20 p-4 shadow-lg bg-card">
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="size-4 text-destructive" />
+                  <Icons.alertCircle className="size-4 text-destructive" />
                   <span className="text-sm font-semibold text-foreground">
                     {t('billing.cancelSubscription.whatYouWillLose')}
                   </span>
                 </div>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2">
-                    <X className="size-4 mt-0.5 shrink-0 text-destructive" />
+                    <Icons.x className="size-4 mt-0.5 shrink-0 text-destructive" />
                     <span>{t('billing.cancelSubscription.loss.premiumModels')}</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <X className="size-4 mt-0.5 shrink-0 text-destructive" />
+                    <Icons.x className="size-4 mt-0.5 shrink-0 text-destructive" />
                     <span>{t('billing.cancelSubscription.loss.unlimitedConversations')}</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <X className="size-4 mt-0.5 shrink-0 text-destructive" />
+                    <Icons.x className="size-4 mt-0.5 shrink-0 text-destructive" />
                     <span>{t('billing.cancelSubscription.loss.prioritySupport')}</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <X className="size-4 mt-0.5 shrink-0 text-destructive" />
+                    <Icons.x className="size-4 mt-0.5 shrink-0 text-destructive" />
                     <span>{t('billing.cancelSubscription.loss.advancedFeatures')}</span>
                   </li>
                 </ul>
@@ -156,7 +156,7 @@ export function CancelSubscriptionDialog({
             {isProcessing
               ? (
                   <>
-                    <Loader2 className="size-4 animate-spin mr-2" />
+                    <Icons.loader className="size-4 animate-spin mr-2" />
                     {t('pricing.card.processing')}
                   </>
                 )

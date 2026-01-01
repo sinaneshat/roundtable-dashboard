@@ -20,10 +20,11 @@
  */
 
 import { ulid } from 'ulid';
+import { z } from 'zod';
 
 import { MessageRoles } from '@/api/core/enums';
-import { getPostHogClient } from '@/lib/posthog-server';
-import { isObject, isToolCall } from '@/lib/utils';
+import { getPostHogClient } from '@/lib/analytics/posthog-server';
+import { isObject } from '@/lib/utils';
 import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders';
 
 // ============================================================================
@@ -99,25 +100,33 @@ export type LLMTrackingUsage = {
 /**
  * AI SDK v6 Tool Call structure
  * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-call-part
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
-export type ToolCall = {
-  type: 'tool-call';
-  toolCallId: string;
-  toolName: string;
-  input: unknown;
-};
+export const ToolCallSchema = z.object({
+  type: z.literal('tool-call'),
+  toolCallId: z.string(),
+  toolName: z.string(),
+  input: z.unknown(),
+});
+
+export type ToolCall = z.infer<typeof ToolCallSchema>;
 
 /**
  * AI SDK v6 Tool Result structure
  * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-result-part
  * Note: result is optional to match AI SDK's DynamicToolResult
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
-export type ToolResult = {
-  type: 'tool-result';
-  toolCallId: string;
-  toolName: string;
-  result?: unknown;
-};
+export const ToolResultSchema = z.object({
+  type: z.literal('tool-result'),
+  toolCallId: z.string(),
+  toolName: z.string(),
+  result: z.unknown().optional(),
+});
+
+export type ToolResult = z.infer<typeof ToolResultSchema>;
 
 /**
  * LLM generation result from AI SDK v6
@@ -564,9 +573,12 @@ export async function trackLLMGeneration(
     // =========================================================================
     // TOOL CALLS (AI SDK v6)
     // =========================================================================
-    // ✅ TYPE GUARD: Validate tool calls array with runtime check
+    // ✅ ZOD VALIDATION: Validate tool calls array with Zod schema
     const rawToolCalls = Array.isArray(finishResult.toolCalls) ? finishResult.toolCalls : [];
-    const toolCalls = rawToolCalls.filter(isToolCall);
+    const toolCalls = rawToolCalls
+      .map(tc => ToolCallSchema.safeParse(tc))
+      .filter(result => result.success)
+      .map(result => result.data);
     const hasToolCalls = toolCalls.length > 0;
 
     // =========================================================================
@@ -791,20 +803,28 @@ export async function trackLLMError(
   }
 
   try {
-    // Extract error details
+    // ✅ ZOD VALIDATION: Extract error details with proper type safety
+    const HttpErrorPropsSchema = z.object({
+      statusCode: z.number().optional(),
+      responseBody: z.string().optional(),
+    });
+
     const errorDetails: Record<string, unknown> = {
       error_message: error.message,
       error_name: error.name,
       error_stack: error.stack,
     };
 
-    // ✅ TYPE GUARD: Check for HTTP error properties
+    // Validate and extract HTTP error properties if present
     if (isObject(error)) {
-      if ('statusCode' in error && typeof error.statusCode === 'number') {
-        errorDetails.http_status = error.statusCode;
-      }
-      if ('responseBody' in error && typeof error.responseBody === 'string') {
-        errorDetails.response_body = error.responseBody;
+      const httpProps = HttpErrorPropsSchema.safeParse(error);
+      if (httpProps.success) {
+        if (httpProps.data.statusCode !== undefined) {
+          errorDetails.http_status = httpProps.data.statusCode;
+        }
+        if (httpProps.data.responseBody !== undefined) {
+          errorDetails.response_body = httpProps.data.responseBody;
+        }
       }
     }
 

@@ -10,8 +10,9 @@
  * @module lib/utils/date-transforms
  */
 
-import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { StoredPreSearchSchema } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread } from '@/db/validation/chat';
 
 // ============================================================================
 // CORE DATE UTILITIES

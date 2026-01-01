@@ -1,16 +1,4 @@
 'use client';
-import {
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Info,
-  Package,
-  RefreshCw,
-  Wifi,
-  WifiOff,
-  XCircle,
-} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import React from 'react';
@@ -37,6 +25,7 @@ import {
   SpacingVariants,
   SuccessStateVariants,
 } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -53,12 +42,11 @@ type LoadingStateProps = {
   size?: ComponentSize;
 };
 
-type SizeConfigValue = { spinner: string; title: string; container: string };
-type BasicSizeKey = typeof ComponentSizes.SM | typeof ComponentSizes.MD | typeof ComponentSizes.LG;
+const DEFAULT_SIZE_CONFIG = { spinner: 'size-6', title: 'text-base', container: 'py-8 gap-3' } as const;
 
-const sizeConfig: Record<BasicSizeKey, SizeConfigValue> = {
+const sizeConfig: Partial<Record<ComponentSize, { spinner: string; title: string; container: string }>> = {
   [ComponentSizes.SM]: { spinner: 'size-4', title: 'text-sm', container: 'py-4 gap-2' },
-  [ComponentSizes.MD]: { spinner: 'size-6', title: 'text-base', container: 'py-8 gap-3' },
+  [ComponentSizes.MD]: DEFAULT_SIZE_CONFIG,
   [ComponentSizes.LG]: { spinner: 'size-8', title: 'text-lg', container: 'py-12 gap-4' },
 };
 
@@ -80,7 +68,7 @@ export function LoadingState({
   const t = useTranslations();
   const defaultTitle = title || t('states.loading.default');
   const defaultMessage = message || t('states.loading.please_wait');
-  const config = sizeConfig[size as BasicSizeKey] || sizeConfig[ComponentSizes.MD];
+  const config = sizeConfig[size] ?? DEFAULT_SIZE_CONFIG;
 
   if (variant === LoadingStateVariants.INLINE) {
     return (
@@ -149,52 +137,66 @@ export function ErrorState({
 }: ErrorStateProps) {
   const t = useTranslations();
   const defaultRetryLabel = retryLabel || t('actions.tryAgain');
-  const networkConfig = {
+  type NetworkConfigItem = {
+    icon: typeof Icons.wifiOff;
+    title: string;
+    description: string;
+    badge: string;
+    badgeVariant: 'destructive' | 'secondary';
+  };
+  const networkConfig: Record<NetworkErrorType, NetworkConfigItem> = {
     [NetworkErrorTypes.OFFLINE]: {
-      icon: WifiOff,
+      icon: Icons.wifiOff,
       title: t('states.error.offline'),
       description: t('states.error.offlineDescription'),
       badge: t('networkStatus.offline'),
-      badgeVariant: 'destructive' as const,
+      badgeVariant: 'destructive',
     },
     [NetworkErrorTypes.TIMEOUT]: {
-      icon: Clock,
+      icon: Icons.clock,
       title: t('states.error.timeout'),
       description: t('states.error.timeoutDescription'),
       badge: t('networkStatus.timeout'),
-      badgeVariant: 'secondary' as const,
+      badgeVariant: 'secondary',
     },
     [NetworkErrorTypes.CONNECTION]: {
-      icon: Wifi,
+      icon: Icons.wifi,
       title: t('states.error.network'),
       description: t('states.error.networkDescription'),
       badge: t('networkStatus.connectionError'),
-      badgeVariant: 'destructive' as const,
+      badgeVariant: 'destructive',
     },
-  } as const satisfies Record<NetworkErrorType, { icon: typeof WifiOff | typeof Clock | typeof Wifi; title: string; description: string; badge: string; badgeVariant: 'destructive' | 'secondary' }>;
-  const severityConfig = {
+  };
+  type SeverityConfigItem = {
+    icon: typeof Icons.xCircle;
+    title: string;
+    description: string;
+    alertVariant: 'destructive' | 'default';
+    iconColor: string;
+  };
+  const severityConfig: Record<ErrorSeverity, SeverityConfigItem> = {
     [ErrorSeverities.FAILED]: {
-      icon: XCircle,
+      icon: Icons.xCircle,
       title: t('states.error.default'),
       description: t('states.error.description'),
-      alertVariant: 'destructive' as const,
+      alertVariant: 'destructive',
       iconColor: 'text-destructive',
     },
     [ErrorSeverities.WARNING]: {
-      icon: AlertTriangle,
+      icon: Icons.alertTriangle,
       title: t('status.warning'),
       description: t('states.error.description'),
-      alertVariant: 'default' as const,
+      alertVariant: 'default',
       iconColor: 'text-chart-2',
     },
     [ErrorSeverities.INFO]: {
-      icon: Info,
+      icon: Icons.info,
       title: t('status.info'),
       description: t('states.error.description'),
-      alertVariant: 'default' as const,
+      alertVariant: 'default',
       iconColor: 'text-primary',
     },
-  } as const satisfies Record<ErrorSeverity, { icon: typeof XCircle | typeof AlertTriangle | typeof Info; title: string; description: string; alertVariant: 'destructive' | 'default'; iconColor: string }>;
+  };
   if (variant === ErrorStateVariants.NETWORK) {
     const config = networkConfig[networkType];
     const Icon = config.icon;
@@ -253,7 +255,7 @@ export function ErrorState({
       <Card className={cn('border-destructive/50', className)}>
         <CardContent className="text-center py-12 space-y-6">
           <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-            <XCircle className="h-8 w-8 text-destructive" />
+            <Icons.xCircle className="h-8 w-8 text-destructive" />
           </div>
           <div className="space-y-3">
             <h3 className="text-lg font-semibold text-destructive">
@@ -265,7 +267,7 @@ export function ErrorState({
           </div>
           {onRetry && (
             <Button onClick={onRetry} variant="outline">
-              <RefreshCw className="h-4 w-4 me-2" />
+              <Icons.refreshCw className="h-4 w-4 me-2" />
               {retryLabel}
             </Button>
           )}
@@ -273,7 +275,7 @@ export function ErrorState({
       </Card>
     );
   }
-  const Icon = icon || AlertCircle;
+  const Icon = icon || Icons.alertCircle;
   return (
     <PageTransition>
       <FadeIn delay={0.05} className={className}>
@@ -291,7 +293,7 @@ export function ErrorState({
               </p>
               {onRetry && (
                 <Button variant="outline" onClick={onRetry}>
-                  <RefreshCw className="h-4 w-4 me-2" />
+                  <Icons.refreshCw className="h-4 w-4 me-2" />
                   {retryLabel}
                 </Button>
               )}
@@ -307,7 +309,7 @@ type EmptyStateProps = {
   description?: string;
   action?: ReactNode;
   variant?: EmptyStateVariant;
-  size?: Extract<ComponentSize, 'sm' | 'md' | 'lg'>;
+  size?: 'sm' | 'md' | 'lg';
   style?: EmptyStateStyle;
   className?: string;
   icon?: ReactNode;
@@ -317,7 +319,7 @@ export function EmptyState({
   description,
   action,
   variant = EmptyStateVariants.GENERAL,
-  size = ComponentSizes.MD,
+  size = 'md',
   style = EmptyStateStyles.DEFAULT,
   className,
   icon,
@@ -325,12 +327,12 @@ export function EmptyState({
   const t = useTranslations();
   const emptyStateConfig = {
     [EmptyStateVariants.GENERAL]: {
-      icon: Package,
+      icon: Icons.package,
       title: t('states.empty.default'),
       description: t('states.empty.description'),
     },
     [EmptyStateVariants.CUSTOM]: {
-      icon: AlertCircle,
+      icon: Icons.alertCircle,
       title: t('states.empty.default'),
       description: t('states.empty.description'),
     },
@@ -338,21 +340,21 @@ export function EmptyState({
   const config = emptyStateConfig[variant] || emptyStateConfig[EmptyStateVariants.GENERAL];
   const Icon = icon || config.icon;
   const sizeConfig = {
-    [ComponentSizes.SM]: {
+    sm: {
       container: 'py-6',
       iconContainer: 'w-12 h-12',
       iconSize: 'h-6 w-6',
       title: 'text-base font-semibold',
       description: 'text-sm',
     },
-    [ComponentSizes.MD]: {
+    md: {
       container: 'py-8',
       iconContainer: 'w-16 h-16',
       iconSize: 'h-8 w-8',
       title: 'text-lg font-semibold',
       description: 'text-sm',
     },
-    [ComponentSizes.LG]: {
+    lg: {
       container: 'py-12',
       iconContainer: 'w-24 h-24',
       iconSize: 'h-12 w-12',
@@ -373,7 +375,7 @@ export function EmptyState({
           <div className={cn(
             sizeSettings.iconContainer,
             'bg-muted rounded-full flex items-center justify-center mx-auto',
-            size === ComponentSizes.LG && 'rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-dashed border-primary/20',
+            size === 'lg' && 'rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-dashed border-primary/20',
           )}
           >
             {React.isValidElement(Icon)
@@ -382,7 +384,7 @@ export function EmptyState({
                 ? (
                     <Icon className={cn(
                       sizeSettings.iconSize,
-                      size === ComponentSizes.LG ? 'text-primary/60' : 'text-muted-foreground',
+                      size === 'lg' ? 'text-primary/60' : 'text-muted-foreground',
                     )}
                     />
                   )
@@ -395,7 +397,7 @@ export function EmptyState({
             <p className={cn(
               sizeSettings.description,
               'text-muted-foreground max-w-md mx-auto',
-              size === ComponentSizes.LG && 'max-w-lg leading-relaxed',
+              size === 'lg' && 'max-w-lg leading-relaxed',
             )}
             >
               {description || config.description}
@@ -430,7 +432,7 @@ export function SuccessState({
       <Card className={cn('border-chart-3/20 bg-chart-3/10', className)}>
         <CardContent className="text-center py-8 space-y-4">
           <div className="w-16 h-16 bg-chart-3/20 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle className="h-8 w-8 text-chart-3" />
+            <Icons.checkCircle className="h-8 w-8 text-chart-3" />
           </div>
           <div className="space-y-2">
             <h3 className="text-lg font-semibold text-chart-3">{title}</h3>
@@ -445,7 +447,7 @@ export function SuccessState({
   }
   return (
     <Alert className={cn('border-chart-3/20 bg-chart-3/10', className)}>
-      <CheckCircle className="h-4 w-4 text-chart-3" />
+      <Icons.checkCircle className="h-4 w-4 text-chart-3" />
       <AlertTitle className="text-chart-3">{title}</AlertTitle>
       {description && (
         <AlertDescription className="text-chart-3/80">

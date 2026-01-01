@@ -15,8 +15,7 @@ function Skeleton({ className, ...props }: ComponentProps<"div">) {
   )
 }
 
-// Enhanced skeleton patterns for complex layouts
-function CardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function CardSkeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div className={cn("rounded-2xl border bg-card p-6 space-y-4", className)} {...props}>
       <div className="flex items-center justify-between">
@@ -38,7 +37,13 @@ function CardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function TableRowSkeleton({ columns = 4, className, ...props }: { columns?: number } & React.ComponentProps<"div">) {
+type TableRowSkeletonBaseProps = ComponentProps<"div">;
+
+interface TableRowSkeletonProps extends TableRowSkeletonBaseProps {
+  columns?: number
+}
+
+function TableRowSkeleton({ columns = 4, className, ...props }: TableRowSkeletonProps) {
   return (
     <div className={cn("flex items-center space-x-4 p-4 border-b", className)} {...props}>
       {Array.from({ length: columns }).map((_, i) => (
@@ -48,7 +53,7 @@ function TableRowSkeleton({ columns = 4, className, ...props }: { columns?: numb
   )
 }
 
-function StatCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function StatCardSkeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div className={cn("rounded-2xl border bg-card p-6", className)} {...props}>
       <div className="flex items-center justify-between mb-4">
@@ -64,7 +69,7 @@ function StatCardSkeleton({ className, ...props }: React.ComponentProps<"div">) 
   )
 }
 
-function ChartSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function ChartSkeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div className={cn("rounded-2xl border bg-card p-6", className)} {...props}>
       <div className="flex items-center justify-between mb-6">
@@ -79,7 +84,7 @@ function ChartSkeleton({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function PaymentMethodSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function PaymentMethodSkeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div className={cn("rounded-2xl border bg-card p-6 space-y-4", className)} {...props}>
       <div className="flex items-center justify-between">
@@ -103,7 +108,7 @@ function PaymentMethodSkeleton({ className, ...props }: React.ComponentProps<"di
   )
 }
 
-function SubscriptionSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function SubscriptionSkeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div className={cn("rounded-2xl border bg-card", className)} {...props}>
       <div className="p-6 space-y-4">
@@ -135,8 +140,7 @@ function SubscriptionSkeleton({ className, ...props }: React.ComponentProps<"div
   )
 }
 
-// Chat message skeletons matching simplified design without heavy borders
-function UserMessageSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function UserMessageSkeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div className={cn("mb-4 flex justify-end", className)} {...props}>
       <div className="max-w-[80%]">
@@ -155,7 +159,7 @@ function UserMessageSkeleton({ className, ...props }: React.ComponentProps<"div"
   )
 }
 
-function AssistantMessageSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function AssistantMessageSkeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div className={cn("mb-4 flex justify-start", className)} {...props}>
       <div className="max-w-[85%]">
@@ -178,11 +182,7 @@ function AssistantMessageSkeleton({ className, ...props }: React.ComponentProps<
   )
 }
 
-/**
- * Moderator card skeleton - matches moderator card ChainOfThought style
- * Reusable across thread and public loading pages
- */
-function ModeratorCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function ModeratorCardSkeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div className={cn("mt-6", className)} {...props}>
       <div className="rounded-2xl bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-white/5">
@@ -210,11 +210,7 @@ function ModeratorCardSkeleton({ className, ...props }: React.ComponentProps<"di
   )
 }
 
-/**
- * Sticky input skeleton - matches the sticky chat input container
- * Reusable across overview and thread loading pages
- */
-function StickyInputSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function StickyInputSkeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       className={cn(
@@ -225,7 +221,7 @@ function StickyInputSkeleton({ className, ...props }: React.ComponentProps<"div"
       {...props}
     >
       <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
-        <div className="rounded-2xl bg-card border border-white/[0.12] shadow-lg p-4">
+        <div className="rounded-2xl bg-card border shadow-lg p-4">
           <Skeleton className="h-12 w-full bg-white/10 rounded-xl" />
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-2">
@@ -242,19 +238,19 @@ function StickyInputSkeleton({ className, ...props }: React.ComponentProps<"div"
   )
 }
 
-/**
- * Thread messages skeleton - user message + AI responses + moderator
- * Reusable pattern for chat thread loading states
- */
+type ThreadMessagesSkeletonBaseProps = ComponentProps<"div">;
+
+interface ThreadMessagesSkeletonProps extends ThreadMessagesSkeletonBaseProps {
+  participantCount?: number;
+  showModerator?: boolean;
+}
+
 function ThreadMessagesSkeleton({
   participantCount = 2,
   showModerator = true,
   className,
   ...props
-}: {
-  participantCount?: number;
-  showModerator?: boolean;
-} & React.ComponentProps<"div">) {
+}: ThreadMessagesSkeletonProps) {
   return (
     <div className={cn("space-y-3", className)} {...props}>
       <UserMessageSkeleton />
@@ -266,11 +262,7 @@ function ThreadMessagesSkeleton({
   )
 }
 
-/**
- * Preset card skeleton - matches ModelPresetCard design
- * Used for loading states in model selection modal
- */
-function PresetCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function PresetCardSkeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       className={cn("rounded-2xl border border-border/50 bg-card p-4 space-y-3", className)}
@@ -299,11 +291,13 @@ function PresetCardSkeleton({ className, ...props }: React.ComponentProps<"div">
   )
 }
 
-/**
- * Quick start cards skeleton - matches ChatQuickStart vertical list
- * Reusable for overview loading page
- */
-function QuickStartSkeleton({ count = 3, className, ...props }: { count?: number } & React.ComponentProps<"div">) {
+type QuickStartSkeletonBaseProps = ComponentProps<"div">;
+
+interface QuickStartSkeletonProps extends QuickStartSkeletonBaseProps {
+  count?: number
+}
+
+function QuickStartSkeleton({ count = 3, className, ...props }: QuickStartSkeletonProps) {
   return (
     <div className={cn("flex flex-col", className)} {...props}>
       {Array.from({ length: count }, (_, i) => (
@@ -333,10 +327,17 @@ function QuickStartSkeleton({ count = 3, className, ...props }: { count?: number
   )
 }
 
-/**
- * Image with skeleton loading - prevents CLS with fixed dimensions
- * Shows skeleton while image loads, fades in when ready
- */
+type ImageWithSkeletonBaseProps = Omit<ComponentProps<"img">, "src" | "alt" | "width" | "height">;
+
+interface ImageWithSkeletonProps extends ImageWithSkeletonBaseProps {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  className?: string;
+  skeletonClassName?: string;
+}
+
 function ImageWithSkeleton({
   src,
   alt,
@@ -345,14 +346,7 @@ function ImageWithSkeleton({
   className,
   skeletonClassName,
   ...props
-}: {
-  src: string;
-  alt: string;
-  width: number;
-  height: number;
-  className?: string;
-  skeletonClassName?: string;
-} & Omit<ComponentProps<"img">, "src" | "alt" | "width" | "height">) {
+}: ImageWithSkeletonProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
 

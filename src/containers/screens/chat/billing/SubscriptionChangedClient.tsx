@@ -1,14 +1,14 @@
 'use client';
 
-import { AlertCircle, ArrowDown, ArrowUp, CheckCircle } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense } from 'react';
 
 import type { SubscriptionChangeType, SubscriptionTier } from '@/api/core/enums';
-import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema } from '@/api/core/enums';
-import type { Subscription } from '@/api/routes/billing/schema';
+import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers } from '@/api/core/enums';
 import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES, subscriptionTierSchema } from '@/api/services/product-logic.service';
+import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,14 +16,17 @@ import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
 
-function ChangeBadge({ changeType, t }: {
+type ChangeBadgeProps = {
   changeType: SubscriptionChangeType;
-  t: ReturnType<typeof useTranslations>;
-}) {
+  t: (key: string, values?: Record<string, string | number>) => string;
+};
+
+function ChangeBadge(props: ChangeBadgeProps) {
+  const { changeType, t } = props;
   if (changeType === SubscriptionChangeTypes.UPGRADE) {
     return (
       <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20">
-        <ArrowUp className="mr-1 size-3" />
+        <Icons.arrowUp className="mr-1 size-3" />
         {t('billing.subscriptionChanged.upgrade')}
       </Badge>
     );
@@ -32,7 +35,7 @@ function ChangeBadge({ changeType, t }: {
   if (changeType === SubscriptionChangeTypes.DOWNGRADE) {
     return (
       <Badge className="bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 border-orange-500/20">
-        <ArrowDown className="mr-1 size-3" />
+        <Icons.arrowDown className="mr-1 size-3" />
         {t('billing.subscriptionChanged.downgrade')}
       </Badge>
     );
@@ -45,33 +48,25 @@ function ChangeBadge({ changeType, t }: {
   );
 }
 
-/**
- * Internal component that uses useSearchParams
- * Separated to allow Suspense wrapping per Next.js 15 requirements
- */
 function SubscriptionChangedContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslations();
 
-  // ✅ TYPE-SAFE: Use Zod schema validation instead of unsafe cast
   const changeTypeRaw = searchParams.get('changeType');
   const changeTypeResult = SubscriptionChangeTypeSchema.safeParse(changeTypeRaw);
   const changeType = changeTypeResult.success ? changeTypeResult.data : null;
   const oldProductId = searchParams.get('oldProductId');
 
   const { data: subscriptionData, isFetching: isSubscriptionsFetching } = useSubscriptionsQuery();
-
   const { data: usageStats, isFetching: isUsageStatsFetching } = useUsageStatsQuery();
 
   const displaySubscription
-    = subscriptionData?.data?.items?.find((sub: Subscription) => sub.status === StripeSubscriptionStatuses.ACTIVE)
+    = subscriptionData?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
       || subscriptionData?.data?.items?.[0]
       || null;
 
   const isLoadingData = isSubscriptionsFetching || isUsageStatsFetching;
 
-  // ✅ React 19: Timer-based redirect extracted to shared hook
   const { countdown } = useCountdownRedirect({
     enabled: !isLoadingData,
     redirectPath: '/chat',
@@ -88,7 +83,7 @@ function SubscriptionChangedContent() {
           <StaggerItem>
             <ScaleIn duration={0.3} delay={0}>
               <div className="flex size-20 items-center justify-center rounded-full bg-destructive/10 ring-4 ring-destructive/20 md:size-24">
-                <AlertCircle className="size-10 text-destructive md:size-12" strokeWidth={2} />
+                <Icons.alertCircle className="size-10 text-destructive md:size-12" strokeWidth={2} />
               </div>
             </ScaleIn>
           </StaggerItem>
@@ -104,11 +99,13 @@ function SubscriptionChangedContent() {
 
           <StaggerItem className="flex flex-col items-center gap-4">
             <Button
-              onClick={() => router.replace('/chat/pricing')}
+              asChild
               size="lg"
               className="min-w-[200px]"
             >
-              {t('billing.subscriptionChanged.viewPricing')}
+              <Link href="/chat/pricing" prefetch={false}>
+                {t('billing.subscriptionChanged.viewPricing')}
+              </Link>
             </Button>
           </StaggerItem>
         </StaggerContainer>
@@ -116,13 +113,12 @@ function SubscriptionChangedContent() {
     );
   }
 
-  // ✅ TYPE-SAFE: Use Zod schema validation instead of unsafe casts
   const newTierString = displaySubscription?.price?.productId
     ? getTierFromProductId(displaySubscription.price.productId)
-    : 'free';
+    : SubscriptionTiers.FREE;
 
   const newTierResult = subscriptionTierSchema.safeParse(newTierString);
-  const newTier: SubscriptionTier = newTierResult.success ? newTierResult.data : 'free';
+  const newTier: SubscriptionTier = newTierResult.success ? newTierResult.data : SubscriptionTiers.FREE;
 
   const oldTierString = oldProductId ? getTierFromProductId(oldProductId) : null;
   const oldTierResult = oldTierString ? subscriptionTierSchema.safeParse(oldTierString) : null;
@@ -144,13 +140,11 @@ function SubscriptionChangedContent() {
   const currentActiveMaxModels = currentActiveTier ? getMaxModelsForTier(currentActiveTier) : newMaxModels;
   const futureMaxModels = futureTier ? getMaxModelsForTier(futureTier) : null;
 
-  // ✅ TIER-BASED: Get monthly credits from tier configuration, not user stats
   const newMonthlyCredits = getMonthlyCreditsForTier(newTier);
   const oldMonthlyCredits = oldTier ? getMonthlyCreditsForTier(oldTier) : null;
   const currentActiveMonthlyCredits = currentActiveTier ? getMonthlyCreditsForTier(currentActiveTier) : newMonthlyCredits;
   const futureMonthlyCredits = futureTier ? getMonthlyCreditsForTier(futureTier) : null;
 
-  // ✅ CREDITS: Current user balance from usage stats
   const creditsAvailable = usageStats?.data?.credits?.available || 0;
 
   const effectiveDate = displaySubscription?.currentPeriodEnd
@@ -167,7 +161,7 @@ function SubscriptionChangedContent() {
         <StaggerItem>
           <ScaleIn duration={0.3} delay={0}>
             <div className="flex size-20 items-center mx-auto justify-center rounded-full bg-green-500/10 ring-4 ring-green-500/20 md:size-24">
-              <CheckCircle className="size-10 text-green-500 mx-auto md:size-12" strokeWidth={2} />
+              <Icons.checkCircle className="size-10 text-green-500 mx-auto md:size-12" strokeWidth={2} />
             </div>
           </ScaleIn>
         </StaggerItem>
@@ -218,7 +212,7 @@ function SubscriptionChangedContent() {
                         <CardDescription className="text-primary">
                           {currentActiveTierName}
                           {' '}
-                          Plan
+                          {t('subscription.planLabel')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="grid grid-cols-2 gap-4">
@@ -243,13 +237,15 @@ function SubscriptionChangedContent() {
                       <CardHeader>
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-lg">
-                            {t('billing.subscriptionChanged.afterDate', { date: effectiveDate || 'billing period ends' })}
+                            {t('billing.subscriptionChanged.afterDate', {
+                              date: effectiveDate || t('billing.subscriptionChanged.billingPeriodEnds'),
+                            })}
                           </CardTitle>
                         </div>
                         <CardDescription className="text-muted-foreground/70">
                           {futureTierName}
                           {' '}
-                          Plan
+                          {t('subscription.planLabel')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="grid grid-cols-2 gap-4">
@@ -284,7 +280,7 @@ function SubscriptionChangedContent() {
                         <CardDescription className="text-muted-foreground/70">
                           {oldTierName}
                           {' '}
-                          Plan
+                          {t('subscription.planLabel')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="grid grid-cols-2 gap-4">
@@ -315,7 +311,7 @@ function SubscriptionChangedContent() {
                         <CardDescription className="text-primary">
                           {newTierName}
                           {' '}
-                          Plan
+                          {t('subscription.planLabel')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="grid grid-cols-2 gap-4">
@@ -340,14 +336,14 @@ function SubscriptionChangedContent() {
           </StaggerItem>
         )}
 
-        {}
         {displaySubscription && (
           <StaggerItem className="w-full">
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {oldTier ? t('billing.subscriptionChanged.newPlanDetails') : newTierName}
-                  {!oldTier && ' Plan'}
+                  {oldTier
+                    ? t('billing.subscriptionChanged.newPlanDetails')
+                    : `${newTierName} ${t('subscription.planLabel')}`}
                 </CardTitle>
                 <CardDescription>{t(`subscription.tiers.${newTier}.description`)}</CardDescription>
               </CardHeader>
@@ -394,19 +390,23 @@ function SubscriptionChangedContent() {
 
         <StaggerItem className="flex flex-col sm:flex-row items-center gap-4">
           <Button
-            onClick={() => router.replace('/chat')}
+            asChild
             size="lg"
             className="min-w-[200px]"
           >
-            {t('billing.success.startChat')}
+            <Link href="/chat" prefetch={false}>
+              {t('billing.success.startChat')}
+            </Link>
           </Button>
           <Button
-            onClick={() => router.replace('/chat/pricing')}
+            asChild
             variant="outline"
             size="lg"
             className="min-w-[200px]"
           >
-            {t('billing.success.viewPricing')}
+            <Link href="/chat/pricing" prefetch={false}>
+              {t('billing.success.viewPricing')}
+            </Link>
           </Button>
         </StaggerItem>
       </StaggerContainer>
@@ -414,26 +414,25 @@ function SubscriptionChangedContent() {
   );
 }
 
-/**
- * Subscription Changed Client wrapper component with Suspense boundary
- * Following Next.js 15 pattern for useSearchParams usage
- */
+function SubscriptionChangedFallback() {
+  const t = useTranslations();
+  return (
+    <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
+      <div className="flex flex-col items-center gap-6 text-center max-w-md mx-auto">
+        <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 ring-4 ring-primary/20 md:size-24">
+          <Icons.checkCircle className="size-10 text-primary md:size-12 animate-pulse" strokeWidth={2} />
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+          {t('common.loading')}
+        </h1>
+      </div>
+    </div>
+  );
+}
+
 export function SubscriptionChangedClient() {
   return (
-    <Suspense
-      fallback={(
-        <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
-          <div className="flex flex-col items-center gap-6 text-center max-w-md mx-auto">
-            <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 ring-4 ring-primary/20 md:size-24">
-              <CheckCircle className="size-10 text-primary md:size-12 animate-pulse" strokeWidth={2} />
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-              Loading...
-            </h1>
-          </div>
-        </div>
-      )}
-    >
+    <Suspense fallback={<SubscriptionChangedFallback />}>
       <SubscriptionChangedContent />
     </Suspense>
   );

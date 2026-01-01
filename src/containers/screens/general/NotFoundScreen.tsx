@@ -1,9 +1,9 @@
 'use client';
 
-import { FileQuestion } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -21,7 +21,7 @@ export default function NotFoundScreen() {
       <Empty className="max-w-md border-none">
         <EmptyHeader>
           <EmptyMedia variant="icon">
-            <FileQuestion />
+            <Icons.fileQuestion />
           </EmptyMedia>
           <EmptyTitle className="text-3xl font-bold sm:text-4xl">
             {t('pages.notFound.title')}

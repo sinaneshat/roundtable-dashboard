@@ -5,26 +5,13 @@ import { useTranslations } from 'next-intl';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/core/enums';
-import { StripeSubscriptionStatuses } from '@/api/core/enums';
-import type { Subscription } from '@/api/routes/billing/schema';
+import { PlanTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { getMaxModelsForTier, getMonthlyCreditsForTier } from '@/api/services/product-logic.service';
 import { PlanOverviewCard, StatusPage, StatusPageActions } from '@/components/billing';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
 
-/**
- * Billing Success Client - Subscriptions Only
- *
- * Theo's "Stay Sane with Stripe" pattern:
- * This component handles ONLY subscription purchases.
- * Credit pack purchases use the separate CreditsSuccessClient component.
- *
- * Flow:
- * 1. Sync subscription data from Stripe
- * 2. Display subscription confirmation
- * 3. Auto-redirect to chat
- */
 export function BillingSuccessClient() {
   const router = useRouter();
   const t = useTranslations();
@@ -46,14 +33,13 @@ export function BillingSuccessClient() {
   const subscriptionData = subscriptionsQuery.data;
   const usageStats = usageStatsQuery.data;
 
-  // Extract sync result - use this as source of truth for tier
   const syncResult = syncMutation.data;
   const syncedCreditsBalance = syncResult?.data?.creditsBalance;
   const syncedTier = syncResult?.data?.tierChange?.newTier;
 
   const displaySubscription = useMemo(() => {
     return (
-      subscriptionData?.data?.items?.find((sub: Subscription) => sub.status === StripeSubscriptionStatuses.ACTIVE)
+      subscriptionData?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
       ?? subscriptionData?.data?.items?.[0]
       ?? null
     );
@@ -127,26 +113,22 @@ export function BillingSuccessClient() {
         actions={(
           <StatusPageActions
             primaryLabel={t('actions.goHome')}
-            primaryOnClick={() => router.replace('/chat')}
+            primaryHref="/chat"
           />
         )}
       />
     );
   }
 
-  // Subscription data - use sync result tier as source of truth (prevents stale usageStats)
-  // syncedTier comes from sync-after-checkout which has fresh data from Stripe
-  // SubscriptionTier values: 'free' | 'pro' - anything not 'free' is paid
-  const isPaidPlan = (syncedTier !== undefined && syncedTier !== 'free') || (syncedTier === undefined && usageStats?.data?.plan?.type === 'paid');
-  const currentTier: SubscriptionTier = isPaidPlan ? 'pro' : 'free';
-  const tierName = isPaidPlan ? 'Pro' : 'Free';
+  const isPaidPlan = (syncedTier !== undefined && syncedTier !== SubscriptionTiers.FREE) || (syncedTier === undefined && usageStats?.data?.plan?.type === PlanTypes.PAID);
+  const currentTier: SubscriptionTier = isPaidPlan ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
+  const tierName = isPaidPlan ? t('subscription.tiers.pro.name') : t('subscription.tiers.free.name');
   const maxModels = getMaxModelsForTier(currentTier);
   const creditsBalance = syncedCreditsBalance ?? usageStats?.data?.credits?.available ?? 0;
   const monthlyCredits = getMonthlyCreditsForTier(currentTier);
 
   const formatCredits = (credits: number) => credits.toLocaleString();
 
-  // Use different title/description for free plan card connection vs pro subscription
   const successTitle = isPaidPlan
     ? t('billing.success.title')
     : t('billing.success.cardConnected.title');
@@ -162,21 +144,26 @@ export function BillingSuccessClient() {
       actions={(
         <StatusPageActions
           primaryLabel={t('billing.success.startChat')}
-          primaryOnClick={() => router.replace('/chat')}
+          primaryHref="/chat"
           secondaryLabel={t('billing.success.viewPricing')}
-          secondaryOnClick={() => router.replace('/chat/pricing')}
+          secondaryHref="/chat/pricing"
         />
       )}
     >
       {displaySubscription && (
         <PlanOverviewCard
           tierName={tierName}
-          description={isPaidPlan ? '1,000,000 credits per month' : '10,000 free credits added to your account'}
-          status={isPaidPlan ? displaySubscription.status : 'Connected'}
+          description={isPaidPlan
+            ? t('billing.success.planLimits.paidDescription')
+            : t('billing.success.planLimits.freeDescription')}
+          status={isPaidPlan ? displaySubscription.status : t('billing.success.connected')}
           stats={[
-            { label: 'Models', value: maxModels },
-            { label: 'Credits', value: formatCredits(creditsBalance) },
-            { label: isPaidPlan ? 'Monthly' : 'Bonus', value: isPaidPlan ? formatCredits(monthlyCredits) : 'One-time' },
+            { label: t('billing.success.planLimits.models'), value: maxModels },
+            { label: t('billing.success.planLimits.credits'), value: formatCredits(creditsBalance) },
+            {
+              label: isPaidPlan ? t('billing.success.planLimits.monthly') : t('billing.success.planLimits.bonus'),
+              value: isPaidPlan ? formatCredits(monthlyCredits) : t('billing.success.planLimits.oneTime'),
+            },
           ]}
           activeUntil={isPaidPlan && displaySubscription.currentPeriodEnd
             ? new Date(displaySubscription.currentPeriodEnd).toLocaleDateString()

@@ -5,13 +5,14 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatModeSchema, UploadStatuses } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatThread, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { useChatStore, useModelPreferencesStore } from '@/components/providers';
 import { useModelsQuery } from '@/hooks/queries';
 import { useBoolean, useChatAttachments } from '@/hooks/utils';
+import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
 import {
   chatMessagesToUIMessages,
@@ -33,7 +34,7 @@ import { ChatView } from './ChatView';
 
 type ChatThreadScreenProps = {
   thread: ChatThread;
-  participants: ChatParticipant[];
+  participants: ChatParticipantWithSettings[];
   initialMessages: ChatMessage[];
   slug: string;
   user: {

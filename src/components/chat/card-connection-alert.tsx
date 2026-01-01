@@ -1,15 +1,10 @@
-/**
- * Card Connection Alert - Prompt for new users without payment method
- *
- * Shows when user hasn't connected a card yet (free plan without payment method)
- * Same styling as QuotaAlertExtension for visual consistency
- */
 'use client';
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
+import { PlanTypes } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
@@ -26,7 +21,7 @@ export function CardConnectionAlert() {
     }
     const { plan } = statsData.data;
     // Show for free plan users without payment method
-    return plan?.type !== 'paid' && !plan?.hasPaymentMethod;
+    return plan?.type !== PlanTypes.PAID && !plan?.hasPaymentMethod;
   }, [statsData]);
 
   if (isLoading || !shouldShow) {
@@ -60,7 +55,7 @@ export function CardConnectionAlert() {
             size="sm"
             className="h-6 px-3 text-[10px] font-semibold shrink-0 rounded-full border-amber-500/40 bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30"
           >
-            <Link href="/chat/pricing">
+            <Link href="/chat/pricing" prefetch={false}>
               {t('usage.cardAlert.connectCard')}
             </Link>
           </Button>

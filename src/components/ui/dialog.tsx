@@ -3,9 +3,9 @@
 import type { ComponentProps } from 'react';
 
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { XIcon } from "lucide-react"
 import { useTranslations } from 'next-intl';
 
+import { Icons } from "@/components/icons"
 import { cn } from "@/lib/ui/cn"
 
 function Dialog({
@@ -32,9 +32,11 @@ function DialogClose({
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
-type DialogOverlayProps = ComponentProps<typeof DialogPrimitive.Overlay> & {
-  glass?: boolean;
-};
+type DialogOverlayBaseProps = ComponentProps<typeof DialogPrimitive.Overlay>;
+
+interface DialogOverlayProps extends DialogOverlayBaseProps {
+  glass?: boolean
+}
 
 function DialogOverlay({
   className,
@@ -54,10 +56,12 @@ function DialogOverlay({
   )
 }
 
-type DialogContentProps = ComponentProps<typeof DialogPrimitive.Content> & {
-  showCloseButton?: boolean;
-  glass?: boolean;
-};
+type DialogContentBaseProps = ComponentProps<typeof DialogPrimitive.Content>;
+
+interface DialogContentProps extends DialogContentBaseProps {
+  showCloseButton?: boolean
+  glass?: boolean
+}
 
 function DialogContent({
   className,
@@ -78,7 +82,7 @@ function DialogContent({
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           glass
             ? cn("gap-0 rounded-2xl border border-border bg-card p-0 shadow-lg overflow-hidden")
-            : "gap-4 rounded-2xl border bg-background p-6 shadow-lg",
+            : "gap-4 rounded-2xl border bg-background p-6 shadow-lg overflow-hidden",
           className
         )}
         {...props}
@@ -87,9 +91,9 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 end-4 rounded-full opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className="ring-offset-background focus-visible:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 end-4 rounded-full opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
-            <XIcon />
+            <Icons.x />
             <span className="sr-only">{t('close')}</span>
           </DialogPrimitive.Close>
         )}
@@ -98,9 +102,11 @@ function DialogContent({
   )
 }
 
-type DialogHeaderProps = ComponentProps<"div"> & {
-  glass?: boolean;
-};
+type DialogHeaderBaseProps = ComponentProps<"div">;
+
+interface DialogHeaderProps extends DialogHeaderBaseProps {
+  glass?: boolean
+}
 
 function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps) {
   return (
@@ -116,13 +122,16 @@ function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps)
   )
 }
 
-type DialogFooterProps = ComponentProps<"div"> & {
-  glass?: boolean;
-};
+type DialogFooterBaseProps = ComponentProps<"div">;
+type DialogBodyBaseProps = ComponentProps<"div">;
 
-type DialogBodyProps = ComponentProps<"div"> & {
-  glass?: boolean;
-};
+interface DialogFooterProps extends DialogFooterBaseProps {
+  glass?: boolean
+}
+
+interface DialogBodyProps extends DialogBodyBaseProps {
+  glass?: boolean
+}
 
 function DialogBody({ className, glass = false, ...props }: DialogBodyProps) {
   return (

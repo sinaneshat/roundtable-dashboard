@@ -1,13 +1,5 @@
 'use client';
 
-import {
-  Check,
-  Code2,
-  Copy,
-  ExternalLink,
-  Lock,
-  Share2,
-} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   EmailShareButton,
@@ -21,6 +13,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { ConfirmationDialog } from '@/components/chat/confirmation-dialog';
+import { Icons } from '@/components/icons';
 import {
   Accordion,
   AccordionContent,
@@ -119,7 +112,7 @@ function CodeSnippet({ code, onCopy, copied }: { code: string; onCopy: () => voi
         className="absolute right-2 top-2 size-7 opacity-0 transition-opacity group-hover:opacity-100"
         onClick={onCopy}
       >
-        {copied ? <Check className="size-3.5 text-green-500" /> : <Copy className="size-3.5" />}
+        {copied ? <Icons.check className="size-3.5 text-green-500" /> : <Icons.copy className="size-3.5" />}
       </Button>
     </div>
   );
@@ -164,7 +157,6 @@ export function ShareDialog({
       setCopySuccess(type);
       copyTimeoutRef.current = setTimeout(() => setCopySuccess(null), 2000);
     } catch {
-      // Silent fail
     }
   };
 
@@ -182,7 +174,6 @@ export function ShareDialog({
     handleOpenChange(false);
   };
 
-  // Confirm making thread public
   if (!isPublic) {
     return (
       <ConfirmationDialog
@@ -200,7 +191,6 @@ export function ShareDialog({
     );
   }
 
-  // Confirm making private
   if (confirmingPrivate) {
     return (
       <ConfirmationDialog
@@ -219,7 +209,6 @@ export function ShareDialog({
     );
   }
 
-  // Main share dialog - public thread
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="!max-w-2xl !w-[calc(100vw-2.5rem)]">
@@ -235,7 +224,6 @@ export function ShareDialog({
 
         <ScrollArea className="max-h-[60vh]">
           <div className="flex flex-col gap-4">
-            {/* Copy Link & Share Buttons */}
             <div className="space-y-3">
               <div className="text-sm font-medium">
                 {t('shareDialog.copyLinkLabel')}
@@ -256,13 +244,13 @@ export function ShareDialog({
                       copySuccess === 'link' && 'text-green-500 hover:text-green-500',
                     )}
                   >
-                    {copySuccess === 'link' ? <Check className="size-4" /> : <Copy className="size-4" />}
+                    {copySuccess === 'link' ? <Icons.check className="size-4" /> : <Icons.copy className="size-4" />}
                   </button>
                 </div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline">
-                      <Share2 className="mr-2 size-4" />
+                      <Icons.share className="mr-2 size-4" />
                       {t('shareDialog.shareOn')}
                     </Button>
                   </PopoverTrigger>
@@ -282,12 +270,11 @@ export function ShareDialog({
                   </PopoverContent>
                 </Popover>
                 <Button variant="outline" size="icon" onClick={() => window.open(shareUrl, '_blank')}>
-                  <ExternalLink className="size-4" />
+                  <Icons.externalLink className="size-4" />
                 </Button>
               </div>
             </div>
 
-            {/* OG Preview Card */}
             <div className="-mx-3 px-3 py-3 overflow-visible">
               <CometCard>
                 <div className="rounded-2xl bg-zinc-900 p-1">
@@ -302,12 +289,11 @@ export function ShareDialog({
               </CometCard>
             </div>
 
-            {/* Embed Options - API Keys Modal Style */}
             <Accordion type="single" collapsible className="w-full rounded-xl border border-border">
               <AccordionItem value="embed" className="border-0">
                 <AccordionTrigger className="px-4 hover:no-underline">
                   <div className="flex items-center gap-3">
-                    <Code2 className="size-4 text-muted-foreground" />
+                    <Icons.code className="size-4 text-muted-foreground" />
                     <div className="flex flex-col items-start gap-1">
                       <span className="text-sm font-medium">{t('shareDialog.embedOptionsLabel')}</span>
                       <span className="text-xs font-normal text-muted-foreground">
@@ -348,7 +334,7 @@ export function ShareDialog({
             onClick={handleMakePrivate}
             className="w-full sm:w-auto bg-amber-600 text-white hover:bg-amber-700"
           >
-            <Lock className="mr-2 size-4" />
+            <Icons.lock className="mr-2 size-4" />
             {t('makePrivate')}
           </Button>
         </DialogFooter>

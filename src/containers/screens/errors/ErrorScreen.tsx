@@ -1,8 +1,8 @@
 'use client';
 
-import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { NextIntlClientProvider, useTranslations } from 'next-intl';
 
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -15,11 +15,10 @@ import {
 import messages from '@/i18n/locales/en/common.json';
 
 type ErrorScreenProps = {
-  error: Error & { digest?: string };
   reset: () => void;
 };
 
-function ErrorScreenContent({ reset }: { reset: () => void }) {
+function ErrorScreenContent({ reset }: ErrorScreenProps) {
   const t = useTranslations();
 
   return (
@@ -27,7 +26,7 @@ function ErrorScreenContent({ reset }: { reset: () => void }) {
       <Empty className="max-w-lg border-none">
         <EmptyHeader>
           <EmptyMedia variant="icon">
-            <AlertTriangle className="text-destructive" />
+            <Icons.alertTriangle className="text-destructive" />
           </EmptyMedia>
           <EmptyTitle className="text-2xl font-semibold">
             {t('states.error.default')}
@@ -37,8 +36,8 @@ function ErrorScreenContent({ reset }: { reset: () => void }) {
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button onClick={() => reset()} variant="outline" size="lg">
-            <RefreshCw className="me-2 size-4" />
+          <Button onClick={reset} variant="outline" size="lg">
+            <Icons.refreshCw className="me-2 size-4" />
             {t('states.error.tryAgain')}
           </Button>
         </EmptyContent>
@@ -47,7 +46,7 @@ function ErrorScreenContent({ reset }: { reset: () => void }) {
   );
 }
 
-export default function ErrorScreen({ error: _error, reset }: ErrorScreenProps) {
+export default function ErrorScreen({ reset }: ErrorScreenProps) {
   return (
     <NextIntlClientProvider messages={messages} locale="en" timeZone="UTC">
       <ErrorScreenContent reset={reset} />

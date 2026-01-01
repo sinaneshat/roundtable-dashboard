@@ -15,7 +15,7 @@
  *
  * Usage in API routes:
  * ```ts
- * import { getPostHogClient } from '@/lib/posthog-server';
+ * import { getPostHogClient } from '@/lib/analytics/posthog-server';
  *
  * const posthog = getPostHogClient();
  * if (posthog) {

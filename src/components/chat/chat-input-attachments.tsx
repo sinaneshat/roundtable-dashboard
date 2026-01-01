@@ -1,20 +1,10 @@
 'use client';
 
-/**
- * Chat Input Attachments Component
- *
- * Displays pending file attachments in the chat input:
- * - Horizontal scrollable list using ScrollArea
- * - Hover tooltips with detailed file info
- * - Compact preview cards with icons/thumbnails
- * - Drag and drop zone overlay
- */
-
-/* eslint-disable simple-import-sort/imports */
-import { FileCode, File as FileIcon, FileImage, FileText, Upload, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 
 import { UploadStatuses } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -34,9 +24,6 @@ type ChatInputAttachmentsProps = {
   onDrop?: (files: File[]) => void;
 };
 
-/**
- * Format file size for display
- */
 function formatFileSize(bytes: number): string {
   if (bytes === 0)
     return '0 B';
@@ -46,9 +33,6 @@ function formatFileSize(bytes: number): string {
   return `${Number.parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
 }
 
-/**
- * Format date for display
- */
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -58,33 +42,28 @@ function formatDate(date: Date): string {
   }).format(date);
 }
 
-/**
- * Render the appropriate file icon based on mime type
- */
 function FileTypeIcon({ mimeType, className }: { mimeType: string; className?: string }) {
   const iconName = getFileIconName(mimeType);
   const iconClass = cn('size-4 text-muted-foreground', className);
 
   switch (iconName) {
     case 'image':
-      return <FileImage className={iconClass} />;
+      return <Icons.fileImage className={iconClass} />;
     case 'file-code':
-      return <FileCode className={iconClass} />;
+      return <Icons.fileCode className={iconClass} />;
     case 'file-text':
-      return <FileText className={iconClass} />;
+      return <Icons.fileText className={iconClass} />;
     default:
-      return <FileIcon className={iconClass} />;
+      return <Icons.file className={iconClass} />;
   }
 }
 
-/**
- * Hover preview content with file details
- */
 function AttachmentTooltipContent({
   attachment,
 }: {
   attachment: PendingAttachment;
 }) {
+  const t = useTranslations();
   const { file, preview, status, uploadItem } = attachment;
   const isImage = file.type.startsWith('image/');
   const isUploading = status === UploadStatuses.UPLOADING;
@@ -125,7 +104,7 @@ function AttachmentTooltipContent({
           <div className="flex items-center gap-2 text-xs text-primary">
             <div className="size-1.5 rounded-full bg-primary animate-pulse" />
             <span>
-              Uploading...
+              {t('chat.attachments.uploading')}
               {' '}
               {uploadItem?.progress.percent ?? 0}
               %
@@ -135,7 +114,7 @@ function AttachmentTooltipContent({
         {isFailed && (
           <div className="flex items-center gap-2 text-xs text-destructive">
             <div className="size-1.5 rounded-full bg-destructive" />
-            <span>Upload failed</span>
+            <span>{t('chat.attachments.uploadFailed')}</span>
           </div>
         )}
       </div>
@@ -165,7 +144,7 @@ function AttachmentChip({
     : file.name;
 
   return (
-    <Tooltip delayDuration={300}>
+    <Tooltip delayDuration={800}>
       <TooltipTrigger asChild>
         <motion.div
           layout
@@ -224,12 +203,12 @@ function AttachmentChip({
               className={cn(
                 'size-4 shrink-0 rounded-full p-0',
                 'opacity-60 hover:opacity-100',
-                'hover:bg-destructive/10 hover:text-destructive',
+                'hover:bg-destructive/20 hover:text-destructive',
                 'transition-all duration-150',
               )}
               disabled={isUploading}
             >
-              <X className="size-2.5" />
+              <Icons.x className="size-2.5" />
             </Button>
           )}
         </motion.div>
@@ -245,6 +224,7 @@ function AttachmentChip({
  * Dropzone overlay for drag and drop - covers entire chat input
  */
 export function ChatInputDropzoneOverlay({ isDragging }: { isDragging: boolean }) {
+  const t = useTranslations();
   return (
     <AnimatePresence>
       {isDragging && (
@@ -263,13 +243,13 @@ export function ChatInputDropzoneOverlay({ isDragging }: { isDragging: boolean }
         >
           {/* Upload icon - static, no animation */}
           <div className="p-3 rounded-full bg-primary/15">
-            <Upload className="size-8 text-primary" />
+            <Icons.upload className="size-8 text-primary" />
           </div>
 
           {/* Text content */}
           <div className="text-center">
-            <p className="text-sm font-medium text-white">Drop files here</p>
-            <p className="text-xs text-white/50 mt-0.5">Upload files to include in your message</p>
+            <p className="text-sm font-medium text-white">{t('chat.attachments.dropHere')}</p>
+            <p className="text-xs text-white/50 mt-0.5">{t('chat.attachments.dropDescription')}</p>
           </div>
         </motion.div>
       )}

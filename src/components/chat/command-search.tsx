@@ -1,10 +1,10 @@
 'use client';
-import { Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
+import { Icons } from '@/components/icons';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { VisuallyHidden } from '@/components/ui/visually-hidden';
@@ -17,27 +17,39 @@ type CommandSearchProps = {
   isOpen: boolean;
   onClose: () => void;
 };
+
+type SearchResultThread = {
+  id: string;
+  slug: string;
+  title: string;
+  updatedAt: string;
+  isFavorite?: boolean | null;
+};
+
+type SearchResultItemProps = {
+  thread: SearchResultThread;
+  index: number;
+  selectedIndex: number;
+  onClose: () => void;
+  onSelect: (index: number) => void;
+};
+
 function SearchResultItem({
   thread,
   index,
   selectedIndex,
   onClose,
   onSelect,
-}: {
-  thread: { id: string; slug: string; title: string; updatedAt: string; isFavorite?: boolean | null };
-  index: number;
-  selectedIndex: number;
-  onClose: () => void;
-  onSelect: (index: number) => void;
-}) {
+}: SearchResultItemProps) {
   const href = `/chat/${thread.slug}`;
   return (
     <Link
       href={href}
+      prefetch={false}
       onClick={onClose}
       className={cn(
         'flex items-center gap-3 mx-2 my-1 px-3 py-2.5 rounded-full transition-all duration-200',
-        'hover:bg-white/10 active:scale-[0.98]',
+        'hover:bg-white/[0.07] active:bg-black/20',
         selectedIndex === index ? 'bg-white/15 shadow-sm' : 'bg-transparent',
       )}
       onMouseEnter={() => {
@@ -53,7 +65,7 @@ function SearchResultItem({
         </p>
       </div>
       {thread.isFavorite && (
-        <div className="size-2 rounded-full bg-yellow-500 shrink-0" />
+        <div className="size-2 rounded-full bg-primary shrink-0" />
       )}
     </Link>
   );
@@ -84,16 +96,14 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     setSelectedIndex(0);
     onClose();
   }, [onClose]);
-  // Focus input after modal renders and paints
+
   useEffect(() => {
     if (isOpen) {
       return afterPaint(() => searchInputRef.current?.focus({ preventScroll: true }));
     }
     return undefined;
   }, [isOpen]);
-  // ✅ REACT 19: useEffectEvent for keyboard handler
-  // Automatically captures latest values (isOpen, threads, selectedIndex, router, handleClose)
-  // without causing the event listener effect to re-run
+
   const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
     if (!isOpen)
       return;
@@ -124,16 +134,13 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
-  // ✅ REACT 19: useEffectEvent for click outside handler
-  // Automatically captures latest handleClose without re-mounting listener
+
   const onClickOutside = useEffectEvent((event: MouseEvent) => {
     if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
       handleClose();
     }
   });
 
-  // Add click-outside listener after modal renders and paints
-  // This prevents click-outside from immediately firing during modal opening
   useEffect(() => {
     if (!isOpen)
       return;
@@ -145,9 +152,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
       document.removeEventListener('mousedown', onClickOutside);
     };
   }, [isOpen]);
-  // ✅ REACT 19: useEffectEvent for scroll handler
-  // Automatically captures latest hasNextPage, isFetchingNextPage, fetchNextPage
-  // without re-mounting the scroll listener
+
   const onScroll = useEffectEvent(() => {
     if (!scrollViewportRef.current || !hasNextPage || isFetchingNextPage)
       return;
@@ -162,7 +167,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     const scrollArea = scrollAreaRef.current;
     if (!scrollArea)
       return;
-    const viewport = scrollArea.querySelector<HTMLDivElement>('[data-slot="scroll-area-viewport"]');
+    const viewport = scrollArea.querySelector('[data-slot="scroll-area-viewport"]') as HTMLDivElement;
     if (!viewport)
       return;
     scrollViewportRef.current = viewport;
@@ -176,13 +181,12 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
         showCloseButton={false}
         className="!max-w-2xl !w-[calc(100vw-2.5rem)] p-0 gap-0"
       >
-        {/* Fixed Header Section */}
         <DialogHeader className="flex flex-row items-center gap-3 bg-card px-4 sm:px-5 md:px-6 py-4">
           <VisuallyHidden>
             <DialogTitle>{t('chat.searchChats')}</DialogTitle>
             <DialogDescription>{t('chat.searchChatsDescription')}</DialogDescription>
           </VisuallyHidden>
-          <Search className="size-5 text-muted-foreground shrink-0" />
+          <Icons.search className="size-5 text-muted-foreground shrink-0" />
           <input
             ref={searchInputRef}
             type="text"
@@ -198,14 +202,13 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           <button
             type="button"
             onClick={handleClose}
-            className="size-9 shrink-0 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors"
+            className="size-9 shrink-0 flex items-center justify-center hover:bg-white/[0.07] rounded-full transition-colors"
             aria-label={t('actions.close')}
           >
-            <X className="size-4.5 text-muted-foreground" />
+            <Icons.x className="size-4.5 text-muted-foreground" />
           </button>
         </DialogHeader>
 
-        {/* Scrollable Results Section */}
         <DialogBody className="h-[400px] border-t border-border bg-card">
           <ScrollArea ref={scrollAreaRef} className="h-full">
             {isLoading && !threads.length
@@ -243,7 +246,6 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           </ScrollArea>
         </DialogBody>
 
-        {/* Fixed Footer Section */}
         <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-t border-border text-xs text-muted-foreground shrink-0 bg-card">
           <div className="flex items-center gap-1.5">
             <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↑</kbd>

@@ -3,12 +3,12 @@ import type { Metadata } from 'next';
 import { permanentRedirect, redirect } from 'next/navigation';
 
 import { MessageRoles, ResourceUnavailableReasons } from '@/api/core/enums';
+import type { ThreadDetailPayload } from '@/api/routes/chat/schema';
 import { BRAND } from '@/constants/brand';
 import PublicChatThreadScreen from '@/containers/screens/chat/PublicChatThreadScreen';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import type { GetPublicThreadResponse } from '@/services/api';
 import { getPublicThreadService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
@@ -84,7 +84,7 @@ export default async function PublicChatThreadPage({
       staleTime: 5 * 60 * 1000,
     });
 
-    const cachedData = queryClient.getQueryData<GetPublicThreadResponse>(queryKeys.threads.public(slug));
+    const cachedData = queryClient.getQueryData<{ success: true; data: ThreadDetailPayload } | { success: false }>(queryKeys.threads.public(slug));
     if (!cachedData?.success) {
       const params = new URLSearchParams({
         toast: 'failed',

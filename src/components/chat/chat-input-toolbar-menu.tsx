@@ -1,12 +1,12 @@
 'use client';
 
-import { AlertCircle, Globe, Mic, MoreHorizontal, Paperclip, Sparkles, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect } from 'react';
 
 import type { ChatMode } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { AvatarGroup } from '@/components/chat/avatar-group';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Drawer,
@@ -21,7 +21,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useMediaQuery } from '@/hooks/utils';
+import { useBoolean, useMediaQuery } from '@/hooks/utils';
 import { getChatModeById } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
@@ -52,6 +52,7 @@ type ChatInputToolbarMenuProps = {
 
   // State
   disabled?: boolean;
+  isModelsLoading?: boolean;
 };
 
 export const ChatInputToolbarMenu = memo(({
@@ -69,41 +70,37 @@ export const ChatInputToolbarMenu = memo(({
   onToggleSpeech,
   isSpeechSupported = false,
   disabled = false,
+  isModelsLoading = false,
 }: ChatInputToolbarMenuProps) => {
   const t = useTranslations();
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const [mounted, setMounted] = useState(false);
+  const mounted = useBoolean(false);
 
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
-  const hasNoModelsSelected = selectedParticipants.length === 0;
+  const hasNoModelsSelected = selectedParticipants.length === 0 && !isModelsLoading;
 
   // Handle file input click
   const handleAttachClick = useCallback(() => {
     onAttachmentClick?.();
   }, [onAttachmentClick]);
 
-  // Prevent hydration mismatch by only showing responsive behavior after mount
   useEffect(() => {
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Required pattern to prevent SSR hydration mismatch
-    setMounted(true);
-  }, []);
+    mounted.onTrue();
+  }, [mounted]);
 
-  // ✅ HYDRATION FIX: Show placeholder during SSR to prevent Radix ID mismatch
-  // Radix components (Drawer, Dialog, Tooltip) generate unique IDs that differ between
-  // server and client, causing hydration errors. Render a static placeholder until mounted.
-  if (!mounted) {
+  if (!mounted.value) {
     return (
       <button
         type="button"
         disabled={disabled}
         className={cn(
           'flex items-center justify-center size-8 rounded-full',
-          'bg-white/5 hover:bg-white/10 active:bg-white/15',
+          'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
           'transition-colors disabled:opacity-50',
         )}
       >
-        <MoreHorizontal className="size-4" />
+        <Icons.moreHorizontal className="size-4" />
       </button>
     );
   }
@@ -111,7 +108,7 @@ export const ChatInputToolbarMenu = memo(({
   // After mount, show desktop version
   if (isDesktop) {
     return (
-      <TooltipProvider delayDuration={300}>
+      <TooltipProvider delayDuration={800}>
         <div className="flex items-center gap-2">
           {/* Models button */}
           <Tooltip>
@@ -124,10 +121,10 @@ export const ChatInputToolbarMenu = memo(({
                 onClick={onOpenModelModal}
                 className={cn(
                   'h-9 rounded-2xl gap-1.5 text-xs px-3',
-                  hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/10',
+                  hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/20',
                 )}
               >
-                {hasNoModelsSelected && <AlertCircle className="size-3.5" />}
+                {hasNoModelsSelected && <Icons.alertCircle className="size-3.5" />}
                 <span>{t('chat.models.models')}</span>
                 {!hasNoModelsSelected && (
                   <AvatarGroup
@@ -179,7 +176,7 @@ export const ChatInputToolbarMenu = memo(({
                     attachmentCount > 0 && 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20',
                   )}
                 >
-                  <Paperclip className="size-4" />
+                  <Icons.paperclip className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">
@@ -208,7 +205,7 @@ export const ChatInputToolbarMenu = memo(({
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <Globe className="size-4" />
+                <Icons.globe className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top">
@@ -233,11 +230,11 @@ export const ChatInputToolbarMenu = memo(({
           disabled={disabled}
           className={cn(
             'flex items-center justify-center size-8 rounded-full',
-            'bg-white/5 hover:bg-white/10 active:bg-white/15',
+            'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
             'transition-colors disabled:opacity-50',
           )}
         >
-          <MoreHorizontal className="size-4" />
+          <Icons.moreHorizontal className="size-4" />
         </button>
       </DrawerTrigger>
       <DrawerContent glass>
@@ -256,7 +253,7 @@ export const ChatInputToolbarMenu = memo(({
               'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
               hasNoModelsSelected
                 ? 'bg-destructive/10 border border-destructive/30 hover:bg-destructive/15'
-                : 'bg-white/5 hover:bg-white/10 active:bg-white/15',
+                : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
             )}
           >
             <div className={cn(
@@ -265,8 +262,8 @@ export const ChatInputToolbarMenu = memo(({
             )}
             >
               {hasNoModelsSelected
-                ? <AlertCircle className="size-5 text-destructive" />
-                : <Sparkles className="size-5 text-cyan-400" />}
+                ? <Icons.alertCircle className="size-5 text-destructive" />
+                : <Icons.sparkles className="size-5 text-cyan-400" />}
             </div>
             <div className="flex flex-col flex-1 min-w-0 text-left">
               <span className={cn(
@@ -300,7 +297,7 @@ export const ChatInputToolbarMenu = memo(({
           <button
             type="button"
             onClick={onOpenModeModal}
-            className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 transition-colors"
+            className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/[0.07] active:bg-black/20 transition-colors"
           >
             <div className="flex items-center justify-center size-10 rounded-full bg-purple-500/10">
               {ModeIcon && <ModeIcon className="size-5 text-purple-400" />}
@@ -323,7 +320,7 @@ export const ChatInputToolbarMenu = memo(({
               'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
               enableWebSearch
                 ? 'bg-blue-500/20 hover:bg-blue-500/25 active:bg-blue-500/30'
-                : 'bg-white/5 hover:bg-white/10 active:bg-white/15',
+                : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
             )}
           >
             <div className={cn(
@@ -331,7 +328,7 @@ export const ChatInputToolbarMenu = memo(({
               enableWebSearch ? 'bg-blue-500/20' : 'bg-blue-500/10',
             )}
             >
-              <Globe className={cn(
+              <Icons.globe className={cn(
                 'size-5 transition-colors',
                 enableWebSearch ? 'text-blue-300' : 'text-blue-400',
               )}
@@ -360,7 +357,7 @@ export const ChatInputToolbarMenu = memo(({
                 !enableAttachments && 'opacity-50 cursor-not-allowed',
                 attachmentCount > 0
                   ? 'bg-amber-500/20 hover:bg-amber-500/25 active:bg-amber-500/30'
-                  : 'bg-white/5 hover:bg-white/10 active:bg-white/15',
+                  : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
               )}
             >
               <div className={cn(
@@ -368,7 +365,7 @@ export const ChatInputToolbarMenu = memo(({
                 attachmentCount > 0 ? 'bg-amber-500/20' : 'bg-amber-500/10',
               )}
               >
-                <Paperclip className={cn(
+                <Icons.paperclip className={cn(
                   'size-5 transition-colors',
                   attachmentCount > 0 ? 'text-amber-300' : 'text-amber-400',
                 )}
@@ -395,7 +392,7 @@ export const ChatInputToolbarMenu = memo(({
                 !isSpeechSupported && 'opacity-50 cursor-not-allowed',
                 isListening
                   ? 'bg-red-500/20 hover:bg-red-500/25 active:bg-red-500/30'
-                  : 'bg-white/5 hover:bg-white/10 active:bg-white/15',
+                  : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
               )}
             >
               <div className={cn(
@@ -404,8 +401,8 @@ export const ChatInputToolbarMenu = memo(({
               )}
               >
                 {isListening
-                  ? <StopCircle className="size-5 text-red-400" />
-                  : <Mic className="size-5 text-green-400" />}
+                  ? <Icons.stopCircle className="size-5 text-red-400" />
+                  : <Icons.mic className="size-5 text-green-400" />}
               </div>
               <span className={cn(
                 'text-sm font-medium flex-1 text-left transition-colors',

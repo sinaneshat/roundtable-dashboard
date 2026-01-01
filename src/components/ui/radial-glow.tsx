@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
@@ -19,30 +20,38 @@ export const RadialGlow = ({
   offsetY = 0,
   className = '',
 }: RadialGlowProps = {}) => {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mediaQuery.matches);
+
+    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  const shouldAnimate = animate && !prefersReducedMotion;
+
   return (
     <div
-      className={cn('absolute left-1/2 top-1/2 pointer-events-none', className)}
-      style={{
-        width: 0,
-        height: 0,
-        zIndex: -1,
-      }}
+      className={cn('absolute left-1/2 top-1/2 pointer-events-none size-0 -z-10', className)}
     >
       <motion.div
-        initial={{ opacity: 0.85 }}
+        initial={{ opacity: 0.5 }}
         animate={{
-          opacity: animate ? [0.85, 1, 0.85] : 0.9,
-          scale: animate ? [1, 1.05, 1] : 1,
+          opacity: shouldAnimate ? [0.5, 0.65, 0.5] : 0.55,
+          scale: shouldAnimate ? [1, 1.03, 1] : 1,
         }}
         transition={{
           opacity: {
-            duration: 0.6,
+            duration: 0.8,
             delay: 0.1,
             ease: 'easeOut',
           },
           scale: {
             duration,
-            repeat: animate ? Infinity : 0,
+            repeat: shouldAnimate ? Infinity : 0,
             repeatType: 'reverse',
             ease: 'easeInOut',
           },
@@ -61,19 +70,19 @@ export const RadialGlow = ({
         <motion.div
           className="absolute inset-0 rounded-full will-change-transform"
           style={{
-            background: 'radial-gradient(circle, rgba(30, 58, 138, 0.55) 0%, rgba(30, 64, 175, 0.42) 25%, rgba(37, 99, 235, 0.28) 50%, transparent 70%)',
-            filter: 'blur(100px)',
+            background: 'radial-gradient(circle, rgba(20, 40, 100, 0.35) 0%, rgba(25, 50, 130, 0.25) 30%, rgba(30, 60, 160, 0.15) 55%, transparent 75%)',
+            filter: 'blur(120px)',
             transform: 'translateZ(0)',
             backfaceVisibility: 'hidden',
           }}
           initial={{ scale: 1 }}
-          animate={animate
+          animate={shouldAnimate
             ? {
-                scale: [1, 1.1, 1],
+                scale: [1, 1.06, 1],
               }
             : {}}
           transition={{
-            duration: duration * 2,
+            duration: duration * 2.5,
             repeat: Infinity,
             ease: 'easeInOut',
             delay: 0.2,
@@ -83,37 +92,15 @@ export const RadialGlow = ({
         <motion.div
           className="absolute inset-0 rounded-full will-change-transform"
           style={{
-            background: 'radial-gradient(circle, rgba(30, 64, 175, 0.45) 0%, rgba(37, 99, 235, 0.32) 30%, rgba(59, 130, 246, 0.20) 60%, transparent 80%)',
-            filter: 'blur(140px)',
-            transform: 'translateZ(0) scale(1.3)',
+            background: 'radial-gradient(circle, rgba(25, 50, 130, 0.28) 0%, rgba(30, 60, 160, 0.18) 35%, rgba(40, 80, 180, 0.10) 65%, transparent 85%)',
+            filter: 'blur(160px)',
+            transform: 'translateZ(0) scale(1.4)',
             backfaceVisibility: 'hidden',
           }}
           initial={{ scale: 1 }}
-          animate={animate
+          animate={shouldAnimate
             ? {
-                scale: [1, 1.15, 1],
-              }
-            : {}}
-          transition={{
-            duration: duration * 2.5,
-            repeat: Infinity,
-            ease: 'easeInOut',
-            delay: 0.3,
-          }}
-        />
-
-        <motion.div
-          className="absolute inset-0 rounded-full will-change-transform"
-          style={{
-            background: 'radial-gradient(circle, rgba(37, 99, 235, 0.38) 0%, rgba(59, 130, 246, 0.26) 40%, rgba(96, 165, 250, 0.16) 70%, transparent 90%)',
-            filter: 'blur(180px)',
-            transform: 'translateZ(0) scale(1.6)',
-            backfaceVisibility: 'hidden',
-          }}
-          initial={{ scale: 1 }}
-          animate={animate
-            ? {
-                scale: [1, 1.2, 1],
+                scale: [1, 1.08, 1],
               }
             : {}}
           transition={{

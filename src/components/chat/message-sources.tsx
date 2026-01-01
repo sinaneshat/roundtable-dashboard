@@ -1,9 +1,7 @@
 'use client';
 
-import { Download, FileText, Paperclip } from 'lucide-react';
-import { useTranslations } from 'next-intl';
-
 import type { AvailableSource } from '@/api/types/citations';
+import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,18 +11,10 @@ import {
 } from '@/components/ui/collapsible';
 import { cn } from '@/lib/ui/cn';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 type MessageSourcesProps = {
   sources: AvailableSource[];
   className?: string;
 };
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
 function formatFileSize(bytes?: number): string {
   if (!bytes)
@@ -36,23 +26,7 @@ function formatFileSize(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Note: Currently using FileText icon directly in SourceCard.
-// Could extend to use different icons based on mime type if needed.
-
-// ============================================================================
-// Component
-// ============================================================================
-
-/**
- * MessageSources - Displays sources/files available to an AI response
- *
- * Shows a collapsible "Sources" section below AI responses when files
- * were available to the AI, even if no inline citations were generated.
- * This ensures users always know what files the AI had access to.
- */
 export function MessageSources({ sources, className }: MessageSourcesProps) {
-  const t = useTranslations();
-
   if (!sources || sources.length === 0) {
     return null;
   }
@@ -65,11 +39,9 @@ export function MessageSources({ sources, className }: MessageSourcesProps) {
           size="sm"
           className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
         >
-          <Paperclip className="size-3.5" />
+          <Icons.paperclip className="size-3.5" />
           <span>
-            {t('chat.sources.title')}
-            {' '}
-            (
+            Sources (
             {sources.length}
             )
           </span>
@@ -78,7 +50,7 @@ export function MessageSources({ sources, className }: MessageSourcesProps) {
       <CollapsibleContent className="mt-2">
         <div className="flex flex-wrap gap-2">
           {sources.map((source, index) => (
-            <SourceCard key={source.id ?? `source-${source.filename ?? source.title ?? ''}-${index}`} source={source} index={index + 1} />
+            <SourceCard key={source.id || index} source={source} index={index + 1} />
           ))}
         </div>
       </CollapsibleContent>
@@ -86,22 +58,16 @@ export function MessageSources({ sources, className }: MessageSourcesProps) {
   );
 }
 
-// ============================================================================
-// Source Card
-// ============================================================================
-
 type SourceCardProps = {
   source: AvailableSource;
   index: number;
 };
 
 function SourceCard({ source, index }: SourceCardProps) {
-  const t = useTranslations('actions');
   const fileSize = formatFileSize(source.fileSize);
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm">
-      {/* Index badge */}
       <Badge
         variant="secondary"
         className="flex size-5 shrink-0 items-center justify-center rounded-full p-0 text-[10px] font-medium"
@@ -109,10 +75,8 @@ function SourceCard({ source, index }: SourceCardProps) {
         {index}
       </Badge>
 
-      {/* File icon - using FileText directly to avoid component-during-render issue */}
-      <FileText className="size-4 shrink-0 text-muted-foreground" />
+      <Icons.fileText className="size-4 shrink-0 text-muted-foreground" />
 
-      {/* File info */}
       <div className="flex min-w-0 flex-col">
         <span className="truncate text-xs font-medium">
           {source.filename || source.title}
@@ -126,7 +90,6 @@ function SourceCard({ source, index }: SourceCardProps) {
         )}
       </div>
 
-      {/* Download button */}
       {source.downloadUrl && (
         <Button
           variant="ghost"
@@ -138,10 +101,9 @@ function SourceCard({ source, index }: SourceCardProps) {
             href={source.downloadUrl}
             target="_blank"
             rel="noopener noreferrer"
-            title={t('download')}
-            aria-label={t('download')}
+            title={`Download ${source.filename || source.title}`}
           >
-            <Download className="size-3.5" />
+            <Icons.download className="size-3.5" />
           </a>
         </Button>
       )}

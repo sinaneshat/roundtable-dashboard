@@ -1,10 +1,10 @@
 'use client';
-import { Loader2, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
 import { FeedbackTypes } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -60,10 +60,10 @@ function RoundFeedbackComponent({
           >
             {isLikePending
               ? (
-                  <Loader2 className="size-3 animate-spin" />
+                  <Icons.loader className="size-3 animate-spin" />
                 )
               : (
-                  <ThumbsUp className={cn('size-3', currentFeedback === FeedbackTypes.LIKE && 'fill-current')} />
+                  <Icons.thumbsUp className={cn('size-3', currentFeedback === FeedbackTypes.LIKE && 'fill-current')} />
                 )}
           </Button>
         </TooltipTrigger>
@@ -89,10 +89,10 @@ function RoundFeedbackComponent({
           >
             {isDislikePending
               ? (
-                  <Loader2 className="size-3 animate-spin" />
+                  <Icons.loader className="size-3 animate-spin" />
                 )
               : (
-                  <ThumbsDown className={cn('size-3', currentFeedback === FeedbackTypes.DISLIKE && 'fill-current')} />
+                  <Icons.thumbsDown className={cn('size-3', currentFeedback === FeedbackTypes.DISLIKE && 'fill-current')} />
                 )}
           </Button>
         </TooltipTrigger>
@@ -117,5 +117,3 @@ export const RoundFeedback = memo(
     );
   },
 );
-
-RoundFeedback.displayName = 'RoundFeedback';

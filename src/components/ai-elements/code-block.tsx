@@ -1,36 +1,27 @@
 'use client';
 
-/**
- * CodeBlock - Official AI Elements Pattern
- *
- * Syntax-highlighted code display with copy functionality.
- * Based on the official AI SDK AI Elements code-block component.
- *
- * @see https://ai-sdk.dev/elements/components/code-block
- */
-
-import { CheckIcon, CopyIcon } from 'lucide-react';
-import type { ComponentProps, HTMLAttributes } from 'react';
+import type { ComponentProps } from 'react';
 import { createContext, memo, use, useEffect, useMemo, useRef, useState } from 'react';
 import type { BundledLanguage, ShikiTransformer } from 'shiki';
 import { codeToHtml } from 'shiki';
 
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
 
-type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
-  code: string;
-  language: BundledLanguage | string;
-  showLineNumbers?: boolean;
-};
+type CodeBlockProps = {
+  readonly code: string;
+  readonly language: BundledLanguage | string;
+  readonly showLineNumbers?: boolean;
+  readonly className?: string;
+  readonly children?: React.ReactNode;
+} & Omit<ComponentProps<'div'>, 'className' | 'children'>;
 
 type CodeBlockContextType = {
-  code: string;
+  readonly code: string;
 };
 
-const CodeBlockContext = createContext<CodeBlockContextType>({
-  code: '',
-});
+const CodeBlockContext = createContext<CodeBlockContextType | null>(null);
 
 const lineNumberTransformer: ShikiTransformer = {
   name: 'line-numbers',
@@ -53,15 +44,18 @@ const lineNumberTransformer: ShikiTransformer = {
   },
 };
 
-// eslint-disable-next-line react-refresh/only-export-components -- Utility function closely related to CodeBlock component
-export async function highlightCode(
+async function highlightCode(
   code: string,
   language: BundledLanguage | string,
   showLineNumbers = false,
 ): Promise<[string, string]> {
-  const transformers: ShikiTransformer[] = showLineNumbers
-    ? [lineNumberTransformer]
-    : [];
+  const transformers: ShikiTransformer[] = showLineNumbers ? [lineNumberTransformer] : [];
+
+  const escapeHtml = (text: string): string =>
+    text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
 
   try {
     const [light, dark] = await Promise.all([
@@ -78,12 +72,7 @@ export async function highlightCode(
     ]);
     return [light, dark];
   } catch {
-    // Fallback for unsupported languages
-    const escapedCode = code
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-    const fallbackHtml = `<pre><code>${escapedCode}</code></pre>`;
+    const fallbackHtml = `<pre><code>${escapeHtml(code)}</code></pre>`;
     return [fallbackHtml, fallbackHtml];
   }
 }
@@ -148,11 +137,13 @@ function CodeBlockComponent({
 
 export const CodeBlock = memo(CodeBlockComponent);
 
-export type CodeBlockCopyButtonProps = ComponentProps<typeof Button> & {
-  onCopy?: () => void;
-  onError?: (error: Error) => void;
-  timeout?: number;
-};
+type CodeBlockCopyButtonProps = {
+  readonly onCopy?: () => void;
+  readonly onError?: (error: Error) => void;
+  readonly timeout?: number;
+  readonly children?: React.ReactNode;
+  readonly className?: string;
+} & Omit<ComponentProps<typeof Button>, 'onClick' | 'size' | 'variant' | 'className' | 'children'>;
 
 export function CodeBlockCopyButton({
   onCopy,
@@ -163,7 +154,11 @@ export function CodeBlockCopyButton({
   ...props
 }: CodeBlockCopyButtonProps) {
   const [isCopied, setIsCopied] = useState(false);
-  const { code } = use(CodeBlockContext);
+  const context = use(CodeBlockContext);
+  if (!context) {
+    throw new Error('CodeBlockCopyButton must be used within CodeBlock');
+  }
+  const { code } = context;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -189,12 +184,11 @@ export function CodeBlockCopyButton({
       }
       timeoutRef.current = setTimeout(() => setIsCopied(false), timeout);
     } catch (error) {
-      // ✅ TYPE-SAFE: Use proper error type guard instead of force cast
       onError?.(error instanceof Error ? error : new Error(String(error)));
     }
   };
 
-  const Icon = isCopied ? CheckIcon : CopyIcon;
+  const Icon = isCopied ? Icons.check : Icons.copy;
 
   return (
     <Button
@@ -209,21 +203,15 @@ export function CodeBlockCopyButton({
   );
 }
 
-/**
- * InlineCode - Styled inline code element
- *
- * For use within paragraphs and other text content.
- * Matches AI SDK AI Elements inline code styling.
- */
-export type InlineCodeProps = HTMLAttributes<HTMLElement>;
+type InlineCodeProps = {
+  readonly className?: string;
+  readonly children?: React.ReactNode;
+} & Omit<ComponentProps<'code'>, 'className' | 'children'>;
 
 export function InlineCode({ className, children, ...props }: InlineCodeProps) {
   return (
     <code
-      className={cn(
-        'bg-muted px-1.5 py-0.5 rounded-md text-sm font-mono text-foreground/90',
-        className,
-      )}
+      className={cn('bg-muted px-1.5 py-0.5 rounded-md text-sm font-mono text-foreground/90', className)}
       {...props}
     >
       {children}

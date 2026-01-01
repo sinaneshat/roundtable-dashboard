@@ -1,7 +1,6 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Mail } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -10,8 +9,9 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { AuthStep } from '@/api/core/enums';
-import { AuthSteps } from '@/api/core/enums';
-import { RHFTextField } from '@/components/forms';
+import { AuthSteps, DEFAULT_AUTH_STEP } from '@/api/core/enums';
+import { RHFTextField } from '@/components/forms/rhf-text-field';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { useBoolean } from '@/hooks/utils';
@@ -31,9 +31,10 @@ function AuthFormContent() {
   const t = useTranslations();
   const searchParams = useSearchParams();
   const isLoading = useBoolean(false);
-  const [step, setStep] = useState<AuthStep>(AuthSteps.METHOD);
+  const [step, setStep] = useState<AuthStep>(DEFAULT_AUTH_STEP);
   const [sentEmail, setSentEmail] = useState('');
 
+  // Handle toast messages from URL params
   useEffect(() => {
     const toastType = searchParams.get('toast');
     const message = searchParams.get('message');
@@ -86,13 +87,14 @@ function AuthFormContent() {
   };
 
   const goBack = () => {
-    setStep(AuthSteps.METHOD);
+    setStep(DEFAULT_AUTH_STEP);
     form.reset();
   };
 
   return (
     <div className="w-full">
       <AnimatePresence mode="wait" initial={false}>
+        {/* Step 1: Method Selection - pt-10 compensates for email step's extra height */}
         {step === AuthSteps.METHOD && (
           <motion.div
             key="method"
@@ -114,6 +116,7 @@ function AuthFormContent() {
           </motion.div>
         )}
 
+        {/* Step 2: Email Input - pb-5 matches method step total height (152px) */}
         {step === AuthSteps.EMAIL && (
           <motion.div
             key="email"
@@ -131,7 +134,7 @@ function AuthFormContent() {
                 className="h-auto py-1 px-2 text-xs text-muted-foreground"
                 onClick={goBack}
               >
-                <ArrowLeft className="size-3 mr-1" />
+                <Icons.arrowLeft className="size-3 mr-1" />
                 {t('actions.back')}
               </Button>
             </div>
@@ -162,6 +165,7 @@ function AuthFormContent() {
           </motion.div>
         )}
 
+        {/* Step 3: Email Sent Success - pt-3 aligns height with other steps */}
         {step === AuthSteps.SENT && (
           <motion.div
             key="sent"
@@ -178,7 +182,7 @@ function AuthFormContent() {
                 transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.05 }}
                 className="flex size-10 items-center justify-center rounded-full bg-chart-3/20"
               >
-                <Mail className="size-5 text-chart-3" />
+                <Icons.mail className="size-5 text-chart-3" />
               </motion.div>
               <h3 className="text-base font-semibold">
                 {t('auth.magicLink.title')}

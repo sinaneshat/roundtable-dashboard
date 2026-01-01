@@ -1,15 +1,14 @@
 'use client';
-import { MessageSquare, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useMemo } from 'react';
 
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
-import { ChatModes, SubscriptionTiers } from '@/api/core/enums';
+import { ChatModes, PlanTypes, SubscriptionTiers } from '@/api/core/enums';
 import {
   MIN_MODELS_REQUIRED,
 } from '@/api/services/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Icons } from '@/components/icons';
 import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
@@ -28,60 +27,25 @@ type ChatQuickStartProps = {
   ) => void;
   className?: string;
 };
-function QuickStartSkeleton({ className }: { className?: string }) {
-  return (
-    <div className={cn('w-full relative z-20', className)}>
-      <div className="flex flex-col">
-        {[0, 1, 2].map(index => (
-          <div
-            key={index}
-            className={cn(
-              'w-full px-4 py-3',
-              index !== 2 && 'border-b border-white/[0.06]',
-            )}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
-              <Skeleton className="h-5 w-3/4 bg-white/10" />
-              <div className="flex items-center gap-2 shrink-0">
-                <Skeleton className="h-6 w-16 rounded-2xl bg-white/10" />
-                <div className="flex -space-x-2">
-                  {[0, 1, 2].map(i => (
-                    <Skeleton key={i} className="size-6 rounded-full bg-white/10" />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function ChatQuickStart({
   onSuggestionClick,
   className,
 }: ChatQuickStartProps) {
-  const { data: usageData, isLoading: isUsageLoading } = useUsageStatsQuery();
-  const { data: modelsResponse, isLoading: isModelsLoading } = useModelsQuery();
-
-  const isLoading = isModelsLoading || isUsageLoading;
-
-  // CREDITS-ONLY: Map plan type to tier for model access
-  const userTier: SubscriptionTier = usageData?.data?.plan?.type === 'paid' ? 'pro' : 'free';
+  const { data: usageData } = useUsageStatsQuery();
+  const userTier: SubscriptionTier = usageData?.data?.plan?.type === PlanTypes.PAID ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
+  const { data: modelsResponse } = useModelsQuery();
 
   const allModels = useMemo(() => {
-    if (!modelsResponse?.success)
-      return [];
-    return modelsResponse.data.items;
+    const models = modelsResponse?.success ? modelsResponse.data.items : [];
+    return models;
   }, [modelsResponse]);
 
   const accessibleModels = useMemo(() => {
-    return allModels.filter(
+    const accessible = allModels.filter(
       model => model.is_accessible_to_user === true,
     );
+    return accessible;
   }, [allModels]);
-
   const modelsByProvider = useMemo(() => {
     const grouped = new Map<string, typeof accessibleModels>();
     for (const model of accessibleModels) {
@@ -93,7 +57,6 @@ export function ChatQuickStart({
     }
     return grouped;
   }, [accessibleModels]);
-
   const selectUniqueProviderModels = useCallback(
     (count: number): string[] => {
       const selectedModels: string[] = [];
@@ -119,7 +82,6 @@ export function ChatQuickStart({
     },
     [modelsByProvider],
   );
-
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
     // Only show suggestions if we have valid models available
     const availableModelIds = accessibleModels
@@ -160,13 +122,11 @@ export function ChatQuickStart({
       return models;
     };
 
-    // Credits-only: Just free and pro tier models
     const freeModels = getModelsForTier(MIN_MODELS_REQUIRED);
     const proModels = getModelsForTier(4);
 
     const freeTierSuggestions: QuickStartSuggestion[] = (() => {
       const models = freeModels;
-      // Always return suggestions, adjust participants based on available models
       if (models.length === 0) {
         return [];
       }
@@ -232,7 +192,6 @@ export function ChatQuickStart({
 
     const proTierSuggestions: QuickStartSuggestion[] = (() => {
       const models = proModels;
-      // Always return suggestions, adjust participants based on available models
       if (models.length === 0)
         return [];
 
@@ -295,25 +254,15 @@ export function ChatQuickStart({
       ];
     })();
 
-    // Credits-only: Simplified to free/pro tiers
-    // Free users get free tier suggestions, paid users get pro tier suggestions
-    const tierSuggestions: QuickStartSuggestion[] = userTier === SubscriptionTiers.FREE
+    return userTier === SubscriptionTiers.FREE
       ? freeTierSuggestions
       : proTierSuggestions;
-
-    return tierSuggestions;
   }, [userTier, accessibleModels, selectUniqueProviderModels]);
-
-  // Show skeleton while loading models or usage data (after all hooks)
-  if (isLoading) {
-    return <QuickStartSkeleton className={className} />;
-  }
-
   const getModeConfig = (mode: ChatMode) => {
     switch (mode) {
       case ChatModes.DEBATING:
         return {
-          icon: Users,
+          icon: Icons.users,
           label: 'Debating',
           color: 'text-white/80',
           bgColor: 'bg-white/10',
@@ -321,7 +270,7 @@ export function ChatQuickStart({
         };
       case ChatModes.ANALYZING:
         return {
-          icon: MessageSquare,
+          icon: Icons.messageSquare,
           label: 'Analyzing',
           color: 'text-white/80',
           bgColor: 'bg-white/10',
@@ -329,7 +278,7 @@ export function ChatQuickStart({
         };
       default:
         return {
-          icon: MessageSquare,
+          icon: Icons.messageSquare,
           label: 'Chatting',
           color: 'text-white/80',
           bgColor: 'bg-white/10',
@@ -366,11 +315,11 @@ export function ChatQuickStart({
                 )}
               className={cn(
                 'group/suggestion w-full text-left px-4 py-3 rounded-2xl cursor-pointer focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
-                // Glass effect with backdrop blur on hover
-                'hover:bg-white/10 hover:backdrop-blur-md',
-                'active:bg-white/[0.15]',
+                // Darker hover effect
+                'hover:bg-white/[0.07]',
+                'active:bg-black/20',
                 'transition-all duration-200 ease-out',
-                !isLast && 'border-b border-white/[0.06]',
+                !isLast && 'border-b border-white/[0.02]',
               )}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
@@ -381,7 +330,7 @@ export function ChatQuickStart({
 
                 {/* Right: Mode and avatars */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.06]">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.02]">
                     <span
                       className={cn(
                         'text-[11px] font-medium whitespace-nowrap',

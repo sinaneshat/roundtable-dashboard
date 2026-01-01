@@ -4,17 +4,15 @@ import ErrorScreen from '@/containers/screens/errors/ErrorScreen';
 
 export const dynamic = 'force-dynamic';
 
-export default function GlobalError({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
+type GlobalErrorProps = {
   reset: () => void;
-}) {
+};
+
+export default function GlobalError({ reset }: GlobalErrorProps) {
   return (
     <html lang="en">
       <body>
-        <ErrorScreen error={error} reset={reset} />
+        <ErrorScreen reset={reset} />
       </body>
     </html>
   );

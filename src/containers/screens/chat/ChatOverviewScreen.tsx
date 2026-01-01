@@ -1,7 +1,7 @@
 'use client';
 
 import type { ChatStatus } from 'ai';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -22,7 +22,6 @@ import {
   useChatStoreApi,
   useModelPreferencesStore,
 } from '@/components/providers';
-import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
@@ -107,7 +106,6 @@ export default function ChatOverviewScreen() {
     })),
   );
 
-  // ✅ ZUSTAND v5: Consolidate all form and action selectors into single batch
   const {
     inputValue,
     selectedMode,
@@ -179,13 +177,8 @@ export default function ChatOverviewScreen() {
     can_upgrade: true,
   };
 
-  // ✅ ZUSTAND V5: Batch selectors with useShallow to prevent multiple re-renders
-  const { modelOrder, setModelOrder } = useChatStore(
-    useShallow(s => ({
-      modelOrder: s.modelOrder,
-      setModelOrder: s.setModelOrder,
-    })),
-  );
+  const modelOrder = useChatStore(s => s.modelOrder);
+  const setModelOrder = useChatStore(s => s.setModelOrder);
 
   const accessibleModelIds = useMemo(() => {
     if (allEnabledModels.length === 0)
@@ -201,9 +194,9 @@ export default function ChatOverviewScreen() {
     }
 
     if (persistedModelIds.length > 0) {
-      const validIds = persistedModelIds.filter((id: string) => accessibleModelIds.includes(id));
+      const validIds = persistedModelIds.filter(id => accessibleModelIds.includes(id));
       if (validIds.length > 0) {
-        return validIds.map((modelId: string, index: number) => ({
+        return validIds.map((modelId, index) => ({
           id: modelId,
           modelId,
           role: '',
@@ -306,7 +299,7 @@ export default function ChatOverviewScreen() {
       let fullOrder: string[];
       if (persistedModelOrder.length > 0) {
         const availableIds = new Set(allEnabledModels.map(m => m.id));
-        const validPersistedOrder = persistedModelOrder.filter((id: string) => availableIds.has(id));
+        const validPersistedOrder = persistedModelOrder.filter(id => availableIds.has(id));
         const newModelIds = allEnabledModels
           .filter(m => !validPersistedOrder.includes(m.id))
           .map(m => m.id);
@@ -427,7 +420,7 @@ export default function ChatOverviewScreen() {
   });
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
-  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting || isModelsLoading;
+  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting;
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
 
   const lastResetPathRef = useRef<string | null>(null);
@@ -630,6 +623,7 @@ export default function ChatOverviewScreen() {
       attachmentCount={chatAttachments.attachments.length}
       enableAttachments={!isInitialUIInputBlocked}
       disabled={isInitialUIInputBlocked}
+      isModelsLoading={isModelsLoading}
     />
   ), [
     selectedParticipants,
@@ -642,6 +636,7 @@ export default function ChatOverviewScreen() {
     handleAttachmentClick,
     chatAttachments.attachments.length,
     isInitialUIInputBlocked,
+    isModelsLoading,
   ]);
 
   const sharedChatInputProps = useMemo(() => {
@@ -663,6 +658,7 @@ export default function ChatOverviewScreen() {
       toolbar: chatInputToolbar,
       isSubmitting: formActions.isSubmitting,
       isUploading: chatAttachments.isUploading,
+      isModelsLoading,
     };
   }, [
     inputValue,
@@ -679,6 +675,7 @@ export default function ChatOverviewScreen() {
     chatInputToolbar,
     formActions.isSubmitting,
     chatAttachments.isUploading,
+    isModelsLoading,
   ]);
 
   const showChatView = !showInitialUI && (currentThread || createdThreadId);
@@ -686,40 +683,10 @@ export default function ChatOverviewScreen() {
   return (
     <>
       <UnifiedErrorBoundary context="chat">
-        <div className="flex flex-col relative flex-1 min-h-dvh">
-          <AnimatePresence mode="wait">
-            {showInitialUI && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-                className="fixed inset-0 pointer-events-none overflow-hidden"
-                style={{ zIndex: 0, willChange: 'opacity' }}
-              >
-                <div
-                  className="absolute"
-                  style={{
-                    top: '-100px',
-                    left: '63%',
-                    transform: 'translateX(-50%)',
-                    willChange: 'transform',
-                  }}
-                >
-                  <RadialGlow
-                    size={500}
-                    offsetY={0}
-                    duration={18}
-                    animate={true}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
+        <div className="flex flex-col relative flex-1">
           {showInitialUI && (
             <>
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 relative">
                 <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
                   <motion.div
                     key="initial-ui"
@@ -732,24 +699,58 @@ export default function ChatOverviewScreen() {
                     <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
                       <motion.div
                         className="relative h-20 w-20 sm:h-24 sm:w-24"
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
                         exit={{ scale: 0.5, opacity: 0, y: -50 }}
                         transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
                       >
-                        <Image
-                          src={BRAND.logos.main}
-                          alt={BRAND.name}
-                          className="w-full h-full object-contain"
-                          width={96}
-                          height={96}
-                          priority
+                        {/* Pulsing glow behind logo */}
+                        <motion.div
+                          className="absolute inset-0 rounded-full bg-primary/20 blur-xl will-change-[transform,opacity]"
+                          animate={{
+                            scale: [1, 1.15, 1],
+                            opacity: [0.3, 0.5, 0.3],
+                          }}
+                          transition={{
+                            duration: 4,
+                            repeat: Infinity,
+                            ease: 'easeInOut',
+                          }}
                         />
+                        {/* Logo with slow rotation and breathing */}
+                        <motion.div
+                          className="relative w-full h-full will-change-transform"
+                          animate={{
+                            rotate: 360,
+                            scale: [1, 1.03, 1],
+                          }}
+                          transition={{
+                            rotate: {
+                              duration: 60,
+                              repeat: Infinity,
+                              ease: 'linear',
+                            },
+                            scale: {
+                              duration: 4,
+                              repeat: Infinity,
+                              ease: 'easeInOut',
+                            },
+                          }}
+                        >
+                          <Image
+                            src={BRAND.logos.main}
+                            alt={BRAND.name}
+                            className="w-full h-full object-contain"
+                            width={96}
+                            height={96}
+                            priority
+                          />
+                        </motion.div>
                       </motion.div>
 
                       <div className="flex flex-col items-center gap-1.5">
                         <motion.h1
-                          className="text-3xl sm:text-4xl font-semibold text-white px-4 leading-tight"
+                          className="text-3xl sm:text-4xl font-semibold text-foreground px-4 leading-tight"
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -30 }}
@@ -759,7 +760,7 @@ export default function ChatOverviewScreen() {
                         </motion.h1>
 
                         <motion.p
-                          className="text-sm sm:text-base text-gray-300 max-w-2xl px-4 leading-relaxed"
+                          className="text-sm sm:text-base text-muted-foreground max-w-2xl px-4 leading-relaxed"
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -30 }}

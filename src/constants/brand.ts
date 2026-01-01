@@ -1,9 +1,20 @@
+/**
+ * Brand Constants
+ *
+ * Centralized brand identity, colors, logos, and messaging.
+ * All constants immutable with 'as const' assertion.
+ */
+
+// ============================================================================
+// CORE BRAND IDENTITY
+// ============================================================================
+
 export const BRAND = {
   name: 'Roundtable',
   fullName: 'Roundtable Dashboard',
-  displayName: 'Roundtable.now', // User-facing brand name (domain format)
-  domain: 'roundtable.now', // Domain name without protocol
-  domainDisplay: 'Roundtable.now', // Spoken/readable domain format
+  displayName: 'Roundtable.now',
+  domain: 'roundtable.now',
+  domainDisplay: 'Roundtable.now',
   tagline: 'Watch multiple models debate and brainstorm together',
   description: 'Watch multiple models debate and brainstorm together',
   venture: 'Roundtable',
@@ -13,19 +24,18 @@ export const BRAND = {
   parentWebsite: 'https://roundtable.now/',
   support: 'hello@roundtable.now',
 
-  // Colors (Professional AI/tech brand colors)
+  // Professional AI/tech brand colors
   colors: {
-    primary: '#2563eb', // Modern blue
-    secondary: '#64748b', // Slate gray
-    dark: '#0f172a', // Dark slate
-    light: '#f8fafc', // Light slate
-    accent: '#3b82f6', // Bright blue
-    background: '#ffffff', // White background
-    foreground: '#1e293b', // Dark text
-  },
+    primary: '#2563eb',
+    secondary: '#64748b',
+    dark: '#0f172a',
+    light: '#f8fafc',
+    accent: '#3b82f6',
+    background: '#ffffff',
+    foreground: '#1e293b',
+  } as const,
 
-  // Logo gradient colors - extracted from rainbow gradient logo
-  // Use these for data visualization to maintain brand consistency
+  // Rainbow gradient colors extracted from logo
   logoGradient: [
     '#FFD700', // Vibrant Gold/Yellow
     '#FF8C00', // Deep Orange
@@ -39,23 +49,23 @@ export const BRAND = {
     '#4CAF50', // Green
     '#8BC34A', // Light Green
     '#CDDC39', // Lime
-  ],
+  ] as const,
 
-  // Logo paths - Proper transparent logos for different use cases
+  // Holographic sphere logo paths
   logos: {
-    light: '/static/logo.png', // Transparent background for light themes
-    dark: '/static/logo.png', // Transparent background for dark themes
-    iconLight: '/static/logo.png', // Use transparent logo for icons too
-    iconDark: '/static/logo.png', // Use transparent logo for icons too
-    round: '/static/logo.png', // Main transparent logo for full variant
-    roundWhite: '/static/logo.png', // Transparent logo works on all backgrounds
-    roundBlack: '/apple-touch-icon.png', // Keep apple-touch-icon for PWA/mobile only
-    animation: '/static/logo.png',
-    main: '/static/logo.png',
-    mainBlack: '/static/logo.png',
-  },
+    light: '/static/logo.svg',
+    dark: '/static/logo.svg',
+    iconLight: '/static/logo.svg',
+    iconDark: '/static/logo.svg',
+    round: '/static/logo.svg',
+    roundWhite: '/static/logo.svg',
+    roundBlack: '/apple-touch-icon.png',
+    animation: '/static/logo.svg',
+    main: '/static/logo.svg',
+    mainBlack: '/static/logo.svg',
+  } as const,
 
-  // Typography (Modern tech fonts)
+  // Modern tech fonts
   typography: {
     fontFamily: 'Inter, system-ui, sans-serif',
     weights: {
@@ -64,58 +74,53 @@ export const BRAND = {
       medium: 500,
       semibold: 600,
       bold: 700,
-    },
-  },
+    } as const,
+  } as const,
 
   // Social links
   social: {
     twitter: 'https://twitter.com/roundtablenow',
     linkedin: 'https://linkedin.com/company/roundtable',
     github: 'https://github.com/roundtable',
-  },
+  } as const,
 
   // Legal
   legal: {
     terms: '/terms',
     privacy: '/privacy',
-    copyright: `© ${new Date().getFullYear()} Roundtable. All rights reserved.`,
-  },
-};
+  } as const,
+} as const;
 
-// Export type for TypeScript
-export type Brand = typeof BRAND;
+export function getCopyrightText(): string {
+  return `© ${new Date().getFullYear()} ${BRAND.name}. All rights reserved.`;
+}
 
-// API-specific brand constants
+// ============================================================================
+// API-SPECIFIC BRANDING
+// ============================================================================
+
 export const API_BRAND = {
-  // API-specific branding
   apiName: `${BRAND.name} API`,
   apiDescription: `${BRAND.description} - Application API`,
   apiVersion: '1.0.0',
-
-  // Support information
   supportEmail: BRAND.support,
   docsUrl: `${BRAND.website}docs`,
 
-  // Rate limiting display names
   rateLimitInfo: {
     name: BRAND.name,
     website: BRAND.website,
-  },
+  } as const,
 
-  // Error response branding
   errorBranding: {
     company: BRAND.name,
     support: BRAND.support,
     website: BRAND.website,
-  },
+  } as const,
 
-  // Roundtable specific messaging
+  // Roundtable-specific messaging
   messaging: {
     rateLimitMessage: 'Processing capacity exceeded. Multiple models need time to think.',
     unauthorizedMessage: 'Access denied. Please join the roundtable with proper credentials.',
     serverErrorMessage: 'System processing error. The AI collaboration network is experiencing issues.',
-  },
-};
-
-// Export type for TypeScript
-export type ApiBrand = typeof API_BRAND;
+  } as const,
+} as const;

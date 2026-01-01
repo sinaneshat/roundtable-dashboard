@@ -16,45 +16,12 @@ import {
 import { CHAT_MODE_CONFIGS } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
 
-/**
- * ConversationModeModal Component
- *
- * Reusable modal for selecting conversation modes with icon, title, and description.
- * Follows established dialog patterns from src/components/ui/dialog.tsx and
- * chat components like chat-mode-selector.tsx.
- *
- * Features:
- * - Single selection with visual feedback (blue border highlight)
- * - Icon + title + description for each mode
- * - Full keyboard accessibility via Radix Dialog
- * - Translation key integration
- * - Dark theme compatible
- *
- * @example
- * ```tsx
- * <ConversationModeModal
- *   open={isOpen}
- *   onOpenChange={setIsOpen}
- *   selectedMode="brainstorming"
- *   onModeSelect={(mode) => {
- *     setIsOpen(false);
- *   }}
- * />
- * ```
- */
-
 export type ConversationModeModalProps = {
-  /** Controls dialog open/close state */
   open: boolean;
-  /** Callback when dialog open state changes */
   onOpenChange: (open: boolean) => void;
-  /** Currently selected mode (for highlighting) */
   selectedMode?: ChatMode;
-  /** Callback when a mode is selected */
   onModeSelect: (mode: ChatMode) => void;
-  /** Optional className for dialog content */
   className?: string;
-  /** Optional children to render below mode options */
   children?: ReactNode;
 };
 
@@ -68,7 +35,6 @@ export function ConversationModeModal({
 }: ConversationModeModalProps) {
   const t = useTranslations('chat.modes.modal');
 
-  // Get enabled modes from configuration
   const enabledModes = CHAT_MODE_CONFIGS.filter(mode => mode.isEnabled).sort(
     (a, b) => a.order - b.order,
   );
@@ -97,7 +63,7 @@ export function ConversationModeModal({
                   'flex items-center gap-3 p-3 text-left w-full rounded-lg',
                   'cursor-pointer transition-all duration-200',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20',
-                  !isSelected && 'hover:bg-white/5 hover:backdrop-blur-sm',
+                  !isSelected && 'hover:bg-white/[0.07]',
                   isSelected && 'bg-white/10',
                 )}
                 aria-pressed={isSelected}

@@ -1,16 +1,23 @@
 {
   "accessibility": {
-    "breadcrumb": "breadcrumb",
-    "clearRole": "Clear role",
-    "currentPage": "Current page",
-    "customizePreset": "Customize preset",
-    "deletePreset": "Delete preset",
+    "accessibility": "Accessibility",
+    "disableHighContrast": "DisableHighContrast",
+    "disableMotion": "DisableMotion",
+    "enableHighContrast": "EnableHighContrast",
+    "enableMotion": "EnableMotion",
+    "highContrast": "HighContrast",
+    "largeText": "LargeText",
     "morePages": "More pages",
     "nextPage": "Go to next page",
+    "openSidebar": "Open sidebar",
+    "normalText": "NormalText",
+    "openToolbar": "OpenToolbar",
     "pagination": "pagination",
     "previousPage": "Go to previous page",
+    "reducedMotion": "ReducedMotion",
     "selectAll": "Select all",
     "selectRow": "Select row",
+    "settings": "Settings",
     "toggleSidebar": "Toggle Sidebar"
   },
   "actions": {
@@ -28,9 +35,10 @@
     "retry": "Retry",
     "scrollToBottom": "Scroll to bottom",
     "select": "Select",
-    "toggleSidebar": "Toggle Sidebar",
     "tryAgain": "Try Again",
-    "updating": "Updating"
+    "updating": "Updating",
+    "toggleSidebar": "Toggle Sidebar",
+    "more": "More"
   },
   "apiKeys": {
     "modal": {
@@ -84,7 +92,6 @@
       "copied": "Copied!",
       "copyWarning": "This is your only chance to copy this key. Store it securely - we cannot recover it later.",
       "createButton": "Create API Key",
-      "createError": "Failed to create API key",
       "doneButton": "Done",
       "limitReached": {
         "title": "API Key Limit Reached",
@@ -500,7 +507,11 @@
       "defaultName": "Attachment",
       "loadingPreview": "Loading preview...",
       "previewUnavailable": "Preview unavailable",
-      "defaultFileType": "File"
+      "defaultFileType": "File",
+      "uploading": "Uploading...",
+      "uploadFailed": "Upload failed",
+      "dropHere": "Drop files here",
+      "dropDescription": "Upload files to include in your message"
     },
     "loading": {
       "creatingConversation": "Creating conversation",
@@ -784,10 +795,16 @@
         "refreshPage": "Refresh Page"
       }
     },
-    "addToFavorites": "Add to favorites",
-    "addingToFavorites": "Adding to favorites...",
-    "addedToFavorites": "Added to favorites",
-    "addedToFavoritesDescription": "Thread has been added to your favorites",
+    "pin": "Pin",
+    "pinning": "Pinning...",
+    "pinned": "Pinned",
+    "pinnedDescription": "Thread has been pinned",
+    "unpin": "Unpin",
+    "unpinning": "Unpinning...",
+    "unpinned": "Unpinned",
+    "unpinnedDescription": "Thread has been unpinned",
+    "pinFailed": "Failed to update pin",
+    "pinFailedDescription": "Could not update pin status. Please try again.",
     "copyFailed": "Failed to copy link",
     "copyFailedDescription": "Could not copy link to clipboard. Please try again.",
     "copyLink": "Copy link",
@@ -813,9 +830,6 @@
       "goHome": "Go Home",
       "experiencePower": "Experience the power of multi-AI collaboration."
     },
-    "favoriteFailed": "Failed to update favorite",
-    "favorites": "Favorites",
-    "favoriteFailedDescription": "Could not update favorite status. Please try again.",
     "trending": "Trending",
     "comingSoon": "Coming soon",
     "input": {
@@ -829,6 +843,8 @@
       "threadPlaceholder": "Continue the conversation...",
       "voiceInput": "Voice input",
       "stopRecording": "Stop recording",
+      "recording": "Recording...",
+      "clickMicToStop": "Click mic to stop",
       "listeningPlaceholder": "Listening... speak now",
       "label": "Message input",
       "streamingLabel": "Message input (disabled while AI responds)",
@@ -861,8 +877,9 @@
     "makingPublic": "Making public...",
     "makePublicAndShare": "Make public and share",
     "makePublicFirstDescription": "Make this thread public to share it with others",
-    "makePublicConfirmDescription": "Anyone with the link will be able to view this thread and its messages.",
-    "makePublicConfirmTitle": "Make this thread public?",
+    "makePublicConfirmDescription": "This conversation will no longer be private. Anyone with the link can view it.",
+    "makePublicConfirmTitle": "Make this conversation public?",
+    "makePublicConfirmAction": "Make Public",
     "moreOptions": "More options",
     "noMessages": "No messages",
     "noMoreThreads": "That's all your chats for now",
@@ -890,10 +907,10 @@
         "title": "Solve Problems"
       }
     },
-    "removeFromFavorites": "Remove from favorites",
-    "removingFromFavorites": "Removing from favorites...",
-    "removedFromFavorites": "Removed from favorites",
-    "removedFromFavoritesDescription": "Thread has been removed from your favorites",
+    "rename": "Rename",
+    "renameConversation": "Rename conversation",
+    "delete": "Delete",
+    "share": "Share",
     "scrollToBottom": "Scroll to bottom",
     "searchChats": "Search chats...",
     "searchChatsDescription": "Search and navigate through your chat conversations",
@@ -954,8 +971,7 @@
       "waitingForWebResults": "Searching...",
       "moderatorObserving": "Observing...",
       "emptyResponse": "No visible response from {model}",
-      "reasoningOnlyResponse": "{model} used reasoning but produced no text output",
-      "tierRequired": "{tier} required"
+      "reasoningOnlyResponse": "{model} used reasoning but produced no text output"
     },
     "streamingTimeout": "Streaming Timeout",
     "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
@@ -1017,9 +1033,9 @@
   },
   "forms": {
     "loading": "Loading",
-    "noOptionsAvailable": "No options available",
-    "noResultsFound": "No results found",
-    "pickDate": "Pick a date",
+    "noOptionsAvailable": "NoOptionsAvailable",
+    "noResultsFound": "NoResultsFound",
+    "pickDate": "PickDate",
     "searchPlaceholder": "Search...",
     "selectOption": "Select an option",
     "hidePassword": "Hide password",
@@ -1057,6 +1073,7 @@
         "content": "We use cookies and similar tracking technologies to track activity on our service and hold certain information to improve and analyze our service.",
         "title": "5. Cookies and Tracking"
       },
+      "lastUpdated": "Last updated: {date}",
       "rights": {
         "content": "You have the right to access, update, or delete your personal information. You may also opt-out of certain communications from us.",
         "title": "6. Your Rights"
@@ -1094,6 +1111,7 @@
         "content": "These Terms shall be governed and construed in accordance with the laws of the jurisdiction in which the company is established, without regard to its conflict of law provisions.",
         "title": "7. Governing Law"
       },
+      "lastUpdated": "Last updated: {date}",
       "liability": {
         "content": "In no event shall Roundtable, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential, or punitive damages.",
         "title": "6. Limitation of Liability"
@@ -1183,6 +1201,20 @@
       "description": "The page you were looking for could not be found. Please check the URL or try navigating back to the homepage.",
       "goHome": "Go to Homepage",
       "title": "Oops, page not found!"
+    },
+    "offline": {
+      "title": "You're Offline",
+      "description": "It looks like you've lost your internet connection. Please check your network and try again.",
+      "statusMessage": "Some features may not work properly while you're offline. Don't worry - your data is safe and will sync when you reconnect.",
+      "tryAgain": "Try Again",
+      "goHome": "Go Home",
+      "troubleshootingTitle": "Troubleshooting tips:",
+      "tips": {
+        "wifi": "Check if your Wi-Fi or mobile data is turned on",
+        "airplane": "Try turning airplane mode off",
+        "router": "Restart your router if on Wi-Fi",
+        "cached": "Some cached content may still be available"
+      }
     }
   },
   "plans": {
@@ -1259,6 +1291,10 @@
     "newVersionAvailable": "Update available",
     "updateDescription": "A new version is ready. Update now for the latest features and improvements.",
     "updateNow": "Update"
+  },
+  "privacy": {
+    "description": "Description",
+    "title": "Title"
   },
   "processing": "Processing",
   "seo": {
@@ -1338,11 +1374,19 @@
     "tiers": {
       "free": {
         "name": "Free",
-        "description": "Connect your card to get 10K free credits"
+        "description": "Basic access to free AI models with limited features"
+      },
+      "starter": {
+        "name": "Starter",
+        "description": "Budget-friendly models with better performance and increased limits"
       },
       "pro": {
         "name": "Pro",
-        "description": "1M monthly credits with unlimited AI models and priority support"
+        "description": "Professional-grade models with excellent quality and advanced features"
+      },
+      "power": {
+        "name": "Power",
+        "description": "Flagship models with maximum capabilities and unlimited access"
       }
     }
   },
@@ -1357,6 +1401,10 @@
     "searchPlaceholder": "Search {field}...",
     "selectAllRows": "Select all rows",
     "selectRow": "Select row {id}"
+  },
+  "terms": {
+    "description": "Description",
+    "title": "Title"
   },
   "time": {
     "today": "Today",

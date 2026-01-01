@@ -139,7 +139,7 @@ const ChatMessageSchema = chatMessageSelectSchema
         name: z.string(),
         arguments: z.string(),
       }),
-    })).nullable().optional(),
+    })).nullable(),
     metadata: DbMessageMetadataSchema.nullable(),
   })
   .openapi('ChatMessage');
@@ -251,7 +251,7 @@ export const ThreadListQuerySchema = CursorPaginationQuerySchema.extend({
     example: 'product strategy',
   }),
 }).openapi('ThreadListQuery');
-const ThreadDetailPayloadSchema = z.object({
+export const ThreadDetailPayloadSchema = z.object({
   thread: ChatThreadSchema,
   participants: z.array(ChatParticipantSchema),
   messages: z.array(ChatMessageSchema),
@@ -268,6 +268,7 @@ const ThreadDetailPayloadSchema = z.object({
     image: true,
   }),
 }).openapi('ThreadDetailPayload');
+export type ThreadDetailPayload = z.infer<typeof ThreadDetailPayloadSchema>;
 export const ThreadListResponseSchema = createCursorPaginatedResponseSchema(ChatThreadSchema).openapi('ThreadListResponse');
 export type ThreadListResponse = z.infer<typeof ThreadListResponseSchema>;
 export const ThreadDetailResponseSchema = createApiResponseSchema(ThreadDetailPayloadSchema).openapi('ThreadDetailResponse');

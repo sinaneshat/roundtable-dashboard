@@ -1,11 +1,10 @@
 'use client';
 import type { ChatStatus } from 'ai';
-import { ArrowUp, Loader2, Mic, Square, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 
-import { AiSdkStatuses } from '@/api/core/enums';
+import { AiSdkStatuses, PlanTypes } from '@/api/core/enums';
 import { CardConnectionAlert } from '@/components/chat/card-connection-alert';
 import {
   ChatInputAttachments,
@@ -13,6 +12,7 @@ import {
 } from '@/components/chat/chat-input-attachments';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -33,7 +33,6 @@ import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
 
 const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
-
 const EMPTY_ATTACHMENTS: PendingAttachment[] = [];
 
 type ChatInputProps = {
@@ -49,30 +48,21 @@ type ChatInputProps = {
   participants?: ParticipantConfig[];
   onRemoveParticipant?: (participantId: string) => void;
   className?: string;
-  // Speech recognition props
   enableSpeech?: boolean;
   minHeight?: number;
   maxHeight?: number;
-  // ✅ CREDITS-ONLY: Show credit alert when credits depleted
   showCreditAlert?: boolean;
-  // File attachment props
   attachments?: PendingAttachment[];
   onAddAttachments?: (files: File[]) => void;
   onRemoveAttachment?: (id: string) => void;
   enableAttachments?: boolean;
-  /** Ref to expose attachment click handler to parent (for toolbar integration) */
   attachmentClickRef?: React.MutableRefObject<(() => void) | null>;
-  /** Whether files are currently uploading - disables submit until complete */
   isUploading?: boolean;
-  /** Suppress validation errors during hydration (prevents flash of "no models" error) */
   isHydrating?: boolean;
-  /** Whether a submission is in progress (API call) - shows loading spinner on submit button */
   isSubmitting?: boolean;
+  isModelsLoading?: boolean;
 };
 
-// ✅ RENDER OPTIMIZATION: Memoize ChatInput to prevent unnecessary re-renders
-// ChatInput is used in multiple places and re-renders frequently due to parent state changes
-// Memoizing prevents re-renders when props haven't changed
 export const ChatInput = memo(({
   value,
   onChange,
@@ -86,13 +76,10 @@ export const ChatInput = memo(({
   participants = EMPTY_PARTICIPANTS,
   onRemoveParticipant: _onRemoveParticipant,
   className,
-  // Speech recognition props
   enableSpeech = true,
-  minHeight = 72, // ~3 lines of text
-  maxHeight = 200, // Scroll after ~8 lines
-  // ✅ CREDITS-ONLY: Show credit alert when credits depleted
+  minHeight = 72,
+  maxHeight = 200,
   showCreditAlert = false,
-  // File attachment props
   attachments = EMPTY_ATTACHMENTS,
   onAddAttachments,
   onRemoveAttachment,
@@ -101,63 +88,42 @@ export const ChatInput = memo(({
   isUploading = false,
   isHydrating = false,
   isSubmitting = false,
+  isModelsLoading = false,
 }: ChatInputProps) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isStreaming = status !== AiSdkStatuses.READY;
 
-  // Check if credits are exhausted or card connection needed
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
 
-  // ✅ NEW USERS: Check if user needs to connect card (free plan, no payment method)
   const needsCardConnection = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
       return false;
     }
     const { plan } = statsData.data;
-    // Free plan users without payment method need to connect card first
-    return plan?.type !== 'paid' && !plan?.hasPaymentMethod;
+    return plan?.type !== PlanTypes.PAID && !plan?.hasPaymentMethod;
   }, [statsData]);
 
-  // ✅ CREDITS-ONLY: Quota exceeded ONLY for users who have payment method but 0 credits
-  // Users without payment method show card connection alert instead (not quota exceeded)
   const isQuotaExceeded = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
       return false;
     }
 
-    // Don't show quota exceeded for users who need to connect card
-    // They'll see the card connection alert instead
     const { plan, credits } = statsData.data;
-    if (plan?.type !== 'paid' && !plan?.hasPaymentMethod) {
+    if (plan?.type !== PlanTypes.PAID && !plan?.hasPaymentMethod) {
       return false;
     }
 
-    // User has payment method - check if credits are exhausted
     return credits.available <= 0;
   }, [statsData]);
 
-  // ✅ FIX: Split disabled states - textarea/mic always enabled during streaming
-  // User can always type to prepare next message, even while AI is responding
-  //
-  // isInputDisabled: Controls textarea - only disabled for explicit disable or quota exceeded
-  // isMicDisabled: Controls microphone - same as input, always available for voice input
-  // isSubmitDisabled: Controls submit button - disabled during streaming, submitting, quota exceeded, uploading, or over limit
-  // Note: needsCardConnection disables submit but NOT typing (let users explore the interface)
   const isInputDisabled = disabled || isQuotaExceeded;
   const isMicDisabled = disabled || isQuotaExceeded;
-
-  // Character limit validation - aligned with backend MessageContentSchema
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
-
-  // ✅ SUBMIT DISABLE: Include isSubmitting and needsCardConnection to disable during API calls
-  // Users without payment method can type but not submit until they connect their card
-  // Also block while stats are loading to prevent race condition (submit before credit check)
   const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || needsCardConnection || isUploading || isOverLimit || isSubmitting || isLoadingStats;
   const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
 
-  // File attachment handlers
   const handleFilesSelected = useCallback((files: File[]) => {
     if (onAddAttachments && files.length > 0) {
       onAddAttachments(files);
@@ -167,7 +133,6 @@ export const ChatInput = memo(({
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     handleFilesSelected(files);
-    // Reset input so the same file can be selected again
     e.target.value = '';
   }, [handleFilesSelected]);
 
@@ -175,24 +140,20 @@ export const ChatInput = memo(({
     fileInputRef.current?.click();
   }, []);
 
-  // ✅ Sync ref after render commits (refs can't be updated during render)
   useEffect(() => {
     if (attachmentClickRef && enableAttachments) {
       attachmentClickRef.current = handleAttachmentClick;
     }
   }, [attachmentClickRef, enableAttachments, handleAttachmentClick]);
 
-  // Drag and drop support
   const { isDragging, dragHandlers } = useDragDrop(handleFilesSelected);
 
-  // Auto-resizing textarea
   useAutoResizeTextarea(textareaRef, {
     value,
     minHeight,
     maxHeight,
   });
 
-  // Speech recognition - simple pattern: base text + hook's accumulated transcripts
   const baseTextRef = useRef('');
 
   const {
@@ -208,7 +169,6 @@ export const ChatInput = memo(({
     enableAudioVisualization: true,
   });
 
-  // ✅ REACT 19: useEffectEvent for onChange callback - stable reference, always latest value
   const onChangeEvent = useEffectEvent((newValue: string) => {
     onChange(newValue);
   });
@@ -238,6 +198,7 @@ export const ChatInput = memo(({
       onChangeEvent(displayText);
     }
   }, [isListening, finalTranscript, interimTranscript, value]);
+
   useEffect(() => {
     if (autoFocus && textareaRef.current) {
       return afterPaint(() => textareaRef.current?.focus({ preventScroll: true }));
@@ -249,10 +210,8 @@ export const ChatInput = memo(({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!isSubmitDisabled && hasValidInput) {
-        // Create a properly typed synthetic FormEvent
-        // FormEvent requires minimal properties: currentTarget, preventDefault, and type
         const form = e.currentTarget.form || e.currentTarget;
-        const syntheticEvent: FormEvent<HTMLFormElement | HTMLTextAreaElement> = {
+        const syntheticEvent = {
           bubbles: e.bubbles,
           cancelable: e.cancelable,
           currentTarget: form,
@@ -263,23 +222,21 @@ export const ChatInput = memo(({
           target: form,
           timeStamp: e.timeStamp,
           type: 'submit',
-          preventDefault: () => {}, // No-op since already prevented above
+          preventDefault: () => {},
           isDefaultPrevented: () => true,
           stopPropagation: () => e.stopPropagation(),
           isPropagationStopped: () => false,
           persist: () => {},
-        };
+        } as FormEvent<HTMLFormElement | HTMLTextAreaElement>;
         onSubmit(syntheticEvent);
       }
     }
   };
 
-  // ✅ HYDRATION FIX: Don't show error during hydration (prevents flash before store initializes)
-  const showNoModelsError = participants.length === 0 && !isQuotaExceeded && !isHydrating;
+  const showNoModelsError = participants.length === 0 && !isQuotaExceeded && !isHydrating && !isModelsLoading;
 
   return (
     <div className="w-full">
-      {/* Hidden file input for attachment selection */}
       {enableAttachments && onAddAttachments && (
         <input
           ref={fileInputRef}
@@ -295,29 +252,22 @@ export const ChatInput = memo(({
         className={cn(
           'relative flex flex-col overflow-hidden',
           'rounded-2xl',
-          'border border-white/[0.12]',
+          'border',
           'bg-card',
           'shadow-lg',
           'transition-all duration-200',
           isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && !needsCardConnection && 'cursor-not-allowed',
           (isOverLimit || showNoModelsError || isQuotaExceeded) && 'border-destructive',
-          // ✅ AMBER BORDER: Show for users who need to connect their card (takes precedence over other states)
           needsCardConnection && !isOverLimit && !showNoModelsError && 'border-amber-500/50',
           className,
         )}
         {...(enableAttachments ? dragHandlers : {})}
       >
-        {/* Dropzone overlay - covers entire chat input during drag */}
         {enableAttachments && <ChatInputDropzoneOverlay isDragging={isDragging} />}
 
         <div className="flex flex-col overflow-hidden h-full">
-          {/* Credit Alert Extension - appears at top when credits depleted */}
           {showCreditAlert && <QuotaAlertExtension />}
-
-          {/* Card Connection Alert - appears at top for new users without payment method */}
           {needsCardConnection && <CardConnectionAlert />}
-
-          {/* No models selected alert - appears at top when no participants */}
           {showNoModelsError && (
             <div
               className={cn(
@@ -332,7 +282,6 @@ export const ChatInput = memo(({
             </div>
           )}
 
-          {/* Content limit alert - appears at top when message too long */}
           {isOverLimit && (
             <div
               className={cn(
@@ -347,7 +296,6 @@ export const ChatInput = memo(({
             </div>
           )}
 
-          {/* Voice Visualization - appears at top when recording */}
           {enableSpeech && isSpeechSupported && (
             <VoiceVisualization
               isActive={isListening}
@@ -355,8 +303,6 @@ export const ChatInput = memo(({
             />
           )}
 
-          {/* File Attachments Preview - appears above textarea */}
-          {/* Always show attachments if they exist; only enable removal when enableAttachments=true */}
           {attachments.length > 0 && (
             <ChatInputAttachments
               attachments={attachments}
@@ -377,7 +323,6 @@ export const ChatInput = memo(({
               isQuotaExceeded && 'opacity-50 pointer-events-none',
             )}
           >
-            {/* Textarea */}
             <div className="px-3 sm:px-4 py-3 sm:py-4">
               <textarea
                 ref={textareaRef}
@@ -407,19 +352,15 @@ export const ChatInput = memo(({
               />
             </div>
 
-            {/* Toolbar and submit */}
             <div>
               <div className="px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3">
-                {/* Left side: Toolbar */}
                 <div className="flex-1 flex items-center gap-1 sm:gap-2 min-w-0">
                   {toolbar}
                 </div>
 
-                {/* Right side: Speech + Submit buttons */}
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                  {/* Speech recognition button - always enabled during streaming */}
                   {enableSpeech && isSpeechSupported && (
-                    <TooltipProvider delayDuration={300}>
+                    <TooltipProvider delayDuration={800}>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -433,7 +374,7 @@ export const ChatInput = memo(({
                               isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
                             )}
                           >
-                            {isListening ? <StopCircle className="size-3.5 sm:size-4" /> : <Mic className="size-3.5 sm:size-4" />}
+                            {isListening ? <Icons.stopCircle className="size-3.5 sm:size-4" /> : <Icons.mic className="size-3.5 sm:size-4" />}
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="top">
@@ -447,7 +388,6 @@ export const ChatInput = memo(({
                     </TooltipProvider>
                   )}
 
-                  {/* Submit/Stop button */}
                   {isStreaming && onStop
                     ? (
                         <Button
@@ -457,7 +397,7 @@ export const ChatInput = memo(({
                           className="size-9 sm:size-10 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform bg-white text-black hover:bg-white/90"
                           aria-label={t('chat.input.stopStreaming')}
                         >
-                          <Square className="size-4 sm:size-5" />
+                          <Icons.square className="size-4 sm:size-5" />
                         </Button>
                       )
                     : (
@@ -469,8 +409,8 @@ export const ChatInput = memo(({
                           aria-label={isSubmitting ? t('chat.input.submitting') : t('chat.input.send')}
                         >
                           {isSubmitting
-                            ? <Loader2 className="size-4 sm:size-5 animate-spin" />
-                            : <ArrowUp className="size-4 sm:size-5" />}
+                            ? <Icons.loader className="size-4 sm:size-5 animate-spin" />
+                            : <Icons.arrowUp className="size-4 sm:size-5" />}
                         </Button>
                       )}
                 </div>
@@ -482,5 +422,3 @@ export const ChatInput = memo(({
     </div>
   );
 });
-
-ChatInput.displayName = 'ChatInput';

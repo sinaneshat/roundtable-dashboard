@@ -29,7 +29,7 @@ import {
   InlineCitationQuote,
   InlineCitationSource,
 } from '../ai-elements/inline-citation';
-import { streamdownComponents } from '../markdown/streamdown-components';
+import { streamdownComponents } from '../markdown/unified-markdown-components';
 
 // ============================================================================
 // Types

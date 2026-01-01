@@ -2,7 +2,7 @@
   "name": "roundtable",
   "version": "1.0.1",
   "private": true,
-  "packageManager": "pnpm@10.11.0",
+  "packageManager": "pnpm@10.27.0",
   "description": "Roundtable Dashboard - Watch multiple models debate and brainstorm together",
   "author": "Roundtable <hello@roundtable.now>",
   "homepage": "https://roundtable.now/",

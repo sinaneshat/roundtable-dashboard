@@ -1,24 +1,25 @@
 'use client';
 
-import type { ComponentPropsWithoutRef, ElementRef, HTMLAttributes, RefObject } from 'react';
+import type { ComponentProps } from 'react';
 
 import type { DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive } from 'cmdk';
-import { Search } from 'lucide-react';
 
+import { Icons } from '@/components/icons';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { glassCard } from '@/lib/ui/glassmorphism';
 import { cn } from '@/lib/ui/cn';
 
-type CommandProps = ComponentPropsWithoutRef<typeof CommandPrimitive> & {
-  ref?: RefObject<ElementRef<typeof CommandPrimitive> | null>;
-  glass?: boolean;
-};
+type CommandBaseProps = ComponentProps<typeof CommandPrimitive>;
 
-function Command({ ref, className, glass = false, ...props }: CommandProps) {
+interface CommandProps extends CommandBaseProps {
+  glass?: boolean
+}
+
+function Command({ className, glass = false, ...props }: CommandProps) {
   return (
     <CommandPrimitive
-      ref={ref}
+      data-slot="command"
       className={cn(
         'flex h-full w-full flex-col overflow-hidden rounded-2xl',
         glass ? glassCard('medium') : 'bg-popover text-popover-foreground',
@@ -28,11 +29,8 @@ function Command({ ref, className, glass = false, ...props }: CommandProps) {
     />
   );
 }
-Command.displayName = CommandPrimitive.displayName;
 
-type CommandDialogProps = DialogProps;
-
-function CommandDialog({ children, ...props }: CommandDialogProps) {
+function CommandDialog({ children, ...props }: DialogProps) {
   return (
     <Dialog {...props}>
       <DialogContent glass={true} className="overflow-hidden p-0 shadow-lg">
@@ -44,12 +42,15 @@ function CommandDialog({ children, ...props }: CommandDialogProps) {
   );
 }
 
-function CommandInput({ ref, className, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.Input> | null> }) {
+function CommandInput({
+  className,
+  ...props
+}: ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
-      <Search className="me-2 size-4 shrink-0 opacity-50" />
+      <Icons.search className="me-2 size-4 shrink-0 opacity-50" />
       <CommandPrimitive.Input
-        ref={ref}
+        data-slot="command-input"
         className={cn(
           'flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
           className,
@@ -60,36 +61,38 @@ function CommandInput({ ref, className, ...props }: ComponentPropsWithoutRef<typ
   );
 }
 
-CommandInput.displayName = CommandPrimitive.Input.displayName;
-
-function CommandList({ ref, className, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.List> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.List> | null> }) {
+function CommandList({
+  className,
+  ...props
+}: ComponentProps<typeof CommandPrimitive.List>) {
   return (
     <CommandPrimitive.List
-      ref={ref}
+      data-slot="command-list"
       className={cn('max-h-[300px] overflow-y-auto overflow-x-hidden', className)}
       {...props}
     />
   );
 }
 
-CommandList.displayName = CommandPrimitive.List.displayName;
-
-function CommandEmpty({ ref, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.Empty> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.Empty> | null> }) {
+function CommandEmpty({
+  ...props
+}: ComponentProps<typeof CommandPrimitive.Empty>) {
   return (
     <CommandPrimitive.Empty
-      ref={ref}
+      data-slot="command-empty"
       className="py-6 text-center text-sm"
       {...props}
     />
   );
 }
 
-CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
-
-function CommandGroup({ ref, className, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.Group> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.Group> | null> }) {
+function CommandGroup({
+  className,
+  ...props
+}: ComponentProps<typeof CommandPrimitive.Group>) {
   return (
     <CommandPrimitive.Group
-      ref={ref}
+      data-slot="command-group"
       className={cn(
         'overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground',
         className,
@@ -99,23 +102,26 @@ function CommandGroup({ ref, className, ...props }: ComponentPropsWithoutRef<typ
   );
 }
 
-CommandGroup.displayName = CommandPrimitive.Group.displayName;
-
-function CommandSeparator({ ref, className, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.Separator> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.Separator> | null> }) {
+function CommandSeparator({
+  className,
+  ...props
+}: ComponentProps<typeof CommandPrimitive.Separator>) {
   return (
     <CommandPrimitive.Separator
-      ref={ref}
+      data-slot="command-separator"
       className={cn('-mx-1 h-px bg-border', className)}
       {...props}
     />
   );
 }
-CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
 
-function CommandItem({ ref, className, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.Item> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.Item> | null> }) {
+function CommandItem({
+  className,
+  ...props
+}: ComponentProps<typeof CommandPrimitive.Item>) {
   return (
     <CommandPrimitive.Item
-      ref={ref}
+      data-slot="command-item"
       className={cn(
         'relative flex cursor-default select-none items-center rounded-xl px-2 py-1.5 text-sm outline-none aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled=\'true\']:pointer-events-none data-[disabled=\'true\']:opacity-50',
         className,
@@ -125,14 +131,13 @@ function CommandItem({ ref, className, ...props }: ComponentPropsWithoutRef<type
   );
 }
 
-CommandItem.displayName = CommandPrimitive.Item.displayName;
-
 function CommandShortcut({
   className,
   ...props
-}: HTMLAttributes<HTMLSpanElement>) {
+}: ComponentProps<"span">) {
   return (
     <span
+      data-slot="command-shortcut"
       className={cn(
         'ms-auto text-xs tracking-widest text-muted-foreground',
         className,
@@ -141,7 +146,6 @@ function CommandShortcut({
     />
   );
 }
-CommandShortcut.displayName = 'CommandShortcut';
 
 export {
   Command,

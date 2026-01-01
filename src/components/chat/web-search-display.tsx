@@ -1,8 +1,6 @@
 'use client';
 
-import { AlertCircle, Globe, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
 
 import type { WebSearchStreamingStage } from '@/api/core/enums';
 import { ChainOfThoughtStepStatuses, WebSearchStreamingStages } from '@/api/core/enums';
@@ -18,15 +16,14 @@ import {
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
+import { Icons } from '@/components/icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AccordionEntrance } from '@/components/ui/motion';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useBoolean } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 import { safeExtractDomain } from '@/lib/utils';
 
-/**
- * Determine current streaming stage based on available data
- */
 function getStreamingStage(query: string | undefined, answer: string | null | undefined): WebSearchStreamingStage {
   if (!query)
     return WebSearchStreamingStages.QUERY;
@@ -47,9 +44,8 @@ export function WebSearchDisplay({
 }: WebSearchDisplayExtendedProps) {
   const t = useTranslations('chat.tools.webSearch');
   const tSteps = useTranslations('chat.preSearch.steps');
-  const [isOpen, setIsOpen] = useState(true);
+  const isOpen = useBoolean(true);
 
-  // Show loading state while streaming
   if (isStreaming && (!results || results.length === 0)) {
     const currentStage = getStreamingStage(query, answer);
 
@@ -59,23 +55,23 @@ export function WebSearchDisplay({
           <ChainOfThought open disabled>
             <ChainOfThoughtHeader disabled>
               <div className="flex items-center gap-2">
-                <Globe className="size-4 animate-pulse" />
-                <TextShimmer className="text-sm">{query ? `Searching for "${query}"` : t('title')}</TextShimmer>
+                <Icons.globe className="size-4 animate-pulse" />
+                <TextShimmer className="text-sm">{query ? t('searchingFor', { query }) : t('title')}</TextShimmer>
               </div>
             </ChainOfThoughtHeader>
             <ChainOfThoughtContent>
               <ChainOfThoughtStep
-                icon={Search}
+                icon={Icons.search}
                 label={tSteps('query')}
                 status={currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
               />
               <ChainOfThoughtStep
-                icon={Globe}
+                icon={Icons.globe}
                 label={tSteps('searchingTheWeb')}
                 status={currentStage === WebSearchStreamingStages.SEARCH ? ChainOfThoughtStepStatuses.ACTIVE : currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.PENDING : ChainOfThoughtStepStatuses.COMPLETE}
               />
               <ChainOfThoughtStep
-                icon={Search}
+                icon={Icons.search}
                 label={tSteps('synthesizingAnswer')}
                 status={currentStage === WebSearchStreamingStages.SYNTHESIZE ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.PENDING}
               />
@@ -100,7 +96,6 @@ export function WebSearchDisplay({
   const hasErrors = successfulResults.length < totalResults;
   const hasImages = successfulResults.some(r => r.metadata?.imageUrl);
 
-  // Extract unique domains for badge display
   const domains = successfulResults.map((r) => {
     const domain = r.domain || safeExtractDomain(r.url, 'unknown');
     return domain.replace('www.', '');
@@ -109,19 +104,18 @@ export function WebSearchDisplay({
   return (
     <AccordionEntrance>
       <div className={cn('relative py-2', className)}>
-        <ChainOfThought open={isOpen} onOpenChange={setIsOpen}>
+        <ChainOfThought open={isOpen.value} onOpenChange={isOpen.setValue}>
           <ChainOfThoughtHeader>
             <div className="flex items-center gap-2">
-              <Globe className="size-4" />
-              <span>{query ? `Searched for "${query}"` : t('title')}</span>
+              <Icons.globe className="size-4" />
+              <span>{query ? t('searchedFor', { query }) : t('title')}</span>
             </div>
           </ChainOfThoughtHeader>
 
           <ChainOfThoughtContent>
-            {/* Search Results as Domain Badges */}
             <ChainOfThoughtStep
-              icon={Search}
-              label={`Found ${successfulResults.length} ${successfulResults.length === 1 ? 'source' : 'sources'}`}
+              icon={Icons.search}
+              label={t('foundSources', { count: successfulResults.length })}
               status={ChainOfThoughtStepStatuses.COMPLETE}
             >
               <ChainOfThoughtSearchResults>
@@ -141,10 +135,9 @@ export function WebSearchDisplay({
               </ChainOfThoughtSearchResults>
             </ChainOfThoughtStep>
 
-            {/* Image Gallery */}
             {hasImages && (
               <ChainOfThoughtStep
-                icon={Globe}
+                icon={Icons.globe}
                 label={tSteps('foundImages')}
                 status={ChainOfThoughtStepStatuses.COMPLETE}
               >
@@ -152,10 +145,9 @@ export function WebSearchDisplay({
               </ChainOfThoughtStep>
             )}
 
-            {/* AI Answer Summary */}
             {(answer || isStreaming) && (
               <ChainOfThoughtStep
-                icon={Search}
+                icon={Icons.search}
                 label={tSteps('answer')}
                 status={isStreaming ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
               >
@@ -169,10 +161,9 @@ export function WebSearchDisplay({
               </ChainOfThoughtStep>
             )}
 
-            {/* Error display */}
             {hasErrors && (
               <Alert variant="destructive">
-                <AlertCircle className="size-4" />
+                <Icons.alertCircle className="size-4" />
                 <AlertDescription>
                   {t('error.failedToLoad', {
                     count: totalResults - successfulResults.length,

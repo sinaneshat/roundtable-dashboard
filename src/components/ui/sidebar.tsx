@@ -4,9 +4,10 @@ import type { ComponentProps, CSSProperties } from 'react';
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useState } from 'react';
 
 import { Slot } from "@radix-ui/react-slot";
-import { cva, VariantProps } from "class-variance-authority";
-import { PanelLeftIcon } from "lucide-react";
+import { cva, type VariantProps } from "class-variance-authority";
 import { useTranslations } from "next-intl";
+
+import { Icons } from '@/components/icons';
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,13 +31,15 @@ import { Skeleton } from "./skeleton";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "18rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
-const SIDEBAR_WIDTH_ICON = "3rem"
+const SIDEBAR_WIDTH = "20rem"
+const SIDEBAR_WIDTH_MOBILE = "20rem"
+const SIDEBAR_WIDTH_ICON = "4rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
+type SidebarState = "expanded" | "collapsed";
+
 type SidebarContextProps = {
-  state: "expanded" | "collapsed"
+  state: SidebarState
   open: boolean
   setOpen: (open: boolean) => void
   openMobile: boolean
@@ -56,6 +59,14 @@ function useSidebar() {
   return context
 }
 
+type SidebarProviderBaseProps = ComponentProps<"div">;
+
+interface SidebarProviderProps extends SidebarProviderBaseProps {
+  defaultOpen?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,
@@ -64,11 +75,7 @@ function SidebarProvider({
   style,
   children,
   ...props
-}: ComponentProps<"div"> & {
-  defaultOpen?: boolean
-  open?: boolean
-  onOpenChange?: (open: boolean) => void
-}) {
+}: SidebarProviderProps) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = useState(false)
 
@@ -82,7 +89,6 @@ function SidebarProvider({
       if (setOpenProp) {
         setOpenProp(openState)
       } else {
-    // Intentionally empty
         _setOpen(openState)
       }
 
@@ -156,6 +162,14 @@ function SidebarProvider({
   )
 }
 
+type SidebarBaseProps = ComponentProps<"div">;
+
+interface SidebarProps extends SidebarBaseProps {
+  side?: "start" | "end"
+  variant?: "sidebar" | "floating" | "inset"
+  collapsible?: "offcanvas" | "icon" | "none"
+}
+
 function Sidebar({
   side = "start",
   variant = "sidebar",
@@ -163,11 +177,7 @@ function Sidebar({
   className,
   children,
   ...props
-}: ComponentProps<"div"> & {
-  side?: "start" | "end"
-  variant?: "sidebar" | "floating" | "inset"
-  collapsible?: "offcanvas" | "icon" | "none"
-}) {
+}: SidebarProps) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
   if (collapsible === "none") {
@@ -206,13 +216,15 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col p-3">
+          <div className="flex h-full w-full flex-col p-2">
             {children}
           </div>
         </SheetContent>
       </Sheet>
     )
   }
+
+  const { toggleSidebar } = useSidebar()
 
   // Calculate collapsed width for floating/inset variants
   const isFloatingOrInset = variant === "floating" || variant === "inset"
@@ -221,6 +233,13 @@ function Sidebar({
   // For floating/inset collapsed: icon width (3rem) + left/right padding (2rem) = 5rem
   // Gap needs same width as container for proper layout flow
   const collapsedWidth = "calc(var(--sidebar-width-icon) + 2rem)"
+
+  // Click anywhere on collapsed sidebar to expand
+  const handleCollapsedClick = useCallback(() => {
+    if (isCollapsed) {
+      toggleSidebar()
+    }
+  }, [isCollapsed, toggleSidebar])
 
   return (
     <div
@@ -262,9 +281,14 @@ function Sidebar({
         <div
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
+          role={isCollapsed ? "button" : undefined}
+          tabIndex={isCollapsed ? 0 : undefined}
+          onClick={handleCollapsedClick}
+          onKeyDown={isCollapsed ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCollapsedClick(); } } : undefined}
           className={cn(
-            "bg-card flex h-full w-full flex-col rounded-2xl p-3",
-            "border border-white/[0.12] shadow-lg"
+            "bg-card flex h-full w-full flex-col rounded-2xl p-2",
+            "border shadow-lg",
+            isCollapsed && "cursor-ew-resize"
           )}
         >
           {children}
@@ -274,11 +298,18 @@ function Sidebar({
   )
 }
 
+type SidebarTriggerBaseProps = ComponentProps<typeof Button>;
+
+interface SidebarTriggerProps extends SidebarTriggerBaseProps {
+  iconClassName?: string
+}
+
 function SidebarTrigger({
   className,
   onClick,
+  iconClassName,
   ...props
-}: ComponentProps<typeof Button>) {
+}: SidebarTriggerProps) {
   const { toggleSidebar, state } = useSidebar()
   const t = useTranslations('actions');
 
@@ -297,7 +328,7 @@ function SidebarTrigger({
       }}
       {...props}
     >
-      <PanelLeftIcon className={isCollapsed ? "size-3.5" : "size-4"} />
+      <Icons.panelLeft className={iconClassName ?? (isCollapsed ? "size-3.5" : "size-4")} />
       <span className="sr-only">{t('toggleSidebar')}</span>
     </Button>
   )
@@ -418,11 +449,17 @@ function SidebarGroup({ className, ...props }: ComponentProps<"div">) {
   )
 }
 
+type SidebarGroupLabelBaseProps = ComponentProps<"div">;
+
+interface SidebarGroupLabelProps extends SidebarGroupLabelBaseProps {
+  asChild?: boolean
+}
+
 function SidebarGroupLabel({
   className,
   asChild = false,
   ...props
-}: ComponentProps<"div"> & { asChild?: boolean }) {
+}: SidebarGroupLabelProps) {
   const Comp = asChild ? Slot : "div"
 
   return (
@@ -439,11 +476,17 @@ function SidebarGroupLabel({
   )
 }
 
+type SidebarGroupActionBaseProps = ComponentProps<"button">;
+
+interface SidebarGroupActionProps extends SidebarGroupActionBaseProps {
+  asChild?: boolean
+}
+
 function SidebarGroupAction({
   className,
   asChild = false,
   ...props
-}: ComponentProps<"button"> & { asChild?: boolean }) {
+}: SidebarGroupActionProps) {
   const Comp = asChild ? Slot : "button"
 
   return (
@@ -492,20 +535,20 @@ function SidebarMenuItem({ className, ...props }: ComponentProps<"li">) {
     <li
       data-slot="sidebar-menu-item"
       data-sidebar="menu-item"
-      className={cn("group/menu-item relative w-full", className)}
+      className={cn("group/menu-item relative w-full group-data-[collapsible=icon]:w-auto", className)}
       {...props}
     />
   )
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-full px-2 py-2 text-start text-sm outline-hidden ring-sidebar-ring transition-all duration-200 hover:bg-accent focus-visible:ring-2 active:bg-accent active:scale-[0.998] disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pe-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-accent data-[active=true]:font-medium data-[state=open]:hover:bg-accent group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem] group-data-[collapsible=icon]:!flex-shrink-0 group-data-[collapsible=icon]:!flex-grow-0 group-data-[collapsible=icon]:items-center! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:gap-0! group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:rounded-full! group-data-[collapsible=icon]:aspect-square [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+  "peer/menu-button flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-full px-4 py-2 text-start text-sm outline-hidden ring-sidebar-ring transition-all duration-200 hover:bg-accent focus-visible:ring-2 active:bg-accent active:scale-[0.998] disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pe-10 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-accent data-[active=true]:font-medium data-[state=open]:hover:bg-accent group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem] group-data-[collapsible=icon]:!flex-shrink-0 group-data-[collapsible=icon]:!flex-grow-0 group-data-[collapsible=icon]:items-center! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:gap-0! group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:rounded-full! group-data-[collapsible=icon]:aspect-square [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "hover:bg-accent",
+        default: "hover:bg-white/[0.07]",
         outline:
-          "bg-card shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-accent hover:shadow-[0_0_0_1px_var(--border)]",
+          "bg-card shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-white/[0.07] hover:shadow-[0_0_0_1px_var(--border)]",
       },
       size: {
         default: "h-9 text-sm group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem]",
@@ -520,6 +563,15 @@ const sidebarMenuButtonVariants = cva(
   }
 )
 
+type SidebarMenuButtonBaseProps = ComponentProps<"button">;
+type SidebarMenuButtonVariantProps = VariantProps<typeof sidebarMenuButtonVariants>;
+
+interface SidebarMenuButtonProps extends SidebarMenuButtonBaseProps, SidebarMenuButtonVariantProps {
+  asChild?: boolean
+  isActive?: boolean
+  tooltip?: string | ComponentProps<typeof TooltipContent>
+}
+
 function SidebarMenuButton({
   asChild = false,
   isActive = false,
@@ -528,11 +580,7 @@ function SidebarMenuButton({
   tooltip,
   className,
   ...props
-}: ComponentProps<"button"> & {
-  asChild?: boolean
-  isActive?: boolean
-  tooltip?: string | ComponentProps<typeof TooltipContent>
-} & VariantProps<typeof sidebarMenuButtonVariants>) {
+}: SidebarMenuButtonProps) {
   const Comp = asChild ? Slot : "button"
   const { isMobile, state } = useSidebar()
 
@@ -570,15 +618,19 @@ function SidebarMenuButton({
   )
 }
 
+type SidebarMenuActionBaseProps = ComponentProps<"button">;
+
+interface SidebarMenuActionProps extends SidebarMenuActionBaseProps {
+  asChild?: boolean
+  showOnHover?: boolean
+}
+
 function SidebarMenuAction({
   className,
   asChild = false,
   showOnHover = false,
   ...props
-}: ComponentProps<"button"> & {
-  asChild?: boolean
-  showOnHover?: boolean
-}) {
+}: SidebarMenuActionProps) {
   const Comp = asChild ? Slot : "button"
 
   return (
@@ -586,13 +638,13 @@ function SidebarMenuAction({
       data-slot="sidebar-menu-action"
       data-sidebar="menu-action"
       className={cn(
-        // Base styles - full rounded icon button with destructive hover
-        "absolute end-2 flex size-6 items-center justify-center rounded-full p-0 outline-hidden",
+        // Base styles - subtle action button that blends with item hover
+        "absolute end-2 flex size-6 items-center justify-center p-0 outline-hidden cursor-pointer",
         "text-sidebar-foreground/60 ring-sidebar-ring",
-        "hover:bg-destructive/15 hover:text-destructive",
-        "focus-visible:ring-2 focus-visible:ring-destructive/50",
+        "hover:text-sidebar-foreground",
+        "focus-visible:ring-2 focus-visible:ring-sidebar-ring",
         "transition-all duration-150 ease-out",
-        "[&>svg]:size-3.5 [&>svg]:shrink-0",
+        "[&>svg]:size-4 [&>svg]:shrink-0",
         // Touch target - larger hit area on mobile
         "after:absolute after:-inset-2 md:after:hidden",
         // Size-responsive positioning
@@ -633,13 +685,17 @@ function SidebarMenuBadge({
   )
 }
 
+type SidebarMenuSkeletonBaseProps = ComponentProps<"div">;
+
+interface SidebarMenuSkeletonProps extends SidebarMenuSkeletonBaseProps {
+  showIcon?: boolean
+}
+
 function SidebarMenuSkeleton({
   className,
   showIcon = false,
   ...props
-}: ComponentProps<"div"> & {
-  showIcon?: boolean
-}) {
+}: SidebarMenuSkeletonProps) {
   // Random width between 50 to 90%.
   const width = useMemo(() => {
     return `${Math.floor(Math.random() * 40) + 50}%`
@@ -700,17 +756,21 @@ function SidebarMenuSubItem({
   )
 }
 
+type SidebarMenuSubButtonBaseProps = ComponentProps<"a">;
+
+interface SidebarMenuSubButtonProps extends SidebarMenuSubButtonBaseProps {
+  asChild?: boolean
+  size?: "sm" | "md"
+  isActive?: boolean
+}
+
 function SidebarMenuSubButton({
   asChild = false,
   size = "md",
   isActive = false,
   className,
   ...props
-}: ComponentProps<"a"> & {
-  asChild?: boolean
-  size?: "sm" | "md"
-  isActive?: boolean
-}) {
+}: SidebarMenuSubButtonProps) {
   const Comp = asChild ? Slot : "a"
 
   return (

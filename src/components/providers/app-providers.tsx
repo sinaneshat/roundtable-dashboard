@@ -6,7 +6,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { ReactNode } from 'react';
 import { Suspense, useEffect } from 'react';
 
-import { VersionUpdateModal } from '@/components/changelog-modal';
+import { VersionUpdateModal } from '@/components/modals/version-update-modal';
 import { Toaster } from '@/components/ui/toaster';
 import type { ModelPreferencesState } from '@/stores/preferences';
 

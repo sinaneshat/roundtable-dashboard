@@ -1,24 +1,9 @@
 'use client';
 
-/**
- * Message Attachment Preview Component
- *
- * Compact, square-shaped attachment previews for chat messages.
- * Follows ChatGPT-style small thumbnail previews displayed above message text.
- *
- * Features:
- * - Small square thumbnails (48x48px)
- * - Image previews with fallback
- * - File type icons for non-images
- * - Hover tooltip with details
- * - Download on click
- * - Automatic signed URL fetching for invalid URLs
- */
-
-/* eslint-disable simple-import-sort/imports -- circular conflict with alias */
-import { FileCode, File as FileIcon, FileText, ImageIcon, Loader2 } from 'lucide-react';
-/* eslint-enable simple-import-sort/imports */
+/* eslint-disable simple-import-sort/imports -- Circular fix conflict in ESLint config */
 import { useTranslations } from 'next-intl';
+
+import { Icons } from '@/components/icons';
 import { z } from 'zod';
 
 import type { IconType } from '@/api/core/enums';
@@ -28,15 +13,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useDownloadUrlQuery } from '@/hooks/queries';
 import { getFileIconName, getFileTypeLabel } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
+/* eslint-enable simple-import-sort/imports */
 
-// ============================================================================
-// TYPE-SAFE SCHEMA DEFINITIONS
-// ============================================================================
-
-/**
- * Message attachment schema with Zod validation
- * Single source of truth for attachment type safety
- */
 export const MessageAttachmentSchema = z.object({
   url: z.string(),
   filename: z.string().optional(),
@@ -46,22 +24,10 @@ export const MessageAttachmentSchema = z.object({
 
 export type MessageAttachment = z.infer<typeof MessageAttachmentSchema>;
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-/**
- * Check if a URL is valid for display (not blob, not empty)
- * Blob URLs are temporary and tied to browser session
- */
 function isValidDisplayUrl(url: string | undefined): boolean {
   return Boolean(url && url !== '' && !url.startsWith('blob:'));
 }
 
-/**
- * Map centralized icon name to component icon type
- * Uses single source of truth from @/hooks/utils/use-file-preview
- */
 function getIconType(mimeType?: string): IconType {
   if (!mimeType) {
     return IconTypes.FILE;
@@ -82,18 +48,11 @@ function getIconType(mimeType?: string): IconType {
   return IconTypes.FILE;
 }
 
-// ============================================================================
-// ATTACHMENT PREVIEW COMPONENT
-// ============================================================================
-
 type MessageAttachmentPreviewProps = {
   attachments: MessageAttachment[];
   messageId: string;
 };
 
-/**
- * Single attachment thumbnail with signed URL fetching
- */
 function AttachmentThumbnail({
   attachment,
   messageId: _messageId,
@@ -140,7 +99,7 @@ function AttachmentThumbnail({
   })();
 
   return (
-    <Tooltip delayDuration={200}>
+    <Tooltip delayDuration={800}>
       <TooltipTrigger asChild>
         <WrapperComponent
           {...wrapperProps}
@@ -150,14 +109,14 @@ function AttachmentThumbnail({
             'bg-muted/60 border border-border/50',
             'hover:border-border hover:bg-muted',
             'transition-all duration-150',
-            'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             !hasValidUrl && !isLoading && 'cursor-default opacity-70',
           )}
         >
           {isLoading
             ? (
                 <div className="size-full flex items-center justify-center">
-                  <Loader2 className="size-4 text-muted-foreground animate-spin" />
+                  <Icons.loader className="size-4 text-muted-foreground animate-spin" />
                 </div>
               )
             : canShowImage
@@ -171,17 +130,17 @@ function AttachmentThumbnail({
                     containerClassName="size-full"
                     fallback={(
                       <div className="size-full flex items-center justify-center">
-                        <ImageIcon className="size-5 text-muted-foreground" />
+                        <Icons.image className="size-5 text-muted-foreground" />
                       </div>
                     )}
                   />
                 )
               : (
                   <div className="size-full flex items-center justify-center">
-                    {iconType === IconTypes.IMAGE && <ImageIcon className="size-5 text-muted-foreground" />}
-                    {iconType === IconTypes.CODE && <FileCode className="size-5 text-muted-foreground" />}
-                    {iconType === IconTypes.TEXT && <FileText className="size-5 text-muted-foreground" />}
-                    {iconType === IconTypes.FILE && <FileIcon className="size-5 text-muted-foreground" />}
+                    {iconType === IconTypes.IMAGE && <Icons.image className="size-5 text-muted-foreground" />}
+                    {iconType === IconTypes.CODE && <Icons.fileCode className="size-5 text-muted-foreground" />}
+                    {iconType === IconTypes.TEXT && <Icons.fileText className="size-5 text-muted-foreground" />}
+                    {iconType === IconTypes.FILE && <Icons.file className="size-5 text-muted-foreground" />}
                   </div>
                 )}
 
@@ -209,10 +168,6 @@ function AttachmentThumbnail({
   );
 }
 
-/**
- * Message attachments grid
- * Displays small, square attachment previews above message text
- */
 export function MessageAttachmentPreview({
   attachments,
   messageId,

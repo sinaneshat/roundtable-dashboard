@@ -12,6 +12,17 @@ import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
 import { toast as baseToast } from '@/hooks/utils';
 
+/**
+ * Create ToastActionElement using React.createElement
+ *
+ * TYPE ASSERTION JUSTIFICATION:
+ * - React.createElement returns ReactElement (generic JSX element)
+ * - ToastActionElement expects ReactElement<typeof ToastAction> (specific component type)
+ * - The cast is safe because we're creating ToastAction with correct props
+ * - Alternative would be JSX syntax, but this is a JS context (not TSX)
+ *
+ * @see docs/type-inference-patterns.md - Factory patterns with justified assertions
+ */
 function createToastActionElement(label: string, onClick: () => void): ToastActionElement {
   return React.createElement(
     ToastAction,

@@ -6,13 +6,13 @@ import { Streamdown } from 'streamdown';
 
 import type { MessageStatus } from '@/api/core/enums';
 import { FinishReasons, isCompletionFinishReason, MessagePartTypes, MessageRoles, MessageStatuses, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, UIMessageRoles } from '@/api/core/enums';
-import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { MessageAttachment } from '@/components/chat/message-attachment-preview';
 import { MessageAttachmentPreview } from '@/components/chat/message-attachment-preview';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
-import { streamdownComponents } from '@/components/markdown/streamdown-components';
+import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollAwareParticipant, ScrollAwareUserMessage, ScrollFromTop } from '@/components/ui/motion';
 import { BRAND } from '@/constants/brand';
@@ -21,11 +21,12 @@ import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useModelLookup } from '@/hooks/utils';
 import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
+import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
 import { extractColorFromImage, getCachedImageColor, hasColorCached } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';
 import { allParticipantsHaveVisibleContent, buildParticipantMessageMaps, getAvatarPropsFromModelId, getEnabledParticipants, getMessageMetadata, getMessageStatus, getModeratorMetadata, getParticipantMessageFromMaps, getRoleBadgeStyle, getRoundNumber, getUserMetadata, isModeratorMessage, isPreSearch as isPreSearchMessage, participantHasVisibleContent } from '@/lib/utils';
 
-const EMPTY_PARTICIPANTS: ChatParticipant[] = [];
+const EMPTY_PARTICIPANTS: ChatParticipantWithSettings[] = [];
 const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];
 
 // Type definitions for message groups
@@ -176,7 +177,7 @@ const ParticipantHeader = memo(({
 // ============================================================================
 
 type ParticipantMessageWrapperProps = {
-  participant?: ChatParticipant;
+  participant?: ChatParticipantWithSettings;
   participantIndex: number;
   model: EnhancedModelResponse | undefined;
   status: MessageStatus;
@@ -434,8 +435,8 @@ function getParticipantInfoForMessage({
   totalMessages: number;
   isGlobalStreaming: boolean;
   currentParticipantIndex: number;
-  participants: ChatParticipant[];
-  currentStreamingParticipant: ChatParticipant | null;
+  participants: ChatParticipantWithSettings[];
+  currentStreamingParticipant: ChatParticipantWithSettings | null;
   isModeratorStreaming?: boolean;
 }): {
   participantIndex: number;
@@ -523,11 +524,11 @@ type ChatMessageListProps = {
     name: string;
     image: string | null;
   } | null;
-  participants?: ChatParticipant[];
+  participants?: ChatParticipantWithSettings[];
   hideMetadata?: boolean;
   isLoading?: boolean;
   isStreaming?: boolean;
-  currentStreamingParticipant?: ChatParticipant | null;
+  currentStreamingParticipant?: ChatParticipantWithSettings | null;
   currentParticipantIndex?: number;
   userAvatar?: { src: string; name: string };
   threadId?: string | null; // Optional threadId for pre-search hydration

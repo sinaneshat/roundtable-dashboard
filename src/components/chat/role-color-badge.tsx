@@ -1,25 +1,21 @@
 'use client';
 
-import type { LucideIcon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useMemo } from 'react';
 
 import type { AvatarSize } from '@/api/core/enums';
 import { AvatarSizes } from '@/api/core/enums';
+import type { Icon } from '@/components/icons';
 import { cn } from '@/lib/ui/cn';
 import { getRoleColors } from '@/lib/utils';
 
 type RoleColorBadgeProps = {
   roleName: string;
-  icon?: LucideIcon;
+  icon?: Icon;
   size?: AvatarSize;
   className?: string;
 };
 
-/**
- * RoleColorBadge - Displays a colored badge with icon or initial for a role
- * Uses CSS custom properties for dynamic colors to avoid inline style anti-patterns
- */
 export const RoleColorBadge = memo(({
   roleName,
   icon: Icon,

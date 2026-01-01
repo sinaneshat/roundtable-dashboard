@@ -1,9 +1,9 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -13,6 +13,17 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
+const TERMS_SECTIONS = [
+  'acceptance',
+  'services',
+  'billing',
+  'privacy',
+  'termination',
+  'liability',
+  'governing',
+  'contact',
+];
+
 export default function TermsScreen() {
   const t = useTranslations();
 
@@ -21,7 +32,7 @@ export default function TermsScreen() {
       <div className="mb-8">
         <Link href="/auth/sign-in">
           <Button variant="ghost" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <Icons.arrowLeft className="mr-2 h-4 w-4" />
             {t('actions.back')}
           </Button>
         </Link>
@@ -36,45 +47,16 @@ export default function TermsScreen() {
         </CardHeader>
         <CardContent className="prose prose-sm dark:prose-invert max-w-none">
           <section className="space-y-6">
-            <div>
-              <h2 className="text-xl font-semibold mb-3">{t('legal.terms.acceptance.title')}</h2>
-              <p className="text-muted-foreground">{t('legal.terms.acceptance.content')}</p>
-            </div>
-
-            <div>
-              <h2 className="text-xl font-semibold mb-3">{t('legal.terms.services.title')}</h2>
-              <p className="text-muted-foreground">{t('legal.terms.services.content')}</p>
-            </div>
-
-            <div>
-              <h2 className="text-xl font-semibold mb-3">{t('legal.terms.billing.title')}</h2>
-              <p className="text-muted-foreground">{t('legal.terms.billing.content')}</p>
-            </div>
-
-            <div>
-              <h2 className="text-xl font-semibold mb-3">{t('legal.terms.privacy.title')}</h2>
-              <p className="text-muted-foreground">{t('legal.terms.privacy.content')}</p>
-            </div>
-
-            <div>
-              <h2 className="text-xl font-semibold mb-3">{t('legal.terms.termination.title')}</h2>
-              <p className="text-muted-foreground">{t('legal.terms.termination.content')}</p>
-            </div>
-
-            <div>
-              <h2 className="text-xl font-semibold mb-3">{t('legal.terms.liability.title')}</h2>
-              <p className="text-muted-foreground">{t('legal.terms.liability.content')}</p>
-            </div>
-
-            <div>
-              <h2 className="text-xl font-semibold mb-3">{t('legal.terms.governing.title')}</h2>
-              <p className="text-muted-foreground">{t('legal.terms.governing.content')}</p>
-            </div>
-
-            <div>
-              <h2 className="text-xl font-semibold mb-3">{t('legal.terms.contact.title')}</h2>
-              <p className="text-muted-foreground">{t('legal.terms.contact.content')}</p>
-            </div>
+            {TERMS_SECTIONS.map(section => (
+              <div key={section}>
+                <h2 className="text-xl font-semibold mb-3">
+                  {t(`legal.terms.${section}.title`)}
+                </h2>
+                <p className="text-muted-foreground">
+                  {t(`legal.terms.${section}.content`)}
+                </p>
+              </div>
+            ))}
           </section>
         </CardContent>
       </Card>

@@ -1,9 +1,9 @@
 'use client';
 
-import { Check, Share2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -15,8 +15,6 @@ import { cn } from '@/lib/ui/cn';
 
 type SocialShareButtonProps = {
   url: string;
-  title?: string;
-  description?: string;
   showTextOnLargeScreens?: boolean;
   className?: string;
 };
@@ -52,7 +50,7 @@ export function SocialShareButton({
 
   return (
     <TooltipProvider>
-      <Tooltip delayDuration={300}>
+      <Tooltip delayDuration={800}>
         <TooltipTrigger asChild>
           <Button
             variant="ghost"
@@ -67,8 +65,8 @@ export function SocialShareButton({
             )}
           >
             {copySuccess
-              ? <Check className="size-4 animate-in zoom-in-75 duration-300" />
-              : <Share2 className="size-4" />}
+              ? <Icons.check className="size-4 animate-in zoom-in-75 duration-300" />
+              : <Icons.share className="size-4" />}
             {showTextOnLargeScreens && (
               <span className="hidden md:inline">
                 {copySuccess ? t('linkCopied') : t('copyLink')}

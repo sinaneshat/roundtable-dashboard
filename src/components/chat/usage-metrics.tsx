@@ -1,14 +1,9 @@
 'use client';
-import {
-  ArrowUpCircle,
-  Coins,
-  CreditCard,
-  Gift,
-} from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
-import { UsageStatuses, UsageStatusMetadata } from '@/api/core/enums';
+import { PlanTypes, UsageStatuses, UsageStatusMetadata } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,11 +11,6 @@ import { useUsageStatsQuery } from '@/hooks/queries';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { cn } from '@/lib/ui/cn';
 
-/**
- * ✅ CREDITS-ONLY: Simplified usage display
- * Shows only credit balance and plan info
- * Users don't need to see threads/messages/analysis quotas
- */
 export function UsageMetrics() {
   const t = useTranslations();
   const { data: usageData, isLoading, isError } = useUsageStatsQuery();
@@ -41,17 +31,15 @@ export function UsageMetrics() {
   const { credits, plan } = usageData.data;
   const creditsStatus = credits?.status ?? UsageStatuses.DEFAULT;
   const isLowCredits = creditsStatus === UsageStatuses.CRITICAL || creditsStatus === UsageStatuses.WARNING;
-  const isPaidPlan = plan?.type === 'paid';
+  const isPaidPlan = plan?.type === PlanTypes.PAID;
   const hasPaymentMethod = plan?.hasPaymentMethod ?? false;
   const pendingChange = plan?.pendingChange;
 
-  // Calculate credit usage percentage
   const totalCredits = isPaidPlan ? (plan?.monthlyCredits || 1_000_000) : 10_000;
   const usedPercentage = Math.min(100, Math.round(((totalCredits - credits.available) / totalCredits) * 100));
 
   return (
     <div className="space-y-3">
-      {/* Plan Badge */}
       <div className="flex items-center justify-between">
         <Badge
           variant={isPaidPlan ? 'default' : 'outline'}
@@ -64,13 +52,12 @@ export function UsageMetrics() {
         </Badge>
         {!hasPaymentMethod && !isPaidPlan && (
           <div className="flex items-center gap-1 text-[9px] text-amber-600">
-            <CreditCard className="size-2.5" />
+            <Icons.creditCard className="size-2.5" />
             <span className="font-medium">{t('usage.addCard')}</span>
           </div>
         )}
       </div>
 
-      {/* Grace Period Notice - shown when there's a pending tier change */}
       {pendingChange && (
         <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
           <p className="text-[10px] leading-tight text-blue-600 dark:text-blue-400">
@@ -87,11 +74,10 @@ export function UsageMetrics() {
         </div>
       )}
 
-      {/* Credits Balance */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <Coins className="size-3 text-muted-foreground" />
+            <Icons.coins className="size-3 text-muted-foreground" />
             <span className="text-xs font-medium">{t('usage.credits')}</span>
           </div>
           <span className={cn(
@@ -115,13 +101,11 @@ export function UsageMetrics() {
         </p>
       </div>
 
-      {/* Actions */}
       {!isPaidPlan && (
         <div className="space-y-2">
-          {/* Descriptive message for users without payment method */}
           {!hasPaymentMethod && (
             <div className="flex items-start gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-              <Gift className="size-3.5 text-emerald-500 shrink-0 mt-0.5" />
+              <Icons.gift className="size-3.5 text-emerald-500 shrink-0 mt-0.5" />
               <p className="text-[10px] leading-tight text-emerald-600 dark:text-emerald-400">
                 {t('usage.cardAlert.sidebarMessage', {
                   credits: CREDIT_CONFIG.PLANS.free.cardConnectionCredits.toLocaleString(),
@@ -130,14 +114,14 @@ export function UsageMetrics() {
             </div>
           )}
 
-          {/* Glass-style link */}
           <Link
             href="/chat/pricing"
+            prefetch
             className={cn(
               'w-full flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-medium',
               'backdrop-blur-sm transition-all duration-200',
               hasPaymentMethod
-                ? 'bg-white/5 hover:bg-white/10 active:bg-white/15 text-foreground'
+                ? 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20 text-foreground'
                 : 'bg-emerald-500/20 hover:bg-emerald-500/25 active:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30',
               isLowCredits && hasPaymentMethod && 'bg-amber-500/20 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30',
             )}
@@ -145,13 +129,13 @@ export function UsageMetrics() {
             {hasPaymentMethod
               ? (
                   <>
-                    <ArrowUpCircle className="size-3" />
+                    <Icons.arrowUpCircle className="size-3" />
                     {t('usage.upgradeNow')}
                   </>
                 )
               : (
                   <>
-                    <CreditCard className="size-3" />
+                    <Icons.creditCard className="size-3" />
                     {t('usage.connectCard')}
                   </>
                 )}

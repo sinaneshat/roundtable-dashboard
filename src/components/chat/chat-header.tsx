@@ -6,8 +6,7 @@ import type { ReactNode } from 'react';
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { ComponentSize } from '@/api/core/enums';
-import { ComponentSizes } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Logo } from '@/components/logo';
 import { useChatStore } from '@/components/providers';
 import {
@@ -18,8 +17,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { useSidebar } from '@/components/ui/sidebar';
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 
@@ -27,14 +27,14 @@ import { ChatScrollButton } from './chat-scroll-button';
 import { ChatSection } from './chat-states';
 import { useThreadHeaderOptional } from './thread-header-context';
 
-const breadcrumbMap: Record<string, { titleKey: string; parent?: string }> = {
+const breadcrumbMap = {
   '/chat': { titleKey: 'navigation.chat' },
   '/chat/pricing': { titleKey: 'navigation.pricing', parent: '/chat' },
-};
+} as const;
+
 type NavigationHeaderProps = {
   className?: string;
   threadTitle?: string;
-  threadParent?: string;
   threadActions?: ReactNode;
   showSidebarTrigger?: boolean;
   showLogo?: boolean;
@@ -44,7 +44,6 @@ type NavigationHeaderProps = {
 function NavigationHeaderComponent({
   className,
   threadTitle: threadTitleProp,
-  threadParent: threadParentProp,
   threadActions: threadActionsProp,
   showSidebarTrigger = true,
   showLogo = false,
@@ -53,9 +52,8 @@ function NavigationHeaderComponent({
 }: NavigationHeaderProps = {}) {
   const pathname = usePathname();
   const t = useTranslations();
+  const { setOpenMobile } = useSidebar();
 
-  // ✅ ZUSTAND PATTERN: Thread title comes from store, not context
-  // ✅ OPTIMIZATION: Batch all selectors with useShallow to prevent multiple re-renders
   const { storeThreadTitle, showInitialUI, createdThreadId, thread } = useChatStore(
     useShallow(s => ({
       storeThreadTitle: s.thread?.title ?? null,
@@ -70,7 +68,6 @@ function NavigationHeaderComponent({
   const hasActiveThread = !showInitialUI && (createdThreadId || thread);
 
   const threadTitle = threadTitleProp ?? (showSidebarTrigger ? storeThreadTitle : null);
-  const threadParent = threadParentProp ?? '/chat';
   const threadActions = threadActionsProp ?? (showSidebarTrigger ? context.threadActions : null);
   const isThreadPage = (
     (pathname?.startsWith('/chat/') && pathname !== '/chat' && pathname !== '/chat/pricing')
@@ -81,9 +78,8 @@ function NavigationHeaderComponent({
   // Show thread breadcrumb when on thread page OR active thread from overview
   const showThreadBreadcrumb = (isThreadPage || hasActiveThread) && threadTitle;
   const currentPage = showThreadBreadcrumb
-    ? { titleKey: threadTitle, parent: threadParent, isDynamic: true }
-    : pathname ? breadcrumbMap[pathname] : undefined;
-  const parentPage = currentPage?.parent ? breadcrumbMap[currentPage.parent] : null;
+    ? { titleKey: threadTitle, isDynamic: true as const }
+    : pathname ? breadcrumbMap[pathname as keyof typeof breadcrumbMap] : undefined;
   return (
     <header
       className={cn(
@@ -98,15 +94,19 @@ function NavigationHeaderComponent({
       )}
       >
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-          {showSidebarTrigger && (
-            <>
-              <SidebarTrigger className="flex-shrink-0 touch-manipulation" />
-              {!isOverviewPage && <Separator orientation="vertical" className="me-1 sm:me-2 h-3.5 sm:h-4 flex-shrink-0 opacity-30" />}
-            </>
-          )}
+          {/* Mobile sidebar trigger - ChatGPT-like pattern */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden size-9 shrink-0"
+            onClick={() => setOpenMobile(true)}
+            aria-label={t('accessibility.openSidebar')}
+          >
+            <Icons.menu className="size-5" />
+          </Button>
           {showLogo && !isOverviewPage && (
             <>
-              <Link href="/" className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 touch-manipulation">
+              <Link href="/" prefetch={false} className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 touch-manipulation">
                 <Logo size="sm" variant="icon" />
                 <span className="text-sm sm:text-base font-semibold tracking-tight hidden xs:inline">
                   {BRAND.displayName}
@@ -118,22 +118,22 @@ function NavigationHeaderComponent({
           {!isOverviewPage && currentPage && (
             <Breadcrumb className="min-w-0 flex-1">
               <BreadcrumbList>
-                {parentPage && (
-                  <>
-                    <BreadcrumbItem className="hidden md:block">
-                      <BreadcrumbLink asChild>
-                        <Link href={currentPage.parent!}>
-                          {t(parentPage.titleKey)}
-                        </Link>
-                      </BreadcrumbLink>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator className="hidden md:block" />
-                  </>
-                )}
-                <BreadcrumbItem className="min-w-0 overflow-hidden" style={{ maxWidth: '20rem' }}>
+                {/* Brand name - always visible, muted styling */}
+                <BreadcrumbItem className="shrink-0">
+                  <BreadcrumbLink asChild>
+                    <Link
+                      href="/chat"
+                      className="text-muted-foreground hover:text-foreground transition-colors text-sm sm:text-base"
+                    >
+                      {BRAND.displayName}
+                    </Link>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                {/* Current page title - truncates to preserve brand visibility */}
+                <BreadcrumbItem className="min-w-0 overflow-hidden max-w-64">
                   <BreadcrumbPage
-                    className="line-clamp-1 truncate overflow-hidden text-ellipsis whitespace-nowrap text-sm sm:text-base"
-                    style={{ maxWidth: '20rem' }}
+                    className="line-clamp-1 truncate overflow-hidden text-ellipsis whitespace-nowrap text-sm sm:text-base max-w-64"
                     title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey)}
                   >
                     {'isDynamic' in currentPage && currentPage.isDynamic
@@ -157,8 +157,9 @@ function NavigationHeaderComponent({
 }
 export const NavigationHeader = React.memo(NavigationHeaderComponent);
 function MinimalHeaderComponent({ className }: { className?: string } = {}) {
-  // ✅ OPTIMIZATION: Batch all streaming state selectors with useShallow
-  // Prevents 5 separate re-renders when related states change
+  const t = useTranslations();
+  const { setOpenMobile } = useSidebar();
+
   const {
     showInitialUI,
     isStreaming,
@@ -195,9 +196,20 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
         className,
       )}
     >
-      <div className="flex items-center gap-2 px-3 sm:px-4 md:px-6 lg:px-8 h-14 sm:h-16">
-        <SidebarTrigger className="touch-manipulation" />
+      {/* Mobile sidebar trigger - hidden on desktop where sidebar is visible */}
+      <div className="flex items-center px-3 sm:px-4 md:hidden">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-9 shrink-0"
+          onClick={() => setOpenMobile(true)}
+          aria-label={t('accessibility.openSidebar')}
+        >
+          <Icons.menu className="size-5" />
+        </Button>
       </div>
+      {/* Spacer for desktop - sidebar is visible there */}
+      <div className="hidden md:block h-14 sm:h-16" />
     </header>
   );
 }
@@ -208,7 +220,7 @@ type PageHeaderProps = {
   action?: ReactNode;
   children?: ReactNode;
   showSeparator?: boolean;
-  size?: Extract<ComponentSize, 'sm' | 'md' | 'lg'>;
+  size?: 'sm' | 'md' | 'lg';
   className?: string;
 };
 export function PageHeader({
@@ -217,21 +229,21 @@ export function PageHeader({
   action,
   children,
   showSeparator = true,
-  size = ComponentSizes.MD,
+  size = 'md',
   className,
 }: PageHeaderProps) {
   const sizeConfig = {
-    [ComponentSizes.SM]: {
+    sm: {
       title: 'text-lg font-semibold tracking-tight',
       description: 'text-xs text-muted-foreground',
       spacing: 'space-y-3',
     },
-    [ComponentSizes.MD]: {
+    md: {
       title: 'text-2xl font-semibold tracking-tight',
       description: 'text-sm text-muted-foreground',
       spacing: 'space-y-6',
     },
-    [ComponentSizes.LG]: {
+    lg: {
       title: 'text-3xl font-bold tracking-tight',
       description: 'text-base text-muted-foreground',
       spacing: 'space-y-8',
@@ -258,7 +270,7 @@ type ChatPageHeaderProps = {
   title: string;
   description: string;
   action?: ReactNode;
-  size?: Extract<ComponentSize, 'sm' | 'md' | 'lg'>;
+  size?: 'sm' | 'md' | 'lg';
   className?: string;
 };
 export function ChatPageHeader({

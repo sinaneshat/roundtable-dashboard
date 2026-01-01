@@ -1,10 +1,11 @@
 'use client';
 
-import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import type { StatusVariant } from '@/api/core/enums';
 import { StatusVariants } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
 
@@ -16,26 +17,32 @@ type StatusPageProps = {
   actions?: ReactNode;
 };
 
-const statusConfig = {
+type StatusConfig = {
+  icon: typeof Icons.loader | typeof Icons.checkCircle | typeof Icons.alertCircle;
+  iconClass: string;
+  ringClass: string;
+};
+
+const STATUS_CONFIG: Record<StatusVariant, StatusConfig> = {
   [StatusVariants.LOADING]: {
-    icon: Loader2,
+    icon: Icons.loader,
     iconClass: 'text-blue-500 animate-spin',
     ringClass: 'bg-blue-500/10 ring-blue-500/20',
   },
   [StatusVariants.SUCCESS]: {
-    icon: CheckCircle,
+    icon: Icons.checkCircle,
     iconClass: 'text-green-500',
     ringClass: 'bg-green-500/10 ring-green-500/20',
   },
   [StatusVariants.ERROR]: {
-    icon: AlertCircle,
+    icon: Icons.alertCircle,
     iconClass: 'text-destructive',
     ringClass: 'bg-destructive/10 ring-destructive/20',
   },
-} as const satisfies Record<StatusVariant, { icon: typeof Loader2 | typeof CheckCircle | typeof AlertCircle; iconClass: string; ringClass: string }>;
+} as const;
 
 export function StatusPage({ variant, title, description, children, actions }: StatusPageProps) {
-  const config = statusConfig[variant];
+  const config = STATUS_CONFIG[variant];
   const Icon = config.icon;
 
   return (
@@ -64,31 +71,60 @@ export function StatusPage({ variant, title, description, children, actions }: S
 
 type StatusPageActionsProps = {
   primaryLabel: string;
-  primaryOnClick: () => void;
+  primaryHref?: string;
+  primaryOnClick?: () => void;
   secondaryLabel?: string;
+  secondaryHref?: string;
   secondaryOnClick?: () => void;
 };
 
 export function StatusPageActions({
   primaryLabel,
+  primaryHref,
   primaryOnClick,
   secondaryLabel,
+  secondaryHref,
   secondaryOnClick,
 }: StatusPageActionsProps) {
   return (
     <>
-      <Button onClick={primaryOnClick} className="w-full">
-        {primaryLabel}
-      </Button>
-      {secondaryLabel && secondaryOnClick && (
-        <Button
-          onClick={secondaryOnClick}
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-        >
-          {secondaryLabel}
-        </Button>
+      {primaryHref
+        ? (
+            <Button asChild className="w-full">
+              <Link href={primaryHref} prefetch={false}>
+                {primaryLabel}
+              </Link>
+            </Button>
+          )
+        : (
+            <Button onClick={primaryOnClick} className="w-full">
+              {primaryLabel}
+            </Button>
+          )}
+      {secondaryLabel && (secondaryHref || secondaryOnClick) && (
+        secondaryHref
+          ? (
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+              >
+                <Link href={secondaryHref} prefetch={false}>
+                  {secondaryLabel}
+                </Link>
+              </Button>
+            )
+          : (
+              <Button
+                onClick={secondaryOnClick}
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+              >
+                {secondaryLabel}
+              </Button>
+            )
       )}
     </>
   );

@@ -16,7 +16,7 @@ import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { MessageSources } from '@/components/chat/message-sources';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
-import { streamdownComponents } from '@/components/markdown/streamdown-components';
+import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { useChatStore } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { StreamingMessageContent } from '@/components/ui/motion';
@@ -295,9 +295,16 @@ export const ModelMessageCard = memo(({
   // ✅ Helper function to render content parts (extracted for ScrollArea wrapping)
   function renderContentParts() {
     // ✅ MODEL NORMALIZATION: Uses pre-filtered renderableParts (non-renderable reasoning excluded)
-    // ✅ TYPE-SAFE: Use Record type with known keys and validate before access
-    const order: Record<string, number> = { 'reasoning': 0, 'text': 1, 'tool-call': 2, 'tool-result': 3 };
-    const getOrder = (type: string): number => order[type] ?? 4;
+    // ✅ TYPE-SAFE: Use enum constants for part ordering (Record<string> for runtime lookup safety)
+    const PART_ORDER: Record<string, number> = {
+      [MessagePartTypes.REASONING]: 0,
+      [MessagePartTypes.TEXT]: 1,
+      [MessagePartTypes.TOOL_CALL]: 2,
+      [MessagePartTypes.TOOL_RESULT]: 3,
+      [MessagePartTypes.FILE]: 4,
+      [MessagePartTypes.STEP_START]: 5,
+    };
+    const getOrder = (type: string): number => PART_ORDER[type] ?? 6;
     const sortedParts = [...renderableParts].sort((a, b) => {
       return getOrder(a.type) - getOrder(b.type);
     });

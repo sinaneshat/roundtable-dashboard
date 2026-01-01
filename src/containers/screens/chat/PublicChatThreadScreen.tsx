@@ -1,14 +1,14 @@
 'use client';
 
-import { ArrowRight, Lock, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
-import type { ChatParticipant, RoundFeedbackData, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries';
@@ -16,7 +16,11 @@ import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
 import { chatMessagesToUIMessages, transformPreSearches } from '@/lib/utils';
 
-export default function PublicChatThreadScreen({ slug }: { slug: string }) {
+type PublicChatThreadScreenProps = {
+  slug: string;
+};
+
+export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenProps) {
   const t = useTranslations();
   const tPublic = useTranslations('chat.public');
 
@@ -32,31 +36,24 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
 
   const messages = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
 
-  // Transform participants - convert string dates to Date objects
-  const participants = useMemo(() => rawParticipants.map((p: Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & { createdAt: string; updatedAt: string }) => ({
+  const participants = useMemo(() => rawParticipants.map(p => ({
     ...p,
     createdAt: new Date(p.createdAt),
     updatedAt: new Date(p.updatedAt),
   })), [rawParticipants]);
 
-  // ✅ TEXT STREAMING: Moderator messages stored as chatMessage entries with metadata.isModerator: true
-  // Moderator messages appear in messages array and are rendered inline by ChatMessageList
-
-  // ✅ PUBLIC PAGE FIX: Include pre-searches for web search display
-  // ✅ SINGLE SOURCE OF TRUTH: Use transformPreSearches for type-safe date conversion
   const preSearches: StoredPreSearch[] = useMemo(
     () => transformPreSearches(threadResponse?.preSearches || []),
     [threadResponse],
   );
 
-  // Build feedback map for quick lookup - transform dates
   const feedbackByRound = useMemo(() => {
     const map = new Map<number, FeedbackType>();
-    rawFeedback?.forEach((fb: RoundFeedbackData) => {
+    for (const fb of rawFeedback || []) {
       if (fb.feedbackType) {
         map.set(fb.roundNumber, fb.feedbackType);
       }
-    });
+    }
     return map;
   }, [rawFeedback]);
 
@@ -66,8 +63,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     preSearches,
   });
 
-  // Scroll management - minimal hook for tracking scroll position
-  // Initial scroll and virtualization handled by useVirtualizedTimeline
   const isStoreReady = !isLoadingThread && messages.length > 0;
 
   useChatScroll({
@@ -91,7 +86,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4 max-w-md mx-auto px-4">
           <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto">
-            <Lock className="w-8 h-8 text-destructive" />
+            <Icons.lock className="w-8 h-8 text-destructive" />
           </div>
           <div className="space-y-2">
             <h2 className="text-2xl font-bold">{t('chat.public.threadNotFound')}</h2>
@@ -99,8 +94,10 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
               {t('chat.public.threadNotFoundDescription')}
             </p>
           </div>
-          <Button asChild variant="default">
-            <Link href="/">{t('actions.goHome')}</Link>
+          <Button variant="default" asChild>
+            <Link href="/" prefetch={false}>
+              {t('actions.goHome')}
+            </Link>
           </Button>
         </div>
       </div>
@@ -112,7 +109,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4 max-w-md mx-auto px-4">
           <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto">
-            <Lock className="w-8 h-8 text-destructive" />
+            <Icons.lock className="w-8 h-8 text-destructive" />
           </div>
           <div className="space-y-2">
             <h2 className="text-2xl font-bold">{tPublic('privateChat')}</h2>
@@ -120,8 +117,10 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
               {tPublic('privateChatDescription')}
             </p>
           </div>
-          <Button asChild variant="default">
-            <Link href="/">{tPublic('goHome')}</Link>
+          <Button variant="default" asChild>
+            <Link href="/" prefetch={false}>
+              {tPublic('goHome')}
+            </Link>
           </Button>
         </div>
       </div>
@@ -142,7 +141,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                 <div className="flex items-center justify-center min-h-[50vh]">
                   <div className="text-center space-y-4 max-w-md px-4">
                     <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto">
-                      <Sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-muted-foreground" />
+                      <Icons.sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-muted-foreground" />
                     </div>
                     <div className="space-y-2">
                       <h3 className="text-base sm:text-lg font-semibold">{t('chat.public.noMessagesYet')}</h3>
@@ -170,7 +169,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                   <div className="mt-12 sm:mt-16 mb-6 sm:mb-8">
                     <div className="rounded-2xl sm:rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-6 sm:p-8 md:p-10 text-center space-y-4 sm:space-y-6">
                       <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 mb-1 sm:mb-2">
-                        <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
+                        <Icons.sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
                       </div>
                       <div className="space-y-2 sm:space-y-3">
                         <h3 className="text-xl sm:text-2xl md:text-3xl font-bold">
@@ -186,22 +185,22 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                       </div>
                       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 sm:pt-4">
                         <Button
-                          asChild
                           size="lg"
                           className="gap-2 w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
+                          asChild
                         >
-                          <Link href={signUpUrl} className="whitespace-nowrap">
+                          <Link href={signUpUrl} prefetch={false}>
                             {tPublic('tryRoundtable')}
-                            <ArrowRight className="w-4 h-4 shrink-0" />
+                            <Icons.arrowRight className="w-4 h-4" />
                           </Link>
                         </Button>
                         <Button
-                          asChild
                           variant="outline"
                           size="lg"
                           className="w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
+                          asChild
                         >
-                          <Link href="/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more">
+                          <Link href="/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more" prefetch={false}>
                             {tPublic('learnMore')}
                           </Link>
                         </Button>

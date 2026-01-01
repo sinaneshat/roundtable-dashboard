@@ -16,8 +16,8 @@ import {
 } from '@/components/seo';
 import { LiquidGlassFilters } from '@/components/ui/liquid-glass-filters';
 import { BRAND } from '@/constants/brand';
-import { spaceGrotesk } from '@/lib/fonts';
 import { cn } from '@/lib/ui/cn';
+import { spaceGrotesk } from '@/lib/ui/fonts';
 import { parsePreferencesCookie, PREFERENCES_COOKIE_NAME } from '@/stores/preferences';
 import { createMetadata } from '@/utils';
 

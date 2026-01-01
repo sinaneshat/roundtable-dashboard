@@ -15,7 +15,7 @@
 
 import type { ParticipantComparisonMode } from '@/api/core/enums';
 import { ParticipantComparisonModes } from '@/api/core/enums';
-import type { ChatParticipant } from '@/api/routes/chat/schema';
+import type { ChatParticipant } from '@/db/validation/chat';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 // ============================================================================

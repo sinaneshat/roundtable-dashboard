@@ -1,13 +1,13 @@
 'use client';
 
 import { cva } from 'class-variance-authority';
-import type { LucideIcon } from 'lucide-react';
-import { ChevronDown } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import { createContext, use, useCallback, useMemo, useState } from 'react';
 
 import type { ChainOfThoughtStepStatus } from '@/api/core/enums';
 import { ChainOfThoughtStepStatuses } from '@/api/core/enums';
+import type { Icon } from '@/components/icons';
+import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/ui/cn';
@@ -26,8 +26,8 @@ import { cn } from '@/lib/ui/cn';
 // ============================================================================
 
 type ChainOfThoughtContextValue = {
-  open: boolean;
-  setOpen: (open: boolean) => void;
+  readonly open: boolean;
+  readonly setOpen: (open: boolean) => void;
 };
 
 const ChainOfThoughtContext = createContext<ChainOfThoughtContextValue | null>(null);
@@ -44,12 +44,14 @@ function useChainOfThought() {
 // Root Component
 // ============================================================================
 
-type ChainOfThoughtProps = ComponentProps<'div'> & {
-  open?: boolean;
-  defaultOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  disabled?: boolean;
-};
+type ChainOfThoughtProps = {
+  readonly open?: boolean;
+  readonly defaultOpen?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
+  readonly disabled?: boolean;
+  readonly className?: string;
+  readonly children?: ReactNode;
+} & Omit<ComponentProps<'div'>, 'className' | 'children'>;
 
 export function ChainOfThought({
   open: controlledOpen,
@@ -99,9 +101,11 @@ export function ChainOfThought({
 // Header
 // ============================================================================
 
-type ChainOfThoughtHeaderProps = ComponentProps<typeof CollapsibleTrigger> & {
-  children?: ReactNode;
-};
+type ChainOfThoughtHeaderProps = {
+  readonly children?: ReactNode;
+  readonly className?: string;
+  readonly disabled?: boolean;
+} & Omit<ComponentProps<typeof CollapsibleTrigger>, 'className' | 'children' | 'disabled'>;
 
 export function ChainOfThoughtHeader({
   children = 'Chain of Thought',
@@ -129,7 +133,7 @@ export function ChainOfThoughtHeader({
       {...props}
     >
       <span className="flex-1 min-w-0">{children}</span>
-      <ChevronDown
+      <Icons.chevronDown
         className={cn(
           'size-4 flex-shrink-0 ml-2 transition-transform duration-200',
           open && 'rotate-180',
@@ -144,23 +148,19 @@ export function ChainOfThoughtHeader({
 // Content
 // ============================================================================
 
-type ChainOfThoughtContentProps = ComponentProps<typeof CollapsibleContent> & {
-  /** Enable stagger animation for children elements */
-  staggerChildren?: boolean;
-};
+type ChainOfThoughtContentProps = {
+  readonly className?: string;
+  readonly children?: ReactNode;
+} & Omit<ComponentProps<typeof CollapsibleContent>, 'className' | 'children'>;
 
 export function ChainOfThoughtContent({
   className,
   children,
-  staggerChildren: _staggerChildren = false,
   ...props
 }: ChainOfThoughtContentProps) {
-  // ✅ SIMPLIFIED: No stagger animations - content appears instantly
-  // Only the typing effect inside items should be animated
   return (
     <CollapsibleContent
       className={cn(
-        // Consistent Y padding and spacing for body content
         'px-3 pt-1 pb-4 space-y-3 sm:px-4 sm:pt-2 sm:pb-5 sm:space-y-4',
         className,
       )}
@@ -175,57 +175,42 @@ export function ChainOfThoughtContent({
 // Step
 // ============================================================================
 
-/**
- * CVA variants for step icon colors
- * Values correspond to CHAIN_OF_THOUGHT_STEP_STATUSES enum
- * @see ChainOfThoughtStepStatuses in @/api/core/enums
- */
-const stepIconVariants = cva(
-  'mt-0.5 flex-shrink-0',
-  {
-    variants: {
-      status: {
-        [ChainOfThoughtStepStatuses.PENDING]: 'text-muted-foreground',
-        [ChainOfThoughtStepStatuses.ACTIVE]: 'text-blue-500',
-        [ChainOfThoughtStepStatuses.COMPLETE]: 'text-green-500',
-      },
-    },
-    defaultVariants: {
-      status: ChainOfThoughtStepStatuses.COMPLETE,
+const stepIconVariants = cva('mt-0.5 flex-shrink-0', {
+  variants: {
+    status: {
+      [ChainOfThoughtStepStatuses.PENDING]: 'text-muted-foreground',
+      [ChainOfThoughtStepStatuses.ACTIVE]: 'text-blue-500',
+      [ChainOfThoughtStepStatuses.COMPLETE]: 'text-green-500',
     },
   },
-);
+  defaultVariants: {
+    status: ChainOfThoughtStepStatuses.COMPLETE,
+  },
+});
 
-/**
- * CVA variants for step label colors
- * Values correspond to CHAIN_OF_THOUGHT_STEP_STATUSES enum
- * @see ChainOfThoughtStepStatuses in @/api/core/enums
- */
-const stepLabelVariants = cva(
-  'text-sm font-medium',
-  {
-    variants: {
-      status: {
-        [ChainOfThoughtStepStatuses.PENDING]: 'text-muted-foreground',
-        [ChainOfThoughtStepStatuses.ACTIVE]: 'text-foreground',
-        [ChainOfThoughtStepStatuses.COMPLETE]: 'text-foreground',
-      },
-    },
-    defaultVariants: {
-      status: ChainOfThoughtStepStatuses.COMPLETE,
+const stepLabelVariants = cva('text-sm font-medium', {
+  variants: {
+    status: {
+      [ChainOfThoughtStepStatuses.PENDING]: 'text-muted-foreground',
+      [ChainOfThoughtStepStatuses.ACTIVE]: 'text-foreground',
+      [ChainOfThoughtStepStatuses.COMPLETE]: 'text-foreground',
     },
   },
-);
+  defaultVariants: {
+    status: ChainOfThoughtStepStatuses.COMPLETE,
+  },
+});
 
-type ChainOfThoughtStepProps = ComponentProps<'div'> & {
-  /** Step status from Zod schema - single source of truth */
-  status?: ChainOfThoughtStepStatus;
-  icon?: LucideIcon;
-  label: string;
-  description?: ReactNode;
-  badge?: ReactNode;
-  metadata?: ReactNode;
-};
+type ChainOfThoughtStepProps = {
+  readonly status?: ChainOfThoughtStepStatus;
+  readonly icon?: Icon;
+  readonly label: string;
+  readonly description?: ReactNode;
+  readonly badge?: ReactNode;
+  readonly metadata?: ReactNode;
+  readonly className?: string;
+  readonly children?: ReactNode;
+} & Omit<ComponentProps<'div'>, 'className' | 'children'>;
 
 export function ChainOfThoughtStep({
   icon: Icon,
@@ -281,7 +266,10 @@ export function ChainOfThoughtStep({
 // Search Results
 // ============================================================================
 
-type ChainOfThoughtSearchResultsProps = ComponentProps<'div'>;
+type ChainOfThoughtSearchResultsProps = {
+  readonly className?: string;
+  readonly children?: ReactNode;
+} & Omit<ComponentProps<'div'>, 'className' | 'children'>;
 
 export function ChainOfThoughtSearchResults({
   className,
@@ -289,16 +277,16 @@ export function ChainOfThoughtSearchResults({
   ...props
 }: ChainOfThoughtSearchResultsProps) {
   return (
-    <div
-      className={cn('flex flex-wrap gap-1.5', className)}
-      {...props}
-    >
+    <div className={cn('flex flex-wrap gap-1.5', className)} {...props}>
       {children}
     </div>
   );
 }
 
-type ChainOfThoughtSearchResultProps = ComponentProps<typeof Badge>;
+type ChainOfThoughtSearchResultProps = {
+  readonly className?: string;
+  readonly children?: ReactNode;
+} & Omit<ComponentProps<typeof Badge>, 'className' | 'children' | 'variant'>;
 
 export function ChainOfThoughtSearchResult({
   className,
@@ -306,11 +294,7 @@ export function ChainOfThoughtSearchResult({
   ...props
 }: ChainOfThoughtSearchResultProps) {
   return (
-    <Badge
-      variant="secondary"
-      className={cn('text-xs font-normal', className)}
-      {...props}
-    >
+    <Badge variant="secondary" className={cn('text-xs font-normal', className)} {...props}>
       {children}
     </Badge>
   );
@@ -320,9 +304,11 @@ export function ChainOfThoughtSearchResult({
 // Image
 // ============================================================================
 
-type ChainOfThoughtImageProps = ComponentProps<'div'> & {
-  caption?: string;
-};
+type ChainOfThoughtImageProps = {
+  readonly caption?: string;
+  readonly className?: string;
+  readonly children?: ReactNode;
+} & Omit<ComponentProps<'div'>, 'className' | 'children'>;
 
 export function ChainOfThoughtImage({
   caption,
@@ -332,14 +318,8 @@ export function ChainOfThoughtImage({
 }: ChainOfThoughtImageProps) {
   return (
     <div className={cn('space-y-2', className)} {...props}>
-      <div className="rounded-md overflow-hidden bg-muted">
-        {children}
-      </div>
-      {caption && (
-        <p className="text-xs text-muted-foreground text-center">
-          {caption}
-        </p>
-      )}
+      <div className="rounded-md overflow-hidden bg-muted">{children}</div>
+      {caption && <p className="text-xs text-muted-foreground text-center">{caption}</p>}
     </div>
   );
 }

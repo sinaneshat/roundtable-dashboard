@@ -1,18 +1,18 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { MessageStatuses } from '@/api/core/enums';
-import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
   ChainOfThoughtHeader,
 } from '@/components/ai-elements/chain-of-thought';
+import { Icons } from '@/components/icons';
 import { useChatStore } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { FadeIn } from '@/components/ui/motion';
@@ -21,6 +21,9 @@ import { cn } from '@/lib/ui/cn';
 import { AnimationIndices } from '@/stores/chat';
 
 import { PreSearchStream } from './pre-search-stream';
+
+// Infer PreSearchDataPayload from StoredPreSearch
+type PreSearchDataPayload = NonNullable<StoredPreSearch['searchData']>;
 
 type PreSearchCardProps = {
   threadId: string;
@@ -42,12 +45,8 @@ export function PreSearchCard({
   demoShowContent,
 }: PreSearchCardProps) {
   const t = useTranslations();
-  // ✅ FIX: Use useQueryClient() hook instead of getQueryClient()
-  // Ensures we use the same QueryClient instance from React context
   const queryClient = useQueryClient();
 
-  // Store actions (moved from child to parent callbacks)
-  // ✅ OPTIMIZATION: Batch action selectors with useShallow to prevent multiple re-renders
   const { updatePreSearchStatus, updatePreSearchData, registerAnimation, completeAnimation } = useChatStore(
     useShallow(s => ({
       updatePreSearchStatus: s.updatePreSearchStatus,
@@ -59,12 +58,8 @@ export function PreSearchCard({
   const hasRegisteredRef = useRef(false);
   const prevStatusRef = useRef(preSearch.status);
 
-  // ✅ REACT 19: Manual control state with round tracking (derived state pattern)
-  // Track the round number when user took manual control - allows auto-invalidation
   const [manualControl, setManualControl] = useState<{ round: number; open: boolean } | null>(null);
 
-  // ✅ REACT 19: Derive if manual control is still valid (no useEffect needed)
-  // Manual control is invalidated when a newer round starts streaming
   const isManualControlValid = useMemo(() => {
     if (!manualControl)
       return false;
@@ -75,9 +70,6 @@ export function PreSearchCard({
     return true;
   }, [manualControl, streamingRoundNumber]);
 
-  // ✅ FIX: Use useLayoutEffect for synchronous animation registration
-  // This ensures animations are registered BEFORE any callbacks fire
-  // useLayoutEffect runs synchronously after DOM mutations, before browser paint
   useLayoutEffect(() => {
     const isStreaming = preSearch.status === MessageStatuses.STREAMING;
     if (isStreaming && !hasRegisteredRef.current) {
@@ -86,9 +78,6 @@ export function PreSearchCard({
     }
   }, [preSearch.status, registerAnimation]);
 
-  // ✅ CRITICAL: Cleanup animation on unmount
-  // If component unmounts while animation is registered (e.g., navigation during streaming),
-  // complete the animation to prevent orphaned entries blocking handleComplete
   useLayoutEffect(() => {
     return () => {
       if (hasRegisteredRef.current) {
@@ -98,16 +87,12 @@ export function PreSearchCard({
     };
   }, [completeAnimation]);
 
-  // ✅ FIX: Complete animation SYNCHRONOUSLY on status transition
-  // Previous RAF approach had a bug: cleanup could cancel RAF before it fired,
-  // leaving animation stuck forever (especially on refresh where state changes quickly)
   useLayoutEffect(() => {
     const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
     const nowComplete = preSearch.status !== MessageStatuses.STREAMING
       && preSearch.status !== MessageStatuses.PENDING;
 
     if (wasStreaming && nowComplete && hasRegisteredRef.current) {
-      // Complete synchronously - no RAF that could be canceled
       completeAnimation(AnimationIndices.PRE_SEARCH);
       hasRegisteredRef.current = false;
     }
@@ -116,21 +101,14 @@ export function PreSearchCard({
     return undefined;
   }, [preSearch.status, completeAnimation]);
 
-  // Stream start callback: Update status to STREAMING when backend starts processing
-  // This ensures the UI reflects the actual streaming state and maintains loading indicator visibility
   const handleStreamStart = useCallback(() => {
     updatePreSearchStatus(preSearch.roundNumber, MessageStatuses.STREAMING);
   }, [preSearch.roundNumber, updatePreSearchStatus]);
 
-  // Stream completion callback: Update store and invalidate queries
-  // Pattern from round-summary-card.tsx:37-47 (onStreamComplete prop)
   const handleStreamComplete = useCallback((completedData?: PreSearchDataPayload) => {
     if (completedData) {
-      // Update store with completed data
       updatePreSearchData(preSearch.roundNumber, completedData);
       updatePreSearchStatus(preSearch.roundNumber, MessageStatuses.COMPLETE);
-
-      // Invalidate list query to sync orchestrator (store-first pattern)
       queryClient.invalidateQueries({
         queryKey: queryKeys.threads.preSearches(threadId),
       });
@@ -140,25 +118,15 @@ export function PreSearchCard({
   const isStreamingOrPending = preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING;
   const hasError = preSearch.status === MessageStatuses.FAILED;
 
-  // ✅ REACT 19: Event handler (not useEffect) for user interaction
   const handleOpenChange = useCallback((open: boolean) => {
-    // Prevent interaction during streaming
     if (isStreamingOrPending)
       return;
-
-    // Store manual control with current round number for invalidation tracking
     setManualControl({ round: preSearch.roundNumber, open });
   }, [isStreamingOrPending, preSearch.roundNumber]);
 
-  // ✅ REACT 19: Fully derived accordion state (no useEffect needed)
-  // Priority: demoOpen > streaming/pending (always open) > valid manual control > isLatest
-  // ✅ PROGRESSIVE UI FIX: Keep accordion open during streaming/pending
-  // Without this, when new timeline items are added, isLatest becomes false,
-  // accordion closes, PreSearchStream unmounts, and progressive updates are lost
   const isOpen = useMemo(() => {
     if (demoOpen !== undefined)
       return demoOpen;
-    // Keep open during streaming/pending to preserve PreSearchStream mount
     if (isStreamingOrPending)
       return true;
     if (isManualControlValid && manualControl)
@@ -176,15 +144,11 @@ export function PreSearchCard({
       >
         <div className="relative">
           <ChainOfThoughtHeader>
-            {/* Mobile-optimized header layout - inline title and badge */}
             <div className="flex items-center gap-2 w-full min-w-0">
-              <Zap className="size-4 text-blue-500 flex-shrink-0" />
-              {/* Title and badge - always inline, no wrap */}
+              <Icons.zap className="size-4 text-blue-500 flex-shrink-0" />
               <span className="text-sm font-medium whitespace-nowrap">
                 {t('chat.preSearch.title')}
               </span>
-
-              {/* Status badges - inline */}
               {isStreamingOrPending && (
                 <Badge
                   variant="outline"
@@ -206,11 +170,9 @@ export function PreSearchCard({
         </div>
 
         <ChainOfThoughtContent>
-          {/* Demo mode: only show content when demoShowContent is true */}
           {(demoShowContent === undefined || demoShowContent) && (
             <FadeIn duration={0.25}>
               <div className="space-y-4">
-                {/* PreSearchStream handles all states: PENDING, STREAMING, and COMPLETE */}
                 {!hasError && (
                   <PreSearchStream
                     threadId={threadId}
@@ -219,8 +181,6 @@ export function PreSearchCard({
                     onStreamComplete={handleStreamComplete}
                   />
                 )}
-
-                {/* Failed state */}
                 {hasError && preSearch.errorMessage && (
                   <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
                     <span className="size-1.5 rounded-full bg-destructive/80" />

@@ -70,6 +70,10 @@ export {
 // Billing and subscription enums
 export {
   assertNeverTier,
+  BILLING_ERROR_TYPES,
+  type BillingErrorType,
+  BillingErrorTypes,
+  BillingErrorTypeSchema,
   type BillingInterval,
   BillingIntervals,
   BillingIntervalSchema,
@@ -81,6 +85,7 @@ export {
   type CreditTransactionType,
   CreditTransactionTypes,
   CreditTransactionTypeSchema,
+  DEFAULT_BILLING_ERROR_TYPE,
   DEFAULT_BILLING_INTERVAL,
   DEFAULT_CREDIT_ACTION,
   DEFAULT_CREDIT_TRANSACTION_TYPE,
