@@ -1,14 +1,13 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo } from 'react';
 
 import { PlanTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
-import { CancelSubscriptionDialog } from '@/components/chat/cancel-subscription-dialog';
 import { UsageMetrics } from '@/components/chat/usage-metrics';
 import { Icons } from '@/components/icons';
-import { ApiKeysModal } from '@/components/modals/api-keys-modal';
 import {
   Accordion,
   AccordionContent,
@@ -36,6 +35,17 @@ import { useBoolean } from '@/hooks/utils';
 import { signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
 import { showApiErrorToast } from '@/lib/toast';
+
+// Dynamic imports - only loaded when user opens these dialogs
+const CancelSubscriptionDialog = dynamic(
+  () => import('@/components/chat/cancel-subscription-dialog').then(m => m.CancelSubscriptionDialog),
+  { ssr: false },
+);
+
+const ApiKeysModal = dynamic(
+  () => import('@/components/modals/api-keys-modal').then(m => m.ApiKeysModal),
+  { ssr: false },
+);
 
 type NavUserProps = {
   /** Server-side session for hydration - prevents mismatch */

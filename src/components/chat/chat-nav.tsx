@@ -1,4 +1,5 @@
 'use client';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -13,7 +14,6 @@ import {
   ChatSidebarPaginationSkeleton,
   ChatSidebarSkeleton,
 } from '@/components/chat/chat-sidebar-skeleton';
-import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
 import { Icons } from '@/components/icons';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -36,6 +36,12 @@ import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';
 import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
+
+// Dynamic import - only loaded when user opens search (Cmd+K)
+const CommandSearch = dynamic(
+  () => import('@/components/chat/command-search').then(m => m.CommandSearch),
+  { ssr: false },
+);
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   /** Server-side session for hydration - prevents mismatch */

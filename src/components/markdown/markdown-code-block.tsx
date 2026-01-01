@@ -1,11 +1,27 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import type { ReactNode } from 'react';
 import { isValidElement } from 'react';
 
-import { CodeBlock, CodeBlockCopyButton, InlineCode } from '@/components/ai-elements/code-block';
+import { InlineCode } from '@/components/ai-elements/code-block';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/ui/cn';
 import { isObject } from '@/lib/utils/type-guards';
+
+// Dynamic import CodeBlock to defer shiki (~800KB) until code is rendered
+const CodeBlock = dynamic(
+  () => import('@/components/ai-elements/code-block').then(mod => mod.CodeBlock),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-32 w-full rounded-2xl" />,
+  },
+);
+
+const CodeBlockCopyButton = dynamic(
+  () => import('@/components/ai-elements/code-block').then(mod => mod.CodeBlockCopyButton),
+  { ssr: false },
+);
 
 function extractLanguage(className: string | undefined): string {
   if (!className)
