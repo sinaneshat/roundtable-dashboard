@@ -1,9 +1,7 @@
-import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
 
 import { BRAND } from '@/constants/brand';
 import ChatOverviewScreen from '@/containers/screens/chat/ChatOverviewScreen';
-import { getQueryClient } from '@/lib/data/query-client';
 import { createMetadata } from '@/utils';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -24,12 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-export default async function ChatOverviewPage() {
-  const queryClient = getQueryClient();
-
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <ChatOverviewScreen />
-    </HydrationBoundary>
-  );
+// No HydrationBoundary needed - layout already hydrates threads, subscriptions, usage
+export default function ChatOverviewPage() {
+  return <ChatOverviewScreen />;
 }

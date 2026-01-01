@@ -1,9 +1,7 @@
-import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type React from 'react';
 
 import { redirectIfAuthenticated } from '@/app/auth/actions';
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
-import { getQueryClient } from '@/lib/data/query-client';
 
 // Force dynamic rendering - required because:
 // 1. Layout calls redirectIfAuthenticated() which needs auth session check
@@ -18,21 +16,10 @@ type AuthLayoutPageProps = {
 
 /**
  * Auth Flow Layout - Handles authenticated user redirects
- *
- * NOTE: No Suspense here - child components (AuthForm, etc.) have their own
- * Suspense boundaries for client hooks per Next.js 15 requirements.
- * Avoids double loading states.
+ * No HydrationBoundary needed - no queries prefetched here
  */
 export default async function AuthLayoutPage({ children }: AuthLayoutPageProps) {
-  // Redirect authenticated users to dashboard
   await redirectIfAuthenticated();
 
-  // Create query client for streaming SSR support
-  const queryClient = getQueryClient();
-
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <AuthShowcaseLayout>{children}</AuthShowcaseLayout>
-    </HydrationBoundary>
-  );
+  return <AuthShowcaseLayout>{children}</AuthShowcaseLayout>;
 }
