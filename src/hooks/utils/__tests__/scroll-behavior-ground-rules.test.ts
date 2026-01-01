@@ -29,7 +29,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { act, renderHook } from '@/lib/testing';
 
-import { useChatScroll } from '../useChatScroll';
+import { useChatScroll } from '../use-chat-scroll';
 
 // ============================================================================
 // TEST HELPERS

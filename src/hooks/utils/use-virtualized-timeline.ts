@@ -4,7 +4,7 @@ import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import type { TimelineItem } from './useThreadTimeline';
+import type { TimelineItem } from './use-thread-timeline';
 
 /**
  * Options for useVirtualizedTimeline hook

@@ -98,6 +98,7 @@ export function ModelSelectionModal({
 }: ModelSelectionModalProps) {
   const t = useTranslations('chat.models.modal');
   const tModels = useTranslations('chat.models');
+  const tRoles = useTranslations('chat.roles');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -618,7 +619,7 @@ export function ModelSelectionModal({
                                     handleDeleteCustomRole(role.id, role.name);
                                   }}
                                   className="shrink-0 p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all"
-                                  aria-label="Delete custom role"
+                                  aria-label={tRoles('deleteCustomRole')}
                                 >
                                   <Icons.trash className="h-4 w-4 text-destructive" />
                                 </button>

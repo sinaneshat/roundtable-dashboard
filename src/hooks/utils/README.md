@@ -441,21 +441,3 @@ When adding new hooks:
 6. **Consider dual export** - Pure function + hook if used in callbacks/loops
 7. **Add TypeScript types** - Export all option/return types
 8. **Test edge cases** - Browser compatibility, async behavior, error states
-
-## Migration Notes
-
-### Zustand v5 Store Actions
-
-Store-specific action hooks have been moved to `@/stores/{feature}/actions/`:
-- `@/stores/chat/actions/` - Chat-specific actions
-- `@/stores/project/actions/` - Project-specific actions
-
-Only general-purpose utility hooks remain in `@/hooks/utils/`.
-
-### Better Auth Integration
-
-Authentication hooks now use Better Auth directly:
-- Session: `useSession()` from `@/lib/auth/client`
-- User data: Managed via TanStack Query in `@/hooks/queries/`
-
-No custom auth utility hooks needed - Better Auth provides everything.

@@ -1033,6 +1033,10 @@
     "more": "More",
     "statusLabel": "Status: {status}"
   },
+  "errors": {
+    "streamFailed": "Stream failed",
+    "unknownError": "An unknown error occurred"
+  },
   "forms": {
     "loading": "Loading",
     "noOptionsAvailable": "NoOptionsAvailable",
@@ -1527,5 +1531,11 @@
       "failed": "Search failed",
       "cached": "From cache"
     }
+  },
+  "version": {
+    "newVersionAvailable": "New Version Available",
+    "versionLabel": "Version:",
+    "updateDescription": "A new version of the app is available. Update now to get the latest features and improvements.",
+    "updateNow": "Update Now"
   }
 }

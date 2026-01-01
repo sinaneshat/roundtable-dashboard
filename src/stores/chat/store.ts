@@ -992,7 +992,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       ? preferences.selectedModelIds.map((modelId, index) => ({
           id: modelId,
           modelId,
-          role: '' as const,
+          role: null,
           priority: index,
         }))
       : FORM_DEFAULTS.selectedParticipants;

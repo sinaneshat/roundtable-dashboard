@@ -17,8 +17,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { act, renderHook } from '@/lib/testing';
 
-import type { TimelineItem } from '../useThreadTimeline';
-import { useVirtualizedTimeline } from '../useVirtualizedTimeline';
+import type { TimelineItem } from '../use-thread-timeline';
+import { useVirtualizedTimeline } from '../use-virtualized-timeline';
 
 // ============================================================================
 // MOCK SETUP

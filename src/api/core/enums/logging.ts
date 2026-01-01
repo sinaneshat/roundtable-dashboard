@@ -224,7 +224,7 @@ export const DevLogMsgEvents = {
 // ============================================================================
 
 // 1. ARRAY CONSTANT
-export const LOG_TYPES = ['request', 'database', 'auth', 'validation', 'performance', 'api', 'operation', 'system', 'edge_case'] as const;
+export const LOG_TYPES = ['request', 'database', 'auth', 'validation', 'performance', 'api', 'operation', 'system', 'edge_case', 'alarm_error', 'alarm_retry', 'do_fetch_error'] as const;
 
 // 2. ZOD SCHEMA
 export const LogTypeSchema = z.enum(LOG_TYPES).openapi({
@@ -249,6 +249,9 @@ export const LogTypes = {
   OPERATION: 'operation' as const,
   SYSTEM: 'system' as const,
   EDGE_CASE: 'edge_case' as const,
+  ALARM_ERROR: 'alarm_error' as const,
+  ALARM_RETRY: 'alarm_retry' as const,
+  DO_FETCH_ERROR: 'do_fetch_error' as const,
 } as const;
 
 // ============================================================================

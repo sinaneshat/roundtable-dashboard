@@ -1,5 +1,6 @@
 'use client';
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useCallback, useMemo } from 'react';
 
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
@@ -33,6 +34,7 @@ export function ChatQuickStart({
   onSuggestionClick,
   className,
 }: ChatQuickStartProps) {
+  const t = useTranslations('chat.modes.modal');
   const { data: usageData } = useUsageStatsQuery();
   const userTier: SubscriptionTier = usageData?.data?.plan?.type === PlanTypes.PAID ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
   const { data: modelsResponse, isPending: isModelsLoading } = useModelsQuery();
@@ -267,7 +269,7 @@ export function ChatQuickStart({
       case ChatModes.DEBATING:
         return {
           icon: Icons.users,
-          label: 'Debating',
+          label: t('debating.title'),
           color: 'text-white/80',
           bgColor: 'bg-white/10',
           borderColor: 'border-white/20',
@@ -275,7 +277,23 @@ export function ChatQuickStart({
       case ChatModes.ANALYZING:
         return {
           icon: Icons.messageSquare,
-          label: 'Analyzing',
+          label: t('analyzing.title'),
+          color: 'text-white/80',
+          bgColor: 'bg-white/10',
+          borderColor: 'border-white/20',
+        };
+      case ChatModes.BRAINSTORMING:
+        return {
+          icon: Icons.messageSquare,
+          label: t('brainstorming.title'),
+          color: 'text-white/80',
+          bgColor: 'bg-white/10',
+          borderColor: 'border-white/20',
+        };
+      case ChatModes.SOLVING:
+        return {
+          icon: Icons.messageSquare,
+          label: t('problemSolving.title'),
           color: 'text-white/80',
           bgColor: 'bg-white/10',
           borderColor: 'border-white/20',
@@ -283,7 +301,7 @@ export function ChatQuickStart({
       default:
         return {
           icon: Icons.messageSquare,
-          label: 'Chatting',
+          label: t('brainstorming.title'),
           color: 'text-white/80',
           bgColor: 'bg-white/10',
           borderColor: 'border-white/20',
