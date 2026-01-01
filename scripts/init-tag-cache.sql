@@ -1,10 +1,13 @@
--- Create revalidations table for Next.js tag cache
--- This table tracks On-Demand revalidation times for tags and paths
+-- Create revalidations table for Next.js/OpenNext tag cache
+-- Schema must match @opennextjs/cloudflare d1-next-tag-cache expectations
+-- Column name is camelCase (revalidatedAt) NOT snake_case
 
-CREATE TABLE IF NOT EXISTS revalidations (
+DROP TABLE IF EXISTS revalidations;
+
+CREATE TABLE revalidations (
   tag TEXT PRIMARY KEY,
-  revalidated_at INTEGER NOT NULL
+  revalidatedAt INTEGER NOT NULL
 );
 
--- Create index for faster lookups
-CREATE INDEX IF NOT EXISTS idx_revalidated_at ON revalidations(revalidated_at);
+-- Index for faster time-based queries
+CREATE INDEX IF NOT EXISTS idx_revalidatedAt ON revalidations(revalidatedAt);

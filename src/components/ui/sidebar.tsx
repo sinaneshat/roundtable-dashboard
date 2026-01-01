@@ -7,6 +7,8 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { useTranslations } from "next-intl";
 
+import type { SidebarState } from '@/api/core/enums';
+import { SidebarStates } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 
 import { Button } from "@/components/ui/button";
@@ -35,8 +37,6 @@ const SIDEBAR_WIDTH = "20rem"
 const SIDEBAR_WIDTH_MOBILE = "20rem"
 const SIDEBAR_WIDTH_ICON = "4rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
-
-type SidebarState = "expanded" | "collapsed";
 
 type SidebarContextProps = {
   state: SidebarState
@@ -178,6 +178,7 @@ function Sidebar({
   children,
   ...props
 }: SidebarProps) {
+  const t = useTranslations('accessibility');
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
   if (collapsible === "none") {
@@ -213,8 +214,8 @@ function Sidebar({
           side={side}
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetTitle>{t('mobileSidebar.title')}</SheetTitle>
+            <SheetDescription>{t('mobileSidebar.description')}</SheetDescription>
           </SheetHeader>
           <div className="flex h-full w-full flex-col p-2">
             {children}
@@ -228,7 +229,7 @@ function Sidebar({
 
   // Calculate collapsed width for floating/inset variants
   const isFloatingOrInset = variant === "floating" || variant === "inset"
-  const isCollapsed = state === "collapsed" && collapsible === "icon"
+  const isCollapsed = state === SidebarStates.COLLAPSED && collapsible === "icon"
 
   // For floating/inset collapsed: icon width (3rem) + left/right padding (2rem) = 5rem
   // Gap needs same width as container for proper layout flow
@@ -245,7 +246,7 @@ function Sidebar({
     <div
       className="group peer text-sidebar-foreground hidden md:block"
       data-state={state}
-      data-collapsible={state === "collapsed" ? collapsible : ""}
+      data-collapsible={state === SidebarStates.COLLAPSED ? collapsible : ""}
       data-variant={variant}
       data-side={side}
       data-slot="sidebar"
@@ -313,7 +314,7 @@ function SidebarTrigger({
   const { toggleSidebar, state } = useSidebar()
   const t = useTranslations('actions');
 
-  const isCollapsed = state === "collapsed";
+  const isCollapsed = state === SidebarStates.COLLAPSED;
 
   return (
     <Button

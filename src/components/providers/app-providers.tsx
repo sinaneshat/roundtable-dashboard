@@ -1,7 +1,7 @@
 'use client';
 
 import type { AbstractIntlMessages } from 'next-intl';
-import { NextIntlClientProvider } from 'next-intl';
+import { NextIntlClientProvider, useTranslations } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { ReactNode } from 'react';
 import { Suspense, useEffect } from 'react';
@@ -16,6 +16,11 @@ import { PostHogPageview } from './posthog-pageview';
 import PostHogProvider from './posthog-provider';
 import { PreferencesStoreProvider } from './preferences-store-provider';
 import { QueryClientProvider } from './query-client-provider';
+
+function MaintenanceMessage() {
+  const t = useTranslations('common');
+  return <div>{t('maintenance')}</div>;
+}
 
 type AppProvidersProps = {
   children: ReactNode;
@@ -78,7 +83,7 @@ export function AppProviders({
                 now={now}
               >
                 <GlobalErrorBoundary>
-                  {env.NEXT_PUBLIC_MAINTENANCE === 'true' ? <div>Maintenance</div> : children}
+                  {env.NEXT_PUBLIC_MAINTENANCE === 'true' ? <MaintenanceMessage /> : children}
                 </GlobalErrorBoundary>
                 <VersionUpdateModal />
                 <Toaster />

@@ -8,8 +8,8 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-// ISR: Regenerate every hour while serving stale content
-export const revalidate = 3600;
+// SSG: Generate at build time, never revalidate
+export const dynamic = 'force-static';
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
@@ -31,12 +31,18 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PricingPage() {
   const queryClient = getQueryClient();
 
-  // ISR: Prefetch products, regenerate hourly
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.products.list(),
-    queryFn: getProductsService,
-    staleTime: 3600 * 1000, // 1 hour in milliseconds
-  });
+  // SSG: Prefetch products at build time
+  // If API is unreachable during build, client will fetch on mount
+  try {
+    await queryClient.prefetchQuery({
+      queryKey: queryKeys.products.list(),
+      queryFn: getProductsService,
+      staleTime: Infinity, // SSG: never consider stale
+    });
+  } catch {
+    // Build-time fetch failed - client will fetch on mount
+    console.warn('[SSG] Products prefetch failed, will fetch client-side');
+  }
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

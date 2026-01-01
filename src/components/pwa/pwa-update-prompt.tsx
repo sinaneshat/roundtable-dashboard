@@ -4,6 +4,7 @@ import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider, useTranslations } from 'next-intl';
 import { startTransition, useEffect, useState } from 'react';
 
+import { ServiceWorkerMessageTypes, ServiceWorkerStates } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,12 +38,12 @@ function PWAUpdatePromptContent({
 
     const waitingWorker = registration.waiting;
     const handleActivation = () => {
-      if (waitingWorker.state === 'activated') {
+      if (waitingWorker.state === ServiceWorkerStates.ACTIVATED) {
         window.location.reload();
       }
     };
 
-    waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    waitingWorker.postMessage({ type: ServiceWorkerMessageTypes.SKIP_WAITING });
     waitingWorker.addEventListener('statechange', handleActivation);
   };
 
@@ -157,7 +158,7 @@ export function PWAUpdatePrompt({ messages, locale, timeZone, now }: PWAUpdatePr
     };
 
     const handleStateChange = () => {
-      if (installingWorker && installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+      if (installingWorker && installingWorker.state === ServiceWorkerStates.INSTALLED && navigator.serviceWorker.controller) {
         setUpdateAvailable(true);
       }
     };

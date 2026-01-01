@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useBoolean } from '@/hooks/utils';
-import { formatRelativeTime } from '@/lib/format/date';
+import { formatRelativeTime } from '@/lib/format';
 import { cn } from '@/lib/ui/cn';
 import { buildGoogleFaviconUrl, handleImageError, safeExtractDomain } from '@/lib/utils';
 

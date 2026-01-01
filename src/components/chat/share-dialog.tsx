@@ -306,8 +306,8 @@ export function ShareDialog({
                 <AccordionContent className="px-4 pb-4">
                   <Tabs defaultValue="html" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="html">HTML</TabsTrigger>
-                      <TabsTrigger value="markdown">Markdown</TabsTrigger>
+                      <TabsTrigger value="html">{t('shareDialog.embedFormat.html')}</TabsTrigger>
+                      <TabsTrigger value="markdown">{t('shareDialog.embedFormat.markdown')}</TabsTrigger>
                     </TabsList>
                     <TabsContent value="html" className="mt-4">
                       <CodeSnippet

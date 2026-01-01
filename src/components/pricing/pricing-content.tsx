@@ -268,7 +268,11 @@ export function PricingContent({
                         .filter((p: Price) => !p.interval && isCreditPackagePriceId(p.id))
                         .sort((a: Price, b: Price) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0))
                         .map((price: Price, index: number) => {
-                          const creditsAmount = CREDIT_CONFIG.CUSTOM_CREDITS.packages[price.id as CreditPackagePriceId];
+                          // Type guard verified in filter above - safe to access packages
+                          // This runtime check ensures TypeScript narrowing for the lookup
+                          if (!isCreditPackagePriceId(price.id))
+                            return null;
+                          const creditsAmount = CREDIT_CONFIG.CUSTOM_CREDITS.packages[price.id];
                           return isMounted
                             ? (
                                 <motion.div

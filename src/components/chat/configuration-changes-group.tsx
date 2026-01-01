@@ -23,7 +23,7 @@ import {
   safeParseChangelogData,
 } from '@/db/schemas/chat-metadata';
 import { useModelsQuery } from '@/hooks/queries';
-import { formatRelativeTime } from '@/lib/format/date';
+import { formatRelativeTime } from '@/lib/format';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils';
 

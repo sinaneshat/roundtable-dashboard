@@ -1,6 +1,7 @@
 'use client';
 
 import { Sparkles } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -38,7 +39,7 @@ function checkVersionUpdate(): { shouldShow: boolean; version: string } {
 }
 
 export function VersionUpdateModal() {
-  // Lazy state initialization to avoid setState in effect
+  const t = useTranslations('version');
   const [state] = useState(() => checkVersionUpdate());
   const [open, setOpen] = useState(state.shouldShow);
 
@@ -66,10 +67,10 @@ export function VersionUpdateModal() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="size-5 text-blue-400" />
-            New Version Available
+            {t('newVersionAvailable')}
           </DialogTitle>
           <DialogDescription>
-            Version
+            {t('versionLabel')}
             {' '}
             {state.version}
           </DialogDescription>
@@ -77,13 +78,13 @@ export function VersionUpdateModal() {
 
         <div className="space-y-4 bg-black/50 backdrop-blur-lg p-6">
           <p className="text-sm text-muted-foreground">
-            A new version is available. Click update to refresh and get the latest improvements.
+            {t('updateDescription')}
           </p>
         </div>
 
         <DialogFooter>
           <Button onClick={handleUpdate} className="w-full">
-            Update Now
+            {t('updateNow')}
           </Button>
         </DialogFooter>
       </DialogContent>

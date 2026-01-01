@@ -2,6 +2,8 @@ import { defaultCache } from '@serwist/next/worker';
 import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist';
 import { CacheFirst, NetworkFirst, Serwist, StaleWhileRevalidate } from 'serwist';
 
+import { ServiceWorkerMessageTypes } from '@/api/core/enums';
+
 declare global {
   // eslint-disable-next-line ts/consistent-type-definitions
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -217,7 +219,7 @@ serwist.addEventListeners();
 
 // Handle update requests from PWAUpdatePrompt component
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+  if (event.data && event.data.type === ServiceWorkerMessageTypes.SKIP_WAITING) {
     void self.skipWaiting();
   }
 });

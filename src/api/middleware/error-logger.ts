@@ -58,8 +58,10 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
   }
 
   // Extract Cloudflare request context
+  // c.req.raw.cf is typed as CfProperties | undefined by Cloudflare's type definitions
+  // which includes colo and country properties from IncomingRequestCfPropertiesBase
   const cfRay = c.req.header('cf-ray');
-  const cf = c.req.raw.cf as Record<string, unknown> | undefined;
+  const cf = c.req.raw.cf;
 
   // Build structured error log (Cloudflare auto-indexes JSON fields)
   const errorLog = {

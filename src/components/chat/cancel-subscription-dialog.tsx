@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { formatDate } from '@/lib/format/date';
+import { formatDate } from '@/lib/format';
 
 type CancelSubscriptionDialogProps = {
   open: boolean;

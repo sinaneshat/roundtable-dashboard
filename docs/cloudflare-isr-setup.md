@@ -195,13 +195,13 @@ View the revalidations table:
 
 ```bash
 # Local
-npx wrangler d1 execute NEXT_TAG_CACHE_D1 --local --command "SELECT * FROM revalidations ORDER BY revalidated_at DESC LIMIT 10"
+npx wrangler d1 execute NEXT_TAG_CACHE_D1 --local --command "SELECT * FROM revalidations ORDER BY revalidatedAt DESC LIMIT 10"
 
 # Preview
-npx wrangler d1 execute NEXT_TAG_CACHE_D1 --remote --env=preview --command "SELECT * FROM revalidations ORDER BY revalidated_at DESC LIMIT 10"
+npx wrangler d1 execute NEXT_TAG_CACHE_D1 --remote --env=preview --command "SELECT * FROM revalidations ORDER BY revalidatedAt DESC LIMIT 10"
 
 # Production
-npx wrangler d1 execute NEXT_TAG_CACHE_D1 --remote --env=production --command "SELECT * FROM revalidations ORDER BY revalidated_at DESC LIMIT 10"
+npx wrangler d1 execute NEXT_TAG_CACHE_D1 --remote --env=production --command "SELECT * FROM revalidations ORDER BY revalidatedAt DESC LIMIT 10"
 ```
 
 ### Check R2 Cache

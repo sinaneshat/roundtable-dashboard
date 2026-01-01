@@ -844,3 +844,109 @@ export const BaseToastVariants = {
 export function isValidBaseToastVariant(value: unknown): value is BaseToastVariant {
   return typeof value === 'string' && BASE_TOAST_VARIANTS.includes(value as BaseToastVariant);
 }
+
+// ============================================================================
+// SIDEBAR STATE
+// ============================================================================
+
+export const SIDEBAR_STATES = ['expanded', 'collapsed'] as const;
+
+export const DEFAULT_SIDEBAR_STATE: SidebarState = 'expanded';
+
+export const SidebarStateSchema = z.enum(SIDEBAR_STATES).openapi({
+  description: 'Sidebar expansion state',
+  example: 'expanded',
+});
+
+export type SidebarState = z.infer<typeof SidebarStateSchema>;
+
+export const SidebarStates = {
+  EXPANDED: 'expanded' as const,
+  COLLAPSED: 'collapsed' as const,
+} as const;
+
+export function isValidSidebarState(value: unknown): value is SidebarState {
+  return typeof value === 'string' && SIDEBAR_STATES.includes(value as SidebarState);
+}
+
+// ============================================================================
+// SERVICE WORKER STATE
+// ============================================================================
+
+export const SERVICE_WORKER_STATES = ['installing', 'installed', 'activating', 'activated', 'redundant'] as const;
+
+export const DEFAULT_SERVICE_WORKER_STATE: ServiceWorkerState = 'installing';
+
+export const ServiceWorkerStateSchema = z.enum(SERVICE_WORKER_STATES).openapi({
+  description: 'Service worker lifecycle state',
+  example: 'activated',
+});
+
+export type ServiceWorkerState = z.infer<typeof ServiceWorkerStateSchema>;
+
+export const ServiceWorkerStates = {
+  INSTALLING: 'installing' as const,
+  INSTALLED: 'installed' as const,
+  ACTIVATING: 'activating' as const,
+  ACTIVATED: 'activated' as const,
+  REDUNDANT: 'redundant' as const,
+} as const;
+
+export function isValidServiceWorkerState(value: unknown): value is ServiceWorkerState {
+  return typeof value === 'string' && SERVICE_WORKER_STATES.includes(value as ServiceWorkerState);
+}
+
+// ============================================================================
+// SERVICE WORKER MESSAGE TYPE
+// ============================================================================
+
+export const SERVICE_WORKER_MESSAGE_TYPES = ['SKIP_WAITING'] as const;
+
+export const DEFAULT_SERVICE_WORKER_MESSAGE_TYPE: ServiceWorkerMessageType = 'SKIP_WAITING';
+
+export const ServiceWorkerMessageTypeSchema = z.enum(SERVICE_WORKER_MESSAGE_TYPES).openapi({
+  description: 'Service worker message type',
+  example: 'SKIP_WAITING',
+});
+
+export type ServiceWorkerMessageType = z.infer<typeof ServiceWorkerMessageTypeSchema>;
+
+export const ServiceWorkerMessageTypes = {
+  SKIP_WAITING: 'SKIP_WAITING' as const,
+} as const;
+
+export function isValidServiceWorkerMessageType(value: unknown): value is ServiceWorkerMessageType {
+  return typeof value === 'string' && SERVICE_WORKER_MESSAGE_TYPES.includes(value as ServiceWorkerMessageType);
+}
+
+// ============================================================================
+// KEYBOARD KEY
+// ============================================================================
+
+export const KEYBOARD_KEYS = ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Tab', 'Space', 'Backspace', 'Delete'] as const;
+
+export const DEFAULT_KEYBOARD_KEY: KeyboardKey = 'Enter';
+
+export const KeyboardKeySchema = z.enum(KEYBOARD_KEYS).openapi({
+  description: 'Keyboard key for event handling',
+  example: 'Enter',
+});
+
+export type KeyboardKey = z.infer<typeof KeyboardKeySchema>;
+
+export const KeyboardKeys = {
+  ARROW_DOWN: 'ArrowDown' as const,
+  ARROW_UP: 'ArrowUp' as const,
+  ARROW_LEFT: 'ArrowLeft' as const,
+  ARROW_RIGHT: 'ArrowRight' as const,
+  ENTER: 'Enter' as const,
+  ESCAPE: 'Escape' as const,
+  TAB: 'Tab' as const,
+  SPACE: 'Space' as const,
+  BACKSPACE: 'Backspace' as const,
+  DELETE: 'Delete' as const,
+} as const;
+
+export function isValidKeyboardKey(value: unknown): value is KeyboardKey {
+  return typeof value === 'string' && KEYBOARD_KEYS.includes(value as KeyboardKey);
+}

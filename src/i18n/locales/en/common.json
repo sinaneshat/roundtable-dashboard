@@ -7,6 +7,10 @@
     "enableMotion": "EnableMotion",
     "highContrast": "HighContrast",
     "largeText": "LargeText",
+    "mobileSidebar": {
+      "title": "Sidebar",
+      "description": "Displays the mobile sidebar."
+    },
     "morePages": "More pages",
     "nextPage": "Go to next page",
     "openSidebar": "Open sidebar",
@@ -935,7 +939,11 @@
       "copyLinkLabel": "Share Link",
       "shareOnSocialLabel": "Share on Social",
       "embedOptionsLabel": "Embed Options",
-      "embedOptionsDescription": "HTML and Markdown snippets"
+      "embedOptionsDescription": "HTML and Markdown snippets",
+      "embedFormat": {
+        "html": "HTML",
+        "markdown": "Markdown"
+      }
     },
     "streaming": {
       "remaining": "remaining",
@@ -1027,6 +1035,7 @@
   "common": {
     "error": "An error occurred",
     "loading": "Loading...",
+    "maintenance": "Maintenance",
     "none": "None",
     "or": "Or",
     "logo": "Logo",

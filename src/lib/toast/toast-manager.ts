@@ -464,5 +464,3 @@ if (typeof window !== 'undefined') {
   startQueueProcessing();
   window.addEventListener('beforeunload', stopQueueProcessing);
 }
-
-export { startQueueProcessing, stopQueueProcessing };

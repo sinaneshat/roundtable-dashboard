@@ -32,18 +32,12 @@ import { z } from 'zod';
 
 import type { ErrorCode } from '@/api/core/enums';
 import { ERROR_CODES } from '@/api/core/enums';
+import type { ValidationError } from '@/api/core/schemas';
+import { ValidationErrorSchema } from '@/api/core/schemas';
 
-// ============================================================================
-// VALIDATION ERROR SCHEMA (Zod-first pattern)
-// ============================================================================
-
-export const ValidationErrorSchema = z.object({
-  field: z.string(),
-  message: z.string(),
-  code: z.string().optional(),
-});
-
-export type ValidationError = z.infer<typeof ValidationErrorSchema>;
+// Re-export for backwards compatibility (consumers should migrate to @/api/core)
+export type { ValidationError };
+export { ValidationErrorSchema };
 
 // ============================================================================
 // ERROR DETAILS SCHEMA (Typed structure instead of unknown)

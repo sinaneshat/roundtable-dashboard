@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
+import { KeyboardKeys } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -108,22 +109,22 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     if (!isOpen)
       return;
     switch (e.key) {
-      case 'ArrowDown':
+      case KeyboardKeys.ARROW_DOWN:
         e.preventDefault();
         setSelectedIndex(prev => (prev + 1) % threads.length);
         break;
-      case 'ArrowUp':
+      case KeyboardKeys.ARROW_UP:
         e.preventDefault();
         setSelectedIndex(prev => (prev - 1 + threads.length) % threads.length);
         break;
-      case 'Enter':
+      case KeyboardKeys.ENTER:
         e.preventDefault();
         if (threads[selectedIndex]) {
           router.push(`/chat/${threads[selectedIndex].slug}`);
           handleClose();
         }
         break;
-      case 'Escape':
+      case KeyboardKeys.ESCAPE:
         e.preventDefault();
         handleClose();
         break;
