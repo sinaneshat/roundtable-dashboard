@@ -8,10 +8,8 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-// ISR: Build at runtime on edge (not CI), revalidate every hour
-// Note: Pure SSG doesn't work because build machine can't reach production API
-// ISR ensures the page is built at runtime when API IS accessible
-export const revalidate = 3600; // 1 hour - products rarely change
+// SSG: Generate at build time
+export const dynamic = 'force-static';
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
@@ -33,12 +31,17 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PricingPage() {
   const queryClient = getQueryClient();
 
-  // ISR: Prefetch products at runtime on edge with await
-  // Per TanStack docs: use await to ensure data is ready before dehydration
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.products.list(),
-    queryFn: getProductsService,
-  });
+  // SSG: Fetch products at build time - use fetchQuery to catch errors
+  try {
+    const data = await queryClient.fetchQuery({
+      queryKey: queryKeys.products.list(),
+      queryFn: getProductsService,
+    });
+    // eslint-disable-next-line no-console
+    console.log('[SSG] Products prefetch success:', data?.success, 'items:', data?.data?.items?.length ?? 0);
+  } catch (error) {
+    console.error('[SSG] Products prefetch failed:', error);
+  }
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
