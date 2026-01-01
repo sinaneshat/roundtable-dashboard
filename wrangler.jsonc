@@ -163,10 +163,6 @@
         "enabled": true,
         "head_sampling_rate": 0.1
       },
-      // CPU limits for preview environment (100ms)
-      "limits": {
-        "cpu_ms": 100
-      },
       "routes": [
         {
           "pattern": "app-preview.roundtable.now",
@@ -288,10 +284,6 @@
       "observability": {
         "enabled": true,
         "head_sampling_rate": 0.05
-      },
-      // CPU limits for production (150ms - slightly higher for complex operations)
-      "limits": {
-        "cpu_ms": 150
       },
       "routes": [
         {
