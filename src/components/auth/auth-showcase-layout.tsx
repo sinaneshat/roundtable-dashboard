@@ -1,13 +1,30 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 
 import { Logo } from '@/components/logo';
 import { Card } from '@/components/ui/card';
 import { RadialGlow } from '@/components/ui/radial-glow';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
 
-import { LiveChatDemo } from './live-chat-demo';
+// Client-only, deferred loading - LiveChatDemo is 350+ lines with ThreadTimeline
+// Only shown on desktop (lg:), so mobile users never load this
+const LiveChatDemo = dynamic(
+  () => import('./live-chat-demo').then(mod => mod.LiveChatDemo),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col h-full p-6 gap-4">
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    ),
+  },
+);
 
 type AuthShowcaseLayoutProps = {
   children: React.ReactNode;

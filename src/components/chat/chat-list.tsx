@@ -6,7 +6,6 @@ import { useTranslations } from 'next-intl';
 import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ChatSidebarItem } from '@/api/routes/chat/schema';
-import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatRenameForm } from '@/components/chat/chat-rename-form';
 import { Icons } from '@/components/icons';
 import {
@@ -35,6 +34,12 @@ import {
 } from '@/components/ui/sidebar';
 import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations';
 import { useCurrentPathname } from '@/hooks/utils';
+
+// Lazy-loaded - only shown when user clicks delete
+const ChatDeleteDialog = dynamic(
+  () => import('@/components/chat/chat-delete-dialog').then(m => m.ChatDeleteDialog),
+  { ssr: false },
+);
 
 // Lazy-loaded - ShareDialog contains heavy next-share library (~200KB)
 const ShareDialog = dynamic(
