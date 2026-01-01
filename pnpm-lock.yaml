@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@opennextjs/cloudflare@1.14.7':
+    hash: bb672261dd76c8176338170c012211bf3913bc10f4e22e27632696392e9f0b53
+    path: patches/@opennextjs__cloudflare@1.14.7.patch
+
 importers:
 
   .:
@@ -21,8 +26,8 @@ importers:
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.69.0(react@19.2.3))
       '@opennextjs/cloudflare':
-        specifier: https://pkg.pr.new/@opennextjs/cloudflare@main
-        version: https://pkg.pr.new/@opennextjs/cloudflare@main(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(wrangler@4.54.0(@cloudflare/workers-types@4.20251231.0))
+        specifier: https://pkg.pr.new/@opennextjs/cloudflare@1057
+        version: https://pkg.pr.new/@opennextjs/cloudflare@1057(patch_hash=bb672261dd76c8176338170c012211bf3913bc10f4e22e27632696392e9f0b53)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(wrangler@4.54.0(@cloudflare/workers-types@4.20251231.0))
       '@openrouter/ai-sdk-provider':
         specifier: ^1.5.4
         version: 1.5.4(ai@6.0.5(zod@4.3.2))(zod@4.3.2)
@@ -3194,8 +3199,8 @@ packages:
     peerDependencies:
       next: ^14.2.35 || ~15.0.7 || ~15.1.11 || ~15.2.8 || ~15.3.8 || ~15.4.10 || ~15.5.9 || ^16.0.10
 
-  '@opennextjs/cloudflare@https://pkg.pr.new/@opennextjs/cloudflare@main':
-    resolution: {integrity: sha512-gHK1vx2nIYvr16IG71zRFVTq5diV8haYb6UV+DHw1JZTw1xrM5g6E+k7tDu5n8NX0u/9QH+cZIsJS7nmXUnc+A==, tarball: https://pkg.pr.new/@opennextjs/cloudflare@main}
+  '@opennextjs/cloudflare@https://pkg.pr.new/@opennextjs/cloudflare@1057':
+    resolution: {integrity: sha512-ow138ksp2VGkcClDgtlueTbSfLtXLlQ1HnmdVKucSqVhFA1QyyduL61pBAtPeItjPlDGCMANJbxKXhJODhMVqQ==, tarball: https://pkg.pr.new/@opennextjs/cloudflare@1057}
     version: 1.14.7
     hasBin: true
     peerDependencies:
@@ -14541,7 +14546,7 @@ snapshots:
       - aws-crt
       - supports-color
 
-  '@opennextjs/cloudflare@https://pkg.pr.new/@opennextjs/cloudflare@main(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(wrangler@4.54.0(@cloudflare/workers-types@4.20251231.0))':
+  '@opennextjs/cloudflare@https://pkg.pr.new/@opennextjs/cloudflare@1057(patch_hash=bb672261dd76c8176338170c012211bf3913bc10f4e22e27632696392e9f0b53)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(wrangler@4.54.0(@cloudflare/workers-types@4.20251231.0))':
     dependencies:
       '@ast-grep/napi': 0.40.0
       '@dotenvx/dotenvx': 1.31.0
