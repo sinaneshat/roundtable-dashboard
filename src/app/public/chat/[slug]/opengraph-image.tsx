@@ -39,7 +39,8 @@ import {
 import { getPublicThreadService } from '@/services/api';
 
 // Open Graph Image metadata - must be direct exports (not re-exported)
-export const revalidate = 86400; // ISR: Revalidate every 24 hours (same as page)
+// Force dynamic to avoid build-time image fetch errors
+export const dynamic = 'force-dynamic';
 export const size = {
   width: 1200,
   height: 630,

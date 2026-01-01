@@ -328,7 +328,6 @@ export {
   type UploadWithTicketRequest,
   type UploadWithTicketResponse,
   uploadWithTicketService,
-  type UploadWithTicketServiceInput,
 } from './uploads';
 
 // ============================================================================

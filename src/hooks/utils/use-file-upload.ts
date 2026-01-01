@@ -340,9 +340,11 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           const partData = file.slice(start, end);
 
           const partResult = await uploadPart.mutateAsync({
-            id: dbUploadId,
-            uploadId: multipartId,
-            partNumber: partNumber.toString(),
+            param: { id: dbUploadId },
+            query: {
+              uploadId: multipartId,
+              partNumber: partNumber.toString(),
+            },
             body: partData,
           });
 

@@ -17,7 +17,8 @@ import {
   OG_COLORS,
 } from '@/lib/ui';
 
-export const revalidate = 3600; // ISR: Revalidate every hour
+// Force dynamic to avoid build-time image fetch errors
+export const dynamic = 'force-dynamic';
 export const size = {
   width: 1200,
   height: 630,

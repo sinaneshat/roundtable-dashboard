@@ -206,28 +206,25 @@ export async function requestUploadTicketService(data: RequestUploadTicketReques
 }
 
 /**
- * Upload request type for ticket-based service
- * Requires manual type - Hono RPC doesn't support multipart/form-data with query params
- */
-export type UploadWithTicketServiceInput = {
-  token: string;
-  file: File;
-};
-
-/**
  * Upload a file with a valid ticket (Step 2 of secure upload)
  * Protected endpoint - requires authentication
  *
- * Uses authenticatedFetch because Hono RPC doesn't support multipart/form-data
+ * NOTE: Uses authenticatedFetch instead of Hono RPC because:
+ * - Backend uses @hono/zod-openapi with OpenAPI binary schema (type: 'string', format: 'binary')
+ * - Hono RPC InferRequestType only infers `query` from this, not `form`
+ * - Per Hono docs, RPC works with zValidator('form', z.object({ file: z.instanceof(File) }))
+ *   but OpenAPI schema format doesn't translate to RPC types
+ *
+ * @see https://hono.dev/docs/guides/rpc#file-uploads
  */
-export async function uploadWithTicketService(data: UploadWithTicketServiceInput) {
+export async function uploadWithTicketService(data: { query: { token: string }; form: { file: File } }) {
   const formData = new FormData();
-  formData.append('file', data.file);
+  formData.append('file', data.form.file);
 
   const response = await authenticatedFetch('/uploads/ticket/upload', {
     method: 'POST',
     body: formData,
-    searchParams: { token: data.token },
+    searchParams: { token: data.query.token },
   });
 
   return response.json() as Promise<UploadWithTicketResponse>;
@@ -255,8 +252,8 @@ export async function secureUploadService(file: File) {
 
   // Step 2: Upload file with token
   return uploadWithTicketService({
-    token: ticketResponse.data.token,
-    file,
+    query: { token: ticketResponse.data.token },
+    form: { file },
   });
 }
 
@@ -283,13 +280,12 @@ export async function createMultipartUploadService(data: CreateMultipartUploadRe
 }
 
 /**
- * Upload part request type
- * Requires manual type - Hono RPC doesn't support application/octet-stream
+ * Upload part request type - follows Hono RPC structure
+ * Uses manual type because Hono RPC doesn't infer body from OpenAPI octet-stream schema
  */
 export type UploadPartServiceInput = {
-  id: string;
-  uploadId: string;
-  partNumber: string;
+  param: { id: string };
+  query: { uploadId: string; partNumber: string };
   body: Blob;
 };
 
@@ -297,10 +293,13 @@ export type UploadPartServiceInput = {
  * Upload a part of a multipart upload
  * Protected endpoint - requires authentication
  *
- * Uses authenticatedFetch because Hono RPC doesn't support octet-stream
+ * NOTE: Uses authenticatedFetch instead of Hono RPC because:
+ * - Backend uses application/octet-stream for binary part data
+ * - Hono RPC InferRequestType only infers `param` and `query`, not binary `body`
+ * - OpenAPI schema (type: 'string', format: 'binary') doesn't translate to RPC types
  */
 export async function uploadPartService(data: UploadPartServiceInput) {
-  const response = await authenticatedFetch(`/uploads/multipart/${data.id}/parts`, {
+  const response = await authenticatedFetch(`/uploads/multipart/${data.param.id}/parts`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/octet-stream',
@@ -308,8 +307,8 @@ export async function uploadPartService(data: UploadPartServiceInput) {
     },
     body: data.body,
     searchParams: {
-      uploadId: data.uploadId,
-      partNumber: data.partNumber,
+      uploadId: data.query.uploadId,
+      partNumber: data.query.partNumber,
     },
   });
 

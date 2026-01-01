@@ -3,9 +3,6 @@
  *
  * Utilities for generating dynamic OG images with proper type safety.
  * Uses brand constants and type-safe mode color mapping.
- *
- * Note: During Next.js static build, images are read from filesystem.
- * At runtime (Cloudflare Workers), images are fetched from URL.
  */
 
 import type { ChatMode } from '@/api/core/enums';
@@ -17,51 +14,7 @@ import { getModelIconInfo } from '@/lib/utils';
 // IMAGE CONVERSION
 // ============================================================================
 
-/**
- * Read image from filesystem (Node.js build time)
- * Returns null if not available (e.g., Cloudflare Workers runtime)
- */
-async function readImageFromFilesystem(relativePath: string): Promise<string | null> {
-  // Only try filesystem in Node.js environment (build time)
-  if (typeof process === 'undefined' || !process.cwd) {
-    return null;
-  }
-
-  try {
-    // Dynamic import to avoid bundling Node.js modules in Workers
-    const fs = await import('node:fs/promises');
-    const path = await import('node:path');
-
-    const cleanPath = relativePath.replace(/^public\//, '');
-    const filePath = path.join(process.cwd(), 'public', cleanPath);
-
-    const buffer = await fs.readFile(filePath);
-    const base64 = buffer.toString('base64');
-
-    const ext = cleanPath.split('.').pop()?.toLowerCase();
-    const mimeType = ext === 'png'
-      ? 'image/png'
-      : ext === 'jpg' || ext === 'jpeg'
-        ? 'image/jpeg'
-        : ext === 'svg'
-          ? 'image/svg+xml'
-          : 'image/png';
-
-    return `data:${mimeType};base64,${base64}`;
-  } catch {
-    // Filesystem not available or file not found
-    return null;
-  }
-}
-
 export async function getBase64Image(relativePath: string): Promise<string> {
-  // First try filesystem (works during build)
-  const fsResult = await readImageFromFilesystem(relativePath);
-  if (fsResult) {
-    return fsResult;
-  }
-
-  // Fall back to URL fetch (works at runtime)
   const cleanPath = relativePath.replace(/^public\//, '');
   const baseUrl = getAppBaseUrl();
   const imageUrl = `${baseUrl}/${cleanPath}`;
