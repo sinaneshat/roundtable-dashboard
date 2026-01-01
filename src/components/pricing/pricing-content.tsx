@@ -3,7 +3,7 @@
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import type { UIBillingInterval } from '@/api/core/enums';
 import {
@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PricingCard } from '@/components/ui/pricing-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useIsMounted } from '@/hooks/utils';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 const CREDITS_TAB = 'credits' as const;
@@ -66,12 +67,7 @@ export function PricingContent({
   const t = useTranslations();
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState<PricingTab>(DEFAULT_UI_BILLING_INTERVAL);
-  const [isMounted, setIsMounted] = useState(false);
-
-  // Prevent hydration issues with motion components
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const isMounted = useIsMounted();
 
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
@@ -370,11 +366,7 @@ function ProductGrid({
   getAnnualSavings,
 }: ProductGridProps) {
   const t = useTranslations();
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const isMounted = useIsMounted();
 
   if (products.length === 0) {
     return (

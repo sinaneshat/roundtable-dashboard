@@ -6,11 +6,11 @@
 import type { ReactElement } from 'react';
 import React from 'react';
 
-import type { ToastVariant } from '@/api/core/enums';
-import { ToastVariants } from '@/api/core/enums';
+import type { BaseToastVariant, ToastPosition, ToastVariant } from '@/api/core/enums';
+import { BaseToastVariants, ToastVariants } from '@/api/core/enums';
 import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
-import { toast as baseToast } from '@/hooks/utils';
+import { toast as baseToast } from '@/hooks/utils/use-toast';
 
 /**
  * Create ToastActionElement using React.createElement
@@ -55,7 +55,7 @@ export type ToastOptions = {
   };
   icon?: React.ComponentType<{ className?: string }>;
   dismissible?: boolean;
-  position?: 'top-center' | 'top-right' | 'bottom-center' | 'bottom-right';
+  position?: ToastPosition;
 };
 
 type ToastProgressCallback = (progress: number) => void;
@@ -136,14 +136,13 @@ function showToastInternal(options: ToastOptions): void {
 
   // Normalize custom variants (warning, info, loading) to default for base toast
   // Only DEFAULT, SUCCESS, DESTRUCTIVE are supported by the base toast component
-  type BaseToastVariant = 'default' | 'success' | 'destructive';
   const normalizedVariant: BaseToastVariant = (
     variant === ToastVariants.WARNING
     || variant === ToastVariants.INFO
     || variant === ToastVariants.LOADING
   )
-    ? ToastVariants.DEFAULT
-    : variant;
+    ? BaseToastVariants.DEFAULT
+    : (variant as BaseToastVariant);
 
   const toastConfig = {
     title,

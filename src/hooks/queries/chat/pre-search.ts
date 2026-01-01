@@ -2,7 +2,7 @@
  * Thread Pre-Search Query Hooks
  *
  * TanStack Query hooks for thread pre-search operations
- * Following EXACT pattern from moderator.ts
+ * Following EXACT pattern from moderator.handler.ts
  *
  * IMPORTANT: staleTime values MUST match server-side prefetch values
  */
@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { MessageStatuses } from '@/api/core/enums';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
+import { POLLING_INTERVALS, STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadPreSearchesService } from '@/services/api';
 
 /**
@@ -34,10 +34,7 @@ export function useThreadPreSearchesQuery(
 
   const query = useQuery({
     queryKey: queryKeys.threads.preSearches(threadId),
-    queryFn: async () => {
-      const response = await getThreadPreSearchesService({ param: { id: threadId } });
-      return response;
-    },
+    queryFn: () => getThreadPreSearchesService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.preSearch,
     placeholderData: previousData => previousData,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
@@ -62,8 +59,7 @@ export function useThreadPreSearchesQuery(
         ps => ps.status === MessageStatuses.PENDING,
       );
 
-      // Poll every 500ms only for PENDING status to catch execution start
-      return hasPendingPreSearch ? 500 : false;
+      return hasPendingPreSearch ? POLLING_INTERVALS.preSearchPending : false;
     },
     refetchIntervalInBackground: false, // Only poll when tab is active
   });

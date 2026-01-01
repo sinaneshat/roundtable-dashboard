@@ -29,6 +29,7 @@ import {
   TEXT_MIMES,
   UploadStrategySchema,
 } from '@/api/core/enums';
+import { formatFileSize } from '@/lib/format';
 
 // ============================================================================
 // ZOD SCHEMAS - Type-safe validation structures
@@ -138,18 +139,6 @@ function getFileCategoryFromMime(mimeType: string): FileCategory {
 }
 
 /**
- * Format bytes to human-readable string
- */
-function formatBytes(bytes: number): string {
-  if (bytes === 0)
-    return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${Number.parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
-}
-
-/**
  * Calculate optimal part configuration for multipart upload
  */
 function calculateMultipartParts(fileSize: number): { partCount: number; partSize: number } {
@@ -194,21 +183,10 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
 
   const effectiveMaxSize = maxSize ?? (allowMultipart ? MAX_TOTAL_FILE_SIZE : MAX_SINGLE_UPLOAD_SIZE);
 
+  // Only wrap in useCallback when there are deps to memoize
   const isAllowedType = useCallback(
     (mimeType: string) => checkAllowedMimeType(mimeType, allowedTypes),
     [allowedTypes],
-  );
-
-  const getFileCategory = useCallback(
-    (mimeType: string) => getFileCategoryFromMime(mimeType),
-    [],
-  );
-
-  const formatFileSize = useCallback((bytes: number) => formatBytes(bytes), []);
-
-  const calculateParts = useCallback(
-    (fileSize: number) => calculateMultipartParts(fileSize),
-    [],
   );
 
   const validateFile = useCallback(
@@ -264,7 +242,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
           valid: false,
           error: {
             code: 'file_too_large',
-            message: `File is too large (${formatBytes(file.size)}). Maximum size is ${formatBytes(effectiveMaxSize)}`,
+            message: `File is too large (${formatFileSize(file.size)}). Maximum size is ${formatFileSize(effectiveMaxSize)}`,
             details: {
               maxSize: effectiveMaxSize,
               actualSize: file.size,
@@ -290,7 +268,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
           valid: false,
           error: {
             code: 'file_too_large',
-            message: `File is too large for single upload (${formatBytes(file.size)}). Maximum is ${formatBytes(MAX_SINGLE_UPLOAD_SIZE)}`,
+            message: `File is too large for single upload (${formatFileSize(file.size)}). Maximum is ${formatFileSize(MAX_SINGLE_UPLOAD_SIZE)}`,
             details: {
               maxSize: MAX_SINGLE_UPLOAD_SIZE,
               actualSize: file.size,
@@ -339,9 +317,9 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
     validateFile,
     validateFiles,
     isAllowedType,
-    getFileCategory,
+    getFileCategory: getFileCategoryFromMime,
     formatFileSize,
-    calculateParts,
+    calculateParts: calculateMultipartParts,
     constants,
   };
 }

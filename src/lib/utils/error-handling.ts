@@ -9,9 +9,9 @@
  * {
  *   success: false,
  *   error: {
- *     code: string,              // e.g., "VALIDATION_ERROR", "UNAUTHENTICATED"
+ *     code: ErrorCode,           // e.g., "VALIDATION_ERROR", "UNAUTHENTICATED"
  *     message: string,           // Human-readable error message
- *     details?: unknown,         // Optional additional details
+ *     details?: ErrorDetails,    // Optional additional details (typed)
  *     context?: ErrorContext,    // Type-safe error context
  *     validation?: Array<{       // Optional validation errors
  *       field: string,
@@ -28,34 +28,135 @@
  * ```
  */
 
-import type { ToastVariant } from '@/api/core/enums';
-import { ToastVariants } from '@/api/core/enums';
+import { z } from 'zod';
+
+import type { ErrorCode } from '@/api/core/enums';
+import { ERROR_CODES } from '@/api/core/enums';
+
+// ============================================================================
+// VALIDATION ERROR SCHEMA (Zod-first pattern)
+// ============================================================================
+
+export const ValidationErrorSchema = z.object({
+  field: z.string(),
+  message: z.string(),
+  code: z.string().optional(),
+});
+
+export type ValidationError = z.infer<typeof ValidationErrorSchema>;
+
+// ============================================================================
+// ERROR DETAILS SCHEMA (Typed structure instead of unknown)
+// ============================================================================
+
+/** Primitive value types allowed in error context */
+type ErrorContextValue = string | number | boolean | null;
+
+export const ErrorDetailsSchema = z.object({
+  /** Original error name */
+  errorName: z.string().optional(),
+  /** Stack trace (development only) */
+  stack: z.string().optional(),
+  /** Error context type (for discriminated union) */
+  errorType: z.string().optional(),
+  /** Additional context data - typed as record of primitives */
+  context: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+}).optional();
+
+export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
+
+// ============================================================================
+// REQUEST META SCHEMA
+// ============================================================================
+
+export const RequestMetaSchema = z.object({
+  requestId: z.string().optional(),
+  timestamp: z.string().optional(),
+  correlationId: z.string().optional(),
+});
+
+export type RequestMeta = z.infer<typeof RequestMetaSchema>;
+
+// ============================================================================
+// API ERROR DETAILS SCHEMA (Main exported type)
+// ============================================================================
+
+export const ApiErrorDetailsSchema = z.object({
+  /** Main error message */
+  message: z.string(),
+  /** Error code (if available) - uses ErrorCode enum when valid */
+  code: z.string().optional(),
+  /** HTTP status code (if available) */
+  status: z.number().int().positive().optional(),
+  /** Validation errors (if any) */
+  validationErrors: z.array(ValidationErrorSchema).optional(),
+  /** Additional error details (typed) */
+  details: ErrorDetailsSchema,
+  /** Request metadata */
+  meta: RequestMetaSchema.optional(),
+});
+
+export type ApiErrorDetails = z.infer<typeof ApiErrorDetailsSchema>;
+
+// ============================================================================
+// TYPE GUARDS
+// ============================================================================
 
 /**
- * Extracted error information from API responses
+ * Type guard to check if a string is a valid ErrorCode
  */
-export type ApiErrorDetails = {
-  /** Main error message */
-  message: string;
-  /** Error code (if available) */
-  code?: string;
-  /** HTTP status code (if available) */
-  status?: number;
-  /** Validation errors (if any) */
-  validationErrors?: Array<{
-    field: string;
-    message: string;
-    code?: string;
-  }>;
-  /** Additional error details */
-  details?: unknown;
-  /** Request metadata */
-  meta?: {
-    requestId?: string;
-    timestamp?: string;
-    correlationId?: string;
-  };
-};
+export function isValidErrorCode(code: string): code is ErrorCode {
+  return ERROR_CODES.includes(code as ErrorCode);
+}
+
+/**
+ * Type guard to check if an object has a string property
+ */
+function hasStringProperty(obj: object, key: string): boolean {
+  return key in obj && typeof (obj as Record<string, unknown>)[key] === 'string';
+}
+
+/**
+ * Type guard to check if value is non-null object
+ */
+function isNonNullObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/**
+ * Safely extract error details from context object
+ */
+function extractErrorDetails(context: unknown): ErrorDetails | undefined {
+  if (!isNonNullObject(context)) {
+    return undefined;
+  }
+
+  const details: NonNullable<ErrorDetails> = {};
+
+  if (hasStringProperty(context, 'errorType')) {
+    details.errorType = context.errorType as string;
+  }
+
+  // Extract primitive values into context record
+  const contextRecord: Record<string, ErrorContextValue> = {};
+  let hasContextValues = false;
+
+  for (const [key, value] of Object.entries(context)) {
+    if (key === 'errorType' || key === 'errorName' || key === 'stack') {
+      continue;
+    }
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null) {
+      contextRecord[key] = value;
+      hasContextValues = true;
+    }
+  }
+
+  if (hasContextValues) {
+    details.context = contextRecord;
+  }
+
+  return Object.keys(details).length > 0 ? details : undefined;
+}
 
 /**
  * Extract detailed error message from API error responses
@@ -147,16 +248,16 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
         }));
     }
 
-    // Extract additional error details
+    // Extract additional error details using type-safe extraction
     if ('details' in apiError && apiError.details !== undefined) {
-      result.details = apiError.details;
+      result.details = extractErrorDetails(apiError.details);
     }
 
     // Extract error context (type-safe discriminated union in backend)
     // This is available for debugging but not typically shown to users
-    if ('context' in apiError && typeof apiError.context === 'object' && apiError.context !== null) {
+    if ('context' in apiError && isNonNullObject(apiError.context)) {
       // Context is available in result.details for advanced error handling
-      result.details = result.details || apiError.context;
+      result.details = result.details ?? extractErrorDetails(apiError.context);
     }
   }
 
@@ -223,7 +324,7 @@ export function getApiErrorMessage(error: unknown, fallback = 'An unknown error 
 }
 
 /**
- * Format validation errors into a readable string
+ * Format validation errors into a readable string for frontend display
  * Useful for displaying multiple validation errors in a single toast
  *
  * @param validationErrors - Array of validation errors
@@ -233,7 +334,7 @@ export function getApiErrorMessage(error: unknown, fallback = 'An unknown error 
  * ```typescript
  * const errorDetails = getApiErrorDetails(error);
  * if (errorDetails.validationErrors && errorDetails.validationErrors.length > 0) {
- *   const message = formatValidationErrors(errorDetails.validationErrors);
+ *   const message = formatValidationErrorsAsString(errorDetails.validationErrors);
  *   toast({
  *     variant: 'destructive',
  *     title: 'Validation failed',
@@ -242,8 +343,8 @@ export function getApiErrorMessage(error: unknown, fallback = 'An unknown error 
  * }
  * ```
  */
-export function formatValidationErrors(
-  validationErrors: Array<{ field: string; message: string }>,
+export function formatValidationErrorsAsString(
+  validationErrors: ReadonlyArray<ValidationError>,
 ): string {
   if (!validationErrors || validationErrors.length === 0) {
     return 'Validation failed';
@@ -255,43 +356,4 @@ export function formatValidationErrors(
   }
 
   return validationErrors.map(err => `${err.field}: ${err.message}`).join('; ');
-}
-
-/**
- * Show an error toast with proper API error extraction
- * This is a convenience wrapper that combines error extraction with toast display
- *
- * @param toast - Toast function from useToast or toastManager
- * @param title - Toast title
- * @param error - Error object from API call
- * @param fallbackMessage - Fallback message if error extraction fails
- *
- * @example
- * ```typescript
- * import { toast } from '@/hooks/utils';
- * import { showErrorToast } from '@/lib/utils';
- *
- * try {
- *   await createApiKey(data);
- * } catch (error) {
- *   showErrorToast(toast, 'Failed to create API key', error);
- * }
- * ```
- */
-export function showErrorToast(
-  toast: (options: {
-    variant?: ToastVariant;
-    title?: string;
-    description?: string;
-  }) => void,
-  title: string,
-  error: unknown,
-  fallbackMessage?: string,
-): void {
-  const errorMessage = getApiErrorMessage(error, fallbackMessage);
-  toast({
-    variant: ToastVariants.DESTRUCTIVE,
-    title,
-    description: errorMessage,
-  });
 }

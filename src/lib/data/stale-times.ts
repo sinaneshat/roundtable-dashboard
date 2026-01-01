@@ -120,3 +120,18 @@ export function getStaleTime(
  * Ensures consistency between server and client
  */
 export type StaleTimeKey = keyof typeof STALE_TIMES;
+
+// ============================================================================
+// POLLING INTERVALS
+// ============================================================================
+
+/**
+ * Centralized polling interval configuration
+ *
+ * Used by TanStack Query's refetchInterval option for conditional polling.
+ * These are used when polling is needed to detect state transitions.
+ */
+export const POLLING_INTERVALS = {
+  /** Poll for pre-search status changes (PENDING -> STREAMING transition) */
+  preSearchPending: 500,
+} as const;

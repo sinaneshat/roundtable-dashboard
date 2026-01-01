@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import type { AvailableSource } from '@/api/types/citations';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +11,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { formatFileSize } from '@/lib/format';
 import { cn } from '@/lib/ui/cn';
 
 type MessageSourcesProps = {
@@ -16,17 +19,9 @@ type MessageSourcesProps = {
   className?: string;
 };
 
-function formatFileSize(bytes?: number): string {
-  if (!bytes)
-    return '';
-  if (bytes < 1024)
-    return `${bytes} B`;
-  if (bytes < 1024 * 1024)
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 export function MessageSources({ sources, className }: MessageSourcesProps) {
+  const t = useTranslations('chat.message');
+
   if (!sources || sources.length === 0) {
     return null;
   }
@@ -41,9 +36,7 @@ export function MessageSources({ sources, className }: MessageSourcesProps) {
         >
           <Icons.paperclip className="size-3.5" />
           <span>
-            Sources (
-            {sources.length}
-            )
+            {t('sources', { count: sources.length })}
           </span>
         </Button>
       </CollapsibleTrigger>
@@ -101,7 +94,7 @@ function SourceCard({ source, index }: SourceCardProps) {
             href={source.downloadUrl}
             target="_blank"
             rel="noopener noreferrer"
-            title={`Download ${source.filename || source.title}`}
+            aria-label={`Download ${source.filename || source.title}`}
           >
             <Icons.download className="size-3.5" />
           </a>

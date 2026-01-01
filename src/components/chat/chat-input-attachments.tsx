@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
-import { UploadStatuses } from '@/api/core/enums';
+import { FileIconNames, UploadStatuses } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -11,58 +11,43 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { PendingAttachment } from '@/hooks/utils';
 import { getFileIconName, getFileTypeLabel } from '@/hooks/utils';
+import { formatFileSize } from '@/lib/format';
+import { formatDate } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
 
 type ChatInputAttachmentsProps = {
-  /** Pending attachments to display */
   attachments: PendingAttachment[];
-  /** Callback when an attachment is removed (if undefined, remove buttons are hidden) */
   onRemove?: (id: string) => void;
-  /** Whether to show the dropzone overlay */
   isDragging?: boolean;
-  /** Callback when files are dropped */
   onDrop?: (files: File[]) => void;
 };
 
-function formatFileSize(bytes: number): string {
-  if (bytes === 0)
-    return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${Number.parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
-}
+type FileTypeIconProps = {
+  mimeType: string;
+  className?: string;
+};
 
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-}
-
-function FileTypeIcon({ mimeType, className }: { mimeType: string; className?: string }) {
+function FileTypeIcon({ mimeType, className }: FileTypeIconProps) {
   const iconName = getFileIconName(mimeType);
   const iconClass = cn('size-4 text-muted-foreground', className);
 
   switch (iconName) {
-    case 'image':
+    case FileIconNames.IMAGE:
       return <Icons.fileImage className={iconClass} />;
-    case 'file-code':
+    case FileIconNames.FILE_CODE:
       return <Icons.fileCode className={iconClass} />;
-    case 'file-text':
+    case FileIconNames.FILE_TEXT:
       return <Icons.fileText className={iconClass} />;
     default:
       return <Icons.file className={iconClass} />;
   }
 }
 
-function AttachmentTooltipContent({
-  attachment,
-}: {
+type AttachmentTooltipContentProps = {
   attachment: PendingAttachment;
-}) {
+};
+
+function AttachmentTooltipContent({ attachment }: AttachmentTooltipContentProps) {
   const t = useTranslations();
   const { file, preview, status, uploadItem } = attachment;
   const isImage = file.type.startsWith('image/');
@@ -96,7 +81,14 @@ function AttachmentTooltipContent({
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           <span>{formatFileSize(file.size)}</span>
           <span>{getFileTypeLabel(file.type)}</span>
-          <span>{formatDate(new Date(file.lastModified))}</span>
+          <span>
+            {formatDate(new Date(file.lastModified), {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+            })}
+          </span>
         </div>
 
         {/* Status indicator */}
@@ -122,16 +114,12 @@ function AttachmentTooltipContent({
   );
 }
 
-/**
- * Compact attachment chip with hover preview
- */
-function AttachmentChip({
-  attachment,
-  onRemove,
-}: {
+type AttachmentChipProps = {
   attachment: PendingAttachment;
   onRemove?: () => void;
-}) {
+};
+
+function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
   const { file, preview, status, uploadItem } = attachment;
   const isImage = file.type.startsWith('image/');
   const isUploading = status === UploadStatuses.UPLOADING;
@@ -220,10 +208,11 @@ function AttachmentChip({
   );
 }
 
-/**
- * Dropzone overlay for drag and drop - covers entire chat input
- */
-export function ChatInputDropzoneOverlay({ isDragging }: { isDragging: boolean }) {
+type ChatInputDropzoneOverlayProps = {
+  isDragging: boolean;
+};
+
+export function ChatInputDropzoneOverlay({ isDragging }: ChatInputDropzoneOverlayProps) {
   const t = useTranslations();
   return (
     <AnimatePresence>

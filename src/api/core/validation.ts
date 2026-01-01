@@ -85,9 +85,10 @@ export function createValidator<T>(schema: z.ZodSchema<T>) {
 }
 
 /**
- * Format validation errors for API responses
+ * Format validation errors into ErrorContext for API responses
+ * Returns structured error context object for backend error handling
  */
-export function formatValidationErrors(errors: ValidationError[]): ErrorContext {
+export function formatValidationErrorContext(errors: ValidationError[]): ErrorContext {
   return {
     errorType: 'validation' as const,
     fieldErrors: errors.map(err => ({
@@ -151,8 +152,9 @@ export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
 
 /**
  * Filter value schema - type-safe union of allowed filter types
+ * Used for dynamic query filters in search/list endpoints
  */
-const FilterValueSchema = z.union([
+export const FilterValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
@@ -279,16 +281,18 @@ export const documentUploadValidator = createFileUploadValidator(
 // ============================================================================
 
 /**
- * Conditional value type - the value being validated
- */
-type ConditionalValue = string | number | boolean | null;
-
-/**
  * Conditional data schema - ensures object has the condition field
+ * Used for field-based conditional validation
  */
-const ConditionalDataSchema = z.record(z.string(), FilterValueSchema).openapi('ConditionalData');
+export const ConditionalDataSchema = z.record(z.string(), FilterValueSchema).openapi('ConditionalData');
 
 export type ConditionalData = z.infer<typeof ConditionalDataSchema>;
+
+/**
+ * Conditional value type - inferred from FilterValueSchema
+ * Represents allowed values for conditional validation
+ */
+export type ConditionalValue = FilterValue;
 
 /**
  * Create a conditional validator based on another field
@@ -352,11 +356,11 @@ export function validateQueryParams<T>(
 }
 
 /**
- * Path parameters schema - string key-value pairs
+ * Path parameters schema - string key-value pairs for route params
  */
-const _PathParamsSchema = z.record(z.string(), z.string()).openapi('PathParams');
+export const PathParamsSchema = z.record(z.string(), z.string()).openapi('PathParams');
 
-export type PathParams = z.infer<typeof _PathParamsSchema>;
+export type PathParams = z.infer<typeof PathParamsSchema>;
 
 /**
  * Validate path parameters
@@ -389,9 +393,9 @@ export function createValidationErrorContext(
 /**
  * Unknown input schema - accepts any value for initial validation
  */
-const _UnknownInputSchema = z.unknown().openapi('UnknownInput');
+export const UnknownInputSchema = z.unknown().openapi('UnknownInput');
 
-export type UnknownInput = z.infer<typeof _UnknownInputSchema>;
+export type UnknownInput = z.infer<typeof UnknownInputSchema>;
 
 /**
  * Validate against ErrorContextSchema to ensure type safety

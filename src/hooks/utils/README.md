@@ -35,14 +35,19 @@ const debouncedSearch = useDebouncedValue(search, 300);
 ```
 
 #### `use-toast.ts` (197 lines)
-Toast notification system (react-hot-toast integration).
-- **Usage:** User feedback, error messages, success confirmations
-- **API:** `toast.success()`, `toast.error()`, `toast.loading()`
+Base toast notification primitives (internal use by Toaster component).
+- **Internal use only:** Provides low-level toast state management
+- **For application code, use `@/lib/toast` instead**
 
 ```typescript
-import { toast } from '@/hooks/utils';
-toast.success('Profile updated');
-toast.error('Failed to save');
+// For application code - use toastManager from @/lib/toast:
+import { toastManager, showApiErrorToast, showApiSuccessToast } from '@/lib/toast';
+toastManager.success('Profile updated');
+showApiErrorToast('Failed to save', error);
+
+// Internal use only - useToast hook powers the Toaster component:
+import { useToast } from '@/hooks/utils';
+const { toasts } = useToast(); // Used by Toaster component
 ```
 
 ### Responsive/Browser

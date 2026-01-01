@@ -13,9 +13,8 @@ export function isValidDate(date: Date | string | number): boolean {
 
 /**
  * Format date with locale support
- * Internal utility function used by other date formatting functions
  */
-function formatDate(
+export function formatDate(
   date: Date | string | number,
   options: Intl.DateTimeFormatOptions = {},
   locale = 'en-US',

@@ -1,8 +1,6 @@
-import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type React from 'react';
 
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
-import { getQueryClient } from '@/lib/data/query-client';
 
 type StaticLayoutProps = {
   children: React.ReactNode;
@@ -10,17 +8,13 @@ type StaticLayoutProps = {
 
 /**
  * Static Chat Layout
- * For SSG pages that don't require authentication (e.g., pricing)
- * No auth check, no dynamic operations - fully static at build time
+ * For SSG/ISR pages that don't require authentication (e.g., pricing)
+ * No auth check, no HydrationBoundary (pages handle their own hydration)
  */
-export default async function StaticChatLayout({ children }: StaticLayoutProps) {
-  const queryClient = getQueryClient();
-
+export default function StaticChatLayout({ children }: StaticLayoutProps) {
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <ChatLayoutShell session={null}>
-        {children}
-      </ChatLayoutShell>
-    </HydrationBoundary>
+    <ChatLayoutShell session={null}>
+      {children}
+    </ChatLayoutShell>
   );
 }

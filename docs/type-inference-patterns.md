@@ -1136,7 +1136,7 @@ async function performValidation<
     if (!result.success) {
       throw HTTPExceptionFactory.badRequest(
         'Request validation failed',
-        formatValidationErrors(result.errors)
+        formatValidationErrorContext(result.errors)
       );
     }
 
@@ -1151,7 +1151,7 @@ async function performValidation<
     if (!result.success) {
       throw HTTPExceptionFactory.badRequest(
         'Query validation failed',
-        formatValidationErrors(result.errors)
+        formatValidationErrorContext(result.errors)
       );
     }
 
@@ -1166,7 +1166,7 @@ async function performValidation<
     if (!result.success) {
       throw HTTPExceptionFactory.badRequest(
         'Path parameter validation failed',
-        formatValidationErrors(result.errors)
+        formatValidationErrorContext(result.errors)
       );
     }
 

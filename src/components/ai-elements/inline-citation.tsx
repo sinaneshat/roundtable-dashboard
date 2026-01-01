@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 import { createContext, use, useMemo, useState } from 'react';
 
@@ -9,6 +10,7 @@ import type { Icon } from '@/components/icons';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { formatFileSize } from '@/lib/format';
 import { cn } from '@/lib/ui/cn';
 
 // ============================================================================
@@ -206,19 +208,9 @@ function InlineCitationSource({
   mimeType,
   fileSize,
 }: InlineCitationSourceProps) {
+  const t = useTranslations('chat.citations');
   const config = SOURCE_TYPE_CONFIG[sourceType];
   const Icon = config.icon;
-
-  const formatFileSize = (bytes: number | undefined): string | null => {
-    if (!bytes)
-      return null;
-    if (bytes < 1024)
-      return `${bytes}B`;
-    if (bytes < 1024 * 1024)
-      return `${(bytes / 1024).toFixed(1)}KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-  };
-
   const isAttachment = sourceType === CitationSourceTypes.ATTACHMENT;
   const displayTitle = filename || title;
 
@@ -263,10 +255,7 @@ function InlineCitationSource({
           )}
         >
           <Icons.download className="size-3" />
-          <span>
-            Download
-            {filename || 'file'}
-          </span>
+          <span>{t('download', { name: filename || 'file' })}</span>
         </a>
       )}
       {url && !isAttachment && (

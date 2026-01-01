@@ -39,6 +39,7 @@ export {
   useFileValidation,
   UseFileValidationOptionsSchema,
 } from './use-file-validation';
+export { useIsMounted } from './use-is-mounted';
 export { useKeyboardAwareScroll } from './use-keyboard-aware-scroll';
 export type { UseMediaQueryReturn } from './use-media-query';
 export { useMediaQuery } from './use-media-query';
@@ -55,7 +56,9 @@ export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
 export { useSpeechRecognition } from './use-speech-recognition';
 export { useSyncedRefs } from './use-synced-refs';
 export { useIsFirstRender, useTimelineAnimations } from './use-timeline-animations';
-export { toast, useToast } from './use-toast';
+// useToast is exported for internal use by Toaster component
+// For application code, use toastManager/showApiErrorToast from @/lib/toast
+export { useToast } from './use-toast';
 export { useVisualViewportPosition } from './use-visual-viewport-position';
 export { useChatScroll } from './useChatScroll';
 export type { ModeratorStreamState } from './useModeratorStream';

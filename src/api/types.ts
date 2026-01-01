@@ -5,7 +5,7 @@
  * These types define the shape of context bindings and variables.
  *
  * NOTE: User and Session types are inferred from Better Auth's type system.
- * StoragePurpose is derived from Zod schema in @/api/common/storage-keys.
+ * StoragePurpose is derived from Zod schema in @/api/core/enums.
  *
  * @see /docs/type-inference-patterns.md for type safety patterns
  */
@@ -21,7 +21,7 @@ import type { Session, User } from '@/lib/auth/types';
 
 /**
  * Storage purpose - inferred from Zod schema
- * Single source of truth: @/api/common/storage-keys
+ * Single source of truth: @/api/core/enums
  */
 export type StoragePurpose = z.infer<typeof storagePurposeSchema>;
 

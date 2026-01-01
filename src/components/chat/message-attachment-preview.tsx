@@ -7,11 +7,11 @@ import { Icons } from '@/components/icons';
 import { z } from 'zod';
 
 import type { IconType } from '@/api/core/enums';
-import { IconTypes } from '@/api/core/enums';
+import { FileIconNames, getFileTypeLabelFromMime, IconTypes } from '@/api/core/enums';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDownloadUrlQuery } from '@/hooks/queries';
-import { getFileIconName, getFileTypeLabel } from '@/hooks/utils';
+import { getFileIconName } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 /* eslint-enable simple-import-sort/imports */
 
@@ -35,13 +35,13 @@ function getIconType(mimeType?: string): IconType {
 
   const iconName = getFileIconName(mimeType);
 
-  if (iconName === 'image') {
+  if (iconName === FileIconNames.IMAGE) {
     return IconTypes.IMAGE;
   }
-  if (iconName === 'file-code') {
+  if (iconName === FileIconNames.FILE_CODE) {
     return IconTypes.CODE;
   }
-  if (iconName === 'file-text') {
+  if (iconName === FileIconNames.FILE_TEXT) {
     return IconTypes.TEXT;
   }
 
@@ -151,7 +151,7 @@ function AttachmentThumbnail({
         <div className="space-y-1">
           <p className="text-xs font-medium break-all">{displayName}</p>
           <p className="text-xs text-muted-foreground">
-            {mediaType ? getFileTypeLabel(mediaType) : t('defaultFileType')}
+            {mediaType ? getFileTypeLabelFromMime(mediaType) : t('defaultFileType')}
           </p>
           {statusMessage && (
             <p className={cn(

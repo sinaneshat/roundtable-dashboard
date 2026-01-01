@@ -408,3 +408,42 @@ export const FileValidationErrorCodes = {
   EMPTY_FILE: 'empty_file' as const,
   FILENAME_TOO_LONG: 'filename_too_long' as const,
 } as const;
+
+// ============================================================================
+// FILE ICON NAME (Lucide icon names for file type visualization)
+// ============================================================================
+
+export const FILE_ICON_NAMES = [
+  'image',
+  'file-text',
+  'file-code',
+  'file',
+] as const;
+
+export const DEFAULT_FILE_ICON_NAME: FileIconName = 'file';
+
+export const FileIconNameSchema = z.enum(FILE_ICON_NAMES).openapi({
+  description: 'Lucide icon name for file type visualization',
+  example: 'file-text',
+});
+
+export type FileIconName = z.infer<typeof FileIconNameSchema>;
+
+export const FileIconNames = {
+  IMAGE: 'image' as const,
+  FILE_TEXT: 'file-text' as const,
+  FILE_CODE: 'file-code' as const,
+  FILE: 'file' as const,
+} as const;
+
+/**
+ * Maps FilePreviewType to FileIconName for consistent icon display
+ */
+export const FILE_TYPE_TO_ICON: Record<FilePreviewType, FileIconName> = {
+  [FilePreviewTypes.IMAGE]: FileIconNames.IMAGE,
+  [FilePreviewTypes.PDF]: FileIconNames.FILE_TEXT,
+  [FilePreviewTypes.TEXT]: FileIconNames.FILE_TEXT,
+  [FilePreviewTypes.CODE]: FileIconNames.FILE_CODE,
+  [FilePreviewTypes.DOCUMENT]: FileIconNames.FILE,
+  [FilePreviewTypes.UNKNOWN]: FileIconNames.FILE,
+};

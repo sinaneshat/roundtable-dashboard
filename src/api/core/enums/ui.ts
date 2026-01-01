@@ -793,3 +793,54 @@ export function isValidModelSelectionTab(value: unknown): value is ModelSelectio
 export function isValidCardVariant(value: unknown): value is CardVariant {
   return typeof value === 'string' && CARD_VARIANTS.includes(value as CardVariant);
 }
+
+// ============================================================================
+// TOAST POSITION
+// ============================================================================
+
+export const TOAST_POSITIONS = ['top-center', 'top-right', 'bottom-center', 'bottom-right'] as const;
+
+export const DEFAULT_TOAST_POSITION: ToastPosition = 'bottom-right';
+
+export const ToastPositionSchema = z.enum(TOAST_POSITIONS).openapi({
+  description: 'Toast notification position on screen',
+  example: 'bottom-right',
+});
+
+export type ToastPosition = z.infer<typeof ToastPositionSchema>;
+
+export const ToastPositions = {
+  TOP_CENTER: 'top-center' as const,
+  TOP_RIGHT: 'top-right' as const,
+  BOTTOM_CENTER: 'bottom-center' as const,
+  BOTTOM_RIGHT: 'bottom-right' as const,
+} as const;
+
+export function isValidToastPosition(value: unknown): value is ToastPosition {
+  return typeof value === 'string' && TOAST_POSITIONS.includes(value as ToastPosition);
+}
+
+// ============================================================================
+// BASE TOAST VARIANT (Subset of ToastVariant supported by base toast component)
+// ============================================================================
+
+export const BASE_TOAST_VARIANTS = ['default', 'destructive', 'success'] as const;
+
+export const DEFAULT_BASE_TOAST_VARIANT: BaseToastVariant = 'default';
+
+export const BaseToastVariantSchema = z.enum(BASE_TOAST_VARIANTS).openapi({
+  description: 'Base toast variant (supported by shadcn toast component)',
+  example: 'default',
+});
+
+export type BaseToastVariant = z.infer<typeof BaseToastVariantSchema>;
+
+export const BaseToastVariants = {
+  DEFAULT: 'default' as const,
+  DESTRUCTIVE: 'destructive' as const,
+  SUCCESS: 'success' as const,
+} as const;
+
+export function isValidBaseToastVariant(value: unknown): value is BaseToastVariant {
+  return typeof value === 'string' && BASE_TOAST_VARIANTS.includes(value as BaseToastVariant);
+}

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useIsMounted } from './use-is-mounted';
+
 // Browser speech recognition types
 type SpeechRecognition = {
   continuous: boolean;
@@ -62,7 +64,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   const { lang = 'en-US', continuous = true, enableAudioVisualization = true } = options;
 
   const [isListening, setIsListening] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useIsMounted();
   const [audioLevels, setAudioLevels] = useState<number[]>([]);
   const [interimTranscript, setInterimTranscript] = useState('');
   const [finalTranscript, setFinalTranscript] = useState('');
@@ -79,13 +81,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   const isSupported = isMounted
     && typeof window !== 'undefined'
     && (Boolean(window.SpeechRecognition) || Boolean(window.webkitSpeechRecognition));
-
-  // Set mounted flag after hydration to avoid hydration mismatch
-  // Legitimate pattern for client-side-only features (Next.js recommended)
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
-    setIsMounted(true);
-  }, []);
 
   // Initialize speech recognition
   useEffect(() => {

@@ -9,16 +9,18 @@
 
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import type { FilePreviewType } from '@/api/core/enums';
 import {
   CODE_MIMES,
+  DOCUMENT_MIMES,
+  FILE_TYPE_TO_ICON,
+  FilePreviewTypes,
   FilePreviewTypeSchema,
   getFileTypeLabelFromMime,
   IMAGE_MIMES,
-  MIME_TYPE_CATEGORIES,
   TEXT_MIMES,
 } from '@/api/core/enums';
 
@@ -87,24 +89,22 @@ function generatePreviewId(): string {
 
 /**
  * Determine preview type from MIME type
+ * Uses FilePreviewTypes enum constants for type safety
  */
 function getPreviewType(mimeType: string): FilePreviewType {
   if (IMAGE_MIMES.includes(mimeType)) {
-    return 'image';
+    return FilePreviewTypes.IMAGE;
   }
-  if (mimeType === 'application/pdf') {
-    return 'pdf';
+  if (DOCUMENT_MIMES.includes(mimeType)) {
+    return FilePreviewTypes.DOCUMENT;
   }
   if (TEXT_MIMES.includes(mimeType)) {
-    return 'text';
+    return FilePreviewTypes.TEXT;
   }
   if (CODE_MIMES.includes(mimeType)) {
-    return 'code';
+    return FilePreviewTypes.CODE;
   }
-  if (MIME_TYPE_CATEGORIES.document.some(t => mimeType.includes(t))) {
-    return 'document';
-  }
-  return 'unknown';
+  return FilePreviewTypes.UNKNOWN;
 }
 
 /**
@@ -163,7 +163,7 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
   const [previews, setPreviews] = useState<FilePreview[]>([]);
   const objectUrlsRef = useRef<Set<string>>(new Set());
 
-  // Cleanup object URLs on unmount
+  // Cleanup object URLs on unmount - valid useEffect for cleanup
   useEffect(() => {
     const urls = objectUrlsRef.current;
     return () => {
@@ -183,21 +183,19 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
 
       try {
         switch (type) {
-          case 'image': {
+          case FilePreviewTypes.IMAGE: {
             const url = URL.createObjectURL(file);
             objectUrlsRef.current.add(url);
             return { url, loading: false };
           }
-          case 'text':
-          case 'code': {
+          case FilePreviewTypes.TEXT:
+          case FilePreviewTypes.CODE: {
             const textPreview = await readTextContent(file, maxTextPreviewLength);
             return { textPreview, loading: false };
           }
-          case 'pdf':
-          case 'document':
+          case FilePreviewTypes.PDF:
+          case FilePreviewTypes.DOCUMENT:
           default:
-            // For PDFs and documents, just mark as loaded
-            // Actual preview would need a PDF renderer
             return { loading: false };
         }
       } catch (error) {
@@ -340,7 +338,7 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
     [previews],
   );
 
-  const isLoading = previews.some(p => p.loading);
+  const isLoading = useMemo(() => previews.some(p => p.loading), [previews]);
 
   return {
     previews,
@@ -363,20 +361,7 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
  */
 export function getFileIconName(mimeType: string): string {
   const type = getPreviewType(mimeType);
-  switch (type) {
-    case 'image':
-      return 'image';
-    case 'pdf':
-      return 'file-text';
-    case 'text':
-      return 'file-text';
-    case 'code':
-      return 'file-code';
-    case 'document':
-      return 'file';
-    default:
-      return 'file';
-  }
+  return FILE_TYPE_TO_ICON[type];
 }
 
 /**
@@ -392,5 +377,5 @@ export function getFileTypeLabel(mimeType: string): string {
  */
 export function supportsInlinePreview(mimeType: string): boolean {
   const type = getPreviewType(mimeType);
-  return type === 'image' || type === 'text' || type === 'code';
+  return type === FilePreviewTypes.IMAGE || type === FilePreviewTypes.TEXT || type === FilePreviewTypes.CODE;
 }

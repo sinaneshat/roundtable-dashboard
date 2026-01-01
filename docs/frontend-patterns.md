@@ -668,7 +668,7 @@ export function usePreSearchStream(options: PreSearchStreamOptions) {
 // File: src/services/api-interceptors.ts
 import { api } from './api'
 import { useAuthStore } from '@/stores/auth-store'
-import { toast } from '@/hooks/use-toast'
+import { showApiErrorToast } from '@/lib/toast'
 
 // Add request interceptor for authentication
 const originalFetch = api.$fetch
@@ -694,27 +694,19 @@ api.$fetch = async (input, init) => {
 
     // Handle server errors
     if (response.status >= 500) {
-      toast({
-        title: 'Server Error',
-        description: 'Something went wrong. Please try again.',
-        variant: 'destructive',
-      })
+      showApiErrorToast('Server Error', new Error('Something went wrong. Please try again.'))
     }
 
     return response
   } catch (error) {
-    toast({
-      title: 'Network Error',
-      description: 'Please check your connection.',
-      variant: 'destructive',
-    })
+    showApiErrorToast('Network Error', error)
     throw error
   }
 }
 
 // Pattern: Global request/response interceptors
 // Centralized error handling and authentication
-// User feedback for common error scenarios
+// User feedback via showApiErrorToast from @/lib/toast
 ```
 
 ---

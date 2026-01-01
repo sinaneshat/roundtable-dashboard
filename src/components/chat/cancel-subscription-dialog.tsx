@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { formatDate } from '@/lib/format/date';
 
 type CancelSubscriptionDialogProps = {
   open: boolean;
@@ -22,6 +23,7 @@ type CancelSubscriptionDialogProps = {
   currentPeriodEnd?: string | null;
   isProcessing?: boolean;
 };
+
 export function CancelSubscriptionDialog({
   open,
   onOpenChange,
@@ -32,11 +34,9 @@ export function CancelSubscriptionDialog({
 }: CancelSubscriptionDialogProps) {
   const t = useTranslations();
   const endDate = currentPeriodEnd ? new Date(currentPeriodEnd) : null;
-  const formattedEndDate = endDate?.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const formattedEndDate = endDate
+    ? formatDate(endDate, { year: 'numeric', month: 'long', day: 'numeric' })
+    : null;
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-lg">
