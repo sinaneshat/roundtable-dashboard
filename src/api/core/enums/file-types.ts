@@ -1,9 +1,3 @@
-/**
- * File and MIME Type Enums
- *
- * Enums for file upload handling, MIME type validation, and content extraction.
- */
-
 import { z } from '@hono/zod-openapi';
 
 // ============================================================================
@@ -144,10 +138,6 @@ export const MIME_TYPE_CATEGORIES = {
   code: CODE_MIME_TYPES,
 } as const;
 
-/**
- * Type-safe MIME type arrays as readonly string[] for .includes() checks
- * These avoid TypeScript strict literal type issue with as const arrays
- */
 export const IMAGE_MIMES: readonly string[] = IMAGE_MIME_TYPES;
 export const DOCUMENT_MIMES: readonly string[] = DOCUMENT_MIME_TYPES;
 export const TEXT_MIMES: readonly string[] = TEXT_MIME_TYPES;
@@ -176,7 +166,6 @@ export const TEXT_EXTRACTABLE_MIME_TYPES = [
 
 export type TextExtractableMimeType = (typeof TEXT_EXTRACTABLE_MIME_TYPES)[number];
 
-/** Maximum text content to extract from a single file (100KB) */
 export const MAX_TEXT_CONTENT_SIZE = 100 * 1024;
 
 // ============================================================================
@@ -190,12 +179,8 @@ export const VISUAL_MIME_TYPES = [
 
 export type VisualMimeType = (typeof VISUAL_MIME_TYPES)[number];
 
-/** Set for O(1) lookup performance */
 const VISUAL_MIME_SET = new Set<string>(VISUAL_MIME_TYPES);
 
-/**
- * Check if a MIME type is visual (image or PDF)
- */
 export function isVisualMimeType(mimeType: string): mimeType is VisualMimeType {
   return VISUAL_MIME_SET.has(mimeType);
 }
@@ -237,10 +222,6 @@ export const FILE_TYPE_LABELS = {
 
 export type FileTypeLabelMimeType = keyof typeof FILE_TYPE_LABELS;
 
-/**
- * Get human-readable label for a MIME type
- * Returns 'File' for unknown types
- */
 export function getFileTypeLabelFromMime(mimeType: string): string {
   return FILE_TYPE_LABELS[mimeType as FileTypeLabelMimeType] ?? 'File';
 }
@@ -249,22 +230,11 @@ export function getFileTypeLabelFromMime(mimeType: string): string {
 // UPLOAD SIZE CONSTANTS (R2/S3 Limits)
 // ============================================================================
 
-/** Max file size for single-request uploads (100MB) */
 export const MAX_SINGLE_UPLOAD_SIZE = 100 * 1024 * 1024;
-
-/** Minimum part size for multipart uploads (5MB - R2/S3 requirement) */
 export const MIN_MULTIPART_PART_SIZE = 5 * 1024 * 1024;
-
-/** Recommended part size for multipart uploads (10MB) */
 export const RECOMMENDED_PART_SIZE = 10 * 1024 * 1024;
-
-/** Maximum total file size (5GB) */
 export const MAX_TOTAL_FILE_SIZE = 5 * 1024 * 1024 * 1024;
-
-/** Maximum filename length */
 export const MAX_FILENAME_LENGTH = 255;
-
-/** Maximum number of parts for multipart upload (R2/S3 limit) */
 export const MAX_MULTIPART_PARTS = 10000;
 
 // ============================================================================
@@ -436,9 +406,6 @@ export const FileIconNames = {
   FILE: 'file' as const,
 } as const;
 
-/**
- * Maps FilePreviewType to FileIconName for consistent icon display
- */
 export const FILE_TYPE_TO_ICON: Record<FilePreviewType, FileIconName> = {
   [FilePreviewTypes.IMAGE]: FileIconNames.IMAGE,
   [FilePreviewTypes.PDF]: FileIconNames.FILE_TEXT,
@@ -447,3 +414,41 @@ export const FILE_TYPE_TO_ICON: Record<FilePreviewType, FileIconName> = {
   [FilePreviewTypes.DOCUMENT]: FileIconNames.FILE,
   [FilePreviewTypes.UNKNOWN]: FileIconNames.FILE,
 };
+
+// ============================================================================
+// SINGLE SOURCE OF TRUTH: FILE CATEGORY DETECTION
+// ============================================================================
+
+/**
+ * Get file category from MIME type - SINGLE SOURCE OF TRUTH
+ * Use this for file validation classification
+ */
+export function getFileCategoryFromMime(mimeType: string): FileCategory {
+  if (IMAGE_MIMES.includes(mimeType))
+    return FileCategories.IMAGE;
+  if (DOCUMENT_MIMES.includes(mimeType))
+    return FileCategories.DOCUMENT;
+  if (TEXT_MIMES.includes(mimeType))
+    return FileCategories.TEXT;
+  if (CODE_MIMES.includes(mimeType))
+    return FileCategories.CODE;
+  return FileCategories.OTHER;
+}
+
+/**
+ * Get preview type from MIME type - SINGLE SOURCE OF TRUTH
+ * Use this for UI preview rendering
+ */
+export function getPreviewTypeFromMime(mimeType: string): FilePreviewType {
+  if (IMAGE_MIMES.includes(mimeType))
+    return FilePreviewTypes.IMAGE;
+  if (mimeType === 'application/pdf')
+    return FilePreviewTypes.PDF;
+  if (DOCUMENT_MIMES.includes(mimeType))
+    return FilePreviewTypes.DOCUMENT;
+  if (TEXT_MIMES.includes(mimeType))
+    return FilePreviewTypes.TEXT;
+  if (CODE_MIMES.includes(mimeType))
+    return FilePreviewTypes.CODE;
+  return FilePreviewTypes.UNKNOWN;
+}

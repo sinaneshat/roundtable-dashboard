@@ -9,30 +9,35 @@
  * ✅ PATTERN: Uses enum constants from @/api/core/enums for type-safe status values
  * ✅ SINGLE SOURCE: Eliminates duplicate inline object creation in form-actions.ts
  * ✅ TYPE-SAFE: Returns typed StoredModeratorData, StoredPreSearch, and UIMessage objects
+ * ✅ ZOD-FIRST: All types inferred from schemas for maximum type safety
  *
  * @module stores/chat/utils/placeholder-factories
  */
 
 import type { UIMessage } from 'ai';
+import { z } from 'zod';
 
-import type { ChatMode } from '@/api/core/enums';
-import { MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import { ChatModeSchema, MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { StoredModeratorData, StoredPreSearch } from '@/api/routes/chat/schema';
-import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
+import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 
 // ============================================================================
-// PLACEHOLDER MODERATOR FACTORY
+// ZOD SCHEMAS - Single source of truth for type definitions
 // ============================================================================
 
 /**
- * Parameters for creating a placeholder moderator
+ * Parameters schema for creating a placeholder moderator
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
-export type CreatePlaceholderModeratorParams = {
-  threadId: string;
-  roundNumber: number;
-  mode: ChatMode;
-  userQuestion: string;
-};
+export const CreatePlaceholderModeratorParamsSchema = z.object({
+  threadId: z.string(),
+  roundNumber: z.number().int().nonnegative(),
+  mode: ChatModeSchema,
+  userQuestion: z.string(),
+});
+
+export type CreatePlaceholderModeratorParams = z.infer<typeof CreatePlaceholderModeratorParamsSchema>;
 
 /**
  * Create a placeholder moderator object for test mocking
@@ -75,13 +80,17 @@ export function createPlaceholderModerator(
 // ============================================================================
 
 /**
- * Parameters for creating a placeholder pre-search
+ * Parameters schema for creating a placeholder pre-search
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
-export type CreatePlaceholderPreSearchParams = {
-  threadId: string;
-  roundNumber: number;
-  userQuery: string;
-};
+export const CreatePlaceholderPreSearchParamsSchema = z.object({
+  threadId: z.string(),
+  roundNumber: z.number().int().nonnegative(),
+  userQuery: z.string(),
+});
+
+export type CreatePlaceholderPreSearchParams = z.infer<typeof CreatePlaceholderPreSearchParamsSchema>;
 
 /**
  * Create a placeholder pre-search object for eager UI rendering
@@ -122,13 +131,17 @@ export function createPlaceholderPreSearch(
 // ============================================================================
 
 /**
- * Parameters for creating an optimistic user message
+ * Parameters schema for creating an optimistic user message
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
-export type CreateOptimisticUserMessageParams = {
-  roundNumber: number;
-  text: string;
-  fileParts?: ExtendedFilePart[];
-};
+export const CreateOptimisticUserMessageParamsSchema = z.object({
+  roundNumber: z.number().int().nonnegative(),
+  text: z.string(),
+  fileParts: z.array(ExtendedFilePartSchema).optional(),
+});
+
+export type CreateOptimisticUserMessageParams = z.infer<typeof CreateOptimisticUserMessageParamsSchema>;
 
 /**
  * Create an optimistic user message for immediate UI feedback

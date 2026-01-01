@@ -261,16 +261,6 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 /**
- * Check if a MIME type is supported for visual AI processing
- *
- * @param mimeType - MIME type to check
- * @returns True if the file type can be processed by AI models
- */
-export function isVisualMimeType(mimeType: string): boolean {
-  return VISUAL_MIME_TYPES.has(mimeType);
-}
-
-/**
  * Check if a file size is within the conversion limit
  *
  * @param fileSize - File size in bytes

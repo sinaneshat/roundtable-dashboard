@@ -1,18 +1,3 @@
-/**
- * Unified Validation System - Context7 Best Practices
- *
- * Consolidates all validation logic into a single, type-safe system.
- * Replaces multiple validation files with consistent patterns.
- *
- * Features:
- * - Type-safe validation results
- * - Comprehensive error formatting
- * - Schema composition utilities
- * - Request validation helpers
- * - Business rule validators
- * - OpenAPI validation hook
- */
-
 import type { Hook } from '@hono/zod-openapi';
 import { z } from 'zod';
 
@@ -52,9 +37,6 @@ export type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
 // VALIDATION UTILITIES
 // ============================================================================
 
-/**
- * Safe validation with detailed error information using native Zod
- */
 export function validateWithSchema<T>(
   schema: z.ZodSchema<T>,
   data: unknown,
@@ -75,19 +57,12 @@ export function validateWithSchema<T>(
   };
 }
 
-/**
- * Create a validator function for a specific schema
- */
 export function createValidator<T>(schema: z.ZodSchema<T>) {
   return (data: unknown): ValidationResult<T> => {
     return validateWithSchema(schema, data);
   };
 }
 
-/**
- * Format validation errors into ErrorContext for API responses
- * Returns structured error context object for backend error handling
- */
 export function formatValidationErrorContext(errors: ValidationError[]): ErrorContext {
   return {
     errorType: 'validation' as const,
@@ -103,57 +78,32 @@ export function formatValidationErrorContext(errors: ValidationError[]): ErrorCo
 // SCHEMA COMPOSITION UTILITIES
 // ============================================================================
 
-/**
- * Create a partial version of a schema (all fields optional)
- */
 export function createPartialSchema<T extends z.ZodRawShape>(
   schema: z.ZodObject<T>,
 ) {
   return schema.partial();
 }
 
-/**
- * Create an update schema that omits certain fields
- *
- * NOTE: Zod v4 has strict Mask type requirements for omit/pick.
- * The double cast (as unknown as Mask) is required to satisfy TypeScript's structural typing.
- * This is a known Zod pattern for dynamic field selection - the runtime behavior is safe.
- */
 export function createUpdateSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   omitFields: readonly K[],
 ) {
-  // Build the omit object with Zod v4 Mask type compatibility
   const omitObj = Object.fromEntries(
     omitFields.map(key => [key, true]),
   );
-  // Double cast required for Zod v4's strict Mask type - runtime safe
   return schema.omit(omitObj as unknown as Parameters<typeof schema.omit>[0]);
 }
 
-/**
- * Create a pick schema with only specific fields
- *
- * NOTE: Zod v4 has strict Mask type requirements for omit/pick.
- * The double cast (as unknown as Mask) is required to satisfy TypeScript's structural typing.
- * This is a known Zod pattern for dynamic field selection - the runtime behavior is safe.
- */
 export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   pickFields: readonly K[],
 ) {
-  // Build the pick object with Zod v4 Mask type compatibility
   const pickObj = Object.fromEntries(
     pickFields.map(key => [key, true]),
   );
-  // Double cast required for Zod v4's strict Mask type - runtime safe
   return schema.pick(pickObj as unknown as Parameters<typeof schema.pick>[0]);
 }
 
-/**
- * Filter value schema - type-safe union of allowed filter types
- * Used for dynamic query filters in search/list endpoints
- */
 export const FilterValueSchema = z.union([
   z.string(),
   z.number(),
@@ -163,9 +113,6 @@ export const FilterValueSchema = z.union([
 
 export type FilterValue = z.infer<typeof FilterValueSchema>;
 
-/**
- * Create a search/filter schema with common patterns
- */
 export function createSearchSchema<T extends z.ZodRawShape>(
   schema: z.ZodObject<T>,
   searchableFields: Array<keyof T>,
@@ -196,13 +143,7 @@ export function createSearchSchema<T extends z.ZodRawShape>(
 // BUSINESS RULE VALIDATORS
 // ============================================================================
 
-/**
- * Security validation utilities
- */
 export const SecurityValidators = {
-  /**
-   * Password strength validation
-   */
   strongPassword: () =>
     z.string()
       .min(8, 'Password must be at least 8 characters')
@@ -212,9 +153,6 @@ export const SecurityValidators = {
       .regex(/\d/, 'Password must contain at least one number')
       .regex(/\W/, 'Password must contain at least one special character'),
 
-  /**
-   * Safe string validation (prevents XSS)
-   */
   safeString: (maxLength = 1000) =>
     z.string()
       .max(maxLength)
@@ -222,16 +160,13 @@ export const SecurityValidators = {
       .refine(str => !/javascript:/i.test(str), 'JavaScript URLs not allowed')
       .refine(str => !/on\w+\s*=/i.test(str), 'Event handlers not allowed')
       .transform(str => str
-        .replace(/<[^>]*>/g, '') // Remove HTML tags
-        .replace(/[<>&"']/g, '') // Remove dangerous chars
-        .replace(/\s+/g, ' ') // Normalize whitespace
+        .replace(/<[^>]*>/g, '')
+        .replace(/[<>&"']/g, '')
+        .replace(/\s+/g, ' ')
         .trim(),
       )
       .refine(str => str.length > 0, 'Content required after sanitization'),
 
-  /**
-   * API key format validation
-   */
   apiKey: () =>
     z.string()
       .min(32, 'API key must be at least 32 characters')
@@ -243,9 +178,6 @@ export const SecurityValidators = {
 // FILE UPLOAD VALIDATORS
 // ============================================================================
 
-/**
- * Create a file upload validator with type and size restrictions
- */
 export function createFileUploadValidator(
   allowedTypes: string[],
   maxSizeBytes: number,
@@ -264,9 +196,6 @@ export function createFileUploadValidator(
   });
 }
 
-/**
- * Document upload validator
- */
 export const documentUploadValidator = createFileUploadValidator(
   [
     'application/pdf',
@@ -280,25 +209,12 @@ export const documentUploadValidator = createFileUploadValidator(
 // CONDITIONAL VALIDATORS
 // ============================================================================
 
-/**
- * Conditional data schema - ensures object has the condition field
- * Used for field-based conditional validation
- */
 export const ConditionalDataSchema = z.record(z.string(), FilterValueSchema).openapi('ConditionalData');
 
 export type ConditionalData = z.infer<typeof ConditionalDataSchema>;
 
-/**
- * Conditional value type - inferred from FilterValueSchema
- * Represents allowed values for conditional validation
- */
 export type ConditionalValue = FilterValue;
 
-/**
- * Create a conditional validator based on another field
- *
- * Uses Zod schema validation for maximum type safety
- */
 export function createConditionalValidator<T, K extends string>(
   conditionField: K,
   conditionValue: ConditionalValue,
@@ -318,9 +234,6 @@ export function createConditionalValidator<T, K extends string>(
   );
 }
 
-/**
- * Create a validator that accepts multiple formats
- */
 export function createMultiFormatValidator<T>(
   validators: Array<z.ZodSchema<T>>,
   errorMessage?: string,
@@ -334,9 +247,6 @@ export function createMultiFormatValidator<T>(
 // REQUEST VALIDATION HELPERS
 // ============================================================================
 
-/**
- * Validate request body with proper error formatting
- */
 export function validateRequestBody<T>(
   schema: z.ZodSchema<T>,
   body: unknown,
@@ -344,9 +254,6 @@ export function validateRequestBody<T>(
   return validateWithSchema(schema, body);
 }
 
-/**
- * Validate query parameters with coercion
- */
 export function validateQueryParams<T>(
   schema: z.ZodSchema<T>,
   searchParams: URLSearchParams,
@@ -355,16 +262,10 @@ export function validateQueryParams<T>(
   return validateWithSchema(schema, query);
 }
 
-/**
- * Path parameters schema - string key-value pairs for route params
- */
 export const PathParamsSchema = z.record(z.string(), z.string()).openapi('PathParams');
 
 export type PathParams = z.infer<typeof PathParamsSchema>;
 
-/**
- * Validate path parameters
- */
 export function validatePathParams<T>(
   schema: z.ZodSchema<T>,
   params: PathParams,
@@ -376,9 +277,6 @@ export function validatePathParams<T>(
 // INTEGRATION HELPERS
 // ============================================================================
 
-/**
- * Create validation error context for API responses
- */
 export function createValidationErrorContext(
   errors: ValidationError[],
   schemaName?: string,
@@ -390,16 +288,10 @@ export function createValidationErrorContext(
   };
 }
 
-/**
- * Unknown input schema - accepts any value for initial validation
- */
 export const UnknownInputSchema = z.unknown().openapi('UnknownInput');
 
 export type UnknownInput = z.infer<typeof UnknownInputSchema>;
 
-/**
- * Validate against ErrorContextSchema to ensure type safety
- */
 export function validateErrorContext(context: UnknownInput): ValidationResult<ErrorContext> {
   return validateWithSchema(ErrorContextSchema, context);
 }
@@ -410,7 +302,6 @@ export function validateErrorContext(context: UnknownInput): ValidationResult<Er
 
 export const customValidationHook: Hook<UnknownInput, ApiEnv, string, UnknownInput> = (result, c) => {
   if (!result.success) {
-    // 🔍 DEBUG: Log validation failures to identify the issue
     console.error('[VALIDATION-HOOK] Validation failed:', {
       path: c.req.path,
       issues: result.error.issues.slice(0, 5).map(i => ({
@@ -420,16 +311,13 @@ export const customValidationHook: Hook<UnknownInput, ApiEnv, string, UnknownInp
       })),
     });
 
-    // Transform Zod issues to ValidationError format
     const errors = result.error.issues.map((err: z.ZodIssue) => ({
       field: err.path.join('.') || 'root',
       message: err.message,
       code: err.code,
     }));
 
-    // Use pre-built response architecture for consistency
     return validationError(c, errors, 'Request validation failed');
   }
-  // Validation passed - continue to handler
   return undefined;
 };

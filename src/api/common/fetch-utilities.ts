@@ -6,39 +6,57 @@
  */
 
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import type { EnhancedHTTPException } from '@/api/core';
 import { HTTPExceptionFactory } from '@/api/core';
-import type { CircuitBreakerState } from '@/api/core/enums';
-import { CircuitBreakerStates } from '@/api/core/enums';
+import { CircuitBreakerStates, CircuitBreakerStateSchema } from '@/api/core/enums';
 
 // CloudflareEnv is globally available from cloudflare-env.d.ts
 import { createError } from './error-handling';
 
 // ============================================================================
-// TYPE DEFINITIONS
+// ZOD SCHEMAS - Single source of truth for type definitions
 // ============================================================================
 
-export type FetchConfig = {
-  timeoutMs?: number;
-  maxRetries?: number;
-  retryDelay?: number;
-  backoffFactor?: number;
-  retryableStatuses?: number[];
-  circuitBreaker?: {
-    failureThreshold: number;
-    resetTimeoutMs: number;
-  };
-  correlationId?: string;
-};
+/**
+ * Circuit breaker configuration schema
+ */
+const CircuitBreakerConfigSchema = z.object({
+  failureThreshold: z.number().int().positive(),
+  resetTimeoutMs: z.number().int().positive(),
+});
 
-export type RetryableError = {
-  isRetryable: boolean;
-  shouldCircuitBreak: boolean;
-  delay: number;
-};
+/**
+ * Fetch configuration schema
+ */
+export const FetchConfigSchema = z.object({
+  timeoutMs: z.number().int().positive().optional(),
+  maxRetries: z.number().int().nonnegative().optional(),
+  retryDelay: z.number().int().positive().optional(),
+  backoffFactor: z.number().positive().optional(),
+  retryableStatuses: z.array(z.number().int()).optional(),
+  circuitBreaker: CircuitBreakerConfigSchema.optional(),
+  correlationId: z.string().optional(),
+});
 
+export type FetchConfig = z.infer<typeof FetchConfigSchema>;
+
+/**
+ * Retryable error result schema
+ */
+export const RetryableErrorSchema = z.object({
+  isRetryable: z.boolean(),
+  shouldCircuitBreak: z.boolean(),
+  delay: z.number().nonnegative(),
+});
+
+export type RetryableError = z.infer<typeof RetryableErrorSchema>;
+
+/**
+ * Fetch result - generic type with discriminated union
+ * Note: Uses generic T for data type, so schema is for structure only
+ */
 export type FetchResult<T> = {
   success: true;
   data: T;
@@ -72,12 +90,18 @@ export type UnvalidatedParseResult
 // CIRCUIT BREAKER STATE MANAGEMENT
 // ============================================================================
 
-type CircuitBreakerStateData = {
-  failures: number;
-  lastFailureTime: number;
-  nextAttemptTime: number;
-  state: CircuitBreakerState;
-};
+/**
+ * Circuit breaker state data schema
+ * Exported for use in tests and state inspection
+ */
+export const CircuitBreakerStateDataSchema = z.object({
+  failures: z.number().int().nonnegative(),
+  lastFailureTime: z.number().nonnegative(),
+  nextAttemptTime: z.number().nonnegative(),
+  state: CircuitBreakerStateSchema,
+});
+
+type CircuitBreakerStateData = z.infer<typeof CircuitBreakerStateDataSchema>;
 
 const circuitBreakers = new Map<string, CircuitBreakerStateData>();
 

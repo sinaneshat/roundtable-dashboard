@@ -31,17 +31,12 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PricingPage() {
   const queryClient = getQueryClient();
 
-  // SSG: Prefetch products at build time
-  // If API is unreachable during build, client will fetch on mount
-  try {
-    await queryClient.prefetchQuery({
-      queryKey: queryKeys.products.list(),
-      queryFn: getProductsService,
-      staleTime: Infinity, // SSG: never consider stale
-    });
-  } catch {
-    // Build-time fetch failed - client will fetch on mount
-  }
+  // SSG: Prefetch products at build time with await
+  // Per TanStack docs: use await for SSG to ensure data is ready before dehydration
+  await queryClient.prefetchQuery({
+    queryKey: queryKeys.products.list(),
+    queryFn: getProductsService,
+  });
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

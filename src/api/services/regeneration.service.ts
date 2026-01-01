@@ -12,6 +12,7 @@
  */
 
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import type { getDbAsync } from '@/db';
@@ -20,20 +21,35 @@ import * as tables from '@/db';
 import { validateRegenerateRound } from './round.service';
 
 // ============================================================================
-// Type Definitions
+// ZOD SCHEMAS - Single source of truth for type definitions
 // ============================================================================
 
-export type RegenerateRoundParams = {
-  threadId: string;
-  regenerateRound: number;
-  participantIndex: number;
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-};
+/**
+ * Regenerate round params schema
+ * Note: db is a Drizzle database instance that cannot be expressed in Zod
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
+ */
+export const RegenerateRoundParamsSchema = z.object({
+  threadId: z.string(),
+  regenerateRound: z.number().int().nonnegative(),
+  participantIndex: z.number().int().nonnegative(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(val => val !== null && typeof val === 'object'),
+});
 
-export type RegenerateRoundResult = {
-  deletedMessagesCount: number;
-  cleanedEmbeddingsCount: number;
-};
+export type RegenerateRoundParams = z.infer<typeof RegenerateRoundParamsSchema>;
+
+/**
+ * Regenerate round result schema
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
+ */
+export const RegenerateRoundResultSchema = z.object({
+  deletedMessagesCount: z.number().int().nonnegative(),
+  cleanedEmbeddingsCount: z.number().int().nonnegative(),
+});
+
+export type RegenerateRoundResult = z.infer<typeof RegenerateRoundResultSchema>;
 
 // ============================================================================
 // Round Regeneration Logic

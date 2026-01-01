@@ -9,7 +9,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { useSession } from '@/lib/auth/client';
+import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
@@ -26,8 +26,7 @@ import {
  * Only fetches when explicitly enabled (e.g., when modal is open)
  */
 export function useApiKeysQuery(enabled = true) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.apiKeys.list(),
@@ -45,8 +44,7 @@ export function useApiKeysQuery(enabled = true) {
  * Query hook for fetching a specific API key by ID
  */
 export function useApiKeyQuery(keyId: string) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.apiKeys.detail(keyId),

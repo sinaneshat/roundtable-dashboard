@@ -16,7 +16,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import type { ChatAttachmentStatus } from '@/api/core/enums';
 import { LIMITS } from '@/constants/limits';
-import { useSession } from '@/lib/auth/client';
+import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
@@ -33,8 +33,7 @@ import {
  * @param status - Optional status filter (uploading, uploaded, processing, ready, failed)
  */
 export function useUploadsQuery(status?: ChatAttachmentStatus) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
     queryKey: [...queryKeys.uploads.lists(), status],
@@ -73,8 +72,7 @@ export function useUploadsQuery(status?: ChatAttachmentStatus) {
  * @param enabled - Control whether to fetch (based on need for fresh URL)
  */
 export function useDownloadUrlQuery(uploadId: string, enabled: boolean) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.uploads.downloadUrl(uploadId),

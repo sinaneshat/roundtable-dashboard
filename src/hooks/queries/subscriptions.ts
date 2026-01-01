@@ -11,7 +11,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { useSession } from '@/lib/auth/client';
+import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
@@ -29,8 +29,7 @@ import {
  * @param options.forceEnabled - Force enable query regardless of auth state
  */
 export function useSubscriptionsQuery(options?: { forceEnabled?: boolean }) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.subscriptions.list(),
@@ -49,8 +48,7 @@ export function useSubscriptionsQuery(options?: { forceEnabled?: boolean }) {
  * @param subscriptionId - Subscription ID
  */
 export function useSubscriptionQuery(subscriptionId: string) {
-  const { data: session } = useSession();
-  const isAuthenticated = !!session?.user;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.subscriptions.detail(subscriptionId),

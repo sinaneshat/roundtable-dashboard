@@ -12,7 +12,7 @@
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
-import { useSession } from '@/lib/auth/client';
+import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIME_PRESETS } from '@/lib/data/stale-times';
 import {
@@ -85,8 +85,7 @@ export function useThreadFeedbackQuery(threadId: string, enabled = true) {
  * Stale time: 2 minutes (custom roles change infrequently)
  */
 export function useCustomRolesQuery(enabled = true) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
     queryKey: queryKeys.customRoles.lists(),
@@ -121,8 +120,7 @@ export function useCustomRolesQuery(enabled = true) {
  * Stale time: 5 minutes (custom role details change very infrequently)
  */
 export function useCustomRoleQuery(roleId: string, enabled = true) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.customRoles.detail(roleId),
@@ -151,8 +149,7 @@ export function useCustomRoleQuery(roleId: string, enabled = true) {
  * Stale time: 2 minutes (user presets change infrequently)
  */
 export function useUserPresetsQuery(enabled = true) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
     queryKey: queryKeys.userPresets.lists(),
@@ -184,8 +181,7 @@ export function useUserPresetsQuery(enabled = true) {
  * Stale time: 5 minutes (user preset details change very infrequently)
  */
 export function useUserPresetQuery(presetId: string, enabled = true) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.userPresets.detail(presetId),

@@ -26,8 +26,7 @@ import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
-import { getRoleBadgeStyle, hasCitations } from '@/lib/utils';
-import { hasProperty, isNonEmptyString } from '@/lib/utils/type-guards';
+import { getRoleBadgeStyle, hasCitations, hasProperty, isNonEmptyString } from '@/lib/utils';
 
 /**
  * ✅ MODEL NORMALIZATION: Filter non-renderable reasoning parts

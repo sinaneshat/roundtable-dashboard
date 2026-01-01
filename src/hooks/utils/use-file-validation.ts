@@ -1,12 +1,3 @@
-/**
- * File Validation Utilities
- *
- * Client-side file validation matching backend rules
- * Provides consistent validation before upload attempts
- *
- * Location: /src/hooks/utils/use-file-validation.ts
- */
-
 'use client';
 
 import { useCallback, useMemo } from 'react';
@@ -15,29 +6,22 @@ import { z } from 'zod';
 import type { FileCategory } from '@/api/core/enums';
 import {
   ALLOWED_MIME_TYPES,
-  CODE_MIMES,
-  DOCUMENT_MIMES,
-  FileCategories,
   FileCategorySchema,
   FileValidationErrorCodeSchema,
-  IMAGE_MIMES,
+  getFileCategoryFromMime,
   MAX_MULTIPART_PARTS,
   MAX_SINGLE_UPLOAD_SIZE,
   MAX_TOTAL_FILE_SIZE,
   MIN_MULTIPART_PART_SIZE,
   RECOMMENDED_PART_SIZE,
-  TEXT_MIMES,
   UploadStrategySchema,
 } from '@/api/core/enums';
 import { formatFileSize } from '@/lib/format';
 
 // ============================================================================
-// ZOD SCHEMAS - Type-safe validation structures
+// ZOD SCHEMAS
 // ============================================================================
 
-/**
- * File validation error details schema
- */
 const FileValidationErrorDetailsSchema = z.object({
   maxSize: z.number().optional(),
   actualSize: z.number().optional(),
@@ -45,18 +29,12 @@ const FileValidationErrorDetailsSchema = z.object({
   actualType: z.string().optional(),
 });
 
-/**
- * File validation error schema
- */
 export const FileValidationErrorSchema = z.object({
   code: FileValidationErrorCodeSchema,
   message: z.string(),
   details: FileValidationErrorDetailsSchema.optional(),
 });
 
-/**
- * File validation result schema
- */
 export const FileValidationResultSchema = z.object({
   valid: z.boolean(),
   error: FileValidationErrorSchema.optional(),
@@ -78,30 +56,20 @@ export type FileValidationResult = z.infer<typeof FileValidationResultSchema>;
 // ============================================================================
 
 export const UseFileValidationOptionsSchema = z.object({
-  /** Custom max size override (defaults to MAX_SINGLE_UPLOAD_SIZE for single, MAX_TOTAL_FILE_SIZE for multipart) */
   maxSize: z.number().optional(),
-  /** Custom allowed MIME types (defaults to ALLOWED_MIME_TYPES) */
   allowedTypes: z.array(z.string()).readonly().optional(),
-  /** Whether to allow multipart uploads for large files */
   allowMultipart: z.boolean().optional(),
 });
 
 export type UseFileValidationOptions = z.infer<typeof UseFileValidationOptionsSchema>;
 
 export type UseFileValidationReturn = {
-  /** Validate a single file */
   validateFile: (file: File) => FileValidationResult;
-  /** Validate multiple files */
   validateFiles: (files: File[]) => Map<File, FileValidationResult>;
-  /** Check if MIME type is allowed */
   isAllowedType: (mimeType: string) => boolean;
-  /** Get file category from MIME type */
   getFileCategory: (mimeType: string) => FileCategory;
-  /** Format file size for display */
   formatFileSize: (bytes: number) => string;
-  /** Calculate multipart upload parts */
   calculateParts: (fileSize: number) => { partCount: number; partSize: number };
-  /** Constants for reference */
   constants: {
     maxSingleUploadSize: number;
     maxTotalFileSize: number;
@@ -115,38 +83,14 @@ export type UseFileValidationReturn = {
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Check if MIME type is allowed (matches backend logic)
- */
 function checkAllowedMimeType(mimeType: string, allowedTypes: readonly string[]): boolean {
   return allowedTypes.includes(mimeType) || mimeType.startsWith('text/');
 }
 
-/**
- * Get file category from MIME type
- * ✅ TYPE-SAFE: Uses typed readonly string[] exports for .includes() compatibility
- */
-function getFileCategoryFromMime(mimeType: string): FileCategory {
-  if (IMAGE_MIMES.includes(mimeType))
-    return FileCategories.IMAGE;
-  if (DOCUMENT_MIMES.includes(mimeType))
-    return FileCategories.DOCUMENT;
-  if (TEXT_MIMES.includes(mimeType))
-    return FileCategories.TEXT;
-  if (CODE_MIMES.includes(mimeType))
-    return FileCategories.CODE;
-  return FileCategories.OTHER;
-}
-
-/**
- * Calculate optimal part configuration for multipart upload
- */
 function calculateMultipartParts(fileSize: number): { partCount: number; partSize: number } {
-  // Use recommended part size, but ensure we don't exceed MAX_MULTIPART_PARTS (R2 limit)
   let partSize = RECOMMENDED_PART_SIZE;
   let partCount = Math.ceil(fileSize / partSize);
 
-  // If we'd have too many parts, increase part size
   if (partCount > MAX_MULTIPART_PARTS) {
     partSize = Math.ceil(fileSize / MAX_MULTIPART_PARTS);
     partCount = Math.ceil(fileSize / partSize);
@@ -159,21 +103,6 @@ function calculateMultipartParts(fileSize: number): { partCount: number; partSiz
 // HOOK IMPLEMENTATION
 // ============================================================================
 
-/**
- * File validation hook for upload pre-checks
- *
- * @example
- * const { validateFile, formatFileSize } = useFileValidation();
- *
- * const handleFileSelect = (file: File) => {
- *   const result = validateFile(file);
- *   if (!result.valid) {
- *     toast.error(result.error.message);
- *     return;
- *   }
- *   // Proceed with upload using result.uploadStrategy
- * };
- */
 export function useFileValidation(options: UseFileValidationOptions = {}): UseFileValidationReturn {
   const {
     maxSize,
@@ -183,7 +112,6 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
 
   const effectiveMaxSize = maxSize ?? (allowMultipart ? MAX_TOTAL_FILE_SIZE : MAX_SINGLE_UPLOAD_SIZE);
 
-  // Only wrap in useCallback when there are deps to memoize
   const isAllowedType = useCallback(
     (mimeType: string) => checkAllowedMimeType(mimeType, allowedTypes),
     [allowedTypes],
@@ -193,7 +121,6 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
     (file: File): FileValidationResult => {
       const fileCategory = getFileCategoryFromMime(file.type);
 
-      // Check for empty file
       if (file.size === 0) {
         return {
           valid: false,
@@ -206,7 +133,6 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
         };
       }
 
-      // Check filename length
       if (file.name.length > 255) {
         return {
           valid: false,
@@ -219,7 +145,6 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
         };
       }
 
-      // Check MIME type
       if (!checkAllowedMimeType(file.type, allowedTypes)) {
         return {
           valid: false,
@@ -236,7 +161,6 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
         };
       }
 
-      // Check file size
       if (file.size > effectiveMaxSize) {
         return {
           valid: false,
@@ -253,7 +177,6 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
         };
       }
 
-      // Determine upload strategy
       if (file.size <= MAX_SINGLE_UPLOAD_SIZE) {
         return {
           valid: true,
@@ -262,7 +185,6 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
         };
       }
 
-      // Large file - use multipart if allowed
       if (!allowMultipart) {
         return {
           valid: false,

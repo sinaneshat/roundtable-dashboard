@@ -1,8 +1,3 @@
-/**
- * Enhanced Toast Management System
- * Prevents duplicate toasts, provides centralized control, and supports advanced features
- */
-
 import type { ReactElement } from 'react';
 import React from 'react';
 
@@ -12,17 +7,6 @@ import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
 import { toast as baseToast } from '@/hooks/utils/use-toast';
 
-/**
- * Create ToastActionElement using React.createElement
- *
- * TYPE ASSERTION JUSTIFICATION:
- * - React.createElement returns ReactElement (generic JSX element)
- * - ToastActionElement expects ReactElement<typeof ToastAction> (specific component type)
- * - The cast is safe because we're creating ToastAction with correct props
- * - Alternative would be JSX syntax, but this is a JS context (not TSX)
- *
- * @see docs/type-inference-patterns.md - Factory patterns with justified assertions
- */
 function createToastActionElement(label: string, onClick: () => void): ToastActionElement {
   return React.createElement(
     ToastAction,
@@ -109,33 +93,25 @@ function showToastInternal(options: ToastOptions): void {
     duration = variant === ToastVariants.LOADING ? 0 : 5000,
     preventDuplicates = true,
     action,
-    // icon and dismissible are defined in ToastOptions but not used in toast rendering
-    // They're kept in the type for future extensibility
   } = options;
 
   const toastId = id || createToastId(title, description);
 
-  // Prevent duplicate toasts if enabled
   if (preventDuplicates && activeToasts.has(toastId)) {
     return;
   }
 
-  // Clear any existing timeout for this toast
   const existingTimeout = toastTimeouts.get(toastId);
   if (existingTimeout) {
     clearTimeout(existingTimeout);
   }
 
-  // Mark toast as active
   activeToasts.add(toastId);
 
-  // Create properly typed action element using factory
   const actionElement: ToastActionElement | undefined = action
     ? createToastActionElement(action.label, action.onClick)
     : undefined;
 
-  // Normalize custom variants (warning, info, loading) to default for base toast
-  // Only DEFAULT, SUCCESS, DESTRUCTIVE are supported by the base toast component
   const normalizedVariant: BaseToastVariant = (
     variant === ToastVariants.WARNING
     || variant === ToastVariants.INFO
@@ -152,10 +128,8 @@ function showToastInternal(options: ToastOptions): void {
     ...(actionElement && { action: actionElement }),
   };
 
-  // Show the toast
   baseToast(toastConfig);
 
-  // Auto-remove from active set after duration (if not persistent)
   if (duration > 0) {
     const timeout = setTimeout(() => {
       activeToasts.delete(toastId);
@@ -167,13 +141,9 @@ function showToastInternal(options: ToastOptions): void {
   }
 }
 
-/**
- * Enhanced toast function that prevents duplicates and manages queue
- */
 export function toast(options: ToastOptions): string {
   const toastId = options.id || createToastId(options.title || '', options.description);
 
-  // Add to queue if we're at capacity, otherwise show immediately
   if (activeToasts.size >= maxConcurrentToasts) {
     toastQueue.push(options);
   } else {
@@ -183,9 +153,6 @@ export function toast(options: ToastOptions): string {
   return toastId;
 }
 
-/**
- * Create a progress toast that can be updated
- */
 export function createProgressToast(options: ProgressToastOptions): {
   updateProgress: (progress: number) => void;
   complete: () => void;
@@ -194,7 +161,6 @@ export function createProgressToast(options: ProgressToastOptions): {
 } {
   const toastId = options.id || createToastId(options.title || '', 'progress');
 
-  // Initial progress toast
   const progressData = { progress: 0, callback: options.onProgress };
   progressToasts.set(toastId, progressData);
 
@@ -202,7 +168,7 @@ export function createProgressToast(options: ProgressToastOptions): {
     ...options,
     id: toastId,
     variant: ToastVariants.LOADING,
-    duration: 0, // Persistent until manually dismissed
+    duration: 0,
     dismissible: false,
   });
 
@@ -212,7 +178,6 @@ export function createProgressToast(options: ProgressToastOptions): {
       if (data) {
         data.progress = progress;
         data.callback?.(progress);
-        // Update toast content with progress
         showToastInternal({
           ...options,
           id: toastId,
@@ -227,7 +192,6 @@ export function createProgressToast(options: ProgressToastOptions): {
       progressToasts.delete(toastId);
       dismissToast(toastId);
       options.onComplete?.();
-      // Show completion toast
       toast({
         title: options.title,
         description: `${options.description} - Completed`,
@@ -239,7 +203,6 @@ export function createProgressToast(options: ProgressToastOptions): {
       progressToasts.delete(toastId);
       dismissToast(toastId);
       options.onError?.(error);
-      // Show error toast
       toast({
         title: options.title,
         description: error.message,
@@ -254,9 +217,6 @@ export function createProgressToast(options: ProgressToastOptions): {
   };
 }
 
-/**
- * Dismiss a specific toast
- */
 export function dismissToast(toastId: string): void {
   const timeout = toastTimeouts.get(toastId);
   if (timeout) {
@@ -268,11 +228,7 @@ export function dismissToast(toastId: string): void {
   processToastQueue();
 }
 
-/**
- * Enhanced toast manager with comprehensive functionality
- */
 export const toastManager = {
-  // Basic toast types
   success: (message: string, description?: string, options?: Partial<ToastOptions>) => {
     return toast({
       title: message,
@@ -319,14 +275,13 @@ export const toastManager = {
       title: message,
       description,
       variant: ToastVariants.LOADING,
-      duration: 0, // Persistent until dismissed
+      duration: 0,
       dismissible: false,
       preventDuplicates: true,
       ...options,
     });
   },
 
-  // Advanced toast types
   promise: async <T>(
     promise: Promise<T>,
     messages: {
@@ -355,7 +310,6 @@ export const toastManager = {
     }
   },
 
-  // Action toast with buttons
   action: (message: string, actionLabel: string, actionFn: () => void, options?: Partial<ToastOptions>) => {
     return toast({
       title: message,
@@ -364,12 +318,11 @@ export const toastManager = {
         label: actionLabel,
         onClick: actionFn,
       },
-      duration: 10000, // Longer duration for action toasts
+      duration: 10000,
       ...options,
     });
   },
 
-  // Undo toast pattern
   undo: (message: string, undoFn: () => void, options?: Partial<ToastOptions>) => {
     return toastManager.action(message, 'Undo', undoFn, {
       variant: ToastVariants.WARNING,
@@ -377,7 +330,6 @@ export const toastManager = {
     });
   },
 
-  // Retry toast pattern
   retry: (message: string, retryFn: () => void, options?: Partial<ToastOptions>) => {
     return toastManager.action(message, 'Retry', retryFn, {
       variant: ToastVariants.DESTRUCTIVE,
@@ -385,7 +337,6 @@ export const toastManager = {
     });
   },
 
-  // Persistent toast (no auto-dismiss)
   persistent: (message: string, description?: string, options?: Partial<ToastOptions>) => {
     return toast({
       title: message,
@@ -397,14 +348,12 @@ export const toastManager = {
     });
   },
 
-  // Update an existing toast
   update: (toastId: string, options: Partial<ToastOptions>) => {
     if (activeToasts.has(toastId)) {
       toast({ ...options, id: toastId, preventDuplicates: false });
     }
   },
 
-  // Utility methods
   force: (options: ToastOptions) => {
     return toast({ ...options, preventDuplicates: false });
   },
@@ -438,7 +387,6 @@ export const toastManager = {
     processToastQueue();
   },
 
-  // Progress toast helper
   progress: (options: ProgressToastOptions) => {
     return createProgressToast(options);
   },

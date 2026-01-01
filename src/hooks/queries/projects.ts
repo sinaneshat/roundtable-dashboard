@@ -17,7 +17,7 @@ import type {
   ListProjectMemoriesQuery,
 } from '@/api/routes/project/schema';
 import { LIMITS } from '@/constants/limits';
-import { useSession } from '@/lib/auth/client';
+import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
@@ -38,8 +38,7 @@ import {
  * @param search - Optional search query to filter projects by name
  */
 export function useProjectsQuery(search?: string) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
     queryKey: [...queryKeys.projects.lists(search)],
@@ -77,8 +76,7 @@ export function useProjectsQuery(search?: string) {
  * @param enabled - Optional control over whether to fetch (default: based on projectId and auth)
  */
 export function useProjectQuery(projectId: string, enabled?: boolean) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.projects.detail(projectId),
@@ -104,8 +102,7 @@ export function useProjectAttachmentsQuery(
   indexStatus?: ProjectIndexStatus,
   enabled?: boolean,
 ) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
     queryKey: [...queryKeys.projects.attachments(projectId), indexStatus],
@@ -147,8 +144,7 @@ export function useProjectMemoriesQuery(
   isActive?: 'true' | 'false',
   enabled?: boolean,
 ) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
     queryKey: [...queryKeys.projects.memories(projectId), source, isActive],
@@ -188,8 +184,7 @@ export function useProjectContextQuery(
   projectId: string,
   enabled?: boolean,
 ) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.projects.context(projectId),

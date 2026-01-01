@@ -12,7 +12,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { useSession } from '@/lib/auth/client';
+import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadChangelogService } from '@/services/api';
@@ -29,8 +29,7 @@ import { getThreadChangelogService } from '@/services/api';
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
 export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.threads.changelog(threadId),

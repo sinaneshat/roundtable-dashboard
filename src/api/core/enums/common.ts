@@ -477,3 +477,43 @@ export const CircuitBreakerStates = {
 export function isCircuitBreakerState(value: unknown): value is CircuitBreakerState {
   return typeof value === 'string' && CIRCUIT_BREAKER_STATES.includes(value as CircuitBreakerState);
 }
+
+// ============================================================================
+// DATE FORMAT VARIANT (Date display formatting variants)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const DATE_FORMAT_VARIANTS = ['short', 'medium', 'long'] as const;
+
+// 2. ZOD SCHEMA
+export const DateFormatVariantSchema = z.enum(DATE_FORMAT_VARIANTS).openapi({
+  description: 'Date formatting variant for display',
+  example: 'medium',
+});
+
+// 3. TYPESCRIPT TYPE
+export type DateFormatVariant = z.infer<typeof DateFormatVariantSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_DATE_FORMAT_VARIANT: DateFormatVariant = 'medium';
+
+// 5. CONSTANT OBJECT
+export const DateFormatVariants = {
+  SHORT: 'short' as const,
+  MEDIUM: 'medium' as const,
+  LONG: 'long' as const,
+} as const;
+
+// Labels for UI display
+export const DATE_FORMAT_VARIANT_LABELS: Record<DateFormatVariant, string> = {
+  [DateFormatVariants.SHORT]: 'Short',
+  [DateFormatVariants.MEDIUM]: 'Medium',
+  [DateFormatVariants.LONG]: 'Long',
+} as const;
+
+// Intl.DateTimeFormatOptions mapping
+export const DATE_FORMAT_VARIANT_OPTIONS: Record<DateFormatVariant, Intl.DateTimeFormatOptions> = {
+  [DateFormatVariants.SHORT]: { year: 'numeric', month: 'short', day: 'numeric' },
+  [DateFormatVariants.MEDIUM]: { year: 'numeric', month: 'long', day: 'numeric' },
+  [DateFormatVariants.LONG]: { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' },
+} as const;

@@ -5,8 +5,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
 import { FinishReasons, MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases, TextPartStates, UIMessageRoles } from '@/api/core/enums';
-import { getRoundNumber, rlog } from '@/lib/utils';
-import { isObject } from '@/lib/utils/type-guards';
+import { getRoundNumber, isObject, rlog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseModeratorTriggerOptions = {

@@ -41,6 +41,7 @@ export function AvatarGroup({
       <div className={cn('flex items-center', className)}>
         {Array.from({ length: skeletonCount }).map((_, index) => (
           <div
+            // eslint-disable-next-line react/no-array-index-key -- Static skeleton placeholders with no stable IDs
             key={`skeleton-${index}`}
             className="relative"
             style={{

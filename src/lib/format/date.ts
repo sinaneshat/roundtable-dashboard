@@ -3,6 +3,12 @@
  * English locale, US timezone
  */
 
+import type { DateFormatVariant } from '@/api/core/enums';
+import {
+  DATE_FORMAT_VARIANT_OPTIONS,
+  DateFormatVariants,
+} from '@/api/core/enums';
+
 /**
  * Check if a date is valid
  */
@@ -108,20 +114,15 @@ export function isOverdue(date: Date | string | number): boolean {
 export function formatBillingDate(
   date: Date | string | number,
   locale = 'en-US',
-  variant: 'short' | 'medium' | 'long' = 'medium',
+  variant: DateFormatVariant = DateFormatVariants.MEDIUM,
 ): string {
   if (!isValidDate(date)) {
     return 'Invalid Date';
   }
 
   const dateObj = new Date(date);
-  const optionsMap: Record<'short' | 'medium' | 'long', Intl.DateTimeFormatOptions> = {
-    short: { year: 'numeric', month: 'short', day: 'numeric' },
-    medium: { year: 'numeric', month: 'long', day: 'numeric' },
-    long: { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' },
-  };
 
-  return new Intl.DateTimeFormat(locale, optionsMap[variant]).format(dateObj);
+  return new Intl.DateTimeFormat(locale, DATE_FORMAT_VARIANT_OPTIONS[variant]).format(dateObj);
 }
 
 /**

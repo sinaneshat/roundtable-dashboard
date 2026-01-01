@@ -12,6 +12,7 @@
 'use client';
 
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+import { z } from 'zod';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { FlowState, MessageStatus, ScreenMode } from '@/api/core/enums';
@@ -20,7 +21,9 @@ import {
   MessagePartTypes,
   MessageRoles,
   MessageStatuses,
+  MessageStatusSchema,
   ScreenModes,
+  ScreenModeSchema,
   TextPartStates,
 } from '@/api/core/enums';
 import { useChatStore, useChatStoreApi } from '@/components/providers';
@@ -32,24 +35,35 @@ import {
   getParticipantCompletionStatus,
 } from '../utils/participant-completion-gate';
 
-export type FlowContext = {
-  threadId: string | null;
-  threadSlug: string | null;
-  hasAiGeneratedTitle: boolean;
-  currentRound: number;
-  hasMessages: boolean;
-  participantCount: number;
-  allParticipantsResponded: boolean;
-  moderatorStatus: MessageStatus | null;
-  moderatorExists: boolean;
-  isAiSdkStreaming: boolean;
-  streamingJustCompleted: boolean;
-  pendingAnimations: Set<number>;
-  isCreatingThread: boolean;
-  isCreatingModerator: boolean;
-  hasNavigated: boolean;
-  screenMode: ScreenMode | null;
-};
+// ============================================================================
+// ZOD SCHEMAS - Single source of truth for type definitions
+// ============================================================================
+
+/**
+ * Flow context schema - captures all state needed for flow state calculation
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
+ */
+export const FlowContextSchema = z.object({
+  threadId: z.string().nullable(),
+  threadSlug: z.string().nullable(),
+  hasAiGeneratedTitle: z.boolean(),
+  currentRound: z.number().int().nonnegative(),
+  hasMessages: z.boolean(),
+  participantCount: z.number().int().nonnegative(),
+  allParticipantsResponded: z.boolean(),
+  moderatorStatus: MessageStatusSchema.nullable(),
+  moderatorExists: z.boolean(),
+  isAiSdkStreaming: z.boolean(),
+  streamingJustCompleted: z.boolean(),
+  pendingAnimations: z.custom<Set<number>>(val => val instanceof Set),
+  isCreatingThread: z.boolean(),
+  isCreatingModerator: z.boolean(),
+  hasNavigated: z.boolean(),
+  screenMode: ScreenModeSchema.nullable(),
+});
+
+export type FlowContext = z.infer<typeof FlowContextSchema>;
 
 const FlowActionTypes = {
   CREATE_THREAD: 'CREATE_THREAD',

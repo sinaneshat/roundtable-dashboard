@@ -13,7 +13,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { LIMITS } from '@/constants/limits';
-import { useSession } from '@/lib/auth/client';
+import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
@@ -34,8 +34,7 @@ import {
  * @param search - Optional search query to filter threads by title
  */
 export function useThreadsQuery(search?: string) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
     queryKey: [...queryKeys.threads.lists(search)],
@@ -73,8 +72,7 @@ export function useThreadsQuery(search?: string) {
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
 export function useThreadQuery(threadId: string, enabled?: boolean) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.threads.detail(threadId),
@@ -113,8 +111,7 @@ export function usePublicThreadQuery(slug: string, enabled?: boolean) {
  * @param enabled - Optional control over whether to fetch (default: based on slug and auth)
  */
 export function useThreadBySlugQuery(slug: string, enabled?: boolean) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.threads.bySlug(slug),

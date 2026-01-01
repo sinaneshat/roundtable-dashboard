@@ -6,11 +6,26 @@ Custom React hooks for common patterns and features.
 
 Hooks are organized by purpose rather than bundled into large files. Each hook has a single responsibility for better discoverability and maintainability.
 
-**Current Status:** 15 hooks (consolidated)
+**Current Status:** 16 hooks (consolidated)
 
 ## Categories
 
 ### Core Utilities (Highly Reusable)
+
+#### `use-auth-check.ts` (53 lines)
+Centralized authentication check hook - SINGLE SOURCE OF TRUTH for query hooks.
+- **Usage:** 21+ query hooks across the codebase
+- **Example:** Checking auth status before fetching data
+- **API:** `{ isAuthenticated, isPending, userId }`
+- **Purpose:** Eliminates duplicated `useSession()` + `isAuthenticated` pattern
+
+```typescript
+const { isAuthenticated } = useAuthCheck();
+return useQuery({
+  enabled: isAuthenticated,
+  // ...
+});
+```
 
 #### `use-boolean.ts` (21 lines)
 Boolean state management with semantic toggle/on/off methods.
@@ -421,7 +436,7 @@ useEffect(() => {
 
 | Category | Hooks | Total Lines | Reusability |
 |----------|-------|-------------|-------------|
-| Core Utilities | 3 | 257 | Very High |
+| Core Utilities | 4 | 310 | Very High |
 | Responsive/Browser | 2 | 196 | High |
 | Message/Chat Processing | 2 | 232 | Medium (domain-specific) |
 | Timeline/Virtualization | 4 | 807 | Medium |

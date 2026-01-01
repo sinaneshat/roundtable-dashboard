@@ -5,7 +5,6 @@ import {
   DatabaseOperationSchema,
   HttpMethodSchema,
   LogTypes,
-  LogTypeSchema,
   ValidationTypeSchema,
 } from '@/api/core/enums';
 
@@ -307,8 +306,6 @@ export const LogHelpers = {
     ...data,
   }),
 };
-
-export { LogTypeSchema };
 
 /**
  * Zod schema for TypedLogger interface

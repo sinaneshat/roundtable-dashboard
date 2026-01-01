@@ -1,4 +1,6 @@
 export { shouldRetryMutation } from './mutation-retry';
+export type { UseAuthCheckReturn } from './use-auth-check';
+export { useAuthCheck } from './use-auth-check';
 export type { UseAutoResizeTextareaOptions, UseAutoResizeTextareaReturn } from './use-auto-resize-textarea';
 export { useAutoResizeTextarea } from './use-auto-resize-textarea';
 export type { UseBooleanReturn } from './use-boolean';

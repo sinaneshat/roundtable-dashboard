@@ -48,54 +48,70 @@ import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders'
  */
 
 /**
- * LLM tracking context - captures all relevant context for PostHog event enrichment
+ * LLM tracking context schema - captures all relevant context for PostHog event enrichment
  *
  * ✅ Better Auth Integration: Uses Better Auth session ID for distinct ID
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
-export type LLMTrackingContext = {
+export const LLMTrackingContextSchema = z.object({
   // User identification (Better Auth session ID for distinct ID)
-  userId: string;
-  sessionId?: string; // Better Auth session.id - used as PostHog distinct ID (optional)
+  userId: z.string(),
+  sessionId: z.string().optional(), // Better Auth session.id - used as PostHog distinct ID
 
   // Conversation context
-  threadId: string;
-  roundNumber: number;
-  threadMode: string;
+  threadId: z.string(),
+  roundNumber: z.number().int().nonnegative(),
+  threadMode: z.string(),
 
   // Participant context
-  participantId: string;
-  participantIndex: number;
-  participantRole?: string | null;
+  participantId: z.string(),
+  participantIndex: z.number().int().nonnegative(),
+  participantRole: z.string().nullable().optional(),
 
   // Model context
-  modelId: string;
-  modelName?: string;
+  modelId: z.string(),
+  modelName: z.string().optional(),
 
   // Request metadata
-  isRegeneration?: boolean;
-  userTier?: string;
-};
+  isRegeneration: z.boolean().optional(),
+  userTier: z.string().optional(),
+});
+
+export type LLMTrackingContext = z.infer<typeof LLMTrackingContextSchema>;
 
 /**
- * Simplified usage type for tracking purposes
+ * Input token details schema for cache metrics
+ */
+const InputTokenDetailsSchema = z.object({
+  noCacheTokens: z.number().int().nonnegative().optional(),
+  cacheReadTokens: z.number().int().nonnegative().optional(),
+  cacheWriteTokens: z.number().int().nonnegative().optional(),
+});
+
+/**
+ * Output token details schema for reasoning metrics
+ */
+const OutputTokenDetailsSchema = z.object({
+  textTokens: z.number().int().nonnegative().optional(),
+  reasoningTokens: z.number().int().nonnegative().optional(),
+});
+
+/**
+ * Simplified usage schema for tracking purposes
  * AI SDK v6 LanguageModelUsage requires inputTokenDetails/outputTokenDetails
  * We use a subset for PostHog tracking which only needs token counts
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
-export type LLMTrackingUsage = {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-  // AI SDK v6: inputTokenDetails contains cache metrics
-  inputTokenDetails?: {
-    noCacheTokens?: number;
-    cacheReadTokens?: number;
-    cacheWriteTokens?: number;
-  };
-  outputTokenDetails?: {
-    textTokens?: number;
-    reasoningTokens?: number;
-  };
-};
+export const LLMTrackingUsageSchema = z.object({
+  inputTokens: z.number().int().nonnegative().optional(),
+  outputTokens: z.number().int().nonnegative().optional(),
+  totalTokens: z.number().int().nonnegative().optional(),
+  inputTokenDetails: InputTokenDetailsSchema.optional(),
+  outputTokenDetails: OutputTokenDetailsSchema.optional(),
+});
+
+export type LLMTrackingUsage = z.infer<typeof LLMTrackingUsageSchema>;
 
 /**
  * AI SDK v6 Tool Call structure
@@ -129,108 +145,140 @@ export const ToolResultSchema = z.object({
 export type ToolResult = z.infer<typeof ToolResultSchema>;
 
 /**
- * LLM generation result from AI SDK v6
+ * Reasoning part schema
+ */
+const ReasoningPartSchema = z.object({
+  type: z.literal('reasoning'),
+  text: z.string(),
+});
+
+/**
+ * LLM response metadata schema
+ */
+const LLMResponseMetadataSchema = z.object({
+  id: z.string().optional(),
+  modelId: z.string().optional(),
+  timestamp: z.date().optional(),
+});
+
+/**
+ * LLM generation result schema from AI SDK v6
  *
  * ✅ AI SDK TYPE SAFETY: Uses explicit types from AI SDK patterns
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
-export type LLMGenerationResult = {
-  text: string;
-  finishReason: string;
-  usage?: LLMTrackingUsage;
-  reasoning?: Array<{ type: 'reasoning'; text: string }>;
-  toolCalls?: ToolCall[];
-  toolResults?: ToolResult[];
-  response?: {
-    id?: string;
-    modelId?: string;
-    timestamp?: Date;
+export const LLMGenerationResultSchema = z.object({
+  text: z.string(),
+  finishReason: z.string(),
+  usage: LLMTrackingUsageSchema.optional(),
+  reasoning: z.array(ReasoningPartSchema).optional(),
+  toolCalls: z.array(ToolCallSchema).optional(),
+  toolResults: z.array(ToolResultSchema).optional(),
+  response: LLMResponseMetadataSchema.optional(),
+});
+
+export type LLMGenerationResult = z.infer<typeof LLMGenerationResultSchema>;
+
+/**
+ * Content part schema for message content
+ */
+const ContentPartSchema = z.object({
+  type: z.string(),
+  text: z.string(),
+});
+
+/**
+ * Input message schema for PostHog tracking
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
+ */
+export const LLMInputMessageSchema = z.object({
+  role: z.string(),
+  content: z.union([z.string(), z.array(ContentPartSchema)]),
+});
+
+export type LLMInputMessage = z.infer<typeof LLMInputMessageSchema>;
+
+// ============================================================================
+// TYPES FOR POSTHOG INTEGRATION
+// ============================================================================
+// Note: These types are kept as TypeScript types (not Zod schemas) because:
+// 1. They need to exactly match PostHog's internal $ai_tools format
+// 2. z.passthrough()/catchall() creates incompatible index signature types
+// 3. These are internal types used for PostHog event building
+
+/**
+ * Tool function parameters type (JSON Schema compatible)
+ */
+type ToolFunctionParameters = {
+  type?: string;
+  properties?: Record<string, { type?: string; description?: string }>;
+  required?: string[];
+  [key: string]: unknown;
+};
+
+/**
+ * PostHog tool type (internal)
+ */
+type PostHogTool = {
+  type: string;
+  function: {
+    name: string;
+    description?: string;
+    parameters?: ToolFunctionParameters;
   };
 };
 
 /**
- * Input message format for PostHog tracking
- */
-export type LLMInputMessage = {
-  role: string;
-  content: string | Array<{ type: string; text: string }>;
-};
-
-/**
- * Optional tracking enrichment options
+ * Optional tracking enrichment options type
  *
- * ✅ AI SDK TYPE REUSE: Uses LanguageModelUsage from AI SDK for totalUsage
+ * Note: This is kept as a type rather than Zod-inferred because:
+ * 1. tools property needs to match LLMGenerationProperties exactly
+ * 2. z.passthrough() creates incompatible types with internal properties type
+ * 3. This is the public API that consumers use
+ *
+ * ✅ AI SDK TYPE REUSE: Uses LLMTrackingUsage for totalUsage
  */
 export type LLMTrackingOptions = {
-  // Dynamic model pricing from OpenRouter API (per 1M tokens)
   modelPricing?: { input: number; output: number };
-
-  // ✅ PostHog Official: Custom pricing override (per token, NOT per 1M)
-  // Use this to override automatic pricing calculations
-  // Reference: https://posthog.com/docs/llm-analytics/cost-tracking
   customPricing?: {
-    inputTokenPrice?: number; // Cost per input token in USD
-    outputTokenPrice?: number; // Cost per output token in USD
-    cacheReadTokenPrice?: number; // Cost per cached input token in USD
-    cacheWriteTokenPrice?: number; // Cost per cache creation token in USD
+    inputTokenPrice?: number;
+    outputTokenPrice?: number;
+    cacheReadTokenPrice?: number;
+    cacheWriteTokenPrice?: number;
   };
-
-  // Model configuration
   modelConfig?: {
     temperature?: number;
     maxTokens?: number;
   };
-
-  // Prompt tracking for A/B testing
   promptTracking?: {
     promptId?: string;
     promptVersion?: string;
     systemPromptTokens?: number;
   };
-
-  // ✅ PostHog Official: Available tools/functions for the LLM
-  // JSON Schema for function parameters (standard JSON Schema object)
-  tools?: Array<{
-    type: string;
-    function: {
-      name: string;
-      description?: string;
-      parameters?: {
-        type?: string;
-        properties?: Record<string, { type?: string; description?: string }>;
-        required?: string[];
-        [key: string]: unknown;
-      };
-    };
-  }>;
-
-  // ✅ PostHog Official: Anthropic cache creation tokens (write to cache)
+  tools?: PostHogTool[];
   cacheCreationInputTokens?: number;
-
-  // ✅ AI SDK v6: Total usage across all steps
   totalUsage?: LLMTrackingUsage;
-
-  // Reasoning tokens (from AI SDK or estimated)
   reasoningTokens?: number;
-
-  // ✅ PostHog Official: Provider URL tracking
-  // Reference: https://posthog.com/docs/llm-analytics/generations
   providerUrls?: {
-    baseUrl?: string; // Base URL of the LLM provider (e.g., "https://openrouter.ai")
-    requestUrl?: string; // Full URL of the request (e.g., "https://openrouter.ai/api/v1/chat/completions")
+    baseUrl?: string;
+    requestUrl?: string;
   };
-
-  // Additional custom properties
   additionalProperties?: Record<string, unknown>;
 };
 
 /**
- * Result from LLM generation tracking
+ * Result from LLM generation tracking schema
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
-export type LLMTrackingResult = {
-  traceId: string;
-  success: boolean;
-  errorMessage?: string;
-};
+export const LLMTrackingResultSchema = z.object({
+  traceId: z.string(),
+  success: z.boolean(),
+  errorMessage: z.string().optional(),
+});
+
+export type LLMTrackingResult = z.infer<typeof LLMTrackingResultSchema>;
 
 // ============================================================================
 // POSTHOG PROPERTIES SCHEMA

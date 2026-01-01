@@ -16,37 +16,54 @@
 import { eq } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { ulid } from 'ulid';
+import { z } from 'zod';
 
 import { normalizeError } from '@/api/common/error-handling';
-import { ChangelogTypes } from '@/api/core/enums';
+import { ChangelogTypes, ChangelogTypeSchema } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { TypedLogger } from '@/api/types/logger';
 import type { DbType } from '@/db';
 import * as tables from '@/db';
-import type { DbChangelogData } from '@/db/schemas/chat-metadata';
+import { DbChangelogDataSchema } from '@/db/schemas/chat-metadata';
 import type { ParticipantConfigInput } from '@/lib/schemas/participant-schemas';
 
 import { validateParticipantUniqueness } from './participant-validation.service';
 
 // ============================================================================
-// TYPES (imported from schema.ts - no manual definitions)
+// ZOD SCHEMAS - Single source of truth for type definitions
 // ============================================================================
 
-export type ParticipantChangeResult = {
-  insertOps: BatchItem<'sqlite'>[];
-  updateOps: BatchItem<'sqlite'>[];
-  disableOps: BatchItem<'sqlite'>[];
-  reenableOps: BatchItem<'sqlite'>[];
-  changelogOps: BatchItem<'sqlite'>[];
-  participantIdMapping: Map<string, string>; // tempId -> realDbId
-};
+/**
+ * Participant change result schema
+ * Note: BatchItem is a Drizzle type that cannot be expressed in Zod
+ * Use z.custom for complex types that require runtime validation
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
+ */
+export const ParticipantChangeResultSchema = z.object({
+  insertOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
+  updateOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
+  disableOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
+  reenableOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
+  changelogOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
+  participantIdMapping: z.custom<Map<string, string>>(val => val instanceof Map),
+});
 
-export type ChangelogEntry = {
-  id: string;
-  changeType: typeof ChangelogTypes[keyof typeof ChangelogTypes];
-  changeSummary: string;
-  changeData: DbChangelogData;
-};
+export type ParticipantChangeResult = z.infer<typeof ParticipantChangeResultSchema>;
+
+/**
+ * Changelog entry schema
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
+ */
+export const ChangelogEntrySchema = z.object({
+  id: z.string(),
+  changeType: ChangelogTypeSchema,
+  changeSummary: z.string(),
+  changeData: DbChangelogDataSchema,
+});
+
+export type ChangelogEntry = z.infer<typeof ChangelogEntrySchema>;
 
 // ============================================================================
 // UTILITY FUNCTIONS

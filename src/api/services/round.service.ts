@@ -12,6 +12,7 @@
  */
 
 import { and, desc, eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
@@ -26,41 +27,70 @@ import {
 import { isTextPart } from '@/lib/utils';
 
 // ============================================================================
-// Type Definitions
+// ZOD SCHEMAS - Single source of truth for type definitions
 // ============================================================================
 
 /**
- * Message structure for round number calculation
+ * Message part schema for round calculation
+ */
+const RoundCalculationMessagePartSchema = z.object({
+  type: z.string(),
+  text: z.string().optional(),
+});
+
+/**
+ * Message metadata schema for round calculation
+ */
+const RoundCalculationMessageMetadataSchema = z.object({
+  isParticipantTrigger: z.boolean().optional(),
+  roundNumber: z.number().int().optional(),
+});
+
+/**
+ * Message structure schema for round number calculation
  * ✅ TYPE-SAFE: Explicit structure instead of `unknown`
  *
  * Uses optional properties since we only need metadata and parts for calculation.
  * Avoids force casting by using type guards for property access.
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
-export type RoundCalculationMessage = {
-  role?: string;
-  metadata?: {
-    isParticipantTrigger?: boolean;
-    roundNumber?: number;
-  };
-  parts?: Array<{
-    type: string;
-    text?: string;
-  }>;
-};
+export const RoundCalculationMessageSchema = z.object({
+  role: z.string().optional(),
+  metadata: RoundCalculationMessageMetadataSchema.optional(),
+  parts: z.array(RoundCalculationMessagePartSchema).optional(),
+});
 
-export type CalculateRoundNumberParams = {
-  threadId: string;
-  participantIndex: number;
-  message: RoundCalculationMessage;
-  regenerateRound?: number;
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-};
+export type RoundCalculationMessage = z.infer<typeof RoundCalculationMessageSchema>;
 
-export type RoundNumberResult = {
-  roundNumber: number;
-  isRegeneration: boolean;
-  isTriggerMessage: boolean;
-};
+/**
+ * Calculate round number params schema
+ * Note: db is a Drizzle database instance that cannot be expressed in Zod
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
+ */
+export const CalculateRoundNumberParamsSchema = z.object({
+  threadId: z.string(),
+  participantIndex: z.number().int().nonnegative(),
+  message: RoundCalculationMessageSchema,
+  regenerateRound: z.number().int().nonnegative().optional(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(val => val !== null && typeof val === 'object'),
+});
+
+export type CalculateRoundNumberParams = z.infer<typeof CalculateRoundNumberParamsSchema>;
+
+/**
+ * Round number result schema
+ *
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
+ */
+export const RoundNumberResultSchema = z.object({
+  roundNumber: z.number().int().nonnegative(),
+  isRegeneration: z.boolean(),
+  isTriggerMessage: z.boolean(),
+});
+
+export type RoundNumberResult = z.infer<typeof RoundNumberResultSchema>;
 
 // ============================================================================
 // Round Number Calculation
