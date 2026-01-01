@@ -11,6 +11,16 @@ import { getBaseUrl } from '@/utils/helpers';
 import { validateEmailDomain } from '../utils';
 
 /**
+ * Get auth secret with build-time fallback.
+ *
+ * Wrangler secrets are runtime-only, not available during Next.js SSG build.
+ * Fallback prevents BetterAuthError during static generation (auth unused anyway).
+ */
+function getAuthSecret(): string {
+  return process.env.BETTER_AUTH_SECRET || 'build-placeholder-secret-min-32-chars';
+}
+
+/**
  * Create Better Auth database adapter
  *
  * IMPORTANT: Better Auth is initialized at module load time (not per-request),
@@ -47,7 +57,7 @@ function createAuthAdapter() {
  * No organizations, just basic user auth
  */
 export const auth = betterAuth({
-  secret: process.env.BETTER_AUTH_SECRET,
+  secret: getAuthSecret(),
   baseURL: process.env.BETTER_AUTH_URL || `${getBaseUrl()}/api/auth`,
   database: createAuthAdapter(),
 
