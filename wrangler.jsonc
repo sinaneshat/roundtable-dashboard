@@ -19,8 +19,15 @@
   "observability": {
     "enabled": true
   },
+  // Smart Placement: disabled for local dev, enabled in preview/production
+  // @see https://developers.cloudflare.com/workers/configuration/smart-placement/
   "placement": {
     "mode": "off"
+  },
+  // Next.js Image Optimization binding
+  // @see https://developers.cloudflare.com/images/transform-images/
+  "images": {
+    "binding": "IMAGES"
   },
   "assets": {
     "directory": ".open-next/assets",
@@ -147,6 +154,19 @@
   "env": {
     "preview": {
       "name": "roundtable-dashboard-preview",
+      // Smart Placement: optimizes worker location near D1/R2 backends
+      "placement": {
+        "mode": "smart"
+      },
+      // Observability with sampling to reduce log volume
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 0.1
+      },
+      // CPU limits for preview environment (100ms)
+      "limits": {
+        "cpu_ms": 100
+      },
       "routes": [
         {
           "pattern": "app-preview.roundtable.now",
@@ -209,6 +229,9 @@
       "ai": {
         "binding": "AI"
       },
+      "images": {
+        "binding": "IMAGES"
+      },
       "durable_objects": {
         "bindings": [
           {
@@ -257,6 +280,19 @@
     },
     "production": {
       "name": "roundtable-dashboard-production",
+      // Smart Placement: optimizes worker location near D1/R2 backends
+      "placement": {
+        "mode": "smart"
+      },
+      // Observability with lower sampling for production (5%)
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 0.05
+      },
+      // CPU limits for production (150ms - slightly higher for complex operations)
+      "limits": {
+        "cpu_ms": 150
+      },
       "routes": [
         {
           "pattern": "app.roundtable.now",
@@ -318,6 +354,9 @@
       },
       "ai": {
         "binding": "AI"
+      },
+      "images": {
+        "binding": "IMAGES"
       },
       "durable_objects": {
         "bindings": [
