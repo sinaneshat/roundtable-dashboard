@@ -13,8 +13,7 @@ import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/api/client';
-import { createApiClient } from '@/api/client';
-import { getApiBaseUrl } from '@/lib/config/base-urls';
+import { authenticatedFetch, createApiClient } from '@/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
@@ -208,42 +207,28 @@ export async function requestUploadTicketService(data: RequestUploadTicketReques
 
 /**
  * Upload request type for ticket-based service
- * Similar to UploadAttachmentServiceInput but includes the token
+ * Requires manual type - Hono RPC doesn't support multipart/form-data with query params
  */
 export type UploadWithTicketServiceInput = {
   token: string;
-  form: {
-    file: File;
-  };
+  file: File;
 };
 
 /**
  * Upload a file with a valid ticket (Step 2 of secure upload)
  * Protected endpoint - requires authentication
  *
- * The token from requestUploadTicketService must be included.
- * Token is validated before file is accepted.
- *
- * Note: Uses native fetch because Hono RPC client doesn't properly
- * infer types for multipart/form-data with query parameters.
+ * Uses authenticatedFetch because Hono RPC doesn't support multipart/form-data
  */
 export async function uploadWithTicketService(data: UploadWithTicketServiceInput) {
-  const baseUrl = getApiUrl();
-  const url = new URL(`${baseUrl}/uploads/ticket/upload`);
-  url.searchParams.set('token', data.token);
-
   const formData = new FormData();
-  formData.append('file', data.form.file);
+  formData.append('file', data.file);
 
-  const response = await fetch(url.toString(), {
+  const response = await authenticatedFetch('/uploads/ticket/upload', {
     method: 'POST',
     body: formData,
-    credentials: 'include',
+    searchParams: { token: data.token },
   });
-
-  if (!response.ok) {
-    throw new Error(`Upload failed: ${response.statusText}`);
-  }
 
   return response.json() as Promise<UploadWithTicketResponse>;
 }
@@ -271,7 +256,7 @@ export async function secureUploadService(file: File) {
   // Step 2: Upload file with token
   return uploadWithTicketService({
     token: ticketResponse.data.token,
-    form: { file },
+    file,
   });
 }
 
@@ -298,59 +283,35 @@ export async function createMultipartUploadService(data: CreateMultipartUploadRe
 }
 
 /**
- * Extended type for upload part with binary body
- * Hono client doesn't support application/octet-stream content types,
- * so we define a clean type for the native fetch implementation
+ * Upload part request type
+ * Requires manual type - Hono RPC doesn't support application/octet-stream
  */
-export type UploadPartRequestWithBody = {
-  param: { id: string };
-  query: { uploadId: string; partNumber: string };
+export type UploadPartServiceInput = {
+  id: string;
+  uploadId: string;
+  partNumber: string;
   body: Blob;
 };
-
-/**
- * Get API base URL - uses centralized config
- * Client-side: uses same origin for cookie handling
- * Server-side: uses centralized URL config
- */
-function getApiUrl(): string {
-  if (typeof window !== 'undefined') {
-    return `${window.location.origin}/api/v1`;
-  }
-  return getApiBaseUrl();
-}
 
 /**
  * Upload a part of a multipart upload
  * Protected endpoint - requires authentication
  *
- * Uses native fetch because Hono RPC client doesn't support
- * application/octet-stream content type for binary uploads.
- * This follows Cloudflare R2 best practices for multipart uploads.
- *
- * @param data - Request with attachment ID, uploadId, partNumber, and binary part data
+ * Uses authenticatedFetch because Hono RPC doesn't support octet-stream
  */
-export async function uploadPartService(data: UploadPartRequestWithBody) {
-  const { param, query, body } = data;
-
-  const baseUrl = getApiUrl();
-  const url = new URL(`${baseUrl}/uploads/multipart/${param.id}/parts`);
-  url.searchParams.set('uploadId', query.uploadId);
-  url.searchParams.set('partNumber', query.partNumber);
-
-  const response = await fetch(url.toString(), {
+export async function uploadPartService(data: UploadPartServiceInput) {
+  const response = await authenticatedFetch(`/uploads/multipart/${data.id}/parts`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/octet-stream',
       'Accept': 'application/json',
     },
-    body,
-    credentials: 'include',
+    body: data.body,
+    searchParams: {
+      uploadId: data.uploadId,
+      partNumber: data.partNumber,
+    },
   });
-
-  if (!response.ok) {
-    throw new Error(`Upload part failed: ${response.statusText}`);
-  }
 
   return response.json() as Promise<UploadPartResponse>;
 }

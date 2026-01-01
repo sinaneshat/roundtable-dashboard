@@ -16,8 +16,8 @@ import type {
   ListAttachmentsResponse,
   UpdateAttachmentRequest,
   UpdateAttachmentResponse,
-  UploadPartRequestWithBody,
   UploadPartResponse,
+  UploadPartServiceInput,
   UploadWithTicketResponse,
 } from '@/services/api';
 import {
@@ -144,7 +144,7 @@ export function useCreateMultipartUploadMutation() {
 }
 
 export function useUploadPartMutation() {
-  return useMutation<UploadPartResponse, Error, UploadPartRequestWithBody>({
+  return useMutation<UploadPartResponse, Error, UploadPartServiceInput>({
     mutationFn: uploadPartService,
     retry: 3,
     retryDelay: attempt => Math.min(1000 * 2 ** attempt, 30000),

@@ -111,3 +111,81 @@ export type ApiClientType = ReturnType<typeof hc<AppType>>;
  * Export AppType for use in services layer
  */
 export type { AppType };
+
+// ============================================================================
+// Authenticated Fetch Utility - For non-RPC requests (multipart, binary)
+// ============================================================================
+
+/**
+ * Service fetch error with structured information
+ */
+export class ServiceFetchError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly statusText: string,
+  ) {
+    super(message);
+    this.name = 'ServiceFetchError';
+  }
+}
+
+/**
+ * Authenticated fetch for non-RPC requests
+ *
+ * Use this for special cases where Hono RPC client doesn't work:
+ * - multipart/form-data uploads
+ * - application/octet-stream binary uploads
+ *
+ * Handles:
+ * - Server-side cookie forwarding
+ * - Client-side credentials
+ * - Unified error handling
+ *
+ * @param path - API path (e.g., '/uploads/ticket/upload')
+ * @param init - Fetch init options (method, body, headers)
+ * @returns Response object
+ * @throws ServiceFetchError if response is not ok
+ */
+export async function authenticatedFetch(
+  path: string,
+  init: RequestInit & { searchParams?: Record<string, string> },
+): Promise<Response> {
+  const baseUrl = getClientApiUrl();
+  const url = new URL(`${baseUrl}${path}`);
+
+  // Add search params if provided
+  if (init.searchParams) {
+    for (const [key, value] of Object.entries(init.searchParams)) {
+      url.searchParams.set(key, value);
+    }
+  }
+
+  const headers = new Headers(init.headers);
+
+  // Server-side: manually forward cookies
+  if (typeof window === 'undefined') {
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+    const cookieHeader = cookieStore.toString();
+    if (cookieHeader) {
+      headers.set('Cookie', cookieHeader);
+    }
+  }
+
+  const response = await fetch(url.toString(), {
+    ...init,
+    headers,
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new ServiceFetchError(
+      `Request failed: ${response.statusText}`,
+      response.status,
+      response.statusText,
+    );
+  }
+
+  return response;
+}
