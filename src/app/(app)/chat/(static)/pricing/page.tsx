@@ -41,7 +41,6 @@ export default async function PricingPage() {
     });
   } catch {
     // Build-time fetch failed - client will fetch on mount
-    console.warn('[SSG] Products prefetch failed, will fetch client-side');
   }
 
   return (
