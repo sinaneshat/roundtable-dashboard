@@ -30,7 +30,6 @@ import type { StreamBufferMetadata, StreamChunk } from '@/api/types/streaming';
 import {
   parseSSEEventType,
   parseStreamBufferMetadata,
-  parseStreamChunksArray,
   STREAM_BUFFER_TTL_SECONDS,
 } from '@/api/types/streaming';
 
@@ -42,10 +41,11 @@ function getMetadataKey(streamId: string): string {
 }
 
 /**
- * Generate KV key for stream chunks
+ * Generate KV key for individual chunk storage
+ * ✅ FIX: Store chunks individually to avoid O(n) memory accumulation
  */
-function getChunksKey(streamId: string): string {
-  return `stream:buffer:${streamId}:chunks`;
+function getChunkKey(streamId: string, index: number): string {
+  return `stream:buffer:${streamId}:c:${index}`;
 }
 
 /**
@@ -94,13 +94,9 @@ export async function initializeStreamBuffer(
       errorMessage: null,
     };
 
-    // Store metadata
+    // Store metadata only - chunks stored individually via appendStreamChunk
+    // ✅ FIX: No longer initialize empty chunks array to avoid O(n) memory pattern
     await env.KV.put(getMetadataKey(streamId), JSON.stringify(metadata), {
-      expirationTtl: STREAM_BUFFER_TTL_SECONDS,
-    });
-
-    // Initialize empty chunks array
-    await env.KV.put(getChunksKey(streamId), JSON.stringify([]), {
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
 
@@ -132,7 +128,9 @@ export async function initializeStreamBuffer(
  * Append chunk to stream buffer
  * Called as SSE data arrives from AI SDK stream
  *
- * ✅ FIX: Added retry logic and better error handling for KV eventual consistency
+ * ✅ FIX: O(1) memory - stores each chunk as individual KV key instead of
+ * accumulating in array. Previous O(n) pattern caused "Worker exceeded memory limit"
+ * for long streams (reading/copying entire array per chunk append).
  */
 export async function appendStreamChunk(
   streamId: string,
@@ -145,89 +143,52 @@ export async function appendStreamChunk(
     return;
   }
 
-  // ✅ FIX: Parse SSE event type for deduplication during resumption
-  // Enables filtering reasoning chunks to prevent duplicate thinking tags
-  const chunk: StreamChunk = {
-    data,
-    timestamp: Date.now(),
-    event: parseSSEEventType(data),
-  };
+  try {
+    // ✅ FIX: Parse SSE event type for deduplication during resumption
+    const chunk: StreamChunk = {
+      data,
+      timestamp: Date.now(),
+      event: parseSSEEventType(data),
+    };
 
-  const chunksKey = getChunksKey(streamId);
-  const maxRetries = 3;
-  let retryCount = 0;
+    // ✅ FIX: Get current chunk count from metadata (O(1) read)
+    const metadataKey = getMetadataKey(streamId);
+    const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
 
-  while (retryCount < maxRetries) {
-    try {
-      // ✅ TYPE-SAFE: Use safe parser instead of force casting
-      let existingChunks = parseStreamChunksArray(await env.KV.get(chunksKey, 'json'));
-
-      // ✅ FIX: If chunks don't exist, wait and retry (KV eventual consistency)
-      if (!existingChunks) {
-        if (retryCount < maxRetries - 1) {
-          logger?.info('Stream chunks not found, waiting for KV consistency', LogHelpers.operation({
-            operationName: 'appendStreamChunk',
-            streamId,
-            retryCount: retryCount + 1,
-          }));
-          await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
-          retryCount++;
-          continue;
-        }
-
-        // ✅ FIX: If still not found after retries, initialize empty array
-        // This handles race condition where appendStreamChunk is called before initializeStreamBuffer completes
-        logger?.warn(
-          'Stream chunks not found after retries, initializing empty array',
-          LogHelpers.operation({
-            operationName: 'appendStreamChunk',
-            streamId,
-            retriesAttempted: retryCount,
-            edgeCase: 'chunks_not_found',
-          }),
-        );
-        existingChunks = [];
-      }
-
-      // Append new chunk
-      const updatedChunks = [...existingChunks, chunk];
-
-      // Store updated chunks
-      await env.KV.put(chunksKey, JSON.stringify(updatedChunks), {
-        expirationTtl: STREAM_BUFFER_TTL_SECONDS,
-      });
-
-      // Update metadata chunk count
-      const metadataKey = getMetadataKey(streamId);
-      // ✅ TYPE-SAFE: Use safe parser instead of force casting
-      const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
-
-      if (metadata) {
-        metadata.chunkCount = updatedChunks.length;
-        await env.KV.put(metadataKey, JSON.stringify(metadata), {
-          expirationTtl: STREAM_BUFFER_TTL_SECONDS,
-        });
-      }
-
-      // Success - exit retry loop
+    // If metadata doesn't exist, stream wasn't initialized - skip buffering
+    // This is a race condition that shouldn't happen normally
+    if (!metadata) {
+      logger?.warn('Stream metadata not found during chunk append', LogHelpers.operation({
+        operationName: 'appendStreamChunk',
+        streamId,
+        edgeCase: 'metadata_not_found',
+      }));
       return;
-    } catch (error) {
-      retryCount++;
-      if (retryCount >= maxRetries) {
-        // ✅ FIX: Log error with more context for debugging stream resumption issues
-        logger?.error('Failed to append stream chunk after retries', LogHelpers.operation({
-          operationName: 'appendStreamChunk',
-          streamId,
-          retriesAttempted: retryCount,
-          chunkDataLength: data.length,
-          error: error instanceof Error ? error.message : 'Unknown error',
-          errorStack: error instanceof Error ? error.stack : undefined,
-        }));
-      } else {
-        // Wait before retry
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
     }
+
+    const chunkIndex = metadata.chunkCount;
+
+    // ✅ FIX: Store chunk at individual key (O(1) write, no array accumulation)
+    // Key format: stream:buffer:{streamId}:c:{index}
+    await env.KV.put(
+      getChunkKey(streamId, chunkIndex),
+      JSON.stringify(chunk),
+      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
+    );
+
+    // ✅ FIX: Increment chunk count in metadata (O(1) update)
+    metadata.chunkCount = chunkIndex + 1;
+    await env.KV.put(metadataKey, JSON.stringify(metadata), {
+      expirationTtl: STREAM_BUFFER_TTL_SECONDS,
+    });
+  } catch (error) {
+    // Log error but don't fail - buffering is best-effort
+    logger?.error('Failed to append stream chunk', LogHelpers.operation({
+      operationName: 'appendStreamChunk',
+      streamId,
+      chunkDataLength: data.length,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }));
   }
 }
 
@@ -287,6 +248,8 @@ export async function completeStreamBuffer(
 /**
  * Fail stream buffer
  * Called when stream encounters an error
+ *
+ * ✅ FIX: Uses individual chunk keys instead of array accumulation
  */
 export async function failStreamBuffer(
   streamId: string,
@@ -301,7 +264,6 @@ export async function failStreamBuffer(
 
   try {
     const metadataKey = getMetadataKey(streamId);
-    // ✅ TYPE-SAFE: Use safe parser instead of force casting
     const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
 
     if (!metadata) {
@@ -313,48 +275,28 @@ export async function failStreamBuffer(
       return;
     }
 
-    // ✅ TYPE-SAFE: Create updated metadata object with failure info
-    let updatedMetadata: StreamBufferMetadata = {
+    // ✅ FIX: Append error chunk as individual key (O(1) operation)
+    const errorChunk: StreamChunk = {
+      data: `3:${JSON.stringify({ error: errorMessage })}`,
+      timestamp: Date.now(),
+      event: 'error',
+    };
+
+    const errorChunkIndex = metadata.chunkCount;
+    await env.KV.put(
+      getChunkKey(streamId, errorChunkIndex),
+      JSON.stringify(errorChunk),
+      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
+    );
+
+    // Update metadata with failure status and new chunk count
+    const updatedMetadata: StreamBufferMetadata = {
       ...metadata,
       status: StreamStatuses.FAILED,
       completedAt: Date.now(),
       errorMessage,
+      chunkCount: errorChunkIndex + 1,
     };
-
-    // ✅ FIX: Append error chunk so frontend receives error event on resume
-    // AI SDK v6 error format: 3:{"error":"..."}
-    try {
-      const chunksKey = getChunksKey(streamId);
-      // ✅ TYPE-SAFE: Use safe parser instead of force casting
-      const existingChunks = parseStreamChunksArray(await env.KV.get(chunksKey, 'json'));
-
-      if (existingChunks) {
-        const errorChunk: StreamChunk = {
-          data: `3:${JSON.stringify({ error: errorMessage })}`,
-          timestamp: Date.now(),
-          event: 'error',
-        };
-
-        const updatedChunks = [...existingChunks, errorChunk];
-
-        await env.KV.put(chunksKey, JSON.stringify(updatedChunks), {
-          expirationTtl: STREAM_BUFFER_TTL_SECONDS,
-        });
-
-        // ✅ TYPE-SAFE: Update metadata with new chunk count
-        updatedMetadata = {
-          ...updatedMetadata,
-          chunkCount: updatedChunks.length,
-        };
-      }
-    } catch (chunkError) {
-      logger?.warn('Failed to append error chunk', LogHelpers.operation({
-        operationName: 'failStreamBuffer',
-        streamId,
-        edgeCase: 'append_error_chunk_failed',
-        error: chunkError instanceof Error ? chunkError.message : 'Unknown error',
-      }));
-    }
 
     await env.KV.put(metadataKey, JSON.stringify(updatedMetadata), {
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
@@ -459,6 +401,9 @@ export async function getStreamMetadata(
 /**
  * Get all buffered chunks for a stream
  * Returns chunks in order they were received
+ *
+ * ✅ FIX: Reads individual chunk keys instead of single array
+ * Uses parallel batch reads for efficiency
  */
 export async function getStreamChunks(
   streamId: string,
@@ -471,10 +416,46 @@ export async function getStreamChunks(
   }
 
   try {
-    // ✅ TYPE-SAFE: Use safe parser instead of force casting
-    const chunks = parseStreamChunksArray(await env.KV.get(getChunksKey(streamId), 'json'));
+    // Get chunk count from metadata
+    const metadata = parseStreamBufferMetadata(await env.KV.get(getMetadataKey(streamId), 'json'));
 
-    if (chunks) {
+    if (!metadata) {
+      return null;
+    }
+
+    if (metadata.chunkCount === 0) {
+      return [];
+    }
+
+    // ✅ FIX: Read chunks in parallel batches for efficiency
+    // KV doesn't have native batch get, so we use Promise.all
+    // For very large streams (1000+ chunks), consider pagination
+    const BATCH_SIZE = 100;
+    const chunks: StreamChunk[] = [];
+
+    for (let batchStart = 0; batchStart < metadata.chunkCount; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, metadata.chunkCount);
+      const batchPromises: Promise<string | null>[] = [];
+
+      for (let i = batchStart; i < batchEnd; i++) {
+        batchPromises.push(env.KV.get(getChunkKey(streamId, i), 'text'));
+      }
+
+      const batchResults = await Promise.all(batchPromises);
+
+      for (const result of batchResults) {
+        if (result) {
+          try {
+            const chunk = JSON.parse(result) as StreamChunk;
+            chunks.push(chunk);
+          } catch {
+            // Skip malformed chunks
+          }
+        }
+      }
+    }
+
+    if (chunks.length > 0) {
       logger?.info('Retrieved stream chunks', LogHelpers.operation({
         operationName: 'getStreamChunks',
         streamId,
@@ -533,6 +514,8 @@ export async function clearActiveStream(
 /**
  * Delete entire stream buffer
  * Called to clean up after stream completes
+ *
+ * ✅ FIX: Deletes individual chunk keys and metadata
  */
 export async function deleteStreamBuffer(
   streamId: string,
@@ -548,13 +531,30 @@ export async function deleteStreamBuffer(
   }
 
   try {
+    // Get chunk count to know how many chunk keys to delete
+    const metadata = parseStreamBufferMetadata(await env.KV.get(getMetadataKey(streamId), 'json'));
+    const chunkCount = metadata?.chunkCount || 0;
+
+    // ✅ FIX: Delete all individual chunk keys in batches
+    const BATCH_SIZE = 50;
+    for (let batchStart = 0; batchStart < chunkCount; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, chunkCount);
+      const deletePromises: Promise<void>[] = [];
+
+      for (let i = batchStart; i < batchEnd; i++) {
+        deletePromises.push(env.KV.delete(getChunkKey(streamId, i)));
+      }
+
+      await Promise.all(deletePromises);
+    }
+
+    // Delete metadata and active stream tracking
     await Promise.all([
       env.KV.delete(getMetadataKey(streamId)),
-      env.KV.delete(getChunksKey(streamId)),
       env.KV.delete(getActiveKey(threadId, roundNumber, participantIndex)),
     ]);
 
-    logger?.info('Deleted stream buffer', LogHelpers.operation({
+    logger?.info(`Deleted stream buffer with ${chunkCount} chunks`, LogHelpers.operation({
       operationName: 'deleteStreamBuffer',
       streamId,
     }));

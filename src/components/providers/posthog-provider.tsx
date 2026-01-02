@@ -2,7 +2,6 @@
 
 import dynamic from 'next/dynamic';
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
 
 type PostHogProviderProps = {
   children: ReactNode;
@@ -12,58 +11,65 @@ type PostHogProviderProps = {
 };
 
 const PostHogProviderInternal = dynamic(
-  () =>
-    import('posthog-js').then((posthogModule) => {
-      const posthog = posthogModule.default;
+  async () => {
+    try {
+      const [posthogModule, reactModule] = await Promise.all([
+        import('posthog-js'),
+        import('posthog-js/react'),
+      ]);
 
-      return import('posthog-js/react').then((reactModule) => {
-        const PHProvider = reactModule.PostHogProvider;
+      const posthog = posthogModule?.default;
+      const PHProvider = reactModule?.PostHogProvider;
 
+      if (!posthog || !PHProvider) {
+        console.warn('[PostHog] Failed to load modules');
         return {
-          default: function PostHogInternal({
-            children,
-            apiKey,
-            apiHost,
-            environment,
-          }: PostHogProviderProps) {
-            const shouldInitialize = environment !== 'local' && apiKey && apiHost;
-
-            useEffect(() => {
-              if (!shouldInitialize) {
-                return;
-              }
-
-              if (posthog.__loaded) {
-                return;
-              }
-
-              const timeoutId = setTimeout(() => {
-                posthog.init(apiKey!, {
-                  api_host: apiHost!,
-                  defaults: '2025-05-24',
-                  person_profiles: 'identified_only',
-                  capture_pageview: false,
-                  capture_pageleave: true,
-                  autocapture: true,
-                  session_recording: {
-                    recordCrossOriginIframes: false,
-                  },
-                  loaded: (posthog) => {
-                    if (process.env.NODE_ENV === 'development') {
-                      posthog.debug();
-                    }
-                  },
-                });
-              }, 0);
-
-              return () => clearTimeout(timeoutId);
-            }, [shouldInitialize, apiKey, apiHost]);
-
-            return <PHProvider client={posthog}>{children}</PHProvider>;
-          },
+          default: ({ children }: PostHogProviderProps) => <>{children}</>,
         };
-      });
-    }),
+      }
+
+      return {
+        default: function PostHogInternal({
+          children,
+          apiKey,
+          apiHost,
+          environment,
+        }: PostHogProviderProps) {
+          const shouldInitialize = environment !== 'local' && apiKey && apiHost;
+
+          if (shouldInitialize) {
+            try {
+              posthog.init(apiKey, {
+                api_host: apiHost,
+                defaults: '2025-05-24',
+                person_profiles: 'identified_only',
+                capture_pageview: false,
+                capture_pageleave: true,
+                autocapture: true,
+                session_recording: {
+                  recordCrossOriginIframes: false,
+                },
+                loaded: (ph) => {
+                  if (process.env.NODE_ENV === 'development') {
+                    ph.debug();
+                  }
+                },
+              });
+            } catch (err) {
+              console.warn('[PostHog] Init failed:', err);
+            }
+          }
+
+          return <PHProvider client={posthog}>{children}</PHProvider>;
+        },
+      };
+    } catch (err) {
+      console.warn('[PostHog] Module load failed:', err);
+      return {
+        default: ({ children }: PostHogProviderProps) => <>{children}</>,
+      };
+    }
+  },
   {
     ssr: false,
     loading: () => null,
