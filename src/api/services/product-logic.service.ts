@@ -911,15 +911,29 @@ export const TITLE_GENERATION_CONFIG = {
 
 /**
  * AI timeout configuration
+ *
+ * ✅ IMPORTANT: These are WALL TIME timeouts (includes I/O wait), not CPU time.
+ *
+ * Cloudflare Workers limits (wrangler.jsonc):
+ * - CPU time: 30,000ms (30s of actual compute) - set via limits.cpu_ms
+ * - Memory: 128MB (fixed, can't be increased)
+ *
+ * During streaming, most time is I/O wait (waiting for AI provider response),
+ * not CPU compute. The 10-minute wall time allows for slow reasoning models
+ * while staying within the 30s CPU limit since actual compute is minimal.
+ *
+ * ✅ AI SDK v6 PATTERN: Reasoning models need extended timeouts
+ * @see https://sdk.vercel.ai/docs/providers/community-providers/claude-code#extended-thinking
  */
-// ✅ AI SDK v6 PATTERN: Reasoning models need extended timeouts
-// Reference: https://sdk.vercel.ai/docs/providers/community-providers/claude-code#extended-thinking
-// DeepSeek-R1, Claude 4, Gemini 2.0 reasoning models can take 5-10 minutes
 export const AI_TIMEOUT_CONFIG = {
-  default: 600000, // 10 minutes - reasoning models (DeepSeek-R1, Claude 4) need extended time
-  titleGeneration: 10000, // 10 seconds - title generation is fast
-  perAttemptMs: 600000, // 10 minutes per retry attempt - matches frontend timeout
-  moderatorAnalysisMs: 120000, // 2 minutes for moderator analysis (non-reasoning)
+  /** 10 min wall time - reasoning models need extended I/O wait, not CPU */
+  default: 600000,
+  /** 10 sec - title generation is fast, minimal compute */
+  titleGeneration: 10000,
+  /** 10 min per attempt - matches frontend timeout, mostly I/O wait */
+  perAttemptMs: 600000,
+  /** 2 min for moderator analysis - non-reasoning, more compute-intensive */
+  moderatorAnalysisMs: 120000,
 } as const;
 
 /**

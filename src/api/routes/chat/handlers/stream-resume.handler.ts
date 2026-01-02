@@ -3,7 +3,7 @@ import { and, desc, eq } from 'drizzle-orm';
 
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
-import { createHandler, Responses, ThreadIdParamSchema } from '@/api/core';
+import { createHandler, Responses, STREAMING_CONFIG, ThreadIdParamSchema } from '@/api/core';
 import type { MessageStatus, RoundPhase } from '@/api/core/enums';
 import { MessageRoles, MessageStatuses, ParticipantStreamStatuses, RoundPhases, StreamStatuses } from '@/api/core/enums';
 import { getActivePreSearchStreamId, getPreSearchStreamChunks, getPreSearchStreamMetadata } from '@/api/services/pre-search-stream-buffer.service';
@@ -58,8 +58,6 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     });
     const currentRound = latestMessage?.roundNumber ?? 0;
 
-    const STALE_CHUNK_TIMEOUT_MS = 30 * 1000;
-
     const preSearchStreamId = await getActivePreSearchStreamId(threadId, currentRound, c.env);
     if (preSearchStreamId) {
       const preSearchMetadata = await getPreSearchStreamMetadata(preSearchStreamId, c.env);
@@ -69,7 +67,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
         const lastChunkTime = preSearchChunks && preSearchChunks.length > 0
           ? Math.max(...preSearchChunks.map(chunk => chunk.timestamp))
           : 0;
-        const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
+        const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
 
         if (!isStale) {
           return Responses.noContentWithHeaders({
@@ -119,9 +117,9 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       const hasNoChunks = !chunks || chunks.length === 0;
       const streamIsOldWithNoChunks = hasNoChunks
         && streamCreatedTime > 0
-        && Date.now() - streamCreatedTime > STALE_CHUNK_TIMEOUT_MS;
+        && Date.now() - streamCreatedTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
 
-      const isStaleStream = (lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS)
+      const isStaleStream = (lastChunkTime > 0 && Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS)
         || streamIsOldWithNoChunks;
 
       if (isStaleStream) {
@@ -183,7 +181,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
         const lastChunkTime = moderatorChunks && moderatorChunks.length > 0
           ? Math.max(...moderatorChunks.map(chunk => chunk.timestamp))
           : 0;
-        const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
+        const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
 
         if (!isStale) {
           // ✅ FIX: Create resumable stream for moderator instead of just returning headers
@@ -256,7 +254,6 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
   async (c) => {
     const { user } = c.auth();
     const { threadId } = c.validated.params;
-    const STALE_CHUNK_TIMEOUT_MS = 30 * 1000;
 
     const db = await getDbAsync();
     const thread = await db.query.chatThread.findFirst({
@@ -333,7 +330,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
             lastChunkTime,
             metadata?.createdAt ?? 0,
             (chunks?.length ?? 0) > 0,
-            STALE_CHUNK_TIMEOUT_MS,
+            STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS,
           );
 
           if (stale) {
@@ -385,7 +382,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
           lastChunkTime,
           streamCreatedTime,
           (chunks?.length ?? 0) > 0,
-          STALE_CHUNK_TIMEOUT_MS,
+          STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS,
         );
 
         if (stale) {
@@ -484,7 +481,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
           lastChunkTime,
           metadata?.createdAt ?? 0,
           (chunks?.length ?? 0) > 0,
-          STALE_CHUNK_TIMEOUT_MS,
+          STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS,
         );
 
         if (stale) {

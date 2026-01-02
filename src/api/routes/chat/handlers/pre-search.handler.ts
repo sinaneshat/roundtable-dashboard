@@ -1201,7 +1201,6 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
     // Mark stale STREAMING/PENDING searches as FAILED
     // ✅ FIX: Check KV buffer for recent activity before marking as orphaned
     // A search with recent KV chunks is still actively running and should not be marked failed
-    const STALE_CHUNK_TIMEOUT_MS = 30_000; // 30 seconds - matches stream-resume handler
     const potentialOrphans = allPreSearches.filter((search) => {
       if (search.status !== MessageStatuses.STREAMING && search.status !== MessageStatuses.PENDING) {
         return false;
@@ -1220,7 +1219,7 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
       // If KV has recent chunks, the stream is still active - don't mark as orphaned
       if (chunks && chunks.length > 0) {
         const lastChunkTime = Math.max(...chunks.map(chunk => chunk.timestamp));
-        const isStale = Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
+        const isStale = Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
 
         if (!isStale) {
           // Stream is still active, skip orphan cleanup for this search

@@ -227,6 +227,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       return;
     }
 
+    // Immediate UI feedback: disable input and show loading state
+    actions.setWaitingToStartStreaming(true);
+
     let pendingRoundNumber = calculateNextRoundNumber(threadState.messages);
     if (pendingRoundNumber === 0 && threadState.messages.length > 0) {
       const round0AssistantMessages = threadState.messages.filter(
@@ -360,6 +363,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     } catch (error) {
       console.error('[handleUpdateThreadAndSend] Error updating thread:', error);
 
+      actions.setWaitingToStartStreaming(false);
       actions.setHasEarlyOptimisticMessage(false);
       actions.setStreamingRoundNumber(null);
 
