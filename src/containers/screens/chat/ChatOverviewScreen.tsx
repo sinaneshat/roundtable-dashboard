@@ -652,6 +652,9 @@ export default function ChatOverviewScreen() {
     isModelsLoading,
   ]);
 
+  // Show spinner from submit click until streaming starts (then stop button shows instead)
+  const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming || Boolean(pendingMessage);
+
   const sharedChatInputProps = useMemo(() => {
     const status: ChatStatus = isInitialUIInputBlocked ? 'submitted' : 'ready';
     return {
@@ -669,7 +672,7 @@ export default function ChatOverviewScreen() {
       enableAttachments: !isInitialUIInputBlocked,
       attachmentClickRef,
       toolbar: chatInputToolbar,
-      isSubmitting: formActions.isSubmitting,
+      isSubmitting: showSubmitSpinner,
       isUploading: chatAttachments.isUploading,
       isModelsLoading,
     };
@@ -686,7 +689,7 @@ export default function ChatOverviewScreen() {
     chatAttachments.removeAttachment,
     attachmentClickRef,
     chatInputToolbar,
-    formActions.isSubmitting,
+    showSubmitSpinner,
     chatAttachments.isUploading,
     isModelsLoading,
   ]);

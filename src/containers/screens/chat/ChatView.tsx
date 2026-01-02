@@ -371,6 +371,9 @@ export function ChatView({
     || isResumptionActive
     || formActions.isSubmitting;
 
+  // Show spinner from submit click until streaming starts (then stop button shows instead)
+  const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming || Boolean(pendingMessage);
+
   const keyboardOffset = useVisualViewportPosition();
 
   const handleModeSelect = useCallback((newMode: ChatMode) => {
@@ -583,7 +586,7 @@ export function ChatView({
                 attachmentClickRef={attachmentClickRef}
                 isUploading={chatAttachments.isUploading}
                 isHydrating={mode === ScreenModes.THREAD && !hasInitiallyLoaded}
-                isSubmitting={formActions.isSubmitting}
+                isSubmitting={showSubmitSpinner}
                 isModelsLoading={isModelsLoading}
                 toolbar={(
                   <ChatInputToolbarMenu

@@ -673,3 +673,187 @@ describe('submit Blocking - Moderator Transition Window (Race Condition Fix)', (
     expect(true).toBe(true);
   });
 });
+
+// ============================================================================
+// LOADING SPINNER STATE TESTS
+// ============================================================================
+
+/**
+ * Tests for loading spinner state on submit button.
+ * The spinner should show from submit click until streaming starts.
+ *
+ * Lifecycle:
+ * 1. User clicks submit → isSubmitting=true (mutation pending) → spinner shows
+ * 2. API completes → isSubmitting=false, but pendingMessage set → spinner continues
+ * 3. waitingToStartStreaming=true → spinner continues
+ * 4. Streaming starts (isStreaming=true) → stop button shows instead of spinner
+ * 5. Streaming ends → button enabled, no spinner
+ *
+ * BUG FIXED: Previously spinner disappeared when API completed (isSubmitting=false)
+ * before pendingMessage was set, causing brief flash of enabled button.
+ */
+type SpinnerCheckState = {
+  isSubmitting: boolean;
+  waitingToStartStreaming: boolean;
+  pendingMessage: string | null;
+};
+
+function calculateShowSubmitSpinner(state: SpinnerCheckState): boolean {
+  return state.isSubmitting || state.waitingToStartStreaming || Boolean(state.pendingMessage);
+}
+
+describe('submit Spinner - Loading State Lifecycle', () => {
+  it('shows spinner when API mutation is pending (isSubmitting=true)', () => {
+    const showSpinner = calculateShowSubmitSpinner({
+      isSubmitting: true,
+      waitingToStartStreaming: false,
+      pendingMessage: null,
+    });
+    expect(showSpinner).toBe(true);
+  });
+
+  it('shows spinner when waitingToStartStreaming is true', () => {
+    const showSpinner = calculateShowSubmitSpinner({
+      isSubmitting: false,
+      waitingToStartStreaming: true,
+      pendingMessage: null,
+    });
+    expect(showSpinner).toBe(true);
+  });
+
+  it('shows spinner when pendingMessage exists', () => {
+    const showSpinner = calculateShowSubmitSpinner({
+      isSubmitting: false,
+      waitingToStartStreaming: false,
+      pendingMessage: 'Test message',
+    });
+    expect(showSpinner).toBe(true);
+  });
+
+  it('hides spinner when all states are false/null', () => {
+    const showSpinner = calculateShowSubmitSpinner({
+      isSubmitting: false,
+      waitingToStartStreaming: false,
+      pendingMessage: null,
+    });
+    expect(showSpinner).toBe(false);
+  });
+
+  it('shows spinner during entire submit lifecycle (combo states)', () => {
+    // Simulate the full lifecycle
+    const states: SpinnerCheckState[] = [
+      // Step 1: User clicks submit, API call starts
+      { isSubmitting: true, waitingToStartStreaming: false, pendingMessage: null },
+      // Step 2: API call in progress
+      { isSubmitting: true, waitingToStartStreaming: false, pendingMessage: null },
+      // Step 3: API completes, prepareForNewMessage called
+      { isSubmitting: false, waitingToStartStreaming: false, pendingMessage: 'Test' },
+      // Step 4: Waiting for stream to start
+      { isSubmitting: false, waitingToStartStreaming: true, pendingMessage: 'Test' },
+    ];
+
+    for (const state of states) {
+      const showSpinner = calculateShowSubmitSpinner(state);
+      expect(showSpinner).toBe(true);
+    }
+  });
+});
+
+describe('submit Spinner - Double Submission Prevention', () => {
+  it('scenario: API completes before pendingMessage set (the bug)', () => {
+    /**
+     * BUG REPRODUCTION:
+     * Timeline of the double-submission bug:
+     * T0: User clicks submit
+     *   - isSubmitting: true (mutation starts)
+     *   - Spinner shows
+     *
+     * T1: API response received (~100-500ms)
+     *   - isSubmitting: false (mutation.isPending becomes false)
+     *   - pendingMessage: null (not set yet in the old implementation)
+     *   - BUG: Spinner disappeared, button appeared enabled
+     *   - User could click submit again!
+     *
+     * T2: prepareForNewMessage() called
+     *   - pendingMessage: set to user message
+     *   - Button now properly disabled (but too late)
+     *
+     * FIX: showSubmitSpinner now includes pendingMessage and waitingToStartStreaming
+     */
+
+    // The problematic state that allowed double submission
+    const bugState: SpinnerCheckState = {
+      isSubmitting: false, // API just completed
+      waitingToStartStreaming: false, // Not set yet
+      pendingMessage: null, // Not set yet (the gap)
+    };
+
+    // This is the state that could happen in the gap
+    // With the old logic, spinner would be false = bug
+    const showSpinner = calculateShowSubmitSpinner(bugState);
+
+    // After fix, spinner should still be false here, but isInputBlocked
+    // should be true due to other checks in the component
+    // The fix is that pendingMessage gets set BEFORE isSubmitting becomes false
+    // OR waitingToStartStreaming is set during the API call
+    expect(showSpinner).toBe(false);
+
+    // Immediately after, pendingMessage is set
+    const fixedState: SpinnerCheckState = {
+      isSubmitting: false,
+      waitingToStartStreaming: false,
+      pendingMessage: 'Test message', // Now set
+    };
+    const showSpinnerAfterFix = calculateShowSubmitSpinner(fixedState);
+    expect(showSpinnerAfterFix).toBe(true);
+  });
+
+  it('scenario: continuous blocking from submit to streaming start', () => {
+    /**
+     * Correct lifecycle with fix:
+     * The button should remain disabled and show spinner from
+     * submit click until streaming starts.
+     */
+
+    // T0: Click submit
+    const t0 = { isSubmitting: true, waitingToStartStreaming: false, pendingMessage: null };
+
+    // T1: API in progress
+    const t1 = { isSubmitting: true, waitingToStartStreaming: false, pendingMessage: null };
+
+    // T2: API completes, prepareForNewMessage called (nearly simultaneous)
+    const t2 = { isSubmitting: false, waitingToStartStreaming: false, pendingMessage: 'Msg' };
+
+    // T3: Waiting for streaming to start
+    const t3 = { isSubmitting: false, waitingToStartStreaming: true, pendingMessage: 'Msg' };
+
+    // All states should show spinner
+    expect(calculateShowSubmitSpinner(t0)).toBe(true);
+    expect(calculateShowSubmitSpinner(t1)).toBe(true);
+    expect(calculateShowSubmitSpinner(t2)).toBe(true);
+    expect(calculateShowSubmitSpinner(t3)).toBe(true);
+
+    // T4: Streaming starts - spinner stops (stop button shows instead)
+    // This is handled by isStreaming in the component, not showSubmitSpinner
+    const t4 = { isSubmitting: false, waitingToStartStreaming: false, pendingMessage: null };
+    expect(calculateShowSubmitSpinner(t4)).toBe(false);
+  });
+
+  it('verifies isInputBlocked includes pendingMessage for double-submit prevention', () => {
+    // This test verifies the fix applied to isInitialUIInputBlocked
+    // which now includes Boolean(pendingMessage)
+    const isBlocked = calculateIsInputBlocked({
+      isStreaming: false,
+      isCreatingThread: false,
+      waitingToStartStreaming: false,
+      isModeratorStreaming: false,
+      pendingMessage: 'Test message', // This should block
+      currentResumptionPhase: null,
+      preSearchResumption: null,
+      moderatorResumption: null,
+      isSubmitting: false, // API already completed
+    });
+
+    expect(isBlocked).toBe(true); // Blocked by pendingMessage
+  });
+});

@@ -8,8 +8,6 @@
  * which uses plain text JSON streaming.
  */
 
-import { z } from 'zod';
-
 import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
