@@ -1,5 +1,4 @@
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
-import withSerwistInit from '@serwist/next';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 
@@ -55,24 +54,6 @@ const nextConfig: NextConfig = {
     '@react-email/render',
     'react-email',
   ],
-
-  // Block service worker in development to prevent caching issues
-  async rewrites() {
-    if (isDev) {
-      return {
-        beforeFiles: [
-          {
-            // Block sw.js requests in dev - return 404 via non-existent path
-            source: '/sw.js',
-            destination: '/_dev-sw-blocked',
-          },
-        ],
-        afterFiles: [],
-        fallback: [],
-      };
-    }
-    return { beforeFiles: [], afterFiles: [], fallback: [] };
-  },
 
   // Cache optimization headers
   async headers() {
@@ -148,19 +129,6 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Block service worker caching in development
-      ...(isDev
-        ? [
-            {
-              source: '/sw.js',
-              headers: [
-                { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-                { key: 'Pragma', value: 'no-cache' },
-                { key: 'Expires', value: '0' },
-              ],
-            },
-          ]
-        : []),
       {
         // API routes - no cache by default (handled by middleware)
         source: '/api/:path*',
@@ -290,20 +258,6 @@ const nextConfig: NextConfig = {
 
 };
 
-// Configure Serwist PWA
-const withSerwist = withSerwistInit({
-  swSrc: 'src/app/sw.ts',
-  swDest: 'public/sw.js',
-  // Disable Serwist in development for faster builds
-  disable: process.env.NODE_ENV === 'development',
-  // Additional Serwist configuration
-  cacheOnNavigation: true,
-  reloadOnOnline: true,
-  register: true,
-  scope: '/',
-});
-
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
-// Chain plugins: Serwist -> NextIntl -> NextConfig
-export default withSerwist(withNextIntl(nextConfig));
+export default withNextIntl(nextConfig);

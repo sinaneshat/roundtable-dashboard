@@ -21,9 +21,6 @@
       ]
     },
     "resolveJsonModule": true,
-    "types": [
-      "@serwist/next/typings"
-    ],
     "allowJs": true,
     "checkJs": true,
     "strict": true,

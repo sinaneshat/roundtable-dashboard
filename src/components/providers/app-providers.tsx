@@ -4,7 +4,7 @@ import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider, useTranslations } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { ReactNode } from 'react';
-import { Suspense, useEffect } from 'react';
+import { Suspense } from 'react';
 
 import { GlobalErrorBoundary } from '@/components/errors/global-error-boundary';
 import { VersionUpdateModal } from '@/components/modals/version-update-modal';
@@ -46,23 +46,6 @@ export function AppProviders({
   env,
   initialPreferences,
 }: AppProvidersProps) {
-  useEffect(() => {
-    if (env.NEXT_PUBLIC_WEBAPP_ENV === 'local' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        for (const registration of registrations) {
-          registration.unregister();
-        }
-      });
-      if ('caches' in window) {
-        caches.keys().then((names) => {
-          for (const name of names) {
-            caches.delete(name);
-          }
-        });
-      }
-    }
-  }, [env.NEXT_PUBLIC_WEBAPP_ENV]);
-
   return (
     <PostHogProvider
       apiKey={env.NEXT_PUBLIC_POSTHOG_API_KEY}
