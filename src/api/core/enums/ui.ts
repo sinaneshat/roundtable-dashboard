@@ -950,3 +950,278 @@ export const KeyboardKeys = {
 export function isValidKeyboardKey(value: unknown): value is KeyboardKey {
   return typeof value === 'string' && KEYBOARD_KEYS.includes(value as KeyboardKey);
 }
+
+// ============================================================================
+// SEO CONTENT TYPE (for AEO meta tags)
+// ============================================================================
+
+export const SEO_CONTENT_TYPES = ['how-to', 'comparison', 'review', 'guide', 'faq', 'tutorial'] as const;
+
+export const DEFAULT_SEO_CONTENT_TYPE: SeoContentType = 'guide';
+
+export const SeoContentTypeSchema = z.enum(SEO_CONTENT_TYPES).openapi({
+  description: 'SEO content type for AI search optimization',
+  example: 'how-to',
+});
+
+export type SeoContentType = z.infer<typeof SeoContentTypeSchema>;
+
+export const SeoContentTypes = {
+  HOW_TO: 'how-to' as const,
+  COMPARISON: 'comparison' as const,
+  REVIEW: 'review' as const,
+  GUIDE: 'guide' as const,
+  FAQ: 'faq' as const,
+  TUTORIAL: 'tutorial' as const,
+} as const;
+
+export function isValidSeoContentType(value: unknown): value is SeoContentType {
+  return typeof value === 'string' && SEO_CONTENT_TYPES.includes(value as SeoContentType);
+}
+
+// ============================================================================
+// SEO CONTENT LEVEL (for AEO meta tags)
+// ============================================================================
+
+export const SEO_CONTENT_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
+
+export const DEFAULT_SEO_CONTENT_LEVEL: SeoContentLevel = 'beginner';
+
+export const SeoContentLevelSchema = z.enum(SEO_CONTENT_LEVELS).openapi({
+  description: 'Content difficulty level for audience matching',
+  example: 'intermediate',
+});
+
+export type SeoContentLevel = z.infer<typeof SeoContentLevelSchema>;
+
+export const SeoContentLevels = {
+  BEGINNER: 'beginner' as const,
+  INTERMEDIATE: 'intermediate' as const,
+  ADVANCED: 'advanced' as const,
+} as const;
+
+export function isValidSeoContentLevel(value: unknown): value is SeoContentLevel {
+  return typeof value === 'string' && SEO_CONTENT_LEVELS.includes(value as SeoContentLevel);
+}
+
+// ============================================================================
+// SIDEBAR SIDE (for Sidebar component)
+// ============================================================================
+
+export const SIDEBAR_SIDES = ['start', 'end'] as const;
+
+export const DEFAULT_SIDEBAR_SIDE: SidebarSide = 'start';
+
+export const SidebarSideSchema = z.enum(SIDEBAR_SIDES).openapi({
+  description: 'Sidebar position side',
+  example: 'start',
+});
+
+export type SidebarSide = z.infer<typeof SidebarSideSchema>;
+
+export const SidebarSides = {
+  START: 'start' as const,
+  END: 'end' as const,
+} as const;
+
+export function isValidSidebarSide(value: unknown): value is SidebarSide {
+  return typeof value === 'string' && SIDEBAR_SIDES.includes(value as SidebarSide);
+}
+
+// ============================================================================
+// SIDEBAR VARIANT (for Sidebar component)
+// ============================================================================
+
+export const SIDEBAR_VARIANTS = ['sidebar', 'floating', 'inset'] as const;
+
+export const DEFAULT_SIDEBAR_VARIANT: SidebarVariant = 'sidebar';
+
+export const SidebarVariantSchema = z.enum(SIDEBAR_VARIANTS).openapi({
+  description: 'Sidebar visual variant',
+  example: 'sidebar',
+});
+
+export type SidebarVariant = z.infer<typeof SidebarVariantSchema>;
+
+export const SidebarVariants = {
+  SIDEBAR: 'sidebar' as const,
+  FLOATING: 'floating' as const,
+  INSET: 'inset' as const,
+} as const;
+
+export function isValidSidebarVariant(value: unknown): value is SidebarVariant {
+  return typeof value === 'string' && SIDEBAR_VARIANTS.includes(value as SidebarVariant);
+}
+
+// ============================================================================
+// SIDEBAR COLLAPSIBLE (for Sidebar component)
+// ============================================================================
+
+export const SIDEBAR_COLLAPSIBLES = ['offcanvas', 'icon', 'none'] as const;
+
+export const DEFAULT_SIDEBAR_COLLAPSIBLE: SidebarCollapsible = 'offcanvas';
+
+export const SidebarCollapsibleSchema = z.enum(SIDEBAR_COLLAPSIBLES).openapi({
+  description: 'Sidebar collapse behavior',
+  example: 'offcanvas',
+});
+
+export type SidebarCollapsible = z.infer<typeof SidebarCollapsibleSchema>;
+
+export const SidebarCollapsibles = {
+  OFFCANVAS: 'offcanvas' as const,
+  ICON: 'icon' as const,
+  NONE: 'none' as const,
+} as const;
+
+export function isValidSidebarCollapsible(value: unknown): value is SidebarCollapsible {
+  return typeof value === 'string' && SIDEBAR_COLLAPSIBLES.includes(value as SidebarCollapsible);
+}
+
+// ============================================================================
+// SIDEBAR MENU BUTTON SIZE
+// ============================================================================
+
+export const SIDEBAR_MENU_BUTTON_SIZES = ['sm', 'md'] as const;
+
+export const DEFAULT_SIDEBAR_MENU_BUTTON_SIZE: SidebarMenuButtonSize = 'md';
+
+export const SidebarMenuButtonSizeSchema = z.enum(SIDEBAR_MENU_BUTTON_SIZES).openapi({
+  description: 'Sidebar menu button size',
+  example: 'md',
+});
+
+export type SidebarMenuButtonSize = z.infer<typeof SidebarMenuButtonSizeSchema>;
+
+export const SidebarMenuButtonSizes = {
+  SM: 'sm' as const,
+  MD: 'md' as const,
+} as const;
+
+export function isValidSidebarMenuButtonSize(value: unknown): value is SidebarMenuButtonSize {
+  return typeof value === 'string' && SIDEBAR_MENU_BUTTON_SIZES.includes(value as SidebarMenuButtonSize);
+}
+
+// ============================================================================
+// DROPDOWN MENU VARIANT
+// ============================================================================
+
+export const DROPDOWN_MENU_VARIANTS = ['default', 'destructive'] as const;
+
+export const DEFAULT_DROPDOWN_MENU_VARIANT: DropdownMenuVariant = 'default';
+
+export const DropdownMenuVariantSchema = z.enum(DROPDOWN_MENU_VARIANTS).openapi({
+  description: 'Dropdown menu item variant',
+  example: 'default',
+});
+
+export type DropdownMenuVariant = z.infer<typeof DropdownMenuVariantSchema>;
+
+export const DropdownMenuVariants = {
+  DEFAULT: 'default' as const,
+  DESTRUCTIVE: 'destructive' as const,
+} as const;
+
+export function isValidDropdownMenuVariant(value: unknown): value is DropdownMenuVariant {
+  return typeof value === 'string' && DROPDOWN_MENU_VARIANTS.includes(value as DropdownMenuVariant);
+}
+
+// ============================================================================
+// IMAGE LOADING (for img element)
+// ============================================================================
+
+export const IMAGE_LOADINGS = ['lazy', 'eager'] as const;
+
+export const DEFAULT_IMAGE_LOADING: ImageLoading = 'lazy';
+
+export const ImageLoadingSchema = z.enum(IMAGE_LOADINGS).openapi({
+  description: 'Image loading strategy',
+  example: 'lazy',
+});
+
+export type ImageLoading = z.infer<typeof ImageLoadingSchema>;
+
+export const ImageLoadings = {
+  LAZY: 'lazy' as const,
+  EAGER: 'eager' as const,
+} as const;
+
+export function isValidImageLoading(value: unknown): value is ImageLoading {
+  return typeof value === 'string' && IMAGE_LOADINGS.includes(value as ImageLoading);
+}
+
+// ============================================================================
+// FIELD TYPE (for form inputs)
+// ============================================================================
+
+export const FIELD_TYPES = ['text', 'number', 'email', 'password'] as const;
+
+export const DEFAULT_FIELD_TYPE: FieldType = 'text';
+
+export const FieldTypeSchema = z.enum(FIELD_TYPES).openapi({
+  description: 'Form input field type',
+  example: 'text',
+});
+
+export type FieldType = z.infer<typeof FieldTypeSchema>;
+
+export const FieldTypes = {
+  TEXT: 'text' as const,
+  NUMBER: 'number' as const,
+  EMAIL: 'email' as const,
+  PASSWORD: 'password' as const,
+} as const;
+
+export function isValidFieldType(value: unknown): value is FieldType {
+  return typeof value === 'string' && FIELD_TYPES.includes(value as FieldType);
+}
+
+// ============================================================================
+// SCROLL BEHAVIOR
+// ============================================================================
+
+export const SCROLL_BEHAVIORS = ['auto', 'smooth'] as const;
+
+export const DEFAULT_SCROLL_BEHAVIOR: ScrollBehavior = 'auto';
+
+export const ScrollBehaviorSchema = z.enum(SCROLL_BEHAVIORS).openapi({
+  description: 'Scroll animation behavior',
+  example: 'smooth',
+});
+
+export type ScrollBehavior = z.infer<typeof ScrollBehaviorSchema>;
+
+export const ScrollBehaviors = {
+  AUTO: 'auto' as const,
+  SMOOTH: 'smooth' as const,
+} as const;
+
+export function isValidScrollBehavior(value: unknown): value is ScrollBehavior {
+  return typeof value === 'string' && SCROLL_BEHAVIORS.includes(value as ScrollBehavior);
+}
+
+// ============================================================================
+// SCROLL ALIGN
+// ============================================================================
+
+export const SCROLL_ALIGNS = ['start', 'center', 'end', 'auto'] as const;
+
+export const DEFAULT_SCROLL_ALIGN: ScrollAlign = 'auto';
+
+export const ScrollAlignSchema = z.enum(SCROLL_ALIGNS).openapi({
+  description: 'Scroll alignment position',
+  example: 'center',
+});
+
+export type ScrollAlign = z.infer<typeof ScrollAlignSchema>;
+
+export const ScrollAligns = {
+  START: 'start' as const,
+  CENTER: 'center' as const,
+  END: 'end' as const,
+  AUTO: 'auto' as const,
+} as const;
+
+export function isValidScrollAlign(value: unknown): value is ScrollAlign {
+  return typeof value === 'string' && SCROLL_ALIGNS.includes(value as ScrollAlign);
+}

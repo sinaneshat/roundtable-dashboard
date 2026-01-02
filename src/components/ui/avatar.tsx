@@ -23,6 +23,8 @@ import { forwardRef } from 'react';
 
 import * as AvatarPrimitive from "@radix-ui/react-avatar"
 
+import type { ImageLoading } from '@/api/core/enums';
+import { ImageLoadings } from '@/api/core/enums';
 import { cn } from "@/lib/ui/cn"
 
 const Avatar = forwardRef<
@@ -55,14 +57,14 @@ Avatar.displayName = AvatarPrimitive.Root.displayName
  * especially in scrollable lists with many images (e.g., model dropdowns).
  */
 interface AvatarImageProps extends ComponentPropsWithoutRef<typeof AvatarPrimitive.Image> {
-  loading?: "lazy" | "eager";
+  loading?: ImageLoading;
   referrerPolicy?: HTMLAttributeReferrerPolicy;
 }
 
 const AvatarImage = forwardRef<
   ElementRef<typeof AvatarPrimitive.Image>,
   AvatarImageProps
->(({ className, loading = "lazy", referrerPolicy = "no-referrer", ...props }, ref) => (
+>(({ className, loading = ImageLoadings.LAZY, referrerPolicy = "no-referrer", ...props }, ref) => (
   <AvatarPrimitive.Image
     ref={ref}
     data-slot="avatar-image"

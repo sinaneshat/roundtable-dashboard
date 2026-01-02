@@ -14,6 +14,8 @@
  * - Q&A format support
  */
 
+import type { SeoContentLevel, SeoContentType } from '@/api/core/enums';
+
 // Stable default values to prevent re-renders
 const EMPTY_ENTITIES: string[] = [];
 const EMPTY_RELATED_QUESTIONS: string[] = [];
@@ -24,13 +26,13 @@ type AeoMetaTagsProps = {
   /** Direct answer (concise) */
   primaryAnswer?: string;
   /** Content type for AI engines */
-  contentType?: 'how-to' | 'comparison' | 'review' | 'guide' | 'faq' | 'tutorial';
+  contentType?: SeoContentType;
   /** Key entities mentioned in the content */
   entities?: string[];
   /** Related questions */
   relatedQuestions?: string[];
   /** Content difficulty level */
-  contentLevel?: 'beginner' | 'intermediate' | 'advanced';
+  contentLevel?: SeoContentLevel;
   /** Estimated reading time in minutes */
   readingTime?: number;
   /** Last updated date */

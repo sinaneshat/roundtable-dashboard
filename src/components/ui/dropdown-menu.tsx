@@ -4,6 +4,8 @@ import type { ComponentProps } from 'react';
 
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 
+import type { DropdownMenuVariant } from '@/api/core/enums';
+import { DropdownMenuVariants } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { cn } from "@/lib/ui/cn"
 
@@ -62,13 +64,13 @@ function DropdownMenuGroup({
 
 interface DropdownMenuItemProps extends ComponentProps<typeof DropdownMenuPrimitive.Item> {
   inset?: boolean
-  variant?: "default" | "destructive"
+  variant?: DropdownMenuVariant
 }
 
 function DropdownMenuItem({
   className,
   inset,
-  variant = "default",
+  variant = DropdownMenuVariants.DEFAULT,
   ...props
 }: DropdownMenuItemProps) {
   return (

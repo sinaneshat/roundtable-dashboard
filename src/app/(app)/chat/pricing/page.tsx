@@ -8,9 +8,6 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-// SSG: Generate at build time
-export const dynamic = 'force-static';
-
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: `Pricing - ${BRAND.fullName}`,
@@ -31,7 +28,6 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PricingPage() {
   const queryClient = getQueryClient();
 
-  // SSG: Prefetch products at build time
   await queryClient.prefetchQuery({
     queryKey: queryKeys.products.list(),
     queryFn: getProductsService,

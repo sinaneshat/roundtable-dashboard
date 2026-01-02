@@ -7,8 +7,8 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { useTranslations } from "next-intl";
 
-import type { SidebarState } from '@/api/core/enums';
-import { SidebarStates } from '@/api/core/enums';
+import type { SidebarCollapsible, SidebarMenuButtonSize, SidebarSide, SidebarState, SidebarVariant } from '@/api/core/enums';
+import { SidebarCollapsibles, SidebarMenuButtonSizes, SidebarSides, SidebarStates, SidebarVariants } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 
 import { Button } from "@/components/ui/button";
@@ -165,15 +165,15 @@ function SidebarProvider({
 type SidebarBaseProps = ComponentProps<"div">;
 
 interface SidebarProps extends SidebarBaseProps {
-  side?: "start" | "end"
-  variant?: "sidebar" | "floating" | "inset"
-  collapsible?: "offcanvas" | "icon" | "none"
+  side?: SidebarSide
+  variant?: SidebarVariant
+  collapsible?: SidebarCollapsible
 }
 
 function Sidebar({
-  side = "start",
-  variant = "sidebar",
-  collapsible = "offcanvas",
+  side = SidebarSides.START,
+  variant = SidebarVariants.SIDEBAR,
+  collapsible = SidebarCollapsibles.OFFCANVAS,
   className,
   children,
   ...props
@@ -181,7 +181,7 @@ function Sidebar({
   const t = useTranslations('accessibility');
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
-  if (collapsible === "none") {
+  if (collapsible === SidebarCollapsibles.NONE) {
     return (
       <div
         data-slot="sidebar"
@@ -228,8 +228,8 @@ function Sidebar({
   const { toggleSidebar } = useSidebar()
 
   // Calculate collapsed width for floating/inset variants
-  const isFloatingOrInset = variant === "floating" || variant === "inset"
-  const isCollapsed = state === SidebarStates.COLLAPSED && collapsible === "icon"
+  const isFloatingOrInset = variant === SidebarVariants.FLOATING || variant === SidebarVariants.INSET
+  const isCollapsed = state === SidebarStates.COLLAPSED && collapsible === SidebarCollapsibles.ICON
 
   // For floating/inset collapsed: icon width (3rem) + left/right padding (2rem) = 5rem
   // Gap needs same width as container for proper layout flow
@@ -761,13 +761,13 @@ type SidebarMenuSubButtonBaseProps = ComponentProps<"a">;
 
 interface SidebarMenuSubButtonProps extends SidebarMenuSubButtonBaseProps {
   asChild?: boolean
-  size?: "sm" | "md"
+  size?: SidebarMenuButtonSize
   isActive?: boolean
 }
 
 function SidebarMenuSubButton({
   asChild = false,
-  size = "md",
+  size = SidebarMenuButtonSizes.MD,
   isActive = false,
   className,
   ...props
@@ -783,8 +783,8 @@ function SidebarMenuSubButton({
       className={cn(
         "text-sidebar-foreground ring-sidebar-ring hover:bg-accent active:bg-accent active:scale-[0.998] flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-xl px-2 outline-hidden transition-all duration-200 focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
         "data-[active=true]:bg-accent",
-        size === "sm" && "text-xs",
-        size === "md" && "text-sm",
+        size === SidebarMenuButtonSizes.SM && "text-xs",
+        size === SidebarMenuButtonSizes.MD && "text-sm",
         "group-data-[collapsible=icon]:hidden",
         className
       )}

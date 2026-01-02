@@ -1,6 +1,8 @@
 import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
 
+import type { FieldType } from '@/api/core/enums';
+import { FieldTypes } from '@/api/core/enums';
 import {
   FormControl,
   FormDescription,
@@ -19,7 +21,7 @@ type RHFTextFieldProps<TFieldValues extends FieldValues = FieldValues> = {
   required?: boolean;
   disabled?: boolean;
   className?: string;
-  fieldType?: 'number' | 'text' | 'email' | 'password';
+  fieldType?: FieldType;
 };
 
 export function RHFTextField<TFieldValues extends FieldValues = FieldValues>({
@@ -29,7 +31,7 @@ export function RHFTextField<TFieldValues extends FieldValues = FieldValues>({
   placeholder,
   required,
   disabled,
-  fieldType = 'text',
+  fieldType = FieldTypes.TEXT,
   className,
 }: RHFTextFieldProps<TFieldValues>) {
   const { control } = useFormContext<TFieldValues>();
@@ -51,7 +53,7 @@ export function RHFTextField<TFieldValues extends FieldValues = FieldValues>({
               placeholder={placeholder}
               onChange={(e) => {
                 const rawValue = e.target.value;
-                const value = fieldType === 'number' && rawValue !== ''
+                const value = fieldType === FieldTypes.NUMBER && rawValue !== ''
                   ? Number(rawValue)
                   : rawValue;
                 field.onChange(value);
