@@ -91,6 +91,7 @@ import {
   getThreadHandler,
   getThreadMessagesHandler,
   getThreadPreSearchesHandler,
+  getThreadRoundChangelogHandler,
   getThreadSlugStatusHandler,
   getThreadStreamResumptionStateHandler,
   getUserPresetHandler,
@@ -123,6 +124,7 @@ import {
   getThreadFeedbackRoute,
   getThreadMessagesRoute,
   getThreadPreSearchesRoute,
+  getThreadRoundChangelogRoute,
   getThreadRoute,
   getThreadSlugStatusRoute,
   getThreadStreamResumptionStateRoute,
@@ -553,6 +555,7 @@ const appRoutes = app
   // Message Management
   .openapi(getThreadMessagesRoute, getThreadMessagesHandler) // Get thread messages
   .openapi(getThreadChangelogRoute, getThreadChangelogHandler) // Get configuration changelog
+  .openapi(getThreadRoundChangelogRoute, getThreadRoundChangelogHandler) // Get changelog for specific round (efficient)
   .openapi(streamChatRoute, streamChatHandler) // Stream AI responses via SSE
   .openapi(resumeThreadStreamRoute, resumeThreadStreamHandler) // Resume active thread stream (AI SDK pattern)
   .openapi(getThreadStreamResumptionStateRoute, getThreadStreamResumptionStateHandler) // Get stream resumption state for server-side prefetching

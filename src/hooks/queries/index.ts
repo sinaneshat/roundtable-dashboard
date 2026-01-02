@@ -2,7 +2,7 @@ export {
   useApiKeyQuery,
   useApiKeysQuery,
 } from './api-keys';
-export { useThreadChangelogQuery } from './chat/changelog';
+export { useThreadChangelogQuery, useThreadRoundChangelogQuery } from './chat/changelog';
 export {
   useCustomRoleQuery,
   useCustomRolesQuery,

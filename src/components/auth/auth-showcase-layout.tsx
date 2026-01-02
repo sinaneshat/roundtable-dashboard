@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Logo } from '@/components/logo';
 import { Card } from '@/components/ui/card';
 import { RadialGlow } from '@/components/ui/radial-glow';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ThreadMessagesSkeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
 
 // Client-only, deferred loading - LiveChatDemo is 350+ lines with ThreadTimeline
@@ -16,11 +16,8 @@ const LiveChatDemo = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex flex-col h-full p-6 gap-4">
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-32 w-full" />
+      <div className="flex flex-col h-full px-4 sm:px-6 pt-6 pb-6">
+        <ThreadMessagesSkeleton participantCount={3} showModerator />
       </div>
     ),
   },

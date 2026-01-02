@@ -393,9 +393,10 @@ export function createModelPreferencesStore(
               accessibleSet.has(id),
             );
 
-            // Add any new accessible models not in order
+            // ✅ PERF FIX: Use Set for O(1) lookup instead of O(n) .includes()
+            const validOrderSet = new Set(validOrder);
             const newModels = accessibleModelIds.filter(id =>
-              !validOrder.includes(id),
+              !validOrderSet.has(id),
             );
             const updatedOrder = [...validOrder, ...newModels];
 

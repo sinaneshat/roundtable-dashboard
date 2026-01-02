@@ -1,3 +1,4 @@
+export { useChangelogSync } from './use-changelog-sync';
 export { useMessageSync } from './use-message-sync';
 export { useModeratorTrigger } from './use-moderator-trigger';
 export { useNavigationCleanup } from './use-navigation-cleanup';

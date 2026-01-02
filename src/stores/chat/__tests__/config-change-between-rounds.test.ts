@@ -37,7 +37,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       ];
 
       store.getState().setSelectedParticipants(round1Participants);
-      store.getState().prepareForNewMessage('Test message 1', ['gpt-4', 'claude-3']);
+      store.getState().prepareForNewMessage('Test message 1', []);
       store.getState().setStreamingRoundNumber(0);
 
       // Simulate round 1 completion
@@ -51,7 +51,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       ];
 
       store.getState().setSelectedParticipants(round2Participants);
-      store.getState().prepareForNewMessage('Test message 2', ['gpt-4', 'claude-3', 'gemini-pro']);
+      // NEW: setExpectedParticipantIds must be called explicitly (done by form-actions.ts)
+      store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3', 'gemini-pro']);
+      store.getState().prepareForNewMessage('Test message 2', []);
       store.getState().setStreamingRoundNumber(1);
 
       const state = store.getState();
@@ -80,7 +82,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       ];
 
       store.getState().setSelectedParticipants(round1Participants);
-      store.getState().prepareForNewMessage('Test message 1', ['gpt-4', 'claude-3', 'gemini-pro']);
+      store.getState().prepareForNewMessage('Test message 1', []);
       store.getState().setStreamingRoundNumber(0);
 
       // Simulate round 1 completion
@@ -93,7 +95,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       ];
 
       store.getState().setSelectedParticipants(round2Participants);
-      store.getState().prepareForNewMessage('Test message 2', ['gpt-4', 'claude-3']);
+      // NEW: setExpectedParticipantIds must be called explicitly (done by form-actions.ts)
+      store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3']);
+      store.getState().prepareForNewMessage('Test message 2', []);
       store.getState().setStreamingRoundNumber(1);
 
       const state = store.getState();
@@ -114,7 +118,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       ];
 
       store.getState().setSelectedParticipants(round1Participants);
-      store.getState().prepareForNewMessage('Message 1', ['gpt-4', 'claude-3']);
+      store.getState().prepareForNewMessage('Message 1', []);
 
       // Round 2: Swap roles
       const round2Participants = [
@@ -123,7 +127,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       ];
 
       store.getState().setSelectedParticipants(round2Participants);
-      store.getState().prepareForNewMessage('Message 2', ['gpt-4', 'claude-3']);
+      store.getState().prepareForNewMessage('Message 2', []);
 
       // ❌ EXPECTED FAILURE: New round should reflect updated roles
       // BUG: Roles might not update correctly if participant config isn't re-applied
@@ -136,7 +140,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     it('sHOULD clear pre-search state when disabled between rounds', () => {
       // Round 1: Web search ENABLED
       store.getState().setEnableWebSearch(true);
-      store.getState().prepareForNewMessage('Query 1', ['gpt-4']);
+      store.getState().prepareForNewMessage('Query 1', []);
       store.getState().setStreamingRoundNumber(0);
 
       // Add placeholder pre-search for round 1
@@ -157,7 +161,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       // Round 2: Web search DISABLED
       store.getState().setEnableWebSearch(false);
-      store.getState().prepareForNewMessage('Query 2', ['gpt-4']);
+      store.getState().prepareForNewMessage('Query 2', []);
       store.getState().setStreamingRoundNumber(1);
 
       // ❌ EXPECTED FAILURE: Old pre-search state should NOT affect round 2
@@ -171,7 +175,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     it('sHOULD create fresh pre-search state when enabled between rounds', () => {
       // Round 1: Web search DISABLED
       store.getState().setEnableWebSearch(false);
-      store.getState().prepareForNewMessage('Query 1', ['gpt-4']);
+      store.getState().prepareForNewMessage('Query 1', []);
       store.getState().setStreamingRoundNumber(0);
 
       // Complete round 1 without pre-search
@@ -179,7 +183,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       // Round 2: Web search ENABLED
       store.getState().setEnableWebSearch(true);
-      store.getState().prepareForNewMessage('Query 2', ['gpt-4']);
+      store.getState().prepareForNewMessage('Query 2', []);
       store.getState().setStreamingRoundNumber(1);
 
       // ❌ EXPECTED FAILURE: New round should have clean pre-search state
@@ -193,7 +197,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     it('sHOULD isolate pre-search tracking per round', () => {
       // Round 1: Pre-search enabled
       store.getState().setEnableWebSearch(true);
-      store.getState().prepareForNewMessage('Query 1', ['gpt-4']);
+      store.getState().prepareForNewMessage('Query 1', []);
       store.getState().setStreamingRoundNumber(0);
 
       store.getState().addPreSearch({
@@ -213,7 +217,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       // Round 2: Pre-search still enabled
       store.getState().setEnableWebSearch(true);
-      store.getState().prepareForNewMessage('Query 2', ['gpt-4']);
+      store.getState().prepareForNewMessage('Query 2', []);
       store.getState().setStreamingRoundNumber(1);
 
       // ❌ EXPECTED FAILURE: Round 1 pre-search state should NOT affect round 2
@@ -236,13 +240,13 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     it('sHOULD handle mode change between rounds', () => {
       // Round 1: Panel mode
       store.getState().setSelectedMode('panel');
-      store.getState().prepareForNewMessage('Message 1', ['gpt-4']);
+      store.getState().prepareForNewMessage('Message 1', []);
 
       store.getState().completeStreaming();
 
       // Round 2: Council mode
       store.getState().setSelectedMode('council');
-      store.getState().prepareForNewMessage('Message 2', ['gpt-4']);
+      store.getState().prepareForNewMessage('Message 2', []);
 
       // ❌ EXPECTED FAILURE: Mode should update correctly
       expect(store.getState().selectedMode).toBe('council');
@@ -254,7 +258,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     it('sHOULD not carry over moderator state when mode changes', () => {
       // Round 1: With moderator (council mode)
       store.getState().setSelectedMode('council');
-      store.getState().prepareForNewMessage('Message 1', ['gpt-4']);
+      store.getState().prepareForNewMessage('Message 1', []);
       store.getState().setStreamingRoundNumber(0);
 
       // Mark moderator as created for round 0
@@ -264,7 +268,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       // Round 2: Different mode that might not use moderator
       store.getState().setSelectedMode('panel');
-      store.getState().prepareForNewMessage('Message 2', ['gpt-4']);
+      store.getState().prepareForNewMessage('Message 2', []);
       store.getState().setStreamingRoundNumber(1);
 
       // ❌ EXPECTED FAILURE: Round 1 moderator tracking should NOT affect round 2
@@ -316,7 +320,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
       ]);
 
-      store.getState().prepareForNewMessage('Message 2', ['gpt-4', 'claude-3', 'gemini-pro']);
+      // NEW: setExpectedParticipantIds must be called explicitly (done by form-actions.ts)
+      store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3', 'gemini-pro']);
+      store.getState().prepareForNewMessage('Message 2', []);
       store.getState().setStreamingRoundNumber(1);
 
       // Add pre-search for round 2
@@ -349,7 +355,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
       ]);
 
-      store.getState().prepareForNewMessage('Message 1', ['gpt-4', 'claude-3']);
+      store.getState().prepareForNewMessage('Message 1', []);
       store.getState().setStreamingRoundNumber(0);
 
       // Simulate round 1 completion
@@ -369,7 +375,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         { id: 'p6', modelId: 'command-r', role: 'validator', priority: 3 },
       ]);
 
-      store.getState().prepareForNewMessage('Message 2', ['gemini-pro', 'mistral', 'llama-70b', 'command-r']);
+      // NEW: setExpectedParticipantIds must be called explicitly (done by form-actions.ts)
+      store.getState().setExpectedParticipantIds(['gemini-pro', 'mistral', 'llama-70b', 'command-r']);
+      store.getState().prepareForNewMessage('Message 2', []);
       store.getState().setStreamingRoundNumber(1);
 
       // ❌ EXPECTED FAILURE: Round 2 should be COMPLETELY isolated from round 1
@@ -401,7 +409,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
       ]);
 
-      store.getState().prepareForNewMessage('Message 1', ['gpt-4', 'claude-3']);
+      store.getState().prepareForNewMessage('Message 1', []);
       store.getState().setStreamingRoundNumber(0);
       store.getState().completeStreaming();
 
@@ -427,7 +435,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
   describe('tracking State Isolation', () => {
     it('sHOULD isolate tracking sets between rounds', () => {
       // Round 1
-      store.getState().prepareForNewMessage('Message 1', ['gpt-4']);
+      store.getState().prepareForNewMessage('Message 1', []);
       store.getState().setStreamingRoundNumber(0);
 
       store.getState().markModeratorCreated(0);
@@ -436,7 +444,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       store.getState().completeStreaming();
 
       // Round 2
-      store.getState().prepareForNewMessage('Message 2', ['gpt-4']);
+      store.getState().prepareForNewMessage('Message 2', []);
       store.getState().setStreamingRoundNumber(1);
 
       // ❌ EXPECTED FAILURE: completeStreaming should NOT clear per-round tracking
@@ -453,7 +461,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
     it('sHOULD allow atomic check-and-mark for new rounds', () => {
       // Round 1
-      store.getState().prepareForNewMessage('Message 1', ['gpt-4']);
+      store.getState().prepareForNewMessage('Message 1', []);
       store.getState().setStreamingRoundNumber(0);
 
       const round0Result = store.getState().tryMarkModeratorCreated(0);
@@ -465,7 +473,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       store.getState().completeStreaming();
 
       // Round 2
-      store.getState().prepareForNewMessage('Message 2', ['gpt-4']);
+      store.getState().prepareForNewMessage('Message 2', []);
       store.getState().setStreamingRoundNumber(1);
 
       const round1Result = store.getState().tryMarkModeratorCreated(1);

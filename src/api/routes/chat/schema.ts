@@ -235,6 +235,13 @@ export const UpdateThreadRequestSchema = chatThreadUpdateSchema
     participants: z.array(UpdateParticipantSchema)
       .optional()
       .openapi({ description: 'Complete list of participants with their updated state' }),
+    newMessage: z.object({
+      content: MessageContentSchema,
+      roundNumber: RoundNumberSchema,
+      attachmentIds: z.array(z.string()).optional(),
+    }).optional().openapi({
+      description: 'New user message to add to the thread',
+    }),
   })
   .refine(
     (data) => {
@@ -273,6 +280,18 @@ export const ThreadListResponseSchema = createCursorPaginatedResponseSchema(Chat
 export type ThreadListResponse = z.infer<typeof ThreadListResponseSchema>;
 export const ThreadDetailResponseSchema = createApiResponseSchema(ThreadDetailPayloadSchema).openapi('ThreadDetailResponse');
 export type ThreadDetailResponse = z.infer<typeof ThreadDetailResponseSchema>;
+
+export const UpdateThreadPayloadSchema = z.object({
+  thread: ChatThreadSchema,
+  participants: z.array(ChatParticipantSchema),
+  message: ChatMessageSchema.optional().openapi({
+    description: 'Newly created user message (only present if newMessage was provided in request)',
+  }),
+}).openapi('UpdateThreadPayload');
+export type UpdateThreadPayload = z.infer<typeof UpdateThreadPayloadSchema>;
+
+export const UpdateThreadResponseSchema = createApiResponseSchema(UpdateThreadPayloadSchema).openapi('UpdateThreadResponse');
+export type UpdateThreadResponse = z.infer<typeof UpdateThreadResponseSchema>;
 
 const ThreadSlugStatusPayloadSchema = z.object({
   slug: z.string().openapi({

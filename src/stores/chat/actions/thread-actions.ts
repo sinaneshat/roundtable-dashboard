@@ -5,28 +5,37 @@
  * Consolidates thread-specific logic (participant sync, changelog management)
  * Uses TanStack Query for data fetching - no setTimeout/timing patterns
  *
+ * ✅ INCREMENTAL CHANGELOG: Uses round-specific changelog fetch for efficiency
+ * When config changes mid-conversation, only fetches that round's changelog
+ * and merges into the existing cache instead of full refetch.
+ *
  * Location: /src/stores/chat/actions/thread-actions.ts
  * Used by: ChatThreadScreen
  */
 
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore } from '@/components/providers';
+import { useThreadRoundChangelogQuery } from '@/hooks/queries';
+import { queryKeys } from '@/lib/data/query-keys';
 import { getEnabledSortedParticipants, useMemoizedReturn } from '@/lib/utils';
 
 import type { UseConfigChangeHandlersReturn } from '../hooks';
 import { useConfigChangeHandlers } from '../hooks';
+import type { ChangelogListCache } from './types';
+import { validateChangelogListCache } from './types';
 
 export type UseThreadActionsOptions = {
   /** Thread slug for query invalidation */
   slug: string;
+  /** Thread ID for changelog queries */
+  threadId: string;
   /** Whether round is currently in progress (streaming or creating moderator) */
   isRoundInProgress: boolean;
-  /** Whether changelog is currently being fetched */
-  isChangelogFetching: boolean;
 };
 
 /**
@@ -34,22 +43,29 @@ export type UseThreadActionsOptions = {
  *
  * Consolidates:
  * - Participant sync from context to form state
- * - Changelog wait flag management (clears when fetch completes)
+ * - Incremental changelog fetch on config changes (round-specific)
  * - Mode/participant change handlers with config tracking (via useConfigChangeHandlers)
  *
- * Uses TanStack Query for data fetching - no setTimeout/timing patterns
+ * ✅ INCREMENTAL CHANGELOG: When config changes mid-conversation:
+ * 1. Store sets isWaitingForChangelog=true and configChangeRoundNumber=N
+ * 2. This hook uses useThreadRoundChangelogQuery to fetch ONLY that round's entries
+ * 3. On success, merges data into the main changelog cache
+ * 4. Clears flags after merge
+ *
+ * This is MUCH more efficient than invalidating the full changelog.
  *
  * @example
  * const threadActions = useThreadActions({
  *   slug,
+ *   threadId,
  *   isRoundInProgress,
- *   isChangelogFetching,
  * })
  *
  * <ChatModeSelector onModeChange={threadActions.handleModeChange} />
  */
 export function useThreadActions(options: UseThreadActionsOptions): UseConfigChangeHandlersReturn {
-  const { slug, isRoundInProgress, isChangelogFetching } = options;
+  const { slug, threadId, isRoundInProgress } = options;
+  const queryClient = useQueryClient();
 
   // ✅ REFACTORED: Use shared hook for config change handlers
   const configHandlers = useConfigChangeHandlers({ slug, isRoundInProgress });
@@ -57,20 +73,23 @@ export function useThreadActions(options: UseThreadActionsOptions): UseConfigCha
   // Batch related state selectors with useShallow for performance
   const contextParticipants = useChatStore(s => s.participants);
 
-  // Flags - batch with useShallow
-  const { hasPendingConfigChanges, isWaitingForChangelog } = useChatStore(useShallow(s => ({
+  // Flags - batch with useShallow (includes configChangeRoundNumber for incremental changelog)
+  const { hasPendingConfigChanges, isWaitingForChangelog, configChangeRoundNumber } = useChatStore(useShallow(s => ({
     hasPendingConfigChanges: s.hasPendingConfigChanges,
     isWaitingForChangelog: s.isWaitingForChangelog,
+    configChangeRoundNumber: s.configChangeRoundNumber,
   })));
 
   // Actions - batched with useShallow for stable reference
   const actions = useChatStore(useShallow(s => ({
     setSelectedParticipants: s.setSelectedParticipants,
     setIsWaitingForChangelog: s.setIsWaitingForChangelog,
+    setConfigChangeRoundNumber: s.setConfigChangeRoundNumber,
   })));
 
   // Use local ref for tracking synced participants
   const lastSyncedContextRef = useRef<string>('');
+  const lastMergedRoundRef = useRef<number | null>(null);
 
   /**
    * Sync local participants with context when no pending changes
@@ -104,25 +123,94 @@ export function useThreadActions(options: UseThreadActionsOptions): UseConfigCha
     })));
   }, [contextParticipants, isRoundInProgress, hasPendingConfigChanges, actions]);
 
+  // ✅ INCREMENTAL CHANGELOG: Fetch round-specific changelog when config changes
+  const shouldFetchRoundChangelog = isWaitingForChangelog && configChangeRoundNumber !== null && !!threadId;
+  const { data: roundChangelogData, isSuccess: roundChangelogSuccess } = useThreadRoundChangelogQuery(
+    threadId,
+    configChangeRoundNumber ?? 0,
+    shouldFetchRoundChangelog,
+  );
+
   /**
-   * Clear changelog waiting flag when changelog fetch completes
-   * Uses TanStack Query status for proper async coordination
+   * Merge round-specific changelog into main changelog cache
+   * This is more efficient than invalidating and refetching the entire changelog
    */
   useEffect(() => {
-    // Clear immediately if not fetching
-    if (isWaitingForChangelog && !isChangelogFetching) {
+    if (!roundChangelogSuccess || !roundChangelogData?.success)
+      return;
+    if (configChangeRoundNumber === null)
+      return;
+    // Prevent duplicate merges for the same round
+    if (lastMergedRoundRef.current === configChangeRoundNumber)
+      return;
+
+    const newItems = roundChangelogData.data.items || [];
+    if (newItems.length === 0) {
+      // No new changelog entries, but still clear the waiting flag
       actions.setIsWaitingForChangelog(false);
+      actions.setConfigChangeRoundNumber(null);
+      lastMergedRoundRef.current = configChangeRoundNumber;
+      return;
+    }
+
+    // Merge new entries into existing changelog cache
+    queryClient.setQueryData<ChangelogListCache>(
+      queryKeys.threads.changelog(threadId),
+      (old) => {
+        // ✅ TYPE-SAFE: Use validation instead of force typecasting
+        const existingCache = validateChangelogListCache(old);
+
+        // If no existing cache, create new response with the items
+        if (!existingCache || !existingCache.data) {
+          return {
+            success: true,
+            data: { items: newItems },
+          };
+        }
+
+        const existingItems = existingCache.data.items;
+        const existingIds = new Set(existingItems.map(item => item.id));
+
+        // Only add items that don't already exist (prevent duplicates)
+        const uniqueNewItems = newItems.filter(item => !existingIds.has(item.id));
+
+        return {
+          ...existingCache,
+          data: {
+            // Add new items at the beginning (newest first) - changelog is ordered by createdAt DESC
+            items: [...uniqueNewItems, ...existingItems],
+          },
+        };
+      },
+    );
+
+    // Clear flags after successful merge
+    actions.setIsWaitingForChangelog(false);
+    actions.setConfigChangeRoundNumber(null);
+    lastMergedRoundRef.current = configChangeRoundNumber;
+  }, [
+    roundChangelogSuccess,
+    roundChangelogData,
+    configChangeRoundNumber,
+    threadId,
+    queryClient,
+    actions,
+  ]);
+
+  /**
+   * Safety timeout for edge cases where round changelog fetch fails or takes too long
+   */
+  useEffect(() => {
+    if (!isWaitingForChangelog)
       return undefined;
-    }
 
-    // Safety timeout for edge cases
-    if (isWaitingForChangelog) {
-      const timeout = setTimeout(() => actions.setIsWaitingForChangelog(false), 30000);
-      return () => clearTimeout(timeout);
-    }
+    const timeout = setTimeout(() => {
+      actions.setIsWaitingForChangelog(false);
+      actions.setConfigChangeRoundNumber(null);
+    }, 30000);
 
-    return undefined;
-  }, [isWaitingForChangelog, isChangelogFetching, actions]);
+    return () => clearTimeout(timeout);
+  }, [isWaitingForChangelog, actions]);
 
   return useMemoizedReturn(configHandlers, [configHandlers]);
 }

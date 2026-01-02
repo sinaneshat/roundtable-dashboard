@@ -2,7 +2,7 @@
  * Thread Changelog Service - Tracks configuration changes to chat threads.
  */
 
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
@@ -80,6 +80,34 @@ export async function getThreadChangelog(
     where: eq(tables.chatThreadChangelog.threadId, threadId),
     orderBy: [desc(tables.chatThreadChangelog.createdAt)],
     limit,
+  });
+
+  return changelog;
+}
+
+/**
+ * Get changelog entries for a specific round
+ *
+ * ✅ PERF OPTIMIZATION: Returns only changelog entries for a specific round
+ * Used for incremental changelog updates after config changes during conversation
+ * Much more efficient than fetching all changelogs
+ *
+ * @param threadId - Thread ID
+ * @param roundNumber - Round number (0-BASED)
+ * @returns List of changelog entries for that round
+ */
+export async function getThreadChangelogByRound(
+  threadId: string,
+  roundNumber: number,
+): Promise<Array<ChatThreadChangelog>> {
+  const db = await getDbAsync();
+
+  const changelog = await db.query.chatThreadChangelog.findMany({
+    where: and(
+      eq(tables.chatThreadChangelog.threadId, threadId),
+      eq(tables.chatThreadChangelog.roundNumber, roundNumber),
+    ),
+    orderBy: [desc(tables.chatThreadChangelog.createdAt)],
   });
 
   return changelog;

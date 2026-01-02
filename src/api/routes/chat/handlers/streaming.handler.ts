@@ -15,9 +15,8 @@ import {
   streamText,
   wrapLanguageModel,
 } from 'ai';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
-import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import {
@@ -33,7 +32,6 @@ import {
 import { createHandler } from '@/api/core';
 import {
   FinishReasons,
-  MessagePartTypes,
   MessageRoles,
   ParticipantStreamStatuses,
   UIMessageRoles,
@@ -73,7 +71,6 @@ import {
   updateParticipantStatus,
 } from '@/api/services/resumable-stream-kv.service';
 import { calculateRoundNumber } from '@/api/services/round.service';
-import { generateSignedDownloadPath } from '@/api/services/signed-url.service';
 import {
   appendStreamChunk,
   completeStreamBuffer,
@@ -92,10 +89,6 @@ import {
   logWebSearchToggle,
 } from '@/api/services/thread-changelog.service';
 import {
-  cancelUploadCleanup,
-  isCleanupSchedulerAvailable,
-} from '@/api/services/upload-cleanup.service';
-import {
   getUserTier,
 } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
@@ -103,8 +96,6 @@ import type { CitableSource } from '@/api/types/citations';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
-import type { ExtendedFilePart, MessagePart } from '@/lib/schemas/message-schemas';
-import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { completeStreamingMetadata, createStreamingMetadata, getRoundNumber } from '@/lib/utils';
 
@@ -413,10 +404,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         = await chatMessagesToUIMessages(previousDbMessages);
 
       // =========================================================================
-      // STEP 9: Save New User Message (ONLY first participant)
+      // STEP 9: Skip user message creation - messages are now pre-persisted via thread PATCH
       // =========================================================================
-      // ✅ TYPE-SAFE: message already validated via StreamChatRequestSchema/UIMessageSchema
-      // No casting needed - Zod validation ensures message has correct structure
+      // ✅ NEW ARCHITECTURE: User messages are created via PATCH /threads/:id before streaming
+      // The streaming handler should only verify the message exists (for safety)
+      // This is a separation of concerns - thread handler manages persistence, streaming handler manages AI
       if (
         message.role === UIMessageRoles.USER
         && participantIndex === 0
@@ -427,152 +419,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         });
 
         if (!existsInDb) {
-          const textParts
-            = lastMessage.parts?.filter(part => part.type === MessagePartTypes.TEXT) || [];
-          if (textParts.length > 0) {
-            const content = textParts
-              .map((part) => {
-                if ('text' in part && typeof part.text === 'string') {
-                  return part.text;
-                }
-                return '';
-              })
-              .join('')
-              .trim();
-
-            if (content.length > 0) {
-              // ✅ DUPLICATE PREVENTION: Check if a user message exists in this round
-              // Since we can't filter by JSON content in SQL, check all messages in the round
-              const roundMessages = await db.query.chatMessage.findMany({
-                where: and(
-                  eq(tables.chatMessage.threadId, threadId),
-                  eq(tables.chatMessage.role, MessageRoles.USER),
-                  eq(tables.chatMessage.roundNumber, currentRoundNumber),
-                ),
-                columns: { id: true, parts: true },
-              });
-
-              // Check if any existing message has the same content
-              const isDuplicate = roundMessages.some(
-                msg => extractTextFromParts(msg.parts).trim() === content,
-              );
-
-              if (!isDuplicate) {
-                // ✅ CREDIT CHECK: Verify user has credits before processing
-                // Actual deduction happens after AI response in finalizeCredits
-                const minCreditsNeeded = estimateStreamingCredits(1);
-                await reserveCredits(user.id, `user-msg-${lastMessage.id}`, minCreditsNeeded);
-
-                // ✅ FIX: Include file parts in user message for immediate UI display
-                // Without this, attachments don't show until page refresh because:
-                // 1. Optimistic message is replaced by AI SDK message sync
-                // 2. Backend message had only text parts, no file parts
-                // Following pattern from createThreadHandler:310-346
-                //
-                // ✅ TYPE SAFETY: Use MessagePart & ExtendedFilePart from message-schemas.ts (single source of truth)
-                // ExtendedFilePart includes uploadId for participant 1+ to load content from R2
-                // BUG FIX: Without uploadId, when AI SDK syncs messages from DB, participant 1+ can't
-                // extract uploadId from HTTP URLs to load base64 content, causing "Invalid file URL" errors
-                let messageParts: Array<MessagePart | ExtendedFilePart> = [
-                  { type: MessagePartTypes.TEXT, text: content },
-                ];
-
-                if (attachmentIds && attachmentIds.length > 0) {
-                  // Load upload details for file parts
-                  const uploads = await db.query.upload.findMany({
-                    where: inArray(tables.upload.id, attachmentIds),
-                    columns: {
-                      id: true,
-                      filename: true,
-                      mimeType: true,
-                    },
-                  });
-                  const uploadMap = new Map(uploads.map(u => [u.id, u]));
-
-                  // Generate signed URLs and create file parts
-                  const baseUrl = new URL(c.req.url).origin;
-                  const fileParts: ExtendedFilePart[] = await Promise.all(
-                    attachmentIds.map(
-                      async (uploadId): Promise<ExtendedFilePart | null> => {
-                        const upload = uploadMap.get(uploadId);
-                        if (!upload)
-                          return null;
-
-                        const signedPath = await generateSignedDownloadPath(c, {
-                          uploadId,
-                          userId: user.id,
-                          threadId,
-                          expirationMs: 60 * 60 * 1000, // 1 hour
-                        });
-
-                        return {
-                          type: MessagePartTypes.FILE,
-                          url: `${baseUrl}${signedPath}`,
-                          filename: upload.filename,
-                          mediaType: upload.mimeType,
-                          uploadId, // ✅ ExtendedFilePart: uploadId for participant 1+ to load content from R2
-                        };
-                      },
-                    ),
-                  ).then(parts =>
-                    parts.filter((p): p is ExtendedFilePart => p !== null),
-                  );
-
-                  // Combine: files first, then text (matches UI layout)
-                  messageParts = [
-                    ...fileParts,
-                    { type: MessagePartTypes.TEXT, text: content },
-                  ];
-                }
-
-                await db.insert(tables.chatMessage).values({
-                  id: lastMessage.id,
-                  threadId,
-                  role: UIMessageRoles.USER,
-                  parts: messageParts,
-                  roundNumber: currentRoundNumber,
-                  metadata: {
-                    role: UIMessageRoles.USER, // ✅ FIX: Add role discriminator for type guard
-                    roundNumber: currentRoundNumber,
-                  },
-                  createdAt: new Date(),
-                });
-                // ✅ CREDITS: User message tokens are counted as inputTokens in AI response
-
-                // ✅ Associate attachments with the user message (for relational queries)
-                if (attachmentIds && attachmentIds.length > 0) {
-                  const messageUploadValues = attachmentIds.map(
-                    (uploadId, index) => ({
-                      id: ulid(),
-                      messageId: lastMessage.id,
-                      uploadId,
-                      displayOrder: index,
-                      createdAt: new Date(),
-                    }),
-                  );
-
-                  await db
-                    .insert(tables.messageUpload)
-                    .values(messageUploadValues);
-
-                  // Cancel scheduled cleanup for attached uploads (non-blocking)
-                  if (isCleanupSchedulerAvailable(c.env)) {
-                    const cancelCleanupTasks = attachmentIds.map(uploadId =>
-                      cancelUploadCleanup(
-                        c.env.UPLOAD_CLEANUP_SCHEDULER,
-                        uploadId,
-                      ).catch(() => {}),
-                    );
-                    if (c.executionCtx) {
-                      c.executionCtx.waitUntil(Promise.all(cancelCleanupTasks));
-                    } else {
-                      Promise.all(cancelCleanupTasks).catch(() => {});
-                    }
-                  }
-                }
-              }
-            }
-          }
+          // Message should have been created via PATCH - log warning if missing
+          console.error(`[stream] User message not found in DB, expected pre-persisted: ${lastMessage.id}`);
+          // Don't create it here - this indicates a bug in the message persistence flow
         }
       }
 

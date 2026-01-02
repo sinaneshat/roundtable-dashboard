@@ -30,12 +30,11 @@ export default function TermsScreen() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-8">
-        <Link href="/auth/sign-in">
-          <Button variant="ghost" size="sm">
-            <Icons.arrowLeft className="mr-2 h-4 w-4" />
+        <Button asChild variant="ghost" size="sm" startIcon={<Icons.arrowLeft />}>
+          <Link href="/auth/sign-in">
             {t('actions.back')}
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
 
       <Card>

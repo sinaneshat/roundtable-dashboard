@@ -149,7 +149,13 @@ export const ChangelogTypes = {
 // CHANGELOG CHANGE TYPE (Thread changelog discriminator)
 // ============================================================================
 
-export const CHANGELOG_CHANGE_TYPES = ['participant', 'participant_role', 'mode_change'] as const;
+export const CHANGELOG_CHANGE_TYPES = [
+  'participant',
+  'participant_role',
+  'mode_change',
+  'participant_reorder',
+  'web_search',
+] as const;
 
 export const ChangelogChangeTypeSchema = z.enum(CHANGELOG_CHANGE_TYPES).openapi({
   description: 'Type of thread changelog change',
@@ -164,6 +170,8 @@ export const ChangelogChangeTypes = {
   PARTICIPANT: 'participant' as const,
   PARTICIPANT_ROLE: 'participant_role' as const,
   MODE_CHANGE: 'mode_change' as const,
+  PARTICIPANT_REORDER: 'participant_reorder' as const,
+  WEB_SEARCH: 'web_search' as const,
 } as const;
 
 // ============================================================================

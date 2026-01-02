@@ -432,7 +432,9 @@
       },
       "buildCustom": {
         "title": "Build Custom"
-      }
+      },
+      "customizePreset": "Customize preset",
+      "deletePreset": "Delete preset"
     },
     "roles": {
       "addRole": "Add Role",
@@ -980,6 +982,7 @@
       "gatheringThoughts": "Thinking...",
       "waitingForWebResults": "Searching...",
       "moderatorObserving": "Observing...",
+      "waitingToSummarize": "Waiting...",
       "emptyResponse": "No visible response from {model}",
       "reasoningOnlyResponse": "{model} used reasoning but produced no text output"
     },

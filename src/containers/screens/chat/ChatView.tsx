@@ -162,9 +162,11 @@ export function ChatView({
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
 
-  const { data: changelogResponse, isFetching: isChangelogFetching } = useThreadChangelogQuery(
+  // ✅ PERF FIX: Only fetch changelog in THREAD mode
+  // Overview screen doesn't need changelog for newly created threads
+  const { data: changelogResponse } = useThreadChangelogQuery(
     effectiveThreadId,
-    Boolean(effectiveThreadId),
+    mode === ScreenModes.THREAD && Boolean(effectiveThreadId),
   );
 
   const { data: feedbackData, isSuccess: feedbackSuccess } = useThreadFeedbackQuery(
@@ -300,8 +302,8 @@ export function ChatView({
 
   const threadActions = useThreadActions({
     slug: slug || '',
+    threadId: effectiveThreadId,
     isRoundInProgress: isStreaming || isModeratorStreaming,
-    isChangelogFetching,
   });
 
   useEffect(() => {
@@ -361,6 +363,10 @@ export function ChatView({
     || moderatorResumption?.status === MessageStatuses.PENDING
   );
 
+  // ✅ FIX: Add streamingRoundNumber check to prevent submit during entire round
+  // This covers gaps between phases (e.g., after participants complete but before moderator starts)
+  const isRoundInProgress = streamingRoundNumber !== null;
+
   const isInputBlocked = isStreaming
     || isCreatingThread
     || waitingToStartStreaming
@@ -369,10 +375,12 @@ export function ChatView({
     || Boolean(pendingMessage)
     || isModelsLoading
     || isResumptionActive
-    || formActions.isSubmitting;
+    || formActions.isSubmitting
+    || isRoundInProgress;
 
-  // Show spinner from submit click until streaming starts (then stop button shows instead)
-  const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming || Boolean(pendingMessage);
+  // Show spinner only from submit click until first stream chunk arrives (web search or participant)
+  // After first stream chunk, button is disabled (not loading) until round finishes
+  const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming;
 
   const keyboardOffset = useVisualViewportPosition();
 

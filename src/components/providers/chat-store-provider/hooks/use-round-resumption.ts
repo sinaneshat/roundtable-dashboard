@@ -42,6 +42,11 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
   const storePreSearches = useStore(store, s => s.preSearches);
   const storeThread = useStore(store, s => s.thread);
   const storeScreenMode = useStore(store, s => s.screenMode);
+  // ✅ CHANGELOG: Wait for changelog before streaming when config changed
+  const isWaitingForChangelog = useStore(store, s => s.isWaitingForChangelog);
+  // ✅ FIX: configChangeRoundNumber signals pending config changes (set before PATCH)
+  // isWaitingForChangelog is only set AFTER PATCH completes
+  const configChangeRoundNumber = useStore(store, s => s.configChangeRoundNumber);
 
   // ✅ RACE CONDITION FIX: Extract isReady explicitly for precise dependency tracking
   // chat object changes frequently (messages, streaming state), but we specifically
@@ -98,33 +103,28 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
       return;
     }
 
+    // Skip conditions (minimal logging)
     if (chatIsStreaming) {
       store.getState().setWaitingToStartStreaming(false);
       store.getState().setNextParticipantToTrigger(null);
       resumptionTriggeredRef.current = null;
       return;
     }
-
-    if (storeParticipants.length === 0) {
+    if (storeParticipants.length === 0 || storeMessages.length === 0)
       return;
-    }
 
-    // ✅ FIX: Don't clear waitingToStartStreaming when messages are empty
-    // During new thread creation, messages haven't populated yet.
-    // Just return early - use-streaming-trigger.ts handles new thread initialization.
-    // This hook is only for RESUMPTION (continuing from specific participant after refresh).
-    if (storeMessages.length === 0) {
-      return;
-    }
-
-    // ✅ RACE CONDITION FIX: Don't handle streaming on OVERVIEW screen
-    // useStreamingTrigger handles OVERVIEW screen streaming via startRound()
+    // useStreamingTrigger handles OVERVIEW screen via startRound()
     // This hook is for THREAD screen resumption via continueFromParticipant()
-    // Without this check, both hooks race when waitingToStartStreaming becomes true
-    // after thread creation, causing duplicate streaming attempts
-    if (storeScreenMode === ScreenModes.OVERVIEW) {
+    if (storeScreenMode === ScreenModes.OVERVIEW)
       return;
-    }
+
+    // ✅ CHANGELOG: Wait for changelog to be fetched before streaming when config changed
+    // This allows the changelog accordion to show config changes before participants speak
+    // configChangeRoundNumber is set BEFORE PATCH (signals pending changes)
+    // isWaitingForChangelog is set AFTER PATCH (triggers changelog fetch)
+    // Both must be null/false for streaming to proceed
+    if (configChangeRoundNumber !== null || isWaitingForChangelog)
+      return;
 
     // Generate unique key for this resumption attempt
     const threadId = storeThread?.id || 'unknown';
@@ -157,6 +157,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
           || latestParticipants.length === 0
           || latestMessages.length === 0
           || latestState.screenMode === ScreenModes.OVERVIEW // ✅ RACE FIX: Let useStreamingTrigger handle overview
+          || latestState.configChangeRoundNumber !== null // ✅ FIX: Wait for PATCH to complete
+          || latestState.isWaitingForChangelog // ✅ CHANGELOG: Wait for changelog before streaming
         ) {
           return;
         }
@@ -206,6 +208,11 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     // ✅ Mark as triggered before calling to prevent race condition double-triggers
     resumptionTriggeredRef.current = resumptionKey;
     rlog.trigger('resume', `p${nextParticipantToTrigger} key=${resumptionKey}`);
+    console.error(`[trigger] useRoundResumption CALL continueFromParticipant p${nextParticipantToTrigger}`, {
+      resumptionKey,
+      screenMode: storeScreenMode,
+      participants: storeParticipants.length,
+    });
 
     // Resume from specific participant
     chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants);
@@ -217,7 +224,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         retryTimeoutRef.current = null;
       }
     };
-  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, chat, store]);
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, configChangeRoundNumber, isWaitingForChangelog, chat, store]);
 
   // Safety timeout for thread screen resumption
   useEffect(() => {

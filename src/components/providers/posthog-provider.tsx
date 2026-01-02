@@ -6,7 +6,6 @@ import type { ReactNode } from 'react';
 type PostHogProviderProps = {
   children: ReactNode;
   apiKey?: string;
-  apiHost?: string;
   environment?: string;
 };
 
@@ -22,7 +21,7 @@ const PostHogProviderInternal = dynamic(
       const PHProvider = reactModule?.PostHogProvider;
 
       if (!posthog || !PHProvider) {
-        console.warn('[PostHog] Failed to load modules');
+        console.error('[PostHog] Failed to load modules');
         return {
           default: ({ children }: PostHogProviderProps) => <>{children}</>,
         };
@@ -32,20 +31,21 @@ const PostHogProviderInternal = dynamic(
         default: function PostHogInternal({
           children,
           apiKey,
-          apiHost,
           environment,
         }: PostHogProviderProps) {
-          const shouldInitialize = environment !== 'local' && apiKey && apiHost;
+          const shouldInitialize = environment !== 'local' && apiKey;
 
           if (shouldInitialize) {
             try {
               posthog.init(apiKey, {
-                api_host: apiHost,
-                defaults: '2025-05-24',
+                api_host: '/ingest',
+                ui_host: 'https://us.posthog.com',
+                defaults: '2025-11-30',
                 person_profiles: 'identified_only',
                 capture_pageview: false,
                 capture_pageleave: true,
                 autocapture: true,
+                capture_exceptions: true,
                 session_recording: {
                   recordCrossOriginIframes: false,
                 },
@@ -56,7 +56,7 @@ const PostHogProviderInternal = dynamic(
                 },
               });
             } catch (err) {
-              console.warn('[PostHog] Init failed:', err);
+              console.error('[PostHog] Init failed:', err);
             }
           }
 
@@ -64,7 +64,7 @@ const PostHogProviderInternal = dynamic(
         },
       };
     } catch (err) {
-      console.warn('[PostHog] Module load failed:', err);
+      console.error('[PostHog] Module load failed:', err);
       return {
         default: ({ children }: PostHogProviderProps) => <>{children}</>,
       };
@@ -77,7 +77,7 @@ const PostHogProviderInternal = dynamic(
 );
 
 export default function PostHogProvider(props: PostHogProviderProps) {
-  if (props.environment === 'local' || !props.apiKey || !props.apiHost) {
+  if (props.environment === 'local' || !props.apiKey) {
     return <>{props.children}</>;
   }
 

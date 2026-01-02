@@ -95,6 +95,15 @@ export type GetThreadChangelogResponse = InferResponseType<
   ApiClientType['chat']['threads'][':id']['changelog']['$get']
 >;
 
+// Round-specific changelog types - for efficient incremental updates
+export type GetThreadRoundChangelogRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['changelog']['$get']
+>;
+
+export type GetThreadRoundChangelogResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['changelog']['$get']
+>;
+
 // Round summary types - for text streaming (like participants)
 export type SummarizeRoundRequest = InferRequestType<
   ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['moderator']['$post']
@@ -267,6 +276,24 @@ export async function getThreadChangelogService(data: GetThreadChangelogRequest)
     param: data.param ?? { id: '' },
   };
   return parseResponse(client.chat.threads[':id'].changelog.$get(params));
+}
+
+/**
+ * Get configuration changelog for a specific round
+ * Protected endpoint - requires authentication (ownership check)
+ *
+ * ✅ PERF OPTIMIZATION: Returns only changelog entries for a specific round
+ * Used for incremental changelog updates after config changes mid-conversation
+ * Much more efficient than fetching all changelogs
+ *
+ * @param data - Request with param.threadId and param.roundNumber
+ */
+export async function getThreadRoundChangelogService(data: GetThreadRoundChangelogRequest) {
+  const client = await createApiClient();
+  const params: GetThreadRoundChangelogRequest = {
+    param: data.param ?? { threadId: '', roundNumber: '0' },
+  };
+  return parseResponse(client.chat.threads[':threadId'].rounds[':roundNumber'].changelog.$get(params));
 }
 
 // ============================================================================

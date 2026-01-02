@@ -128,7 +128,7 @@ const ChatThreadCacheCompatSchema = z.object({
   title: z.string(),
   slug: z.string(),
   previousSlug: z.string().nullable().optional(),
-  mode: z.string(),
+  mode: z.string().optional(), // ✅ FIX: Optional for cache reads (may not be present in optimistic updates)
   status: z.string().optional(),
   isFavorite: z.boolean().optional(),
   isPublic: z.boolean().optional(),
@@ -412,4 +412,79 @@ export function validateThreadsListPages(data: unknown): ThreadsListCachePage[] 
     return undefined;
 
   return validated.map(result => result.data!);
+}
+
+// ============================================================================
+// CHANGELOG CACHE VALIDATION SCHEMAS
+// ============================================================================
+
+/**
+ * ✅ CACHE-SPECIFIC: Changelog item schema that accepts ISO strings OR Date objects
+ * Extends the DB schema for cache compatibility
+ */
+const ChangelogItemCacheSchema = chatThreadChangelogSelectSchema.extend({
+  createdAt: z.union([z.date(), z.string()]),
+});
+
+/**
+ * Changelog list cache response schema
+ *
+ * **SINGLE SOURCE OF TRUTH**: Validates React Query cache for changelog data.
+ * Used when reading/writing changelog cache in incremental fetch merges.
+ */
+export const ChangelogListCacheSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    items: z.array(ChangelogItemCacheSchema),
+  }).optional(),
+});
+
+/**
+ * Type for changelog list cache (inferred from schema)
+ */
+export type ChangelogListCache = z.infer<typeof ChangelogListCacheSchema>;
+
+/**
+ * Type for changelog cache items (inferred from schema)
+ */
+export type ChangelogItemCache = z.infer<typeof ChangelogItemCacheSchema>;
+
+/**
+ * Helper function to safely validate changelog list cache
+ *
+ * **USE THIS INSTEAD OF**: `old as { success: boolean; data?: { items?: unknown[] } }`
+ *
+ * @param data - Raw cache data from React Query
+ * @returns Validated cache or null if invalid/empty
+ *
+ * @example
+ * ```typescript
+ * queryClient.setQueryData(queryKey, (old: unknown) => {
+ *   const cache = validateChangelogListCache(old);
+ *   if (!cache) {
+ *     return { success: true, data: { items: newItems } };
+ *   }
+ *   // Type-safe access to cache.data.items
+ *   return {
+ *     ...cache,
+ *     data: { items: [...newItems, ...cache.data.items] },
+ *   };
+ * });
+ * ```
+ */
+export function validateChangelogListCache(data: unknown): ChangelogListCache | null {
+  // Handle uninitialized queries silently
+  if (data === undefined || data === null) {
+    return null;
+  }
+
+  const result = ChangelogListCacheSchema.safeParse(data);
+  if (!result.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[validateChangelogListCache] Validation failed:', result.error.issues.slice(0, 3));
+    }
+    return null;
+  }
+
+  return result.data;
 }

@@ -21,6 +21,7 @@
 import { z } from 'zod';
 
 import {
+  ChangelogChangeTypes,
   ChatModeSchema,
   CitationSourceTypeSchema,
   ErrorTypeSchema,
@@ -366,7 +367,7 @@ export type DbUserPresetMetadata = z.infer<typeof DbUserPresetMetadataSchema>;
  * - When REMOVING a participant, ID exists from database
  */
 const DbParticipantChangeDataSchema = z.object({
-  type: z.literal('participant'),
+  type: z.literal(ChangelogChangeTypes.PARTICIPANT),
   participantId: z.string().optional(), // ✅ Optional for newly added participants
   modelId: z.string(),
   role: z.string().nullable().optional(),
@@ -377,7 +378,7 @@ const DbParticipantChangeDataSchema = z.object({
  * For role reassignment events
  */
 const DbParticipantRoleChangeDataSchema = z.object({
-  type: z.literal('participant_role'),
+  type: z.literal(ChangelogChangeTypes.PARTICIPANT_ROLE),
   participantId: z.string(),
   modelId: z.string(), // ✅ Required for UI to display model info
   oldRole: z.string().nullable().optional(),
@@ -389,7 +390,7 @@ const DbParticipantRoleChangeDataSchema = z.object({
  * For conversation mode changes
  */
 const DbModeChangeDataSchema = z.object({
-  type: z.literal('mode_change'),
+  type: z.literal(ChangelogChangeTypes.MODE_CHANGE),
   oldMode: ChatModeSchema,
   newMode: ChatModeSchema,
 });
@@ -399,7 +400,7 @@ const DbModeChangeDataSchema = z.object({
  * For priority/order changes
  */
 const DbParticipantReorderDataSchema = z.object({
-  type: z.literal('participant_reorder'),
+  type: z.literal(ChangelogChangeTypes.PARTICIPANT_REORDER),
   participants: z.array(z.object({
     id: z.string(),
     modelId: z.string(),
@@ -413,7 +414,7 @@ const DbParticipantReorderDataSchema = z.object({
  * For enabling/disabling web search mid-conversation
  */
 const DbWebSearchChangeDataSchema = z.object({
-  type: z.literal('web_search'),
+  type: z.literal(ChangelogChangeTypes.WEB_SEARCH),
   enabled: z.boolean(),
 });
 
@@ -489,7 +490,7 @@ export function isModeratorMessageMetadata(
 export function isParticipantChange(
   data: DbChangelogData,
 ): data is Extract<DbChangelogData, { type: 'participant' }> {
-  return data.type === 'participant';
+  return data.type === ChangelogChangeTypes.PARTICIPANT;
 }
 
 /**
@@ -498,7 +499,7 @@ export function isParticipantChange(
 export function isParticipantRoleChange(
   data: DbChangelogData,
 ): data is Extract<DbChangelogData, { type: 'participant_role' }> {
-  return data.type === 'participant_role';
+  return data.type === ChangelogChangeTypes.PARTICIPANT_ROLE;
 }
 
 /**
@@ -507,7 +508,7 @@ export function isParticipantRoleChange(
 export function isModeChange(
   data: DbChangelogData,
 ): data is Extract<DbChangelogData, { type: 'mode_change' }> {
-  return data.type === 'mode_change';
+  return data.type === ChangelogChangeTypes.MODE_CHANGE;
 }
 
 /**
@@ -516,7 +517,7 @@ export function isModeChange(
 export function isParticipantReorder(
   data: DbChangelogData,
 ): data is Extract<DbChangelogData, { type: 'participant_reorder' }> {
-  return data.type === 'participant_reorder';
+  return data.type === ChangelogChangeTypes.PARTICIPANT_REORDER;
 }
 
 /**
@@ -525,7 +526,7 @@ export function isParticipantReorder(
 export function isWebSearchChange(
   data: DbChangelogData,
 ): data is Extract<DbChangelogData, { type: 'web_search' }> {
-  return data.type === 'web_search';
+  return data.type === ChangelogChangeTypes.WEB_SEARCH;
 }
 
 // ============================================================================

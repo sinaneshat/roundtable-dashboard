@@ -1,8 +1,8 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 
 import { verifyThreadOwnership } from '@/api/common/permissions';
-import { createHandler, IdParamSchema, Responses } from '@/api/core';
+import { createHandler, IdParamSchema, Responses, ThreadRoundParamSchema } from '@/api/core';
 import { MessagePartTypes } from '@/api/core/enums';
 import { generateSignedDownloadPath } from '@/api/services/signed-url.service';
 import type { ApiEnv } from '@/api/types';
@@ -13,6 +13,7 @@ import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import type {
   getThreadChangelogRoute,
   getThreadMessagesRoute,
+  getThreadRoundChangelogRoute,
 } from '../route';
 
 export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRoute, ApiEnv> = createHandler(
@@ -101,6 +102,38 @@ export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRo
       where: eq(tables.chatThreadChangelog.threadId, threadId),
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
     });
+    return Responses.collection(c, changelog);
+  },
+);
+
+/**
+ * Get changelog for a specific round
+ *
+ * ✅ PERF OPTIMIZATION: Returns only changelog entries for a specific round
+ * Used for incremental changelog updates after config changes mid-conversation
+ * Much more efficient than fetching all changelogs
+ */
+export const getThreadRoundChangelogHandler: RouteHandler<typeof getThreadRoundChangelogRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ThreadRoundParamSchema,
+    operationName: 'getThreadRoundChangelog',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { threadId, roundNumber: roundNumberStr } = c.validated.params;
+    const roundNumber = Number.parseInt(roundNumberStr, 10);
+    const db = await getDbAsync();
+    await verifyThreadOwnership(threadId, user.id, db);
+
+    const changelog = await db.query.chatThreadChangelog.findMany({
+      where: and(
+        eq(tables.chatThreadChangelog.threadId, threadId),
+        eq(tables.chatThreadChangelog.roundNumber, roundNumber),
+      ),
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
+    });
+
     return Responses.collection(c, changelog);
   },
 );

@@ -738,7 +738,8 @@ describe('message Sync Race', () => {
 
       // Add optimistic message
       store.getState().setScreenMode(ScreenModes.THREAD);
-      store.getState().prepareForNewMessage('Test', ['p0']);
+      // NEW: prepareForNewMessage no longer needs modelIds
+      store.getState().prepareForNewMessage('Test', []);
 
       // Optimistic message exists
       expect(store.getState().messages).toHaveLength(1);

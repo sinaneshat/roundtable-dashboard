@@ -17,7 +17,7 @@ import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
-import { devLog, extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber, rlog, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
+import { extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber, rlog, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { AnimationIndices, getEffectiveWebSearchEnabled, readPreSearchStreamData } from '@/stores/chat';
@@ -58,6 +58,11 @@ export function useStreamingTrigger({
   // This is the source of truth DURING submission, not thread.enableWebSearch
   // Thread.enableWebSearch is only updated after PATCH completes
   const formEnableWebSearch = useStore(store, s => s.enableWebSearch);
+  // ✅ CHANGELOG: Wait for changelog to be fetched before streaming when config changes
+  const isWaitingForChangelog = useStore(store, s => s.isWaitingForChangelog);
+  // ✅ FIX: configChangeRoundNumber signals pending config changes (set before PATCH)
+  // isWaitingForChangelog is only set AFTER PATCH completes
+  const configChangeRoundNumber = useStore(store, s => s.configChangeRoundNumber);
 
   // Race condition guard
   const startRoundCalledForRoundRef = useRef<number | null>(null);
@@ -73,18 +78,19 @@ export function useStreamingTrigger({
     const currentScreenMode = storeScreenMode;
 
     // Only handle overview screen - thread screen uses continueFromParticipant
-    if (currentScreenMode !== null && currentScreenMode !== ScreenModes.OVERVIEW) {
+    if (currentScreenMode !== ScreenModes.OVERVIEW)
       return;
-    }
-
-    if (currentScreenMode === null) {
-      return;
-    }
 
     // Wait for required conditions
-    if (!chat.startRound || storeParticipants.length === 0 || storeMessages.length === 0) {
+    if (!chat.startRound || storeParticipants.length === 0 || storeMessages.length === 0)
       return;
-    }
+
+    // ✅ CHANGELOG: Wait for changelog to be fetched before streaming when config changed
+    // configChangeRoundNumber is set BEFORE PATCH (signals pending changes)
+    // isWaitingForChangelog is set AFTER PATCH (triggers changelog fetch)
+    // Both must be null/false for streaming to proceed
+    if (configChangeRoundNumber !== null || isWaitingForChangelog)
+      return;
 
     // Wait for pre-search completion before streaming participants
     // ✅ BUG FIX: Use form state (user's current intent) instead of thread.enableWebSearch
@@ -306,9 +312,6 @@ export function useStreamingTrigger({
 
     startRoundCalledForRoundRef.current = currentRound;
 
-    // Debug: Track startRound trigger (debounced)
-    devLog.d('StartRound', { rnd: currentRound, parts: storeParticipants.length, msgs: storeMessages.length });
-
     // ✅ RACE CONDITION FIX: Moderator placeholder is now added in useModeratorTrigger
     // AFTER all participants complete streaming. Adding it here caused the moderator
     // to appear BEFORE participants in the UI, leading to incorrect timeline ordering.
@@ -317,11 +320,13 @@ export function useStreamingTrigger({
 
     // ✅ FIX: Use queueMicrotask to run startRound outside React's lifecycle
     // startRound uses flushSync internally which cannot be called during render/effects
+    // ✅ STALE CLOSURE FIX: Pass storeMessages directly to avoid capturing old closure
+    // Messages are now persisted via PATCH before streaming, so store state is fresh
     queueMicrotask(() => {
-      chat.startRound(storeParticipants);
+      chat.startRound(storeParticipants, storeMessages);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waitingToStart, chat.startRound, chat.isReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId, formEnableWebSearch]);
+  }, [waitingToStart, chat.startRound, chat.isReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId, formEnableWebSearch, configChangeRoundNumber, isWaitingForChangelog]);
 
   // Clear waitingToStartStreaming when streaming begins
   useEffect(() => {

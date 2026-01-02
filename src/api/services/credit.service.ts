@@ -14,7 +14,7 @@
  * - Immutable transaction ledger for audit and debugging
  */
 
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 
@@ -916,7 +916,7 @@ export async function getUserTransactionHistory(
     .select()
     .from(tables.creditTransaction)
     .where(whereClause)
-    .orderBy(sql`${tables.creditTransaction.createdAt} DESC`)
+    .orderBy(desc(tables.creditTransaction.createdAt))
     .limit(limit)
     .offset(offset);
 

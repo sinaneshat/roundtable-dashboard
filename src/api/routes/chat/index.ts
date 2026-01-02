@@ -8,6 +8,7 @@ export {
 export {
   getThreadChangelogHandler,
   getThreadMessagesHandler,
+  getThreadRoundChangelogHandler,
 } from './handlers/message.handler';
 export {
   summarizeRoundHandler,

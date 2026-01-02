@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import type { WebSearchImageGalleryProps, WebSearchImageItem } from '@/api/routes/chat/schema';
 import { Icons } from '@/components/icons';
@@ -45,9 +45,17 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
     setFailedImages(prev => new Set([...prev, url]));
   };
 
-  const visibleImages = allImages
-    .filter((img, idx, arr) => arr.findIndex(i => i.url === img.url) === idx)
-    .filter(img => !failedImages.has(img.url));
+  // ✅ PERF FIX: Use Set for O(n) deduplication instead of O(n²) findIndex
+  const visibleImages = useMemo(() => {
+    const seenUrls = new Set<string>();
+    return allImages.filter((img) => {
+      if (seenUrls.has(img.url) || failedImages.has(img.url)) {
+        return false;
+      }
+      seenUrls.add(img.url);
+      return true;
+    });
+  }, [allImages, failedImages]);
 
   if (visibleImages.length === 0) {
     return null;

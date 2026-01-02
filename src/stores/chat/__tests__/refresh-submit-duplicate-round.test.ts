@@ -20,6 +20,13 @@
  * - Server prefill (streamResumptionPrefilled, currentResumptionPhase)
  * - New submission flow (handleUpdateThreadAndSend)
  * - Incomplete round detection (isIncomplete calculation)
+ *
+ * NEW MESSAGE PERSISTENCE PATTERN (architecture change):
+ * - User messages are now created via PATCH /api/v1/threads/:id during handleUpdateThreadAndSend
+ * - Optimistic user message is added immediately to store (with isOptimistic flag)
+ * - Thread PATCH includes newMessage field with user message content
+ * - Backend persists the user message and returns it in the response
+ * - Streaming handler receives the persisted user message (no longer creates it)
  */
 
 import type { UIMessage } from 'ai';

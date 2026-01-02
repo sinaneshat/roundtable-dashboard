@@ -125,7 +125,12 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "test:ci": "vitest run --coverage"
+    "test:ci": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.5",
@@ -185,7 +190,7 @@
     "next-share": "^0.27.0",
     "next-themes": "^0.4.6",
     "nuqs": "^2.8.6",
-    "posthog-js": "^1.311.0",
+    "posthog-js": "^1.313.0",
     "posthog-node": "^5.18.1",
     "randomcolor": "^0.6.2",
     "react": "19.2.3",
@@ -219,6 +224,7 @@
     "@commitlint/types": "^20.2.0",
     "@eslint-react/eslint-plugin": "^2.5.0",
     "@next/eslint-plugin-next": "^16.1.1",
+    "@playwright/test": "^1.57.0",
     "@react-email/preview-server": "4.3.1",
     "@sparticuz/chromium": "^143.0.0",
     "@tailwindcss/postcss": "^4.1.18",

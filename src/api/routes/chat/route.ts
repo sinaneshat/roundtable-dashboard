@@ -32,6 +32,7 @@ import {
   UpdateCustomRoleRequestSchema,
   UpdateParticipantRequestSchema,
   UpdateThreadRequestSchema,
+  UpdateThreadResponseSchema,
   UpdateUserPresetRequestSchema,
   UserPresetDetailResponseSchema,
   UserPresetListResponseSchema,
@@ -134,7 +135,7 @@ export const updateThreadRoute = createRoute({
     [HttpStatusCodes.OK]: {
       description: 'Thread updated successfully',
       content: {
-        'application/json': { schema: ThreadDetailResponseSchema },
+        'application/json': { schema: UpdateThreadResponseSchema },
       },
     },
     ...createMutationRouteResponses(),
@@ -328,6 +329,33 @@ export const getThreadChangelogRoute = createRoute({
   responses: {
     [HttpStatusCodes.OK]: {
       description: 'Changelog retrieved successfully',
+      content: {
+        'application/json': { schema: ChangelogListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * GET Thread Round Changelog Route
+ *
+ * ✅ PERF OPTIMIZATION: Returns only changelog entries for a specific round
+ * Used for incremental changelog updates after config changes mid-conversation
+ * Much more efficient than fetching all changelogs
+ */
+export const getThreadRoundChangelogRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/changelog',
+  tags: ['chat'],
+  summary: 'Get changelog for a specific round',
+  description: 'Retrieve configuration changes for a specific round. More efficient than fetching all changelogs - used for incremental updates after config changes mid-conversation.',
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Round changelog retrieved successfully',
       content: {
         'application/json': { schema: ChangelogListResponseSchema },
       },

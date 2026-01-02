@@ -139,6 +139,41 @@ export async function shutdownPostHog(): Promise<void> {
   }
 }
 
+type ExceptionProperties = Record<string, unknown>;
+
+/**
+ * Capture an exception server-side with optional user context
+ *
+ * Usage:
+ * ```ts
+ * await captureServerException(error, {
+ *   cookieHeader: request.headers.get('cookie'),
+ *   source: 'api',
+ *   endpoint: '/api/users',
+ * });
+ * ```
+ */
+export async function captureServerException(
+  error: Error | unknown,
+  options?: {
+    distinctId?: string;
+    cookieHeader?: string | null;
+    properties?: ExceptionProperties;
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+  if (!posthog)
+    return;
+
+  const distinctId = options?.distinctId
+    ?? (options?.cookieHeader ? getDistinctIdFromCookie(options.cookieHeader) : 'anonymous');
+
+  await posthog.captureException(error, distinctId, {
+    $exception_source: 'backend',
+    ...options?.properties,
+  });
+}
+
 // Ensure PostHog is shut down when the process exits
 if (typeof process !== 'undefined') {
   process.on('exit', () => {

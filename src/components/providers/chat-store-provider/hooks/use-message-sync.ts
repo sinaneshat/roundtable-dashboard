@@ -112,6 +112,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
     const currentMsgCount = chatMessages.length;
     const lastChatMsg = chatMessages[chatMessages.length - 1];
+
     const currentTextLength = lastChatMsg?.parts?.reduce((len, p) => {
       if (p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string') {
         return len + p.text.length;
@@ -358,36 +359,103 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
         return adjustedIdxA - adjustedIdxB;
       });
 
+      // ✅ PERF FIX: Pre-compute Sets for O(1) lookups instead of O(n) per iteration
+      // Previously O(n³): outer loop × .some() × .findIndex() × .some()
+      // Now O(n): single pass to build sets, then O(1) lookups
+      const filteredUserRounds = new Set(
+        filteredMessages
+          .filter(m => m.role === MessageRoles.USER)
+          .map(m => getRoundNumber(m.metadata))
+          .filter((r): r is number => r !== null),
+      );
+      const mergedMessageIds = new Set(mergedMessages.map(m => m.id));
+
+      // Collect optimistic messages that need to be added
+      const optimisticToAdd: UIMessage[] = [];
       for (const optimisticMsg of optimisticMessagesFromStore) {
         const optimisticRound = getRoundNumber(optimisticMsg.metadata);
-        const hasRealMessage = filteredMessages.some((m) => {
-          if (m.role !== MessageRoles.USER)
-            return false;
-          return getRoundNumber(m.metadata) === optimisticRound;
+        // O(1) Set lookup instead of O(n) .some()
+        const hasRealMessage = optimisticRound !== null && filteredUserRounds.has(optimisticRound);
+        // O(1) Set lookup instead of O(n) .some()
+        const alreadyExists = mergedMessageIds.has(optimisticMsg.id);
+
+        if (!hasRealMessage && optimisticRound !== null && !alreadyExists) {
+          optimisticToAdd.push(optimisticMsg);
+          mergedMessageIds.add(optimisticMsg.id); // Prevent duplicates within loop
+        }
+      }
+
+      // ✅ PERF FIX: Push all and re-sort once instead of O(n) splice per message
+      if (optimisticToAdd.length > 0) {
+        mergedMessages.push(...optimisticToAdd);
+        // Re-sort to place optimistic messages in correct positions
+        mergedMessages.sort((a, b) => {
+          const roundA = getRoundNumber(a.metadata) ?? -1;
+          const roundB = getRoundNumber(b.metadata) ?? -1;
+          if (roundA !== roundB)
+            return roundA - roundB;
+          if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER)
+            return -1;
+          if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
+            return 1;
+          const metaA = getMessageMetadata(a.metadata);
+          const metaB = getMessageMetadata(b.metadata);
+          const pIdxA = metaA?.role === UIMessageRoles.ASSISTANT && 'participantIndex' in metaA ? metaA.participantIndex : undefined;
+          const pIdxB = metaB?.role === UIMessageRoles.ASSISTANT && 'participantIndex' in metaB ? metaB.participantIndex : undefined;
+          const adjustedIdxA = pIdxA === undefined ? -1000 : (pIdxA < 0 ? 1000 + pIdxA : pIdxA);
+          const adjustedIdxB = pIdxB === undefined ? -1000 : (pIdxB < 0 ? 1000 + pIdxB : pIdxB);
+          return adjustedIdxA - adjustedIdxB;
         });
+      }
 
-        if (!hasRealMessage && optimisticRound !== null) {
-          const insertIndex = mergedMessages.findIndex((m) => {
-            const msgRound = getRoundNumber(m.metadata);
-            if (msgRound === null)
-              return false;
-            if (msgRound > optimisticRound)
-              return true;
-            if (msgRound === optimisticRound && m.role === MessageRoles.ASSISTANT)
-              return true;
-            return false;
-          });
+      // ✅ PERF FIX: Pre-compute message metrics O(n) once instead of O(n²) repeated scans
+      // Previously: For each duplicate, scan parts array multiple times + extract metadata
+      // Now: Single pass to build metrics cache, then O(1) lookups
+      type MessageMetrics = {
+        textContent: string;
+        textLength: number;
+        textNormalized: string;
+        looksLikeModerator: boolean;
+        metadata: ReturnType<typeof getMessageMetadata>;
+        isModerator: boolean;
+        isParticipant: boolean;
+        finishReason: string | undefined;
+        isComplete: boolean;
+      };
 
-          if (insertIndex === -1) {
-            const alreadyExists = mergedMessages.some(m => m.id === optimisticMsg.id);
-            if (!alreadyExists)
-              mergedMessages.push(optimisticMsg);
-          } else {
-            const alreadyExists = mergedMessages.some(m => m.id === optimisticMsg.id);
-            if (!alreadyExists)
-              mergedMessages.splice(insertIndex, 0, optimisticMsg);
+      const messageMetricsCache = new Map<string, MessageMetrics>();
+      for (const msg of mergedMessages) {
+        // Extract text content in single pass
+        let textContent = '';
+        let textLength = 0;
+        for (const part of msg.parts || []) {
+          if (part.type === MessagePartTypes.TEXT && 'text' in part && typeof part.text === 'string') {
+            textContent = part.text;
+            textLength = part.text.length;
+            break; // Only first text part matters for these comparisons
           }
         }
+
+        const metadata = getMessageMetadata(msg.metadata);
+        const isModerator = metadata?.role === UIMessageRoles.ASSISTANT && 'isModerator' in metadata && metadata.isModerator === true;
+        const isParticipant = msg.id.includes('_p') && !msg.id.includes('_moderator');
+        const finishReason = metadata?.role === UIMessageRoles.ASSISTANT ? metadata.finishReason : undefined;
+        const isComplete = finishReason === FinishReasons.STOP || finishReason === FinishReasons.LENGTH;
+        const textNormalized = textContent.trim();
+        const textLower = textContent.toLowerCase();
+        const looksLikeModerator = textContent.startsWith('###') || textLower.includes('council concluded');
+
+        messageMetricsCache.set(msg.id, {
+          textContent,
+          textLength,
+          textNormalized,
+          looksLikeModerator,
+          metadata,
+          isModerator,
+          isParticipant,
+          finishReason,
+          isComplete,
+        });
       }
 
       const messageDedupeMap = new Map<string, typeof mergedMessages[0]>();
@@ -395,59 +463,30 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       for (const msg of mergedMessages) {
         const existing = messageDedupeMap.get(msg.id);
         if (existing) {
-          const existingContentLength = existing.parts?.reduce((len, p) => {
-            if (p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string') {
-              return len + p.text.length;
-            }
-            return len;
-          }, 0) || 0;
-          const newContentLength = msg.parts?.reduce((len, p) => {
-            if (p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string') {
-              return len + p.text.length;
-            }
-            return len;
-          }, 0) || 0;
+          // ✅ O(1) lookups from pre-computed cache
+          const existingMetrics = messageMetricsCache.get(existing.id)!;
+          const newMetrics = messageMetricsCache.get(msg.id)!;
 
-          const existingText = existing.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string');
-          const newText = msg.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string');
-          const existingTextContent = existingText && 'text' in existingText ? String(existingText.text || '') : '';
-          const newTextContent = newText && 'text' in newText ? String(newText.text || '') : '';
-
-          const existingMeta = getMessageMetadata(existing.metadata);
-          const newMeta = getMessageMetadata(msg.metadata);
-          const existingIsModerator = existingMeta?.role === UIMessageRoles.ASSISTANT && 'isModerator' in existingMeta && existingMeta.isModerator === true;
-          const newIsModerator = newMeta?.role === UIMessageRoles.ASSISTANT && 'isModerator' in newMeta && newMeta.isModerator === true;
-          const existingIsParticipant = existing.id.includes('_p') && !existing.id.includes('_moderator');
-
-          const newLooksLikeModerator = newTextContent.startsWith('###') || newTextContent.toLowerCase().includes('council concluded');
-          if (existingIsParticipant && !existingIsModerator && newLooksLikeModerator && existingContentLength > 0) {
+          if (existingMetrics.isParticipant && !existingMetrics.isModerator && newMetrics.looksLikeModerator && existingMetrics.textLength > 0) {
             continue;
           }
 
-          if (existingContentLength > 0 && newContentLength > existingContentLength) {
-            const existingNormalized = existingTextContent.trim();
-            const newNormalized = newTextContent.trim();
-            const existingAppearsMultipleTimes = newNormalized.includes(existingNormalized + existingNormalized)
-              || (newNormalized.startsWith(existingNormalized) && newNormalized.endsWith(existingNormalized) && newNormalized !== existingNormalized);
+          if (existingMetrics.textLength > 0 && newMetrics.textLength > existingMetrics.textLength) {
+            const existingAppearsMultipleTimes = newMetrics.textNormalized.includes(existingMetrics.textNormalized + existingMetrics.textNormalized)
+              || (newMetrics.textNormalized.startsWith(existingMetrics.textNormalized) && newMetrics.textNormalized.endsWith(existingMetrics.textNormalized) && newMetrics.textNormalized !== existingMetrics.textNormalized);
             if (existingAppearsMultipleTimes) {
               continue;
             }
           }
 
-          const existingFinishReason = existingMeta?.role === UIMessageRoles.ASSISTANT ? existingMeta.finishReason : undefined;
-          const newFinishReason = newMeta?.role === UIMessageRoles.ASSISTANT ? newMeta.finishReason : undefined;
-
-          const existingIsComplete = existingFinishReason === FinishReasons.STOP || existingFinishReason === FinishReasons.LENGTH;
-          const newIsComplete = newFinishReason === FinishReasons.STOP || newFinishReason === FinishReasons.LENGTH;
-
-          if (existingIsModerator && newIsModerator && existingContentLength > 0 && newContentLength === 0) {
+          if (existingMetrics.isModerator && newMetrics.isModerator && existingMetrics.textLength > 0 && newMetrics.textLength === 0) {
             continue;
           }
 
-          if (existingIsParticipant && existingIsComplete && existingContentLength > 0) {
-            const isValidContinuation = newIsComplete
-              && newContentLength >= existingContentLength
-              && newTextContent.startsWith(existingTextContent);
+          if (existingMetrics.isParticipant && existingMetrics.isComplete && existingMetrics.textLength > 0) {
+            const isValidContinuation = newMetrics.isComplete
+              && newMetrics.textLength >= existingMetrics.textLength
+              && newMetrics.textContent.startsWith(existingMetrics.textContent);
             if (!isValidContinuation) {
               continue;
             }
@@ -455,13 +494,13 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
           let keepExisting = false;
 
-          if (existingIsComplete && !newIsComplete) {
+          if (existingMetrics.isComplete && !newMetrics.isComplete) {
             keepExisting = true;
-          } else if (!existingIsComplete && newIsComplete) {
+          } else if (!existingMetrics.isComplete && newMetrics.isComplete) {
             keepExisting = false;
-          } else if (existingContentLength > newContentLength && existingContentLength > 0) {
+          } else if (existingMetrics.textLength > newMetrics.textLength && existingMetrics.textLength > 0) {
             keepExisting = true;
-          } else if (existingContentLength > 0 && newContentLength === 0) {
+          } else if (existingMetrics.textLength > 0 && newMetrics.textLength === 0) {
             keepExisting = true;
           }
 
@@ -478,7 +517,9 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
             return true;
 
           const isModeratorId = msg.id.includes('_moderator');
-          const metadata = getMessageMetadata(msg.metadata);
+          // ✅ PERF FIX: Reuse cached metadata instead of re-extracting
+          const cachedMetrics = messageMetricsCache.get(msg.id);
+          const metadata = cachedMetrics?.metadata ?? getMessageMetadata(msg.metadata);
           const hasModeratorFlag = metadata?.role === UIMessageRoles.ASSISTANT && 'isModerator' in metadata && metadata.isModerator === true;
           const hasParticipantMetadata = metadata?.role === UIMessageRoles.ASSISTANT && 'participantIndex' in metadata && typeof metadata.participantIndex === 'number';
 

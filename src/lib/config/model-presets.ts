@@ -320,8 +320,10 @@ export function filterPresetParticipants(
     };
   }
 
+  // ✅ PERF FIX: Use Set for O(1) lookup instead of O(n) .includes()
+  const compatibleSet = new Set(compatibleModelIds);
   const participants = preset.modelRoles
-    .filter(mr => compatibleModelIds.includes(mr.modelId))
+    .filter(mr => compatibleSet.has(mr.modelId))
     .map((mr, index) => ({
       id: mr.modelId,
       modelId: mr.modelId,

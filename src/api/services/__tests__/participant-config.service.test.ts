@@ -354,4 +354,124 @@ describe('categorizeParticipantChanges', () => {
       expect(result.allDbParticipants.find(p => p.modelId === 'anthropic/claude-3')).toBeDefined();
     });
   });
+
+  // ============================================================================
+  // PERFORMANCE TESTS - MAP OPTIMIZATION
+  // ============================================================================
+
+  describe('map-based optimization performance', () => {
+    it('should handle 100 participants efficiently with O(n+m) complexity', () => {
+      // Create 100 DB participants with various states
+      const dbParticipants = Array.from({ length: 100 }, (_, i) =>
+        createMockDbParticipant(
+          `p${i}`,
+          `model-${i}`,
+          i % 10 !== 0, // 10% disabled
+          i % 5 === 0 ? `Role ${i}` : null,
+          i,
+        ));
+
+      // Create 100 provided participants with some changes
+      const providedParticipants = Array.from({ length: 100 }, (_, i) =>
+        createParticipantConfig(
+          `new-p${i}`,
+          `model-${i}`,
+          i,
+          i % 3 === 0 ? `New Role ${i}` : undefined,
+        ));
+
+      const startTime = performance.now();
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
+      const endTime = performance.now();
+
+      // Should re-enable the 10 disabled participants
+      expect(result.reenabledParticipants).toHaveLength(10);
+
+      // Should detect role changes for participants that had roles changed
+      expect(result.updatedParticipants.length).toBeGreaterThan(0);
+
+      // Performance: should complete in under 10ms for 100 participants
+      // O(n+m) with Map lookups should be very fast
+      expect(endTime - startTime).toBeLessThan(10);
+    });
+
+    it('should handle 500 participants without performance degradation', () => {
+      // Create 500 DB participants
+      const dbParticipants = Array.from({ length: 500 }, (_, i) =>
+        createMockDbParticipant(`p${i}`, `model-${i}`, true, null, i));
+
+      // Create 500 provided participants (half changed)
+      const providedParticipants = Array.from({ length: 500 }, (_, i) =>
+        createParticipantConfig(`p${i}`, `model-${i}`, i, i % 2 === 0 ? 'Role' : undefined));
+
+      const startTime = performance.now();
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
+      const endTime = performance.now();
+
+      // Should detect ~250 role updates
+      expect(result.updatedParticipants).toHaveLength(250);
+
+      // Performance: O(n+m) should still be under 20ms for 500 participants
+      expect(endTime - startTime).toBeLessThan(20);
+    });
+
+    it('should maintain consistency across multiple calls (no race conditions)', () => {
+      const dbParticipants = [
+        createMockDbParticipant('p1', 'model-1', true, 'Role A', 0),
+        createMockDbParticipant('p2', 'model-2', false, null, 1),
+        createMockDbParticipant('p3', 'model-3', true, null, 2),
+      ];
+
+      const providedParticipants = [
+        createParticipantConfig('p1', 'model-1', 0, 'Role B'),
+        createParticipantConfig('new-p2', 'model-2', 1),
+        // p3 removed
+      ];
+
+      // Call multiple times to ensure consistency
+      const results = Array.from({ length: 10 }, () =>
+        categorizeParticipantChanges(dbParticipants, providedParticipants));
+
+      // All results should be identical
+      results.forEach((result) => {
+        expect(result.updatedParticipants).toHaveLength(1);
+        expect(result.updatedParticipants[0]?.modelId).toBe('model-1');
+
+        expect(result.reenabledParticipants).toHaveLength(1);
+        expect(result.reenabledParticipants[0]?.modelId).toBe('model-2');
+
+        expect(result.removedParticipants).toHaveLength(1);
+        expect(result.removedParticipants[0]?.modelId).toBe('model-3');
+      });
+    });
+
+    it('should correctly use Map for O(1) lookups vs O(n) find', () => {
+      // This test verifies the Map optimization works by checking time scaling
+      // With O(n×m) complexity, doubling participants should ~4x the time
+      // With O(n+m) complexity, doubling should only ~2x the time
+
+      const sizes = [50, 100, 200];
+      const times: number[] = [];
+
+      for (const size of sizes) {
+        const dbParticipants = Array.from({ length: size }, (_, i) =>
+          createMockDbParticipant(`p${i}`, `model-${i}`, i % 2 === 0, null, i));
+
+        const providedParticipants = Array.from({ length: size }, (_, i) =>
+          createParticipantConfig(`new-${i}`, `model-${i}`, i));
+
+        const start = performance.now();
+        categorizeParticipantChanges(dbParticipants, providedParticipants);
+        const end = performance.now();
+
+        times.push(end - start);
+      }
+
+      // With O(n+m), doubling input should roughly double time
+      // With O(n×m), doubling input would quadruple time
+      // We check that 4x input doesn't result in >10x time (allowing for variance)
+      const ratio = times[2] / times[0];
+      expect(ratio).toBeLessThan(10); // O(n+m) should scale linearly, not quadratically
+    });
+  });
 });

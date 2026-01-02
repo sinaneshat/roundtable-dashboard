@@ -68,100 +68,51 @@ export function getCurrentRoundNumber(messages: readonly UIMessage[]): number {
 }
 
 export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessage[]> {
-  const messageRounds = new Map<number, number>();
-  const inferredMessages: Array<{ messageId: string; role: string; index: number; inferredRound: number }> = [];
+  // ✅ PERF FIX: Single-pass grouping with forward tracking
+  // Previously O(n²): Backward scans for each message without explicit round
+  // Now O(n): Track last known round as we iterate forward
 
-  messages.forEach((message, index) => {
+  const result = new Map<number, UIMessage[]>();
+  const seenIds = new Set<string>();
+
+  // Track last known user round for inference (eliminates backward scans)
+  let lastKnownUserRound = DEFAULT_ROUND_NUMBER - 1; // Start at -1 so first user msg is round 0
+
+  for (const message of messages) {
+    // Deduplicate in same pass (eliminates third loop)
+    if (seenIds.has(message.id))
+      continue;
+    seenIds.add(message.id);
+
+    // Get explicit round number or infer from context
     const explicitRoundNumber = getRoundNumber(message.metadata);
+    let roundNumber: number;
 
     if (explicitRoundNumber !== undefined && explicitRoundNumber !== null) {
-      messageRounds.set(index, explicitRoundNumber);
-    } else {
+      roundNumber = explicitRoundNumber;
+      // Update tracking if this is a user message
       if (message.role === MessageRoles.USER) {
-        let inferredRound = DEFAULT_ROUND_NUMBER;
-
-        for (let i = index - 1; i >= 0; i--) {
-          const prevMessage = messages[i];
-          if (prevMessage && prevMessage.role === MessageRoles.USER) {
-            const prevRound = messageRounds.get(i);
-            if (prevRound !== undefined) {
-              inferredRound = prevRound + 1;
-              break;
-            }
-          }
-        }
-
-        messageRounds.set(index, inferredRound);
-        inferredMessages.push({
-          messageId: message.id,
-          role: message.role,
-          index,
-          inferredRound,
-        });
+        lastKnownUserRound = roundNumber;
+      }
+    } else {
+      // Infer round from last known state (O(1) instead of O(n) backward scan)
+      if (message.role === MessageRoles.USER) {
+        roundNumber = lastKnownUserRound + 1;
+        lastKnownUserRound = roundNumber;
       } else {
-        let inferredRound = DEFAULT_ROUND_NUMBER;
-
-        for (let i = index - 1; i >= 0; i--) {
-          const prevMessage = messages[i];
-          if (prevMessage && prevMessage.role === MessageRoles.USER) {
-            const userRound = messageRounds.get(i);
-            if (userRound !== undefined) {
-              inferredRound = userRound;
-              break;
-            }
-          }
-        }
-
-        messageRounds.set(index, inferredRound);
-        inferredMessages.push({
-          messageId: message.id,
-          role: message.role,
-          index,
-          inferredRound,
-        });
+        // Assistant messages inherit current user round
+        roundNumber = lastKnownUserRound >= 0 ? lastKnownUserRound : DEFAULT_ROUND_NUMBER;
       }
     }
-  });
 
-  const grouped = new Map<number, UIMessage[]>();
-  messages.forEach((message, index) => {
-    const roundNumber = messageRounds.get(index) ?? DEFAULT_ROUND_NUMBER;
-
-    if (!grouped.has(roundNumber)) {
-      grouped.set(roundNumber, []);
+    // Group by round in same pass (eliminates second loop)
+    if (!result.has(roundNumber)) {
+      result.set(roundNumber, []);
     }
-    grouped.get(roundNumber)!.push(message);
-  });
+    result.get(roundNumber)!.push(message);
+  }
 
-  const deduped = new Map<number, UIMessage[]>();
-  const duplicatesFoundInRounds: Array<{ roundNumber: number; duplicateCount: number; duplicateIds: string[] }> = [];
-
-  grouped.forEach((roundMessages, roundNumber) => {
-    const seenMessageIds = new Set<string>();
-    const uniqueMessages: UIMessage[] = [];
-    const duplicateIds: string[] = [];
-
-    roundMessages.forEach((message) => {
-      if (!seenMessageIds.has(message.id)) {
-        seenMessageIds.add(message.id);
-        uniqueMessages.push(message);
-      } else {
-        duplicateIds.push(message.id);
-      }
-    });
-
-    if (duplicateIds.length > 0) {
-      duplicatesFoundInRounds.push({
-        roundNumber,
-        duplicateCount: duplicateIds.length,
-        duplicateIds,
-      });
-    }
-
-    deduped.set(roundNumber, uniqueMessages);
-  });
-
-  return deduped;
+  return result;
 }
 
 export function isLastRound(roundNumber: number, messages: UIMessage[]): boolean {

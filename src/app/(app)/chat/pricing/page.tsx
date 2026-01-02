@@ -8,6 +8,8 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
+export const dynamic = 'force-static';
+
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: `Pricing - ${BRAND.fullName}`,
@@ -31,6 +33,7 @@ export default async function PricingPage() {
   await queryClient.prefetchQuery({
     queryKey: queryKeys.products.list(),
     queryFn: getProductsService,
+    staleTime: Infinity, // SSG: data baked at build time, never refetch
   });
 
   return (

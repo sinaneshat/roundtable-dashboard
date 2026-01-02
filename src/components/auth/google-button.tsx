@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import type { ButtonProps } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
+import { useBoolean } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
 
 type GoogleButtonProps = {
@@ -31,8 +32,10 @@ export function GoogleButton({
   size,
 }: GoogleButtonProps) {
   const t = useTranslations();
+  const isLoading = useBoolean(false);
 
   const handleGoogleSignIn = async () => {
+    isLoading.onTrue();
     await authClient.signIn.social({
       provider: 'google',
       callbackURL,
@@ -44,7 +47,8 @@ export function GoogleButton({
   return (
     <Button
       onClick={handleGoogleSignIn}
-      disabled={disabled}
+      disabled={disabled || isLoading.value}
+      loading={isLoading.value}
       className={className}
       variant="outline"
       size={size}

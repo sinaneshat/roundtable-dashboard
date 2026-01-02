@@ -6,8 +6,8 @@ import { BRAND } from '@/constants/brand';
 import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadBySlugService, getThreadChangelogService, getThreadPreSearchesService, getThreadStreamResumptionStateService } from '@/services/api';
+import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
+import { getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService, getThreadPreSearchesService, getThreadStreamResumptionStateService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
 export const dynamic = 'force-dynamic';
@@ -48,17 +48,23 @@ export default async function ChatThreadPage({
     permanentRedirect(`/chat/${thread.slug}`);
   }
 
-  // Prefetch chat content only - feedback loads client-side
+  // ✅ PERF FIX: Prefetch all thread data server-side to avoid client-side calls
+  // Uses matching staleTime with client hooks to prevent refetch on hydration
   await Promise.all([
     queryClient.prefetchQuery({
       queryKey: queryKeys.threads.changelog(thread.id),
       queryFn: () => getThreadChangelogService({ param: { id: thread.id } }),
-      staleTime: STALE_TIMES.changelog,
+      staleTime: STALE_TIMES.threadChangelog, // ✅ FIX: Match client hook staleTime (Infinity)
     }),
     queryClient.prefetchQuery({
       queryKey: queryKeys.threads.preSearches(thread.id),
       queryFn: () => getThreadPreSearchesService({ param: { id: thread.id } }),
       staleTime: STALE_TIMES.preSearch,
+    }),
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.threads.feedback(thread.id),
+      queryFn: () => getThreadFeedbackService({ param: { id: thread.id } }),
+      staleTime: STALE_TIME_PRESETS.medium, // ✅ Match client hook staleTime (2 minutes)
     }),
   ]);
 

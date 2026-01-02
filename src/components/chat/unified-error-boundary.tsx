@@ -112,8 +112,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
         )}
 
         <div className="flex gap-4">
-          <Button onClick={onReset} variant="default">
-            <Icons.refreshCw className="mr-2 h-4 w-4" />
+          <Button onClick={onReset} variant="default" startIcon={<Icons.refreshCw />}>
             {t('tryAgain')}
           </Button>
           <Button

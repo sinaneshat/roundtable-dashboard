@@ -148,7 +148,8 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // The orchestrator returns empty array if no pre-searches exist, which is fine
   // Previously only enabled when thread.enableWebSearch=true, causing historical
   // pre-search data to disappear after refresh when web search was later disabled
-  const preSearchOrchestratorEnabled = Boolean(thread?.id) && enableOrchestrator;
+  // ✅ PERF FIX: Only fetch in THREAD mode - overview doesn't need pre-searches for new threads
+  const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD && Boolean(thread?.id) && enableOrchestrator;
   usePreSearchOrchestrator({
     threadId: thread?.id || '',
     enabled: preSearchOrchestratorEnabled,

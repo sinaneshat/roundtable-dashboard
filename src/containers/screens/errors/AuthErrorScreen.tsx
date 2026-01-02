@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense } from 'react';
 
@@ -33,6 +32,7 @@ const AUTH_ERROR_I18N_KEYS = {
 
 function AuthErrorContent() {
   const t = useTranslations();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const rawError = searchParams?.get('failed')?.toLowerCase() ?? AuthErrorTypes.DEFAULT;
   const errorType = isValidAuthErrorType(rawError) ? rawError : AuthErrorTypes.DEFAULT;
@@ -42,6 +42,8 @@ function AuthErrorContent() {
     title: t(errorKeys.title),
     description: t(errorKeys.desc),
   };
+
+  const handleRetry = () => router.push('/auth/sign-in');
 
   return (
     <Empty className="w-full max-w-sm border-none">
@@ -67,17 +69,20 @@ function AuthErrorContent() {
           </p>
         </div>
         <div className="flex flex-col gap-2 w-full">
-          <Button asChild className="w-full">
-            <Link href="/auth/sign-in" prefetch={false}>
-              <Icons.refreshCw className="me-2 h-4 w-4" />
-              {t('auth.errors.tryAgain')}
-            </Link>
+          <Button
+            onClick={handleRetry}
+            startIcon={<Icons.refreshCw />}
+            className="w-full"
+          >
+            {t('auth.errors.tryAgain')}
           </Button>
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/auth/sign-in" prefetch={false}>
-              <Icons.arrowLeft className="me-2 h-4 w-4" />
-              {t('auth.errors.backToSignIn')}
-            </Link>
+          <Button
+            onClick={handleRetry}
+            variant="outline"
+            startIcon={<Icons.arrowLeft />}
+            className="w-full"
+          >
+            {t('auth.errors.backToSignIn')}
           </Button>
         </div>
       </EmptyContent>

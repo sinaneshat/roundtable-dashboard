@@ -19,6 +19,11 @@
 
 import { describe, expect, it } from 'vitest';
 
+import type { MessageStatus } from '@/api/core/enums/chat';
+import { MessageStatuses } from '@/api/core/enums/chat';
+import type { RoundPhase } from '@/api/core/enums/streaming';
+import { RoundPhases } from '@/api/core/enums/streaming';
+
 import { createChatStore } from '../store';
 
 // ============================================================================
@@ -31,9 +36,9 @@ type BlockingCheckState = {
   waitingToStartStreaming: boolean;
   isModeratorStreaming: boolean;
   pendingMessage: string | null;
-  currentResumptionPhase: 'idle' | 'pre_search' | 'participants' | 'moderator' | 'complete' | null;
-  preSearchResumption: { status: 'pending' | 'streaming' | 'complete' | 'failed' | null } | null;
-  moderatorResumption: { status: 'pending' | 'streaming' | 'complete' | 'failed' | null } | null;
+  currentResumptionPhase: RoundPhase | null;
+  preSearchResumption: { status: MessageStatus | null } | null;
+  moderatorResumption: { status: MessageStatus | null } | null;
   isSubmitting?: boolean;
 };
 
@@ -41,10 +46,10 @@ function calculateIsInputBlocked(state: BlockingCheckState): boolean {
   // ✅ Only check actual resumption status states, not the phase
   // Phase can be stale after round completes - only status is reliable
   const isResumptionActive = (
-    state.preSearchResumption?.status === 'streaming'
-    || state.preSearchResumption?.status === 'pending'
-    || state.moderatorResumption?.status === 'streaming'
-    || state.moderatorResumption?.status === 'pending'
+    state.preSearchResumption?.status === MessageStatuses.STREAMING
+    || state.preSearchResumption?.status === MessageStatuses.PENDING
+    || state.moderatorResumption?.status === MessageStatuses.STREAMING
+    || state.moderatorResumption?.status === MessageStatuses.PENDING
   );
 
   return (
@@ -147,7 +152,8 @@ describe('submit Blocking - Thread Creation', () => {
 
   it('blocks submit when pendingMessage exists', () => {
     const store = createChatStore();
-    store.getState().prepareForNewMessage('Test message', ['model-1']);
+    // NEW: prepareForNewMessage no longer needs modelIds
+    store.getState().prepareForNewMessage('Test message', []);
 
     const state = store.getState();
     const isBlocked = calculateIsInputBlocked({
@@ -179,7 +185,7 @@ describe('submit Blocking - Stream Resumption Status', () => {
       isModeratorStreaming: false,
       pendingMessage: null,
       currentResumptionPhase: null,
-      preSearchResumption: { status: 'streaming' },
+      preSearchResumption: { status: MessageStatuses.STREAMING },
       moderatorResumption: null,
     });
 
@@ -194,7 +200,7 @@ describe('submit Blocking - Stream Resumption Status', () => {
       isModeratorStreaming: false,
       pendingMessage: null,
       currentResumptionPhase: null,
-      preSearchResumption: { status: 'pending' },
+      preSearchResumption: { status: MessageStatuses.PENDING },
       moderatorResumption: null,
     });
 
@@ -210,7 +216,7 @@ describe('submit Blocking - Stream Resumption Status', () => {
       pendingMessage: null,
       currentResumptionPhase: null,
       preSearchResumption: null,
-      moderatorResumption: { status: 'streaming' },
+      moderatorResumption: { status: MessageStatuses.STREAMING },
     });
 
     expect(isBlocked).toBe(true);
@@ -225,7 +231,7 @@ describe('submit Blocking - Stream Resumption Status', () => {
       pendingMessage: null,
       currentResumptionPhase: null,
       preSearchResumption: null,
-      moderatorResumption: { status: 'pending' },
+      moderatorResumption: { status: MessageStatuses.PENDING },
     });
 
     expect(isBlocked).toBe(true);
@@ -240,7 +246,7 @@ describe('submit Blocking - Stream Resumption Status', () => {
       waitingToStartStreaming: false,
       isModeratorStreaming: false,
       pendingMessage: null,
-      currentResumptionPhase: 'participants', // Stale phase
+      currentResumptionPhase: RoundPhases.PARTICIPANTS, // Stale phase
       preSearchResumption: null, // No active resumption
       moderatorResumption: null, // No active resumption
     });
@@ -255,7 +261,7 @@ describe('submit Blocking - Stream Resumption Status', () => {
       waitingToStartStreaming: false,
       isModeratorStreaming: false,
       pendingMessage: null,
-      currentResumptionPhase: 'pre_search', // Stale phase
+      currentResumptionPhase: RoundPhases.PRE_SEARCH, // Stale phase
       preSearchResumption: null, // No active resumption
       moderatorResumption: null,
     });
@@ -270,7 +276,7 @@ describe('submit Blocking - Stream Resumption Status', () => {
       waitingToStartStreaming: false,
       isModeratorStreaming: false,
       pendingMessage: null,
-      currentResumptionPhase: 'moderator', // Stale phase
+      currentResumptionPhase: RoundPhases.MODERATOR, // Stale phase
       preSearchResumption: null,
       moderatorResumption: null, // No active resumption
     });
@@ -347,7 +353,7 @@ describe('submit Blocking - Non-Blocking States', () => {
       waitingToStartStreaming: false,
       isModeratorStreaming: false,
       pendingMessage: null,
-      currentResumptionPhase: 'idle',
+      currentResumptionPhase: RoundPhases.IDLE,
       preSearchResumption: null,
       moderatorResumption: null,
     });
@@ -362,7 +368,7 @@ describe('submit Blocking - Non-Blocking States', () => {
       waitingToStartStreaming: false,
       isModeratorStreaming: false,
       pendingMessage: null,
-      currentResumptionPhase: 'complete',
+      currentResumptionPhase: RoundPhases.COMPLETE,
       preSearchResumption: null,
       moderatorResumption: null,
     });
@@ -378,7 +384,7 @@ describe('submit Blocking - Non-Blocking States', () => {
       isModeratorStreaming: false,
       pendingMessage: null,
       currentResumptionPhase: null,
-      preSearchResumption: { status: 'complete' },
+      preSearchResumption: { status: MessageStatuses.COMPLETE },
       moderatorResumption: null,
     });
 
@@ -394,7 +400,7 @@ describe('submit Blocking - Non-Blocking States', () => {
       pendingMessage: null,
       currentResumptionPhase: null,
       preSearchResumption: null,
-      moderatorResumption: { status: 'complete' },
+      moderatorResumption: { status: MessageStatuses.COMPLETE },
     });
 
     expect(isBlocked).toBe(false);
@@ -413,9 +419,9 @@ describe('submit Blocking - Combined States', () => {
       waitingToStartStreaming: true,
       isModeratorStreaming: true,
       pendingMessage: 'test',
-      currentResumptionPhase: 'participants',
-      preSearchResumption: { status: 'streaming' },
-      moderatorResumption: { status: 'pending' },
+      currentResumptionPhase: RoundPhases.PARTICIPANTS,
+      preSearchResumption: { status: MessageStatuses.STREAMING },
+      moderatorResumption: { status: MessageStatuses.PENDING },
       isSubmitting: true,
     });
 
@@ -432,10 +438,10 @@ describe('submit Blocking - Combined States', () => {
       { waitingToStartStreaming: true },
       { isModeratorStreaming: true },
       { pendingMessage: 'test' },
-      { preSearchResumption: { status: 'streaming' as const } },
-      { preSearchResumption: { status: 'pending' as const } },
-      { moderatorResumption: { status: 'streaming' as const } },
-      { moderatorResumption: { status: 'pending' as const } },
+      { preSearchResumption: { status: MessageStatuses.STREAMING } },
+      { preSearchResumption: { status: MessageStatuses.PENDING } },
+      { moderatorResumption: { status: MessageStatuses.STREAMING } },
+      { moderatorResumption: { status: MessageStatuses.PENDING } },
       { isSubmitting: true },
     ];
 
@@ -472,10 +478,10 @@ describe('submit Blocking - Real Scenarios', () => {
       isStreaming: false, // Not streaming yet (pre-search phase)
       isCreatingThread: false,
       waitingToStartStreaming: false,
-      isCreatingModerator: false,
+      isModeratorStreaming: false,
       pendingMessage: null,
-      currentResumptionPhase: 'pre_search',
-      preSearchResumption: { status: 'streaming' }, // Active resumption
+      currentResumptionPhase: RoundPhases.PRE_SEARCH,
+      preSearchResumption: { status: MessageStatuses.STREAMING }, // Active resumption
       moderatorResumption: null,
     });
 
@@ -493,7 +499,7 @@ describe('submit Blocking - Real Scenarios', () => {
       waitingToStartStreaming: false,
       isModeratorStreaming: false,
       pendingMessage: null,
-      currentResumptionPhase: 'participants',
+      currentResumptionPhase: RoundPhases.PARTICIPANTS,
       preSearchResumption: null,
       moderatorResumption: null,
     });
@@ -512,7 +518,7 @@ describe('submit Blocking - Real Scenarios', () => {
       waitingToStartStreaming: false,
       isModeratorStreaming: false,
       pendingMessage: null,
-      currentResumptionPhase: 'participants', // Stale - not reset after round
+      currentResumptionPhase: RoundPhases.PARTICIPANTS, // Stale - not reset after round
       preSearchResumption: null, // No active resumption
       moderatorResumption: null, // No active resumption
     });
@@ -583,9 +589,9 @@ describe('submit Blocking - Real Scenarios', () => {
       waitingToStartStreaming: false,
       isModeratorStreaming: false,
       pendingMessage: null,
-      currentResumptionPhase: 'complete',
-      preSearchResumption: { status: 'complete' },
-      moderatorResumption: { status: 'complete' },
+      currentResumptionPhase: RoundPhases.COMPLETE,
+      preSearchResumption: { status: MessageStatuses.COMPLETE },
+      moderatorResumption: { status: MessageStatuses.COMPLETE },
       isSubmitting: false,
     });
 
@@ -687,19 +693,20 @@ describe('submit Blocking - Moderator Transition Window (Race Condition Fix)', (
  * 2. API completes → isSubmitting=false, but pendingMessage set → spinner continues
  * 3. waitingToStartStreaming=true → spinner continues
  * 4. Streaming starts (isStreaming=true) → stop button shows instead of spinner
- * 5. Streaming ends → button enabled, no spinner
+ * 5. First stream chunk arrives → spinner stops, button disabled
+ * 6. Streaming ends → button enabled
  *
- * BUG FIXED: Previously spinner disappeared when API completed (isSubmitting=false)
- * before pendingMessage was set, causing brief flash of enabled button.
+ * LOADING STATE BEHAVIOR:
+ * Spinner shows ONLY from submit click until first stream chunk arrives.
+ * After first stream chunk (web search or participant), button is disabled but NOT loading.
  */
 type SpinnerCheckState = {
   isSubmitting: boolean;
   waitingToStartStreaming: boolean;
-  pendingMessage: string | null;
 };
 
 function calculateShowSubmitSpinner(state: SpinnerCheckState): boolean {
-  return state.isSubmitting || state.waitingToStartStreaming || Boolean(state.pendingMessage);
+  return state.isSubmitting || state.waitingToStartStreaming;
 }
 
 describe('submit Spinner - Loading State Lifecycle', () => {
@@ -707,7 +714,6 @@ describe('submit Spinner - Loading State Lifecycle', () => {
     const showSpinner = calculateShowSubmitSpinner({
       isSubmitting: true,
       waitingToStartStreaming: false,
-      pendingMessage: null,
     });
     expect(showSpinner).toBe(true);
   });
@@ -716,142 +722,115 @@ describe('submit Spinner - Loading State Lifecycle', () => {
     const showSpinner = calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: true,
-      pendingMessage: null,
     });
     expect(showSpinner).toBe(true);
   });
 
-  it('shows spinner when pendingMessage exists', () => {
+  it('hides spinner when all states are false', () => {
     const showSpinner = calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: false,
-      pendingMessage: 'Test message',
-    });
-    expect(showSpinner).toBe(true);
-  });
-
-  it('hides spinner when all states are false/null', () => {
-    const showSpinner = calculateShowSubmitSpinner({
-      isSubmitting: false,
-      waitingToStartStreaming: false,
-      pendingMessage: null,
     });
     expect(showSpinner).toBe(false);
   });
 
-  it('shows spinner during entire submit lifecycle (combo states)', () => {
-    // Simulate the full lifecycle
+  it('shows spinner during submit until first stream chunk (combo states)', () => {
+    // Simulate the lifecycle - spinner shows until first stream chunk arrives
     const states: SpinnerCheckState[] = [
       // Step 1: User clicks submit, API call starts
-      { isSubmitting: true, waitingToStartStreaming: false, pendingMessage: null },
-      // Step 2: API call in progress
-      { isSubmitting: true, waitingToStartStreaming: false, pendingMessage: null },
-      // Step 3: API completes, prepareForNewMessage called
-      { isSubmitting: false, waitingToStartStreaming: false, pendingMessage: 'Test' },
-      // Step 4: Waiting for stream to start
-      { isSubmitting: false, waitingToStartStreaming: true, pendingMessage: 'Test' },
+      { isSubmitting: true, waitingToStartStreaming: false },
+      // Step 2: API call in progress, waitingToStartStreaming set
+      { isSubmitting: true, waitingToStartStreaming: true },
+      // Step 3: API completes but still waiting for stream
+      { isSubmitting: false, waitingToStartStreaming: true },
     ];
 
     for (const state of states) {
       const showSpinner = calculateShowSubmitSpinner(state);
       expect(showSpinner).toBe(true);
     }
+
+    // Step 4: First stream chunk arrives - spinner stops
+    const streamStarted = { isSubmitting: false, waitingToStartStreaming: false };
+    expect(calculateShowSubmitSpinner(streamStarted)).toBe(false);
   });
 });
 
 describe('submit Spinner - Double Submission Prevention', () => {
-  it('scenario: API completes before pendingMessage set (the bug)', () => {
+  it('scenario: waitingToStartStreaming prevents gap between API complete and streaming', () => {
     /**
-     * BUG REPRODUCTION:
-     * Timeline of the double-submission bug:
+     * FIX VERIFICATION:
+     * waitingToStartStreaming is set at the START of handleUpdateThreadAndSend,
+     * ensuring spinner shows from submit click until first stream chunk arrives.
+     *
+     * Timeline:
      * T0: User clicks submit
+     *   - waitingToStartStreaming: true (set immediately)
      *   - isSubmitting: true (mutation starts)
      *   - Spinner shows
      *
-     * T1: API response received (~100-500ms)
-     *   - isSubmitting: false (mutation.isPending becomes false)
-     *   - pendingMessage: null (not set yet in the old implementation)
-     *   - BUG: Spinner disappeared, button appeared enabled
-     *   - User could click submit again!
+     * T1: API completes
+     *   - isSubmitting: false
+     *   - waitingToStartStreaming: still true (until first stream chunk)
+     *   - Spinner still shows
      *
-     * T2: prepareForNewMessage() called
-     *   - pendingMessage: set to user message
-     *   - Button now properly disabled (but too late)
-     *
-     * FIX: showSubmitSpinner now includes pendingMessage and waitingToStartStreaming
+     * T2: First stream chunk arrives (web search or participant)
+     *   - waitingToStartStreaming: false
+     *   - Spinner stops, button disabled
      */
 
-    // The problematic state that allowed double submission
-    const bugState: SpinnerCheckState = {
-      isSubmitting: false, // API just completed
-      waitingToStartStreaming: false, // Not set yet
-      pendingMessage: null, // Not set yet (the gap)
-    };
+    // T0: Submit clicked - waitingToStartStreaming set immediately
+    const t0 = { isSubmitting: true, waitingToStartStreaming: true };
+    expect(calculateShowSubmitSpinner(t0)).toBe(true);
 
-    // This is the state that could happen in the gap
-    // With the old logic, spinner would be false = bug
-    const showSpinner = calculateShowSubmitSpinner(bugState);
+    // T1: API completes but still waiting for stream
+    const t1 = { isSubmitting: false, waitingToStartStreaming: true };
+    expect(calculateShowSubmitSpinner(t1)).toBe(true);
 
-    // After fix, spinner should still be false here, but isInputBlocked
-    // should be true due to other checks in the component
-    // The fix is that pendingMessage gets set BEFORE isSubmitting becomes false
-    // OR waitingToStartStreaming is set during the API call
-    expect(showSpinner).toBe(false);
-
-    // Immediately after, pendingMessage is set
-    const fixedState: SpinnerCheckState = {
-      isSubmitting: false,
-      waitingToStartStreaming: false,
-      pendingMessage: 'Test message', // Now set
-    };
-    const showSpinnerAfterFix = calculateShowSubmitSpinner(fixedState);
-    expect(showSpinnerAfterFix).toBe(true);
+    // T2: First stream chunk arrives - spinner stops
+    const t2 = { isSubmitting: false, waitingToStartStreaming: false };
+    expect(calculateShowSubmitSpinner(t2)).toBe(false);
   });
 
-  it('scenario: continuous blocking from submit to streaming start', () => {
+  it('scenario: continuous blocking from submit to first stream chunk', () => {
     /**
-     * Correct lifecycle with fix:
-     * The button should remain disabled and show spinner from
-     * submit click until streaming starts.
+     * Correct lifecycle:
+     * The spinner shows from submit click until first stream chunk.
+     * After first stream chunk, button is disabled but not loading.
      */
 
-    // T0: Click submit
-    const t0 = { isSubmitting: true, waitingToStartStreaming: false, pendingMessage: null };
+    // T0: Click submit - waitingToStartStreaming set immediately
+    const t0 = { isSubmitting: true, waitingToStartStreaming: true };
 
     // T1: API in progress
-    const t1 = { isSubmitting: true, waitingToStartStreaming: false, pendingMessage: null };
+    const t1 = { isSubmitting: true, waitingToStartStreaming: true };
 
-    // T2: API completes, prepareForNewMessage called (nearly simultaneous)
-    const t2 = { isSubmitting: false, waitingToStartStreaming: false, pendingMessage: 'Msg' };
-
-    // T3: Waiting for streaming to start
-    const t3 = { isSubmitting: false, waitingToStartStreaming: true, pendingMessage: 'Msg' };
+    // T2: API completes, still waiting for stream
+    const t2 = { isSubmitting: false, waitingToStartStreaming: true };
 
     // All states should show spinner
     expect(calculateShowSubmitSpinner(t0)).toBe(true);
     expect(calculateShowSubmitSpinner(t1)).toBe(true);
     expect(calculateShowSubmitSpinner(t2)).toBe(true);
-    expect(calculateShowSubmitSpinner(t3)).toBe(true);
 
-    // T4: Streaming starts - spinner stops (stop button shows instead)
-    // This is handled by isStreaming in the component, not showSubmitSpinner
-    const t4 = { isSubmitting: false, waitingToStartStreaming: false, pendingMessage: null };
-    expect(calculateShowSubmitSpinner(t4)).toBe(false);
+    // T3: First stream chunk arrives - spinner stops
+    const t3 = { isSubmitting: false, waitingToStartStreaming: false };
+    expect(calculateShowSubmitSpinner(t3)).toBe(false);
   });
 
   it('verifies isInputBlocked includes pendingMessage for double-submit prevention', () => {
-    // This test verifies the fix applied to isInitialUIInputBlocked
-    // which now includes Boolean(pendingMessage)
+    // This test verifies that isInputBlocked still includes pendingMessage
+    // for blocking input even though spinner no longer depends on it
     const isBlocked = calculateIsInputBlocked({
       isStreaming: false,
       isCreatingThread: false,
       waitingToStartStreaming: false,
       isModeratorStreaming: false,
-      pendingMessage: 'Test message', // This should block
+      pendingMessage: 'Test message', // This should block input
       currentResumptionPhase: null,
       preSearchResumption: null,
       moderatorResumption: null,
-      isSubmitting: false, // API already completed
+      isSubmitting: false,
     });
 
     expect(isBlocked).toBe(true); // Blocked by pendingMessage

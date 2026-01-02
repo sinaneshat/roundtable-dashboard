@@ -94,8 +94,7 @@ export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysL
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button onClick={onCreateNew} size="sm">
-            <Icons.plus className="mr-2 size-4" />
+          <Button onClick={onCreateNew} size="sm" startIcon={<Icons.plus />}>
             {t('apiKeys.list.createNew')}
           </Button>
         </EmptyContent>

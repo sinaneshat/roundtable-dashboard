@@ -121,6 +121,12 @@ type UseMultiParticipantChatOptions = {
    * This allows the store to queue the next participant trigger for when participants load
    */
   onResumedStreamComplete?: (roundNumber: number, participantIndex: number) => void;
+  /**
+   * ✅ PERF FIX: Flag indicating thread was just created in this session
+   * When true, disables automatic stream resume since there's nothing to resume for new threads
+   * This prevents wasteful GET /stream calls on thread creation
+   */
+  isNewlyCreatedThread?: boolean;
 };
 
 /**
@@ -134,14 +140,16 @@ type UseMultiParticipantChatReturn = {
   /**
    * Start a new round with the existing participants (used for manual round triggering)
    * @param participantsOverride - Optional fresh participants (used by store subscription to avoid stale data)
+   * @param messagesOverride - Optional fresh messages (used to avoid stale closure in queueMicrotask)
    */
-  startRound: (participantsOverride?: ChatParticipant[]) => void;
+  startRound: (participantsOverride?: ChatParticipant[], messagesOverride?: UIMessage[]) => void;
   /**
    * Continue a round from a specific participant index (used for incomplete round resumption)
    * @param fromIndex - The participant index to continue from
    * @param participantsOverride - Optional fresh participants
+   * @param messagesOverride - Optional fresh messages (used to avoid stale closure)
    */
-  continueFromParticipant: (fromIndex: number, participantsOverride?: ChatParticipant[]) => void;
+  continueFromParticipant: (fromIndex: number, participantsOverride?: ChatParticipant[], messagesOverride?: UIMessage[]) => void;
   /** Whether participants are currently streaming responses */
   isStreaming: boolean;
   /**
@@ -255,6 +263,7 @@ export function useMultiParticipantChat(
     hasEarlyOptimisticMessage = false,
     streamResumptionPrefilled = false,
     onResumedStreamComplete,
+    isNewlyCreatedThread = false,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -341,6 +350,12 @@ export function useMultiParticipantChat(
   // Reset at start of each round (in startRound/sendMessage)
   const queuedParticipantsThisRoundRef = useRef<Set<number>>(new Set());
 
+  // ✅ PHANTOM GUARD: Track which (round, participantIndex) pairs have already triggered next participant
+  // AI SDK calls onFinish multiple times for the same message (phantom calls)
+  // This prevents duplicate triggerNextParticipantWithRefs() calls before round completes
+  // Key format: "r{round}_p{participantIndex}"
+  const triggeredNextForRef = useRef<Set<string>>(new Set());
+
   // Refs to hold values needed for triggering (to avoid closure issues in callbacks)
   const messagesRef = useRef<UIMessage[]>([]);
   // ✅ TYPE-SAFE: Use DbUserMessageMetadata (without createdAt which is added by backend)
@@ -413,6 +428,11 @@ export function useMultiParticipantChat(
       isStreamingRef.current = false;
 
       rlog.phase('PARTS→MOD', `r${currentRoundRef.current} all ${totalParticipants} done`);
+
+      // ✅ PHANTOM GUARD: Increment round ref so phantom calls from previous round are blocked
+      // Without this, phantom onFinish calls would see `msgRound < currentRoundRef` as false
+      // because currentRoundRef would still be the old round number
+      currentRoundRef.current = currentRoundRef.current + 1;
 
       // eslint-disable-next-line react-dom/no-flush-sync -- Required for moderator trigger synchronization
       flushSync(() => {
@@ -696,12 +716,13 @@ export function useMultiParticipantChat(
     // 1. POST: Buffers chunks to KV synchronously via consumeSseStream
     // 2. GET: Returns buffered chunks + polls for new ones until stream completes
     //
-    // ✅ FIX: Only enable resume when we have a valid thread ID
+    // ✅ FIX: Only enable resume when we have a valid thread ID AND it's not a newly created thread
     // This prevents "Cannot read properties of undefined (reading 'state')" errors
     // that occur when AI SDK tries to resume on new threads without an ID.
     // When useChatId is undefined (new thread), resume is disabled to prevent corruption.
     // When useChatId is valid (existing thread), resume enables automatic reconnection.
-    resume: !!useChatId,
+    // ✅ PERF FIX: Disable resume for newly created threads - nothing to resume, avoids wasteful GET /stream
+    resume: !!useChatId && !isNewlyCreatedThread,
     // ✅ NEVER pass messages - let AI SDK be uncontrolled
     // Initial hydration happens via setMessages effect below
 
@@ -720,8 +741,23 @@ export function useMultiParticipantChat(
       const currentIndex = currentIndexRef.current;
       const participant = roundParticipantsRef.current[currentIndex];
 
+      // ✅ FIX: Handle edge case where error is undefined, null, or empty object
+      // AI SDK might call onError with unexpected values in edge cases
+      if (!error || (typeof error === 'object' && Object.keys(error).length === 0)) {
+        console.error('[Chat Streaming Error] Received empty or undefined error', {
+          errorType: typeof error,
+          errorValue: error,
+          currentIndex,
+          participantId: participant?.id,
+          modelId: participant?.modelId,
+          roundParticipantsCount: roundParticipantsRef.current.length,
+        });
+      }
+
       // ✅ SINGLE SOURCE OF TRUTH: Parse and validate error metadata with schema
-      let errorMessage = error instanceof Error ? error.message : String(error);
+      let errorMessage = error instanceof Error
+        ? error.message
+        : (error ? String(error) : 'Unknown streaming error');
       let errorMetadata: z.infer<typeof ErrorMetadataSchema> | undefined;
 
       try {
@@ -839,6 +875,14 @@ export function useMultiParticipantChat(
         completeAnimation(currentIndex);
       }
 
+      // ✅ PHANTOM GUARD: Check if we've already triggered next for this (round, participant)
+      const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
+      if (triggeredNextForRef.current.has(triggerKey)) {
+        console.error(`[flow] SKIP duplicate error trigger ${triggerKey}`);
+        return;
+      }
+      triggeredNextForRef.current.add(triggerKey);
+
       // Trigger next participant immediately (no delay needed)
       triggerNextParticipantWithRefs();
       callbackRefs.onError.current?.(error instanceof Error ? error : new Error(errorMessage));
@@ -923,6 +967,7 @@ export function useMultiParticipantChat(
         // skip setting isStreaming=true. Otherwise, we'd ignore the message data entirely
         // and cause a stuck stream!
         const isFormSubmissionInProgress = callbackRefs.hasEarlyOptimisticMessage.current;
+        console.error(`[flow] isResumedStream=true: overwriting refs from metadata (idx:${metadataParticipantIndex}, round:${metadataRoundNumber}), prevRoundRef:${currentRoundRef.current}`);
 
         // Update refs from metadata for resumed stream (even during submission - safe)
         currentIndex = metadataParticipantIndex;
@@ -975,6 +1020,14 @@ export function useMultiParticipantChat(
           }
         }
 
+        // ✅ PHANTOM GUARD: Check if we've already triggered next for this (round, participant)
+        const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
+        if (triggeredNextForRef.current.has(triggerKey)) {
+          console.error(`[flow] SKIP duplicate trigger ${triggerKey} (missing message)`);
+          return;
+        }
+        triggeredNextForRef.current.add(triggerKey);
+
         // Trigger next participant immediately
         triggerNextParticipantWithRefs();
         const error = new Error(`Participant ${currentIndex} failed: data.message is missing`);
@@ -1003,15 +1056,18 @@ export function useMultiParticipantChat(
         // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
         const backendRoundNumber = getRoundNumber(data.message.metadata);
 
-        // ✅ CRITICAL FIX: Extract round from message ID as secondary fallback
-        // Bug: AI SDK sometimes doesn't preserve backend metadata, causing getRoundNumber to return null
-        // When this happens, we were falling back to currentRoundRef which could be wrong
-        // The message ID is generated by the backend with the correct round number,
-        // so extracting from ID is more reliable than trusting frontend state
+        // ✅ CRITICAL FIX: Extract round AND participant from message ID as PRIMARY source
+        // Bug: AI SDK sometimes calls onFinish again after round completion (phantom calls)
+        // When this happens, refs and even backend metadata can be stale/wrong
+        // The message ID is generated by backend and NEVER changes - it's the source of truth
         const idMatch = data.message?.id?.match(/_r(\d+)_p(\d+)/);
         const roundFromId = idMatch ? Number.parseInt(idMatch[1]!) : null;
-        const finalRoundNumber = backendRoundNumber ?? roundFromId ?? currentRoundRef.current;
-        const expectedId = `${threadId}_r${finalRoundNumber}_p${currentIndex}`;
+        const participantFromId = idMatch ? Number.parseInt(idMatch[2]!) : null;
+        // ✅ FIX: Prioritize ID over metadata - metadata can be stale on phantom calls
+        const finalRoundNumber = roundFromId ?? backendRoundNumber ?? currentRoundRef.current;
+        // ✅ FIX: Use participant index from ID to prevent phantom calls from corrupting messages
+        const finalParticipantIndex = participantFromId ?? currentIndex;
+        const expectedId = `${threadId}_r${finalRoundNumber}_p${finalParticipantIndex}`;
 
         // ✅ CRITICAL FIX: Check if message has generated text to avoid false empty_response errors
         // For some fast models (e.g., gemini-flash-lite), parts might not be populated yet when onFinish fires
@@ -1072,10 +1128,11 @@ export function useMultiParticipantChat(
 
         // ✅ STRICT TYPING: mergeParticipantMetadata now requires roundNumber parameter
         // Returns complete AssistantMessageMetadata with ALL required fields
+        // ✅ FIX: Use finalParticipantIndex from message ID, not currentIndex from ref
         const completeMetadata = mergeParticipantMetadata(
           data.message,
           participant,
-          currentIndex,
+          finalParticipantIndex,
           finalRoundNumber, // REQUIRED: Pass round number explicitly
           { hasGeneratedText: Boolean(hasGeneratedText) }, // REQUIRED: Tell it we have content to avoid false empty_response errors
         );
@@ -1269,10 +1326,23 @@ export function useMultiParticipantChat(
         const hasErrorInMetadata = completeMetadata?.hasError === true;
 
         if (hasErrorInMetadata) {
+          // ✅ PHANTOM GUARD: Check if we've already triggered next for this (round, participant)
+          const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
+          if (triggeredNextForRef.current.has(triggerKey)) {
+            console.error(`[flow] SKIP duplicate error trigger ${triggerKey}`);
+            return;
+          }
+          triggeredNextForRef.current.add(triggerKey);
+
           // Error messages don't animate - trigger next participant after frame
           // ✅ FIX: Must await to block onFinish from returning before next trigger
           // ✅ CRITICAL FIX: Double RAF ensures React has flushed all state updates
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          // ✅ PHANTOM GUARD: Skip trigger if message is from a previous round
+          if (finalRoundNumber < currentRoundRef.current) {
+            console.error(`[flow] SKIP phantom r${finalRoundNumber} (current:r${currentRoundRef.current})`);
+            return;
+          }
           triggerNextParticipantWithRefs();
           return;
         }
@@ -1282,6 +1352,16 @@ export function useMultiParticipantChat(
       // ✅ SIMPLIFIED: Removed animation waiting - it was causing 5s delays
       // Animation coordination is now handled by the store's waitForAllAnimations in handleComplete
       // which has its own timeout mechanism for moderator creation
+
+      // ✅ PHANTOM GUARD: Check if we've already triggered next for this (round, participant)
+      // AI SDK calls onFinish multiple times for the same message (phantom calls)
+      // This check MUST happen BEFORE the await to prevent interleaved duplicates
+      const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
+      if (triggeredNextForRef.current.has(triggerKey)) {
+        return;
+      }
+      triggeredNextForRef.current.add(triggerKey);
+
       // ✅ FIX: Must await to block onFinish from returning before next participant triggers
       // Without await, onFinish returns immediately and AI SDK status changes,
       // allowing multiple streams to start concurrently (race condition)
@@ -1289,6 +1369,14 @@ export function useMultiParticipantChat(
       // Single RAF only waits for next paint, but React might batch updates across frames
       rlog.stream('end', `r${currentRoundRef.current} p${currentIndex} fin=${data.finishReason}`);
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      // ✅ PHANTOM GUARD: Skip trigger if message is from a previous round
+      // AI SDK calls onFinish twice (phantom call) after round completion when refs are reset
+      // Must re-extract round from ID since we're outside the if(participant && data.message) block
+      const msgIdMatch = data.message?.id?.match(/_r(\d+)_p/);
+      const msgRoundNumber = msgIdMatch ? Number.parseInt(msgIdMatch[1]!) : currentRoundRef.current;
+      if (msgRoundNumber < currentRoundRef.current) {
+        return;
+      }
       triggerNextParticipantWithRefs();
     },
 
@@ -1418,7 +1506,14 @@ export function useMultiParticipantChat(
    * but the store subscription has proper guards (messages exist, not already streaming, etc.)
    * Only check isExplicitlyStreaming to prevent concurrent rounds
    */
-  const startRound = useCallback((participantsOverride?: ChatParticipant[]) => {
+  const startRound = useCallback((
+    participantsOverride?: ChatParticipant[],
+    messagesOverride?: UIMessage[],
+  ) => {
+    // ✅ STALE CLOSURE FIX: Accept messagesOverride to avoid stale closure in queueMicrotask
+    // When passed from trigger, these messages are guaranteed to be persisted (from PATCH response)
+    const freshMessages = messagesOverride || initialMessages;
+
     // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
     // Must happen FIRST before any other logic. Two effects calling startRound simultaneously
     // could both pass guards before either sets the lock, causing duplicate aiSendMessage calls
@@ -1484,7 +1579,11 @@ export function useMultiParticipantChat(
       return;
     }
 
-    const lastUserMessage = messages.findLast(m => m.role === MessageRoles.USER);
+    // ✅ STALE CLOSURE FIX: Use freshMessages (messagesOverride or initialMessages)
+    // For round 1+, messages are now persisted via PATCH before streaming
+    // freshMessages contains the guaranteed-persisted messages from the trigger
+    const messagesToSearch = freshMessages.length > 0 ? freshMessages : messages;
+    const lastUserMessage = messagesToSearch.findLast(m => m.role === MessageRoles.USER);
 
     if (!lastUserMessage) {
       isTriggeringRef.current = false;
@@ -1505,13 +1604,12 @@ export function useMultiParticipantChat(
     // Uses shared extractValidFileParts utility for consistent file part handling
     const fileParts = extractValidFileParts(lastUserMessage.parts);
 
-    // Get round number from the last user message
-    // startRound is called to trigger participants for an EXISTING user message
-    // The user message already has the correct roundNumber in its metadata
-    const roundNumber = getCurrentRoundNumber(messages);
+    // ✅ STALE CLOSURE FIX: Use freshMessages (persisted messages) for round number calculation
+    // Messages are now persisted via PATCH before streaming starts (round 1+)
+    // freshMessages contains guaranteed-persisted messages, avoiding stale closure issues
+    const roundNumber = getCurrentRoundNumber(messagesToSearch);
 
     // CRITICAL: Update refs FIRST to avoid race conditions
-    // These refs are used in prepareSendMessagesRequest and must be set before the API call
     currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
     roundParticipantsRef.current = enabled;
     currentRoundRef.current = roundNumber;
@@ -1591,7 +1689,7 @@ export function useMultiParticipantChat(
     // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
     // This prevents concurrent aiSendMessage calls from startRound/continueFromParticipant/etc.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs provides stable ref access to threadId (intentionally omitted to avoid effect re-runs)
-  }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage]);
+  }, [messages, initialMessages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage]);
 
   /**
    * Continue a round from a specific participant index
@@ -1601,7 +1699,15 @@ export function useMultiParticipantChat(
    * @param fromIndex - The participant index to continue from (0-based)
    * @param participantsOverride - Optional fresh participants to use
    */
-  const continueFromParticipant = useCallback((fromIndex: number, participantsOverride?: ChatParticipant[]) => {
+  const continueFromParticipant = useCallback((
+    fromIndex: number,
+    participantsOverride?: ChatParticipant[],
+    messagesOverride?: UIMessage[],
+  ) => {
+    // ✅ STALE CLOSURE FIX: Accept messagesOverride to avoid stale closure
+    // When passed from trigger, these messages are guaranteed to be persisted (from PATCH response)
+    const freshMessages = messagesOverride || initialMessages;
+
     // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
     // Same pattern as startRound - must happen FIRST before any other logic
     if (isTriggeringRef.current) {
@@ -1663,7 +1769,11 @@ export function useMultiParticipantChat(
       return;
     }
 
-    const lastUserMessage = messages.findLast(m => m.role === MessageRoles.USER);
+    // ✅ STALE CLOSURE FIX: Use freshMessages (messagesOverride or initialMessages)
+    // Messages are now persisted via PATCH before streaming (round 1+)
+    // freshMessages contains guaranteed-persisted messages, avoiding stale closure issues
+    const messagesToSearch = freshMessages.length > 0 ? freshMessages : messages;
+    const lastUserMessage = messagesToSearch.findLast(m => m.role === MessageRoles.USER);
 
     if (!lastUserMessage) {
       isTriggeringRef.current = false;
@@ -1678,8 +1788,9 @@ export function useMultiParticipantChat(
       return;
     }
 
-    // Get round number from the last user message
-    const roundNumber = getCurrentRoundNumber(messages);
+    // ✅ STALE CLOSURE FIX: Use freshMessages (persisted messages) for round number calculation
+    // Messages are now persisted via PATCH before streaming starts (round 1+)
+    const roundNumber = getCurrentRoundNumber(messagesToSearch);
 
     // =========================================================================
     // ✅ DUPLICATE MESSAGE FIX: Check if participant already has a complete message
@@ -1801,7 +1912,7 @@ export function useMultiParticipantChat(
     });
     // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs provides stable ref access to threadId (intentionally omitted to avoid effect re-runs)
-  }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, threadId, onResumedStreamComplete]);
+  }, [messages, initialMessages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, threadId, onResumedStreamComplete]);
 
   /**
    * Send a user message and start a new round

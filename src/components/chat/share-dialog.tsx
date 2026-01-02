@@ -250,8 +250,7 @@ export function ShareDialog({
                 </div>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline">
-                      <Icons.share className="mr-2 size-4" />
+                    <Button variant="outline" startIcon={<Icons.share />}>
                       {t('shareDialog.shareOn')}
                     </Button>
                   </PopoverTrigger>
@@ -334,8 +333,8 @@ export function ShareDialog({
           <Button
             onClick={handleMakePrivate}
             className="w-full sm:w-auto bg-amber-600 text-white hover:bg-amber-700"
+            startIcon={<Icons.lock />}
           >
-            <Icons.lock className="mr-2 size-4" />
             {t('makePrivate')}
           </Button>
         </DialogFooter>

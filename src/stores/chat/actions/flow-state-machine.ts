@@ -27,11 +27,10 @@ import {
   TextPartStates,
 } from '@/api/core/enums';
 import { useChatStore, useChatStoreApi } from '@/components/providers';
-import { getAssistantMetadata, getCurrentRoundNumber, getRoundNumber } from '@/lib/utils';
+import { getAssistantMetadata, getCurrentRoundNumber, getModeratorMetadata, getRoundNumber } from '@/lib/utils';
 
 import {
   getMessageStreamingStatus,
-  getModeratorMessageForRound,
   getParticipantCompletionStatus,
 } from '../utils/participant-completion-gate';
 
@@ -303,38 +302,48 @@ export function useFlowStateMachine(
     const currentRound
       = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
 
-    const currentRoundModeratorMessage = getModeratorMessageForRound(messages, currentRound);
+    // ✅ PERF FIX: Single pass through messages to collect all round info
+    // Previously O(3n): 3 separate scans (moderator find, participant filter, completed filter)
+    // Now O(n): Single pass collecting moderator, participant count, and completed count
+    let currentRoundModeratorMessage: typeof messages[0] | null = null;
+    let completedCount = 0;
 
-    const participantMessagesInRound = messages.filter((m) => {
-      return (
-        m.role === MessageRoles.ASSISTANT
-        && getRoundNumber(m.metadata) === currentRound
-      );
-    });
+    for (const m of messages) {
+      if (m.role !== MessageRoles.ASSISTANT)
+        continue;
+      if (getRoundNumber(m.metadata) !== currentRound)
+        continue;
 
-    const completedMessagesInRound = participantMessagesInRound.filter((m) => {
+      // Check if moderator message (use type-safe utility)
+      const modMeta = getModeratorMetadata(m.metadata);
+      if (modMeta) {
+        currentRoundModeratorMessage = m;
+        continue; // Moderator doesn't count toward participant completion
+      }
+
+      // Check if participant message is complete
       const hasStreamingParts = m.parts?.some(
         p => 'state' in p && p.state === TextPartStates.STREAMING,
       ) ?? false;
-      if (hasStreamingParts)
-        return false;
 
-      const hasTextContent = m.parts?.some(
-        p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
-      );
-      if (hasTextContent)
-        return true;
+      if (!hasStreamingParts) {
+        const hasTextContent = m.parts?.some(
+          p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
+        );
 
-      const metadata = getAssistantMetadata(m.metadata);
-      const finishReason = metadata?.finishReason;
-      if (finishReason)
-        return true;
-
-      return false;
-    });
+        if (hasTextContent) {
+          completedCount++;
+        } else {
+          const metadata = getAssistantMetadata(m.metadata);
+          if (metadata?.finishReason) {
+            completedCount++;
+          }
+        }
+      }
+    }
 
     const allParticipantsResponded
-      = completedMessagesInRound.length >= participants.length
+      = completedCount >= participants.length
         && participants.length > 0;
 
     let moderatorStatus: MessageStatus | null = null;

@@ -180,13 +180,10 @@ export function useUpdateThreadMutation() {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
       }
     },
-    onSuccess: async (_data, variables) => {
-      if ('participants' in variables.json || 'mode' in variables.json || 'enableWebSearch' in variables.json) {
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.threads.changelog(variables.param.id),
-        });
-      }
-    },
+    // ✅ PERF: Changelog invalidation REMOVED - was premature (before backend creates entries)
+    // Config changes are persisted here, but changelog entries are created during message streaming.
+    // Round-specific changelog is now fetched AFTER streaming via useThreadRoundChangelogQuery.
+    // See: thread-actions.ts for incremental changelog fetch logic
     retry: false,
     throwOnError: false,
   });

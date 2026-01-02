@@ -70,6 +70,7 @@ export default antfu(
   },
   {
     files: ['**/__tests__/**/*', '**/*.test.*', '**/*.spec.*', '**/test-*.{ts,tsx}', 'src/lib/testing/**/*', 'vitest.setup.ts'],
+    ignores: ['e2e/**/*'],
     plugins: {
       'testing-library': testingLibraryPlugin,
     },

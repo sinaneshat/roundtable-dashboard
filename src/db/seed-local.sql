@@ -7,7 +7,8 @@
 -- ✅ CREDIT-BASED BILLING: Seeds credit plans and custom credit packages
 -- ⚠️ NO BUSINESS LOGIC: All credit configs are in product-logic.service.ts
 --
--- This file contains ONLY Stripe catalog data:
+-- This file contains:
+-- - E2E Test Users (for Playwright testing)
 -- - Products (plans and credit packages)
 -- - Prices (subscription and one-time prices)
 -- - Product metadata (planType for identification)
@@ -17,6 +18,14 @@
 --
 -- Usage:
 --   pnpm db:seed:local
+
+-- ============================================================================
+-- E2E TEST USERS - Created via Better Auth API in global-setup.ts
+-- ============================================================================
+-- Users are created via Better Auth sign-up API during E2E test setup
+-- This ensures proper scrypt password hashing compatible with Better Auth
+-- User IDs are dynamic - billing data is linked after user creation
+-- ⚠️ These settings are ONLY for local E2E testing - never use in production!
 
 -- ============================================================================
 -- STRIPE PRODUCTS - CREDIT-BASED PLANS (TEST MODE)
@@ -70,3 +79,11 @@ INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `
 -- $500 = 500,000 credits
 INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
 ('price_1Shocb52vWNZ3v8w1vlOjP9y', 'prod_Tf8ttpjBZtWGbe', 1, 'usd', 50000, 'one_time', NULL, NULL, NULL, '{"credits":"500000"}', 1766569485000, 1766569485000);
+
+-- ============================================================================
+-- E2E TEST USER BILLING DATA - Created dynamically in global-setup.ts
+-- ============================================================================
+-- Billing data (stripe_customer, payment_method, subscription) is created
+-- dynamically after users are created via Better Auth sign-up API.
+-- This ensures correct user_id references.
+-- See e2e/global-setup.ts for implementation.

@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
   // Required for OpenNext deployment
   output: 'standalone',
 
+  // Required for PostHog API trailing slashes
+  skipTrailingSlashRedirect: true,
+
   // Compiler optimizations
   compiler: {
     // Remove console in production
@@ -206,6 +209,20 @@ const nextConfig: NextConfig = {
       // Note: API routes (/api/*) CSP is handled by Hono middleware, not Next.js
       // This is because Hono responses bypass Next.js header processing in Cloudflare Workers
       // See: src/api/index.ts for API-specific CSP configuration
+    ];
+  },
+
+  // PostHog reverse proxy - bypasses ad blockers (10-30% more events captured)
+  async rewrites() {
+    return [
+      {
+        source: '/ingest/static/:path*',
+        destination: 'https://us-assets.i.posthog.com/static/:path*',
+      },
+      {
+        source: '/ingest/:path*',
+        destination: 'https://us.i.posthog.com/:path*',
+      },
     ];
   },
 

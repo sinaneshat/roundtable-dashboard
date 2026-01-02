@@ -14,6 +14,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
+import { revenueTracking } from '@/lib/analytics';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { isObject } from '@/lib/utils';
 
@@ -1118,6 +1119,128 @@ const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [
 ];
 
 /**
+ * Track Revenue Events to PostHog
+ *
+ * Captures key billing events for PostHog Revenue Analytics.
+ * Only tracks events with actual revenue impact.
+ */
+async function trackRevenueFromWebhook(
+  event: Stripe.Event,
+  userId: string,
+): Promise<void> {
+  const obj = event.data.object;
+  if (!isObject(obj))
+    return;
+
+  try {
+    switch (event.type) {
+      case 'invoice.paid': {
+        const invoice = obj as Stripe.Invoice;
+        if (!invoice.amount_paid || invoice.amount_paid <= 0)
+          return;
+
+        // Extract subscription ID safely (Stripe API may have it as string or object)
+        const subscriptionData = 'subscription' in invoice ? invoice.subscription : null;
+        const subscriptionId = typeof subscriptionData === 'string'
+          ? subscriptionData
+          : (isObject(subscriptionData) && 'id' in subscriptionData ? String(subscriptionData.id) : undefined);
+
+        const isSubscription = subscriptionId !== undefined;
+        const isFirstInvoice = invoice.billing_reason === 'subscription_create';
+
+        if (isSubscription) {
+          if (isFirstInvoice) {
+            await revenueTracking.subscriptionStarted({
+              revenue: invoice.amount_paid,
+              currency: invoice.currency.toUpperCase(),
+              product: invoice.lines?.data[0]?.description ?? undefined,
+              subscription_id: subscriptionId,
+              invoice_id: invoice.id,
+            }, { userId });
+          } else {
+            await revenueTracking.subscriptionRenewed({
+              revenue: invoice.amount_paid,
+              currency: invoice.currency.toUpperCase(),
+              product: invoice.lines?.data[0]?.description ?? undefined,
+              subscription_id: subscriptionId,
+              invoice_id: invoice.id,
+            }, { userId });
+          }
+        } else {
+          // One-time purchase (credit pack)
+          await revenueTracking.creditsPurchased({
+            revenue: invoice.amount_paid,
+            currency: invoice.currency.toUpperCase(),
+            product: invoice.lines?.data[0]?.description ?? 'Credit Pack',
+            invoice_id: invoice.id,
+          }, { userId });
+        }
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = obj as Stripe.Invoice;
+        const subscriptionData = 'subscription' in invoice ? invoice.subscription : null;
+        const subscriptionId = typeof subscriptionData === 'string'
+          ? subscriptionData
+          : (isObject(subscriptionData) && 'id' in subscriptionData ? String(subscriptionData.id) : undefined);
+
+        await revenueTracking.paymentFailed({
+          subscription_id: subscriptionId,
+          invoice_id: invoice.id,
+          error_message: invoice.last_finalization_error?.message,
+        }, { userId });
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const subscription = obj as Stripe.Subscription;
+        await revenueTracking.subscriptionCanceled({
+          subscription_id: subscription.id,
+          product: subscription.items?.data[0]?.price?.nickname ?? undefined,
+        }, { userId });
+        break;
+      }
+
+      case 'customer.subscription.updated': {
+        const subscription = obj as Stripe.Subscription;
+        const previousAttributes = event.data.previous_attributes;
+
+        // Check if plan changed (upgrade/downgrade)
+        if (isObject(previousAttributes) && 'items' in previousAttributes) {
+          const currentAmount = subscription.items?.data[0]?.price?.unit_amount ?? 0;
+          const previousItems = previousAttributes.items;
+          const previousAmount = isObject(previousItems)
+            && Array.isArray((previousItems as { data?: unknown[] }).data)
+            && isObject((previousItems as { data: unknown[] }).data[0])
+            ? ((previousItems as { data: Array<{ price?: { unit_amount?: number } }> }).data[0]?.price?.unit_amount ?? 0)
+            : 0;
+
+          if (currentAmount > previousAmount) {
+            await revenueTracking.subscriptionUpgraded({
+              revenue: currentAmount,
+              currency: subscription.currency.toUpperCase(),
+              subscription_id: subscription.id,
+              product: subscription.items?.data[0]?.price?.nickname ?? undefined,
+            }, { userId });
+          } else if (currentAmount < previousAmount) {
+            await revenueTracking.subscriptionDowngraded({
+              revenue: currentAmount,
+              currency: subscription.currency.toUpperCase(),
+              subscription_id: subscription.id,
+              product: subscription.items?.data[0]?.price?.nickname ?? undefined,
+            }, { userId });
+          }
+        }
+        break;
+      }
+    }
+  } catch {
+    // Silently fail - don't block webhook processing for analytics
+  }
+}
+
+/**
  * Extract customer ID from webhook event
  * All tracked events have a customer property
  *
@@ -1179,6 +1302,9 @@ async function processWebhookEvent(
   if (!customer) {
     return;
   }
+
+  // Track revenue events to PostHog (before sync to ensure we capture the event)
+  await trackRevenueFromWebhook(event, customer.userId);
 
   // Single sync function - fetches fresh data from Stripe API (Theo's pattern)
   await syncStripeDataFromStripe(customerId);

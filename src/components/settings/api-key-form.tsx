@@ -130,20 +130,9 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) 
               variant="secondary"
               size="default"
               className="shrink-0"
+              startIcon={copied.value ? <Icons.check /> : <Icons.copy />}
             >
-              {copied.value
-                ? (
-                    <>
-                      <Icons.check className="mr-2 size-4" />
-                      {t('apiKeys.form.copied')}
-                    </>
-                  )
-                : (
-                    <>
-                      <Icons.copy className="mr-2 size-4" />
-                      {t('apiKeys.form.copyButton')}
-                    </>
-                  )}
+              {copied.value ? t('apiKeys.form.copied') : t('apiKeys.form.copyButton')}
             </Button>
           </div>
 
@@ -204,9 +193,8 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps) 
         <Button
           type="submit"
           className="w-full"
-          disabled={createMutation.isPending}
+          loading={createMutation.isPending}
         >
-          {createMutation.isPending && <Icons.loader className="mr-2 size-4 animate-spin" />}
           {t('apiKeys.form.createButton')}
         </Button>
       </div>

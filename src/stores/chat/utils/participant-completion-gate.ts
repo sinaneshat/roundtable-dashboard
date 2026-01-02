@@ -166,16 +166,25 @@ export function getParticipantCompletionStatus(
     );
   });
 
+  // ✅ PERF FIX: Build participant ID → message Map for O(1) lookups
+  // Previously O(p×n): For each participant, find() scans all round messages
+  // Now O(n+p): Single pass to build map, then O(1) lookups per participant
+  const participantMessageMap = new Map<string, UIMessage>();
+  for (const msg of roundMessages) {
+    const pId = getParticipantId(msg.metadata);
+    if (pId) {
+      participantMessageMap.set(pId, msg);
+    }
+  }
+
   const debugInfo: ParticipantDebugInfo[] = [];
   const streamingParticipantIds: string[] = [];
   const completedParticipantIds: string[] = [];
 
   // Check each expected participant
   for (const participant of enabledParticipants) {
-    const participantMessage = roundMessages.find((m) => {
-      const pId = getParticipantId(m.metadata);
-      return pId === participant.id;
-    });
+    // ✅ O(1) lookup instead of O(n) find
+    const participantMessage = participantMessageMap.get(participant.id);
 
     if (!participantMessage) {
       // No message yet for this participant

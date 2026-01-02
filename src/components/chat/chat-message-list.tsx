@@ -617,12 +617,11 @@ export const ChatMessageList = memo(
     // They should be deduplicated by (roundNumber, isModerator) key
     const deduplicatedMessages = useMemo(() => {
       const seenMessageIds = new Set<string>(); // Track message IDs to prevent actual duplicates
-      // ✅ NEW: Track assistant messages by roundNumber+participantIndex to prevent duplicate rendering
-      const seenAssistantMessages = new Set<string>();
-      // ✅ BUG FIX: Track moderator messages separately by roundNumber
-      const seenModeratorRounds = new Set<number>();
-      // ✅ BUG FIX: Track user messages by roundNumber to prevent duplicates
-      const seenUserRounds = new Set<number>();
+      // ✅ PERF FIX: Track position indices in Maps for O(1) replacement lookups
+      // Previously used findIndex() which caused O(n²) complexity
+      const assistantKeyToIdx = new Map<string, number>(); // dedupeKey -> result index
+      const moderatorRoundToIdx = new Map<number, number>(); // roundNumber -> result index
+      const userRoundToIdx = new Map<number, number>(); // roundNumber -> result index
       const result: UIMessage[] = [];
 
       for (const message of messages) {
@@ -644,9 +643,11 @@ export const ChatMessageList = memo(
           }
 
           // ✅ BUG FIX: Deduplicate user messages by round (prevents optimistic + DB duplicates)
+          // ✅ PERF FIX: Use Map for O(1) lookup instead of O(n) findIndex
           const roundNum = userMeta?.roundNumber;
           if (roundNum !== undefined && roundNum !== null) {
-            if (seenUserRounds.has(roundNum)) {
+            const existingIdx = userRoundToIdx.get(roundNum);
+            if (existingIdx !== undefined) {
               // Prefer deterministic IDs over optimistic IDs
               const isDeterministicId = message.id.includes('_r') && message.id.includes('_user');
               const isOptimistic = message.id.startsWith('optimistic-');
@@ -655,23 +656,15 @@ export const ChatMessageList = memo(
                 continue;
               }
               if (isDeterministicId) {
-                // This is a deterministic DB message - find and replace the optimistic message
-                const existingOptimisticIdx = result.findIndex((m) => {
-                  if (m.role !== MessageRoles.USER)
-                    return false;
-                  const mRound = getRoundNumber(m.metadata);
-                  return mRound === roundNum;
-                });
-                if (existingOptimisticIdx !== -1) {
-                  result[existingOptimisticIdx] = message;
-                  seenMessageIds.add(message.id);
-                  continue;
-                }
+                // This is a deterministic DB message - replace the optimistic message via O(1) lookup
+                result[existingIdx] = message;
+                seenMessageIds.add(message.id);
+                continue;
               }
               // Skip this duplicate
               continue;
             }
-            seenUserRounds.add(roundNum);
+            userRoundToIdx.set(roundNum, result.length); // Track index before push
           }
 
           seenMessageIds.add(message.id);
@@ -684,31 +677,22 @@ export const ChatMessageList = memo(
           if (isModerator) {
             const roundNum = getRoundNumber(message.metadata);
 
-            // Skip if we already have a moderator message for this round
-            if (roundNum !== null && seenModeratorRounds.has(roundNum)) {
-              // Prefer deterministic IDs over temp IDs
-              const isDeterministicId = message.id.includes('_r') && message.id.includes('_moderator');
-              if (!isDeterministicId) {
-                // This is a temp ID message, skip it in favor of the DB message
-                continue;
-              }
-              // This is a deterministic ID message - find and replace the temp ID message
-              const existingTempIdx = result.findIndex((m) => {
-                if (!isModeratorMessage(m))
-                  return false;
-                const mRound = getRoundNumber(m.metadata);
-                return mRound === roundNum;
-              });
-              if (existingTempIdx !== -1) {
-                // Replace temp ID message with deterministic ID message
-                result[existingTempIdx] = message;
+            // ✅ PERF FIX: Use Map for O(1) lookup instead of O(n) findIndex
+            if (roundNum !== null) {
+              const existingIdx = moderatorRoundToIdx.get(roundNum);
+              if (existingIdx !== undefined) {
+                // Prefer deterministic IDs over temp IDs
+                const isDeterministicId = message.id.includes('_r') && message.id.includes('_moderator');
+                if (!isDeterministicId) {
+                  // This is a temp ID message, skip it in favor of the DB message
+                  continue;
+                }
+                // This is a deterministic ID message - replace via O(1) lookup
+                result[existingIdx] = message;
                 seenMessageIds.add(message.id);
                 continue;
               }
-            }
-
-            if (roundNum !== null) {
-              seenModeratorRounds.add(roundNum);
+              moderatorRoundToIdx.set(roundNum, result.length); // Track index before push
             }
             seenMessageIds.add(message.id);
             result.push(message);
@@ -739,41 +723,23 @@ export const ChatMessageList = memo(
               }
             }
 
-            // Skip if we've already seen a message for this participant in this round
-            if (dedupeKey && seenAssistantMessages.has(dedupeKey)) {
-              // ✅ PREFER: Keep the message with the deterministic ID (contains _r{N}_p{M})
-              // and skip the temp ID message (gen-xxxxx)
-              const isDeterministicId = message.id.includes('_r') && message.id.includes('_p');
-              if (!isDeterministicId) {
-                // This is a temp ID message, skip it in favor of the DB message
-                continue;
-              }
-              // This is a deterministic ID message - find and replace the temp ID message
-              const existingTempIdx = result.findIndex((m) => {
-                const mMeta = getMessageMetadata(m.metadata);
-                const mAssistantMeta = mMeta && isAssistantMessageMetadata(mMeta) ? mMeta : null;
-                if (!mAssistantMeta)
-                  return false;
-                const mRound = mAssistantMeta.roundNumber;
-                const mPid = mAssistantMeta.participantId;
-                const mIdx = mAssistantMeta.participantIndex;
-                const mModel = mAssistantMeta.model;
-                // Check if it's the same participant in the same round
-                return mRound === roundNum
-                  && ((participantId && mPid === participantId)
-                    || (participantIdx !== undefined && mIdx === participantIdx)
-                    || (modelId && mModel === modelId));
-              });
-              if (existingTempIdx !== -1) {
-                // Replace temp ID message with deterministic ID message
-                result[existingTempIdx] = message;
+            // ✅ PERF FIX: Use Map for O(1) lookup instead of O(n) findIndex
+            if (dedupeKey) {
+              const existingIdx = assistantKeyToIdx.get(dedupeKey);
+              if (existingIdx !== undefined) {
+                // ✅ PREFER: Keep the message with the deterministic ID (contains _r{N}_p{M})
+                // and skip the temp ID message (gen-xxxxx)
+                const isDeterministicId = message.id.includes('_r') && message.id.includes('_p');
+                if (!isDeterministicId) {
+                  // This is a temp ID message, skip it in favor of the DB message
+                  continue;
+                }
+                // This is a deterministic ID message - replace via O(1) lookup
+                result[existingIdx] = message;
                 seenMessageIds.add(message.id);
                 continue;
               }
-            }
-
-            if (dedupeKey) {
-              seenAssistantMessages.add(dedupeKey);
+              assistantKeyToIdx.set(dedupeKey, result.length); // Track index before push
             }
           }
 
@@ -1295,10 +1261,12 @@ export const ChatMessageList = memo(
                   return (
                     // mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
                     // ✅ FLASH FIX: Use opacity transition instead of conditional rendering
+                    // ✅ POSITION FIX: Use visibility+height instead of absolute positioning
+                    // absolute -z-10 caused layout jumps when content became visible
                     <div
                       className={cn(
-                        'mt-8 space-y-8 transition-opacity duration-150',
-                        shouldShowPendingCards ? 'opacity-100' : 'opacity-0 pointer-events-none absolute -z-10',
+                        'space-y-8 transition-all duration-150 overflow-hidden',
+                        shouldShowPendingCards ? 'mt-8 opacity-100' : 'h-0 opacity-0 pointer-events-none',
                       )}
                       aria-hidden={!shouldShowPendingCards}
                     >
@@ -1408,6 +1376,8 @@ export const ChatMessageList = memo(
                   );
                   const isActuallyLatestRound = roundNumber >= maxRoundInMessages;
                   const isRoundComplete = completedRoundNumbers.has(roundNumber);
+                  // ✅ FIX: Check if this is the active streaming round
+                  const isStreamingRound = roundNumber === _streamingRoundNumber;
 
                   const moderatorMessage = messages.find((m) => {
                     const meta = m.metadata;
@@ -1419,11 +1389,17 @@ export const ChatMessageList = memo(
                     p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0,
                   ) ?? false;
 
-                  const isStreamingRound = roundNumber === _streamingRoundNumber;
-                  const isAnyStreamingActive = isStreaming || isModeratorStreaming || isStreamingRound;
+                  // ✅ IMMEDIATE PLACEHOLDER: Show moderator placeholder immediately when streaming round starts
+                  // This provides visual feedback that moderator will summarize after participants complete.
+                  // Flow:
+                  // - Submit pressed → isStreamingRound becomes true → moderator placeholder shows immediately
+                  // - Participants stream one by one
+                  // - All participants complete → moderator streams (same placeholder, content fills in)
+                  // - After streaming ends (_streamingRoundNumber cleared), messageGroups handles rendering
+                  // - DUPLICATE FIX: isStreamingRound ensures IIFE only renders during active round
                   const shouldShowModerator = isActuallyLatestRound
                     && !isRoundComplete
-                    && isAnyStreamingActive;
+                    && isStreamingRound; // Show immediately when streaming round starts
 
                   const enabledParticipants = getEnabledParticipants(participants);
 
@@ -1442,12 +1418,22 @@ export const ChatMessageList = memo(
                     ? (isModeratorStreaming ? MessageStatuses.STREAMING : MessageStatuses.COMPLETE)
                     : MessageStatuses.PENDING;
 
+                  // ✅ SMART LOADING TEXT: Different message based on participant streaming status
+                  // - When participants still streaming: "Waiting to summarize..."
+                  // - When participants done, moderator starting: "Observing discussion..."
+                  const moderatorLoadingText = moderatorParts.length === 0
+                    ? (isStreaming ? tParticipant('waitingToSummarize') : tParticipant('moderatorObserving'))
+                    : undefined;
+
                   // ✅ FLASH FIX: Keep component mounted but hidden instead of return null
+                  // ✅ POSITION FIX: Use visibility+height instead of absolute positioning
+                  // absolute -z-10 caused layout jumps when moderator became visible
+                  // Now we keep it in flow but visually hidden with h-0
                   return (
                     <div
                       className={cn(
-                        'mt-8 transition-opacity duration-150',
-                        shouldShowModerator ? 'opacity-100' : 'opacity-0 pointer-events-none absolute -z-10',
+                        'transition-all duration-150 overflow-hidden',
+                        shouldShowModerator ? 'mt-8 opacity-100' : 'h-0 opacity-0 pointer-events-none',
                       )}
                       aria-hidden={!shouldShowModerator}
                     >
@@ -1464,7 +1450,7 @@ export const ChatMessageList = memo(
                           parts={moderatorParts}
                           isAccessible={true}
                           messageId={moderatorMessage?.id}
-                          loadingText={moderatorParts.length === 0 ? tParticipant('moderatorObserving') : undefined}
+                          loadingText={moderatorLoadingText}
                           maxContentHeight={maxContentHeight}
                           avatarSrc={BRAND.logos.main}
                           avatarName={MODERATOR_NAME}

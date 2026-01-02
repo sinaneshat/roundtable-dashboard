@@ -88,6 +88,7 @@ import type {
   ResetToOverview,
   ResetUI,
   SetChatSetMessages,
+  SetConfigChangeRoundNumber,
   SetCreatedThreadId,
   SetCurrentParticipantIndex,
   SetCurrentRoundNumber,
@@ -308,6 +309,8 @@ export const DataStateSchema = z.object({
   expectedParticipantIds: z.array(z.string()).nullable(),
   streamingRoundNumber: z.number().nullable(),
   currentRoundNumber: z.number().nullable(),
+  /** Round number when config changes were submitted (for incremental changelog fetch) */
+  configChangeRoundNumber: z.number().nullable(),
 });
 
 export const DataActionsSchema = z.object({
@@ -317,6 +320,7 @@ export const DataActionsSchema = z.object({
   setExpectedParticipantIds: z.custom<SetExpectedParticipantIds>(),
   setStreamingRoundNumber: z.custom<SetStreamingRoundNumber>(),
   setCurrentRoundNumber: z.custom<SetCurrentRoundNumber>(),
+  setConfigChangeRoundNumber: z.custom<SetConfigChangeRoundNumber>(),
 });
 
 export const DataSliceSchema = z.intersection(DataStateSchema, DataActionsSchema);

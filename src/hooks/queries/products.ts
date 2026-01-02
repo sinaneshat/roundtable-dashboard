@@ -19,15 +19,17 @@ import {
  * Hook to fetch all products with pricing plans
  * Public endpoint - no authentication required
  *
- * Stale time: 1 hour (products rarely change)
+ * SSG: Data is baked at build time, never refetch on client
  */
 export function useProductsQuery() {
   return useQuery({
     queryKey: queryKeys.products.list(),
     queryFn: () => getProductsService(),
-    staleTime: STALE_TIMES.products, // 1 hour - products rarely change
-    retry: 2, // Retry on failure
-    throwOnError: false,
+    staleTime: Infinity, // SSG: data baked at build time
+    gcTime: Infinity, // Keep in cache forever
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 

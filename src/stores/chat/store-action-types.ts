@@ -160,6 +160,8 @@ export type SetPendingAttachmentIds = (value: string[] | null) => void;
 export type SetExpectedParticipantIds = (value: string[] | null) => void;
 export type SetStreamingRoundNumber = (value: number | null) => void;
 export type SetCurrentRoundNumber = (value: number | null) => void;
+/** Track round number when config changes are submitted (for incremental changelog fetch) */
+export type SetConfigChangeRoundNumber = (value: number | null) => void;
 
 // ============================================================================
 // TRACKING ACTIONS (Deduplication & state tracking)

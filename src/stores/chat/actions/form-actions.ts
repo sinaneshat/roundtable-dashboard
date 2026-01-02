@@ -58,6 +58,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     participants: s.participants,
     messages: s.messages,
     pendingAttachments: s.pendingAttachments,
+    // ✅ FIX: Track pending config changes for changelog detection
+    // hasPendingConfigChanges is set when user toggles ANY config (web search, mode, participants)
+    // This catches cases where user toggles OFF→ON (same final value, but still a "change")
+    hasPendingConfigChanges: s.hasPendingConfigChanges,
   })));
   const actions = useChatStore(useShallow(s => ({
     setInputValue: s.setInputValue,
@@ -78,9 +82,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setStreamingRoundNumber: s.setStreamingRoundNumber,
     setNextParticipantToTrigger: s.setNextParticipantToTrigger,
     setMessages: s.setMessages,
-    setHasEarlyOptimisticMessage: s.setHasEarlyOptimisticMessage,
     clearAttachments: s.clearAttachments,
     setThread: s.setThread,
+    // ✅ CHANGELOG: Actions for config change tracking
+    setIsWaitingForChangelog: s.setIsWaitingForChangelog,
+    setConfigChangeRoundNumber: s.setConfigChangeRoundNumber,
   })));
 
   const createThreadMutation = useCreateThreadMutation();
@@ -227,152 +233,165 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       return;
     }
 
-    // Immediate UI feedback: disable input and show loading state
-    actions.setWaitingToStartStreaming(true);
-
-    let pendingRoundNumber = calculateNextRoundNumber(threadState.messages);
-    if (pendingRoundNumber === 0 && threadState.messages.length > 0) {
+    // Calculate round number FIRST (before any state changes)
+    let nextRoundNumber = calculateNextRoundNumber(threadState.messages);
+    if (nextRoundNumber === 0 && threadState.messages.length > 0) {
       const round0AssistantMessages = threadState.messages.filter(
         m => m.role === MessageRoles.ASSISTANT && getRoundNumber(m.metadata) === 0,
       );
       if (round0AssistantMessages.length > 0) {
         const userMessages = threadState.messages.filter(m => m.role === MessageRoles.USER);
-        pendingRoundNumber = userMessages.length;
+        nextRoundNumber = userMessages.length;
       }
     }
 
-    try {
-      const nextRoundNumber = pendingRoundNumber;
+    // Prepare config change detection
+    const { updateResult, updatePayloads, optimisticParticipants } = prepareParticipantUpdate(
+      threadState.participants,
+      formState.selectedParticipants,
+      threadId,
+    );
 
-      actions.setStreamingRoundNumber(nextRoundNumber);
+    const currentModeId = threadState.thread?.mode || null;
+    const currentWebSearch = threadState.thread?.enableWebSearch || false;
+    const modeChanged = currentModeId !== formState.selectedMode;
+    const webSearchChanged = currentWebSearch !== formState.enableWebSearch;
 
-      if (formState.enableWebSearch) {
-        actions.addPreSearch(createPlaceholderPreSearch({
-          threadId,
-          roundNumber: nextRoundNumber,
-          userQuery: trimmed,
-        }));
-      }
+    const hasParticipantChanges = shouldUpdateParticipantConfig(updateResult);
+    // ✅ FIX: Include hasPendingConfigChanges to catch toggle OFF→ON scenarios
+    // When user toggles web search OFF then ON, the final value matches thread state
+    // but hasPendingConfigChanges was set on toggle, indicating user made a change
+    const hasAnyChanges = hasParticipantChanges || modeChanged || webSearchChanged || threadState.hasPendingConfigChanges;
 
-      const fileParts: ExtendedFilePart[] = attachmentInfos && attachmentInfos.length > 0
-        ? attachmentInfos.map(att => ({
-            type: 'file' as const,
-            url: att.previewUrl || '',
-            filename: att.filename,
-            mediaType: att.mimeType,
-            uploadId: att.uploadId,
-          }))
-        : [];
+    // ✅ IMMEDIATE UI FEEDBACK: Add optimistic user message BEFORE any async operations
+    // This ensures the streaming trigger sees the correct round when it runs
+    const fileParts: ExtendedFilePart[] = attachmentInfos && attachmentInfos.length > 0
+      ? attachmentInfos.map(att => ({
+          type: 'file' as const,
+          url: att.previewUrl || '',
+          filename: att.filename,
+          mediaType: att.mimeType,
+          uploadId: att.uploadId,
+        }))
+      : [];
 
-      const optimisticUserMessage = createOptimisticUserMessage({
-        roundNumber: nextRoundNumber,
-        text: trimmed,
-        fileParts,
-      });
-      actions.setMessages(currentMessages => [...currentMessages, optimisticUserMessage]);
+    const optimisticMessage = createOptimisticUserMessage({
+      roundNumber: nextRoundNumber,
+      text: trimmed,
+      fileParts,
+    });
 
-      actions.setHasEarlyOptimisticMessage(true);
+    // Add optimistic message to store IMMEDIATELY
+    actions.setMessages(currentMessages => [...currentMessages, optimisticMessage]);
+    actions.setStreamingRoundNumber(nextRoundNumber);
+    actions.setExpectedParticipantIds(getParticipantModelIds(threadState.participants));
 
-      const { updateResult, updatePayloads, optimisticParticipants } = prepareParticipantUpdate(
-        threadState.participants,
-        formState.selectedParticipants,
+    // Optimistically update participants in store if changes exist
+    if (hasParticipantChanges) {
+      actions.updateParticipants(optimisticParticipants);
+    }
+
+    // ✅ FIX: Create pre-search placeholder BEFORE setting waitingToStartStreaming
+    // This ensures the streaming trigger waits for pre-search when web search is enabled
+    // ✅ FIX: Add pre-search regardless of config changes - UI should show placeholder immediately
+    if (formState.enableWebSearch) {
+      actions.addPreSearch(createPlaceholderPreSearch({
         threadId,
-      );
+        roundNumber: nextRoundNumber,
+        userQuery: trimmed,
+      }));
+    }
 
-      const currentModeId = threadState.thread?.mode || null;
-      const currentWebSearch = threadState.thread?.enableWebSearch || false;
-      const modeChanged = currentModeId !== formState.selectedMode;
-      const webSearchChanged = currentWebSearch !== formState.enableWebSearch;
+    // ✅ RACE FIX: ALWAYS block streaming until PATCH completes
+    // Set configChangeRoundNumber to prevent streaming from starting before message is persisted
+    // Without this, streaming requests hit backend before PATCH creates the message in DB
+    // Error: "[stream] User message not found in DB, expected pre-persisted"
+    actions.setConfigChangeRoundNumber(nextRoundNumber);
 
-      const hasAnyChanges = shouldUpdateParticipantConfig(updateResult) || modeChanged || webSearchChanged;
+    // NOW set waitingToStartStreaming - trigger will see correct round from optimistic message
+    actions.setWaitingToStartStreaming(true);
+    actions.setNextParticipantToTrigger(0);
 
-      if (hasAnyChanges) {
-        const previousParticipants = threadState.participants;
+    // Clear input immediately for fast UI feedback
+    actions.setInputValue('');
+    actions.clearAttachments();
 
-        actions.updateParticipants(optimisticParticipants);
+    try {
+      // ✅ PATCH in background: Persist message to DB
+      const response = await updateThreadMutation.mutateAsync({
+        param: { id: threadId },
+        json: {
+          // Config changes (if any)
+          participants: hasParticipantChanges ? updatePayloads : undefined,
+          mode: modeChanged ? formState.selectedMode : undefined,
+          enableWebSearch: webSearchChanged ? formState.enableWebSearch : undefined,
+          // ALWAYS include the user message
+          newMessage: {
+            content: trimmed,
+            roundNumber: nextRoundNumber,
+            attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
+          },
+        },
+      });
 
-        const needsWait = updateResult.hasTemporaryIds || webSearchChanged || modeChanged || formState.enableWebSearch;
-        if (needsWait) {
-          const response = await updateThreadMutation.mutateAsync({
-            param: { id: threadId },
-            json: {
-              participants: updatePayloads,
-              mode: formState.selectedMode,
-              enableWebSearch: formState.enableWebSearch,
-            },
-          });
-
-          if (response?.data?.participants) {
-            const participantsWithDates = transformChatParticipants(response.data.participants);
-
-            actions.updateParticipants(participantsWithDates);
-            actions.setExpectedParticipantIds(getParticipantModelIds(participantsWithDates));
-
-            const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
-            actions.setSelectedParticipants(syncedParticipantConfigs);
-
-            actions.setHasPendingConfigChanges(false);
-          }
-
-          if (response?.data?.thread) {
-            actions.setThread(transformChatThread(response.data.thread));
-          }
-        } else {
-          updateThreadMutation.mutateAsync({
-            param: { id: threadId },
-            json: {
-              participants: updatePayloads,
-              mode: formState.selectedMode,
-              enableWebSearch: formState.enableWebSearch,
-            },
-          }).then((response) => {
-            if (response?.data?.participants) {
-              const participantsWithDates = transformChatParticipants(response.data.participants);
-              actions.updateParticipants(participantsWithDates);
-              const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
-              actions.setSelectedParticipants(syncedParticipantConfigs);
-            }
-            if (response?.data?.thread) {
-              actions.setThread(transformChatThread(response.data.thread));
-            }
-            actions.setHasPendingConfigChanges(false);
-          }).catch((error) => {
-            console.error('[handleUpdateThreadAndSend] Failed to save configuration changes:', error);
-            actions.updateParticipants(previousParticipants);
-            showApiErrorToast('Failed to save configuration changes', error);
-          });
-
-          actions.setExpectedParticipantIds(getParticipantModelIds(optimisticParticipants));
+      // ✅ UPDATE MESSAGE WITH PERSISTED ID: Replace optimistic message with persisted one
+      if (response?.data?.message) {
+        const persistedMessage = response.data.message;
+        const persistedUIMessage = chatMessagesToUIMessages([persistedMessage])[0];
+        if (persistedUIMessage) {
+          // Replace optimistic message with persisted message (same round, different ID)
+          actions.setMessages(currentMessages => currentMessages.map(m =>
+            m.id === optimisticMessage.id ? persistedUIMessage : m,
+          ));
         }
-      } else {
-        actions.setExpectedParticipantIds(getParticipantModelIds(threadState.participants));
       }
 
-      actions.prepareForNewMessage(
-        trimmed,
-        [],
-        attachmentIds,
-        fileParts,
-      );
+      // Update participants from response if config changed
+      if (response?.data?.participants) {
+        const participantsWithDates = transformChatParticipants(response.data.participants);
+        actions.updateParticipants(participantsWithDates);
+        actions.setExpectedParticipantIds(getParticipantModelIds(participantsWithDates));
 
-      actions.setNextParticipantToTrigger(0);
+        const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
+        actions.setSelectedParticipants(syncedParticipantConfigs);
+      }
 
-      actions.setInputValue('');
+      // Update thread from response if changed
+      if (response?.data?.thread) {
+        actions.setThread(transformChatThread(response.data.thread));
+      }
 
-      actions.clearAttachments();
+      // ✅ CHANGELOG: When config changes occurred, trigger changelog fetch AFTER PATCH
+      // The PATCH creates the changelog entries in the database, so we must wait for it
+      // The streaming trigger will wait for isWaitingForChangelog to be false
+      if (hasAnyChanges) {
+        actions.setIsWaitingForChangelog(true);
+        // configChangeRoundNumber will be cleared by use-changelog-sync after changelog is fetched
+      } else {
+        // ✅ FIX: No config changes, so clear configChangeRoundNumber directly
+        // This unblocks streaming now that PATCH has persisted the message
+        actions.setConfigChangeRoundNumber(null);
+      }
+
+      // ✅ FIX: Clear hasPendingConfigChanges after successful submission
+      // This prevents it from persisting to subsequent rounds
+      actions.setHasPendingConfigChanges(false);
+
+      // ✅ NOTE: NOT calling prepareForNewMessage here
+      // That function resets isStreaming=false which would break already-started streaming
+      // Streaming is triggered BEFORE PATCH via optimistic message + waitingToStartStreaming
+      // The streaming hooks extract user text from messages, not pendingMessage
     } catch (error) {
       console.error('[handleUpdateThreadAndSend] Error updating thread:', error);
 
-      actions.setWaitingToStartStreaming(false);
-      actions.setHasEarlyOptimisticMessage(false);
-      actions.setStreamingRoundNumber(null);
+      // ✅ ROLLBACK: Remove optimistic message on error
+      actions.setMessages(currentMessages => currentMessages.filter(m => m.id !== optimisticMessage.id));
 
-      const currentMessages = threadState.messages;
-      const originalMessages = currentMessages.filter((m) => {
-        const metadata = m.metadata;
-        return !(metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true);
-      });
-      actions.setMessages(originalMessages);
+      // Reset streaming state on error
+      actions.setWaitingToStartStreaming(false);
+      actions.setStreamingRoundNumber(null);
+      actions.setNextParticipantToTrigger(null);
+      actions.setConfigChangeRoundNumber(null);
 
       showApiErrorToast('Error updating thread', error);
     }
@@ -402,10 +421,18 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   /**
    * Toggle web search on/off
    * Used by ChatOverviewScreen
+   *
+   * ✅ FIX: When a thread already exists (after creation but before screenMode transitions),
+   * set hasPendingConfigChanges so the system waits for changelog before streaming.
+   * For truly new threads (no thread yet), don't set the flag since there's nothing to compare against.
    */
   const handleWebSearchToggle = useCallback((enabled: boolean) => {
     actions.setEnableWebSearch(enabled);
-  }, [actions]);
+    // If thread exists, treat this as a config change that needs changelog wait
+    if (threadState.thread) {
+      actions.setHasPendingConfigChanges(true);
+    }
+  }, [actions, threadState.thread]);
 
   // ✅ SUBMIT STATE: Track whether any submission is in progress
   // This enables immediate UI feedback (loading spinner) on submit button

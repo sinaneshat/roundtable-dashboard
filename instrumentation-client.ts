@@ -20,18 +20,19 @@ import posthog from 'posthog-js';
 // This runs once when the client-side bundle loads
 if (typeof window !== 'undefined') {
   const apiKey = process.env.NEXT_PUBLIC_POSTHOG_API_KEY;
-  const apiHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
   const environment = process.env.NEXT_PUBLIC_WEBAPP_ENV;
 
   // Disable in local environment, enable in preview and production
-  if (environment !== 'local' && apiKey && apiHost) {
+  if (environment !== 'local' && apiKey) {
     posthog.init(apiKey, {
-      api_host: apiHost,
-      defaults: '2025-05-24', // API version for consistent behavior
+      api_host: '/ingest', // Reverse proxy path (bypasses ad blockers)
+      ui_host: 'https://us.posthog.com', // Required for toolbar/features
+      defaults: '2025-11-30', // API version for consistent behavior
       person_profiles: 'identified_only',
       capture_pageview: false, // Manual pageview tracking
       capture_pageleave: true,
       autocapture: true,
+      capture_exceptions: true, // Auto-capture unhandled errors + promise rejections
       session_recording: {
         recordCrossOriginIframes: false,
       },

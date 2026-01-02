@@ -117,6 +117,8 @@ export const DATA_DEFAULTS = {
   expectedParticipantIds: null,
   streamingRoundNumber: null,
   currentRoundNumber: null,
+  /** Track round number when config changes submitted (for incremental changelog fetch) */
+  configChangeRoundNumber: null,
 } satisfies DataState;
 
 // ============================================================================
@@ -221,7 +223,8 @@ export const STREAMING_STATE_RESET = {
 export const MODERATOR_STATE_RESET = {
   isModeratorStreaming: false,
   isWaitingForChangelog: false,
-} satisfies Pick<FlagsState, 'isModeratorStreaming' | 'isWaitingForChangelog'>;
+  configChangeRoundNumber: null, // Clear when changelog waiting is done
+} satisfies Pick<FlagsState, 'isModeratorStreaming' | 'isWaitingForChangelog'> & Pick<DataState, 'configChangeRoundNumber'>;
 
 /**
  * Pending message state that must be cleared after message is sent
@@ -310,6 +313,7 @@ export const COMPLETE_RESET_STATE = {
   expectedParticipantIds: DATA_DEFAULTS.expectedParticipantIds,
   streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
+  configChangeRoundNumber: DATA_DEFAULTS.configChangeRoundNumber,
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
   // Create fresh Set instances for each complete reset
@@ -364,6 +368,7 @@ export const THREAD_RESET_STATE = {
   expectedParticipantIds: DATA_DEFAULTS.expectedParticipantIds,
   streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
+  configChangeRoundNumber: DATA_DEFAULTS.configChangeRoundNumber,
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
   // Create fresh Set/Map instances for each thread reset

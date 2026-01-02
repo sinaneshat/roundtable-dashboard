@@ -103,25 +103,32 @@ export function categorizeParticipantChanges(
   // Validate no duplicates in provided participants
   validateParticipantUniqueness(providedEnabledParticipants);
 
+  // ✅ PERF FIX: Build Maps for O(1) lookups instead of O(n) find per item
+  // Previously O(n×m): 4 filter loops with find() inside each
+  // Now O(n+m): Single pass to build maps, then O(1) lookups
+  const allDbByModelId = new Map(allDbParticipants.map(p => [p.modelId, p]));
+  const enabledDbByModelId = new Map(enabledDbParticipants.map(p => [p.modelId, p]));
+  const providedByModelId = new Map(providedEnabledParticipants.map(p => [p.modelId, p]));
+
   // Detect removed participants (in enabled DB but not in provided list)
   const removedParticipants = enabledDbParticipants.filter(
-    dbP => !providedEnabledParticipants.find(p => p.modelId === dbP.modelId),
+    dbP => !providedByModelId.has(dbP.modelId),
   );
 
   // Detect truly new participants (not in DB at all, including disabled)
   const addedParticipants = providedEnabledParticipants.filter(
-    provided => !allDbParticipants.find(dbP => dbP.modelId === provided.modelId),
+    provided => !allDbByModelId.has(provided.modelId),
   );
 
   // Detect re-enabled participants (exist in DB but disabled)
   const reenabledParticipants = providedEnabledParticipants.filter((provided) => {
-    const dbP = allDbParticipants.find(db => db.modelId === provided.modelId);
+    const dbP = allDbByModelId.get(provided.modelId);
     return dbP && !dbP.isEnabled; // Exists but was disabled
   });
 
   // Detect updated participants (role changed for same modelId)
   const updatedParticipants = providedEnabledParticipants.filter((provided) => {
-    const dbP = enabledDbParticipants.find(db => db.modelId === provided.modelId);
+    const dbP = enabledDbByModelId.get(provided.modelId);
     if (!dbP) {
       return false; // This is an added/re-enabled participant, not updated
     }

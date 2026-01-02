@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, notLike, or, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
@@ -22,7 +22,7 @@ import {
   ThreadSlugParamSchema,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import { ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, SubscriptionTiers, ThreadStatusSchema } from '@/api/core/enums';
+import { ChangelogChangeTypes, ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, SubscriptionTiers, ThreadStatusSchema } from '@/api/core/enums';
 import {
   deductCreditsForAction,
   enforceCredits,
@@ -551,7 +551,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       .where(
         and(
           eq(tables.chatMessage.threadId, id),
-          sql`${tables.chatMessage.id} NOT LIKE 'pre-search-%'`,
+          notLike(tables.chatMessage.id, 'pre-search-%'),
         ),
       )
       .orderBy(
@@ -702,9 +702,24 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           );
         }
       }
-      if (participantsToInsert.length > 0) {
+      // ✅ UPSERT: Insert participants individually with onConflictDoUpdate
+      // Follows stripe-sync.service.ts pattern for race condition handling
+      // Each insert handles its own conflict - if (threadId, modelId) exists, update instead
+      for (const participant of participantsToInsert) {
         batchOperations.push(
-          db.insert(tables.chatParticipant).values(participantsToInsert),
+          db.insert(tables.chatParticipant)
+            .values(participant)
+            .onConflictDoUpdate({
+              target: [tables.chatParticipant.threadId, tables.chatParticipant.modelId],
+              set: {
+                role: participant.role,
+                customRoleId: participant.customRoleId,
+                priority: participant.priority,
+                isEnabled: participant.isEnabled,
+                settings: participant.settings,
+                updatedAt: participant.updatedAt,
+              },
+            }),
         );
       }
       for (const { id: participantId, updates } of participantsToUpdate) {
@@ -764,7 +779,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           and(
             eq(tables.chatThreadChangelog.threadId, id),
             eq(tables.chatThreadChangelog.roundNumber, nextRoundNumber),
-            sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.type') = 'participant'`,
+            sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.type') = ${ChangelogChangeTypes.PARTICIPANT}`,
           ),
         );
 
@@ -796,7 +811,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               changeType: ChangelogTypes.ADDED,
               changeSummary: `Added ${displayName}`,
               changeData: {
-                type: 'participant' as const,
+                type: ChangelogChangeTypes.PARTICIPANT,
                 modelId,
                 role: newP.role,
               },
@@ -817,7 +832,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               changeType: ChangelogTypes.REMOVED,
               changeSummary: `Removed ${displayName}`,
               changeData: {
-                type: 'participant' as const,
+                type: ChangelogChangeTypes.PARTICIPANT,
                 participantId: prevP.id,
                 modelId,
                 role: prevP.role,
@@ -870,7 +885,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           where: and(
             eq(tables.chatThreadChangelog.threadId, id),
             eq(tables.chatThreadChangelog.roundNumber, nextRoundNumber),
-            sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.type') = 'mode_change'`,
+            sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.type') = ${ChangelogChangeTypes.MODE_CHANGE}`,
           ),
         });
 
@@ -893,8 +908,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               .set({
                 changeSummary: `Changed conversation mode from ${baselineMode} to ${body.mode}`,
                 changeData: {
-                  type: 'mode_change' as const,
-                  oldMode: baselineMode as ChatMode,
+                  type: ChangelogChangeTypes.MODE_CHANGE,
+                  oldMode: baselineMode,
                   newMode: body.mode,
                 },
                 createdAt: now,
@@ -943,7 +958,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           where: and(
             eq(tables.chatThreadChangelog.threadId, id),
             eq(tables.chatThreadChangelog.roundNumber, nextRoundNumber),
-            sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.type') = 'web_search'`,
+            sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.type') = ${ChangelogChangeTypes.WEB_SEARCH}`,
           ),
         });
 
@@ -967,7 +982,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               .set({
                 changeSummary: body.enableWebSearch ? 'Enabled web search' : 'Disabled web search',
                 changeData: {
-                  type: 'web_search' as const,
+                  type: ChangelogChangeTypes.WEB_SEARCH,
                   enabled: body.enableWebSearch,
                 },
                 createdAt: now,
@@ -1028,9 +1043,120 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     if (body.status !== undefined) {
       await invalidateThreadCache(db, user.id, id, thread.slug);
     }
+
+    // ✅ NEW MESSAGE CREATION: Create user message if provided
+    let createdMessage: typeof tables.chatMessage.$inferSelect | undefined;
+    if (body.newMessage) {
+      const messageId = ulid();
+      const messageParts: Array<{ type: 'text'; text: string }> = [
+        { type: MessagePartTypes.TEXT, text: body.newMessage.content },
+      ];
+
+      const [message] = await db
+        .insert(tables.chatMessage)
+        .values({
+          id: messageId,
+          threadId: id,
+          role: MessageRoles.USER,
+          parts: messageParts,
+          roundNumber: body.newMessage.roundNumber,
+          metadata: {
+            role: MessageRoles.USER,
+            roundNumber: body.newMessage.roundNumber,
+          },
+          createdAt: now,
+        })
+        .returning();
+
+      createdMessage = message;
+
+      // ✅ ATTACHMENT SUPPORT: Handle attachments if provided
+      if (body.newMessage.attachmentIds && body.newMessage.attachmentIds.length > 0) {
+        // Get upload details for constructing file parts
+        const uploads = await db.query.upload.findMany({
+          where: inArray(tables.upload.id, body.newMessage.attachmentIds),
+          columns: {
+            id: true,
+            filename: true,
+            mimeType: true,
+          },
+        });
+
+        const uploadMap = new Map(uploads.map(u => [u.id, u]));
+
+        // Insert message-upload associations
+        const messageUploadValues = body.newMessage.attachmentIds.map((uploadId, index) => ({
+          id: ulid(),
+          messageId,
+          uploadId,
+          displayOrder: index,
+          createdAt: now,
+        }));
+        await db.insert(tables.messageUpload).values(messageUploadValues);
+
+        // Generate signed URLs and add file parts to message
+        const baseUrl = new URL(c.req.url).origin;
+        const filePartsForDb: ExtendedFilePart[] = await Promise.all(
+          body.newMessage.attachmentIds.map(async (uploadId): Promise<ExtendedFilePart | null> => {
+            const upload = uploadMap.get(uploadId);
+            if (!upload)
+              return null;
+            const signedPath = await generateSignedDownloadPath(c, {
+              uploadId,
+              userId: user.id,
+              threadId: id,
+              expirationMs: 7 * 24 * 60 * 60 * 1000, // 7 days for DB storage
+            });
+            return {
+              type: MessagePartTypes.FILE,
+              url: `${baseUrl}${signedPath}`,
+              filename: upload.filename,
+              mediaType: upload.mimeType,
+              uploadId,
+            };
+          }),
+        ).then(parts => parts.filter((p): p is ExtendedFilePart => p !== null));
+
+        // Update message parts to include file parts
+        if (filePartsForDb.length > 0 && message) {
+          const combinedPartsForDb = [
+            ...filePartsForDb,
+            ...messageParts,
+          ] as typeof message.parts;
+          await db.update(tables.chatMessage)
+            .set({ parts: combinedPartsForDb })
+            .where(eq(tables.chatMessage.id, messageId));
+
+          // Update the createdMessage to include file parts
+          createdMessage = {
+            ...message,
+            parts: combinedPartsForDb,
+          } as typeof message;
+        }
+
+        // Cancel scheduled cleanup for attached uploads (non-blocking)
+        if (isCleanupSchedulerAvailable(c.env)) {
+          const cancelCleanupTasks = body.newMessage.attachmentIds.map(uploadId =>
+            cancelUploadCleanup(c.env.UPLOAD_CLEANUP_SCHEDULER, uploadId).catch(() => {}),
+          );
+          if (c.executionCtx) {
+            c.executionCtx.waitUntil(Promise.all(cancelCleanupTasks));
+          } else {
+            Promise.all(cancelCleanupTasks).catch(() => {});
+          }
+        }
+      }
+
+      // Update thread's lastMessageAt timestamp
+      await db.update(tables.chatThread)
+        .set({ lastMessageAt: now })
+        .where(eq(tables.chatThread.id, id));
+    }
+
     return Responses.ok(c, {
       thread: updatedThreadWithParticipants,
       participants: updatedThreadWithParticipants.participants,
+      message: createdMessage,
     });
   },
 );
@@ -1118,7 +1244,7 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       .where(
         and(
           eq(tables.chatMessage.threadId, thread.id),
-          sql`${tables.chatMessage.id} NOT LIKE 'pre-search-%'`,
+          notLike(tables.chatMessage.id, 'pre-search-%'),
         ),
       )
       .orderBy(
@@ -1263,7 +1389,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       .where(
         and(
           eq(tables.chatMessage.threadId, thread.id),
-          sql`${tables.chatMessage.id} NOT LIKE 'pre-search-%'`,
+          notLike(tables.chatMessage.id, 'pre-search-%'),
         ),
       )
       .orderBy(

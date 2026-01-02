@@ -9,7 +9,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { ChatModeSchema, MessageStatuses, UploadStatuses } from '@/api/core/enums';
+import { ChatModeSchema, MessageStatuses, ScreenModes, UploadStatuses } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
@@ -110,12 +110,13 @@ export default function ChatOverviewScreen() {
     })),
   );
 
-  const { showInitialUI, isCreatingThread, createdThreadId, waitingToStartStreaming } = useChatStore(
+  const { showInitialUI, isCreatingThread, createdThreadId, waitingToStartStreaming, streamingRoundNumber } = useChatStore(
     useShallow(s => ({
       showInitialUI: s.showInitialUI,
       isCreatingThread: s.isCreatingThread,
       createdThreadId: s.createdThreadId,
       waitingToStartStreaming: s.waitingToStartStreaming,
+      streamingRoundNumber: s.streamingRoundNumber,
     })),
   );
 
@@ -207,7 +208,9 @@ export default function ChatOverviewScreen() {
     }
 
     if (persistedModelIds.length > 0) {
-      const validIds = persistedModelIds.filter(id => accessibleModelIds.includes(id));
+      // ✅ PERF FIX: Use Set for O(1) lookup instead of O(n) .includes()
+      const accessibleSet = new Set(accessibleModelIds);
+      const validIds = persistedModelIds.filter(id => accessibleSet.has(id));
       if (validIds.length > 0) {
         return validIds.map((modelId, index) => ({
           id: modelId,
@@ -313,8 +316,10 @@ export default function ChatOverviewScreen() {
       if (persistedModelOrder.length > 0) {
         const availableIds = new Set(allEnabledModels.map(m => m.id));
         const validPersistedOrder = persistedModelOrder.filter(id => availableIds.has(id));
+        // ✅ PERF FIX: Use Set for O(1) lookup instead of O(n) .includes()
+        const validPersistedOrderSet = new Set(validPersistedOrder);
         const newModelIds = allEnabledModels
-          .filter(m => !validPersistedOrder.includes(m.id))
+          .filter(m => !validPersistedOrderSet.has(m.id))
           .map(m => m.id);
         fullOrder = [...validPersistedOrder, ...newModelIds];
       } else {
@@ -419,8 +424,14 @@ export default function ChatOverviewScreen() {
     ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING,
   );
 
+  // ✅ ARCHITECTURE: Overview screen ALWAYS uses OVERVIEW mode
+  // - Pre-search orchestrator only runs in THREAD mode (actual /chat/[slug] page)
+  // - useStreamingTrigger only works in OVERVIEW mode
+  // - Config changes are handled by formActions.handleWebSearchToggle (which sets hasPendingConfigChanges when thread exists)
+  // - DO NOT transition to THREAD mode here - it enables orchestrators that shouldn't run during initial creation
+
   useScreenInitialization({
-    mode: 'overview',
+    mode: ScreenModes.OVERVIEW,
     thread: shouldInitializeThread ? currentThread : null,
     participants: shouldInitializeThread ? contextParticipants : [],
     chatMode: selectedMode,
@@ -433,7 +444,9 @@ export default function ChatOverviewScreen() {
   });
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
-  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
+  // ✅ FIX: Add streamingRoundNumber check to prevent submit during entire round
+  const isRoundInProgress = streamingRoundNumber !== null;
+  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || Boolean(pendingMessage) || formActions.isSubmitting || isRoundInProgress;
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
 
   const lastResetPathRef = useRef<string | null>(null);
@@ -652,8 +665,9 @@ export default function ChatOverviewScreen() {
     isModelsLoading,
   ]);
 
-  // Show spinner from submit click until streaming starts (then stop button shows instead)
-  const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming || Boolean(pendingMessage);
+  // Show spinner only from submit click until first stream chunk arrives (web search or participant)
+  // After first stream chunk, button is disabled (not loading) until round finishes
+  const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming;
 
   const sharedChatInputProps = useMemo(() => {
     const status: ChatStatus = isInitialUIInputBlocked ? 'submitted' : 'ready';

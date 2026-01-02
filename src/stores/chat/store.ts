@@ -184,48 +184,60 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
     }, false, 'preSearch/addPreSearch'),
   updatePreSearchData: (roundNumber, data) =>
     set((draft) => {
-      draft.preSearches.forEach((ps) => {
-        if (ps.roundNumber === roundNumber) {
-          ps.searchData = data;
-          ps.status = MessageStatuses.COMPLETE;
-        }
-      });
+      // ✅ PERF FIX: Use findIndex + direct access instead of forEach scanning all items
+      const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
+      if (idx !== -1) {
+        draft.preSearches[idx]!.searchData = data;
+        draft.preSearches[idx]!.status = MessageStatuses.COMPLETE;
+        // ✅ FIX: Set completedAt for timing guards in streaming trigger
+        draft.preSearches[idx]!.completedAt = new Date();
+      }
     }, false, 'preSearch/updatePreSearchData'),
   updatePartialPreSearchData: (roundNumber, partialData) =>
     set((draft) => {
-      draft.preSearches.forEach((ps) => {
-        if (ps.roundNumber === roundNumber) {
-          const existingSummary = ps.searchData?.summary ?? '';
-          ps.searchData = {
-            queries: partialData.queries,
-            results: partialData.results.map(r => ({
-              query: r.query,
-              answer: r.answer,
-              results: r.results.map(item => ({
-                title: item.title,
-                url: item.url,
-                content: item.content ?? '',
-                excerpt: item.excerpt,
-                score: 0, // Default score for streaming - replaced on completion
-              })),
-              responseTime: r.responseTime,
-              index: r.index,
+      // ✅ PERF FIX: Use findIndex + direct access instead of forEach scanning all items
+      const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
+      if (idx !== -1) {
+        const ps = draft.preSearches[idx]!;
+        const existingSummary = ps.searchData?.summary ?? '';
+        ps.searchData = {
+          queries: partialData.queries,
+          results: partialData.results.map(r => ({
+            query: r.query,
+            answer: r.answer,
+            results: r.results.map(item => ({
+              title: item.title,
+              url: item.url,
+              content: item.content ?? '',
+              excerpt: item.excerpt,
+              score: 0, // Default score for streaming - replaced on completion
             })),
-            summary: partialData.summary ?? existingSummary,
-            successCount: partialData.results.length,
-            failureCount: 0,
-            totalResults: partialData.totalResults ?? partialData.results.length,
-            totalTime: partialData.totalTime ?? 0,
-          };
-        }
-      });
+            responseTime: r.responseTime,
+            index: r.index,
+          })),
+          summary: partialData.summary ?? existingSummary,
+          successCount: partialData.results.length,
+          failureCount: 0,
+          totalResults: partialData.totalResults ?? partialData.results.length,
+          totalTime: partialData.totalTime ?? 0,
+        };
+      }
     }, false, 'preSearch/updatePartialPreSearchData'),
   updatePreSearchStatus: (roundNumber, status) =>
     set((draft) => {
-      draft.preSearches.forEach((ps) => {
-        if (ps.roundNumber === roundNumber)
-          ps.status = status;
-      });
+      // ✅ PERF FIX: Use findIndex + direct access instead of forEach scanning all items
+      const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
+      if (idx !== -1) {
+        draft.preSearches[idx]!.status = status;
+        // ✅ FIX: Set completedAt when status is COMPLETE for timing guards
+        if (status === MessageStatuses.COMPLETE) {
+          draft.preSearches[idx]!.completedAt = new Date();
+        }
+        // ✅ FIX: Removed clearing waitingToStartStreaming on pre-search STREAMING
+        // Pre-search streaming is NOT the same as participant streaming
+        // waitingToStartStreaming should only clear when actual AI participant streams start
+        // The streaming trigger handles this via separate effect watching isStreaming
+      }
     }, false, 'preSearch/updatePreSearchStatus'),
   removePreSearch: roundNumber =>
     set((draft) => {
@@ -278,8 +290,11 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
     const prevMessages = get().messages;
     const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
 
+    // ✅ PERF FIX: Build Map for O(1) lookup instead of O(n) find per message
+    // Previously O(n²) - now O(n) with single Map construction pass
+    const prevMessagesById = new Map(prevMessages.map(m => [m.id, m]));
     const mergedMessages = newMessages.map((newMsg) => {
-      const existingMsg = prevMessages.find(m => m.id === newMsg.id);
+      const existingMsg = prevMessagesById.get(newMsg.id);
       if (!existingMsg)
         return newMsg;
 
@@ -368,6 +383,8 @@ const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
     set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber'),
   setCurrentRoundNumber: (value: number | null) =>
     set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
+  setConfigChangeRoundNumber: (value: number | null) =>
+    set({ configChangeRoundNumber: value }, false, 'data/setConfigChangeRoundNumber'),
 });
 
 const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
@@ -834,10 +851,21 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       priority: index,
     }));
 
+    // ✅ BUG FIX: Preserve resumption state if prefilled by server
+    // When streamResumptionPrefilled is true, the server detected an incomplete round
+    // and prefilled waitingToStartStreaming, nextParticipantToTrigger, etc.
+    // We should NOT reset these values, otherwise placeholders won't show!
+    const preserveResumptionState = currentState.streamResumptionPrefilled;
+    const resumptionRoundNumber = currentState.resumptionRoundNumber;
+
     set({
-      waitingToStartStreaming: false,
+      // ✅ CONDITIONAL: Only reset streaming state if NOT resuming
+      waitingToStartStreaming: preserveResumptionState ? currentState.waitingToStartStreaming : false,
+      streamingRoundNumber: preserveResumptionState ? resumptionRoundNumber : null,
+      nextParticipantToTrigger: preserveResumptionState ? currentState.nextParticipantToTrigger : null,
+      isModeratorStreaming: preserveResumptionState ? currentState.isModeratorStreaming : false,
+      // These are always reset
       isRegenerating: false,
-      isModeratorStreaming: false,
       isWaitingForChangelog: false,
       hasPendingConfigChanges: false,
       regeneratingRoundNumber: null,
@@ -845,7 +873,6 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       pendingAttachmentIds: null,
       pendingFileParts: null,
       expectedParticipantIds: null,
-      streamingRoundNumber: null,
       currentRoundNumber: null,
       hasSentPendingMessage: false,
       createdModeratorRounds: new Set<number>(),
@@ -856,7 +883,6 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       hasEarlyOptimisticMessage: false,
       streamResumptionState: null,
       resumptionAttempts: new Set<string>(),
-      nextParticipantToTrigger: null,
       pendingAnimations: new Set<number>(),
       animationResolvers: new Map(),
       thread,
@@ -913,7 +939,13 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       draft.nextParticipantToTrigger = null;
 
       draft.isModeratorStreaming = false;
-      draft.isWaitingForChangelog = true;
+      // ✅ INCREMENTAL CHANGELOG: Only wait for changelog if there are pending config changes
+      // Store the round number for incremental fetch via useThreadRoundChangelogQuery
+      const effectiveRoundNumber = draft.streamingRoundNumber ?? nextRoundNumber;
+      if (draft.hasPendingConfigChanges) {
+        draft.isWaitingForChangelog = true;
+        draft.configChangeRoundNumber = effectiveRoundNumber;
+      }
       draft.pendingMessage = message;
       draft.pendingAttachmentIds = attachmentIds && attachmentIds.length > 0 ? attachmentIds : null;
       draft.pendingFileParts = fileParts.length > 0 ? fileParts : null;

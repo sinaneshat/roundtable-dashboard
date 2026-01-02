@@ -57,7 +57,7 @@ export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
 
   return useQuery({
     queryKey: queryKeys.usage.stats(),
-    queryFn: getUserUsageStatsService,
+    queryFn: () => getUserUsageStatsService(),
     staleTime: STALE_TIMES.quota, // 10 seconds - fresh data for UI blocking
     // ✅ PERFORMANCE FIX: Reduce polling frequency and pause when tab hidden
     // Original: 30s always - wasteful when user not looking

@@ -73,6 +73,8 @@ export const queryKeys = {
     slugStatus: (id: string) => QueryKeyFactory.action('threads', 'slug-status', id),
     messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
     changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
+    roundChangelog: (id: string, roundNumber: number) =>
+      QueryKeyFactory.action('threads', 'changelog', id, 'round', String(roundNumber)),
     preSearches: (id: string) => QueryKeyFactory.action('threads', 'pre-searches', id),
     feedback: (id: string) => QueryKeyFactory.action('threads', 'feedback', id),
   },

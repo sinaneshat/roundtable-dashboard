@@ -1,5 +1,6 @@
 'use client';
 
+import { usePostHog } from 'posthog-js/react';
 import { useEffect } from 'react';
 
 import ErrorScreen from '@/containers/screens/errors/ErrorScreen';
@@ -12,6 +13,15 @@ type ErrorProps = {
 };
 
 export default function Error({ error, reset }: ErrorProps) {
+  const posthog = usePostHog();
+
+  useEffect(() => {
+    posthog.captureException(error, {
+      digest: error.digest,
+      errorBoundary: 'route',
+    });
+  }, [error, posthog]);
+
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development')
       return;

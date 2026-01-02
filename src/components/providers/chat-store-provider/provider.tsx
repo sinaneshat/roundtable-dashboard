@@ -16,6 +16,7 @@ import { createChatStore } from '@/stores/chat';
 
 import { ChatStoreContext } from './context';
 import {
+  useChangelogSync,
   useMessageSync,
   useModeratorTrigger,
   useNavigationCleanup,
@@ -243,6 +244,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     onResumedStreamComplete: (roundNumber, participantIndex) => {
       store.getState().handleResumedStreamComplete(roundNumber, participantIndex);
     },
+    // ✅ PERF FIX: Disable resume for newly created threads - nothing to resume
+    isNewlyCreatedThread: Boolean(createdThreadId),
   });
 
   const sendMessageRef = useRef(chat.sendMessage);
@@ -290,6 +293,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   useNavigationCleanup({
     store,
     prevPathnameRef,
+  });
+
+  // ✅ CHANGELOG: Fetch and merge changelog when config changes between rounds
+  useChangelogSync({
+    store,
+    effectiveThreadId,
+    queryClientRef,
   });
 
   const { triggerModerator } = useModeratorTrigger({ store });

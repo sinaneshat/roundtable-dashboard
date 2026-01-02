@@ -106,8 +106,8 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                     variant="outline"
                     size="sm"
                     onClick={this.handleReset}
+                    startIcon={<Icons.refreshCw />}
                   >
-                    <Icons.refreshCw className="mr-2 size-4" />
                     Reload Page
                   </Button>
                   <Button

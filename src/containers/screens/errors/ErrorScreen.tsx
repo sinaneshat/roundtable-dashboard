@@ -36,8 +36,12 @@ function ErrorScreenContent({ reset }: ErrorScreenProps) {
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button onClick={reset} variant="outline" size="lg">
-            <Icons.refreshCw className="me-2 size-4" />
+          <Button
+            onClick={reset}
+            variant="outline"
+            size="lg"
+            startIcon={<Icons.refreshCw />}
+          >
             {t('states.error.tryAgain')}
           </Button>
         </EmptyContent>
