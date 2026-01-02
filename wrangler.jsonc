@@ -162,6 +162,12 @@
         "enabled": true,
         "head_sampling_rate": 0.1
       },
+      // ✅ STREAMING PERFORMANCE: Max CPU time for long AI streaming responses
+      // Workers Standard allows up to 30s CPU time per request
+      // @see https://developers.cloudflare.com/workers/platform/limits/
+      "limits": {
+        "cpu_ms": 30000
+      },
       "routes": [
         {
           "pattern": "app-preview.roundtable.now",
@@ -282,6 +288,12 @@
       "observability": {
         "enabled": true,
         "head_sampling_rate": 0.05
+      },
+      // ✅ STREAMING PERFORMANCE: Max CPU time for long AI streaming responses
+      // Workers Standard allows up to 30s CPU time per request
+      // @see https://developers.cloudflare.com/workers/platform/limits/
+      "limits": {
+        "cpu_ms": 30000
       },
       "routes": [
         {
