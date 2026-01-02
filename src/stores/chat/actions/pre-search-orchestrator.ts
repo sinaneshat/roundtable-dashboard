@@ -13,7 +13,6 @@
  * 3. Streaming pre-search updates trigger query invalidation
  * 4. Hook refetches and re-syncs to store automatically
  *
- * ✅ MIGRATED: Uses createOrchestrator factory (Wave 2)
  * Location: /src/stores/chat/actions/pre-search-orchestrator.ts
  * Used by: useScreenInitialization (internal composition)
  */

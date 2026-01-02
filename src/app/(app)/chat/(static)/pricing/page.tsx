@@ -8,8 +8,8 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-// ISR: Revalidate every hour
-export const revalidate = 3600;
+// SSG: Generate at build time
+export const dynamic = 'force-static';
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
@@ -31,7 +31,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PricingPage() {
   const queryClient = getQueryClient();
 
-  // ISR: Prefetch products, revalidates every hour
+  // SSG: Prefetch products at build time
   await queryClient.prefetchQuery({
     queryKey: queryKeys.products.list(),
     queryFn: getProductsService,

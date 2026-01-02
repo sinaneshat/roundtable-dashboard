@@ -11,7 +11,6 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { ChatModeSchema, MessageStatuses, UploadStatuses } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
-import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
@@ -49,13 +48,18 @@ import {
 
 import { ChatView } from './ChatView';
 
-// Lazy-loaded modals - only loaded when opened (~1000 lines total)
+// Lazy-loaded components - only loaded when needed
 const ModelSelectionModal = dynamic(
   () => import('@/components/chat/model-selection-modal').then(m => m.ModelSelectionModal),
   { ssr: false },
 );
 const ConversationModeModal = dynamic(
   () => import('@/components/chat/conversation-mode-modal').then(m => m.ConversationModeModal),
+  { ssr: false },
+);
+// Toolbar (442 lines) - deferred until chat input visible
+const ChatInputToolbarMenu = dynamic(
+  () => import('@/components/chat/chat-input-toolbar-menu').then(m => m.ChatInputToolbarMenu),
   { ssr: false },
 );
 

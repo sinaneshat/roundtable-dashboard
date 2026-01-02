@@ -1,12 +1,12 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatModeSchema, UploadStatuses } from '@/api/core/enums';
 import type { ChatMessage, ChatThread, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
-import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { useChatStore, useModelPreferencesStore } from '@/components/providers';
@@ -31,6 +31,12 @@ import {
 } from '@/stores/chat/utils/participant-completion-gate';
 
 import { ChatView } from './ChatView';
+
+// Lazy-loaded dialog - only loaded when delete action triggered
+const ChatDeleteDialog = dynamic(
+  () => import('@/components/chat/chat-delete-dialog').then(m => m.ChatDeleteDialog),
+  { ssr: false },
+);
 
 type ChatThreadScreenProps = {
   thread: ChatThread;
