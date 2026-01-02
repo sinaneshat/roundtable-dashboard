@@ -332,12 +332,19 @@ export const FEATURE_FLAGS = {
 /**
  * SSE Streaming configuration
  *
+ * ✅ RESOURCE LIMITS (wrangler.jsonc):
+ * - CPU time: 30,000ms (30s) - actual compute time
+ * - Memory: 128MB - fixed, optimized via O(1) chunk storage
+ *
  * Timeout protection prevents orphaned streaming records when:
  * - User navigates away during stream
  * - Network connection drops
  * - Browser closes/refreshes during stream
  *
  * After timeout, STREAMING records are marked as FAILED to allow new streams
+ *
+ * @see AI_TIMEOUT_CONFIG in product-logic.service.ts for AI provider timeouts
+ * @see stream-buffer.service.ts for O(1) memory-optimized chunk storage
  */
 export const STREAMING_CONFIG = {
   /**
@@ -357,6 +364,15 @@ export const STREAMING_CONFIG = {
    * Used by getThreadAnalysesHandler, getThreadPreSearchesHandler
    */
   ORPHAN_CLEANUP_TIMEOUT_MS: 2 * 60 * 1000,
+
+  /**
+   * Stale chunk timeout in milliseconds (30 seconds)
+   * Applied to: stream resumption handlers
+   *
+   * Rationale: If no chunks received for 30s, consider stream stale
+   * Matches Cloudflare CPU limit for consistent behavior
+   */
+  STALE_CHUNK_TIMEOUT_MS: 30_000,
 } as const;
 
 // ============================================================================
