@@ -433,7 +433,7 @@ export default function ChatOverviewScreen() {
   });
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
-  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting;
+  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
 
   const lastResetPathRef = useRef<string | null>(null);

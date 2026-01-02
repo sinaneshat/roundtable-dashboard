@@ -22,7 +22,6 @@ import {
 
 // KV key patterns for pre-search streams
 const PRESEARCH_STREAM_PREFIX = 'presearch_stream';
-const PRESEARCH_CHUNKS_PREFIX = 'presearch_chunks';
 const PRESEARCH_ACTIVE_PREFIX = 'presearch_active';
 
 // ============================================================================
@@ -33,8 +32,12 @@ function getMetadataKey(streamId: string): string {
   return `${PRESEARCH_STREAM_PREFIX}:${streamId}:metadata`;
 }
 
-function getChunksKey(streamId: string): string {
-  return `${PRESEARCH_CHUNKS_PREFIX}:${streamId}`;
+/**
+ * Generate KV key for individual chunk storage
+ * ✅ FIX: Store chunks individually to avoid O(n) memory accumulation
+ */
+function getChunkKey(streamId: string, index: number): string {
+  return `${PRESEARCH_STREAM_PREFIX}:${streamId}:c:${index}`;
 }
 
 function getActiveKey(threadId: string, roundNumber: number): string {
@@ -73,11 +76,10 @@ export async function initializePreSearchStreamBuffer(
       createdAt: Date.now(),
     };
 
+    // ✅ FIX: Store metadata only - chunks stored individually via appendPreSearchStreamChunk
+    // No longer initialize empty chunks array to avoid O(n) memory pattern
     await Promise.all([
       env.KV.put(getMetadataKey(streamId), JSON.stringify(metadata), {
-        expirationTtl: STREAM_BUFFER_TTL_SECONDS,
-      }),
-      env.KV.put(getChunksKey(streamId), JSON.stringify([]), {
         expirationTtl: STREAM_BUFFER_TTL_SECONDS,
       }),
       env.KV.put(getActiveKey(threadId, roundNumber), streamId, {
@@ -105,6 +107,9 @@ export async function initializePreSearchStreamBuffer(
 /**
  * Append SSE chunk to pre-search stream buffer
  * Called for each SSE event sent to client
+ *
+ * ✅ FIX: O(1) memory - stores each chunk as individual KV key instead of
+ * accumulating in array. Previous O(n) pattern caused memory issues for long streams.
  */
 export async function appendPreSearchStreamChunk(
   streamId: string,
@@ -118,37 +123,42 @@ export async function appendPreSearchStreamChunk(
   }
 
   try {
-    const chunksKey = getChunksKey(streamId);
+    // ✅ FIX: Get current chunk count from metadata (O(1) read)
     const metadataKey = getMetadataKey(streamId);
-
-    const [rawChunks, rawMetadata] = await Promise.all([
-      env.KV.get(chunksKey, 'json'),
-      env.KV.get(metadataKey, 'json'),
-    ]);
-
-    const chunksResult = z.array(PreSearchStreamChunkSchema).safeParse(rawChunks);
-    const chunks = chunksResult.success ? chunksResult.data : [];
+    const rawMetadata = await env.KV.get(metadataKey, 'json');
     const metadataResult = PreSearchStreamMetadataSchema.safeParse(rawMetadata);
 
+    if (!metadataResult.success) {
+      logger?.warn('Stream metadata not found during chunk append', {
+        logType: 'edge_case',
+        scenario: 'pre_search_metadata_not_found',
+        streamId,
+      });
+      return;
+    }
+
+    const metadata = metadataResult.data;
+    const chunkIndex = metadata.chunkCount;
+
     const newChunk: PreSearchStreamChunk = {
-      index: chunks.length,
+      index: chunkIndex,
       event,
       data,
       timestamp: Date.now(),
     };
 
-    chunks.push(newChunk);
+    // ✅ FIX: Store chunk at individual key (O(1) write, no array accumulation)
+    await env.KV.put(
+      getChunkKey(streamId, chunkIndex),
+      JSON.stringify(newChunk),
+      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
+    );
 
-    await env.KV.put(chunksKey, JSON.stringify(chunks), {
+    // ✅ FIX: Increment chunk count in metadata (O(1) update)
+    const updatedMetadata = { ...metadata, chunkCount: chunkIndex + 1 };
+    await env.KV.put(metadataKey, JSON.stringify(updatedMetadata), {
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
-
-    if (metadataResult.success) {
-      const metadata = { ...metadataResult.data, chunkCount: chunks.length };
-      await env.KV.put(metadataKey, JSON.stringify(metadata), {
-        expirationTtl: STREAM_BUFFER_TTL_SECONDS,
-      });
-    }
   } catch (error) {
     logger?.warn('Failed to append pre-search stream chunk', {
       logType: 'edge_case',
@@ -331,6 +341,9 @@ export async function getPreSearchStreamMetadata(
 
 /**
  * Get pre-search stream chunks
+ *
+ * ✅ FIX: Reads individual chunk keys instead of single array
+ * Uses parallel batch reads for efficiency
  */
 export async function getPreSearchStreamChunks(
   streamId: string,
@@ -341,9 +354,42 @@ export async function getPreSearchStreamChunks(
   }
 
   try {
-    const raw = await env.KV.get(getChunksKey(streamId), 'json');
-    const result = z.array(PreSearchStreamChunkSchema).safeParse(raw);
-    return result.success ? result.data : null;
+    // Get chunk count from metadata
+    const metadata = await getPreSearchStreamMetadata(streamId, env);
+
+    if (!metadata) {
+      return null;
+    }
+
+    if (metadata.chunkCount === 0) {
+      return [];
+    }
+
+    // ✅ FIX: Read chunks in parallel batches for efficiency
+    const BATCH_SIZE = 50;
+    const chunks: PreSearchStreamChunk[] = [];
+
+    for (let batchStart = 0; batchStart < metadata.chunkCount; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, metadata.chunkCount);
+      const batchPromises: Promise<string | null>[] = [];
+
+      for (let i = batchStart; i < batchEnd; i++) {
+        batchPromises.push(env.KV.get(getChunkKey(streamId, i), 'text'));
+      }
+
+      const batchResults = await Promise.all(batchPromises);
+
+      for (const result of batchResults) {
+        if (result) {
+          const parseResult = PreSearchStreamChunkSchema.safeParse(JSON.parse(result));
+          if (parseResult.success) {
+            chunks.push(parseResult.data);
+          }
+        }
+      }
+    }
+
+    return chunks;
   } catch {
     return null;
   }
