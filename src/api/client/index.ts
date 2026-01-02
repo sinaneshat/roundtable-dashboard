@@ -9,7 +9,7 @@
 import { hc } from 'hono/client';
 
 import type { AppType } from '@/api';
-import { getApiBaseUrl, getProductionApiUrl } from '@/lib/config/base-urls';
+import { getApiBaseUrl, getApiUrlAsync, getProductionApiUrl } from '@/lib/config/base-urls';
 
 /**
  * Get API base URL for Hono RPC client
@@ -88,11 +88,22 @@ export async function createApiClient(options?: { bypassCache?: boolean }) {
  * - Public profile endpoints
  * - Any other publicly accessible endpoints
  *
- * NOTE: Synchronous (not async) unlike createApiClient() to avoid
- * type instantiation depth issues. Call without await.
+ * NOTE: Now async to properly detect Cloudflare runtime environment.
+ * Uses getApiUrlAsync() to correctly resolve preview vs prod URLs.
  */
-export function createPublicApiClient() {
-  return hc<AppType>(getClientApiUrl(), {
+export async function createPublicApiClient() {
+  // Server-side: use async env detection for proper Cloudflare context
+  if (typeof window === 'undefined') {
+    const apiUrl = await getApiUrlAsync();
+    return hc<AppType>(apiUrl, {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+  }
+
+  // Client-side: use sync URL detection (hostname-based)
+  return hc<AppType>(getApiBaseUrl(), {
     headers: {
       Accept: 'application/json',
     },

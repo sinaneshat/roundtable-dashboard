@@ -45,7 +45,7 @@ export type GetProductResponse = InferResponseType<
  * Uses createPublicApiClient() for SSG/ISR compatibility (no cookie access).
  */
 export async function getProductsService(args?: GetProductsRequest) {
-  const client = createPublicApiClient();
+  const client = await createPublicApiClient();
   return parseResponse(client.billing.products.$get(args ?? {}));
 }
 
@@ -56,7 +56,7 @@ export async function getProductsService(args?: GetProductsRequest) {
  * Uses createPublicApiClient() for SSG/ISR compatibility (no cookie access).
  */
 export async function getProductService(data: GetProductRequest) {
-  const client = createPublicApiClient();
+  const client = await createPublicApiClient();
   const params: GetProductRequest = {
     param: data.param ?? { id: '' },
   };

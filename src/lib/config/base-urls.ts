@@ -253,3 +253,12 @@ export function getProductionApiUrl(): string {
 
   return BASE_URLS[currentEnv].api;
 }
+
+/**
+ * Async version: Get API URL with proper Cloudflare context detection
+ * Use this for server-side code in Cloudflare Workers runtime
+ */
+export async function getApiUrlAsync(): Promise<string> {
+  const currentEnv = await getWebappEnvAsync();
+  return BASE_URLS[currentEnv].api;
+}

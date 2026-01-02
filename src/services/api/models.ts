@@ -51,6 +51,6 @@ export async function listModelsService(options?: { bypassCache?: boolean }) {
  * Returns models with FREE tier access defaults (unauthenticated user).
  */
 export async function listModelsPublicService() {
-  const client = createPublicApiClient();
+  const client = await createPublicApiClient();
   return parseResponse(client.models.$get());
 }

@@ -196,7 +196,6 @@ export async function deleteThreadService(data: DeleteThreadRequest) {
  */
 export async function getPublicThreadService(data: GetPublicThreadRequest) {
   const client = await createPublicApiClient();
-  // Internal fallback: ensure param exists
   const params: GetPublicThreadRequest = {
     param: data.param ?? { slug: '' },
   };
