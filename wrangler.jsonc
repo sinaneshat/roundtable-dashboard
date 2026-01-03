@@ -3,10 +3,7 @@
   "main": "custom-worker.ts",
   "name": "roundtable-dashboard",
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
-  "compatibility_date": "2025-01-01",
-  // Fix for __name is not defined error with turbopack/next-themes
-  // @see https://opennext.js.org/cloudflare/howtos/keep_names
-  "keep_names": false,
+  "compatibility_date": "2024-12-30",
   "compatibility_flags": [
     // Enable Node.js API
     // see https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag
