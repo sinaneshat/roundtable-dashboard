@@ -268,3 +268,47 @@ export const RLOG_CATEGORY_STYLES: Record<RlogCategory, string> = {
   [RlogCategories.PRESRCH]: 'color: #E91E63',
   [RlogCategories.MOD]: 'color: #673AB7; font-weight: bold',
 } as const;
+
+// ============================================================================
+// POSTHOG LOG LEVEL (Extended log levels for PostHog observability)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const POSTHOG_LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
+
+// 2. ZOD SCHEMA
+export const PosthogLogLevelSchema = z.enum(POSTHOG_LOG_LEVELS).openapi({
+  description: 'PostHog log level for structured observability',
+  example: 'info',
+});
+
+// 3. TYPESCRIPT TYPE
+export type PosthogLogLevel = z.infer<typeof PosthogLogLevelSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_POSTHOG_LOG_LEVEL: PosthogLogLevel = 'info';
+
+// 5. CONSTANT OBJECT
+export const PosthogLogLevels = {
+  TRACE: 'trace' as const,
+  DEBUG: 'debug' as const,
+  INFO: 'info' as const,
+  WARN: 'warn' as const,
+  ERROR: 'error' as const,
+  FATAL: 'fatal' as const,
+} as const;
+
+// 6. VALIDATION HELPER
+export function isValidPosthogLogLevel(value: unknown): value is PosthogLogLevel {
+  return typeof value === 'string' && POSTHOG_LOG_LEVELS.includes(value as PosthogLogLevel);
+}
+
+// 7. PRIORITY VALUES (for sorting/comparison)
+export const POSTHOG_LOG_LEVEL_VALUES: Record<PosthogLogLevel, number> = {
+  [PosthogLogLevels.TRACE]: 0,
+  [PosthogLogLevels.DEBUG]: 1,
+  [PosthogLogLevels.INFO]: 2,
+  [PosthogLogLevels.WARN]: 3,
+  [PosthogLogLevels.ERROR]: 4,
+  [PosthogLogLevels.FATAL]: 5,
+} as const;

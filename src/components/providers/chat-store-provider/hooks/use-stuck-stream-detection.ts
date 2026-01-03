@@ -39,8 +39,10 @@ export function useStuckStreamDetection({
     lastStreamActivityRef.current = Date.now();
 
     // Calculate dynamic timeout
+    // ✅ BUG FIX: Use form state (enableWebSearch) as source of truth
+    // When user enables web search mid-conversation, form state is true but thread is false
     const currentState = store.getState();
-    const webSearchEnabled = currentState.thread?.enableWebSearch ?? currentState.enableWebSearch;
+    const webSearchEnabled = currentState.enableWebSearch;
 
     let streamTimeoutMs = 60_000; // Default 60 seconds
 

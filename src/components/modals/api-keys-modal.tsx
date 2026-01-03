@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import type { ApiKeysModalTab } from '@/api/core/enums';
+import { ApiKeysModalTabs, DEFAULT_API_KEYS_MODAL_TAB } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { ApiKeyForm } from '@/components/settings/api-key-form';
 import {
@@ -33,17 +35,15 @@ type ApiKeysModalProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-type ModalTab = 'list' | 'create';
-
 export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
-  const [activeTab, setActiveTab] = useState<ModalTab>('list');
+  const [activeTab, setActiveTab] = useState<ApiKeysModalTab>(DEFAULT_API_KEYS_MODAL_TAB);
   const { data: apiKeysResponse, isLoading, isFetching, error } = useApiKeysQuery(open);
   const t = useTranslations();
 
   const apiKeys = apiKeysResponse?.success && apiKeysResponse.data?.items ? apiKeysResponse.data.items : [];
 
   const handleCreated = () => {
-    setActiveTab('list');
+    setActiveTab(ApiKeysModalTabs.LIST);
   };
 
   return (
@@ -136,20 +136,20 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
                 </AccordionItem>
               </Accordion>
 
-              <Tabs value={activeTab} onValueChange={value => setActiveTab(value as ModalTab)} className="w-full">
+              <Tabs value={activeTab} onValueChange={value => setActiveTab(value as ApiKeysModalTab)} className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="list">{t('apiKeys.tabs.list')}</TabsTrigger>
-                  <TabsTrigger value="create">{t('apiKeys.tabs.create')}</TabsTrigger>
+                  <TabsTrigger value={ApiKeysModalTabs.LIST}>{t('apiKeys.tabs.list')}</TabsTrigger>
+                  <TabsTrigger value={ApiKeysModalTabs.CREATE}>{t('apiKeys.tabs.create')}</TabsTrigger>
                 </TabsList>
-                <TabsContent value="list" className="mt-4">
+                <TabsContent value={ApiKeysModalTabs.LIST} className="mt-4">
                   <ApiKeysList
                     apiKeys={apiKeys}
                     isLoading={isLoading || isFetching}
                     error={error ?? null}
-                    onCreateNew={() => setActiveTab('create')}
+                    onCreateNew={() => setActiveTab(ApiKeysModalTabs.CREATE)}
                   />
                 </TabsContent>
-                <TabsContent value="create" className="mt-4">
+                <TabsContent value={ApiKeysModalTabs.CREATE} className="mt-4">
                   <ApiKeyForm onCreated={handleCreated} currentKeyCount={apiKeys.length} />
                 </TabsContent>
               </Tabs>

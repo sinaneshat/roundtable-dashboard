@@ -216,8 +216,7 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
       })
       .returning();
 
-    c.status(201);
-    return Responses.ok(c, {
+    return Responses.created(c, {
       ...project,
       attachmentCount: 0,
       threadCount: 0,
@@ -545,8 +544,7 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
     // Get the upload details for response
     const { r2Key: _r2Key, ...uploadWithoutR2Key } = existingUpload;
 
-    c.status(201);
-    return Responses.ok(c, {
+    return Responses.created(c, {
       ...projectAttachment,
       upload: uploadWithoutR2Key,
       addedByUser: {
@@ -932,8 +930,7 @@ export const createProjectMemoryHandler: RouteHandler<typeof createProjectMemory
       })
       .returning();
 
-    c.status(201);
-    return Responses.ok(c, {
+    return Responses.created(c, {
       ...memory,
       sourceThreadTitle: null,
     });

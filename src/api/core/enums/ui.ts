@@ -1225,3 +1225,63 @@ export const ScrollAligns = {
 export function isValidScrollAlign(value: unknown): value is ScrollAlign {
   return typeof value === 'string' && SCROLL_ALIGNS.includes(value as ScrollAlign);
 }
+
+// ============================================================================
+// API KEYS MODAL TAB
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const API_KEYS_MODAL_TABS = ['list', 'create'] as const;
+
+// 2. ZOD SCHEMA
+export const ApiKeysModalTabSchema = z.enum(API_KEYS_MODAL_TABS).openapi({
+  description: 'API keys modal tab selection',
+  example: 'list',
+});
+
+// 3. TYPESCRIPT TYPE
+export type ApiKeysModalTab = z.infer<typeof ApiKeysModalTabSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_API_KEYS_MODAL_TAB: ApiKeysModalTab = 'list';
+
+// 5. CONSTANT OBJECT
+export const ApiKeysModalTabs = {
+  LIST: 'list' as const,
+  CREATE: 'create' as const,
+} as const;
+
+// 6. VALIDATION HELPER
+export function isValidApiKeysModalTab(value: unknown): value is ApiKeysModalTab {
+  return typeof value === 'string' && API_KEYS_MODAL_TABS.includes(value as ApiKeysModalTab);
+}
+
+// ============================================================================
+// SKELETON USECASE
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const SKELETON_USECASES = ['chat', 'demo'] as const;
+
+// 2. ZOD SCHEMA
+export const SkeletonUsecaseSchema = z.enum(SKELETON_USECASES).openapi({
+  description: 'Skeleton component usecase variant',
+  example: 'chat',
+});
+
+// 3. TYPESCRIPT TYPE
+export type SkeletonUsecase = z.infer<typeof SkeletonUsecaseSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_SKELETON_USECASE: SkeletonUsecase = 'chat';
+
+// 5. CONSTANT OBJECT
+export const SkeletonUsecases = {
+  CHAT: 'chat' as const,
+  DEMO: 'demo' as const,
+} as const;
+
+// 6. VALIDATION HELPER
+export function isValidSkeletonUsecase(value: unknown): value is SkeletonUsecase {
+  return typeof value === 'string' && SKELETON_USECASES.includes(value as SkeletonUsecase);
+}

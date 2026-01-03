@@ -155,7 +155,10 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     enabled: preSearchOrchestratorEnabled,
   });
 
-  const isStreaming = useChatStore(s => s.isStreaming);
+  // Selector for incomplete round resumption (uses useShallow for consistency)
+  const { isStreaming } = useChatStore(useShallow(s => ({
+    isStreaming: s.isStreaming,
+  })));
 
   useIncompleteRoundResumption({
     threadId: thread?.id || '',

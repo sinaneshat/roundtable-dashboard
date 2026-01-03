@@ -6,8 +6,8 @@ import { useTranslations } from 'next-intl';
 import { Suspense } from 'react';
 
 import type { SubscriptionChangeType, SubscriptionTier } from '@/api/core/enums';
-import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers } from '@/api/core/enums';
-import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES, subscriptionTierSchema } from '@/api/services/product-logic.service';
+import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers, SubscriptionTierSchema } from '@/api/core/enums';
+import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -122,11 +122,11 @@ function SubscriptionChangedContent() {
     ? getTierFromProductId(displaySubscription.price.productId)
     : SubscriptionTiers.FREE;
 
-  const newTierResult = subscriptionTierSchema.safeParse(newTierString);
+  const newTierResult = SubscriptionTierSchema.safeParse(newTierString);
   const newTier: SubscriptionTier = newTierResult.success ? newTierResult.data : SubscriptionTiers.FREE;
 
   const oldTierString = oldProductId ? getTierFromProductId(oldProductId) : null;
-  const oldTierResult = oldTierString ? subscriptionTierSchema.safeParse(oldTierString) : null;
+  const oldTierResult = oldTierString ? SubscriptionTierSchema.safeParse(oldTierString) : null;
   const oldTier: SubscriptionTier | null = oldTierResult?.success ? oldTierResult.data : null;
 
   const isUpgrade = changeType === SubscriptionChangeTypes.UPGRADE;

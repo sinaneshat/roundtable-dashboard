@@ -44,9 +44,12 @@ import { queryKeys } from '@/lib/data/query-keys';
  * ```
  */
 export function useNavigationReset() {
-  const resetToNewChat = useChatStore(s => s.resetToNewChat);
-  const thread = useChatStore(s => s.thread);
-  const createdThreadId = useChatStore(s => s.createdThreadId);
+  // Batch store state and actions with useShallow for performance
+  const { resetToNewChat, thread, createdThreadId } = useChatStore(useShallow(s => ({
+    resetToNewChat: s.resetToNewChat,
+    thread: s.thread,
+    createdThreadId: s.createdThreadId,
+  })));
   const pathname = usePathname();
   const previousPathnameRef = useRef(pathname);
   const queryClient = useQueryClient();

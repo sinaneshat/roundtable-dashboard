@@ -17,6 +17,7 @@ import {
 } from 'ai';
 import { and, asc, eq } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
+import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import {
@@ -637,7 +638,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           }
 
           // Don't retry validation errors (400) - malformed requests
-          if (statusCode === 400) {
+          if (statusCode === HttpStatusCodes.BAD_REQUEST) {
             // Check for specific non-retryable error messages
             const errorMessage = getErrorMessage(error);
             const responseBody = aiError?.responseBody || '';
@@ -658,12 +659,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           }
 
           // Don't retry authentication errors (401, 403) - requires API key fix
-          if (statusCode === 401 || statusCode === 403) {
+          if (statusCode === HttpStatusCodes.UNAUTHORIZED || statusCode === HttpStatusCodes.FORBIDDEN) {
             return false;
           }
 
           // Don't retry model not found errors (404) - model doesn't exist
-          if (statusCode === 404) {
+          if (statusCode === HttpStatusCodes.NOT_FOUND) {
             return false;
           }
 

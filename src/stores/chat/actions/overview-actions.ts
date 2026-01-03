@@ -41,11 +41,9 @@ export type UseOverviewActionsReturn = {
  * <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
  */
 export function useOverviewActions(): UseOverviewActionsReturn {
-  // State selector (separate from actions)
-  const showInitialUI = useChatStore(s => s.showInitialUI);
-
-  // Action selectors - batched with useShallow for stable reference
-  const actions = useChatStore(useShallow(s => ({
+  // Batch state and action selectors with useShallow for stable reference
+  const { showInitialUI, ...actions } = useChatStore(useShallow(s => ({
+    showInitialUI: s.showInitialUI,
     setInputValue: s.setInputValue,
     setSelectedMode: s.setSelectedMode,
     setSelectedParticipants: s.setSelectedParticipants,

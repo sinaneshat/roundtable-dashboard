@@ -68,9 +68,8 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   const threadState = useChatStore(useShallow(s => ({
     currentThread: s.thread,
     createdThreadId: s.createdThreadId,
+    setThread: s.setThread,
   })));
-
-  const setThread = useChatStore(s => s.setThread);
 
   // ============================================================================
   // PRE-POPULATE QUERY CACHE (Eliminates loading.tsx skeleton)
@@ -192,7 +191,8 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   // ============================================================================
 
   // ✅ TEXT STREAMING: Check for moderator messages in messages array
-  const messages = useChatStore(s => s.messages);
+  // useShallow for referential stability with array selector
+  const messages = useChatStore(useShallow(s => s.messages));
 
   /**
    * Check if first moderator message is completed
@@ -253,7 +253,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
           title: slugData.title,
           slug: slugData.slug,
         };
-        setThread(updatedThread);
+        threadState.setThread(updatedThread);
 
         // ✅ IMMEDIATE SIDEBAR UPDATE: Optimistically update sidebar with AI-generated title
         // This provides instant feedback without waiting for invalidation refetch
@@ -332,11 +332,10 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     // Deps intentionally exclude threadState.currentThread to read current value at effect time
     // without re-running when thread updates. This is the "read without subscribing" pattern.
     // Re-running on every thread update would cause unnecessary URL replacements.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isActive,
     slugStatusQuery.data,
-    setThread,
+    threadState,
     queryClient,
     hasUpdatedThread,
   ]);

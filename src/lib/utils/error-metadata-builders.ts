@@ -23,6 +23,7 @@
  */
 
 import { ErrorCategorySchema, FinishReasonSchema } from '@/api/core/enums';
+import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
 import { isObject } from '@/lib/utils';
 
 // ============================================================================
@@ -195,52 +196,6 @@ export function buildOpenRouterErrorMetadata(
   return [openRouterError, errorCategory];
 }
 
-/**
- * Categorize error based on error message content
- *
- * Pattern matching against common error messages to determine category:
- * - model_not_found: Model doesn't exist
- * - content_filter: Safety/moderation block
- * - rate_limit: Rate limiting or quota exceeded
- * - network: Connection/timeout issues
- * - provider_error: Generic provider failure
- *
- * @param errorMessage - Error message to categorize
- * @param fallbackCategory - Category to use if no pattern matches
- * @returns ErrorCategory enum value
- */
-function categorizeError(
-  errorMessage: string,
-  fallbackCategory?: string,
-): string {
-  const errorLower = errorMessage.toLowerCase();
-
-  if (
-    errorLower.includes('not found')
-    || errorLower.includes('does not exist')
-  ) {
-    return ErrorCategorySchema.enum.model_not_found;
-  }
-
-  if (
-    errorLower.includes('filter')
-    || errorLower.includes('safety')
-    || errorLower.includes('moderation')
-  ) {
-    return ErrorCategorySchema.enum.content_filter;
-  }
-
-  if (errorLower.includes('rate limit') || errorLower.includes('quota')) {
-    return ErrorCategorySchema.enum.rate_limit;
-  }
-
-  if (errorLower.includes('timeout') || errorLower.includes('connection')) {
-    return ErrorCategorySchema.enum.network;
-  }
-
-  return fallbackCategory || ErrorCategorySchema.enum.provider_error;
-}
-
 // ============================================================================
 // Complete Error Metadata Builder
 // ============================================================================
@@ -303,7 +258,11 @@ export function buildErrorMetadataFields(
       // OpenRouter provided error details
       providerMessage = openRouterError;
       errorMessage = openRouterError;
-      errorCategory = categorizeError(openRouterError, errorCategory);
+      // Use canonical categorization, fallback to initial category if unknown
+      const categorized = categorizeErrorMessage(openRouterError);
+      errorCategory = categorized !== ErrorCategorySchema.enum.provider_error
+        ? categorized
+        : (errorCategory || categorized);
     } else if (outputTokens === 0) {
       // Empty response - generate context-aware messages
       const [genError, genProvider, genCategory] = generateErrorMessage(

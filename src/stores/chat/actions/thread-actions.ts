@@ -70,11 +70,9 @@ export function useThreadActions(options: UseThreadActionsOptions): UseConfigCha
   // ✅ REFACTORED: Use shared hook for config change handlers
   const configHandlers = useConfigChangeHandlers({ slug, isRoundInProgress });
 
-  // Batch related state selectors with useShallow for performance
-  const contextParticipants = useChatStore(s => s.participants);
-
-  // Flags - batch with useShallow (includes configChangeRoundNumber for incremental changelog)
-  const { hasPendingConfigChanges, isWaitingForChangelog, configChangeRoundNumber } = useChatStore(useShallow(s => ({
+  // Flags - batch with useShallow (includes contextParticipants and configChangeRoundNumber for incremental changelog)
+  const { contextParticipants, hasPendingConfigChanges, isWaitingForChangelog, configChangeRoundNumber } = useChatStore(useShallow(s => ({
+    contextParticipants: s.participants,
     hasPendingConfigChanges: s.hasPendingConfigChanges,
     isWaitingForChangelog: s.isWaitingForChangelog,
     configChangeRoundNumber: s.configChangeRoundNumber,

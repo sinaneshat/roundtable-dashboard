@@ -16,9 +16,10 @@
  * ```
  */
 
-import { getDistinctIdFromCookie, getPostHogClient } from './posthog-server';
+import type { PosthogLogLevel } from '@/api/core/enums';
+import { POSTHOG_LOG_LEVEL_VALUES, PosthogLogLevels } from '@/api/core/enums';
 
-type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+import { getDistinctIdFromCookie, getPostHogClient } from './posthog-server';
 
 type LogAttributes = Record<string, unknown>;
 
@@ -29,23 +30,14 @@ type LogContext = {
   service?: string;
 };
 
-const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
-  trace: 0,
-  debug: 1,
-  info: 2,
-  warn: 3,
-  error: 4,
-  fatal: 5,
-};
+const MIN_LOG_LEVEL: PosthogLogLevel = process.env.NODE_ENV === 'production' ? PosthogLogLevels.INFO : PosthogLogLevels.DEBUG;
 
-const MIN_LOG_LEVEL: LogLevel = process.env.NODE_ENV === 'production' ? 'info' : 'debug';
-
-function shouldLog(level: LogLevel): boolean {
-  return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[MIN_LOG_LEVEL];
+function shouldLog(level: PosthogLogLevel): boolean {
+  return POSTHOG_LOG_LEVEL_VALUES[level] >= POSTHOG_LOG_LEVEL_VALUES[MIN_LOG_LEVEL];
 }
 
 function createLogEvent(
-  level: LogLevel,
+  level: PosthogLogLevel,
   message: string,
   attributes?: LogAttributes,
   context?: LogContext,
@@ -96,22 +88,22 @@ async function createExceptionEvent(
 
 export const logger = {
   trace: (message: string, attributes?: LogAttributes, context?: LogContext) =>
-    createLogEvent('trace', message, attributes, context),
+    createLogEvent(PosthogLogLevels.TRACE, message, attributes, context),
 
   debug: (message: string, attributes?: LogAttributes, context?: LogContext) =>
-    createLogEvent('debug', message, attributes, context),
+    createLogEvent(PosthogLogLevels.DEBUG, message, attributes, context),
 
   info: (message: string, attributes?: LogAttributes, context?: LogContext) =>
-    createLogEvent('info', message, attributes, context),
+    createLogEvent(PosthogLogLevels.INFO, message, attributes, context),
 
   warn: (message: string, attributes?: LogAttributes, context?: LogContext) =>
-    createLogEvent('warn', message, attributes, context),
+    createLogEvent(PosthogLogLevels.WARN, message, attributes, context),
 
   error: (message: string, attributes?: LogAttributes, context?: LogContext) =>
-    createLogEvent('error', message, attributes, context),
+    createLogEvent(PosthogLogLevels.ERROR, message, attributes, context),
 
   fatal: (message: string, attributes?: LogAttributes, context?: LogContext) =>
-    createLogEvent('fatal', message, attributes, context),
+    createLogEvent(PosthogLogLevels.FATAL, message, attributes, context),
 
   exception: (error: Error | unknown, attributes?: LogAttributes, context?: LogContext) =>
     createExceptionEvent(error, attributes, context),

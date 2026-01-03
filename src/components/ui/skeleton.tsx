@@ -3,6 +3,8 @@
 import type { ComponentProps } from 'react';
 import { useState } from 'react';
 
+import type { SkeletonUsecase } from '@/api/core/enums';
+import { SkeletonUsecases } from '@/api/core/enums';
 import { cn } from "@/lib/ui/cn"
 
 function Skeleton({ className, ...props }: ComponentProps<"div">) {
@@ -240,8 +242,6 @@ function StickyInputSkeleton({ className, ...props }: ComponentProps<"div">) {
 
 type ThreadMessagesSkeletonBaseProps = ComponentProps<"div">;
 
-type SkeletonUsecase = 'chat' | 'demo';
-
 interface ThreadMessagesSkeletonProps extends ThreadMessagesSkeletonBaseProps {
   participantCount?: number;
   showModerator?: boolean;
@@ -258,8 +258,8 @@ function ThreadMessagesSkeleton({
   ...props
 }: ThreadMessagesSkeletonProps) {
   // demo usecase: only user + participant messages, no moderator or input
-  const shouldShowModerator = usecase === 'demo' ? false : showModerator;
-  const shouldShowInput = usecase === 'demo' ? false : showInput;
+  const shouldShowModerator = usecase === SkeletonUsecases.DEMO ? false : showModerator;
+  const shouldShowInput = usecase === SkeletonUsecases.DEMO ? false : showInput;
 
   return (
     <div className={cn("space-y-3", className)} {...props}>

@@ -30,7 +30,6 @@
  */
 
 import { z as zOpenAPI } from '@hono/zod-openapi';
-import { z } from 'zod';
 
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
 import { ChatModes, SUBSCRIPTION_TIERS, SubscriptionTiers } from '@/api/core/enums';
@@ -179,14 +178,9 @@ export const SUBSCRIPTION_TIER_NAMES: Record<SubscriptionTier, string>
   = deriveTierRecord(config => config.name);
 
 /**
- * Zod schema for subscription tier validation
- * Use this in service layer and non-OpenAPI contexts
- */
-export const subscriptionTierSchema = z.enum(SUBSCRIPTION_TIERS);
-
-/**
  * OpenAPI-enhanced subscription tier schema
  * Use this in route files (schema.ts) for OpenAPI documentation
+ * NOTE: For non-OpenAPI contexts, use SubscriptionTierSchema from @/api/core/enums
  */
 export const subscriptionTierSchemaOpenAPI = zOpenAPI.enum(SUBSCRIPTION_TIERS);
 

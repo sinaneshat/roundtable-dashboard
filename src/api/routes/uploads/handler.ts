@@ -12,6 +12,7 @@
 
 import type { RouteHandler } from '@hono/zod-openapi';
 import { and, eq } from 'drizzle-orm';
+import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
@@ -452,8 +453,7 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
       }
     }
 
-    c.status(201);
-    return Responses.ok(c, {
+    return Responses.created(c, {
       ...uploadRecord,
       r2Key: undefined,
     });
@@ -571,7 +571,7 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
     ) => {
       // Conditional request: 304 Not Modified
       if (ifNoneMatch && result.httpEtag && ifNoneMatch === result.httpEtag) {
-        return new Response(null, { status: 304 });
+        return new Response(null, { status: HttpStatusCodes.NOT_MODIFIED });
       }
 
       // Build headers following official R2 pattern
@@ -831,8 +831,7 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
         updatedAt: new Date(),
       });
 
-    c.status(201);
-    return Responses.ok(c, {
+    return Responses.created(c, {
       uploadId: multipartUpload.uploadId,
       key: r2Key,
       attachmentId: uploadId,

@@ -46,6 +46,10 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     storeScreenMode,
     isWaitingForChangelog,
     configChangeRoundNumber,
+    // ✅ BUG FIX: Use form state for web search, NOT thread.enableWebSearch
+    // Form state is the source of truth for current round web search decision
+    // Thread's enableWebSearch is just a default/preference synced on load
+    storeEnableWebSearch,
   } = useStore(store, useShallow(s => ({
     waitingToStart: s.waitingToStartStreaming,
     chatIsStreaming: s.isStreaming,
@@ -59,6 +63,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     isWaitingForChangelog: s.isWaitingForChangelog,
     // configChangeRoundNumber signals pending config changes (set before PATCH)
     configChangeRoundNumber: s.configChangeRoundNumber,
+    // ✅ BUG FIX: Form state for web search toggle (user's current intent)
+    storeEnableWebSearch: s.enableWebSearch,
   })));
 
   // ✅ RACE CONDITION FIX: Extract isReady explicitly for precise dependency tracking
@@ -189,8 +195,10 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         }
 
         // Check pre-search blocking
+        // ✅ BUG FIX: Use form state (enableWebSearch) NOT thread.enableWebSearch
+        // When user enables web search mid-conversation, form state is true but thread is false
         const currentRound = getCurrentRoundNumber(latestMessages);
-        const webSearchEnabled = latestThread?.enableWebSearch ?? false;
+        const webSearchEnabled = latestState.enableWebSearch;
         const preSearchForRound = latestPreSearches.find(ps => ps.roundNumber === currentRound);
         if (shouldWaitForPreSearch(webSearchEnabled, preSearchForRound)) {
           return;
@@ -211,8 +219,10 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     }
 
     // Wait for pre-search to complete
+    // ✅ BUG FIX: Use form state (storeEnableWebSearch) NOT thread.enableWebSearch
+    // When user enables web search mid-conversation, form state is true but thread is false
     const currentRound = getCurrentRoundNumber(storeMessages);
-    const webSearchEnabled = storeThread?.enableWebSearch ?? false;
+    const webSearchEnabled = storeEnableWebSearch;
     const preSearchForRound = storePreSearches.find(ps => ps.roundNumber === currentRound);
     if (shouldWaitForPreSearch(webSearchEnabled, preSearchForRound)) {
       return;
@@ -232,7 +242,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         retryTimeoutRef.current = null;
       }
     };
-  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, configChangeRoundNumber, isWaitingForChangelog, chat, store]);
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, configChangeRoundNumber, isWaitingForChangelog, storeEnableWebSearch, chat, store]);
 
   // Safety timeout for thread screen resumption
   useEffect(() => {

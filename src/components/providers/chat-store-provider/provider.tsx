@@ -195,7 +195,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             return;
           }
 
-          const webSearchEnabled = latestState.thread?.enableWebSearch || latestState.enableWebSearch;
+          // ✅ FIX: Form state is the source of truth for current round web search decision
+          const webSearchEnabled = latestState.enableWebSearch;
           if (webSearchEnabled) {
             const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === roundNumber);
             if (preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE) {

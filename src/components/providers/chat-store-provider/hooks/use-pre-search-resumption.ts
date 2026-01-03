@@ -57,12 +57,17 @@ export function usePreSearchResumption({
     storeThread,
     hasInitiallyLoaded,
     isStreaming,
+    // ✅ BUG FIX: Use form state for web search, NOT thread.enableWebSearch
+    // Form state is the source of truth for current round web search decision
+    storeEnableWebSearch,
   } = useStore(store, useShallow(s => ({
     storeMessages: s.messages,
     storePreSearches: s.preSearches,
     storeThread: s.thread,
     hasInitiallyLoaded: s.hasInitiallyLoaded,
     isStreaming: s.isStreaming,
+    // ✅ BUG FIX: Form state for web search toggle (user's current intent)
+    storeEnableWebSearch: s.enableWebSearch,
   })));
 
   // Track which rounds we've attempted resumption for
@@ -86,8 +91,9 @@ export function usePreSearchResumption({
     }
 
     // Check if web search is enabled
-    const webSearchEnabled = storeThread?.enableWebSearch ?? false;
-    if (!webSearchEnabled) {
+    // ✅ BUG FIX: Use form state (storeEnableWebSearch) NOT thread.enableWebSearch
+    // When user enables web search mid-conversation, form state is true but thread is false
+    if (!storeEnableWebSearch) {
       return;
     }
 
@@ -201,6 +207,7 @@ export function usePreSearchResumption({
     storeMessages,
     storePreSearches,
     storeThread,
+    storeEnableWebSearch,
     store,
     effectiveThreadId,
     queryClientRef,

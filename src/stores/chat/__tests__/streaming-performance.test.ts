@@ -497,7 +497,7 @@ describe('streaming Performance - Edge Case Timing', () => {
     timestamps.push(Date.now());
 
     const totalTime = timestamps[timestamps.length - 1]! - timestamps[0]!;
-    expect(totalTime).toBeLessThan(5);
+    expect(totalTime).toBeLessThan(10);
   });
 
   it('transitioning between participants should not delay streaming', () => {

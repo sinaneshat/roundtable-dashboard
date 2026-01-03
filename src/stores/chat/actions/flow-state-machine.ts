@@ -241,10 +241,6 @@ export function useFlowStateMachine(
     pendingAnimations: s.pendingAnimations,
   })));
 
-  // Actions (stable references - no need for useShallow)
-  // 🚨 ATOMIC: Use tryMarkModeratorCreated to prevent race conditions
-  const tryMarkModeratorCreated = useChatStore(s => s.tryMarkModeratorCreated);
-
   // ✅ RACE CONDITION FIX: Get store API for fresh state reads inside effects
   // Prevents stale closure issues where effect runs with old messages
   const storeApi = useChatStoreApi();
@@ -428,7 +424,7 @@ export function useFlowStateMachine(
             // in its finally block AFTER the moderator stream completes.
             // Calling it here would clear streamingRoundNumber prematurely, causing a flash
             // where pending cards disappear and reappear.
-            const moderatorJustCreated = tryMarkModeratorCreated(currentRound);
+            const moderatorJustCreated = freshState.tryMarkModeratorCreated(currentRound);
 
             if (!moderatorJustCreated) {
               break; // Moderator already created by another component, skip
@@ -498,7 +494,6 @@ export function useFlowStateMachine(
     participants,
     thread,
     storeApi,
-    tryMarkModeratorCreated,
   ]);
 
   // ============================================================================

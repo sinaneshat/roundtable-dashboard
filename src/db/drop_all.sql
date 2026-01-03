@@ -55,3 +55,6 @@ DROP TABLE IF EXISTS verification;
 
 -- User table (parent - drop last)
 DROP TABLE IF EXISTS user;
+
+-- Clear migrations tracking so wrangler will re-apply migrations
+DELETE FROM d1_migrations;
