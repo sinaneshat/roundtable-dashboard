@@ -153,6 +153,14 @@ export default async function PublicChatThreadPage({
   );
 }
 
-export async function generateStaticParams() {
+// ISR: revalidate every 5 minutes for public threads
+// Public threads are read-only for viewers, rarely change, and popular ones benefit from caching
+export const revalidate = 300;
+
+// Enable on-demand ISR - slugs are user-generated and not known at build time
+export const dynamicParams = true;
+
+// Empty static params enables ISR mode for dynamic routes
+export function generateStaticParams() {
   return [];
 }
