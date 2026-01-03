@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
 
-import { BillingSuccessSkeleton } from '@/components/billing/billing-success-skeleton';
 import { BRAND } from '@/constants/brand';
 import { BillingSuccessClient } from '@/containers/screens/chat/billing/BillingSuccessClient';
 import { createMetadata } from '@/utils';
@@ -26,11 +24,9 @@ export const metadata: Metadata = createMetadata({
  * 3. Client syncs subscription data from Stripe API
  * 4. Displays subscription details and plan features
  * 5. Auto-redirects to chat
+ *
+ * Note: loading.tsx provides Suspense fallback automatically (Next.js 16 pattern)
  */
 export default function SubscriptionSuccessPage() {
-  return (
-    <Suspense fallback={<BillingSuccessSkeleton />}>
-      <BillingSuccessClient />
-    </Suspense>
-  );
+  return <BillingSuccessClient />;
 }

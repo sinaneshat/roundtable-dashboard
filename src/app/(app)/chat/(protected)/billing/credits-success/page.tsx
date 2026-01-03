@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
 
-import { CreditsSuccessSkeleton } from '@/components/billing/credits-success-skeleton';
 import { BRAND } from '@/constants/brand';
 import { CreditsSuccessClient } from '@/containers/screens/chat/billing/CreditsSuccessClient';
 import { createMetadata } from '@/utils';
@@ -25,11 +23,9 @@ export const metadata: Metadata = createMetadata({
  * 3. Client syncs and grants credits
  * 4. Shows credits added confirmation
  * 5. Auto-redirects to chat
+ *
+ * Note: loading.tsx provides Suspense fallback automatically (Next.js 16 pattern)
  */
 export default function CreditsSuccessPage() {
-  return (
-    <Suspense fallback={<CreditsSuccessSkeleton />}>
-      <CreditsSuccessClient />
-    </Suspense>
-  );
+  return <CreditsSuccessClient />;
 }

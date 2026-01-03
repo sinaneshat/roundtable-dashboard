@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
 
-import { BillingFailureSkeleton } from '@/components/billing/billing-failure-skeleton';
 import { BRAND } from '@/constants/brand';
 import { BillingFailureClient } from '@/containers/screens/chat/billing/BillingFailureClient';
 import { createMetadata } from '@/utils';
@@ -20,6 +18,8 @@ export const metadata: Metadata = createMetadata({
 /**
  * Billing Failure Page
  * No HydrationBoundary needed - layout already hydrates subscriptions, usage stats
+ *
+ * Note: loading.tsx provides Suspense fallback automatically (Next.js 16 pattern)
  */
 export default async function BillingFailurePage({
   searchParams,
@@ -33,9 +33,5 @@ export default async function BillingFailurePage({
   const params = await searchParams;
   const failureResult = await capturePaymentFailure(params);
 
-  return (
-    <Suspense fallback={<BillingFailureSkeleton />}>
-      <BillingFailureClient failureData={failureResult.data} />
-    </Suspense>
-  );
+  return <BillingFailureClient failureData={failureResult.data} />;
 }
