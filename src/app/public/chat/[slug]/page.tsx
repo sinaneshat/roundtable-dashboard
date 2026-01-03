@@ -7,10 +7,13 @@ import { MessageRoles, ResourceUnavailableReasons } from '@/api/core/enums';
 import type { ThreadDetailPayload } from '@/api/routes/chat/schema';
 import { BRAND } from '@/constants/brand';
 import PublicChatThreadScreen from '@/containers/screens/chat/PublicChatThreadScreen';
+import {
+  getCachedPublicThread,
+  getCachedPublicThreadForMetadata,
+} from '@/lib/cache/thread-cache';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { getPublicThreadService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
 export async function generateMetadata({
@@ -21,7 +24,8 @@ export async function generateMetadata({
   const { slug } = await params;
 
   try {
-    const response = await getPublicThreadService({ param: { slug } });
+    // Use cached function for metadata - shares cache with page data
+    const response = await getCachedPublicThreadForMetadata(slug);
 
     if (!response.success || !response.data?.thread) {
       return createMetadata({
@@ -76,10 +80,11 @@ export default async function PublicChatThreadPage({
   const queryClient = getQueryClient();
 
   try {
-    // Prefetch thread data only - models load on client with loading state
+    // Prefetch thread data using cached function with 'use cache: remote'
+    // This provides shared caching across serverless instances
     await queryClient.prefetchQuery({
       queryKey: queryKeys.threads.public(slug),
-      queryFn: () => getPublicThreadService({ param: { slug } }),
+      queryFn: () => getCachedPublicThread(slug),
       staleTime: 5 * 60 * 1000,
     });
 
@@ -151,16 +156,4 @@ export default async function PublicChatThreadPage({
       <PublicChatThreadScreen slug={slug} />
     </HydrationBoundary>
   );
-}
-
-// ISR: revalidate every 5 minutes for public threads
-// Public threads are read-only for viewers, rarely change, and popular ones benefit from caching
-export const revalidate = 300;
-
-// Enable on-demand ISR - slugs are user-generated and not known at build time
-export const dynamicParams = true;
-
-// Empty static params enables ISR mode for dynamic routes
-export function generateStaticParams() {
-  return [];
 }
