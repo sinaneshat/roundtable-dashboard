@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import type { RecoveryStrategy } from '@/api/core/enums';
+import { RecoveryStrategies } from '@/api/core/enums';
+
 /**
  * Complex Resumption Failure Scenario Tests
  *
@@ -51,7 +54,7 @@ type ResumptionResult = {
   success: boolean;
   recoveredState?: StreamState;
   error?: string;
-  recoveryStrategy?: 'full' | 'partial' | 'restart';
+  recoveryStrategy?: RecoveryStrategy;
 };
 
 // Mock functions for resumption logic
@@ -91,23 +94,23 @@ function validateStreamState(state: StreamState): { valid: boolean; errors: stri
 function determineRecoveryStrategy(
   kvData: KVStreamData,
   currentState: Partial<StreamState>,
-): 'full' | 'partial' | 'restart' {
+): RecoveryStrategy {
   const kvTimestamp = kvData.metadata.updatedAt;
   const timeSinceUpdate = Date.now() - kvTimestamp;
 
   // If KV data is too old, restart
   if (timeSinceUpdate > 5 * 60 * 1000) {
-    return 'restart';
+    return RecoveryStrategies.RESTART;
   }
 
   // If current state has more progress, partial recovery
   if (currentState.completedParticipants
     && currentState.completedParticipants.length > kvData.state.completedParticipants.length) {
-    return 'partial';
+    return RecoveryStrategies.PARTIAL;
   }
 
   // Full recovery from KV
-  return 'full';
+  return RecoveryStrategies.FULL;
 }
 
 function mergeStreamStates(
@@ -147,7 +150,7 @@ async function attemptResumption(
       return {
         success: false,
         error: 'No KV data found for stream',
-        recoveryStrategy: 'restart',
+        recoveryStrategy: RecoveryStrategies.RESTART,
       };
     }
 
@@ -156,21 +159,21 @@ async function attemptResumption(
       return {
         success: false,
         error: `Invalid KV state: ${validation.errors.join(', ')}`,
-        recoveryStrategy: 'restart',
+        recoveryStrategy: RecoveryStrategies.RESTART,
       };
     }
 
     const strategy = determineRecoveryStrategy(kvData, localState);
 
-    if (strategy === 'restart') {
+    if (strategy === RecoveryStrategies.RESTART) {
       return {
         success: false,
         error: 'KV data too stale, restart required',
-        recoveryStrategy: 'restart',
+        recoveryStrategy: RecoveryStrategies.RESTART,
       };
     }
 
-    const recoveredState = strategy === 'full'
+    const recoveredState = strategy === RecoveryStrategies.FULL
       ? kvData.state
       : mergeStreamStates(kvData.state, localState);
 
@@ -183,7 +186,7 @@ async function attemptResumption(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      recoveryStrategy: 'restart',
+      recoveryStrategy: RecoveryStrategies.RESTART,
     };
   }
 }
@@ -337,7 +340,7 @@ describe('complex Resumption Failure Scenarios', () => {
 
       const strategy = determineRecoveryStrategy(staleKVData, {});
 
-      expect(strategy).toBe('restart');
+      expect(strategy).toBe(RecoveryStrategies.RESTART);
     });
 
     it('should choose partial when local has more progress', () => {
@@ -347,7 +350,7 @@ describe('complex Resumption Failure Scenarios', () => {
 
       const strategy = determineRecoveryStrategy(baseKVData, localState);
 
-      expect(strategy).toBe('partial');
+      expect(strategy).toBe(RecoveryStrategies.PARTIAL);
     });
 
     it('should choose full recovery for fresh KV with more progress', () => {
@@ -357,13 +360,13 @@ describe('complex Resumption Failure Scenarios', () => {
 
       const strategy = determineRecoveryStrategy(baseKVData, localState);
 
-      expect(strategy).toBe('full');
+      expect(strategy).toBe(RecoveryStrategies.FULL);
     });
 
     it('should choose full recovery when local state is empty', () => {
       const strategy = determineRecoveryStrategy(baseKVData, {});
 
-      expect(strategy).toBe('full');
+      expect(strategy).toBe(RecoveryStrategies.FULL);
     });
   });
 
@@ -461,7 +464,7 @@ describe('complex Resumption Failure Scenarios', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('No KV data found for stream');
-      expect(result.recoveryStrategy).toBe('restart');
+      expect(result.recoveryStrategy).toBe(RecoveryStrategies.RESTART);
     });
 
     it('should fail when KV data is invalid', async () => {
@@ -495,7 +498,7 @@ describe('complex Resumption Failure Scenarios', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Invalid KV state');
-      expect(result.recoveryStrategy).toBe('restart');
+      expect(result.recoveryStrategy).toBe(RecoveryStrategies.RESTART);
     });
 
     it('should succeed with full recovery for valid fresh KV data', async () => {
@@ -530,7 +533,7 @@ describe('complex Resumption Failure Scenarios', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.recoveryStrategy).toBe('full');
+      expect(result.recoveryStrategy).toBe(RecoveryStrategies.FULL);
       expect(result.recoveredState).toEqual(validKVData.state);
     });
 
@@ -545,7 +548,7 @@ describe('complex Resumption Failure Scenarios', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Network timeout');
-      expect(result.recoveryStrategy).toBe('restart');
+      expect(result.recoveryStrategy).toBe(RecoveryStrategies.RESTART);
     });
   });
 
@@ -765,7 +768,7 @@ describe('complex Resumption Failure Scenarios', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('timeout');
-      expect(result.recoveryStrategy).toBe('restart');
+      expect(result.recoveryStrategy).toBe(RecoveryStrategies.RESTART);
     });
   });
 
@@ -1017,7 +1020,7 @@ describe('complex Resumption Failure Scenarios', () => {
       expect(result2.success).toBe(true);
 
       // Result2 has more local progress, should be partial
-      expect(result2.recoveryStrategy).toBe('partial');
+      expect(result2.recoveryStrategy).toBe(RecoveryStrategies.PARTIAL);
     });
   });
 

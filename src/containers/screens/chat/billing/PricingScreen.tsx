@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
@@ -7,7 +8,7 @@ import { useState } from 'react';
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
 import { ChatPageHeader } from '@/components/chat/chat-header';
 import { ChatPage } from '@/components/chat/chat-states';
-import { PricingContent } from '@/components/pricing/pricing-content';
+import { PricingContentSkeleton } from '@/components/pricing/pricing-content-skeleton';
 import {
   useCancelSubscriptionMutation,
   useCreateCheckoutSessionMutation,
@@ -20,6 +21,14 @@ import {
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
+
+const PricingContent = dynamic(
+  () => import('@/components/pricing/pricing-content').then(mod => ({ default: mod.PricingContent })),
+  {
+    loading: () => <PricingContentSkeleton />,
+    ssr: false,
+  },
+);
 
 export default function PricingScreen() {
   const router = useRouter();

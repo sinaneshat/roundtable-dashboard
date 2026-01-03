@@ -47,11 +47,11 @@ type ModeratorDataInput
  * partial streaming data (AI SDK's DeepPartial<ModeratorPayload>).
  *
  * MODERATOR SCHEMA:
- * - summary: string (the main moderator text)
+ * - summary: string (the main council moderator text)
  * - metrics: { engagement, insight, balance, clarity } (0-100 scores)
  *
  * USAGE:
- * - Called during moderator streaming to detect first displayable content
+ * - Called during council moderator streaming to detect first displayable content
  * - Used by ModelMessageCard to determine when to show moderator UI
  * - Works with progressive streaming (detects partial data)
  *
@@ -70,8 +70,8 @@ export function hasModeratorData(
   const summary = 'summary' in data ? data.summary : undefined;
   const metrics = 'metrics' in data ? data.metrics : undefined;
 
-  // Check if we have moderator text (excluding whitespace-only)
-  const hasModeratorText = typeof summary === 'string' && summary.trim().length > 0;
+  // Check if we have council moderator text (excluding whitespace-only)
+  const hasSummaryText = typeof summary === 'string' && summary.trim().length > 0;
 
   // Check if we have any metrics greater than 0
   const hasMetrics = isObject(metrics) && (
@@ -81,8 +81,8 @@ export function hasModeratorData(
     || (typeof metrics.clarity === 'number' && !Number.isNaN(metrics.clarity) && metrics.clarity > 0)
   );
 
-  // Returns true as soon as we have moderator text OR any metrics
-  return hasModeratorText || hasMetrics;
+  // Returns true as soon as we have council moderator text OR any metrics
+  return hasSummaryText || hasMetrics;
 }
 
 // ============================================================================
@@ -93,12 +93,12 @@ export function hasModeratorData(
  * Normalize moderator data to ensure consistent format
  *
  * MODERATOR SCHEMA:
- * - summary: string (moderator text)
+ * - summary: string (council moderator text)
  * - metrics: { engagement, insight, balance, clarity } (0-100 scores)
  *
  * Normalization ensures metrics are clamped to 0-100 range.
  *
- * @param data - Raw moderator data from AI model (streamed via moderator message)
+ * @param data - Raw moderator data from AI model (streamed via council moderator message)
  * @returns Normalized data with clamped metrics
  */
 export function normalizeModeratorData<T>(data: T): T {

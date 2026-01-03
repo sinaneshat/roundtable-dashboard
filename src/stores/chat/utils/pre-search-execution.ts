@@ -14,23 +14,27 @@ import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 import type { ChatStoreApi } from '../store';
 
 /**
- * Get effective web search enabled state from thread (single source of truth).
- * Thread state is THE source of truth for all decisions after thread exists.
- * Form state only used for new chats before thread is created.
+ * Get effective web search enabled state for the CURRENT round.
  *
- * @param thread - The chat thread (null before thread creation)
- * @param formEnableWebSearch - Form state (only used if thread is null)
- * @returns boolean - true if web search enabled, false otherwise
+ * ✅ FIX: Form state is ALWAYS the source of truth for the current round.
+ * Thread.enableWebSearch is only a default/preference synced on load.
+ * Users can toggle web search ON/OFF at any point during a conversation.
+ *
+ * Per FLOW_DOCUMENTATION.md v2.8:
+ * - Form state (`enableWebSearch`) is the sole source of truth for current round
+ * - Thread's stored `enableWebSearch` is a default/preference synced on load
+ * - Per-round decision: each round can have different web search setting
+ *
+ * @param _thread - The chat thread (unused, kept for API compatibility)
+ * @param formEnableWebSearch - Form state (ALWAYS used)
+ * @returns boolean - true if web search enabled for current round
  */
 export function getEffectiveWebSearchEnabled(
-  thread: ChatThread | null,
+  _thread: ChatThread | null,
   formEnableWebSearch: boolean,
 ): boolean {
-  // Thread exists = thread is source of truth
-  if (thread) {
-    return thread.enableWebSearch;
-  }
-  // No thread yet = form state (user's intent for new chat)
+  // ✅ FIX: Form state is ALWAYS the source of truth for the current round
+  // This allows users to toggle web search ON/OFF at any point mid-conversation
   return formEnableWebSearch;
 }
 

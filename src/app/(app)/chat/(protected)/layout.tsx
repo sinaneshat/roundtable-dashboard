@@ -16,6 +16,13 @@ import {
 } from '@/services/api';
 import { createMetadata } from '@/utils';
 
+// Force dynamic rendering - required because:
+// 1. Layout calls requireAuth() which needs auth session check
+// 2. Auth module requires BETTER_AUTH_SECRET only available at runtime
+// 3. Prevents prerendering errors on Cloudflare Pages builds
+// @see https://github.com/opennextjs/opennextjs-cloudflare/issues/596
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: `Chat - ${BRAND.fullName}`,

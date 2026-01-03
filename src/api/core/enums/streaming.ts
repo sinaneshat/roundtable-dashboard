@@ -277,6 +277,32 @@ export function isStreamPhase(value: unknown): value is StreamPhase {
 }
 
 // ============================================================================
+// RECOVERY STRATEGY (Stream resumption recovery approach)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const RECOVERY_STRATEGIES = ['full', 'partial', 'restart'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_RECOVERY_STRATEGY: RecoveryStrategy = 'full';
+
+// 3. ZOD SCHEMA
+export const RecoveryStrategySchema = z.enum(RECOVERY_STRATEGIES).openapi({
+  description: 'Strategy for recovering from stream interruption',
+  example: 'full',
+});
+
+// 4. TYPESCRIPT TYPE
+export type RecoveryStrategy = z.infer<typeof RecoveryStrategySchema>;
+
+// 5. CONSTANT OBJECT
+export const RecoveryStrategies = {
+  FULL: 'full' as const,
+  PARTIAL: 'partial' as const,
+  RESTART: 'restart' as const,
+} as const;
+
+// ============================================================================
 // POLLING STATUS (API Responses)
 // ============================================================================
 

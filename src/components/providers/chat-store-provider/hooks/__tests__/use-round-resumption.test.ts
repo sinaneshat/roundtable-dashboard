@@ -100,7 +100,7 @@ function createMockPreSearch(
       ? {
           queries: [],
           results: [],
-          moderator: 'Moderator summary',
+          moderator: 'Moderator synthesis',
           successCount: 1,
           failureCount: 0,
           totalResults: 3,

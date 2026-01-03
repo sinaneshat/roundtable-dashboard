@@ -982,7 +982,8 @@
       "gatheringThoughts": "Thinking...",
       "waitingForWebResults": "Searching...",
       "moderatorObserving": "Observing...",
-      "waitingToSummarize": "Waiting...",
+      "waitingToCouncilModerate": "Waiting...",
+      "waitingToSynthesize": "Waiting...",
       "emptyResponse": "No visible response from {model}",
       "reasoningOnlyResponse": "{model} used reasoning but produced no text output"
     },
@@ -1019,7 +1020,7 @@
       "limitReached": "Usage limit reached",
       "threadLimitReached": "Thread limit reached ({current}/{limit})",
       "messageLimitReached": "Message limit reached ({current}/{limit})",
-      "summaryLimitReached": "Summary limit reached ({current}/{limit})",
+      "councilModeratorLimitReached": "Council moderator limit reached ({current}/{limit})",
       "resetsOn": "Quota resets on {date}."
     },
     "credits": {
@@ -1442,7 +1443,7 @@
     "messages": "Messages",
     "messagesRemaining": "messages remaining",
     "summary": "Summary",
-    "summaryRemaining": "summaries remaining",
+    "councilModeratorRemaining": "council moderations remaining",
     "plan": "Plan",
     "planUsage": "Credits",
     "threads": "Threads",
@@ -1473,7 +1474,7 @@
     "viewDetails": "View usage details",
     "managePlan": "Manage Plan",
     "available": "available",
-    "moderator": "Analyses"
+    "councilModerator": "Council Moderator"
   },
   "user": {
     "defaultName": "User"

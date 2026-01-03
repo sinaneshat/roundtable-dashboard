@@ -1,14 +1,23 @@
 import type { Metadata } from 'next';
+import dynamic from 'next/dynamic';
 
+import { BillingSuccessSkeleton } from '@/components/billing/billing-success-skeleton';
 import { BRAND } from '@/constants/brand';
-import { BillingSuccessClient } from '@/containers/screens/chat/billing/BillingSuccessClient';
 import { createMetadata } from '@/utils';
+
+const BillingSuccessClient = dynamic(
+  () => import('@/containers/screens/chat/billing/BillingSuccessClient').then(mod => ({ default: mod.BillingSuccessClient })),
+  {
+    loading: () => <BillingSuccessSkeleton />,
+    ssr: false,
+  },
+);
 
 export const metadata: Metadata = createMetadata({
   title: `Subscription Activated - ${BRAND.fullName}`,
   description: 'Your subscription has been activated successfully.',
   url: '/chat/billing/subscription-success',
-  robots: 'noindex, nofollow', // Transient page - don't index
+  robots: 'noindex, nofollow',
 });
 
 /**
@@ -24,6 +33,9 @@ export const metadata: Metadata = createMetadata({
  * 3. Client syncs subscription data from Stripe API
  * 4. Displays subscription details and plan features
  * 5. Auto-redirects to chat
+ *
+ * Performance: BillingSuccessClient dynamically imported to reduce initial bundle.
+ * Only loads when user completes payment, not on pricing page load.
  */
 export default function SubscriptionSuccessPage() {
   return <BillingSuccessClient />;

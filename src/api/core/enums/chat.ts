@@ -317,3 +317,32 @@ export const CoreAssumptionFocusTypes = {
   ASSUMPTION_CONFLICTS: 'where assumptions conflict' as const,
   UNRESOLVED_DISAGREEMENTS: 'why disagreements remain unresolved' as const,
 } as const;
+
+// ============================================================================
+// CHANGELOG CHANGE TYPE (Configuration change discriminator for tests)
+// ============================================================================
+
+export const CHANGELOG_CHANGE_TYPES_EXTENDED = [
+  'added',
+  'removed',
+  'modified',
+  'reordered',
+  'mode-changed',
+] as const;
+
+export const ChangelogChangeTypeExtendedSchema = z.enum(CHANGELOG_CHANGE_TYPES_EXTENDED).openapi({
+  description: 'Extended type of thread changelog change (includes test-specific types)',
+  example: 'reordered',
+});
+
+export type ChangelogChangeTypeExtended = z.infer<typeof ChangelogChangeTypeExtendedSchema>;
+
+export const DEFAULT_CHANGELOG_CHANGE_TYPE_EXTENDED: ChangelogChangeTypeExtended = 'added';
+
+export const ChangelogChangeTypesExtended = {
+  ADDED: 'added' as const,
+  REMOVED: 'removed' as const,
+  MODIFIED: 'modified' as const,
+  REORDERED: 'reordered' as const,
+  MODE_CHANGED: 'mode-changed' as const,
+} as const;

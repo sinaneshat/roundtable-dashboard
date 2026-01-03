@@ -1410,7 +1410,7 @@ export const ChatMessageList = memo(
                   ) ?? false;
 
                   // ✅ IMMEDIATE PLACEHOLDER: Show moderator placeholder immediately when streaming round starts
-                  // This provides visual feedback that moderator will summarize after participants complete.
+                  // This provides visual feedback that moderator will synthesize after participants complete.
                   // Flow:
                   // - Submit pressed → isStreamingRound becomes true → moderator placeholder shows immediately
                   // - Participants stream one by one
@@ -1439,10 +1439,10 @@ export const ChatMessageList = memo(
                     : MessageStatuses.PENDING;
 
                   // ✅ SMART LOADING TEXT: Different message based on participant streaming status
-                  // - When participants still streaming: "Waiting to summarize..."
+                  // - When participants still streaming: "Waiting to synthesize..."
                   // - When participants done, moderator starting: "Observing discussion..."
                   const moderatorLoadingText = moderatorParts.length === 0
-                    ? (isStreaming ? tParticipant('waitingToSummarize') : tParticipant('moderatorObserving'))
+                    ? (isStreaming ? tParticipant('waitingToSynthesize') : tParticipant('moderatorObserving'))
                     : undefined;
 
                   // ✅ FLASH FIX: Keep component mounted but hidden instead of return null

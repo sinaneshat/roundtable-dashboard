@@ -128,8 +128,8 @@ type StreamingBlockProps = {
  *
  * @example
  * ```tsx
- * <StreamingBlock isStreaming={isSummarizing}>
- *   <SummaryContent data={summaryData} />
+ * <StreamingBlock isStreaming={isSynthesizing}>
+ *   <SynthesisContent data={synthesisData} />
  * </StreamingBlock>
  * ```
  */

@@ -870,7 +870,7 @@ describe('streaming State Transitions', () => {
 });
 
 // ============================================================================
-// SUMMARY CREATION GATING SIMULATION
+// COUNCIL MODERATOR CREATION GATING SIMULATION
 // ============================================================================
 
 describe('moderator Creation Gating Simulation', () => {

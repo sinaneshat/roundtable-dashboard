@@ -75,6 +75,7 @@ import {
 // Chat routes
 import {
   addParticipantHandler,
+  councilModeratorRoundHandler,
   createCustomRoleHandler,
   createThreadHandler,
   createUserPresetHandler,
@@ -101,7 +102,6 @@ import {
   resumeThreadStreamHandler,
   setRoundFeedbackHandler,
   streamChatHandler,
-  summarizeRoundHandler,
   updateCustomRoleHandler,
   updateParticipantHandler,
   updateThreadHandler,
@@ -109,6 +109,7 @@ import {
 } from './routes/chat';
 import {
   addParticipantRoute,
+  councilModeratorRoundRoute,
   createCustomRoleRoute,
   createThreadRoute,
   createUserPresetRoute,
@@ -135,7 +136,6 @@ import {
   resumeThreadStreamRoute,
   setRoundFeedbackRoute,
   streamChatRoute,
-  summarizeRoundRoute,
   updateCustomRoleRoute,
   updateParticipantRoute,
   updateThreadRoute,
@@ -578,8 +578,8 @@ const appRoutes = app
   // Pre-search (protected, web search results) - execute auto-creates DB record
   .openapi(getThreadPreSearchesRoute, getThreadPreSearchesHandler) // Get all pre-search results for thread
   .openapi(executePreSearchRoute, executePreSearchHandler) // Stream pre-search execution (auto-creates)
-  // Round Summary (protected, backend-triggered only)
-  .openapi(summarizeRoundRoute, summarizeRoundHandler) // Stream round summary generation (text streaming like participants)
+  // Council Moderator (protected, backend-triggered only)
+  .openapi(councilModeratorRoundRoute, councilModeratorRoundHandler) // Stream council moderator generation (text streaming like participants)
   // Round Feedback (protected)
   .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler) // Set/update round feedback (like/dislike)
   .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler) // Get all round feedback for a thread

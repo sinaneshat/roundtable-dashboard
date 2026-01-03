@@ -1,0 +1,62 @@
+'use client';
+
+import dynamic from 'next/dynamic';
+import type { ComponentType } from 'react';
+
+import { Icons } from '@/components/icons';
+import { cn } from '@/lib/ui/cn';
+
+type VoiceVisualizationProps = {
+  isActive: boolean;
+  audioLevels?: number[];
+  barCount?: number;
+};
+
+function VoiceVisualizationSkeleton() {
+  return (
+    <div className="overflow-hidden">
+      <div
+        className={cn(
+          'flex items-center gap-3 px-3 py-3',
+          'border-0 border-b border-primary/20 rounded-none rounded-t-2xl',
+          'bg-primary/10 backdrop-blur-xl',
+        )}
+      >
+        <div className="flex items-center gap-2 shrink-0">
+          <Icons.mic className="size-3.5 text-primary animate-pulse" />
+          <span className="text-[10px] font-medium text-primary">
+            Loading...
+          </span>
+        </div>
+        <div className="flex items-center gap-[2px] flex-1 h-6 min-w-0">
+          {Array.from({ length: 20 }, (_, i) => (
+            <div
+              key={`skeleton-bar-${i}`}
+              className="flex-1 bg-primary/30 rounded-full min-w-[2px] h-[40%] animate-pulse"
+              style={{ animationDelay: `${i * 50}ms` }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const VoiceVisualizationInternal = dynamic(
+  () => import('@/components/chat/voice-visualization').then(m => ({
+    default: m.VoiceVisualization,
+  })),
+  {
+    ssr: false,
+    loading: () => <VoiceVisualizationSkeleton />,
+  },
+) as ComponentType<VoiceVisualizationProps>;
+
+export function VoiceVisualization(props: VoiceVisualizationProps) {
+  // Only render if active
+  if (!props.isActive) {
+    return null;
+  }
+
+  return <VoiceVisualizationInternal {...props} />;
+}

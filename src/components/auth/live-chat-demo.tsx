@@ -24,7 +24,7 @@ const DEMO_PARTICIPANTS_DATA = [
   { modelId: 'google/gemini-2.5-pro', role: 'Operations Expert' },
 ];
 
-const DEMO_MODERATOR_SUMMARY = `### Summary Conclusion
+const DEMO_MODERATOR_SYNTHESIS = `### Synthesis Conclusion
 
 The council recommends a **staged approach**: run a 90-day enterprise experiment with 5 existing customers before committing to a full pivot.
 
@@ -231,7 +231,7 @@ export function LiveChatDemo() {
 
   const runAnimation = useCallback((index: number) => {
     const isModerator = index === 3;
-    const fullText = isModerator ? DEMO_MODERATOR_SUMMARY : (DEMO_RESPONSES[index] || '');
+    const fullText = isModerator ? DEMO_MODERATOR_SYNTHESIS : (DEMO_RESPONSES[index] || '');
     let charIndex = 0;
 
     if (intervalRef.current) {
@@ -294,7 +294,7 @@ export function LiveChatDemo() {
     for (let i = 0; i < 3; i++) {
       messages.push(createParticipantMessage(i, DEMO_RESPONSES[i] || ''));
     }
-    messages.push(createModeratorMessage(DEMO_MODERATOR_SUMMARY));
+    messages.push(createModeratorMessage(DEMO_MODERATOR_SYNTHESIS));
   } else if (activeParticipant === 3) {
     for (let i = 0; i < 3; i++) {
       messages.push(createParticipantMessage(i, DEMO_RESPONSES[i] || ''));

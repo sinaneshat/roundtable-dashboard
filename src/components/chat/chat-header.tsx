@@ -64,19 +64,24 @@ function NavigationHeaderComponent({
   );
   const context = useThreadHeaderOptional();
 
+  // Known static routes that should never show thread breadcrumbs
+  const isStaticRoute = pathname ? pathname in breadcrumbMap : false;
+
   // Detect active thread from store (created from overview, URL still /chat)
-  const hasActiveThread = !showInitialUI && (createdThreadId || thread);
+  // Only apply on /chat - NOT on static routes like /chat/pricing
+  const hasActiveThread = pathname === '/chat' && !showInitialUI && (createdThreadId || thread);
 
   const threadTitle = threadTitleProp ?? (showSidebarTrigger ? storeThreadTitle : null);
   const threadActions = threadActionsProp ?? (showSidebarTrigger ? context.threadActions : null);
   const isThreadPage = (
-    (pathname?.startsWith('/chat/') && pathname !== '/chat' && pathname !== '/chat/pricing')
+    (pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute)
     || pathname?.startsWith('/public/chat/')
   );
   // Treat as non-overview when we have active thread (even if pathname is /chat)
   const isOverviewPage = pathname === '/chat' && !hasActiveThread;
   // Show thread breadcrumb when on thread page OR active thread from overview
-  const showThreadBreadcrumb = (isThreadPage || hasActiveThread) && threadTitle;
+  // Never show on static routes - they have their own breadcrumb entries
+  const showThreadBreadcrumb = !isStaticRoute && (isThreadPage || hasActiveThread) && threadTitle;
   const currentPage = showThreadBreadcrumb
     ? { titleKey: threadTitle, isDynamic: true as const }
     : pathname ? breadcrumbMap[pathname as keyof typeof breadcrumbMap] : undefined;

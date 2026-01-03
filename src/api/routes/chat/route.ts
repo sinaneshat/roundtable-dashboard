@@ -366,7 +366,7 @@ export const getThreadRoundChangelogRoute = createRoute({
 
 /**
  * POST Pre-Search Route - Execute or return existing search
- * ✅ FOLLOWS: summarizeRoundRoute pattern exactly
+ * ✅ FOLLOWS: councilModeratorRoundRoute pattern exactly
  * ✅ IDEMPOTENT: Returns existing if already completed
  * ✅ DATABASE-FIRST: Creates record before streaming
  */
@@ -375,7 +375,7 @@ export const executePreSearchRoute = createRoute({
   path: '/chat/threads/:threadId/rounds/:roundNumber/pre-search',
   tags: ['chat'],
   summary: 'Execute pre-search for conversation round (streaming)',
-  description: 'Generate and execute web search queries before participant streaming. Streams search progress in real-time using SSE. Returns completed search immediately if already exists. Follows same architectural pattern as moderator summary.',
+  description: 'Generate and execute web search queries before participant streaming. Streams search progress in real-time using SSE. Returns completed search immediately if already exists. Follows same architectural pattern as council moderator.',
   request: {
     params: ThreadRoundParamSchema,
     body: {
@@ -791,12 +791,12 @@ export const deleteUserPresetRoute = createRoute({
     ...createProtectedRouteResponses(),
   },
 });
-export const summarizeRoundRoute = createRoute({
+export const councilModeratorRoundRoute = createRoute({
   method: 'post',
   path: '/chat/threads/:threadId/rounds/:roundNumber/moderator',
   tags: ['chat'],
-  summary: 'Generate moderator summary (streaming)',
-  description: 'Generate an executive-grade moderator summary of all participant responses in a round. Streams moderator text in real-time as a chatMessage with metadata.isModerator: true. Frontend renders via ChatMessageList component alongside participant messages. Returns immediately if moderator message already exists for this round.',
+  summary: 'Generate council moderator round summary (streaming)',
+  description: 'Generate an executive-grade council moderator summary of all participant responses in a round. Streams moderator text in real-time as a chatMessage with metadata.isModerator: true. Frontend renders via ChatMessageList component alongside participant messages. Returns immediately if moderator message already exists for this round.',
   request: {
     params: ThreadRoundParamSchema,
     body: {
@@ -810,11 +810,11 @@ export const summarizeRoundRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Moderator summary streaming in progress OR existing moderator message returned. Streams as text/event-stream following AI SDK UIMessageStream protocol. If moderator message already exists for this round, returns the chatMessage data as JSON.',
+      description: 'Council moderator summary streaming in progress OR existing moderator message returned. Streams as text/event-stream following AI SDK UIMessageStream protocol. If moderator message already exists for this round, returns the chatMessage data as JSON.',
       content: {
         'text/event-stream': {
           schema: z.any().openapi({
-            description: 'AI SDK UIMessageStream format for moderator summary. Dynamic SSE protocol - cannot be represented with static schema.',
+            description: 'AI SDK UIMessageStream format for council moderator summary. Dynamic SSE protocol - cannot be represented with static schema.',
           }),
         },
         'application/json': {
@@ -825,7 +825,7 @@ export const summarizeRoundRoute = createRoute({
             metadata: z.any(),
             roundNumber: z.number(),
           }).openapi({
-            description: 'Existing moderator message (if already persisted)',
+            description: 'Existing council moderator message (if already persisted)',
           }),
         },
       },

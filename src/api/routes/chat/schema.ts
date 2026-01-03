@@ -855,7 +855,7 @@ export const ModeratorMetricsSchema = z.object({
 }).openapi('ModeratorMetrics');
 
 export const ModeratorAIContentSchema = z.object({
-  summary: z.string().describe('Comprehensive structured summary in markdown format'),
+  summary: z.string().describe('Comprehensive structured council moderator content in markdown format'),
   metrics: ModeratorMetricsSchema.describe('Ratings for engagement, insight, balance, and clarity (0-100 each)'),
 }).openapi('ModeratorAIContent');
 
@@ -865,7 +865,7 @@ export const ModeratorDetailPayloadSchema = z.object({
   roundNumber: RoundNumberSchema,
   mode: ChatModeSchema,
   userQuestion: z.string(),
-  summary: z.string().describe('Comprehensive structured summary in markdown format'),
+  summary: z.string().describe('Comprehensive structured council moderator content in markdown format'),
   metrics: ModeratorMetricsSchema,
 }).openapi('ModeratorDetailPayload');
 
@@ -897,18 +897,18 @@ export type ParticipantResponse = z.infer<typeof ParticipantResponseSchema>;
 
 export const ModeratorPromptConfigSchema = z.object({
   roundNumber: RoundNumberSchema.openapi({
-    description: 'Round number being summarized (0-based)',
+    description: 'Round number being moderated (0-based)',
     example: 0,
   }),
   mode: ChatModeSchema.openapi({
-    description: 'Chat mode determining summary style',
+    description: 'Chat mode determining council moderator style',
     example: ChatModes.DEBATING,
   }),
   userQuestion: z.string().min(1).openapi({
     description: 'Original user question for this round',
   }),
   participantResponses: z.array(ParticipantResponseSchema).min(1).openapi({
-    description: 'Array of participant responses to summarize',
+    description: 'Array of participant responses to moderate',
   }),
 }).openapi('ModeratorPromptConfig');
 
@@ -921,7 +921,7 @@ export const MODERATOR_REQUIRED_SECTIONS = [
 ] as const;
 
 export const ModeratorRequiredSectionSchema = z.enum(MODERATOR_REQUIRED_SECTIONS).openapi({
-  description: 'Required moderator summary section',
+  description: 'Required council moderator section',
   example: 'summaryConclusion',
 });
 
@@ -940,7 +940,7 @@ export const MODERATOR_OPTIONAL_SECTIONS = [
 ] as const;
 
 export const ModeratorOptionalSectionSchema = z.enum(MODERATOR_OPTIONAL_SECTIONS).openapi({
-  description: 'Optional moderator summary section',
+  description: 'Optional council moderator section',
   example: 'primaryPerspectives',
 });
 
@@ -952,7 +952,7 @@ export const MODERATOR_ALL_SECTIONS = [
 ] as const;
 
 export const ModeratorSectionSchema = z.enum(MODERATOR_ALL_SECTIONS).openapi({
-  description: 'Moderator summary section identifier',
+  description: 'Council moderator section identifier',
 });
 
 export type ModeratorSection = z.infer<typeof ModeratorSectionSchema>;
@@ -997,7 +997,7 @@ export const LimitationImportances = {
   OUT_OF_SCOPE: 'out_of_scope' as const,
 } as const;
 
-export const ModeratorSummarySectionsSchema = z.object({
+export const CouncilModeratorSectionsSchema = z.object({
   // Required sections
   summaryConclusion: z.object({
     required: z.literal(true),
@@ -1087,9 +1087,9 @@ export const ModeratorSummarySectionsSchema = z.object({
       omitIf: z.literal('none exist'),
     }),
   }).optional(),
-}).openapi('ModeratorSummarySections');
+}).openapi('CouncilModeratorSections');
 
-export type ModeratorSummarySections = z.infer<typeof ModeratorSummarySectionsSchema>;
+export type CouncilModeratorSections = z.infer<typeof CouncilModeratorSectionsSchema>;
 
 export const MODERATOR_STYLE_CONSTRAINTS = [
   'precise_restrained_non_performative',
@@ -1218,7 +1218,7 @@ export type ModeratorMetrics = z.infer<typeof ModeratorMetricsSchema>;
 
 export const StoredModeratorDataSchema = z.object({
   id: CoreSchemas.id().openapi({
-    description: 'Moderator summary ID',
+    description: 'Council moderator ID',
     example: '01HXYZ123ABC',
   }),
   threadId: CoreSchemas.id().openapi({
@@ -1238,10 +1238,10 @@ export const StoredModeratorDataSchema = z.object({
   }),
   status: MessageStatusSchema,
   moderatorData: z.object({
-    text: z.string().describe('Moderator summary text in markdown'),
+    text: z.string().describe('Council moderator text in markdown'),
     metrics: ModeratorMetricsSchema,
   }).nullable().openapi({
-    description: 'Moderator AI-generated summary and metrics',
+    description: 'Council moderator AI-generated content and metrics',
   }),
   participantMessageIds: z.array(CoreSchemas.id()).openapi({
     description: 'Array of participant message IDs in this round',

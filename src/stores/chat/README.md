@@ -116,9 +116,9 @@ function Component() {
 5. **Testability**: Action hooks can be tested independently
 6. **Official Pattern**: Follows Zustand v5 and Next.js App Router best practices
 
-## Moderator Architecture
+## Council Moderator Architecture
 
-The moderator (round summary) functionality works as follows:
+The council moderator (round moderator) functionality works as follows:
 
 1. **Trigger**: `useModeratorTrigger` hook calls `/api/v1/chat/summary` endpoint
 2. **Backend**: Streams moderator message as assistant message with `isModerator: true` metadata
@@ -126,7 +126,7 @@ The moderator (round summary) functionality works as follows:
 4. **Rendering**: Frontend renders via `ChatMessageList` → `ModelMessageCard` component
 5. **Display**: Moderator messages use special styling/header to distinguish from participant messages
 
-No separate summary components or panels - moderators are integrated into the message timeline.
+No separate moderator components or panels - moderators are integrated into the message timeline.
 
 ## Migration Notes
 
@@ -135,7 +135,7 @@ Moved from `hooks/utils/` to `stores/chat/actions/`:
 - `use-feedback-actions.ts` → `actions/feedback-actions.ts`
 
 Consolidated to store subscriptions (deleted):
-- Summary-specific hooks → Moderator now uses message streaming architecture
+- Council moderator-specific hooks → Moderator now uses message streaming architecture
 - Streaming trigger effect → Automatic streaming trigger in store.ts
 - Pending message orchestration → Automatic message sending in store.ts
 

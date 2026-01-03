@@ -1478,6 +1478,13 @@ export function useMultiParticipantChat(
       isTriggeringRef.current = false;
       isStreamingRef.current = false;
       queuedParticipantsThisRoundRef.current = new Set();
+      // ✅ BUG FIX: Clear phantom guard to prevent blocking participant continuation
+      // in subsequent conversations. Without this, keys like "r0_p0" from a previous
+      // conversation would block the same round/participant in a new conversation.
+      triggeredNextForRef.current = new Set();
+      // ✅ BUG FIX: Clear processed message IDs to prevent duplicate filtering
+      // in subsequent conversations.
+      processedMessageIdsRef.current = new Set();
 
       // Reset hydration flag to allow re-hydration on next thread
       hasHydratedRef.current = false;
@@ -1616,6 +1623,10 @@ export function useMultiParticipantChat(
     lastUsedParticipantIndex.current = null; // Reset for new round
     queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for new round
     participantIndexQueue.current = []; // ✅ FIX: Clear stale queue entries from previous round
+    // ✅ BUG FIX: Clear phantom guard at start of each round to prevent stale entries
+    // from blocking participant continuation. This is especially important after
+    // navigation to new chat where refs might not be reset if threadId stays empty.
+    triggeredNextForRef.current = new Set();
 
     // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
     // This prevents race condition where pendingMessage effect checks ref

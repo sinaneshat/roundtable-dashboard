@@ -6,7 +6,6 @@ import { useTranslations } from 'next-intl';
 import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ChatSidebarItem } from '@/api/routes/chat/schema';
-import { ChatRenameForm } from '@/components/chat/chat-rename-form';
 import { Icons } from '@/components/icons';
 import {
   AlertDialog,
@@ -34,6 +33,12 @@ import {
 } from '@/components/ui/sidebar';
 import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations';
 import { useCurrentPathname } from '@/hooks/utils';
+
+// Lazy-loaded - only shown when user starts editing a chat name
+const ChatRenameForm = dynamic(
+  () => import('@/components/chat/chat-rename-form').then(m => ({ default: m.ChatRenameForm })),
+  { ssr: false },
+);
 
 // Lazy-loaded - only shown when user clicks delete
 const ChatDeleteDialog = dynamic(

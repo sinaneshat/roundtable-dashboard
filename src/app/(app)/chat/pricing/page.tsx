@@ -1,14 +1,11 @@
-import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
 
 import { BRAND } from '@/constants/brand';
 import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
-import { getQueryClient } from '@/lib/data/query-client';
-import { queryKeys } from '@/lib/data/query-keys';
-import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-export const dynamic = 'force-static';
+// Pure SSG - products prefetched in layout
+// NO auth required - public pricing page
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
@@ -27,18 +24,6 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-export default async function PricingPage() {
-  const queryClient = getQueryClient();
-
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.products.list(),
-    queryFn: getProductsService,
-    staleTime: Infinity, // SSG: data baked at build time, never refetch
-  });
-
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <PricingScreen />
-    </HydrationBoundary>
-  );
+export default function PricingPage() {
+  return <PricingScreen />;
 }

@@ -43,9 +43,9 @@ const ConversationModeModal = dynamic(
   () => import('@/components/chat/conversation-mode-modal').then(m => m.ConversationModeModal),
   { ssr: false },
 );
-// Toolbar (442 lines) - deferred until chat input visible
+// Toolbar now lazy-loaded within ChatInput via chat-input-toolbar-lazy.tsx
 const ChatInputToolbarMenu = dynamic(
-  () => import('@/components/chat/chat-input-toolbar-menu').then(m => m.ChatInputToolbarMenu),
+  () => import('@/components/chat/chat-input-toolbar-lazy').then(m => m.ChatInputToolbarMenu),
   { ssr: false },
 );
 

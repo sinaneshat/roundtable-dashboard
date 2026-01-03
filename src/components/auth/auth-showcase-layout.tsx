@@ -17,7 +17,7 @@ const LiveChatDemo = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex flex-col h-full px-4 sm:px-6 pt-6 pb-6">
-        <ThreadMessagesSkeleton participantCount={3} showModerator />
+        <ThreadMessagesSkeleton participantCount={3} usecase="demo" />
       </div>
     ),
   },

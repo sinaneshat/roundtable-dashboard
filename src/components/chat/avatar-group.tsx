@@ -35,7 +35,7 @@ export function AvatarGroup({
 }: AvatarGroupProps) {
   const sizeMetadata = AvatarSizeMetadata[size];
 
-  // Show skeleton avatars while loading
+  // Show circular skeleton avatars while loading
   if (isLoading) {
     return (
       <div className={cn('flex items-center', className)}>
@@ -52,9 +52,10 @@ export function AvatarGroup({
             <Skeleton
               className={cn(
                 sizeMetadata.container,
-                'rounded-full',
+                'rounded-full aspect-square',
                 overlap && 'border-2 border-card',
               )}
+              aria-label="Loading avatar"
             />
           </div>
         ))}
@@ -62,9 +63,10 @@ export function AvatarGroup({
           <Skeleton
             className={cn(
               sizeMetadata.container,
-              'rounded-full',
+              'rounded-full aspect-square',
               sizeMetadata.gapSize === 8 ? 'ml-2' : 'ml-3',
             )}
+            aria-label="Loading count"
           />
         )}
       </div>

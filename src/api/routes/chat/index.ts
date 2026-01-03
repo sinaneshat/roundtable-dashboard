@@ -11,7 +11,7 @@ export {
   getThreadRoundChangelogHandler,
 } from './handlers/message.handler';
 export {
-  summarizeRoundHandler,
+  councilModeratorRoundHandler,
 } from './handlers/moderator.handler';
 export {
   addParticipantHandler,

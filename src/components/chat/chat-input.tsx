@@ -9,9 +9,9 @@ import { CardConnectionAlert } from '@/components/chat/card-connection-alert';
 import {
   ChatInputAttachments,
   ChatInputDropzoneOverlay,
-} from '@/components/chat/chat-input-attachments';
+} from '@/components/chat/chat-input-attachments-lazy';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
-import { VoiceVisualization } from '@/components/chat/voice-visualization';
+import { VoiceVisualization } from '@/components/chat/voice-visualization-lazy';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {

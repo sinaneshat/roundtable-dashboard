@@ -3,51 +3,41 @@
  *
  * ✅ SINGLE SOURCE OF TRUTH: Utilities for checking model compatibility with file types
  * ✅ FRONTEND COMPATIBLE: Can be imported by React components
+ * ✅ DERIVES FROM: Uses VISUAL_MIME_TYPES from @/api/core/enums/file-types
  *
  * Used to determine which models can/cannot process certain file types
  * and to auto-filter model selection based on uploaded files.
  */
 
+import type { IncompatibilityReason, VisualMimeType } from '@/api/core/enums';
+import {
+  IncompatibilityReasons,
+  isVisualMimeType,
+  VISUAL_MIME_TYPES,
+} from '@/api/core/enums';
+
 // ============================================================================
-// VISION-REQUIRED MIME TYPES
+// RE-EXPORTS FROM CENTRALIZED ENUMS
 // ============================================================================
 
 /**
  * MIME types that require vision capability to process
- * ✅ MIRRORS: Backend VISION_REQUIRED_MIME_TYPES from src/api/core/enums.ts
+ * ✅ SINGLE SOURCE: Re-exports VISUAL_MIME_TYPES from @/api/core/enums/file-types
  *
  * Models without vision capability will have these file types filtered out
  * on the backend. We expose this on frontend to proactively disable selection.
  */
-export const VISION_REQUIRED_MIME_TYPES = [
-  // Images
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/svg+xml',
-  'image/bmp',
-  'image/tiff',
-  'image/avif',
-  // iOS HEIC/HEIF formats
-  'image/heic',
-  'image/heif',
-  // PDFs (rendered visually by providers)
-  'application/pdf',
-] as const;
-
-export type VisionRequiredMimeType = (typeof VISION_REQUIRED_MIME_TYPES)[number];
-
-/** Set for O(1) lookup performance */
-const VISION_REQUIRED_SET = new Set<string>(VISION_REQUIRED_MIME_TYPES);
+export const VISION_REQUIRED_MIME_TYPES = VISUAL_MIME_TYPES;
+export type VisionRequiredMimeType = VisualMimeType;
 
 /**
  * Check if a MIME type requires vision capability
+ * ✅ SINGLE SOURCE: Delegates to isVisualMimeType from @/api/core/enums
  * @param mimeType - MIME type to check
  * @returns true if the MIME type requires vision capability
  */
 export function isVisionRequiredMimeType(mimeType: string): boolean {
-  return VISION_REQUIRED_SET.has(mimeType);
+  return isVisualMimeType(mimeType);
 }
 
 // ============================================================================
@@ -97,18 +87,6 @@ export function isModelCompatibleWithFiles(
   }
   return true;
 }
-
-// ============================================================================
-// INCOMPATIBILITY REASON ENUM (Simplified - internal use only)
-// ============================================================================
-
-// CONSTANT OBJECT - For usage in code
-export const IncompatibilityReasons = {
-  NO_VISION: 'noVision' as const,
-} as const;
-
-// TYPESCRIPT TYPE - Inferred from constant object
-export type IncompatibilityReason = typeof IncompatibilityReasons[keyof typeof IncompatibilityReasons];
 
 /**
  * Get the reason why a model is incompatible with files

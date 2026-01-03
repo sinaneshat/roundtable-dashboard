@@ -2,9 +2,9 @@
 
 import type { ComponentProps } from 'react';
 import { createContext, memo, use, useEffect, useMemo, useRef, useState } from 'react';
-import type { BundledLanguage, ShikiTransformer } from 'shiki';
-import { codeToHtml } from 'shiki';
 
+import type { BundledLanguage } from '@/components/ai-elements/code-block-highlighter';
+import { highlightCode } from '@/components/ai-elements/code-block-highlighter';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
@@ -23,60 +23,6 @@ type CodeBlockContextType = {
 
 const CodeBlockContext = createContext<CodeBlockContextType | null>(null);
 
-const lineNumberTransformer: ShikiTransformer = {
-  name: 'line-numbers',
-  line(node, line) {
-    node.children.unshift({
-      type: 'element',
-      tagName: 'span',
-      properties: {
-        className: [
-          'inline-block',
-          'min-w-10',
-          'mr-4',
-          'text-right',
-          'select-none',
-          'text-muted-foreground',
-        ],
-      },
-      children: [{ type: 'text', value: String(line) }],
-    });
-  },
-};
-
-async function highlightCode(
-  code: string,
-  language: BundledLanguage | string,
-  showLineNumbers = false,
-): Promise<[string, string]> {
-  const transformers: ShikiTransformer[] = showLineNumbers ? [lineNumberTransformer] : [];
-
-  const escapeHtml = (text: string): string =>
-    text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-
-  try {
-    const [light, dark] = await Promise.all([
-      codeToHtml(code, {
-        lang: language as BundledLanguage,
-        theme: 'one-light',
-        transformers,
-      }),
-      codeToHtml(code, {
-        lang: language as BundledLanguage,
-        theme: 'one-dark-pro',
-        transformers,
-      }),
-    ]);
-    return [light, dark];
-  } catch {
-    const fallbackHtml = `<pre><code>${escapeHtml(code)}</code></pre>`;
-    return [fallbackHtml, fallbackHtml];
-  }
-}
-
 function CodeBlockComponent({
   code,
   language,
@@ -89,15 +35,24 @@ function CodeBlockComponent({
   const [darkHtml, setDarkHtml] = useState<string>('');
   const contextValue = useMemo(() => ({ code }), [code]);
 
+  const isHighlighting = !html;
+
   useEffect(() => {
     let ignore = false;
 
-    highlightCode(code, language, showLineNumbers).then(([light, dark]) => {
+    const loadHighlighting = async () => {
+      const [light, dark] = await highlightCode(code, language, showLineNumbers);
       if (!ignore) {
         setHtml(light);
         setDarkHtml(dark);
       }
-    });
+    };
+
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Reset state when code changes
+    setHtml('');
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Reset state when code changes
+    setDarkHtml('');
+    void loadHighlighting();
 
     return () => {
       ignore = true;
@@ -114,16 +69,26 @@ function CodeBlockComponent({
         {...props}
       >
         <div className="relative">
-          <div
-            className="overflow-hidden dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
-            // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for Shiki syntax highlighting output
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-          <div
-            className="hidden overflow-hidden dark:block [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
-            // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for Shiki syntax highlighting output
-            dangerouslySetInnerHTML={{ __html: darkHtml }}
-          />
+          {isHighlighting && !html
+            ? (
+                <pre className="m-0 bg-background p-4 text-foreground text-sm overflow-x-auto">
+                  <code className="font-mono text-sm">{code}</code>
+                </pre>
+              )
+            : (
+                <>
+                  <div
+                    className="overflow-hidden dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+                    // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for Shiki syntax highlighting output
+                    dangerouslySetInnerHTML={{ __html: html }}
+                  />
+                  <div
+                    className="hidden overflow-hidden dark:block [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+                    // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for Shiki syntax highlighting output
+                    dangerouslySetInnerHTML={{ __html: darkHtml }}
+                  />
+                </>
+              )}
           {children && (
             <div className="absolute top-2 right-2 flex items-center gap-2">
               {children}

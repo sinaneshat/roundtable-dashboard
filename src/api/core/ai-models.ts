@@ -15,15 +15,15 @@
 import { ModelIds } from '@/api/core/enums';
 
 // ============================================================================
-// ROUND SUMMARY MODELS
+// COUNCIL MODERATOR MODELS
 // ============================================================================
 
 /**
- * Model for round summary generation (moderator summaries)
+ * Model for council moderator summary generation
  * ✅ GEMINI 2.5 FLASH: Fast, cheap, reliable structured JSON output
  * ⚠️ Anthropic models have schema validation issues (min/max not supported)
  */
-export const SUMMARY_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_5_FLASH;
+export const COUNCIL_MODERATOR_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_5_FLASH;
 
 // ============================================================================
 // TITLE GENERATION MODELS
@@ -61,7 +61,7 @@ export const IMAGE_ANALYSIS_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_0_FLASH_001;
 // ============================================================================
 
 export const AIModels = {
-  SUMMARY: SUMMARY_MODEL_ID,
+  COUNCIL_MODERATOR: COUNCIL_MODERATOR_MODEL_ID,
   TITLE_GENERATION: TITLE_GENERATION_MODEL_ID,
   WEB_SEARCH: WEB_SEARCH_MODEL_ID,
   IMAGE_ANALYSIS: IMAGE_ANALYSIS_MODEL_ID,

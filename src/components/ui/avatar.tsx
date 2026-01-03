@@ -95,4 +95,5 @@ const AvatarFallback = forwardRef<
 AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
 
 export { Avatar, AvatarFallback, AvatarImage }
+export { LazyAvatarImage } from './lazy-avatar-image'
 

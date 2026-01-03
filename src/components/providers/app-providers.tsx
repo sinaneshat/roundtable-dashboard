@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider, useTranslations } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
@@ -7,7 +8,6 @@ import type { ReactNode } from 'react';
 import { Suspense } from 'react';
 
 import { GlobalErrorBoundary } from '@/components/errors/global-error-boundary';
-import { VersionUpdateModal } from '@/components/modals/version-update-modal';
 import { Toaster } from '@/components/ui/toaster';
 import type { ModelPreferencesState } from '@/stores/preferences';
 
@@ -16,6 +16,12 @@ import { PostHogPageview } from './posthog-pageview';
 import PostHogProvider from './posthog-provider';
 import { PreferencesStoreProvider } from './preferences-store-provider';
 import { QueryClientProvider } from './query-client-provider';
+
+// Lazy-loaded - only shown when app version changes
+const VersionUpdateModal = dynamic(
+  () => import('@/components/modals/version-update-modal').then(m => m.VersionUpdateModal),
+  { ssr: false },
+);
 
 function MaintenanceMessage() {
   const t = useTranslations('common');

@@ -240,24 +240,35 @@ function StickyInputSkeleton({ className, ...props }: ComponentProps<"div">) {
 
 type ThreadMessagesSkeletonBaseProps = ComponentProps<"div">;
 
+type SkeletonUsecase = 'chat' | 'demo';
+
 interface ThreadMessagesSkeletonProps extends ThreadMessagesSkeletonBaseProps {
   participantCount?: number;
   showModerator?: boolean;
+  showInput?: boolean;
+  usecase?: SkeletonUsecase;
 }
 
 function ThreadMessagesSkeleton({
   participantCount = 2,
   showModerator = true,
+  showInput = false,
+  usecase,
   className,
   ...props
 }: ThreadMessagesSkeletonProps) {
+  // demo usecase: only user + participant messages, no moderator or input
+  const shouldShowModerator = usecase === 'demo' ? false : showModerator;
+  const shouldShowInput = usecase === 'demo' ? false : showInput;
+
   return (
     <div className={cn("space-y-3", className)} {...props}>
       <UserMessageSkeleton />
       {Array.from({ length: participantCount }, (_, i) => (
         <AssistantMessageSkeleton key={i} />
       ))}
-      {showModerator && <ModeratorCardSkeleton />}
+      {shouldShowModerator && <ModeratorCardSkeleton />}
+      {shouldShowInput && <StickyInputSkeleton />}
     </div>
   )
 }
@@ -323,6 +334,15 @@ function QuickStartSkeleton({ count = 3, className, ...props }: QuickStartSkelet
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function AuthFormSkeleton({ className, ...props }: ComponentProps<"div">) {
+  return (
+    <div className={cn("w-full flex flex-col gap-4 pt-10", className)} {...props}>
+      <Skeleton className="h-12 w-full rounded-full" />
+      <Skeleton className="h-12 w-full rounded-full" />
     </div>
   )
 }
@@ -396,6 +416,7 @@ export {
   ThreadMessagesSkeleton,
   PresetCardSkeleton,
   QuickStartSkeleton,
+  AuthFormSkeleton,
   ImageWithSkeleton,
 }
 

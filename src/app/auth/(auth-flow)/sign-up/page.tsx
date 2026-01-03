@@ -1,12 +1,9 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
-import { AuthForm } from '@/components/auth/auth-form';
+import { AuthFormLoader } from '@/components/auth/auth-form-loader';
 import { BRAND } from '@/constants/brand';
 import { createMetadata } from '@/utils';
-
-// Note: Parent layout uses force-dynamic for auth session checks
-// These pages inherit dynamic rendering from the layout
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta.signUp');
@@ -29,5 +26,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function SignUpPage() {
-  return <AuthForm />;
+  return <AuthFormLoader />;
 }

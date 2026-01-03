@@ -3,10 +3,9 @@
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { PlanTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
-import { UsageMetrics } from '@/components/chat/usage-metrics';
+import { StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import {
   Accordion,
@@ -25,18 +24,31 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenuButton } from '@/components/ui/sidebar';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   useCancelSubscriptionMutation,
   useCreateCustomerPortalSessionMutation,
   useSubscriptionsQuery,
-  useUsageStatsQuery,
 } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
 import { signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
 import { showApiErrorToast } from '@/lib/toast';
 
-// Dynamic imports - only loaded when user opens these dialogs
+// Dynamic imports - only loaded when user opens dropdown/dialogs
+const UsageMetrics = dynamic(
+  () => import('@/components/chat/usage-metrics').then(m => ({ default: m.UsageMetrics })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-full rounded-md" />
+        <Skeleton className="h-8 w-full rounded-md" />
+      </div>
+    ),
+  },
+);
+
 const CancelSubscriptionDialog = dynamic(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => m.CancelSubscriptionDialog),
   { ssr: false },
@@ -56,7 +68,7 @@ export function NavUser({ initialSession }: NavUserProps) {
   const router = useRouter();
   const { data: clientSession } = useSession();
   const t = useTranslations();
-  const { data: usageData } = useUsageStatsQuery();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const showCancelDialog = useBoolean(false);
   const showApiKeysModal = useBoolean(false);
@@ -116,7 +128,6 @@ export function NavUser({ initialSession }: NavUserProps) {
       showApiErrorToast('Cancellation Failed', error);
     }
   };
-  const subscriptionTier = usageData?.data?.plan?.type === PlanTypes.PAID ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
 
   const mounted = useBoolean(false);
   useEffect(() => {
@@ -151,7 +162,7 @@ export function NavUser({ initialSession }: NavUserProps) {
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
         <DropdownMenuTrigger asChild>
           <SidebarMenuButton
             size="lg"
@@ -199,70 +210,78 @@ export function NavUser({ initialSession }: NavUserProps) {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
 
-          <div className="px-2">
-            <Accordion type="single" collapsible>
-              <AccordionItem value="usage" className="border-none">
-                <AccordionTrigger className="py-2 text-xs font-medium text-muted-foreground hover:no-underline">
-                  {t('usage.planUsage')}
-                </AccordionTrigger>
-                <AccordionContent className="pb-2">
-                  <UsageMetrics />
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </div>
-
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem onClick={showApiKeysModal.onTrue}>
-              <Icons.key />
-              API Keys
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-          {activeSubscription && (
+          {isDropdownOpen && (
             <>
+              <div className="px-2">
+                <Accordion type="single" collapsible>
+                  <AccordionItem value="usage" className="border-none">
+                    <AccordionTrigger className="py-2 text-xs font-medium text-muted-foreground hover:no-underline">
+                      {t('usage.planUsage')}
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-2">
+                      <UsageMetrics />
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem
-                  onClick={handleManageBilling}
-                  disabled={customerPortalMutation.isPending || cancelSubscriptionMutation.isPending}
-                >
-                  {customerPortalMutation.isPending
-                    ? (
-                        <>
-                          <Icons.loader className="size-4 animate-spin" />
-                          {t('pricing.card.processing')}
-                        </>
-                      )
-                    : (
-                        <>
-                          <Icons.creditCard />
-                          {t('pricing.card.manageBilling')}
-                        </>
-                      )}
+                <DropdownMenuItem onClick={showApiKeysModal.onTrue}>
+                  <Icons.key />
+                  API Keys
                 </DropdownMenuItem>
               </DropdownMenuGroup>
+              {activeSubscription && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      onClick={handleManageBilling}
+                      disabled={customerPortalMutation.isPending || cancelSubscriptionMutation.isPending}
+                    >
+                      {customerPortalMutation.isPending
+                        ? (
+                            <>
+                              <Icons.loader className="size-4 animate-spin" />
+                              {t('pricing.card.processing')}
+                            </>
+                          )
+                        : (
+                            <>
+                              <Icons.creditCard />
+                              {t('pricing.card.manageBilling')}
+                            </>
+                          )}
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut}>
+                <Icons.logOut />
+                {t('navigation.signOut')}
+              </DropdownMenuItem>
             </>
           )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleSignOut}>
-            <Icons.logOut />
-            {t('navigation.signOut')}
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <CancelSubscriptionDialog
-        open={showCancelDialog.value}
-        onOpenChange={showCancelDialog.setValue}
-        onConfirm={handleConfirmCancellation}
-        subscriptionTier={subscriptionTier}
-        currentPeriodEnd={activeSubscription?.currentPeriodEnd}
-        isProcessing={cancelSubscriptionMutation.isPending}
-      />
-      <ApiKeysModal
-        open={showApiKeysModal.value}
-        onOpenChange={showApiKeysModal.setValue}
-      />
+      {showCancelDialog.value && (
+        <CancelSubscriptionDialog
+          open={showCancelDialog.value}
+          onOpenChange={showCancelDialog.setValue}
+          onConfirm={handleConfirmCancellation}
+          subscriptionTier={activeSubscription ? SubscriptionTiers.PRO : SubscriptionTiers.FREE}
+          currentPeriodEnd={activeSubscription?.currentPeriodEnd}
+          isProcessing={cancelSubscriptionMutation.isPending}
+        />
+      )}
+      {showApiKeysModal.value && (
+        <ApiKeysModal
+          open={showApiKeysModal.value}
+          onOpenChange={showApiKeysModal.setValue}
+        />
+      )}
     </>
   );
 }

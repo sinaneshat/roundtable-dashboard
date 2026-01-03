@@ -11,7 +11,6 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { ChatModeSchema, MessageStatuses, ScreenModes, UploadStatuses } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
-import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
@@ -20,6 +19,7 @@ import {
   useChatStoreApi,
   useModelPreferencesStore,
 } from '@/components/providers';
+import { QuickStartSkeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
@@ -61,6 +61,14 @@ const ConversationModeModal = dynamic(
 const ChatInputToolbarMenu = dynamic(
   () => import('@/components/chat/chat-input-toolbar-menu').then(m => m.ChatInputToolbarMenu),
   { ssr: false },
+);
+// ChatQuickStart - Heavy component with framer-motion animations, load after hydration
+const ChatQuickStart = dynamic(
+  () => import('@/components/chat/chat-quick-start').then(m => ({ default: m.ChatQuickStart })),
+  {
+    ssr: false,
+    loading: () => <QuickStartSkeleton count={3} />,
+  },
 );
 
 export default function ChatOverviewScreen() {

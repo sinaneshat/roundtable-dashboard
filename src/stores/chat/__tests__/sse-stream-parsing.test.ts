@@ -17,9 +17,9 @@
  * - search-result: Individual search results
  * - summary: Search summary
  *
- * Summary Events:
- * - status: Summary status changes
- * - key-insight: Summary key insights
+ * Council Moderator Events:
+ * - status: Council Moderator status changes
+ * - key-insight: Council Moderator key insights
  * - participant-summary: Per-participant summary
  * - verdict: Final verdict
  *
@@ -367,10 +367,10 @@ describe('pre-Search SSE Events', () => {
 });
 
 // ============================================================================
-// MODERATOR SUMMARY SSE EVENTS
+// COUNCIL MODERATOR SSE EVENTS
 // ============================================================================
 
-describe('moderator Summary SSE Events', () => {
+describe('council Moderator SSE Events', () => {
   describe('key-insight Event', () => {
     it('parses key insight', () => {
       const eventString = createSSEEventString('key-insight', {

@@ -273,6 +273,30 @@ export function isVisualMimeType(mimeType: string): mimeType is VisualMimeType {
 }
 
 // ============================================================================
+// INCOMPATIBILITY REASON ENUM (5-part pattern)
+// ============================================================================
+
+// 1. ARRAY CONSTANT - Source of truth
+export const INCOMPATIBILITY_REASONS = ['noVision'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_INCOMPATIBILITY_REASON: IncompatibilityReason = 'noVision';
+
+// 3. ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const IncompatibilityReasonSchema = z.enum(INCOMPATIBILITY_REASONS).openapi({
+  description: 'Reason why a model is incompatible with attached files',
+  example: 'noVision',
+});
+
+// 4. TYPESCRIPT TYPE - Inferred from Zod schema
+export type IncompatibilityReason = z.infer<typeof IncompatibilityReasonSchema>;
+
+// 5. CONSTANT OBJECT - For usage in code (prevents typos)
+export const IncompatibilityReasons = {
+  NO_VISION: 'noVision' as const,
+} as const;
+
+// ============================================================================
 // FILE TYPE LABELS (Human-Readable File Type Display)
 // ============================================================================
 

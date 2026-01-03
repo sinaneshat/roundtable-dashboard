@@ -199,7 +199,7 @@ async function analyzeImagesForSearchContext(
  * - Streaming answer integration via streamAnswerSummary() (75-80% faster TTFC)
  * - Simplified streaming logic - no nested callbacks
  *
- * **PATTERN**: Identical to summarizeRoundHandler architecture
+ * **PATTERN**: Identical to councilModeratorRoundHandler architecture
  * **REFERENCE**: moderator.handler.ts:227-648, backend-patterns.md:546-693
  */
 export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute, ApiEnv> = createHandler(

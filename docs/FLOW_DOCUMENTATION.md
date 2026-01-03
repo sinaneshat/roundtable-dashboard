@@ -5,7 +5,7 @@
 
 ## OVERVIEW: THE CHAT EXPERIENCE
 
-Roundtable enables users to create conversations where multiple AI models collaborate to answer questions. Each conversation consists of "rounds" - a complete cycle of user question → AI responses → optional summary.
+Roundtable enables users to create conversations where multiple AI models collaborate to answer questions. Each conversation consists of "rounds" - a complete cycle of user question → AI responses → optional council moderator.
 
 ---
 
@@ -54,7 +54,7 @@ Roundtable enables users to create conversations where multiple AI models collab
 3. User's message appears at top
 4. First AI starts responding (text streams word-by-word)
 5. **URL stays at `/chat`** during entire first round
-6. **After summary completes**: Automatic navigation to `/chat/[unique-slug]` (full page transition)
+6. **After council moderator completes**: Automatic navigation to `/chat/[unique-slug]` (full page transition)
 
 **Behind the Scenes:**
 - System creates conversation record in database
@@ -412,9 +412,9 @@ const { messages, stop } = useChat({
 
 ---
 
-## PART 4: ROUND SUMMARY
+## PART 4: COUNCIL MODERATOR
 
-### Summary Trigger
+### Council Moderator Trigger
 
 **When It Happens:** After the LAST selected AI completes response (automatic)
 
@@ -443,7 +443,7 @@ const { messages, stop } = useChat({
    - **Areas for Improvement**: Orange warnings with 1-2 cons
    - **Summary**: Overall assessment paragraph
 
-   **Section 4: Overall Summary**
+   **Section 4: Overall Council Moderator**
    - 2-3 paragraph synthesis of the round
    - Group dynamics and patterns
 
@@ -452,15 +452,15 @@ const { messages, stop } = useChat({
    - Key takeaways
 
 **Behind the Scenes:**
-- System uses fast AI model (GPT-4o) to generate summary
-- Summary considers conversation mode (Debate summary differs from Brainstorming)
+- System uses fast AI model (GPT-4o) to generate council moderator
+- Council moderator considers conversation mode (Debate council moderator differs from Brainstorming)
 - Creates structured data with scores, ratings, and text
 - Saves to database as assistant message with `isModerator: true` metadata
 - Moderator rendered via `ChatMessageList` → `ModelMessageCard` (same as participant messages, but with moderator styling)
 
 ### After First Round Completes
 
-**Automatic Navigation** - Once the moderator summary completes and AI-generated title is ready, the page automatically navigates from `/chat` to `/chat/[slug]`. This transitions from ChatOverviewScreen to ChatThreadScreen, where the user can continue the conversation by typing another message.
+**Automatic Navigation** - Once the council moderator completes and AI-generated title is ready, the page automatically navigates from `/chat` to `/chat/[slug]`. This transitions from ChatOverviewScreen to ChatThreadScreen, where the user can continue the conversation by typing another message.
 
 ---
 
@@ -479,7 +479,7 @@ const { messages, stop } = useChat({
 - Input box at bottom ready for next message
 
 **Behind the Scenes:**
-- System loads conversation details, messages, participants, summary (ONE TIME)
+- System loads conversation details, messages, participants, council moderator (ONE TIME)
 - After initial load, ALL updates happen in browser memory (no server requests)
 - Page refresh is only way to sync with server again
 - This makes interface extremely fast
@@ -565,13 +565,13 @@ Changes save when user submits next message (not immediately).
 **Behind the Scenes:**
 1. **Database cleanup**:
    - Deletes all AI messages from that round
-   - Deletes summary for that round
+   - Deletes council moderator for that round
    - Deletes feedback for that round
    - Keeps user's original question
 2. **Re-execution**:
    - All selected AIs generate completely fresh responses
    - Responses stream in same sequential order
-   - New summary generates after all AIs finish
+   - New council moderator generates after all AIs finish
    - Round number stays the same (maintains timeline)
 
 **User Can Retry Multiple Times:** Button remains available after regeneration completes.
@@ -614,13 +614,13 @@ Changes save when user submits next message (not immediately).
 
 ### Typical Round Duration
 - Each AI response: 5-15 seconds
-- Summary generation: 8-12 seconds
-- Full round (3 participants + summary): ~20-40 seconds
+- Council moderator generation: 8-12 seconds
+- Full round (3 participants + council moderator): ~20-40 seconds
 
 ### Response Behavior
 - First token: ~800ms, then real-time streaming
 - Transitions between participants: 200ms pause
-- Summary sections: 100ms stagger for smooth visual display
+- Council moderator sections: 100ms stagger for smooth visual display
 
 ---
 
@@ -640,7 +640,7 @@ Changes save when user submits next message (not immediately).
 - Round can complete with partial results
 - User can retry entire round to regenerate all responses
 
-### Moderator Errors
+### Council Moderator Errors
 
 **What User Sees:**
 - Red "Failed" badge on moderator message
@@ -648,8 +648,8 @@ Changes save when user submits next message (not immediately).
 - Retry button next to status
 
 **Behavior:**
-- Can retry moderator without regenerating AI responses
-- Failed moderator doesn't prevent continuing conversation
+- Can retry council moderator without regenerating AI responses
+- Failed council moderator doesn't prevent continuing conversation
 
 ---
 
@@ -699,9 +699,9 @@ Changes save when user submits next message (not immediately).
    - User sees responses streaming in real-time
    - Still on /chat, still ChatOverviewScreen
 
-4. Summary completes:
-   - Moderator summary finishes
-   - Summary status: COMPLETED
+4. Council moderator completes:
+   - Council moderator finishes
+   - Council moderator status: COMPLETED
    - Streaming finishes completely
 
 5. Slug polling (starts IMMEDIATELY on thread creation):
@@ -716,7 +716,7 @@ Changes save when user submits next message (not immediately).
    - User continues viewing streaming/first round
    - Sidebar updates with AI-generated title
 
-7. When first summary completes:
+7. When first council moderator completes:
    - Frontend does router.push to /chat/[ai-generated-slug]
    - ChatOverviewScreen UNMOUNTS
    - ChatThreadScreen MOUNTS
@@ -736,11 +736,11 @@ Changes save when user submits next message (not immediately).
    - Format: sanitized-user-question-text + random suffix
    - Example: "say-hi-1-word-only-nzj311"
 
-2. **AI-Generated Title & Slug** - Created asynchronously after summary
-   - Backend generates AI title after moderator summary completes
+2. **AI-Generated Title & Slug** - Created asynchronously after council moderator
+   - Backend generates AI title after council moderator completes
    - Creates new slug from AI title
    - Updates database atomically (both title AND slug)
-   - Timing: Typically 8-15 seconds (after summary completes)
+   - Timing: Typically 8-15 seconds (after council moderator completes)
 
 **URL Update Mechanism:**
 ```typescript
@@ -767,14 +767,14 @@ window.history.replaceState(
 - Checks `isAiGeneratedTitle: boolean` flag
 - **Two-step process:**
   1. When AI title ready → Replace URL with window.history.replaceState (stay on overview) + **STOP POLLING**
-  2. When analysis completes → Do router.push to thread detail page
+  2. When council moderator completes → Do router.push to thread detail page
 - Polling stops immediately when AI title detected (not waiting for navigation)
 
 **Timing Sequence:**
 ```
 Thread created → Polling starts immediately →
 Streaming (20-30s) → AI title ready (background) → URL replaced →
-Summary streaming (8-12s) → Summary complete →
+Council moderator streaming (8-12s) → Council moderator complete →
 router.push to /chat/[slug]
 ```
 
@@ -801,7 +801,7 @@ router.push to /chat/[slug]
 
 ## GLOSSARY
 
-**Round:** One complete cycle of user question → all AI responses → optional summary
+**Round:** One complete cycle of user question → all AI responses → optional council moderator
 
 **Participant:** An AI model selected to respond in the conversation
 
@@ -813,7 +813,7 @@ router.push to /chat/[slug]
 
 **Changelog:** Visual record showing what changed between rounds
 
-**Summary:** AI-generated evaluation comparing all participant responses
+**Council Moderator:** AI-generated evaluation comparing all participant responses
 
 **Mode:** The type of conversation (Brainstorming, Analyzing, Debating, Problem Solving)
 
@@ -832,15 +832,15 @@ router.push to /chat/[slug]
 4. Submit first message
 5. Verify URL stays at `/chat` during streaming
 6. Verify all participants respond sequentially
-7. Verify summary generates after last participant
-8. Verify automatic navigation to `/chat/[slug]` after summary + AI title ready
+7. Verify council moderator generates after last participant
+8. Verify automatic navigation to `/chat/[slug]` after council moderator + AI title ready
 9. Verify ChatThreadScreen loads at new URL
 
 **Scenario 2: Multi-Round Conversation**
 1. Complete Round 1 on thread detail page
 2. Submit second message
 3. Verify Round 2 messages appear
-4. Verify summary generates
+4. Verify council moderator generates
 5. Verify round numbers are consistent
 
 **Scenario 3: Configuration Changes**
@@ -856,7 +856,7 @@ router.push to /chat/[slug]
 2. Click retry button (only on last round)
 3. Verify old responses disappear
 4. Verify new responses generate
-5. Verify new summary generates
+5. Verify new council moderator generates
 6. Verify round number stays the same
 
 **Scenario 5: Error Recovery**
@@ -874,7 +874,7 @@ router.push to /chat/[slug]
 
 ### Performance Benchmarks
 - Time to Interactive: <1s | First token: ~800ms | Page transitions: <100ms
-- AI responses: 5-15s | Summary: 8-12s | Config changes: Instant (optimistic)
+- AI responses: 5-15s | Council moderator: 8-12s | Config changes: Instant (optimistic)
 
 ---
 
@@ -886,7 +886,7 @@ The chat overview screen orchestrates multiple async operations that must coordi
 - Thread creation → Streaming start
 - Slug polling → URL updates
 - Pre-search blocking → Participant streaming
-- Summary completion → Navigation trigger
+- Council moderator completion → Navigation trigger
 - Stop button → In-flight message handling
 
 **Critical Principle**: NO race condition can slip through. Each timing dependency has explicit guards and comprehensive test coverage.
@@ -990,8 +990,8 @@ The chat overview screen orchestrates multiple async operations that must coordi
 - **Test**: `streaming-stop-button-race.test.ts:38-75`
 - **Level**: MEDIUM - UI reflects stop, in-flight messages can arrive
 
-**RACE 4.3: Summary Trigger Timing**
-- **Risk**: Summary creation notification lost, flow never sees completion
+**RACE 4.3: Council Moderator Trigger Timing**
+- **Risk**: Council moderator creation notification lost, flow never sees completion
 - **Protection**: Callback + store subscription dual mechanism
 - **Test**: `streaming-stop-button-race.test.ts:148-173`
 - **Level**: HIGH - Explicit callback + subscription
@@ -1000,10 +1000,10 @@ The chat overview screen orchestrates multiple async operations that must coordi
 
 #### **5. Navigation Timing**
 
-**RACE 5.1: Summary Completion Detection**
+**RACE 5.1: Council Moderator Completion Detection**
 - **Detection Logic**:
   ```
-  firstSummaryCompleted =
+  firstCouncilModeratorCompleted =
     status === 'complete' OR
     (status === 'streaming' && elapsed > 60s) OR
     (status === 'pending' && !isStreaming && elapsed > 60s)
@@ -1034,7 +1034,7 @@ The chat overview screen orchestrates multiple async operations that must coordi
 |---|---|---|---|---|
 | **Navigation Timing** | queueMicrotask ordering (URL replace vs router.push) | race-conditions-navigation-flow.test.ts | 2 | ✅ PASSING |
 | | hasUpdatedThread flag coordination | race-conditions-navigation-flow.test.ts | 2 | ✅ PASSING |
-| | Summary completion detection (multi-layer + timeout) | race-conditions-navigation-flow.test.ts | 5 | ✅ PASSING |
+| | Council moderator completion detection (multi-layer + timeout) | race-conditions-navigation-flow.test.ts | 5 | ✅ PASSING |
 | | Duplicate navigation prevention (hasNavigated flag) | race-conditions-navigation-flow.test.ts | 2 | ✅ PASSING |
 | **Pre-Search Blocking** | Optimistic blocking (orchestrator not synced) | race-conditions-presearch-blocking.test.ts | 4 | ✅ PASSING |
 | | Web search enabled/disabled conditions | race-conditions-presearch-blocking.test.ts | 2 | ✅ PASSING |
@@ -1044,7 +1044,7 @@ The chat overview screen orchestrates multiple async operations that must coordi
 | | Concurrent status checks (consistency) | race-conditions-presearch-blocking.test.ts | 1 | ✅ PASSING |
 | **Stop Button** | In-flight message handling after stop | race-conditions-stop-button.test.ts | 3 | ✅ PASSING |
 | | Atomic state updates (isStreaming + index) | race-conditions-stop-button.test.ts | 2 | ✅ PASSING |
-| | Summary trigger prevention when stopped early | race-conditions-stop-button.test.ts | 3 | ✅ PASSING |
+| | Council moderator trigger prevention when stopped early | race-conditions-stop-button.test.ts | 3 | ✅ PASSING |
 | | Participant sequence control | race-conditions-stop-button.test.ts | 2 | ✅ PASSING |
 | | Rapid stop/start cycles | race-conditions-stop-button.test.ts | 2 | ✅ PASSING |
 | | Stop button state sync | race-conditions-stop-button.test.ts | 3 | ✅ PASSING |
@@ -1099,21 +1099,21 @@ The chat overview screen orchestrates multiple async operations that must coordi
 | **Provider Execution Conditions** | When to execute pre-search (PENDING) | provider-integration-flow.test.ts | 4 | ✅ PASSING |
 | | When to create pre-search (missing) | provider-integration-flow.test.ts | 2 | ✅ PASSING |
 | | When to send message (COMPLETE/FAILED) | provider-integration-flow.test.ts | 4 | ✅ PASSING |
-| **Navigation Timing** | Summary completion detection | provider-integration-flow.test.ts | 3 | ✅ PASSING |
+| **Navigation Timing** | Council moderator completion detection | provider-integration-flow.test.ts | 3 | ✅ PASSING |
 | | Screen mode transitions | provider-integration-flow.test.ts | 4 | ✅ PASSING |
 | **Stop Button Races** | Stop during pre-search | provider-integration-flow.test.ts | 2 | ✅ PASSING |
 | | Stop during streaming | provider-integration-flow.test.ts | 3 | ✅ PASSING |
 | | Stop between participants | provider-integration-flow.test.ts | 1 | ✅ PASSING |
-| | Stop during summary | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Stop during council moderator | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | **Error Recovery** | Pre-search failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
 | | Participant streaming failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
-| | Summary failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
+| | Council moderator failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
 | | Timeout protection | provider-integration-flow.test.ts | 2 | ✅ PASSING |
 | **Documented Race Conditions** | Thread ID availability | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | | Orchestrator sync timing | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | | Sequential participant coordination | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | | Stop during participant switch | provider-integration-flow.test.ts | 1 | ✅ PASSING |
-| | Multi-layer summary completion | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Multi-layer council moderator completion | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | **Complete Journey Integration** | 2-round with web search | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | | Stop mid-round | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | | Pre-search failure recovery | provider-integration-flow.test.ts | 1 | ✅ PASSING |
@@ -1136,7 +1136,7 @@ The chat overview screen orchestrates multiple async operations that must coordi
    ↓ [GUARD: shouldWaitForPreSearch() with timeout]
 6. Participants stream sequentially
    ↓ [GUARD: currentParticipantIndex increments]
-7. Summary created + status COMPLETE
+7. Council moderator created + status COMPLETE
    ↓ [GUARD: Multi-layer detection + 60s timeout]
 8. Navigation to thread detail
 ```
@@ -1144,7 +1144,7 @@ The chat overview screen orchestrates multiple async operations that must coordi
 **Vulnerable Gaps** (All Protected):
 - Gap 2→3: Store state propagation [✅ Explicit sync]
 - Gap 4→5: Orchestrator query timing [✅ Optimistic blocking]
-- Gap 7→8: Summary visibility [✅ Multi-layer + timeout]
+- Gap 7→8: Council moderator visibility [✅ Multi-layer + timeout]
 
 ---
 
@@ -1260,7 +1260,7 @@ Backend pre-search handlers were checking `thread.enableWebSearch` (set at threa
 
 **Test Categories Added**:
 - ✅ Provider-level pre-search execution triggering (10 tests)
-- ✅ Navigation timing and summary completion detection (7 tests)
+- ✅ Navigation timing and council moderator completion detection (7 tests)
 - ✅ Stop button during all states (7 tests)
 - ✅ Error recovery scenarios (8 tests)
 - ✅ Documented race conditions (5 tests)
@@ -1349,7 +1349,7 @@ New tests cover the full flow from pending message to pre-search completion to m
 **Changes:**
 - Fixed Part 12 (URL Patterns) to match actual implementation
 - Updated navigation flow: router.push (not window.history.replaceState)
-- Clarified polling behavior: starts AFTER streaming + summary complete
+- Clarified polling behavior: starts AFTER streaming + council moderator complete
 - Updated test scenarios to reflect two-screen architecture
 
 **Version 2.0** - Focused Chat Journey Documentation

@@ -24,7 +24,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes } from '@/api/core/enums';
+import type { ChangelogChangeTypeExtended } from '@/api/core/enums';
+import { ChangelogChangeTypesExtended, ChatModes } from '@/api/core/enums';
 
 // ============================================================================
 // TEST HELPERS
@@ -39,7 +40,7 @@ type ParticipantConfig = {
 };
 
 type ChangelogEntry = {
-  type: 'added' | 'removed' | 'modified' | 'reordered' | 'mode-changed';
+  type: ChangelogChangeTypeExtended;
   participantId?: string;
   modelId?: string;
   details?: {
@@ -85,7 +86,7 @@ function detectParticipantChanges(
   currentConfig.forEach((p) => {
     if (!prevIds.has(p.id)) {
       changes.push({
-        type: 'added',
+        type: ChangelogChangeTypesExtended.ADDED,
         participantId: p.id,
         modelId: p.modelId,
       });
@@ -96,7 +97,7 @@ function detectParticipantChanges(
   previousConfig.forEach((p) => {
     if (!currIds.has(p.id)) {
       changes.push({
-        type: 'removed',
+        type: ChangelogChangeTypesExtended.REMOVED,
         participantId: p.id,
         modelId: p.modelId,
       });
@@ -110,7 +111,7 @@ function detectParticipantChanges(
       // Role change
       if (prev.role !== curr.role) {
         changes.push({
-          type: 'modified',
+          type: ChangelogChangeTypesExtended.MODIFIED,
           participantId: curr.id,
           details: {
             oldValue: prev.role ?? 'none',
@@ -122,7 +123,7 @@ function detectParticipantChanges(
       // Priority/order change
       if (prev.priority !== curr.priority) {
         changes.push({
-          type: 'reordered',
+          type: ChangelogChangeTypesExtended.REORDERED,
           participantId: curr.id,
           details: {
             oldValue: prev.priority,
@@ -140,10 +141,10 @@ function detectParticipantChanges(
  * Creates a summary string for changelog
  */
 function createChangelogSummary(changes: ChangelogEntry[]): string {
-  const added = changes.filter(c => c.type === 'added').length;
-  const removed = changes.filter(c => c.type === 'removed').length;
-  const modified = changes.filter(c => c.type === 'modified' || c.type === 'reordered').length;
-  const modeChanged = changes.some(c => c.type === 'mode-changed');
+  const added = changes.filter(c => c.type === ChangelogChangeTypesExtended.ADDED).length;
+  const removed = changes.filter(c => c.type === ChangelogChangeTypesExtended.REMOVED).length;
+  const modified = changes.filter(c => c.type === ChangelogChangeTypesExtended.MODIFIED || c.type === ChangelogChangeTypesExtended.REORDERED).length;
+  const modeChanged = changes.some(c => c.type === ChangelogChangeTypesExtended.MODE_CHANGED);
 
   const parts: string[] = [];
   if (added > 0)
@@ -177,7 +178,7 @@ describe('participant Addition Detection', () => {
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
 
-      expect(changes.filter(c => c.type === 'added')).toHaveLength(1);
+      expect(changes.filter(c => c.type === ChangelogChangeTypesExtended.ADDED)).toHaveLength(1);
       expect(changes[0]?.participantId).toBe('participant-2');
     });
   });
@@ -192,7 +193,7 @@ describe('participant Addition Detection', () => {
       ];
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
-      const additions = changes.filter(c => c.type === 'added');
+      const additions = changes.filter(c => c.type === ChangelogChangeTypesExtended.ADDED);
 
       expect(additions).toHaveLength(2);
       expect(additions.map(a => a.participantId)).toContain('participant-1');
@@ -203,8 +204,8 @@ describe('participant Addition Detection', () => {
   describe('addition Summary', () => {
     it('creates correct summary for additions', () => {
       const changes: ChangelogEntry[] = [
-        { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
-        { type: 'added', participantId: 'p2', modelId: 'claude-3' },
+        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p1', modelId: 'gpt-4' },
+        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p2', modelId: 'claude-3' },
       ];
 
       const summary = createChangelogSummary(changes);
@@ -232,7 +233,7 @@ describe('participant Removal Detection', () => {
       ];
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
-      const removals = changes.filter(c => c.type === 'removed');
+      const removals = changes.filter(c => c.type === ChangelogChangeTypesExtended.REMOVED);
 
       expect(removals).toHaveLength(1);
       expect(removals[0]?.participantId).toBe('participant-1');
@@ -249,7 +250,7 @@ describe('participant Removal Detection', () => {
       const currentConfig = [createParticipantConfig(0)];
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
-      const removals = changes.filter(c => c.type === 'removed');
+      const removals = changes.filter(c => c.type === ChangelogChangeTypesExtended.REMOVED);
 
       expect(removals).toHaveLength(2);
     });
@@ -258,7 +259,7 @@ describe('participant Removal Detection', () => {
   describe('removal Summary', () => {
     it('creates correct summary for removals', () => {
       const changes: ChangelogEntry[] = [
-        { type: 'removed', participantId: 'p1', modelId: 'gpt-4' },
+        { type: ChangelogChangeTypesExtended.REMOVED, participantId: 'p1', modelId: 'gpt-4' },
       ];
 
       const summary = createChangelogSummary(changes);
@@ -282,7 +283,7 @@ describe('role Modification Detection', () => {
       ];
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
-      const modifications = changes.filter(c => c.type === 'modified');
+      const modifications = changes.filter(c => c.type === ChangelogChangeTypesExtended.MODIFIED);
 
       expect(modifications).toHaveLength(1);
       expect(modifications[0]?.details?.oldValue).toBe('Critic');
@@ -300,7 +301,7 @@ describe('role Modification Detection', () => {
       ];
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
-      const modifications = changes.filter(c => c.type === 'modified');
+      const modifications = changes.filter(c => c.type === ChangelogChangeTypesExtended.MODIFIED);
 
       expect(modifications).toHaveLength(1);
       expect(modifications[0]?.details?.oldValue).toBe('none');
@@ -318,7 +319,7 @@ describe('role Modification Detection', () => {
       ];
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
-      const modifications = changes.filter(c => c.type === 'modified');
+      const modifications = changes.filter(c => c.type === ChangelogChangeTypesExtended.MODIFIED);
 
       expect(modifications).toHaveLength(1);
       expect(modifications[0]?.details?.oldValue).toBe('Analyst');
@@ -346,7 +347,7 @@ describe('participant Reorder Detection', () => {
       ];
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
-      const reorders = changes.filter(c => c.type === 'reordered');
+      const reorders = changes.filter(c => c.type === ChangelogChangeTypesExtended.REORDERED);
 
       expect(reorders).toHaveLength(3);
     });
@@ -366,7 +367,7 @@ describe('participant Reorder Detection', () => {
       ];
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
-      const reorders = changes.filter(c => c.type === 'reordered');
+      const reorders = changes.filter(c => c.type === ChangelogChangeTypesExtended.REORDERED);
 
       expect(reorders).toHaveLength(2);
     });
@@ -385,7 +386,7 @@ describe('mode Change Detection', () => {
     const changes: ChangelogEntry[] = [];
     if (previousMode !== currentMode) {
       changes.push({
-        type: 'mode-changed',
+        type: ChangelogChangeTypesExtended.MODE_CHANGED,
         details: {
           oldValue: previousMode,
           newValue: currentMode,
@@ -394,7 +395,7 @@ describe('mode Change Detection', () => {
     }
 
     expect(changes).toHaveLength(1);
-    expect(changes[0]?.type).toBe('mode-changed');
+    expect(changes[0]?.type).toBe(ChangelogChangeTypesExtended.MODE_CHANGED);
   });
 
   it('does not create change when mode stays same', () => {
@@ -404,7 +405,7 @@ describe('mode Change Detection', () => {
     const changes: ChangelogEntry[] = [];
     if (previousMode !== currentMode) {
       changes.push({
-        type: 'mode-changed',
+        type: ChangelogChangeTypesExtended.MODE_CHANGED,
         details: {
           oldValue: previousMode,
           newValue: currentMode,
@@ -434,8 +435,8 @@ describe('combined Changes Detection', () => {
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
 
-      const additions = changes.filter(c => c.type === 'added');
-      const removals = changes.filter(c => c.type === 'removed');
+      const additions = changes.filter(c => c.type === ChangelogChangeTypesExtended.ADDED);
+      const removals = changes.filter(c => c.type === ChangelogChangeTypesExtended.REMOVED);
 
       expect(additions).toHaveLength(1);
       expect(removals).toHaveLength(1);
@@ -455,9 +456,9 @@ describe('combined Changes Detection', () => {
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
 
-      const additions = changes.filter(c => c.type === 'added');
-      const removals = changes.filter(c => c.type === 'removed');
-      const modifications = changes.filter(c => c.type === 'modified');
+      const additions = changes.filter(c => c.type === ChangelogChangeTypesExtended.ADDED);
+      const removals = changes.filter(c => c.type === ChangelogChangeTypesExtended.REMOVED);
+      const modifications = changes.filter(c => c.type === ChangelogChangeTypesExtended.MODIFIED);
 
       expect(additions).toHaveLength(1);
       expect(removals).toHaveLength(1);
@@ -468,10 +469,10 @@ describe('combined Changes Detection', () => {
   describe('combined Summary', () => {
     it('creates correct summary for multiple change types', () => {
       const changes: ChangelogEntry[] = [
-        { type: 'added', participantId: 'p1' },
-        { type: 'added', participantId: 'p2' },
-        { type: 'removed', participantId: 'p3' },
-        { type: 'modified', participantId: 'p4', details: { oldValue: 'A', newValue: 'B' } },
+        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p1' },
+        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p2' },
+        { type: ChangelogChangeTypesExtended.REMOVED, participantId: 'p3' },
+        { type: ChangelogChangeTypesExtended.MODIFIED, participantId: 'p4', details: { oldValue: 'A', newValue: 'B' } },
       ];
 
       const summary = createChangelogSummary(changes);
@@ -598,16 +599,16 @@ describe('changelog Banner Display', () => {
   describe('expandable Details', () => {
     it('groups changes by type for display', () => {
       const changes: ChangelogEntry[] = [
-        { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
-        { type: 'added', participantId: 'p2', modelId: 'claude-3' },
-        { type: 'removed', participantId: 'p3', modelId: 'gemini' },
-        { type: 'modified', participantId: 'p4', details: { oldValue: 'A', newValue: 'B' } },
+        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p1', modelId: 'gpt-4' },
+        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p2', modelId: 'claude-3' },
+        { type: ChangelogChangeTypesExtended.REMOVED, participantId: 'p3', modelId: 'gemini' },
+        { type: ChangelogChangeTypesExtended.MODIFIED, participantId: 'p4', details: { oldValue: 'A', newValue: 'B' } },
       ];
 
       const grouped = {
-        added: changes.filter(c => c.type === 'added'),
-        removed: changes.filter(c => c.type === 'removed'),
-        modified: changes.filter(c => c.type === 'modified' || c.type === 'reordered'),
+        added: changes.filter(c => c.type === ChangelogChangeTypesExtended.ADDED),
+        removed: changes.filter(c => c.type === ChangelogChangeTypesExtended.REMOVED),
+        modified: changes.filter(c => c.type === ChangelogChangeTypesExtended.MODIFIED || c.type === ChangelogChangeTypesExtended.REORDERED),
       };
 
       expect(grouped.added).toHaveLength(2);
@@ -633,7 +634,7 @@ describe('edge Cases', () => {
       const changes = detectParticipantChanges(previousConfig, currentConfig);
 
       // All current participants are "added"
-      expect(changes.filter(c => c.type === 'added')).toHaveLength(2);
+      expect(changes.filter(c => c.type === ChangelogChangeTypesExtended.ADDED)).toHaveLength(2);
     });
   });
 
@@ -647,7 +648,7 @@ describe('edge Cases', () => {
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
 
-      expect(changes.filter(c => c.type === 'removed')).toHaveLength(2);
+      expect(changes.filter(c => c.type === ChangelogChangeTypesExtended.REMOVED)).toHaveLength(2);
     });
   });
 
@@ -663,8 +664,8 @@ describe('edge Cases', () => {
       const changes = detectParticipantChanges(previousConfig, currentConfig);
 
       // Should detect role change and priority change
-      expect(changes.filter(c => c.type === 'modified')).toHaveLength(1);
-      expect(changes.filter(c => c.type === 'reordered')).toHaveLength(1);
+      expect(changes.filter(c => c.type === ChangelogChangeTypesExtended.MODIFIED)).toHaveLength(1);
+      expect(changes.filter(c => c.type === ChangelogChangeTypesExtended.REORDERED)).toHaveLength(1);
     });
   });
 
@@ -681,7 +682,7 @@ describe('edge Cases', () => {
       const changes = detectParticipantChanges(previousConfig, currentConfig);
 
       // participant-1 added
-      expect(changes.filter(c => c.type === 'added')).toHaveLength(1);
+      expect(changes.filter(c => c.type === ChangelogChangeTypesExtended.ADDED)).toHaveLength(1);
     });
   });
 });
@@ -730,8 +731,8 @@ describe('round-Specific Change Tracking', () => {
       const changes1 = detectParticipantChanges(round0Config, round1Config);
       const changes2 = detectParticipantChanges(round1Config, round2Config);
 
-      expect(changes1.filter(c => c.type === 'added')).toHaveLength(1);
-      expect(changes2.filter(c => c.type === 'removed')).toHaveLength(1);
+      expect(changes1.filter(c => c.type === ChangelogChangeTypesExtended.ADDED)).toHaveLength(1);
+      expect(changes2.filter(c => c.type === ChangelogChangeTypesExtended.REMOVED)).toHaveLength(1);
     });
   });
 });
@@ -743,10 +744,10 @@ describe('round-Specific Change Tracking', () => {
 describe('atomicity of Changes', () => {
   it('all changes in a round are saved atomically', () => {
     const changes: ChangelogEntry[] = [
-      { type: 'added', participantId: 'p1' },
-      { type: 'removed', participantId: 'p2' },
-      { type: 'modified', participantId: 'p3' },
-      { type: 'mode-changed' },
+      { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p1' },
+      { type: ChangelogChangeTypesExtended.REMOVED, participantId: 'p2' },
+      { type: ChangelogChangeTypesExtended.MODIFIED, participantId: 'p3' },
+      { type: ChangelogChangeTypesExtended.MODE_CHANGED },
     ];
 
     const changelog: Changelog = {

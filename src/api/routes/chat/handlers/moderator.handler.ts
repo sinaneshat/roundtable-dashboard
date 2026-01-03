@@ -1,8 +1,8 @@
 /**
- * Moderator Handler - Moderator summary text streaming
+ * Moderator Handler - Council moderator text streaming
  *
- * Generates and streams moderator summaries as text (like participant messages).
- * Summaries are stored in chatMessage table with metadata.isModerator: true.
+ * Generates and streams council moderator analysis as text (like participant messages).
+ * Council moderator is stored in chatMessage table with metadata.isModerator: true.
  * Frontend renders moderator messages via ChatMessageList component.
  *
  * ✅ ARCHITECTURE: Moderator is a message, not a separate entity
@@ -52,7 +52,7 @@ import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
 import { requireParticipantMetadata } from '@/lib/utils';
 
-import type { summarizeRoundRoute } from '../route';
+import type { councilModeratorRoundRoute } from '../route';
 import type { MessageWithParticipant, ModeratorPromptConfig, ParticipantResponse } from '../schema';
 import {
   MessageWithParticipantSchema,
@@ -92,7 +92,7 @@ function buildTranscript(participantResponses: ParticipantResponse[]): string {
 }
 
 /**
- * Build system prompt for moderator summary generation
+ * Build system prompt for council moderator generation
  *
  * ✅ SCHEMA-DRIVEN: Uses ModeratorPromptConfig schema for validation
  */
@@ -320,11 +320,11 @@ Respond with a well-structured markdown document following the structure above. 
 }
 
 // ============================================================================
-// Moderator Summary Generation (Text Streaming - Like Participants)
+// Council Moderator Generation (Text Streaming - Like Participants)
 // ============================================================================
 
 /**
- * Extended config for moderator summary generation
+ * Extended config for council moderator generation
  * Combines schema-validated prompt config with runtime context
  */
 type ModeratorGenerationConfig = {
@@ -337,13 +337,13 @@ type ModeratorGenerationConfig = {
 } & ModeratorPromptConfig;
 
 /**
- * Generate moderator summary using text streaming
+ * Generate council moderator using text streaming
  *
  * ✅ SCHEMA-DRIVEN: Uses ModeratorPromptConfig for prompt data
  * ✅ TYPE-SAFE: All participant responses validated via ParticipantResponseSchema
  * ✅ PATTERN: Follows same streaming pattern as participant messages
  */
-function generateModeratorSummary(
+function generateCouncilModerator(
   config: ModeratorGenerationConfig,
   c: { env: ApiEnv['Bindings'] },
 ) {
@@ -354,7 +354,7 @@ function generateModeratorSummary(
 
   initializeOpenRouter(env);
   const client = openRouterService.getClient();
-  const moderatorModelId = AIModels.SUMMARY;
+  const moderatorModelId = AIModels.COUNCIL_MODERATOR;
   const moderatorModelName = extractModeratorModelName(moderatorModelId);
 
   const systemPrompt = buildModeratorSystemPrompt({
@@ -377,7 +377,7 @@ function generateModeratorSummary(
   const finalResult = streamText({
     model: client.chat(moderatorModelId),
     system: systemPrompt,
-    prompt: 'Summarize this conversation and produce the summary in markdown format.',
+    prompt: 'Analyze this council discussion and produce the moderator analysis in markdown format.',
     temperature: 0.3,
     maxOutputTokens: 8192,
     onFinish: async (finishResult) => {
@@ -399,7 +399,7 @@ function generateModeratorSummary(
           createdAt: new Date().toISOString(),
         };
 
-        // ✅ PERSISTENCE: Save moderator summary as chatMessage with isModerator metadata
+        // ✅ PERSISTENCE: Save council moderator as chatMessage with isModerator metadata
         await db.insert(tables.chatMessage).values({
           id: messageId,
           threadId,
@@ -456,7 +456,7 @@ function generateModeratorSummary(
                 threadMode: mode,
               },
               finishData,
-              [{ role: MessageRoles.USER, content: 'Analyze this conversation and produce the summary in markdown format.' }],
+              [{ role: MessageRoles.USER, content: 'Analyze this council discussion and produce the moderator analysis in markdown format.' }],
               llmTraceId,
               llmStartTime,
               {
@@ -482,7 +482,7 @@ function generateModeratorSummary(
       } catch (error) {
         // Stream already completed successfully - log persistence error
         const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error('[Moderator Summary] Failed to persist message:', {
+        console.error('[Council Moderator] Failed to persist message:', {
           error: errorMsg,
           messageId,
           threadId,
@@ -507,7 +507,7 @@ function generateModeratorSummary(
               },
               error as Error,
               llmTraceId,
-              'moderator_summary',
+              'council_moderator',
             );
           } catch {
             // Silently fail
@@ -594,7 +594,7 @@ function generateModeratorSummary(
       const streamErrorMessage = getErrorMessage(error);
       const errorName = getErrorName(error);
 
-      console.error('[Moderator Summary Error]', {
+      console.error('[Council Moderator Error]', {
         errorName,
         errorMessage: streamErrorMessage,
         threadId,
@@ -616,15 +616,15 @@ function generateModeratorSummary(
 }
 
 // ============================================================================
-// Summarize Round Handler
+// Council Moderator Round Handler
 // ============================================================================
 
-export const summarizeRoundHandler: RouteHandler<typeof summarizeRoundRoute, ApiEnv> = createHandler(
+export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorRoundRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
     validateParams: ThreadRoundParamSchema,
     validateBody: RoundModeratorRequestSchema,
-    operationName: 'summarizeRound',
+    operationName: 'councilModeratorRound',
   },
   async (c) => {
     const { user } = c.auth();
@@ -733,7 +733,7 @@ export const summarizeRoundHandler: RouteHandler<typeof summarizeRoundRoute, Api
     }
 
     if (!participantMessages || participantMessages.length === 0) {
-      throw createError.badRequest('No participant messages found for moderator summary', {
+      throw createError.badRequest('No participant messages found for council moderator', {
         errorType: 'validation',
         field: 'participantMessageIds',
       });
@@ -801,7 +801,7 @@ export const summarizeRoundHandler: RouteHandler<typeof summarizeRoundRoute, Api
 
     // Generate and return streaming response
     // Mode is validated through ModeratorPromptConfigSchema.parse() in buildModeratorSystemPrompt
-    return generateModeratorSummary(
+    return generateCouncilModerator(
       {
         roundNumber: roundNum,
         mode: thread.mode as ChatMode,
