@@ -58,8 +58,7 @@ const nextConfig: NextConfig = {
       // Markdown/Syntax
       'react-markdown',
       'shiki',
-      // Email
-      '@react-email/components',
+      // Note: @react-email/components excluded - in serverExternalPackages
     ],
   },
 

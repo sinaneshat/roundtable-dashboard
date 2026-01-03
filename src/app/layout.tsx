@@ -51,7 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-export default async function Layout({ children }: LayoutProps<'/'>) {
+export default async function Layout({ children }: { children: React.ReactNode }) {
   const env = process.env;
   const tAeo = await getTranslations('seo.aeo');
   const tFeatures = await getTranslations('seo.features');
