@@ -8,6 +8,10 @@
  * - src/api/services/title-generator.service.ts
  * - docs/backend-patterns.md
  *
+ * ⚠️ DURABLE OBJECT COMPATIBLE: This service is used by UploadCleanupScheduler DO.
+ * Do NOT import from @/db directly as it includes Node.js modules (fs, path)
+ * that crash Workers runtime. Import schema tables directly from @/db/tables/.
+ *
  * Supports two usage patterns:
  * 1. From API handlers: Use functions without db param (uses getDbAsync())
  * 2. From Durable Objects: Use functions with db param (from createDrizzleFromD1())
@@ -18,8 +22,18 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 
-import { getDbAsync } from '@/db';
-import * as schema from '@/db';
+// ⚠️ DO-COMPATIBLE: Import schema tables directly, NOT from @/db
+// The @/db barrel export includes Node.js modules (fs, path) that crash Workers
+import * as chatTables from '@/db/tables/chat';
+import * as projectTables from '@/db/tables/project';
+import * as uploadTables from '@/db/tables/upload';
+
+// Combine schemas needed for this service
+const schema = {
+  ...chatTables,
+  ...projectTables,
+  ...uploadTables,
+};
 
 // ============================================================================
 // TYPES
@@ -60,13 +74,13 @@ export function createDrizzleFromD1(d1: D1Database): DrizzleD1Database {
  * Following backend-patterns.md - use db.query.* for reads.
  *
  * @param uploadId - The upload ID to check
- * @param db - Optional Drizzle database instance (for Durable Objects). If not provided, uses getDbAsync().
+ * @param db - Required Drizzle database instance. For API handlers, use getDbAsync(). For DOs, use createDrizzleFromD1().
  */
 export async function checkUploadOrphaned(
   uploadId: string,
-  db?: DrizzleD1Database,
+  db: DrizzleD1Database,
 ): Promise<OrphanCheckResult> {
-  const database = db ?? await getDbAsync();
+  const database = db;
 
   // Check all junction tables for references using Drizzle's relational queries
   const [messageUploads, threadUploads, projectAttachments] = await Promise.all([
@@ -108,15 +122,13 @@ export async function checkUploadOrphaned(
  * Note: This only deletes the database record. R2 deletion should be handled separately.
  *
  * @param uploadId - The upload ID to delete
- * @param db - Optional Drizzle database instance (for Durable Objects). If not provided, uses getDbAsync().
+ * @param db - Required Drizzle database instance. For API handlers, use getDbAsync(). For DOs, use createDrizzleFromD1().
  */
 export async function deleteUploadRecord(
   uploadId: string,
-  db?: DrizzleD1Database,
+  db: DrizzleD1Database,
 ): Promise<void> {
-  const database = db ?? await getDbAsync();
-
-  await database.delete(schema.upload).where(eq(schema.upload.id, uploadId));
+  await db.delete(uploadTables.upload).where(eq(uploadTables.upload.id, uploadId));
 }
 
 /**
@@ -147,13 +159,13 @@ export async function deleteFromR2(
  * @param uploadId - The upload ID to delete
  * @param r2Key - The R2 storage key
  * @param bucket - The R2 bucket binding
- * @param db - Optional Drizzle database instance (for Durable Objects). If not provided, uses getDbAsync().
+ * @param db - Required Drizzle database instance. For API handlers, use getDbAsync(). For DOs, use createDrizzleFromD1().
  */
 export async function deleteOrphanedUpload(
   uploadId: string,
   r2Key: string,
   bucket: R2Bucket,
-  db?: DrizzleD1Database,
+  db: DrizzleD1Database,
 ): Promise<{ r2Deleted: boolean; dbDeleted: boolean }> {
   // Delete from R2 (best-effort)
   const r2Deleted = await deleteFromR2(bucket, r2Key);
