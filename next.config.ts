@@ -1,13 +1,8 @@
+// OpenNext Cloudflare integration for local development
+// @see https://opennext.js.org/cloudflare
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
-
-// Initialize OpenNext Cloudflare for development - must be called before any other code
-// Only runs if CLOUDFLARE_API_TOKEN is set (to avoid OAuth login prompts when empty)
-// Set token in .env to enable full Cloudflare bindings (AI, Browser, etc.)
-if (process.env.NODE_ENV === 'development' && process.env.CLOUDFLARE_API_TOKEN) {
-  initOpenNextCloudflareForDev();
-}
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -278,3 +273,4 @@ const nextConfig: NextConfig = {
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 export default withNextIntl(nextConfig);
+initOpenNextCloudflareForDev();

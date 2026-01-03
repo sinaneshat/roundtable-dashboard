@@ -34,6 +34,14 @@
     "binding": "ASSETS",
     "run_worker_first": true
   },
+  // Worker self-reference for internal routing (required by OpenNext)
+  // @see https://opennext.js.org/cloudflare
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "roundtable-dashboard"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -233,6 +241,12 @@
       "images": {
         "binding": "IMAGES"
       },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "roundtable-dashboard-preview"
+        }
+      ],
       "durable_objects": {
         "bindings": [
           {
@@ -360,6 +374,12 @@
       "images": {
         "binding": "IMAGES"
       },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "roundtable-dashboard-production"
+        }
+      ],
       "durable_objects": {
         "bindings": [
           {
