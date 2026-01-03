@@ -785,6 +785,7 @@
       "authenticationSolution": "There's an issue with the API authentication. Please contact support.",
       "unknownTitle": "Unexpected Error",
       "unknownSolution": "An unexpected error occurred. Try again, and contact support if the issue persists.",
+      "unexpectedError": "An unexpected error occurred",
       "defaultDescription": "The AI model encountered an error while processing your request.",
       "retryAction": "Retry",
       "nonRetryableHint": "This error cannot be automatically retried. Please try a different approach.",

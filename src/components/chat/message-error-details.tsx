@@ -32,7 +32,7 @@ export function MessageErrorDetails({
   }
 
   const providerMessage = metadata.providerMessage ?? null;
-  const errorMessage = providerMessage || metadata.errorMessage || 'An unexpected error occurred';
+  const errorMessage = providerMessage || metadata.errorMessage || t('unexpectedError');
   // Use string type to allow comparison against multiple error type enums
   const errorType: string = metadata.errorType || 'unknown';
   const model = metadata.model || t('unknownModel');

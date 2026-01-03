@@ -7,6 +7,7 @@ import { cookies } from 'next/headers';
 import { getMessages, getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 
+import { DEFAULT_SEO_CONTENT_TYPE, isValidSeoContentType } from '@/api/core/enums';
 import { AppProviders } from '@/components/providers';
 import {
   AeoMetaTags,
@@ -19,13 +20,6 @@ import { cn } from '@/lib/ui/cn';
 import { spaceGrotesk } from '@/lib/ui/fonts';
 import { parsePreferencesCookie, PREFERENCES_COOKIE_NAME } from '@/stores/preferences';
 import { createMetadata } from '@/utils';
-
-const VALID_CONTENT_TYPES = ['how-to', 'comparison', 'review', 'guide', 'faq', 'tutorial'] as const;
-type ContentType = (typeof VALID_CONTENT_TYPES)[number];
-
-function isValidContentType(value: string): value is ContentType {
-  return (VALID_CONTENT_TYPES as readonly string[]).includes(value);
-}
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -79,7 +73,7 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
   const initialPreferences = parsePreferencesCookie(preferencesCookie?.value);
 
   const contentTypeValue = tAeo('contentType');
-  const contentType = isValidContentType(contentTypeValue) ? contentTypeValue : 'guide';
+  const contentType = isValidSeoContentType(contentTypeValue) ? contentTypeValue : DEFAULT_SEO_CONTENT_TYPE;
 
   return (
     <html

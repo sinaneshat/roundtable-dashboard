@@ -20,7 +20,7 @@ import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { getRoundNumber } from '@/lib/utils';
+import { getRoundNumber, isModeratorMessage } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseMinimalMessageSyncParams = {
@@ -107,14 +107,13 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
 
       // Special case: preserve moderator messages
       // During streaming, moderator messages might not be in AI SDK yet
-      const meta = m.metadata as { isModerator?: boolean; roundNumber?: number } | undefined;
-      if (meta?.isModerator)
+      if (isModeratorMessage(m))
         return true;
 
       // Preserve messages from different rounds (they might have been filtered by AI SDK)
       const chatRounds = new Set(chatMessages.map(cm => getRoundNumber(cm.metadata)));
-      const msgRound = meta?.roundNumber;
-      if (msgRound !== undefined && !chatRounds.has(msgRound))
+      const msgRound = getRoundNumber(m.metadata);
+      if (msgRound !== null && !chatRounds.has(msgRound))
         return true;
 
       return false;

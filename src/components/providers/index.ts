@@ -6,7 +6,6 @@ export {
   useChatStore,
   useChatStoreApi,
 } from './chat-store-provider';
-// PostHogPageview removed - using capture_pageview: 'history_change' for automatic SPA tracking
 export {
   PreferencesStoreProvider,
   type PreferencesStoreProviderProps,
