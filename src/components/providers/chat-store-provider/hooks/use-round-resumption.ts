@@ -16,6 +16,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 
 import { ScreenModes } from '@/api/core/enums';
 import { getCurrentRoundNumber, rlog } from '@/lib/utils';
@@ -33,20 +34,32 @@ type UseRoundResumptionParams = {
  * Handles incomplete round resumption from specific participant
  */
 export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
-  // Subscribe to necessary store state
-  const waitingToStart = useStore(store, s => s.waitingToStartStreaming);
-  const chatIsStreaming = useStore(store, s => s.isStreaming);
-  const nextParticipantToTrigger = useStore(store, s => s.nextParticipantToTrigger);
-  const storeParticipants = useStore(store, s => s.participants);
-  const storeMessages = useStore(store, s => s.messages);
-  const storePreSearches = useStore(store, s => s.preSearches);
-  const storeThread = useStore(store, s => s.thread);
-  const storeScreenMode = useStore(store, s => s.screenMode);
-  // ✅ CHANGELOG: Wait for changelog before streaming when config changed
-  const isWaitingForChangelog = useStore(store, s => s.isWaitingForChangelog);
-  // ✅ FIX: configChangeRoundNumber signals pending config changes (set before PATCH)
-  // isWaitingForChangelog is only set AFTER PATCH completes
-  const configChangeRoundNumber = useStore(store, s => s.configChangeRoundNumber);
+  // ✅ PERF: Batch selectors with useShallow to prevent unnecessary re-renders
+  const {
+    waitingToStart,
+    chatIsStreaming,
+    nextParticipantToTrigger,
+    storeParticipants,
+    storeMessages,
+    storePreSearches,
+    storeThread,
+    storeScreenMode,
+    isWaitingForChangelog,
+    configChangeRoundNumber,
+  } = useStore(store, useShallow(s => ({
+    waitingToStart: s.waitingToStartStreaming,
+    chatIsStreaming: s.isStreaming,
+    nextParticipantToTrigger: s.nextParticipantToTrigger,
+    storeParticipants: s.participants,
+    storeMessages: s.messages,
+    storePreSearches: s.preSearches,
+    storeThread: s.thread,
+    storeScreenMode: s.screenMode,
+    // Wait for changelog before streaming when config changed
+    isWaitingForChangelog: s.isWaitingForChangelog,
+    // configChangeRoundNumber signals pending config changes (set before PATCH)
+    configChangeRoundNumber: s.configChangeRoundNumber,
+  })));
 
   // ✅ RACE CONDITION FIX: Extract isReady explicitly for precise dependency tracking
   // chat object changes frequently (messages, streaming state), but we specifically

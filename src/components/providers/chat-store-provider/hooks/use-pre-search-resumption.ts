@@ -23,6 +23,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { RefObject } from 'react';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 
 import { MessageRoles, MessageStatuses } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -49,11 +50,20 @@ export function usePreSearchResumption({
   effectiveThreadId,
   queryClientRef,
 }: UsePreSearchResumptionParams) {
-  const storeMessages = useStore(store, s => s.messages);
-  const storePreSearches = useStore(store, s => s.preSearches);
-  const storeThread = useStore(store, s => s.thread);
-  const hasInitiallyLoaded = useStore(store, s => s.hasInitiallyLoaded);
-  const isStreaming = useStore(store, s => s.isStreaming);
+  // ✅ PERF: Batch selectors with useShallow to prevent unnecessary re-renders
+  const {
+    storeMessages,
+    storePreSearches,
+    storeThread,
+    hasInitiallyLoaded,
+    isStreaming,
+  } = useStore(store, useShallow(s => ({
+    storeMessages: s.messages,
+    storePreSearches: s.preSearches,
+    storeThread: s.thread,
+    hasInitiallyLoaded: s.hasInitiallyLoaded,
+    isStreaming: s.isStreaming,
+  })));
 
   // Track which rounds we've attempted resumption for
   const attemptedResumptionRef = useRef<Set<number>>(new Set());

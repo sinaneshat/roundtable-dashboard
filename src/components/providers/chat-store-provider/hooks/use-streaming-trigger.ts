@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import type { RefObject } from 'react';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 
 import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -45,24 +46,35 @@ export function useStreamingTrigger({
 }: UseStreamingTriggerParams) {
   const router = useRouter();
 
-  // Subscribe to necessary store state
-  const waitingToStart = useStore(store, s => s.waitingToStartStreaming);
-  const storeParticipants = useStore(store, s => s.participants);
-  const storeMessages = useStore(store, s => s.messages);
-  const storePreSearches = useStore(store, s => s.preSearches);
-  const storeThread = useStore(store, s => s.thread);
-  const storeScreenMode = useStore(store, s => s.screenMode);
-  const storePendingAnimations = useStore(store, s => s.pendingAnimations);
-  const chatIsStreaming = useStore(store, s => s.isStreaming);
-  // ✅ BUG FIX: Subscribe to form state enableWebSearch (user's current intent)
-  // This is the source of truth DURING submission, not thread.enableWebSearch
-  // Thread.enableWebSearch is only updated after PATCH completes
-  const formEnableWebSearch = useStore(store, s => s.enableWebSearch);
-  // ✅ CHANGELOG: Wait for changelog to be fetched before streaming when config changes
-  const isWaitingForChangelog = useStore(store, s => s.isWaitingForChangelog);
-  // ✅ FIX: configChangeRoundNumber signals pending config changes (set before PATCH)
-  // isWaitingForChangelog is only set AFTER PATCH completes
-  const configChangeRoundNumber = useStore(store, s => s.configChangeRoundNumber);
+  // ✅ PERF: Batch selectors with useShallow to prevent unnecessary re-renders
+  const {
+    waitingToStart,
+    storeParticipants,
+    storeMessages,
+    storePreSearches,
+    storeThread,
+    storeScreenMode,
+    storePendingAnimations,
+    chatIsStreaming,
+    formEnableWebSearch,
+    isWaitingForChangelog,
+    configChangeRoundNumber,
+  } = useStore(store, useShallow(s => ({
+    waitingToStart: s.waitingToStartStreaming,
+    storeParticipants: s.participants,
+    storeMessages: s.messages,
+    storePreSearches: s.preSearches,
+    storeThread: s.thread,
+    storeScreenMode: s.screenMode,
+    storePendingAnimations: s.pendingAnimations,
+    chatIsStreaming: s.isStreaming,
+    // Form state enableWebSearch = user's current intent (source of truth DURING submission)
+    formEnableWebSearch: s.enableWebSearch,
+    // Wait for changelog fetch when config changes
+    isWaitingForChangelog: s.isWaitingForChangelog,
+    // configChangeRoundNumber signals pending config changes (set before PATCH)
+    configChangeRoundNumber: s.configChangeRoundNumber,
+  })));
 
   // Race condition guard
   const startRoundCalledForRoundRef = useRef<number | null>(null);
