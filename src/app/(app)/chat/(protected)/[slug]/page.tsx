@@ -10,6 +10,8 @@ import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService, getThreadPreSearchesService, getThreadStreamResumptionStateService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata({
   params,
 }: {
