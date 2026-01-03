@@ -6,7 +6,6 @@
  * The react-refresh warning is disabled as this is not a React component file.
  */
 /* eslint-disable react-refresh/only-export-components */
-import { cacheLife } from 'next/cache';
 import { ImageResponse } from 'next/og';
 
 import { BRAND } from '@/constants/brand';
@@ -20,9 +19,6 @@ export const contentType = 'image/png';
 export const alt = BRAND.fullName;
 
 export default async function Image() {
-  'use cache';
-  cacheLife('hours');
-
   return new ImageResponse(
     (
       <div

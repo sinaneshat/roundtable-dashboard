@@ -6,7 +6,6 @@
  * The react-refresh warning is disabled as this is not a React component file.
  */
 /* eslint-disable react-refresh/only-export-components */
-import { cacheLife } from 'next/cache';
 import { ImageResponse } from 'next/og';
 import { getTranslations } from 'next-intl/server';
 
@@ -24,9 +23,6 @@ export const size = {
 export const contentType = 'image/png';
 
 export default async function Image() {
-  'use cache';
-  cacheLife('max');
-
   // Load translations
   const t = await getTranslations();
 
