@@ -1,10 +1,11 @@
 export { useChangelogSync } from './use-changelog-sync';
-export { useMessageSync } from './use-message-sync';
+export { useMinimalMessageSync } from './use-minimal-message-sync';
 export { useModeratorTrigger } from './use-moderator-trigger';
 export { useNavigationCleanup } from './use-navigation-cleanup';
 export { usePendingMessage } from './use-pending-message';
 export { usePreSearchResumption } from './use-pre-search-resumption';
 export { useRoundResumption } from './use-round-resumption';
 export { useStateSync } from './use-state-sync';
+export { useStreamActivityTracker } from './use-stream-activity-tracker';
 export { useStreamingTrigger } from './use-streaming-trigger';
 export { useStuckStreamDetection } from './use-stuck-stream-detection';

@@ -5,14 +5,12 @@ import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider, useTranslations } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { ReactNode } from 'react';
-import { Suspense } from 'react';
 
 import { GlobalErrorBoundary } from '@/components/errors/global-error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import type { ModelPreferencesState } from '@/stores/preferences';
 
 import { ChatStoreProvider } from './chat-store-provider';
-import { PostHogPageview } from './posthog-pageview';
 import PostHogProvider from './posthog-provider';
 import { PreferencesStoreProvider } from './preferences-store-provider';
 import { QueryClientProvider } from './query-client-provider';
@@ -56,9 +54,6 @@ export function AppProviders({
       apiKey={env.NEXT_PUBLIC_POSTHOG_API_KEY}
       environment={env.NEXT_PUBLIC_WEBAPP_ENV}
     >
-      <Suspense fallback={null}>
-        <PostHogPageview />
-      </Suspense>
       <QueryClientProvider>
         <PreferencesStoreProvider initialState={initialPreferences}>
           <ChatStoreProvider>

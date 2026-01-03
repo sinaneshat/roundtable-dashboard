@@ -53,7 +53,7 @@ export function CardConnectionAlert() {
             asChild
             variant="outline"
             size="sm"
-            className="h-6 px-3 text-[10px] font-semibold shrink-0 rounded-full border-amber-500/40 bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30"
+            className="text-xs shrink-0"
           >
             <Link href="/chat/pricing" prefetch={false}>
               {t('usage.cardAlert.connectCard')}

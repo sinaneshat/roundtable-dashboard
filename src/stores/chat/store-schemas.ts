@@ -54,6 +54,8 @@ import type {
   CompleteModeratorStream,
   CompleteRegeneration,
   CompleteStreaming,
+  DeduplicateMessages,
+  FinalizeMessageId,
   GetAttachments,
   GetPreSearchActivityTime,
   HandleResumedStreamComplete,
@@ -136,6 +138,7 @@ import type {
   UpdatePreSearchActivity,
   UpdatePreSearchData,
   UpdatePreSearchStatus,
+  UpsertStreamingMessage,
   WaitForAnimation,
 } from './store-action-types';
 
@@ -270,6 +273,10 @@ export const ThreadActionsSchema = z.object({
   setStartRound: z.custom<SetStartRound>(),
   setChatSetMessages: z.custom<SetChatSetMessages>(),
   checkStuckStreams: z.custom<CheckStuckStreams>(),
+  // Streaming message actions (direct store updates for AI SDK callbacks)
+  upsertStreamingMessage: z.custom<UpsertStreamingMessage>(),
+  finalizeMessageId: z.custom<FinalizeMessageId>(),
+  deduplicateMessages: z.custom<DeduplicateMessages>(),
 });
 
 export const ThreadSliceSchema = z.intersection(ThreadStateSchema, ThreadActionsSchema);

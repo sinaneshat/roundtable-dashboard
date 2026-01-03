@@ -1,6 +1,7 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import posthog from 'posthog-js';
+import { PostHogProvider as PHProvider } from 'posthog-js/react';
 import type { ReactNode } from 'react';
 
 type PostHogProviderProps = {
@@ -9,77 +10,50 @@ type PostHogProviderProps = {
   environment?: string;
 };
 
-const PostHogProviderInternal = dynamic(
-  async () => {
-    try {
-      const [posthogModule, reactModule] = await Promise.all([
-        import('posthog-js'),
-        import('posthog-js/react'),
-      ]);
+/**
+ * PostHog Provider - Official Next.js App Router Pattern
+ *
+ * @see https://posthog.com/docs/libraries/next-js
+ * @see https://github.com/posthog/posthog-js/blob/main/packages/react/README.md
+ *
+ * Uses top-level initialization with typeof window check for SSR safety.
+ * Uses capture_pageview: 'history_change' for automatic SPA navigation tracking.
+ */
 
-      const posthog = posthogModule?.default;
-      const PHProvider = reactModule?.PostHogProvider;
+// Top-level initialization - official pattern for Next.js App Router
+// This runs once when the module is first imported on the client
+if (typeof window !== 'undefined') {
+  const apiKey = process.env.NEXT_PUBLIC_POSTHOG_API_KEY;
+  const environment = process.env.NEXT_PUBLIC_WEBAPP_ENV;
 
-      if (!posthog || !PHProvider) {
-        console.error('[PostHog] Failed to load modules');
-        return {
-          default: ({ children }: PostHogProviderProps) => <>{children}</>,
-        };
-      }
+  if (apiKey && environment !== 'local') {
+    posthog.init(apiKey, {
+      api_host: '/ingest',
+      ui_host: 'https://us.posthog.com',
+      // Capture pageviews on history change (SPA navigation)
+      // @see https://posthog.com/docs/product-analytics/autocapture
+      capture_pageview: 'history_change',
+      capture_pageleave: 'if_capture_pageview',
+      person_profiles: 'identified_only',
+      autocapture: true,
+      capture_exceptions: true,
+      session_recording: {
+        recordCrossOriginIframes: false,
+      },
+      debug: environment === 'preview',
+    });
+  }
+}
 
-      return {
-        default: function PostHogInternal({
-          children,
-          apiKey,
-          environment,
-        }: PostHogProviderProps) {
-          const shouldInitialize = environment !== 'local' && apiKey;
-
-          if (shouldInitialize) {
-            try {
-              posthog.init(apiKey, {
-                api_host: '/ingest',
-                ui_host: 'https://us.posthog.com',
-                defaults: '2025-11-30',
-                person_profiles: 'identified_only',
-                capture_pageview: false,
-                capture_pageleave: true,
-                autocapture: true,
-                capture_exceptions: true,
-                session_recording: {
-                  recordCrossOriginIframes: false,
-                },
-                loaded: (ph) => {
-                  if (process.env.NODE_ENV === 'development') {
-                    ph.debug();
-                  }
-                },
-              });
-            } catch (err) {
-              console.error('[PostHog] Init failed:', err);
-            }
-          }
-
-          return <PHProvider client={posthog}>{children}</PHProvider>;
-        },
-      };
-    } catch (err) {
-      console.error('[PostHog] Module load failed:', err);
-      return {
-        default: ({ children }: PostHogProviderProps) => <>{children}</>,
-      };
-    }
-  },
-  {
-    ssr: false,
-    loading: () => null,
-  },
-);
-
-export default function PostHogProvider(props: PostHogProviderProps) {
-  if (props.environment === 'local' || !props.apiKey) {
-    return <>{props.children}</>;
+export default function PostHogProvider({
+  children,
+  apiKey,
+  environment,
+}: PostHogProviderProps) {
+  // Skip provider in local environment or if no API key
+  if (environment === 'local' || !apiKey) {
+    return <>{children}</>;
   }
 
-  return <PostHogProviderInternal {...props} />;
+  return <PHProvider client={posthog}>{children}</PHProvider>;
 }

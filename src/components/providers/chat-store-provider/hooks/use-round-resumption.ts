@@ -221,11 +221,6 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     // ✅ Mark as triggered before calling to prevent race condition double-triggers
     resumptionTriggeredRef.current = resumptionKey;
     rlog.trigger('resume', `p${nextParticipantToTrigger} key=${resumptionKey}`);
-    console.error(`[trigger] useRoundResumption CALL continueFromParticipant p${nextParticipantToTrigger}`, {
-      resumptionKey,
-      screenMode: storeScreenMode,
-      participants: storeParticipants.length,
-    });
 
     // Resume from specific participant
     chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants);

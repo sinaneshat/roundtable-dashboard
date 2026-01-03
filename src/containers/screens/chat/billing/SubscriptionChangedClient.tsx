@@ -15,6 +15,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
+import { cn } from '@/lib/ui/cn';
+
+// Glass button styles for billing pages (consistent with chat toolbar)
+const glassButtonPrimary = 'h-11 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors';
+const glassButtonSecondary = 'h-11 rounded-xl border-white/20 bg-white/10 text-foreground hover:bg-white/15 hover:border-white/30 transition-colors';
 
 type ChangeBadgeProps = {
   changeType: SubscriptionChangeType;
@@ -101,7 +106,7 @@ function SubscriptionChangedContent() {
             <Button
               asChild
               size="lg"
-              className="min-w-[200px]"
+              className={cn('min-w-[200px]', glassButtonPrimary)}
             >
               <Link href="/chat/pricing" prefetch={false}>
                 {t('billing.subscriptionChanged.viewPricing')}
@@ -392,7 +397,7 @@ function SubscriptionChangedContent() {
           <Button
             asChild
             size="lg"
-            className="min-w-[200px]"
+            className={cn('min-w-[200px]', glassButtonPrimary)}
           >
             <Link href="/chat" prefetch={false}>
               {t('billing.success.startChat')}
@@ -402,7 +407,7 @@ function SubscriptionChangedContent() {
             asChild
             variant="outline"
             size="lg"
-            className="min-w-[200px]"
+            className={cn('min-w-[200px]', glassButtonSecondary)}
           >
             <Link href="/chat/pricing" prefetch={false}>
               {t('billing.success.viewPricing')}

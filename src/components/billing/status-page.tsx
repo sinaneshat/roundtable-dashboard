@@ -78,6 +78,10 @@ type StatusPageActionsProps = {
   secondaryOnClick?: () => void;
 };
 
+// Glass button styles for billing pages (consistent with chat toolbar)
+const glassButtonPrimary = 'h-11 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors';
+const glassButtonSecondary = 'h-10 rounded-xl border-white/20 bg-white/10 text-foreground hover:bg-white/15 hover:border-white/30 transition-colors';
+
 export function StatusPageActions({
   primaryLabel,
   primaryHref,
@@ -90,14 +94,14 @@ export function StatusPageActions({
     <>
       {primaryHref
         ? (
-            <Button asChild className="w-full">
+            <Button asChild className={cn('w-full', glassButtonPrimary)}>
               <Link href={primaryHref} prefetch={false}>
                 {primaryLabel}
               </Link>
             </Button>
           )
         : (
-            <Button onClick={primaryOnClick} className="w-full">
+            <Button onClick={primaryOnClick} className={cn('w-full', glassButtonPrimary)}>
               {primaryLabel}
             </Button>
           )}
@@ -106,9 +110,9 @@ export function StatusPageActions({
           ? (
               <Button
                 asChild
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="text-muted-foreground"
+                className={cn('w-full', glassButtonSecondary)}
               >
                 <Link href={secondaryHref} prefetch={false}>
                   {secondaryLabel}
@@ -118,9 +122,9 @@ export function StatusPageActions({
           : (
               <Button
                 onClick={secondaryOnClick}
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="text-muted-foreground"
+                className={cn('w-full', glassButtonSecondary)}
               >
                 {secondaryLabel}
               </Button>

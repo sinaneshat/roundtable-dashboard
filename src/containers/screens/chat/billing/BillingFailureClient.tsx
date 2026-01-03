@@ -9,6 +9,11 @@ import { Icons } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
+import { cn } from '@/lib/ui/cn';
+
+// Glass button styles for billing pages (consistent with chat toolbar)
+const glassButtonPrimary = 'h-11 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors';
+const glassButtonSecondary = 'h-11 rounded-xl border-white/20 bg-white/10 text-foreground hover:bg-white/15 hover:border-white/30 transition-colors';
 
 type FailureData = {
   error?: string;
@@ -149,7 +154,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
           <Button
             asChild
             size="lg"
-            className="w-full sm:w-auto sm:min-w-[200px]"
+            className={cn('w-full sm:w-auto sm:min-w-[200px]', glassButtonPrimary)}
           >
             <Link href="/chat/pricing" prefetch={false}>
               {t('billing.failure.tryAgain')}
@@ -160,7 +165,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
             asChild
             variant="outline"
             size="lg"
-            className="w-full sm:w-auto sm:min-w-[200px]"
+            className={cn('w-full sm:w-auto sm:min-w-[200px]', glassButtonSecondary)}
           >
             <Link href="/chat" prefetch={false}>
               {t('billing.failure.returnHome')}

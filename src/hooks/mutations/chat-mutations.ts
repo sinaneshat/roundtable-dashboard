@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { ChatThreadCacheSchema } from '@/api/routes/chat/schema';
+import { revalidatePublicThread } from '@/app/auth/actions';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
   addParticipantService,
@@ -411,6 +412,13 @@ export function useTogglePublicMutation() {
       }
 
       return { previousThreads, previousBySlug, slug: variables.slug };
+    },
+    onSuccess: async (data, variables) => {
+      // Trigger ISR revalidation for the public page
+      if (data?.success && variables.slug) {
+        const action = variables.isPublic ? 'publish' : 'unpublish';
+        await revalidatePublicThread(variables.slug, action);
+      }
     },
     onError: (_error, _variables, context) => {
       if (context?.previousThreads) {

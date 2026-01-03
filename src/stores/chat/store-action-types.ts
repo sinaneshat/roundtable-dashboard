@@ -139,6 +139,60 @@ export type SetChatSetMessages = (fn?: ChatSetMessages) => void;
 export type CheckStuckStreams = () => void;
 
 // ============================================================================
+// STREAMING MESSAGE ACTIONS (Direct store updates for AI SDK callbacks)
+// ============================================================================
+
+/**
+ * Options for upserting a streaming message
+ */
+export type UpsertStreamingMessageOptions = {
+  /** The message to upsert */
+  message: UIMessage;
+  /** If true, only update if message doesn't exist (prevents overwrites during race conditions) */
+  insertOnly?: boolean;
+};
+
+/**
+ * Upsert a streaming message into the store
+ *
+ * If message with same ID exists:
+ * - Updates parts if new message has more content
+ * - Preserves existing content if new message has less
+ *
+ * If message doesn't exist:
+ * - Appends to messages array
+ * - Maintains round order (inserts after messages from earlier rounds)
+ *
+ * This is the primary action for use-multi-participant-chat.ts to write directly to store.
+ */
+export type UpsertStreamingMessage = (options: UpsertStreamingMessageOptions) => void;
+
+/**
+ * Replace a temporary message ID with a deterministic ID
+ *
+ * Used when AI SDK initially creates a message with a temp ID (e.g., "gen-xxx")
+ * but the server returns a deterministic ID (e.g., "thread-123_r0_p0").
+ *
+ * This action:
+ * 1. Finds the message with tempId
+ * 2. Updates its ID to deterministicId
+ * 3. Merges any additional metadata from the finalized message
+ */
+export type FinalizeMessageId = (tempId: string, deterministicId: string, finalMessage: UIMessage) => void;
+
+/**
+ * Deduplicate messages by (roundNumber, participantIndex)
+ *
+ * When multiple messages exist for the same participant in the same round:
+ * - Keeps the message with deterministic ID (contains "_r" and "_p")
+ * - Removes messages with temporary IDs
+ * - Preserves the one with more content if both have deterministic IDs
+ *
+ * This is called after streaming completes to clean up any duplicates.
+ */
+export type DeduplicateMessages = () => void;
+
+// ============================================================================
 // FLAGS ACTIONS (UI re-render triggers)
 // ============================================================================
 

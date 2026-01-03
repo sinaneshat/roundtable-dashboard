@@ -1200,6 +1200,35 @@ Use this checklist when adding new async features:
 
 ## VERSION HISTORY
 
+**Version 2.9** - THREAD Screen Pre-Search Execution Fix
+**Last Updated:** January 3, 2026
+**Changes:**
+- Fixed bug: enabling web search mid-conversation + preset participants → participants never start
+- Added pre-search execution logic to `usePendingMessage` hook for THREAD screen
+- Previously, `useStreamingTrigger` only handled OVERVIEW screen
+- PENDING pre-searches on THREAD screen were created but never executed
+- Added 17 new tests in `mid-conversation-websearch-enable.test.ts`
+
+**Bug Fixed:**
+When enabling web search mid-conversation and selecting preset participants, the web search would complete but the first participant never started speaking. The system was stuck waiting for pre-search completion that never happened.
+
+**Root Cause:**
+- `useStreamingTrigger` only handles pre-search execution on OVERVIEW screen (line 81 check)
+- `usePendingMessage` created PENDING pre-searches but only waited for them, never executed them
+- On THREAD screen with PENDING pre-search, no hook triggered execution
+
+**Fix Applied:**
+- Extended `usePendingMessage` to execute PENDING pre-searches on THREAD screen
+- Added `queryClientRef` and `effectiveThreadId` params to `usePendingMessage`
+- Added atomic check-and-mark via `tryMarkPreSearchTriggered()` to prevent duplicates
+- Pre-search execution now works correctly on both OVERVIEW and THREAD screens
+
+**Files Modified:**
+- `src/components/providers/chat-store-provider/hooks/use-pending-message.ts` - Added pre-search execution logic
+- `src/components/providers/chat-store-provider/provider.tsx` - Updated hook params
+
+---
+
 **Version 2.8** - Mid-Conversation Web Search Toggle Support
 **Last Updated:** November 21, 2025
 **Changes:**

@@ -4,7 +4,8 @@
  * Captures server-side errors via onRequestError hook.
  * Sends exceptions to PostHog with user context from cookies.
  *
- * Reference: https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
+ * @see https://posthog.com/docs/error-tracking/installation/nextjs
+ * @see https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
  */
 
 import type { Instrumentation } from 'next';
@@ -26,41 +27,22 @@ export const onRequestError: Instrumentation.onRequestError = async (
   if (process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local')
     return;
 
-  const apiKey = process.env.NEXT_PUBLIC_POSTHOG_API_KEY;
-  const apiHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
-
-  if (!apiKey || !apiHost)
-    return;
-
   try {
-    const { PostHog } = await import('posthog-node');
-    const posthog = new PostHog(apiKey, {
-      host: apiHost,
-      flushAt: 1,
-      flushInterval: 0,
-    });
+    // Use the shared PostHog server client
+    const { getPostHogClient, getDistinctIdFromCookie } = await import('@/lib/analytics/posthog-server');
+    const posthog = getPostHogClient();
 
-    let distinctId: string | null = null;
+    if (!posthog)
+      return;
 
     // Extract distinct_id from PostHog cookie
-    if (request.headers.cookie) {
-      const cookieString = Array.isArray(request.headers.cookie)
-        ? request.headers.cookie.join('; ')
-        : request.headers.cookie;
+    const cookieHeader = Array.isArray(request.headers.cookie)
+      ? request.headers.cookie.join('; ')
+      : request.headers.cookie ?? null;
 
-      const postHogCookieMatch = cookieString.match(/ph_phc_.*?_posthog=([^;]+)/);
-      if (postHogCookieMatch?.[1]) {
-        try {
-          const decodedCookie = decodeURIComponent(postHogCookieMatch[1]);
-          const postHogData = JSON.parse(decodedCookie) as { distinct_id?: string };
-          distinctId = postHogData.distinct_id ?? null;
-        } catch {
-          // Cookie parse failed, continue with anonymous
-        }
-      }
-    }
+    const distinctId = getDistinctIdFromCookie(cookieHeader);
 
-    await posthog.captureException(err, distinctId ?? 'anonymous', {
+    await posthog.captureException(err, distinctId, {
       $exception_source: 'server',
       routerKind: context.routerKind,
       routePath: context.routePath,

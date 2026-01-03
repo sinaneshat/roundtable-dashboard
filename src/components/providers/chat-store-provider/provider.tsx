@@ -17,13 +17,14 @@ import { createChatStore } from '@/stores/chat';
 import { ChatStoreContext } from './context';
 import {
   useChangelogSync,
-  useMessageSync,
+  useMinimalMessageSync,
   useModeratorTrigger,
   useNavigationCleanup,
   usePendingMessage,
   usePreSearchResumption,
   useRoundResumption,
   useStateSync,
+  useStreamActivityTracker,
   useStreamingTrigger,
   useStuckStreamDetection,
 } from './hooks';
@@ -262,7 +263,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     setMessagesRef,
   });
 
-  const { lastStreamActivityRef } = useMessageSync({ store, chat });
+  // Minimal message sync: AI SDK → Store
+  // Replaces the 965-line use-message-sync.ts with a simple sync
+  // Store's setMessages handles smart merging, deduplicateMessages runs on completeStreaming
+  useMinimalMessageSync({ store, chat });
+
+  // Stream activity tracking for stuck stream detection
+  // This is a simplified replacement for the activity tracking in useMessageSync
+  const { lastStreamActivityRef } = useStreamActivityTracker({ store });
 
   useStreamingTrigger({
     store,
@@ -283,6 +291,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     store,
     chat,
     sendMessageRef,
+    queryClientRef,
+    effectiveThreadId,
   });
 
   useStuckStreamDetection({

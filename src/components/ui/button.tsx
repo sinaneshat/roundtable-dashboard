@@ -73,13 +73,25 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     disabled,
     ...props
   }, ref) => {
-    const Comp = asChild ? Slot : "button"
-
     const isDisabled = disabled || loading
     const buttonChildren = loading && loadingText ? loadingText : children
 
+    // When asChild, pass children directly so Slot can merge props onto the single child
+    if (asChild) {
+      return (
+        <Slot
+          ref={ref}
+          data-slot="button"
+          className={cn(buttonVariants({ variant, size, className }))}
+          {...props}
+        >
+          {children}
+        </Slot>
+      )
+    }
+
     return (
-      <Comp
+      <button
         ref={ref}
         data-slot="button"
         className={cn(buttonVariants({ variant, size, className }))}
@@ -100,7 +112,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             {endIcon && <span className="inline-flex shrink-0" aria-hidden="true">{endIcon}</span>}
           </>
         )}
-      </Comp>
+      </button>
     )
   }
 )

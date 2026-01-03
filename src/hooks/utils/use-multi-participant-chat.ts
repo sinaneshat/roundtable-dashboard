@@ -850,7 +850,10 @@ export function useMultiParticipantChat(
                   },
                 };
               }
-              return updated;
+              // ✅ FROZEN ARRAY FIX: Deep clone to break Immer freeze
+              // AI SDK needs mutable arrays for streaming - frozen refs cause
+              // "Cannot add property 0, object is not extensible" errors
+              return structuredClone(updated);
             }
             // Fallback: create new error message if original not found
             const errorUIMessage = createErrorUIMessage(
@@ -861,7 +864,8 @@ export function useMultiParticipantChat(
               errorMetadata,
               currentRoundRef.current,
             );
-            return [...prev, errorUIMessage];
+            // ✅ FROZEN ARRAY FIX: Clone prev to break Immer freeze
+            return structuredClone([...prev, errorUIMessage]);
           });
         }
       }
@@ -1016,7 +1020,8 @@ export function useMultiParticipantChat(
               currentRoundRef.current,
             );
 
-            setMessages(prev => [...prev, errorUIMessage]);
+            // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
+            setMessages(prev => structuredClone([...prev, errorUIMessage]));
           }
         }
 
@@ -1238,12 +1243,14 @@ export function useMultiParticipantChat(
 
               if (correctIdExists) {
                 // Update existing message with correct ID
-                return filteredMessages.map((msg: UIMessage) =>
+                // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
+                return structuredClone(filteredMessages.map((msg: UIMessage) =>
                   msg.id === correctId ? completeMessage : msg,
-                );
+                ));
               } else {
                 // Add new message with correct ID
-                return [...filteredMessages, completeMessage];
+                // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
+                return structuredClone([...filteredMessages, completeMessage]);
               }
             }
 
@@ -1262,9 +1269,10 @@ export function useMultiParticipantChat(
                 return prev.findIndex(m => m.id === idToSearchFor) === index;
               });
               // Now update the single remaining message
-              return deduplicatedPrev.map((msg: UIMessage) =>
+              // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
+              return structuredClone(deduplicatedPrev.map((msg: UIMessage) =>
                 msg.id === idToSearchFor ? completeMessage : msg,
-              );
+              ));
             }
 
             // ✅ STRICT TYPING FIX: Check if message exists AND belongs to current participant AND current round
@@ -1297,21 +1305,24 @@ export function useMultiParticipantChat(
               if (anyMessageWithSameId !== -1) {
                 // Message exists but metadata didn't match - update it anyway
                 // This handles the case where AI SDK created a streaming message without our metadata
-                return prev.map((msg: UIMessage, idx: number) =>
+                // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
+                return structuredClone(prev.map((msg: UIMessage, idx: number) =>
                   idx === anyMessageWithSameId ? completeMessage : msg,
-                );
+                ));
               }
               // Message truly doesn't exist - add new message
-              return [...prev, completeMessage];
+              // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
+              return structuredClone([...prev, completeMessage]);
             }
 
             // Update existing message with complete metadata (verified to be same participant)
-            return prev.map((msg: UIMessage, idx: number) => {
+            // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
+            return structuredClone(prev.map((msg: UIMessage, idx: number) => {
               if (idx === existingMessageIndex) {
                 return completeMessage;
               }
               return msg;
-            });
+            }));
           });
         });
 
@@ -1854,12 +1865,13 @@ export function useMultiParticipantChat(
         // Without flushSync, setMessages is async and AI SDK may use stale internal state
         // eslint-disable-next-line react-dom/no-flush-sync -- Required for race condition fix: AI SDK must see cleared state synchronously
         flushSync(() => {
+          // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
           setMessages(currentMessages =>
-            currentMessages.map(m =>
+            structuredClone(currentMessages.map(m =>
               m.id === expectedMessageId
                 ? { ...m, parts: [], metadata: { ...m.metadata as object, finishReason: undefined } }
                 : m,
-            ),
+            )),
           );
         });
       }

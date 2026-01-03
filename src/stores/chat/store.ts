@@ -346,6 +346,148 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
         return state;
       return { isStreaming: false };
     }, false, 'thread/checkStuckStreams'),
+
+  // ============================================================================
+  // STREAMING MESSAGE ACTIONS
+  // ============================================================================
+
+  upsertStreamingMessage: ({ message, insertOnly }) => {
+    set((draft) => {
+      const existingIdx = draft.messages.findIndex(m => m.id === message.id);
+
+      if (existingIdx !== -1) {
+        // Message exists - update if we have more content
+        if (insertOnly) {
+          return; // Skip update in insertOnly mode
+        }
+
+        const existing = draft.messages[existingIdx];
+        const existingHasContent = existing?.parts?.some(
+          p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
+        );
+        const newHasContent = message.parts?.some(
+          p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
+        );
+
+        // Only update if new message has content when existing doesn't,
+        // or if new message has more content
+        if (newHasContent && !existingHasContent) {
+          draft.messages[existingIdx] = castDraft(message);
+        } else if (newHasContent && existingHasContent) {
+          // Both have content - keep newer if it has more text
+          const existingTextLength = existing?.parts
+            ?.filter(p => p.type === MessagePartTypes.TEXT && 'text' in p)
+            .reduce((len, p) => len + ((p as { text: string }).text?.length || 0), 0) ?? 0;
+          const newTextLength = message.parts
+            ?.filter(p => p.type === MessagePartTypes.TEXT && 'text' in p)
+            .reduce((len, p) => len + ((p as { text: string }).text?.length || 0), 0) ?? 0;
+
+          if (newTextLength >= existingTextLength) {
+            draft.messages[existingIdx] = castDraft(message);
+          }
+        }
+      } else {
+        // Message doesn't exist - insert in round order
+        const msgRoundNumber = getRoundNumber(message.metadata);
+
+        if (msgRoundNumber === null) {
+          // No round number - append to end
+          draft.messages.push(castDraft(message));
+        } else {
+          // Find correct position (after messages from same or earlier rounds)
+          let insertIdx = draft.messages.length;
+          for (let i = draft.messages.length - 1; i >= 0; i--) {
+            const existingRound = getRoundNumber(draft.messages[i]?.metadata);
+            if (existingRound !== null && existingRound <= msgRoundNumber) {
+              insertIdx = i + 1;
+              break;
+            }
+            if (existingRound === null) {
+              insertIdx = i + 1;
+              break;
+            }
+          }
+          draft.messages.splice(insertIdx, 0, castDraft(message));
+        }
+      }
+    }, false, 'thread/upsertStreamingMessage');
+  },
+
+  finalizeMessageId: (tempId, deterministicId, finalMessage) => {
+    set((draft) => {
+      const tempIdx = draft.messages.findIndex(m => m.id === tempId);
+      const deterministicIdx = draft.messages.findIndex(m => m.id === deterministicId);
+
+      if (tempIdx !== -1 && deterministicIdx === -1) {
+        // Replace temp message with final message using deterministic ID
+        draft.messages[tempIdx] = castDraft({
+          ...finalMessage,
+          id: deterministicId,
+        });
+      } else if (tempIdx !== -1 && deterministicIdx !== -1) {
+        // Both exist - keep deterministic, remove temp
+        draft.messages.splice(tempIdx, 1);
+      } else if (tempIdx === -1 && deterministicIdx === -1) {
+        // Neither exists - insert final message
+        draft.messages.push(castDraft({
+          ...finalMessage,
+          id: deterministicId,
+        }));
+      }
+      // If only deterministic exists, nothing to do
+    }, false, 'thread/finalizeMessageId');
+  },
+
+  deduplicateMessages: () => {
+    set((draft) => {
+      const seen = new Map<string, number>(); // key -> index
+      const toRemove: number[] = [];
+
+      for (let i = 0; i < draft.messages.length; i++) {
+        const msg = draft.messages[i];
+        if (!msg)
+          continue;
+
+        const meta = msg.metadata as { roundNumber?: number; participantIndex?: number; role?: string } | undefined;
+        if (!meta)
+          continue;
+
+        const roundNum = meta.roundNumber;
+        const pIdx = meta.participantIndex;
+
+        if (roundNum === undefined || pIdx === undefined)
+          continue;
+        if (msg.role !== MessageRoles.ASSISTANT)
+          continue;
+
+        const key = `r${roundNum}_p${pIdx}`;
+        const existingIdx = seen.get(key);
+
+        if (existingIdx !== undefined) {
+          // Duplicate found - decide which to keep
+          const existing = draft.messages[existingIdx];
+          const existingIsDeterministic = existing?.id.includes('_r') && existing.id.includes('_p');
+          const newIsDeterministic = msg.id.includes('_r') && msg.id.includes('_p');
+
+          if (newIsDeterministic && !existingIsDeterministic) {
+            // Keep new (deterministic), remove existing (temp)
+            toRemove.push(existingIdx);
+            seen.set(key, i);
+          } else {
+            // Keep existing, remove new
+            toRemove.push(i);
+          }
+        } else {
+          seen.set(key, i);
+        }
+      }
+
+      // Remove in reverse order to preserve indices
+      for (const idx of toRemove.sort((a, b) => b - a)) {
+        draft.messages.splice(idx, 1);
+      }
+    }, false, 'thread/deduplicateMessages');
+  },
 });
 
 const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
@@ -989,6 +1131,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       ...(needsNewPendingAnimations ? { pendingAnimations: new Set<number>() } : {}),
       ...(needsNewAnimationResolvers ? { animationResolvers: new Map<number, () => void>() } : {}),
     }, false, 'operations/completeStreaming');
+
+    // Clean up any duplicate messages after streaming completes
+    // This ensures the store is always in a consistent state
+    get().deduplicateMessages();
   },
 
   startRegeneration: (roundNumber: number) => {
