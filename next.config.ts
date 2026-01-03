@@ -33,7 +33,7 @@ const nextConfig: NextConfig = {
       'recharts',
       'date-fns',
       '@radix-ui/react-icons',
-      'motion',
+      // 'motion', // Disabled - causing tree-shaking issues with Lo property
     ],
 
     // View Transitions API integration (Baseline 2025)
