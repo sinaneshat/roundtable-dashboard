@@ -109,11 +109,9 @@ export function ChatView({
     inputValue,
     setInputValue,
     setSelectedParticipants,
-    removeParticipant,
     enableWebSearch,
     modelOrder,
     setModelOrder,
-    setHasPendingConfigChanges,
   } = useChatStore(
     useShallow(s => ({
       messages: s.messages,
@@ -136,11 +134,9 @@ export function ChatView({
       inputValue: s.inputValue,
       setInputValue: s.setInputValue,
       setSelectedParticipants: s.setSelectedParticipants,
-      removeParticipant: s.removeParticipant,
       enableWebSearch: s.enableWebSearch,
       modelOrder: s.modelOrder,
       setModelOrder: s.setModelOrder,
-      setHasPendingConfigChanges: s.setHasPendingConfigChanges,
     })),
   );
 
@@ -534,13 +530,6 @@ export function ChatView({
     }
   }, [mode, threadActions, formActions, setSelectedParticipants, setModelOrder, t]);
 
-  const handleRemoveParticipant = useCallback((participantId: string) => {
-    removeParticipant(participantId);
-    if (mode === ScreenModes.THREAD) {
-      setHasPendingConfigChanges(true);
-    }
-  }, [removeParticipant, mode, setHasPendingConfigChanges]);
-
   return (
     <>
       <UnifiedErrorBoundary context="chat">
@@ -586,7 +575,6 @@ export function ChatView({
                 placeholder={t('input.placeholder')}
                 participants={selectedParticipants}
                 showCreditAlert={true}
-                onRemoveParticipant={isInputBlocked ? undefined : handleRemoveParticipant}
                 attachments={chatAttachments.attachments}
                 onAddAttachments={chatAttachments.addFiles}
                 onRemoveAttachment={chatAttachments.removeAttachment}
