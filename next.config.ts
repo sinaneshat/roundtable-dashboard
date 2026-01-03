@@ -46,11 +46,14 @@ const nextConfig: NextConfig = {
   // External packages for Server Components bundling
   // Required for React Email to work in edge runtime and Cloudflare Workers
   // @see https://github.com/resend/react-email/issues/977
+  // @see https://opennext.js.org/cloudflare/howtos/workerd-specific-packages
   serverExternalPackages: [
     '@react-email/components',
     '@react-email/html',
     '@react-email/render',
     'react-email',
+    // workerd-specific packages per OpenNext docs
+    'jose',
   ],
 
   // Cache optimization headers
