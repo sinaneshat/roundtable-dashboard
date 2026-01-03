@@ -80,7 +80,8 @@
     "binding": "BROWSER"
   },
   "ai": {
-    "binding": "AI"
+    "binding": "AI",
+    "remote": true
   },
   // AI Search (AutoRAG) - requires creating instances via Cloudflare dashboard or API:
   // wrangler ai-search create roundtable-rag-local --source r2://roundtable-dashboard-r2-uploads-local
