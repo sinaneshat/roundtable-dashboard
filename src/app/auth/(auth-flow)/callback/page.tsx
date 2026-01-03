@@ -11,8 +11,6 @@ export const metadata: Metadata = createMetadata({
   robots: 'noindex, nofollow',
 });
 
-export const dynamic = 'force-dynamic';
-
 export default async function AuthCallbackPage({
   searchParams,
 }: {

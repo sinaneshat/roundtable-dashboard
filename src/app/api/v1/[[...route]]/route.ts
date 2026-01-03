@@ -170,12 +170,6 @@ export const OPTIONS = handler;
 export const HEAD = handler;
 
 /**
- * Dynamic configuration to prevent unnecessary static optimization
- * that might interfere with Hono's routing
- */
-export const dynamic = 'force-dynamic';
-
-/**
  * Enable streaming responses for AI SDK
  * This ensures Next.js doesn't buffer streaming responses
  */

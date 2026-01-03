@@ -17,8 +17,6 @@ import {
   OG_COLORS,
 } from '@/lib/ui';
 
-// Force dynamic to avoid build-time image fetch errors
-export const dynamic = 'force-dynamic';
 export const size = {
   width: 1200,
   height: 630,

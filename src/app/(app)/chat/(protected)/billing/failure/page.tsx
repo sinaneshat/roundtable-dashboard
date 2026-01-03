@@ -6,8 +6,6 @@ import { createMetadata } from '@/utils';
 
 import { capturePaymentFailure } from './actions';
 
-export const dynamic = 'force-dynamic';
-
 export const metadata: Metadata = createMetadata({
   title: `Payment Failed - ${BRAND.fullName}`,
   description: 'Payment processing encountered an error. Please try again or contact support.',

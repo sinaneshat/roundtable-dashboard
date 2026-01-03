@@ -6,9 +6,6 @@ import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getProductsService } from '@/services/api';
 
-// Force dynamic rendering - products API not available at build time
-export const dynamic = 'force-dynamic';
-
 type PricingLayoutProps = {
   children: React.ReactNode;
 };

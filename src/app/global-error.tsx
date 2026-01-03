@@ -5,8 +5,6 @@ import { useEffect } from 'react';
 
 import ErrorScreen from '@/containers/screens/errors/ErrorScreen';
 
-export const dynamic = 'force-dynamic';
-
 type GlobalErrorProps = {
   error: Error & { digest?: string };
   reset: () => void;
