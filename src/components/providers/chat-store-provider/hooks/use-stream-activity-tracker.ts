@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Stream Activity Tracker Hook
  *

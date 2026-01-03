@@ -97,7 +97,7 @@ export function NavUser({ initialSession }: NavUserProps) {
   );
   const handleSignOut = async () => {
     await signOut();
-    router.push('/auth/sign-in');
+    router.replace('/auth/sign-in');
   };
   const handleManageBilling = async () => {
     try {

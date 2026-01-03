@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Minimal Message Sync Hook
  *

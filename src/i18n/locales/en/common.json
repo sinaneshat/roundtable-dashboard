@@ -1306,9 +1306,21 @@
     }
   },
   "pwa": {
-    "dismiss": "Dismiss update notification",
+    "dismiss": "Dismiss",
+    "gotIt": "Got it",
+    "install": "Install",
+    "installDescription": "Install for quick access and offline support",
+    "installTitle": "Install {app}",
+    "iosInstallDescription": "Follow these steps to add to your home screen",
+    "iosInstallTitle": "Install {app}",
+    "iosStep1": "Tap the",
+    "iosStep1Suffix": "share button below",
+    "iosStep2": "Scroll and tap",
+    "iosStep2Suffix": "Add to Home Screen",
+    "iosStep3": "Tap Add to confirm",
     "later": "Later",
     "newVersionAvailable": "Update available",
+    "notNow": "Not now",
     "updateDescription": "A new version is ready. Update now for the latest features and improvements.",
     "updateNow": "Update"
   },

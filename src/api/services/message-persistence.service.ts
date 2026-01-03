@@ -14,9 +14,9 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { revalidateTag } from 'next/cache';
 import { ulid } from 'ulid';
 
+import { invalidateThreadMessagesCache } from '@/api/common/cache-utils';
 import {
   MessagePartTypes,
   MessageRoles,
@@ -425,7 +425,7 @@ export async function saveStreamedMessage(
       }
     }
 
-    revalidateTag(`thread:${threadId}:messages`, 'max');
+    invalidateThreadMessagesCache(threadId);
     // ✅ CREDITS: Message credits handled in streaming handler's finalizeCredits()
   } catch {
     // Non-blocking error - allow round to continue

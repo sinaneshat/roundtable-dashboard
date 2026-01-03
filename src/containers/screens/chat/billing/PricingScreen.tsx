@@ -83,9 +83,9 @@ export default function PricingScreen() {
               newProductId: changeDetails.newPrice.productId,
             });
 
-            router.push(`/chat/billing/subscription-changed?${params.toString()}`);
+            router.replace(`/chat/billing/subscription-changed?${params.toString()}`);
           } else {
-            router.push('/chat/billing/subscription-changed');
+            router.replace('/chat/billing/subscription-changed');
           }
         }
       } else {

@@ -380,6 +380,27 @@ function generateCouncilModerator(
     prompt: 'Analyze this council discussion and produce the moderator analysis in markdown format.',
     temperature: 0.3,
     maxOutputTokens: 8192,
+    // ✅ TELEMETRY: Enable OpenTelemetry for moderator analysis streaming
+    // Exports traces to configured OTEL collector when instrumentation.ts registers @vercel/otel
+    experimental_telemetry: {
+      isEnabled: true,
+      functionId: `chat.thread.${threadId}.moderator`,
+      recordInputs: true,
+      recordOutputs: true,
+      metadata: {
+        thread_id: threadId,
+        round_number: roundNumber,
+        conversation_mode: mode,
+        participant_id: 'moderator',
+        participant_index: MODERATOR_PARTICIPANT_INDEX,
+        participant_role: 'AI Moderator',
+        model_id: moderatorModelId,
+        model_name: moderatorModelName,
+        is_moderator: true,
+        participant_count: participantResponses.length,
+        user_id: userId,
+      },
+    },
     onFinish: async (finishResult) => {
       try {
         const db = await getDbAsync();

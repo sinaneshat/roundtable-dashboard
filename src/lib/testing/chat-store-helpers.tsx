@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Chat Store Testing Helpers
  *

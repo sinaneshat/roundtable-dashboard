@@ -16,12 +16,20 @@
  * - Use raw cache invalidation calls in handlers
  * - Create handler-specific cache utilities
  *
- * @see /src/db/cache/cache-tags.ts - Cache tag definitions
- * @see /src/api/routes/chat/handlers/thread.handler.ts - Original invalidation patterns (lines 245, 261, 484, 521)
+ * CACHE SYSTEMS:
+ * 1. Cloudflare KV Cache (db.$cache) - Database-level caching via Drizzle
+ * 2. Next.js 'use cache' (revalidateTag) - Server-side rendering cache
+ *
+ * @see /src/db/cache/cache-tags.ts - Cloudflare KV cache tag definitions
+ * @see /src/lib/cache/thread-cache.ts - Next.js 'use cache' tag definitions
+ * @see /src/api/routes/chat/handlers/thread.handler.ts - Original invalidation patterns
  */
+
+import { revalidateTag } from 'next/cache';
 
 import type { getDbAsync } from '@/db';
 import { ThreadCacheTags } from '@/db/cache/cache-tags';
+import { THREAD_CACHE_TAGS } from '@/lib/cache/thread-cache';
 
 // ============================================================================
 // THREAD CACHE INVALIDATION
@@ -59,12 +67,58 @@ export async function invalidateThreadCache(
   threadId?: string,
   slug?: string,
 ): Promise<void> {
-  if (!db.$cache?.invalidate) {
-    return;
+  // Invalidate Cloudflare KV cache
+  if (db.$cache?.invalidate) {
+    const tags = ThreadCacheTags.all(userId, threadId, slug);
+    await db.$cache.invalidate({ tags });
   }
 
-  const tags = ThreadCacheTags.all(userId, threadId, slug);
-  await db.$cache.invalidate({ tags });
+  // Invalidate Next.js 'use cache' for public thread (if slug provided)
+  // This ensures cached public thread pages are refreshed
+  // Using 'max' profile for stale-while-revalidate semantics
+  if (slug) {
+    revalidateTag(THREAD_CACHE_TAGS.publicThread(slug), 'max');
+  }
+
+  // Invalidate thread messages cache (if threadId provided)
+  if (threadId) {
+    revalidateTag(THREAD_CACHE_TAGS.threadMessages(threadId), 'max');
+  }
+}
+
+/**
+ * Invalidate public thread cache only (Next.js 'use cache: remote')
+ *
+ * Use this when you only need to invalidate the public thread SSR cache
+ * without affecting Cloudflare KV cache.
+ *
+ * @param slug - Thread slug to invalidate
+ *
+ * @example
+ * ```ts
+ * // When thread visibility changes
+ * await invalidatePublicThreadCache(thread.slug);
+ * ```
+ */
+export function invalidatePublicThreadCache(slug: string): void {
+  revalidateTag(THREAD_CACHE_TAGS.publicThread(slug), 'max');
+}
+
+/**
+ * Invalidate thread messages cache only (Next.js 'use cache')
+ *
+ * Use this when new messages are added to a thread.
+ *
+ * @param threadId - Thread ID to invalidate messages for
+ *
+ * @example
+ * ```ts
+ * // After saving new messages
+ * invalidateThreadMessagesCache(threadId);
+ * ```
+ */
+export function invalidateThreadMessagesCache(threadId: string): void {
+  revalidateTag(THREAD_CACHE_TAGS.threadMessages(threadId), 'max');
 }
 
 // ============================================================================

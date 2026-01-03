@@ -12,6 +12,7 @@ import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getSubscriptionsService,
   getUserUsageStatsService,
+  listModelsService,
   listThreadsService,
 } from '@/services/api';
 import { createMetadata } from '@/utils';
@@ -64,6 +65,12 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
       queryKey: queryKeys.usage.stats(),
       queryFn: getUserUsageStatsService,
       staleTime: STALE_TIMES.quota,
+    }),
+    // Models prefetch - staleTime Infinity means instant availability, no client refetch
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.models.list(),
+      queryFn: () => listModelsService(),
+      staleTime: STALE_TIMES.models,
     }),
   ]);
 

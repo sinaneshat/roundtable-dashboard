@@ -24,14 +24,41 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
 
   // Optimize package imports for better tree-shaking (reduces Cloudflare bundle size)
-  // Note: lucide-react, date-fns are optimized by default
+  // Note: lucide-react, date-fns, recharts are optimized by default in Next.js 16+
   // @see https://nextjs.org/docs/app/api-reference/config/next-config-js/optimizePackageImports
-  experimental: {
-    optimizePackageImports: [
-      'recharts',
-      '@radix-ui/react-icons',
-    ],
-  },
+  // optimizePackageImports: [
+  //   // UI libraries
+  //   '@radix-ui/react-icons',
+  //   'cmdk',
+  //   'vaul',
+  //   'react-day-picker',
+  //   // Animation
+  //   'motion',
+  //   // Forms
+  //   'react-hook-form',
+  //   '@hookform/resolvers',
+  //   // Data/State
+  //   '@tanstack/react-query',
+  //   '@tanstack/react-virtual',
+  //   'zustand',
+  //   'immer',
+  //   // AI SDK
+  //   'ai',
+  //   '@ai-sdk/react',
+  //   // Utilities
+  //   'chroma-js',
+  //   'clsx',
+  //   'class-variance-authority',
+  //   'tailwind-merge',
+  //   'fuse.js',
+  //   // Analytics
+  //   'posthog-js',
+  //   // Markdown/Syntax
+  //   'react-markdown',
+  //   'shiki',
+  //   // Email
+  //   '@react-email/components',
+  // ],
 
   // Cache Components (Next.js 16+) - supported in OpenNext 1.14.7+
   // Enables 'use cache' directive for Partial Prerendering
@@ -112,6 +139,24 @@ const nextConfig: NextConfig = {
           {
             key: 'Cache-Control',
             value: 'public, max-age=604800', // 1 week
+          },
+        ],
+      },
+      {
+        // Service Worker - no cache to ensure updates are picked up
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/javascript; charset=utf-8',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
           },
         ],
       },
