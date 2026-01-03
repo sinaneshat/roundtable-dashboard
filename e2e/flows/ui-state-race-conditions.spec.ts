@@ -261,8 +261,8 @@ test.describe('Concurrent Operation Handling', () => {
 
     // Type with modifier keys (common shortcuts)
     await input.fill('Normal text');
-    await page.keyboard.press('Control+a');  // Select all
-    await page.keyboard.press('Backspace');  // Delete
+    await page.keyboard.press('Control+a'); // Select all
+    await page.keyboard.press('Backspace'); // Delete
     await input.fill('New text');
 
     await expect(input).toHaveValue('New text');
@@ -322,11 +322,11 @@ test.describe('Visual Consistency', () => {
 
     // Empty input - button may be disabled or hidden
     await input.fill('');
-    const emptyState = await sendButton.isDisabled().catch(() => true);
+    const _emptyState = await sendButton.isDisabled().catch(() => true);
 
     // With text - button should be enabled or visible
     await input.fill('Hello');
-    await page.waitForTimeout(100);  // Allow for debounce
+    await page.waitForTimeout(100); // Allow for debounce
 
     // Button should be interactable with text
     if (await sendButton.isVisible()) {
@@ -341,7 +341,7 @@ test.describe('Visual Consistency', () => {
     await input.focus();
 
     // Input should have visible focus indicator
-    const isFocused = await input.evaluate((el) => document.activeElement === el);
+    const isFocused = await input.evaluate(el => document.activeElement === el);
     expect(isFocused).toBe(true);
   });
 

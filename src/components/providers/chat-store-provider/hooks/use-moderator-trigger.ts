@@ -64,16 +64,25 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
   ) => {
     const state = store.getState();
 
-    if (!effectiveThreadId) {
+    // ✅ FLASH FIX: Get effectiveThreadId from FRESH state, not stale closure
+    // The closure can be stale if thread was just created but React hasn't re-rendered
+    // This was causing completeStreaming() to be called incorrectly, clearing streamingRoundNumber
+    const freshThreadId = state.thread?.id || state.createdThreadId || '';
+
+    if (!freshThreadId) {
       rlog.moderator('skip', 'no threadId');
-      state.completeStreaming();
+      // ✅ FLASH FIX: Don't call completeStreaming() on early return
+      // This clears streamingRoundNumber causing isLatestRound to be false → flash
+      // handleComplete already set isModeratorStreaming=true, let it timeout naturally
+      // This case should never happen with fresh state since handleComplete checks threadId
       return;
     }
 
-    const moderatorId = `${effectiveThreadId}_r${roundNumber}_moderator`;
+    const moderatorId = `${freshThreadId}_r${roundNumber}_moderator`;
     if (state.hasModeratorStreamBeenTriggered(moderatorId, roundNumber)) {
       rlog.moderator('skip', `r${roundNumber} already triggered`);
-      state.completeStreaming();
+      // ✅ FLASH FIX: Don't call completeStreaming() - original trigger will handle cleanup
+      // Calling it here would abort the in-progress moderator stream
       return;
     }
 
@@ -115,7 +124,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
 
     try {
       const response = await fetch(
-        `/api/v1/chat/threads/${effectiveThreadId}/rounds/${roundNumber}/moderator`,
+        `/api/v1/chat/threads/${freshThreadId}/rounds/${roundNumber}/moderator`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -215,7 +224,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       }
 
       const finalText = accumulatedText;
-      const moderatorMessageId = `${effectiveThreadId}_r${roundNumber}_moderator`;
+      const moderatorMessageId = `${freshThreadId}_r${roundNumber}_moderator`;
 
       if (finalText.length > 0) {
         store.getState().setMessages((currentMessages) => {
@@ -263,7 +272,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       triggeringRoundRef.current = null;
       abortControllerRef.current = null;
     }
-  }, [effectiveThreadId, store]);
+  }, [store]); // ✅ FLASH FIX: Removed effectiveThreadId - now read from fresh state inside callback
 
   useEffect(() => {
     return () => {

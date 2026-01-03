@@ -53,8 +53,8 @@ async function authenticateUser(
       },
       headers: {
         'Content-Type': 'application/json',
-        Origin: baseURL,
-        Referer: baseURL,
+        'Origin': baseURL,
+        'Referer': baseURL,
       },
     });
 
@@ -76,8 +76,8 @@ async function authenticateUser(
       },
       headers: {
         'Content-Type': 'application/json',
-        Origin: baseURL,
-        Referer: baseURL,
+        'Origin': baseURL,
+        'Referer': baseURL,
       },
     });
 
@@ -150,28 +150,49 @@ function setupBillingData(): void {
     const paymentMethodId = `pm_e2e_${user.tier}_${Date.now()}`;
 
     try {
-      // Create stripe_customer
-      const customerSql = `INSERT OR REPLACE INTO stripe_customer (id, user_id, email, name, default_payment_method_id, metadata, created_at, updated_at) VALUES ('${customerId}', '${userId}', '${user.email}', '${user.name}', '${paymentMethodId}', '{"e2e_test":"true"}', ${now}, ${now});`;
+      // Create stripe_customer (NULL metadata to avoid JSON parsing issues)
+      const customerSql = `INSERT OR REPLACE INTO stripe_customer (id, user_id, email, name, default_payment_method_id, metadata, created_at, updated_at) VALUES ('${customerId}', '${userId}', '${user.email}', '${user.name}', '${paymentMethodId}', NULL, ${now}, ${now});`;
 
       execSync(`npx wrangler d1 execute DB --local --command="${customerSql}"`, {
         stdio: 'pipe',
         encoding: 'utf-8',
       });
 
-      // Create stripe_payment_method
-      const paymentSql = `INSERT OR REPLACE INTO stripe_payment_method (id, customer_id, type, card_brand, card_last4, card_exp_month, card_exp_year, is_default, metadata, created_at, updated_at) VALUES ('${paymentMethodId}', '${customerId}', 'card', 'visa', '4242', 12, 2030, 1, '{"e2e_test":"true"}', ${now}, ${now});`;
+      // Create stripe_payment_method (NULL metadata to avoid JSON parsing issues)
+      const paymentSql = `INSERT OR REPLACE INTO stripe_payment_method (id, customer_id, type, card_brand, card_last4, card_exp_month, card_exp_year, is_default, metadata, created_at, updated_at) VALUES ('${paymentMethodId}', '${customerId}', 'card', 'visa', '4242', 12, 2030, 1, NULL, ${now}, ${now});`;
 
       execSync(`npx wrangler d1 execute DB --local --command="${paymentSql}"`, {
         stdio: 'pipe',
         encoding: 'utf-8',
       });
 
-      // Create subscription for Pro user
+      // Create subscription for Pro user (NULL metadata to avoid JSON parsing issues)
       if (user.tier === 'pro') {
         const subscriptionId = `sub_e2e_pro_${Date.now()}`;
-        const subscriptionSql = `INSERT OR REPLACE INTO stripe_subscription (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, current_period_start, current_period_end, metadata, version, created_at, updated_at) VALUES ('${subscriptionId}', '${customerId}', '${userId}', 'active', 'price_1Shoc952vWNZ3v8wCuBiKKIA', 1, 0, ${now}, ${futureDate}, '{"e2e_test":"true"}', 1, ${now}, ${now});`;
+        const subscriptionSql = `INSERT OR REPLACE INTO stripe_subscription (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, current_period_start, current_period_end, metadata, version, created_at, updated_at) VALUES ('${subscriptionId}', '${customerId}', '${userId}', 'active', 'price_1Shoc952vWNZ3v8wCuBiKKIA', 1, 0, ${now}, ${futureDate}, NULL, 1, ${now}, ${now});`;
 
         execSync(`npx wrangler d1 execute DB --local --command="${subscriptionSql}"`, {
+          stdio: 'pipe',
+          encoding: 'utf-8',
+        });
+
+        // Create credit balance for Pro user with monthly credits
+        const creditBalanceId = `01${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+        const monthlyCredits = 50000; // Pro tier monthly credits
+        const creditBalanceSql = `INSERT OR REPLACE INTO user_credit_balance (id, user_id, balance, reserved_credits, plan_type, monthly_credits, pay_as_you_go_enabled, next_refill_at, version, created_at, updated_at) VALUES ('${creditBalanceId}', '${userId}', ${monthlyCredits}, 0, 'paid', ${monthlyCredits}, 0, ${futureDate}, 1, ${now}, ${now});`;
+
+        execSync(`npx wrangler d1 execute DB --local --command="${creditBalanceSql}"`, {
+          stdio: 'pipe',
+          encoding: 'utf-8',
+        });
+
+        // Create user_chat_usage record with Pro tier
+        const usageId = `01${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+        const periodStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+        const periodEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).getTime();
+        const usageSql = `INSERT OR REPLACE INTO user_chat_usage (id, user_id, current_period_start, current_period_end, threads_created, messages_created, custom_roles_created, analysis_generated, subscription_tier, is_annual, version, created_at, updated_at) VALUES ('${usageId}', '${userId}', ${periodStart}, ${periodEnd}, 0, 0, 0, 0, 'pro', 0, 1, ${now}, ${now});`;
+
+        execSync(`npx wrangler d1 execute DB --local --command="${usageSql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });

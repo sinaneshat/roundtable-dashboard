@@ -1143,7 +1143,6 @@ describe('streamingRoundNumber-based Input Blocking', () => {
     store.getState().setWaitingToStartStreaming(false);
     store.getState().setStreamingRoundNumber(1); // Round 1 in progress
 
-    const state = store.getState();
     expect(calculateIsInputBlocked({
       isStreaming: false,
       isCreatingThread: false,

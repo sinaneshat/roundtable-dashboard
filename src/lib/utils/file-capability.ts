@@ -28,6 +28,10 @@ export const VISION_REQUIRED_MIME_TYPES = [
   'image/svg+xml',
   'image/bmp',
   'image/tiff',
+  'image/avif',
+  // iOS HEIC/HEIF formats
+  'image/heic',
+  'image/heif',
   // PDFs (rendered visually by providers)
   'application/pdf',
 ] as const;

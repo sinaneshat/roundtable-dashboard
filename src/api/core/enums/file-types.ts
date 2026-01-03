@@ -40,6 +40,11 @@ export const ALLOWED_MIME_TYPES = [
   'image/gif',
   'image/webp',
   'image/svg+xml',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  'image/bmp',
+  'image/tiff',
   // Documents
   'application/pdf',
   'application/msword',
@@ -83,6 +88,11 @@ export const IMAGE_MIME_TYPES = [
   'image/gif',
   'image/webp',
   'image/svg+xml',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  'image/bmp',
+  'image/tiff',
 ] as const;
 
 export const ImageMimeTypeSchema = z.enum(IMAGE_MIME_TYPES).openapi({
@@ -98,6 +108,11 @@ export const ImageMimeTypes = {
   GIF: 'image/gif' as const,
   WEBP: 'image/webp' as const,
   SVG: 'image/svg+xml' as const,
+  AVIF: 'image/avif' as const,
+  HEIC: 'image/heic' as const,
+  HEIF: 'image/heif' as const,
+  BMP: 'image/bmp' as const,
+  TIFF: 'image/tiff' as const,
 } as const;
 
 // ============================================================================

@@ -57,49 +57,5 @@ test.describe('Chat Interface Setup', () => {
   });
 });
 
-/**
- * Full Chat Streaming Tests
- * These tests require:
- * - Payment method connected (free tier users need card on file)
- * - Real AI API access
- * - Longer timeouts for AI responses
- *
- * Skip these unless ENABLE_CHAT_STREAMING_TESTS=1 is set
- */
-test.describe('Chat Streaming (requires billing setup)', () => {
-  test.skip(
-    () => !process.env.ENABLE_CHAT_STREAMING_TESTS,
-    'Streaming tests require billing setup - set ENABLE_CHAT_STREAMING_TESTS=1 to enable',
-  );
-
-  test.setTimeout(180000);
-
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/chat');
-    await page.waitForLoadState('networkidle');
-    await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
-  });
-
-  test('can submit message and see response', async ({ page }) => {
-    const input = getMessageInput(page);
-    await input.fill('Say hi in 1 word only');
-    await input.press('Enter');
-
-    // Wait for either:
-    // 1. URL to change to thread page (streaming completed)
-    // 2. Streaming indicator (pulsing dot) to appear
-    // 3. Stop button to appear (streaming in progress)
-    await Promise.race([
-      page.waitForURL(/\/chat\/[a-zA-Z0-9-]+/, { timeout: 180000 }),
-      page.locator('.animate-pulse').first().waitFor({ state: 'visible', timeout: 60000 }),
-      page.getByRole('button', { name: /stop/i }).waitFor({ state: 'visible', timeout: 60000 }),
-    ]);
-
-    // Verify we see AI response content or are on thread page
-    const isOnThreadPage = page.url().match(/\/chat\/[a-zA-Z0-9-]+/);
-    if (!isOnThreadPage) {
-      // If not on thread page yet, wait for it
-      await page.waitForURL(/\/chat\/[a-zA-Z0-9-]+/, { timeout: 180000 });
-    }
-  });
-});
+// NOTE: Full streaming tests are in e2e/pro/streaming-chat.spec.ts
+// Those tests use pro user auth with billing access

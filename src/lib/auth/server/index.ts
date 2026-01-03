@@ -82,9 +82,6 @@ function getGoogleOAuthCredentials(): { clientId: string; clientSecret: string }
  * @see src/db/index.ts - The Proxy pattern implementation
  */
 function createAuthAdapter() {
-  const isNextDev = process.env.NODE_ENV === 'development' && !process.env.CLOUDFLARE_ENV;
-  const isLocal = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
-
   // For local development: use the db proxy with transactions enabled
   // For Cloudflare Workers: use the db proxy with transactions disabled (D1 limitation)
   return drizzleAdapter(db, {
@@ -95,9 +92,10 @@ function createAuthAdapter() {
       // Better Auth expects "apikey" (lowercase, no underscore) in the schema object
       apikey: authSchema.apiKey,
     },
-    // Disable transactions for Cloudflare Workers (D1 doesn't support BEGIN/COMMIT)
-    // Keep enabled for local SQLite development
-    transaction: isNextDev || isLocal,
+    // Disable transactions entirely - D1 doesn't support traditional transactions
+    // and Better Auth's transaction callback pattern conflicts with async operations
+    // Session operations are atomic at the row level which is sufficient
+    transaction: false,
   });
 }
 
@@ -135,7 +133,9 @@ export const auth = betterAuth({
     crossSubDomainCookies: {
       enabled: false,
     },
-    useSecureCookies: true,
+    // Use secure cookies only in production (HTTPS)
+    // Localhost/development requires non-secure cookies for HTTP
+    useSecureCookies: process.env.NODE_ENV === 'production',
     database: {
       generateId: () => crypto.randomUUID(),
     },

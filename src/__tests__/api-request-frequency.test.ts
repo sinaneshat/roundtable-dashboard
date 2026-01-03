@@ -275,9 +275,6 @@ describe('aPI Request Frequency', () => {
         body: JSON.stringify({ userQuery: 'test query' }),
       });
 
-      // Wait a bit
-      await new Promise(resolve => setTimeout(resolve, 100));
-
       // Moderator call
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
         method: 'POST',

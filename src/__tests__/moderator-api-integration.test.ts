@@ -266,9 +266,6 @@ describe('moderator API Integration', () => {
         );
       });
 
-      // Wait to ensure ordering
-      await new Promise(resolve => setTimeout(resolve, 10));
-
       // Moderator
       await act(async () => {
         await fetch(

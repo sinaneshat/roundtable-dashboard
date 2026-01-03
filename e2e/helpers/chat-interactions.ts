@@ -86,3 +86,55 @@ export async function waitForAIResponse(page: Page, timeout = 60000): Promise<vo
 export async function waitForThreadNavigation(page: Page, timeout = 180000): Promise<void> {
   await page.waitForURL(/\/chat\/[\w-]+/, { timeout });
 }
+
+/**
+ * Ensure at least one model is selected by clicking the Models button
+ * and selecting a model if none are selected.
+ * Returns true if models were already selected or got selected successfully.
+ */
+export async function ensureModelsSelected(page: Page, timeout = 15000): Promise<boolean> {
+  const sendButton = page.getByRole('button', { name: /send message/i });
+
+  // Check if send button is enabled (models already selected)
+  const isEnabled = await sendButton.isEnabled().catch(() => false);
+  if (isEnabled) {
+    return true;
+  }
+
+  // Check for "Select at least 1 model" message
+  const noModelsMessage = page.getByText(/select at least 1 model/i);
+  const hasNoModels = await noModelsMessage.isVisible().catch(() => false);
+
+  if (hasNoModels) {
+    // Click the Models button to open model selector
+    const modelsButton = page.getByRole('button', { name: /models/i });
+    await modelsButton.click({ timeout: 5000 });
+
+    // Wait for dropdown to appear
+    await page.waitForTimeout(500);
+
+    // Try to select the first available model checkbox
+    const modelCheckbox = page.locator('[role="menuitemcheckbox"]').first();
+    const checkboxVisible = await modelCheckbox.isVisible().catch(() => false);
+
+    if (checkboxVisible) {
+      await modelCheckbox.click();
+      // Close the dropdown by clicking elsewhere
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+    } else {
+      // Try clicking any model option
+      const modelOption = page.locator('[data-model-id]').first();
+      const optionVisible = await modelOption.isVisible().catch(() => false);
+      if (optionVisible) {
+        await modelOption.click();
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+      }
+    }
+  }
+
+  // Verify send button is now enabled
+  await sendButton.waitFor({ state: 'visible', timeout });
+  return await sendButton.isEnabled().catch(() => false);
+}

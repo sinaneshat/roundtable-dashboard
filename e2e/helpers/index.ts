@@ -4,6 +4,7 @@
  */
 
 export {
+  ensureModelsSelected,
   getMessageInput,
   getModelSelectorButton,
   getSendButton,

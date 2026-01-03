@@ -1,7 +1,7 @@
 'use client';
 import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { MessageStatus } from '@/api/core/enums';
@@ -588,6 +588,27 @@ export const ChatMessageList = memo(
     const userInfo = useMemo(() => user || { name: 'User', image: null }, [user]);
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;
+
+    // ✅ POST-MODERATOR FLASH FIX: Track rounds that just completed streaming
+    // When a round transitions from streaming to complete, we need to skip entrance
+    // animations for messageGroups because the content was already visible via pending cards.
+    // Without this, both the pending cards fade-out (150ms) and messageGroups fade-in (250ms)
+    // happen simultaneously, creating a "flash" effect.
+    const prevStreamingRoundRef = useRef<number | null>(_streamingRoundNumber);
+    const justCompletedRoundsRef = useRef<Set<number>>(new Set());
+
+    // Track when streaming round changes - if it goes from N to null, round N just completed
+    if (prevStreamingRoundRef.current !== _streamingRoundNumber) {
+      if (prevStreamingRoundRef.current !== null && _streamingRoundNumber === null) {
+        // Round just completed - add to justCompletedRounds
+        justCompletedRoundsRef.current.add(prevStreamingRoundRef.current);
+        // Clear after a short delay to allow one render cycle without animation
+        setTimeout(() => {
+          justCompletedRoundsRef.current.delete(prevStreamingRoundRef.current!);
+        }, 300); // Slightly longer than animation duration
+      }
+      prevStreamingRoundRef.current = _streamingRoundNumber;
+    }
 
     // ✅ ANIMATION: Using whileInView for scroll-triggered animations
     // The viewport={{ once: true }} in motion components handles "don't re-animate"
@@ -1258,15 +1279,24 @@ export const ChatMessageList = memo(
                   // Render ALL enabled participants in priority order (store guarantees sort)
                   // Each participant shows either their actual content or shimmer, maintaining stable positions.
 
+                  // ✅ POST-MODERATOR FLASH FIX: When round completes, hide INSTANTLY (no transition)
+                  // The transition was causing a 150ms fadeout that overlapped with messageGroups fadein
+                  const isJustCompletedRound = justCompletedRoundsRef.current.has(roundNumber);
+
                   return (
                     // mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
                     // ✅ FLASH FIX: Use opacity transition instead of conditional rendering
                     // ✅ POSITION FIX: Use visibility+height instead of absolute positioning
                     // absolute -z-10 caused layout jumps when content became visible
+                    // ✅ POST-MODERATOR FLASH FIX: No transition when hiding (instant) to prevent overlap with messageGroups
                     <div
                       className={cn(
-                        'space-y-8 transition-all duration-150 overflow-hidden',
+                        'space-y-8 overflow-hidden',
+                        // Only transition when showing, not when hiding (prevents flash)
+                        shouldShowPendingCards && 'transition-all duration-150',
                         shouldShowPendingCards ? 'mt-8 opacity-100' : 'h-0 opacity-0 pointer-events-none',
+                        // Force instant hide when round just completed
+                        isJustCompletedRound && 'transition-none',
                       )}
                       aria-hidden={!shouldShowPendingCards}
                     >
@@ -1480,11 +1510,17 @@ export const ChatMessageList = memo(
             }
 
             const firstMessageId = group.messages[0]?.message.id || `group-${groupIndex}`;
+
+            // ✅ POST-MODERATOR FLASH FIX: Skip animation for rounds that just completed
+            // Content was already visible via pending cards - don't replay entrance animation
+            const isJustCompletedRound = justCompletedRoundsRef.current.has(groupRoundNumber);
+            const shouldSkipAnimation = !shouldAnimateMessage(firstMessageId) || isJustCompletedRound;
+
             return (
               <ScrollAwareParticipant
                 key={`assistant-group-${group.participantKey}-${group.messages[0]?.index}`}
                 index={0}
-                skipAnimation={!shouldAnimateMessage(firstMessageId)}
+                skipAnimation={shouldSkipAnimation}
               >
                 <AssistantGroupCard
                   group={group}

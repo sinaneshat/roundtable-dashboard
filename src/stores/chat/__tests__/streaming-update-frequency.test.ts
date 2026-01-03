@@ -287,7 +287,15 @@ describe('streaming Update Frequency', () => {
   });
 
   describe('throttle behavior', () => {
-    it('should respect throttle interval during streaming', async () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should respect throttle interval during streaming', () => {
       const THROTTLE_MS = 100;
       const timestamps: number[] = [];
 
@@ -306,7 +314,7 @@ describe('streaming Update Frequency', () => {
 
       for (let i = 0; i < 20; i++) {
         throttledUpdate();
-        await new Promise(resolve => setTimeout(resolve, 20));
+        vi.advanceTimersByTime(20);
       }
 
       expect(timestamps.length).toBeGreaterThanOrEqual(3);

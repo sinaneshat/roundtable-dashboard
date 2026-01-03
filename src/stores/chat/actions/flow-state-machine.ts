@@ -244,7 +244,6 @@ export function useFlowStateMachine(
   // Actions (stable references - no need for useShallow)
   // 🚨 ATOMIC: Use tryMarkModeratorCreated to prevent race conditions
   const tryMarkModeratorCreated = useChatStore(s => s.tryMarkModeratorCreated);
-  const completeStreaming = useChatStore(s => s.completeStreaming);
 
   // ✅ RACE CONDITION FIX: Get store API for fresh state reads inside effects
   // Prevents stale closure issues where effect runs with old messages
@@ -424,21 +423,22 @@ export function useFlowStateMachine(
             }
 
             // 🚨 ATOMIC: tryMarkModeratorCreated returns false if already created
-            // ✅ RACE FIX: Only call completeStreaming() once, regardless of whether
-            // moderator was just created or already existed
+            // ✅ FLASH FIX: Do NOT call completeStreaming() here!
+            // The moderator trigger (use-moderator-trigger.ts) calls completeStreaming()
+            // in its finally block AFTER the moderator stream completes.
+            // Calling it here would clear streamingRoundNumber prematurely, causing a flash
+            // where pending cards disappear and reappear.
             const moderatorJustCreated = tryMarkModeratorCreated(currentRound);
-
-            // ✅ TEXT STREAMING: Complete streaming state (only once)
-            // useModeratorTrigger hook triggers POST /api/v1/chat/moderator
-            if (!freshState.isModeratorStreaming) {
-              // Only complete if moderator streaming hasn't started yet
-              // This prevents double-completion when moderator trigger is already running
-              completeStreaming();
-            }
 
             if (!moderatorJustCreated) {
               break; // Moderator already created by another component, skip
             }
+
+            // ✅ FLASH FIX: Set isModeratorStreaming=true IMMEDIATELY when transitioning
+            // This bridges the gap between isStreaming=false and moderator stream starting.
+            // Without this, there's a timing window where all streaming flags are false,
+            // causing shouldShowPendingCards=false → participant cards briefly disappear.
+            freshState.setIsModeratorStreaming(true);
           }
           break;
         }
@@ -499,7 +499,6 @@ export function useFlowStateMachine(
     thread,
     storeApi,
     tryMarkModeratorCreated,
-    completeStreaming,
   ]);
 
   // ============================================================================

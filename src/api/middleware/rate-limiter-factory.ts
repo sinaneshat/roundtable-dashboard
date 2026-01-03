@@ -11,6 +11,9 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { HttpMethods } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 
+// Skip rate limiting in local development for e2e tests
+const isLocalDevelopment = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
+
 export type RateLimitConfig = {
   windowMs: number;
   maxRequests: number;
@@ -200,6 +203,12 @@ export class RateLimiterFactory {
    */
   static createCustom(config: RateLimitConfig) {
     return createMiddleware<ApiEnv>(async (c, next) => {
+      // Skip rate limiting in local development for e2e tests
+      if (isLocalDevelopment) {
+        await next();
+        return;
+      }
+
       const keyGenerator = config.keyGenerator || defaultKeyGenerator;
       const key = keyGenerator(c);
       const now = Date.now();

@@ -257,8 +257,14 @@ function setupMockStore(overrides?: Partial<ChatStore>): void {
 
 describe('useIncompleteRoundResumption', () => {
   beforeEach(() => {
+    // Use fake timers with shouldAdvanceTime to work with waitFor from testing-library
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
     mockStore.reset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   // ==========================================================================
@@ -293,7 +299,7 @@ describe('useIncompleteRoundResumption', () => {
 
       // Wait for the hook's internal timeout (100ms for activeStreamCheck + some buffer)
       await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 200));
+        vi.advanceTimersByTime(200);
       });
 
       // The key test: setWaitingToStartStreaming should NOT be called while search is streaming
@@ -713,7 +719,9 @@ describe('useIncompleteRoundResumption', () => {
 
       // The stale state clear effect runs synchronously on mount
       // Wait a bit for effects to run
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
 
       // Should clear stale state
       const setWaitingFn = mockStore.getState().setWaitingToStartStreaming;
@@ -746,7 +754,7 @@ describe('useIncompleteRoundResumption', () => {
 
       // Wait for the 2 second timeout
       await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 2100));
+        vi.advanceTimersByTime(2100);
       });
 
       const setStreamingFn = mockStore.getState().setIsStreaming;

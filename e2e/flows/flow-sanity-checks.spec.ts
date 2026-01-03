@@ -26,7 +26,7 @@ test.describe('Part 1: Overview Screen Verification', () => {
   test('landing page shows expected UI elements', async ({ page }) => {
     // Per docs: "Large Roundtable logo with animated background"
     // At minimum, should have branding/logo element
-    const hasLogo = await page.locator('img, svg, [data-testid="logo"]').first().isVisible().catch(() => false);
+    const _hasLogo = await page.locator('img, svg, [data-testid="logo"]').first().isVisible().catch(() => false);
 
     // "Three quick-start suggestion cards"
     const suggestions = page.locator('button').filter({
@@ -49,10 +49,10 @@ test.describe('Part 1: Overview Screen Verification', () => {
 
     // Should show tier indicators (Free, Pro, etc.)
     const tierText = await dialog.textContent();
-    const hasTierInfo = tierText?.toLowerCase().includes('free') ||
-                        tierText?.toLowerCase().includes('pro') ||
-                        tierText?.toLowerCase().includes('upgrade') ||
-                        tierText?.toLowerCase().includes('tier');
+    const hasTierInfo = tierText?.toLowerCase().includes('free')
+      || tierText?.toLowerCase().includes('pro')
+      || tierText?.toLowerCase().includes('upgrade')
+      || tierText?.toLowerCase().includes('tier');
 
     // Tier info should be present
     expect(hasTierInfo || true).toBe(true); // Allow pass if not visible in current UI
@@ -115,35 +115,8 @@ test.describe('Part 3: Streaming UI Elements', () => {
   });
 });
 
-/**
- * PART 5: Thread Detail Page UI
- */
-test.describe('Part 5: Thread Detail Page Structure', () => {
-  test.skip(
-    () => !process.env.ENABLE_CHAT_STREAMING_TESTS,
-    'Thread detail page tests require actual thread creation',
-  );
-
-  test.setTimeout(180000);
-
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/chat');
-    await page.waitForLoadState('networkidle');
-    await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
-  });
-
-  test('thread page shows input ready for next message', async ({ page }) => {
-    const input = getMessageInput(page);
-    await input.fill('Brief test');
-    await input.press('Enter');
-
-    await page.waitForURL(/\/chat\/[a-zA-Z0-9-]+/, { timeout: 180000 });
-
-    // Per docs: "Input box at bottom ready for next message"
-    await expect(page.locator('textarea')).toBeVisible({ timeout: 30000 });
-    await expect(page.locator('textarea')).toBeEnabled({ timeout: 30000 });
-  });
-});
+// NOTE: Thread detail page tests are in e2e/pro/streaming-chat.spec.ts
+// They require actual thread creation via AI streaming
 
 /**
  * PART 6: Configuration Changes UI
@@ -233,9 +206,9 @@ test.describe('Part 11: Subscription Tier Display', () => {
 
     // Look for upgrade indicators
     const dialogText = await dialog.textContent();
-    const hasUpgradeText = dialogText?.toLowerCase().includes('upgrade') ||
-                          dialogText?.toLowerCase().includes('pro') ||
-                          dialogText?.toLowerCase().includes('locked');
+    const _hasUpgradeText = dialogText?.toLowerCase().includes('upgrade')
+      || dialogText?.toLowerCase().includes('pro')
+      || dialogText?.toLowerCase().includes('locked');
 
     // Some indication of tier restrictions should exist
     // This may vary based on user's subscription
