@@ -30,5 +30,14 @@ export default function Error({ error, reset }: ErrorProps) {
     return () => clearTimeout(timeoutId);
   }, [error, reset]);
 
-  return <ErrorScreen reset={reset} />;
+  return (
+    <ErrorScreen
+      reset={reset}
+      error={{
+        message: error.message,
+        stack: error.stack,
+        digest: error.digest,
+      }}
+    />
+  );
 }

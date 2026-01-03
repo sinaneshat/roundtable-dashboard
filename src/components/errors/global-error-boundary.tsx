@@ -6,6 +6,7 @@ import { Component } from 'react';
 import { Icons } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 
 type Props = {
   children: ReactNode;
@@ -21,8 +22,8 @@ type State = {
 /**
  * Global Error Boundary
  *
- * Shows error details in ALL environments (local, preview, production).
- * This is intentional - we want to see errors everywhere for debugging.
+ * Shows detailed error info in local/preview environments for debugging.
+ * Shows generalized error message in production for security.
  */
 export class GlobalErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -66,8 +67,8 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                   An unexpected error occurred. Please try again.
                 </p>
 
-                {/* Show error details in ALL environments for debugging */}
-                {error && (
+                {/* Show error details only in local/preview for debugging, hide in prod for security */}
+                {error && getWebappEnv() !== WEBAPP_ENVS.PROD && (
                   <div className="mt-4 space-y-2">
                     <details className="rounded-lg bg-destructive/10 p-3" open>
                       <summary className="cursor-pointer text-sm font-medium">

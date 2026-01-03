@@ -9,6 +9,7 @@ import { ErrorBoundaryContexts } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 
 type UnifiedErrorBoundaryProps = {
   children: ReactNode;
@@ -70,7 +71,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
           <p className="text-muted-foreground">{contextMessage}</p>
         </div>
 
-        {process.env.NODE_ENV === 'development' && error && (
+        {getWebappEnv() !== WEBAPP_ENVS.PROD && error && (
           <details className="w-full rounded-lg bg-muted/50 p-4 text-left">
             <summary className="cursor-pointer font-medium">
               {t('devDetailsLabel')}

@@ -13,13 +13,20 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import messages from '@/i18n/locales/en/common.json';
+import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 
 type ErrorScreenProps = {
   reset: () => void;
+  error?: {
+    message?: string;
+    stack?: string;
+    digest?: string;
+  };
 };
 
-function ErrorScreenContent({ reset }: ErrorScreenProps) {
+function ErrorScreenContent({ reset, error }: ErrorScreenProps) {
   const t = useTranslations();
+  const showDetails = error && getWebappEnv() !== WEBAPP_ENVS.PROD;
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background px-4 py-12">
@@ -35,7 +42,40 @@ function ErrorScreenContent({ reset }: ErrorScreenProps) {
             {t('states.error.unexpectedError')}
           </EmptyDescription>
         </EmptyHeader>
-        <EmptyContent>
+        <EmptyContent className="w-full space-y-4">
+          {showDetails && (
+            <details className="w-full rounded-lg bg-destructive/10 p-3 text-left" open>
+              <summary className="cursor-pointer text-sm font-medium text-destructive">
+                Error Details (dev/preview only)
+              </summary>
+              <div className="mt-2 space-y-2">
+                {error.digest && (
+                  <div className="text-xs">
+                    <strong>Digest:</strong>
+                    <code className="ml-2 rounded bg-black/10 px-1.5 py-0.5">
+                      {error.digest}
+                    </code>
+                  </div>
+                )}
+                {error.message && (
+                  <div className="text-xs">
+                    <strong>Error:</strong>
+                    <pre className="mt-1 overflow-auto rounded bg-black/10 p-2 text-xs max-h-32">
+                      {error.message}
+                    </pre>
+                  </div>
+                )}
+                {error.stack && (
+                  <div className="text-xs">
+                    <strong>Stack Trace:</strong>
+                    <pre className="mt-1 overflow-auto rounded bg-black/10 p-2 text-xs max-h-48">
+                      {error.stack}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </details>
+          )}
           <Button
             onClick={reset}
             variant="outline"
@@ -50,10 +90,10 @@ function ErrorScreenContent({ reset }: ErrorScreenProps) {
   );
 }
 
-export default function ErrorScreen({ reset }: ErrorScreenProps) {
+export default function ErrorScreen({ reset, error }: ErrorScreenProps) {
   return (
     <NextIntlClientProvider messages={messages} locale="en" timeZone="UTC">
-      <ErrorScreenContent reset={reset} />
+      <ErrorScreenContent reset={reset} error={error} />
     </NextIntlClientProvider>
   );
 }
