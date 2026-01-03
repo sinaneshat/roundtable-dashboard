@@ -15,6 +15,9 @@ import { useEffect, useRef, useState } from 'react';
  * - Reduces initial network load for image-heavy search results
  * - Only loads images as user scrolls
  * - Falls back to native lazy loading if IntersectionObserver unavailable
+ *
+ * Note: Uses native <img> intentionally for external web search results
+ * where Next.js Image optimization is not applicable (unknown external domains).
  */
 
 type LazyWebSearchImageProps = {
@@ -33,19 +36,22 @@ export function LazyWebSearchImage({
   onError,
   rootMargin = '100px',
 }: LazyWebSearchImageProps) {
-  const [shouldLoad, setShouldLoad] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
+  const [shouldLoad, setShouldLoad] = useState(() => {
+    // SSR fallback - load immediately if no IntersectionObserver
+    if (typeof window === 'undefined')
+      return true;
+    if (!('IntersectionObserver' in window))
+      return true;
+    return false;
+  });
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      setShouldLoad(true);
+    // Skip if already loading or no IntersectionObserver support
+    if (shouldLoad)
       return;
-    }
-
-    if (!('IntersectionObserver' in window)) {
-      setShouldLoad(true);
+    if (typeof window === 'undefined' || !('IntersectionObserver' in window))
       return;
-    }
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -73,9 +79,10 @@ export function LazyWebSearchImage({
       }
       observer.disconnect();
     };
-  }, [rootMargin]);
+  }, [rootMargin, shouldLoad]);
 
   return (
+    // eslint-disable-next-line next/no-img-element -- External web search images from unknown domains
     <img
       ref={imgRef}
       src={shouldLoad ? src : undefined}

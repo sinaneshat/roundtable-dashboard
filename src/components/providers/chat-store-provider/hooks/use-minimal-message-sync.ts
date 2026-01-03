@@ -121,7 +121,13 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
     });
 
     // Merge: chat messages first (for correct order), then store-only
-    const mergedMessages = [...chatMessages, ...storeOnlyMessages];
+    // ✅ CRITICAL FIX: Deep clone messages before passing to store
+    // AI SDK messages and store messages share references. When Immer freezes
+    // the store state, it also freezes the AI SDK's internal message objects.
+    // This causes "Cannot add property 0, object is not extensible" errors
+    // when AI SDK tries to push streaming parts to a frozen parts array.
+    // structuredClone breaks the reference link, ensuring only copies get frozen.
+    const mergedMessages = structuredClone([...chatMessages, ...storeOnlyMessages]);
 
     // Update store (store's setMessages handles deduplication)
     store.getState().setMessages(mergedMessages);
@@ -140,7 +146,8 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
         const newMessages = chatMessages.filter(m => !prevIds.has(m.id));
         if (newMessages.length === 0)
           return prev;
-        return [...prev, ...newMessages];
+        // ✅ CRITICAL FIX: Clone newMessages to prevent Immer from freezing AI SDK's objects
+        return structuredClone([...prev, ...newMessages]);
       });
     }
   }, [chatIsStreaming, isStreaming, chatMessages, store]);

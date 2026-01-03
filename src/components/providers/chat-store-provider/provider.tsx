@@ -101,10 +101,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       const updatedMessages = currentStoreMessages.map((storeMsg) => {
         const sdkMatch = participantMessagesFromSdk.find(sdk => sdk.id === storeMsg.id);
         if (sdkMatch) {
+          // ✅ CRITICAL FIX: Clone SDK data to prevent Immer from freezing AI SDK's objects
           return {
             ...storeMsg,
-            parts: sdkMatch.parts,
-            metadata: sdkMatch.metadata,
+            parts: structuredClone(sdkMatch.parts),
+            metadata: structuredClone(sdkMatch.metadata),
           };
         }
         return storeMsg;
@@ -113,7 +114,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       const storeMsgIds = new Set(currentStoreMessages.map(m => m.id));
       const missingFromStore = participantMessagesFromSdk.filter(m => !storeMsgIds.has(m.id));
       if (missingFromStore.length > 0) {
-        updatedMessages.push(...missingFromStore);
+        // ✅ CRITICAL FIX: Clone SDK messages to prevent Immer from freezing AI SDK's objects
+        updatedMessages.push(...structuredClone(missingFromStore));
       }
 
       store.getState().setMessages(updatedMessages);

@@ -6,10 +6,8 @@ import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'r
 
 import { AiSdkStatuses, PlanTypes } from '@/api/core/enums';
 import { CardConnectionAlert } from '@/components/chat/card-connection-alert';
-import {
-  ChatInputAttachments,
-  ChatInputDropzoneOverlay,
-} from '@/components/chat/chat-input-attachments-lazy';
+import { ChatInputDropzoneOverlay } from '@/components/chat/chat-input-attachments';
+import { ChatInputAttachments } from '@/components/chat/chat-input-attachments-lazy';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization-lazy';
 import { Icons } from '@/components/icons';
@@ -46,7 +44,6 @@ type ChatInputProps = {
   autoFocus?: boolean;
   toolbar?: React.ReactNode;
   participants?: ParticipantConfig[];
-  onRemoveParticipant?: (participantId: string) => void;
   className?: string;
   enableSpeech?: boolean;
   minHeight?: number;
@@ -74,7 +71,6 @@ export const ChatInput = memo(({
   autoFocus = false,
   toolbar,
   participants = EMPTY_PARTICIPANTS,
-  onRemoveParticipant: _onRemoveParticipant,
   className,
   enableSpeech = true,
   minHeight = 72,

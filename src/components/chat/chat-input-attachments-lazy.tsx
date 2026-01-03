@@ -41,6 +41,3 @@ export function ChatInputAttachments(props: ChatInputAttachmentsProps) {
 
   return <ChatInputAttachmentsInternal {...props} />;
 }
-
-// Re-export overlay for use in ChatInput
-export { ChatInputDropzoneOverlay } from '@/components/chat/chat-input-attachments';
