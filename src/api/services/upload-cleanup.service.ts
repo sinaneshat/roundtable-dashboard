@@ -18,7 +18,6 @@ import type {
   GetCleanupStateResult,
   ScheduleCleanupResult,
 } from '@/api/types/uploads';
-import type { UploadCleanupScheduler } from '@/workers/upload-cleanup-scheduler';
 
 /**
  * Schedule automatic cleanup for an upload
@@ -26,9 +25,12 @@ import type { UploadCleanupScheduler } from '@/workers/upload-cleanup-scheduler'
  * Should be called immediately after a file is uploaded.
  * The cleanup will be executed 15 minutes later if the upload
  * hasn't been attached to any message/thread/project.
+ *
+ * Note: Uses DurableObjectNamespace without generic param because
+ * wrangler types doesn't generate proper DO class types.
  */
 export async function scheduleUploadCleanup(
-  cleanupScheduler: DurableObjectNamespace<UploadCleanupScheduler>,
+  cleanupScheduler: DurableObjectNamespace,
   uploadId: string,
   userId: string,
   r2Key: string,
@@ -66,7 +68,7 @@ export async function scheduleUploadCleanup(
  * being deleted as orphaned.
  */
 export async function cancelUploadCleanup(
-  cleanupScheduler: DurableObjectNamespace<UploadCleanupScheduler>,
+  cleanupScheduler: DurableObjectNamespace,
   uploadId: string,
 ): Promise<CancelCleanupResult> {
   const stub = cleanupScheduler.get(
@@ -95,7 +97,7 @@ export async function cancelUploadCleanup(
  * Useful for debugging or checking if cleanup is scheduled.
  */
 export async function getUploadCleanupState(
-  cleanupScheduler: DurableObjectNamespace<UploadCleanupScheduler>,
+  cleanupScheduler: DurableObjectNamespace,
   uploadId: string,
 ): Promise<GetCleanupStateResult> {
   const stub = cleanupScheduler.get(
