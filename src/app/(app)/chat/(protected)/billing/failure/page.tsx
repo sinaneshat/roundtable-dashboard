@@ -1,21 +1,14 @@
 import type { Metadata } from 'next';
-import dynamicImport from 'next/dynamic';
+import { Suspense } from 'react';
 
 import { BillingFailureSkeleton } from '@/components/billing/billing-failure-skeleton';
 import { BRAND } from '@/constants/brand';
+import { BillingFailureClient } from '@/containers/screens/chat/billing/BillingFailureClient';
 import { createMetadata } from '@/utils';
 
 import { capturePaymentFailure } from './actions';
 
 export const dynamic = 'force-dynamic';
-
-const BillingFailureClient = dynamicImport(
-  () => import('@/containers/screens/chat/billing/BillingFailureClient').then(mod => ({ default: mod.BillingFailureClient })),
-  {
-    loading: () => <BillingFailureSkeleton />,
-    ssr: false,
-  },
-);
 
 export const metadata: Metadata = createMetadata({
   title: `Payment Failed - ${BRAND.fullName}`,
@@ -27,9 +20,6 @@ export const metadata: Metadata = createMetadata({
 /**
  * Billing Failure Page
  * No HydrationBoundary needed - layout already hydrates subscriptions, usage stats
- *
- * Performance: BillingFailureClient dynamically imported to reduce initial bundle.
- * Only loads when payment fails, not on pricing page load.
  */
 export default async function BillingFailurePage({
   searchParams,
@@ -43,5 +33,9 @@ export default async function BillingFailurePage({
   const params = await searchParams;
   const failureResult = await capturePaymentFailure(params);
 
-  return <BillingFailureClient failureData={failureResult.data} />;
+  return (
+    <Suspense fallback={<BillingFailureSkeleton />}>
+      <BillingFailureClient failureData={failureResult.data} />
+    </Suspense>
+  );
 }

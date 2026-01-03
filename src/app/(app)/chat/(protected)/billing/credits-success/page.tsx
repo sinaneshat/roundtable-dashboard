@@ -1,17 +1,10 @@
 import type { Metadata } from 'next';
-import dynamic from 'next/dynamic';
+import { Suspense } from 'react';
 
 import { CreditsSuccessSkeleton } from '@/components/billing/credits-success-skeleton';
 import { BRAND } from '@/constants/brand';
+import { CreditsSuccessClient } from '@/containers/screens/chat/billing/CreditsSuccessClient';
 import { createMetadata } from '@/utils';
-
-const CreditsSuccessClient = dynamic(
-  () => import('@/containers/screens/chat/billing/CreditsSuccessClient').then(mod => ({ default: mod.CreditsSuccessClient })),
-  {
-    loading: () => <CreditsSuccessSkeleton />,
-    ssr: false,
-  },
-);
 
 export const metadata: Metadata = createMetadata({
   title: `Credits Added - ${BRAND.fullName}`,
@@ -32,10 +25,11 @@ export const metadata: Metadata = createMetadata({
  * 3. Client syncs and grants credits
  * 4. Shows credits added confirmation
  * 5. Auto-redirects to chat
- *
- * Performance: CreditsSuccessClient dynamically imported to reduce initial bundle.
- * Only loads after user purchases credits, not on pricing page load.
  */
 export default function CreditsSuccessPage() {
-  return <CreditsSuccessClient />;
+  return (
+    <Suspense fallback={<CreditsSuccessSkeleton />}>
+      <CreditsSuccessClient />
+    </Suspense>
+  );
 }

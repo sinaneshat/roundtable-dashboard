@@ -1,5 +1,6 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { permanentRedirect, redirect } from 'next/navigation';
 
 import { MessageRoles, ResourceUnavailableReasons } from '@/api/core/enums';
@@ -99,6 +100,11 @@ export default async function PublicChatThreadPage({
       permanentRedirect(`/public/chat/${thread.slug}`);
     }
   } catch (error) {
+    // Re-throw redirect errors - they must propagate to Next.js
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
     const isErrorObject = error && typeof error === 'object';
     const statusCode = isErrorObject && 'statusCode' in error && typeof error.statusCode === 'number'
       ? error.statusCode
