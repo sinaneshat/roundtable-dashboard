@@ -45,7 +45,7 @@ declare namespace Cloudflare {
 		CLOUDFLARE_API_TOKEN: string;
 		NEXT_CACHE_DO_QUEUE: DurableObjectNamespace /* DOQueueHandler from roundtable-dashboard */;
 		NEXT_CACHE_DO_PURGE: DurableObjectNamespace /* BucketCachePurge from roundtable-dashboard */;
-		UPLOAD_CLEANUP_SCHEDULER: DurableObjectNamespace /* UploadCleanupScheduler from roundtable-dashboard */;
+		UPLOAD_CLEANUP_SCHEDULER: DurableObjectNamespace<import("./src/workers/upload-cleanup-scheduler").UploadCleanupScheduler>;
 		NEXT_INC_CACHE_R2_BUCKET: R2Bucket;
 		UPLOADS_R2_BUCKET: R2Bucket;
 		DB: D1Database;
