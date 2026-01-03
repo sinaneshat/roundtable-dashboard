@@ -8,7 +8,7 @@
  */
 
 import { useRouter } from 'next/navigation';
-import type { MutableRefObject } from 'react';
+import type { RefObject } from 'react';
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
 
@@ -18,7 +18,7 @@ import type { ChatStoreApi } from '@/stores/chat';
 
 type UseStuckStreamDetectionParams = {
   store: ChatStoreApi;
-  lastStreamActivityRef: MutableRefObject<number>;
+  lastStreamActivityRef: RefObject<number>;
 };
 
 /**

@@ -70,10 +70,10 @@ type RefValues = { [key: string]: NonNullable<object> | string | number | boolea
  */
 export function useSyncedRefs<T extends RefValues>(
   values: T,
-): { [K in keyof T]: React.MutableRefObject<T[K]> } {
+): { [K in keyof T]: React.RefObject<T[K]> } {
   // Create stable refs object - only initialize once
   const refs = useMemo(() => {
-    const result: { [K in keyof T]?: React.MutableRefObject<T[K]> } = {};
+    const result: { [K in keyof T]?: React.RefObject<T[K]> } = {};
     for (const key in values) {
       if (Object.prototype.hasOwnProperty.call(values, key)) {
         // ✅ TYPE-SAFE: No force casting - typed properly via mapped type
@@ -82,7 +82,7 @@ export function useSyncedRefs<T extends RefValues>(
       }
     }
     // Type assertion is safe here - we've initialized all keys from values
-    return result as { [K in keyof T]: React.MutableRefObject<T[K]> };
+    return result as { [K in keyof T]: React.RefObject<T[K]> };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only create once
 

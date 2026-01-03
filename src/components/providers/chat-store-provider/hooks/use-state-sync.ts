@@ -8,7 +8,7 @@
  */
 
 import type { QueryClient } from '@tanstack/react-query';
-import type { MutableRefObject } from 'react';
+import type { RefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect } from 'react';
 
 import { queryKeys } from '@/lib/data/query-keys';
@@ -21,11 +21,11 @@ import type { ChatHook } from '../types';
 type UseStateSyncParams = {
   store: ChatStoreApi;
   chat: ChatHook;
-  storeRef: MutableRefObject<ChatStoreApi | null>;
-  queryClientRef: MutableRefObject<QueryClient>;
-  sendMessageRef: MutableRefObject<ChatHook['sendMessage']>;
-  startRoundRef: MutableRefObject<ChatHook['startRound']>;
-  setMessagesRef: MutableRefObject<ChatHook['setMessages']>;
+  storeRef: RefObject<ChatStoreApi | null>;
+  queryClientRef: RefObject<QueryClient>;
+  sendMessageRef: RefObject<ChatHook['sendMessage']>;
+  startRoundRef: RefObject<ChatHook['startRound']>;
+  setMessagesRef: RefObject<ChatHook['setMessages']>;
 };
 
 /**

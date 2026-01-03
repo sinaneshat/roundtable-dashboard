@@ -20,7 +20,7 @@
  */
 
 import type { QueryClient } from '@tanstack/react-query';
-import type { MutableRefObject } from 'react';
+import type { RefObject } from 'react';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
@@ -35,7 +35,7 @@ import { readPreSearchStreamData } from '@/stores/chat';
 type UsePreSearchResumptionParams = {
   store: ChatStoreApi;
   effectiveThreadId: string;
-  queryClientRef: MutableRefObject<QueryClient>;
+  queryClientRef: RefObject<QueryClient>;
 };
 
 /**

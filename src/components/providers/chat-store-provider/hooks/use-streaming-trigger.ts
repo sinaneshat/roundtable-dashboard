@@ -9,7 +9,7 @@
 
 import type { QueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import type { MutableRefObject } from 'react';
+import type { RefObject } from 'react';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
@@ -28,7 +28,7 @@ type UseStreamingTriggerParams = {
   store: ChatStoreApi;
   chat: ChatHook;
   effectiveThreadId: string;
-  queryClientRef: MutableRefObject<QueryClient>;
+  queryClientRef: RefObject<QueryClient>;
 };
 
 /**

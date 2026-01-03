@@ -1,6 +1,6 @@
 'use client';
 
-import type { MutableRefObject } from 'react';
+import type { RefObject } from 'react';
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
 
@@ -14,7 +14,7 @@ import type { ChatHook } from '../types';
 type UsePendingMessageParams = {
   store: ChatStoreApi;
   chat: ChatHook;
-  sendMessageRef: MutableRefObject<ChatHook['sendMessage']>;
+  sendMessageRef: RefObject<ChatHook['sendMessage']>;
 };
 
 export function usePendingMessage({

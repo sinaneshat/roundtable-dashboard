@@ -53,7 +53,7 @@ type UseChatScrollParams = {
 
 type UseChatScrollResult = {
   /** Ref tracking if scroll is "sticky" (following new content) */
-  isAtBottomRef: React.MutableRefObject<boolean>;
+  isAtBottomRef: React.RefObject<boolean>;
   /** Scroll to bottom of the page */
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   /** Reset all scroll state */

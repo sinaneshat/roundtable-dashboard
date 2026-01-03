@@ -56,7 +56,7 @@ type ChatInputProps = {
   onAddAttachments?: (files: File[]) => void;
   onRemoveAttachment?: (id: string) => void;
   enableAttachments?: boolean;
-  attachmentClickRef?: React.MutableRefObject<(() => void) | null>;
+  attachmentClickRef?: React.RefObject<(() => void) | null>;
   isUploading?: boolean;
   isHydrating?: boolean;
   isSubmitting?: boolean;

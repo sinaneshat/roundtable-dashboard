@@ -156,12 +156,12 @@ type UseMultiParticipantChatReturn = {
    * Ref to check streaming state synchronously (for use in async callbacks/microtasks)
    * Avoids race conditions between store state and hook state
    */
-  isStreamingRef: React.MutableRefObject<boolean>;
+  isStreamingRef: React.RefObject<boolean>;
   /**
    * Ref to check if a trigger is in progress (for provider guards)
    * Prevents race conditions between startRound and pendingMessage effects
    */
-  isTriggeringRef: React.MutableRefObject<boolean>;
+  isTriggeringRef: React.RefObject<boolean>;
   /** The index of the currently active participant */
   currentParticipantIndex: number;
   /** Any error that occurred during the chat */

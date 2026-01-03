@@ -8,14 +8,14 @@
  */
 
 import { usePathname } from 'next/navigation';
-import type { MutableRefObject } from 'react';
+import type { RefObject } from 'react';
 import { useEffect } from 'react';
 
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseNavigationCleanupParams = {
   store: ChatStoreApi;
-  prevPathnameRef: MutableRefObject<string | null>;
+  prevPathnameRef: RefObject<string | null>;
 };
 
 /**
