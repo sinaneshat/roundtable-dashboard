@@ -6,9 +6,6 @@ import { ThreadStatuses } from '@/api/core/enums';
 import { chatThread, getDbAsync } from '@/db';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
-// Revalidate sitemap every 24 hours
-export const revalidate = 86400;
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   'use cache';
   cacheLife('days');

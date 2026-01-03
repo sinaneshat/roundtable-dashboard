@@ -13,8 +13,6 @@ import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { getPublicThreadService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-export const revalidate = 86400;
-
 export async function generateMetadata({
   params,
 }: {

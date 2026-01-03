@@ -1,11 +1,9 @@
 import type { Metadata } from 'next';
+import { cacheLife } from 'next/cache';
 
 import { BRAND } from '@/constants/brand';
 import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
 import { createMetadata } from '@/utils';
-
-// ISR - products pre-rendered, revalidated hourly (inherited from layout)
-// NO auth required - public pricing page
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
@@ -24,6 +22,9 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  'use cache';
+  cacheLife('hours');
+
   return <PricingScreen />;
 }
