@@ -2151,7 +2151,11 @@ export function useMultiParticipantChat(
       ? messages.slice(0, firstMessageIndexOfRound)
       : messages.slice(0, -1); // Fallback: remove last message if round not found
 
-    setMessages(messagesBeforeRound);
+    // ✅ CRITICAL FIX: Deep clone messages to break Immer freeze
+    // Messages may contain frozen objects from Zustand store (via sync)
+    // AI SDK needs mutable arrays to push streaming parts during response generation
+    // Without this, streaming fails with "Cannot add property 0, object is not extensible"
+    setMessages(structuredClone(messagesBeforeRound));
 
     // STEP 4: Reset streaming state to start fresh
     // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
@@ -2443,8 +2447,9 @@ export function useMultiParticipantChat(
     // Reset AI SDK state by re-setting current messages
     // This typically causes AI SDK to transition back to 'ready' state
     // Use a microtask to avoid race conditions with ongoing state updates
+    // ✅ CRITICAL FIX: Deep clone to ensure mutable arrays for AI SDK streaming
     queueMicrotask(() => {
-      setMessages(messagesRef.current);
+      setMessages(structuredClone(messagesRef.current));
     });
   }, [status, isExplicitlyStreaming, setMessages]);
 
