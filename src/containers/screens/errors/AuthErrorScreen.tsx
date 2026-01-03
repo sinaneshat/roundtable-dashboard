@@ -1,6 +1,7 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense } from 'react';
 
@@ -32,7 +33,6 @@ const AUTH_ERROR_I18N_KEYS = {
 
 function AuthErrorContent() {
   const t = useTranslations();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const rawError = searchParams?.get('failed')?.toLowerCase() ?? AuthErrorTypes.DEFAULT;
   const errorType = isValidAuthErrorType(rawError) ? rawError : AuthErrorTypes.DEFAULT;
@@ -42,8 +42,6 @@ function AuthErrorContent() {
     title: t(errorKeys.title),
     description: t(errorKeys.desc),
   };
-
-  const handleRetry = () => router.push('/auth/sign-in');
 
   return (
     <Empty className="w-full max-w-sm border-none">
@@ -70,19 +68,23 @@ function AuthErrorContent() {
         </div>
         <div className="flex flex-col gap-2 w-full">
           <Button
-            onClick={handleRetry}
+            asChild
             startIcon={<Icons.refreshCw />}
             className="w-full"
           >
-            {t('auth.errors.tryAgain')}
+            <Link href="/auth/sign-in">
+              {t('auth.errors.tryAgain')}
+            </Link>
           </Button>
           <Button
-            onClick={handleRetry}
+            asChild
             variant="outline"
             startIcon={<Icons.arrowLeft />}
             className="w-full"
           >
-            {t('auth.errors.backToSignIn')}
+            <Link href="/auth/sign-in">
+              {t('auth.errors.backToSignIn')}
+            </Link>
           </Button>
         </div>
       </EmptyContent>

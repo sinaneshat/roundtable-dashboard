@@ -552,11 +552,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // ✅ CHUNK NORMALIZATION: Normalize streaming for models with buffered chunk delivery
         // Some providers (xAI/Grok, DeepSeek, Gemini) buffer server-side, sending large chunks
         // (sometimes entire paragraphs) instead of token-by-token. This causes UI jumpiness.
-        //
-        // needsSmoothStream() checks PROVIDER_STREAMING_DEFAULTS enum for provider behavior.
         // smoothStream re-chunks at word boundaries with controlled delay for consistent UX.
-        // @see /src/api/core/enums/models.ts - StreamingBehaviors enum
-        // @see /src/api/services/models-config.service.ts - needsSmoothStream()
         ...(needsSmoothStream(participant.modelId) && {
           experimental_transform: smoothStream({
             delayInMs: 20,
@@ -568,59 +564,36 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // This allows AI generation to continue even if client disconnects
         // Chunks are buffered to KV via consumeSseStream for resumption
         abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
-        // ✅ AI SDK V6 TELEMETRY: Enable experimental telemetry for OpenTelemetry integration
-        // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/telemetry
-        // This enables automatic trace generation that can be exported to any OpenTelemetry-compatible backend
+        // ✅ TELEMETRY: Enable telemetry for OpenTelemetry integration
         experimental_telemetry: {
           isEnabled: true,
           functionId: `chat.thread.${threadId}.participant.${participantIndex}`,
-          // Record inputs/outputs for full observability (PostHog best practice)
           recordInputs: true,
           recordOutputs: true,
-          // Custom metadata for telemetry traces (enriched with all relevant context)
           metadata: {
-            // Thread/conversation context
             thread_id: threadId,
             round_number: currentRoundNumber,
             conversation_mode: thread.mode,
-
-            // Participant context
             participant_id: participant.id,
             participant_index: participantIndex,
             participant_role: participant.role || 'no-role',
             is_first_participant: participantIndex === 0,
             total_participants: participants.length,
-
-            // Model context
             model_id: participant.modelId,
             model_name: modelInfo?.name || participant.modelId,
             model_context_length: modelContextLength,
             max_output_tokens: maxOutputTokens,
-
-            // User context
             user_id: user.id,
             user_tier: userTier,
-
-            // Request context
             is_regeneration: !!regenerateRound,
             rag_enabled: systemPrompt !== baseSystemPrompt,
             has_custom_system_prompt: !!participant.settings?.systemPrompt,
-
-            // Reasoning model context
             is_reasoning_model: modelInfo?.is_reasoning_model ?? false,
             reasoning_enabled: !!providerOptions,
-
-            // Performance expectations
             estimated_input_tokens: estimatedInputTokens,
-
-            // Pricing context (for cost tracking) - only include if defined
             uses_dynamic_pricing: !!modelPricing,
-            ...(modelPricing?.input && {
-              input_cost_per_million: modelPricing.input,
-            }),
-            ...(modelPricing?.output && {
-              output_cost_per_million: modelPricing.output,
-            }),
+            ...(modelPricing?.input && { input_cost_per_million: modelPricing.input }),
+            ...(modelPricing?.output && { output_cost_per_million: modelPricing.output }),
           },
         },
         // ✅ CONDITIONAL RETRY: Don't retry validation errors (400), authentication errors (401, 403)

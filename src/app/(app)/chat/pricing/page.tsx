@@ -4,7 +4,7 @@ import { BRAND } from '@/constants/brand';
 import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
 import { createMetadata } from '@/utils';
 
-// Pure SSG - products prefetched in layout
+// ISR - products pre-rendered, revalidated hourly (inherited from layout)
 // NO auth required - public pricing page
 
 export async function generateMetadata(): Promise<Metadata> {

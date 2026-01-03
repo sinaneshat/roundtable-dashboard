@@ -7,6 +7,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { KeyboardKeys } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { LinkLoadingIndicator } from '@/components/ui/link-loading-indicator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { useThreadsQuery } from '@/hooks/queries';
@@ -65,6 +66,7 @@ function SearchResultItem({
           {new Date(thread.updatedAt).toLocaleDateString()}
         </p>
       </div>
+      <LinkLoadingIndicator variant="spinner" size="sm" className="text-muted-foreground" />
       {thread.isFavorite && (
         <div className="size-2 rounded-full bg-primary shrink-0" />
       )}

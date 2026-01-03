@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { ConfirmationDialog } from '@/components/chat/confirmation-dialog';
@@ -24,6 +24,7 @@ export function ChatDeleteDialog({
 }: ChatDeleteDialogProps) {
   const t = useTranslations('chat');
   const tActions = useTranslations('actions');
+  const pathname = usePathname();
   const router = useRouter();
   const deleteThreadMutation = useDeleteThreadMutation();
 
@@ -35,8 +36,7 @@ export function ChatDeleteDialog({
           t('threadDeletedDescription'),
         );
         if (redirectIfCurrent && threadSlug) {
-          const currentPath = window.location.pathname;
-          if (currentPath.includes(`/chat/${threadSlug}`)) {
+          if (pathname.includes(`/chat/${threadSlug}`)) {
             router.push('/chat');
           }
         }

@@ -1,12 +1,11 @@
 import type { Metadata } from 'next';
+import { cacheLife } from 'next/cache';
 import { getTranslations } from 'next-intl/server';
 
 import { BRAND } from '@/constants/brand';
 import TermsScreen from '@/containers/screens/legal/TermsScreen';
 import { isArrayOf, isNonEmptyString } from '@/lib/utils/type-guards';
 import { createMetadata } from '@/utils';
-
-export const dynamic = 'force-static';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta.legal.terms');
@@ -33,5 +32,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function TermsPage() {
+  'use cache';
+  cacheLife('max');
+
   return <TermsScreen />;
 }

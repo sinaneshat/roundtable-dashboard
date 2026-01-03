@@ -1,18 +1,17 @@
 /**
  * Default Open Graph Image for all pages
- * Uses Next.js ImageResponse API (no edge runtime needed)
- * Supports ISR with revalidation
+ * Uses Next.js ImageResponse API with Cache Components
  *
  * Note: This file uses Next.js Metadata API which requires named exports.
  * The react-refresh warning is disabled as this is not a React component file.
  */
 /* eslint-disable react-refresh/only-export-components */
+import { cacheLife } from 'next/cache';
 import { ImageResponse } from 'next/og';
 
 import { BRAND } from '@/constants/brand';
 
 // Open Graph Image metadata - must be direct exports (not re-exported)
-export const revalidate = 3600; // ISR: Revalidate every hour
 export const size = {
   width: 1200,
   height: 630,
@@ -21,6 +20,9 @@ export const contentType = 'image/png';
 export const alt = BRAND.fullName;
 
 export default async function Image() {
+  'use cache';
+  cacheLife('hours');
+
   return new ImageResponse(
     (
       <div

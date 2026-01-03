@@ -661,7 +661,7 @@ export function ModelSelectionModal({
                                 className="h-6 rounded-full text-[10px] font-medium shrink-0"
                                 asChild
                               >
-                                <Link href="/chat/pricing" prefetch={false}>
+                                <Link href="/chat/pricing">
                                   {t('upgrade')}
                                 </Link>
                               </Button>

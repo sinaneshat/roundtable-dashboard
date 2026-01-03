@@ -1,7 +1,5 @@
-'use client';
-
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -24,8 +22,8 @@ const TERMS_SECTIONS = [
   'contact',
 ];
 
-export default function TermsScreen() {
-  const t = useTranslations();
+export default async function TermsScreen() {
+  const t = await getTranslations();
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">

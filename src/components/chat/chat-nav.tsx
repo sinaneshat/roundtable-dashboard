@@ -187,7 +187,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
               {/* Action Buttons - Expanded */}
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
                 <SidebarMenuButton asChild isActive={pathname === '/chat'}>
-                  <Link href="/chat" prefetch={false} onClick={handleNavLinkClick}>
+                  <Link href="/chat" onClick={handleNavLinkClick}>
                     <Icons.plus className="size-4 shrink-0" />
                     <span
                       className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap max-w-48"
@@ -219,7 +219,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
               {/* Icon Buttons - Collapsed */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
                 <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
-                  <Link href="/chat" prefetch={false} onClick={handleNavLinkClick}>
+                  <Link href="/chat" onClick={handleNavLinkClick}>
                     <Icons.plus />
                   </Link>
                 </SidebarMenuButton>
@@ -375,7 +375,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                   tooltip={isPaidUser ? `${SUBSCRIPTION_TIER_NAMES[subscriptionTier]} Plan` : t('navigation.upgrade')}
                   isActive={pathname?.startsWith('/chat/pricing')}
                 >
-                  <Link href="/chat/pricing" prefetch={false}>
+                  <Link href="/chat/pricing">
                     <Icons.sparkles className={isPaidUser ? 'text-success' : ''} />
                   </Link>
                 </SidebarMenuButton>

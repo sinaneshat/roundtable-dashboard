@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
+import { cacheLife } from 'next/cache';
 
 import { BRAND } from '@/constants/brand';
 import AuthErrorScreen from '@/containers/screens/errors/AuthErrorScreen';
 import { createMetadata } from '@/utils';
-
-export const dynamic = 'force-static';
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
@@ -14,6 +13,9 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-export default function AuthErrorPage() {
+export default async function AuthErrorPage() {
+  'use cache';
+  cacheLife('max');
+
   return <AuthErrorScreen />;
 }

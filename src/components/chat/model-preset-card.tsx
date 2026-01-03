@@ -171,7 +171,7 @@ export const ModelPresetCard = memo(({
               e.stopPropagation();
             }}
           >
-            <Link href="/chat/pricing" prefetch={false}>
+            <Link href="/chat/pricing">
               {t('upgradeToTier', { tier: SUBSCRIPTION_TIER_NAMES[preset.requiredTier] })}
             </Link>
           </Button>
@@ -182,7 +182,7 @@ export const ModelPresetCard = memo(({
 
   return isLocked
     ? (
-        <Link href="/chat/pricing" prefetch={false} {...sharedProps}>
+        <Link href="/chat/pricing" {...sharedProps}>
           {CardContent}
         </Link>
       )

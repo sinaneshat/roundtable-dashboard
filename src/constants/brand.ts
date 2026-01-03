@@ -91,8 +91,11 @@ export const BRAND = {
   } as const,
 } as const;
 
+// Static copyright year - update annually
+const COPYRIGHT_YEAR = 2025;
+
 export function getCopyrightText(): string {
-  return `© ${new Date().getFullYear()} ${BRAND.name}. All rights reserved.`;
+  return `© ${COPYRIGHT_YEAR} ${BRAND.name}. All rights reserved.`;
 }
 
 // ============================================================================

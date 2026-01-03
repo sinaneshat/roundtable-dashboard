@@ -1,7 +1,5 @@
-'use client';
-
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -25,8 +23,8 @@ const PRIVACY_SECTIONS = [
   'contact',
 ];
 
-export default function PrivacyScreen() {
-  const t = useTranslations();
+export default async function PrivacyScreen() {
+  const t = await getTranslations();
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">

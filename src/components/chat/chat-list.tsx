@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LinkLoadingIndicator } from '@/components/ui/link-loading-indicator';
 import { StaggerItem } from '@/components/ui/motion';
 import {
   SidebarMenu,
@@ -135,8 +136,9 @@ function ChatItem({
                   }
                 }}
               >
-                <div className="truncate overflow-hidden text-ellipsis whitespace-nowrap max-w-52">
-                  {chat.title}
+                <div className="truncate overflow-hidden text-ellipsis whitespace-nowrap max-w-52 flex items-center gap-1.5">
+                  <span className="truncate">{chat.title}</span>
+                  <LinkLoadingIndicator variant="spinner" size="xs" className="text-muted-foreground" />
                 </div>
               </Link>
             </SidebarMenuButton>

@@ -1,11 +1,12 @@
 /**
  * Static Open Graph Image for Privacy Policy Page
- * Uses Next.js ImageResponse API with server-side translations
+ * Uses Next.js ImageResponse API with Cache Components
  *
  * Note: This file uses Next.js Metadata API which requires named exports.
  * The react-refresh warning is disabled as this is not a React component file.
  */
 /* eslint-disable react-refresh/only-export-components */
+import { cacheLife } from 'next/cache';
 import { ImageResponse } from 'next/og';
 import { getTranslations } from 'next-intl/server';
 
@@ -16,8 +17,6 @@ import {
   OG_COLORS,
 } from '@/lib/ui';
 
-// Force dynamic to avoid build-time image fetch errors
-export const dynamic = 'force-dynamic';
 export const size = {
   width: 1200,
   height: 630,
@@ -25,6 +24,9 @@ export const size = {
 export const contentType = 'image/png';
 
 export default async function Image() {
+  'use cache';
+  cacheLife('max');
+
   // Load translations
   const t = await getTranslations();
 
@@ -193,7 +195,7 @@ export default async function Image() {
             color: OG_COLORS.textMuted,
           }}
         >
-          {t('legal.privacy.lastUpdatedYear', { year: new Date().getFullYear() })}
+          {t('legal.privacy.lastUpdatedYear', { year: 2025 })}
         </div>
       </div>
     ),

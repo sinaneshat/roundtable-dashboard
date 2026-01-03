@@ -95,7 +95,7 @@ export function StatusPageActions({
       {primaryHref
         ? (
             <Button asChild className={cn('w-full', glassButtonPrimary)}>
-              <Link href={primaryHref} prefetch={false}>
+              <Link href={primaryHref}>
                 {primaryLabel}
               </Link>
             </Button>
@@ -114,7 +114,7 @@ export function StatusPageActions({
                 size="sm"
                 className={cn('w-full', glassButtonSecondary)}
               >
-                <Link href={secondaryHref} prefetch={false}>
+                <Link href={secondaryHref}>
                   {secondaryLabel}
                 </Link>
               </Button>

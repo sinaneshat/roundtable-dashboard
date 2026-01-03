@@ -238,53 +238,6 @@ html,
 }
 
 /* ============================================================================
- * View Transitions API (Baseline 2025)
- * Browser support: Chrome 111+, Safari 18+, Firefox 144+
- *
- * Native browser-level transitions during Next.js client-side navigation.
- * Enabled via `viewTransition: true` in next.config.ts
- * ============================================================================ */
-
-/* Smooth crossfade transition - old and new pages animate simultaneously */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 200ms;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  /* Prevent black flash by mixing both states */
-  mix-blend-mode: normal;
-}
-
-/* Old page crossfades out */
-::view-transition-old(root) {
-  animation-name: vt-fade-out;
-}
-
-/* New page crossfades in */
-::view-transition-new(root) {
-  animation-name: vt-fade-in;
-}
-
-@keyframes vt-fade-out {
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes vt-fade-in {
-  from {
-    opacity: 0;
-  }
-}
-
-/* Accessibility: Instant transitions for reduced motion preference */
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation-duration: 0.01ms;
-  }
-}
-
-/* ============================================================================
  * Custom Scrollbar Styling
  * Matches shadcn ScrollArea appearance for native overflow scroll containers
  * Used when ScrollArea wrapper interferes with drag-and-drop functionality
@@ -311,4 +264,27 @@ html,
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* ============================================================================
+ * Link Loading Indicator (useLinkStatus)
+ * Debounced animation prevents flash on fast navigations
+ * 100ms delay before showing - per Next.js best practices
+ * ============================================================================ */
+.link-pending-indicator {
+  animation: link-pending-fade-in 150ms ease-out 100ms forwards;
+}
+
+@keyframes link-pending-fade-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Accessibility: Instant indicator for reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .link-pending-indicator {
+    animation-delay: 0ms;
+    animation-duration: 0.01ms;
+  }
 }

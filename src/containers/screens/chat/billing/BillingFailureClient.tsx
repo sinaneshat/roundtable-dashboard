@@ -156,7 +156,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
             size="lg"
             className={cn('w-full sm:w-auto sm:min-w-[200px]', glassButtonPrimary)}
           >
-            <Link href="/chat/pricing" prefetch={false}>
+            <Link href="/chat/pricing">
               {t('billing.failure.tryAgain')}
             </Link>
           </Button>
@@ -167,7 +167,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
             size="lg"
             className={cn('w-full sm:w-auto sm:min-w-[200px]', glassButtonSecondary)}
           >
-            <Link href="/chat" prefetch={false}>
+            <Link href="/chat">
               {t('billing.failure.returnHome')}
             </Link>
           </Button>

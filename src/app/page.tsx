@@ -4,8 +4,6 @@ import { BRAND } from '@/constants/brand';
 import HomeScreen from '@/containers/screens/general/HomeScreen';
 import { createMetadata } from '@/utils';
 
-export const dynamic = 'force-dynamic';
-
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: BRAND.tagline,

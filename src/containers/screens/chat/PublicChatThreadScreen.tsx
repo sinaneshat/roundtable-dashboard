@@ -95,7 +95,7 @@ export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenP
             </p>
           </div>
           <Button variant="default" asChild>
-            <Link href="/" prefetch={false}>
+            <Link href="/">
               {t('actions.goHome')}
             </Link>
           </Button>
@@ -118,7 +118,7 @@ export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenP
             </p>
           </div>
           <Button variant="default" asChild>
-            <Link href="/" prefetch={false}>
+            <Link href="/">
               {tPublic('goHome')}
             </Link>
           </Button>
@@ -189,7 +189,7 @@ export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenP
                           className="gap-2 w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                           asChild
                         >
-                          <Link href={signUpUrl} prefetch={false}>
+                          <Link href={signUpUrl}>
                             {tPublic('tryRoundtable')}
                             <Icons.arrowRight className="w-4 h-4" />
                           </Link>
@@ -200,7 +200,7 @@ export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenP
                           className="w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                           asChild
                         >
-                          <Link href="/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more" prefetch={false}>
+                          <Link href="/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more">
                             {tPublic('learnMore')}
                           </Link>
                         </Button>

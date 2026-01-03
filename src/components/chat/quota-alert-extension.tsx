@@ -49,7 +49,7 @@ export function QuotaAlertExtension() {
             size="sm"
             className="h-6 px-3 text-[10px] font-semibold shrink-0 rounded-full"
           >
-            <Link href="/chat/pricing" prefetch={false}>
+            <Link href="/chat/pricing">
               {t('quotaAlert.action')}
             </Link>
           </Button>

@@ -55,7 +55,7 @@ export function CardConnectionAlert() {
             size="sm"
             className="text-xs shrink-0"
           >
-            <Link href="/chat/pricing" prefetch={false}>
+            <Link href="/chat/pricing">
               {t('usage.cardAlert.connectCard')}
             </Link>
           </Button>

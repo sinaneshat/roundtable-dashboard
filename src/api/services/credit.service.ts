@@ -29,6 +29,7 @@ import {
 } from '@/api/services/product-logic.service';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { CreditCacheTags, SubscriptionCacheTags } from '@/db/cache/cache-tags';
 import type { CreditTransactionMetadata, UserCreditBalance } from '@/db/validation';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
@@ -221,6 +222,7 @@ export async function needsCardConnection(userId: string): Promise<boolean> {
 
   const customer = customerResults[0];
   if (customer) {
+    // ✅ CACHING: Active subscription check with 2-minute TTL
     const subscriptionResults = await db
       .select()
       .from(tables.stripeSubscription)
@@ -230,7 +232,11 @@ export async function needsCardConnection(userId: string): Promise<boolean> {
           eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .$withCache({
+        config: { ex: 120 }, // 2 minutes - consistent with SubscriptionCacheTags
+        tag: SubscriptionCacheTags.active(userId),
+      });
 
     // Has active subscription = has card = doesn't need card connection
     if (subscriptionResults.length > 0) {
@@ -239,6 +245,7 @@ export async function needsCardConnection(userId: string): Promise<boolean> {
   }
 
   // Check if user has ever received card connection credits
+  // ✅ CACHING: Card connection is immutable (one-time event), cache for 1 hour
   const cardConnectionTx = await db
     .select()
     .from(tables.creditTransaction)
@@ -248,7 +255,11 @@ export async function needsCardConnection(userId: string): Promise<boolean> {
         eq(tables.creditTransaction.action, 'card_connection'),
       ),
     )
-    .limit(1);
+    .limit(1)
+    .$withCache({
+      config: { ex: 3600 }, // 1 hour - card connection is immutable
+      tag: CreditCacheTags.cardConnection(userId),
+    });
 
   // No card connection transaction = needs to connect card
   return cardConnectionTx.length === 0;

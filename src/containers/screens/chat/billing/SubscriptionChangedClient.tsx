@@ -108,7 +108,7 @@ function SubscriptionChangedContent() {
               size="lg"
               className={cn('min-w-[200px]', glassButtonPrimary)}
             >
-              <Link href="/chat/pricing" prefetch={false}>
+              <Link href="/chat/pricing">
                 {t('billing.subscriptionChanged.viewPricing')}
               </Link>
             </Button>
@@ -399,7 +399,7 @@ function SubscriptionChangedContent() {
             size="lg"
             className={cn('min-w-[200px]', glassButtonPrimary)}
           >
-            <Link href="/chat" prefetch={false}>
+            <Link href="/chat">
               {t('billing.success.startChat')}
             </Link>
           </Button>
@@ -409,7 +409,7 @@ function SubscriptionChangedContent() {
             size="lg"
             className={cn('min-w-[200px]', glassButtonSecondary)}
           >
-            <Link href="/chat/pricing" prefetch={false}>
+            <Link href="/chat/pricing">
               {t('billing.success.viewPricing')}
             </Link>
           </Button>

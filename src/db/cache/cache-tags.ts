@@ -177,6 +177,23 @@ export const ProductCacheTags = {
 } as const;
 
 /**
+ * Credit-related cache tags
+ */
+export const CreditCacheTags = {
+  /**
+   * Card connection check for a user (immutable once connected)
+   * TTL: 1 hour (card connection is one-time event)
+   * @example 'card-connection-80e42802-3507-43c4-88a3-c194909b2e4e'
+   */
+  cardConnection: (userId: string) => `card-connection-${userId}`,
+
+  /**
+   * Get all credit-related cache tags for bulk invalidation
+   */
+  all: (userId: string) => [CreditCacheTags.cardConnection(userId)],
+} as const;
+
+/**
  * Chat thread-related cache tags
  */
 export const ThreadCacheTags = {

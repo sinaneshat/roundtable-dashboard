@@ -1,19 +1,25 @@
 import { eq } from 'drizzle-orm';
 import type { MetadataRoute } from 'next';
+import { cacheLife } from 'next/cache';
 
 import { ThreadStatuses } from '@/api/core/enums';
 import { chatThread, getDbAsync } from '@/db';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = getAppBaseUrl();
-  const currentDate = new Date();
+// Revalidate sitemap every 24 hours
+export const revalidate = 86400;
 
-  // Static pages
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  'use cache';
+  cacheLife('days');
+
+  const baseUrl = getAppBaseUrl();
+
+  // Static pages - use fixed date for cache stability
   const staticPages: MetadataRoute.Sitemap = [
     {
       url: `${baseUrl}`,
-      lastModified: currentDate.toISOString(),
+      lastModified: new Date().toISOString(),
       changeFrequency: 'weekly',
       priority: 1,
     },

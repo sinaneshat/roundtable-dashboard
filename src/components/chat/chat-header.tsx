@@ -111,7 +111,7 @@ function NavigationHeaderComponent({
           </Button>
           {showLogo && !isOverviewPage && (
             <>
-              <Link href="/" prefetch={false} className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 touch-manipulation">
+              <Link href="/" className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 touch-manipulation">
                 <Logo size="sm" variant="icon" />
                 <span className="text-sm sm:text-base font-semibold tracking-tight hidden xs:inline">
                   {BRAND.displayName}

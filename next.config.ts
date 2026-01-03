@@ -23,25 +23,20 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
 
-  // Stable experimental features (production-ready since Next.js 13.5+)
+  // Optimize package imports for better tree-shaking (reduces Cloudflare bundle size)
+  // Note: lucide-react, date-fns are optimized by default
+  // @see https://nextjs.org/docs/app/api-reference/config/next-config-js/optimizePackageImports
   experimental: {
-    // Optimize package imports for better tree-shaking
-    // Battle-tested since 13.5, widely used in production
-    // Reduces module loading by 15-70% depending on library
     optimizePackageImports: [
-      'lucide-react',
       'recharts',
-      'date-fns',
       '@radix-ui/react-icons',
-      // 'motion', // Disabled - causing tree-shaking issues with Lo property
     ],
-
-    // View Transitions API integration (Baseline 2025)
-    // Browser support: Chrome 111+, Safari 18+, Firefox 144+
-    // Enables smooth page transitions during client-side navigation
-    // https://developer.chrome.com/docs/web-platform/view-transitions
-    viewTransition: true,
   },
+
+  // Cache Components (Next.js 16+) - supported in OpenNext 1.14.7+
+  // Enables 'use cache' directive for Partial Prerendering
+  // @see https://github.com/opennextjs/opennextjs-cloudflare/releases
+  cacheComponents: true,
 
   // External packages for Server Components bundling
   // Required for React Email to work in edge runtime and Cloudflare Workers

@@ -1,7 +1,4 @@
-"use client";
-
 import type { ComponentProps } from 'react';
-import { useState } from 'react';
 
 import type { SkeletonUsecase } from '@/api/core/enums';
 import { SkeletonUsecases } from '@/api/core/enums';
@@ -347,60 +344,6 @@ function AuthFormSkeleton({ className, ...props }: ComponentProps<"div">) {
   )
 }
 
-type ImageWithSkeletonBaseProps = Omit<ComponentProps<"img">, "src" | "alt" | "width" | "height">;
-
-interface ImageWithSkeletonProps extends ImageWithSkeletonBaseProps {
-  src: string;
-  alt: string;
-  width: number;
-  height: number;
-  className?: string;
-  skeletonClassName?: string;
-}
-
-function ImageWithSkeleton({
-  src,
-  alt,
-  width,
-  height,
-  className,
-  skeletonClassName,
-  ...props
-}: ImageWithSkeletonProps) {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
-
-  return (
-    <div
-      className="relative"
-      style={{ width, height }}
-    >
-      {/* Skeleton placeholder - always rendered to reserve space */}
-      {!isLoaded && !hasError && (
-        <Skeleton
-          className={cn("absolute inset-0", skeletonClassName)}
-          style={{ width, height }}
-        />
-      )}
-      {/* Actual image */}
-      <img
-        src={src}
-        alt={alt}
-        width={width}
-        height={height}
-        onLoad={() => setIsLoaded(true)}
-        onError={() => setHasError(true)}
-        className={cn(
-          "transition-opacity duration-300",
-          isLoaded ? "opacity-100" : "opacity-0",
-          className
-        )}
-        {...props}
-      />
-    </div>
-  );
-}
-
 export {
   Skeleton,
   CardSkeleton,
@@ -417,6 +360,5 @@ export {
   PresetCardSkeleton,
   QuickStartSkeleton,
   AuthFormSkeleton,
-  ImageWithSkeleton,
 }
 

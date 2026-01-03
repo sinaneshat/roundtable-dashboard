@@ -5,7 +5,6 @@ import { GeistSans } from 'geist/font/sans';
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import { getMessages, getTranslations } from 'next-intl/server';
-import type { ReactNode } from 'react';
 
 import { DEFAULT_SEO_CONTENT_TYPE, isValidSeoContentType } from '@/api/core/enums';
 import { AppProviders } from '@/components/providers';
@@ -52,12 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-type RootLayoutProps = {
-  children: ReactNode;
-  modal: ReactNode;
-};
-
-export default async function Layout({ children, modal }: RootLayoutProps) {
+export default async function Layout({ children }: LayoutProps<'/'>) {
   const env = process.env;
   const tAeo = await getTranslations('seo.aeo');
   const tFeatures = await getTranslations('seo.features');
@@ -126,7 +120,6 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
           initialPreferences={initialPreferences}
         >
           <main>{children}</main>
-          {modal}
         </AppProviders>
       </body>
     </html>
