@@ -589,25 +589,15 @@ export const ChatMessageList = memo(
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;
 
-    // ✅ POST-MODERATOR FLASH FIX: Track rounds that just completed streaming
-    // When a round transitions from streaming to complete, we need to skip entrance
-    // animations for messageGroups because the content was already visible via pending cards.
-    // Without this, both the pending cards fade-out (150ms) and messageGroups fade-in (250ms)
-    // happen simultaneously, creating a "flash" effect.
-    const prevStreamingRoundRef = useRef<number | null>(_streamingRoundNumber);
-    const justCompletedRoundsRef = useRef<Set<number>>(new Set());
+    // ✅ POST-MODERATOR FLASH FIX: Track rounds that were visible during streaming
+    // When content transitions from pending cards to messageGroups, we must skip
+    // entrance animations because the content was already visible.
+    // Track which rounds have been rendered (their content was visible to user)
+    const renderedRoundsRef = useRef<Set<number>>(new Set());
 
-    // Track when streaming round changes - if it goes from N to null, round N just completed
-    if (prevStreamingRoundRef.current !== _streamingRoundNumber) {
-      if (prevStreamingRoundRef.current !== null && _streamingRoundNumber === null) {
-        // Round just completed - add to justCompletedRounds
-        justCompletedRoundsRef.current.add(prevStreamingRoundRef.current);
-        // Clear after a short delay to allow one render cycle without animation
-        setTimeout(() => {
-          justCompletedRoundsRef.current.delete(prevStreamingRoundRef.current!);
-        }, 300); // Slightly longer than animation duration
-      }
-      prevStreamingRoundRef.current = _streamingRoundNumber;
+    // Mark current streaming round as "rendered" (content is visible via pending cards)
+    if (_streamingRoundNumber !== null) {
+      renderedRoundsRef.current.add(_streamingRoundNumber);
     }
 
     // ✅ ANIMATION: Using whileInView for scroll-triggered animations
@@ -1281,7 +1271,7 @@ export const ChatMessageList = memo(
 
                   // ✅ POST-MODERATOR FLASH FIX: When round completes, hide INSTANTLY (no transition)
                   // The transition was causing a 150ms fadeout that overlapped with messageGroups fadein
-                  const isJustCompletedRound = justCompletedRoundsRef.current.has(roundNumber);
+                  const wasRenderedDuringStreaming = renderedRoundsRef.current.has(roundNumber);
 
                   return (
                     // mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
@@ -1295,8 +1285,8 @@ export const ChatMessageList = memo(
                         // Only transition when showing, not when hiding (prevents flash)
                         shouldShowPendingCards && 'transition-all duration-150',
                         shouldShowPendingCards ? 'mt-8 opacity-100' : 'h-0 opacity-0 pointer-events-none',
-                        // Force instant hide when round just completed
-                        isJustCompletedRound && 'transition-none',
+                        // Force instant hide when round was already rendered (prevents flash)
+                        wasRenderedDuringStreaming && !shouldShowPendingCards && 'transition-none',
                       )}
                       aria-hidden={!shouldShowPendingCards}
                     >
@@ -1511,10 +1501,10 @@ export const ChatMessageList = memo(
 
             const firstMessageId = group.messages[0]?.message.id || `group-${groupIndex}`;
 
-            // ✅ POST-MODERATOR FLASH FIX: Skip animation for rounds that just completed
+            // ✅ POST-MODERATOR FLASH FIX: Skip animation for rounds that were rendered during streaming
             // Content was already visible via pending cards - don't replay entrance animation
-            const isJustCompletedRound = justCompletedRoundsRef.current.has(groupRoundNumber);
-            const shouldSkipAnimation = !shouldAnimateMessage(firstMessageId) || isJustCompletedRound;
+            const wasRenderedDuringStreaming = renderedRoundsRef.current.has(groupRoundNumber);
+            const shouldSkipAnimation = !shouldAnimateMessage(firstMessageId) || wasRenderedDuringStreaming;
 
             return (
               <ScrollAwareParticipant
