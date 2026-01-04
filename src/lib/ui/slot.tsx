@@ -17,6 +17,7 @@ function isSlottableChild(child: ReactNode): child is ReactElement {
 }
 
 function Slot({ ref, children, ...props }: SlotProps & { ref?: Ref<HTMLElement> | null }) {
+  // eslint-disable-next-line react/no-children-to-array -- Intentional: Custom Slot for React 19 + Radix workaround
   const childArray = Children.toArray(children);
   const slottableChild = childArray.find(isSlottableChild);
 
@@ -43,6 +44,7 @@ function Slot({ ref, children, ...props }: SlotProps & { ref?: Ref<HTMLElement> 
     mergedProps.className = mergedClassName || undefined;
     mergedProps.ref = ref as Ref<unknown>;
 
+    // eslint-disable-next-line react/no-clone-element -- Intentional: Custom Slot for React 19 + Radix workaround
     return cloneElement(slottableChild, mergedProps);
   }
 

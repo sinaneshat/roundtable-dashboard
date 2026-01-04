@@ -19,7 +19,8 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
 import React, { useEffect, useRef } from 'react';
@@ -431,7 +432,7 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
 
       // Simulate hovering (would trigger dropdown show)
       const button = screen.getByTestId(`chat-button-${threadId}`);
-      fireEvent.mouseEnter(button);
+      await userEvent.hover(button);
 
       // Verify hover was triggered
       expect(mockPrefetch).toHaveBeenCalled();
