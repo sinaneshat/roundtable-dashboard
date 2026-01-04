@@ -22,6 +22,9 @@ export const size = {
 };
 export const contentType = 'image/png';
 
+// Dynamic to avoid build-time fetch errors for logo
+export const dynamic = 'force-dynamic';
+
 export default async function Image() {
   // Load translations
   const t = await getTranslations();

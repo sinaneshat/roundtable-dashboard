@@ -46,6 +46,9 @@ export const size = {
 export const contentType = 'image/png';
 export const alt = 'Public AI Chat Thread';
 
+// Dynamic to avoid build-time fetch errors for logo/API calls
+export const dynamic = 'force-dynamic';
+
 export default async function Image({
   params,
 }: {

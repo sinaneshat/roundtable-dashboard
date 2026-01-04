@@ -13,6 +13,9 @@ export const size = {
 };
 export const contentType = 'image/png';
 
+// Dynamic to avoid build-time API call errors
+export const dynamic = 'force-dynamic';
+
 const MODE_COLORS: Record<ChatMode, string> = {
   [ChatModes.ANALYZING]: '#3b82f6',
   [ChatModes.BRAINSTORMING]: '#8b5cf6',
