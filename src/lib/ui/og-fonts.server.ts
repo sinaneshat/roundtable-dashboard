@@ -5,6 +5,7 @@
  * in server-side contexts (OG image routes, not client components).
  */
 
+import type { Buffer } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -14,6 +15,15 @@ export type OGFontConfig = {
   style: 'normal' | 'italic';
   weight: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
 };
+
+/**
+ * Converts a Node.js Buffer to a proper ArrayBuffer.
+ * Buffer.buffer returns a view into a shared ArrayBuffer with potential offsets,
+ * so we need to copy to a new ArrayBuffer to avoid offset issues.
+ */
+function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {
+  return new Uint8Array(buffer).buffer;
+}
 
 /**
  * Loads fonts for OG image generation from local files.
@@ -32,9 +42,9 @@ export async function getOGFonts(): Promise<OGFontConfig[]> {
   ]);
 
   return [
-    { name: 'Geist', data: regular.buffer as ArrayBuffer, style: 'normal', weight: 400 },
-    { name: 'Geist', data: semibold.buffer as ArrayBuffer, style: 'normal', weight: 600 },
-    { name: 'Geist', data: bold.buffer as ArrayBuffer, style: 'normal', weight: 700 },
-    { name: 'Geist', data: black.buffer as ArrayBuffer, style: 'normal', weight: 800 },
+    { name: 'Geist', data: bufferToArrayBuffer(regular), style: 'normal', weight: 400 },
+    { name: 'Geist', data: bufferToArrayBuffer(semibold), style: 'normal', weight: 600 },
+    { name: 'Geist', data: bufferToArrayBuffer(bold), style: 'normal', weight: 700 },
+    { name: 'Geist', data: bufferToArrayBuffer(black), style: 'normal', weight: 800 },
   ];
 }
