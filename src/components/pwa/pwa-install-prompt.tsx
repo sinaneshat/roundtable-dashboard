@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -19,12 +19,20 @@ import { usePwa } from '@/hooks/use-pwa';
 
 const DISMISSED_KEY = 'pwa-prompt-dismissed';
 const DISMISS_DURATION_DAYS = 7;
+const AUTO_DISMISS_SECONDS = 15;
 
 export function PwaInstallPrompt() {
   const t = useTranslations('pwa');
   const { isInstallable, isInstalled, isIOS, isStandalone, installApp } = usePwa();
   const [isOpen, setIsOpen] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
+  const [countdown, setCountdown] = useState(AUTO_DISMISS_SECONDS);
+
+  const handleDismiss = useCallback(() => {
+    localStorage.setItem(DISMISSED_KEY, new Date().toISOString());
+    setShowBanner(false);
+    setIsOpen(false);
+  }, []);
 
   useEffect(() => {
     if (isStandalone || isInstalled)
@@ -39,21 +47,31 @@ export function PwaInstallPrompt() {
         return;
     }
 
-    // Show prompt after 5 seconds for better UX
     const timer = setTimeout(() => {
       if (isIOS || isInstallable) {
         setShowBanner(true);
+        setCountdown(AUTO_DISMISS_SECONDS);
       }
     }, 5000);
 
     return () => clearTimeout(timer);
   }, [isIOS, isInstallable, isInstalled, isStandalone]);
 
-  const handleDismiss = () => {
-    localStorage.setItem(DISMISSED_KEY, new Date().toISOString());
-    setShowBanner(false);
-    setIsOpen(false);
-  };
+  useEffect(() => {
+    if (!showBanner || isOpen)
+      return;
+
+    if (countdown <= 0) {
+      handleDismiss();
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setCountdown(prev => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [showBanner, countdown, isOpen, handleDismiss]);
 
   const handleInstall = async () => {
     if (isIOS) {
@@ -71,31 +89,30 @@ export function PwaInstallPrompt() {
 
   return (
     <>
-      {/* Install Banner */}
-      <div className="fixed bottom-0 inset-x-0 z-40 p-4 pb-safe animate-in slide-in-from-bottom duration-300">
-        <div className="mx-auto max-w-lg rounded-2xl border bg-card/95 backdrop-blur-md p-4 shadow-lg">
-          <div className="flex items-start gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-              <Icons.download className="size-5 text-primary" />
+      {/* Install Banner - Bottom Right, Compact */}
+      <div className="fixed bottom-4 right-4 z-40 animate-in slide-in-from-bottom-2 duration-300">
+        <div className="w-64 rounded-xl border bg-card/95 backdrop-blur-md p-3 shadow-lg">
+          <div className="flex items-center gap-2">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Icons.download className="size-4 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-sm">{t('installTitle', { app: BRAND.name })}</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">{t('installDescription')}</p>
+              <h3 className="font-medium text-xs">{t('installTitle', { app: BRAND.name })}</h3>
             </div>
             <button
               onClick={handleDismiss}
-              className="shrink-0 p-1 rounded-full hover:bg-white/10 transition-colors"
+              className="shrink-0 p-0.5 rounded-full hover:bg-white/10 transition-colors"
               aria-label={t('dismiss')}
             >
-              <Icons.x className="size-4 text-muted-foreground" />
+              <Icons.x className="size-3.5 text-muted-foreground" />
             </button>
           </div>
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-1.5 mt-2">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleDismiss}
-              className="flex-1"
+              className="flex-1 h-7 text-xs"
             >
               {t('notNow')}
             </Button>
@@ -103,10 +120,23 @@ export function PwaInstallPrompt() {
               variant="default"
               size="sm"
               onClick={handleInstall}
-              className="flex-1"
+              className="flex-1 h-7 text-xs"
             >
               {t('install')}
             </Button>
+          </div>
+          {/* Countdown indicator */}
+          <div className="mt-2 flex items-center justify-center gap-1">
+            <div className="h-0.5 flex-1 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-primary/50 transition-all duration-1000 ease-linear"
+                style={{ width: `${(countdown / AUTO_DISMISS_SECONDS) * 100}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-muted-foreground tabular-nums">
+              {countdown}
+              s
+            </span>
           </div>
         </div>
       </div>
