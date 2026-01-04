@@ -1,5 +1,6 @@
 import type React from 'react';
 
+import { requireAuth } from '@/app/auth/actions';
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
 
 // ISR: 24 hours (matches page revalidation)
@@ -10,9 +11,11 @@ type PricingLayoutProps = {
 };
 
 /**
- * Pricing Layout - Shell wrapper only
- * Data prefetching handled in page.tsx with HydrationBoundary
+ * Pricing Layout - Auth Required
+ * Pricing page requires authentication to show subscription info
  */
 export default async function PricingLayout({ children }: PricingLayoutProps) {
-  return <ChatLayoutShell>{children}</ChatLayoutShell>;
+  const session = await requireAuth();
+
+  return <ChatLayoutShell session={session}>{children}</ChatLayoutShell>;
 }
