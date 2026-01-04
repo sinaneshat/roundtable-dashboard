@@ -1,13 +1,9 @@
 /**
  * OG Image Font Loader (Server-only)
  *
- * Loads fonts synchronously at module initialization time.
- * This runs during build, making fonts available for static OG image generation.
+ * Fetches Geist fonts from jsDelivr CDN.
+ * This is the most reliable approach for Cloudflare builds.
  */
-
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 export type OGFontConfig = {
   name: string;
@@ -16,34 +12,50 @@ export type OGFontConfig = {
   weight: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
 };
 
-// Get the directory of this module
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const fontsDir = join(__dirname, '../../assets/fonts');
+// Geist font TTF URLs from jsDelivr CDN
+const FONT_BASE_URL = 'https://cdn.jsdelivr.net/npm/geist@1.5.1/dist/fonts/geist-sans';
 
-// Load fonts synchronously at module initialization (runs during build)
-function loadFont(filename: string): ArrayBuffer {
-  const buffer = readFileSync(join(fontsDir, filename));
-  // Convert Buffer to ArrayBuffer properly (avoid shared buffer offset issues)
-  return new Uint8Array(buffer).buffer;
+async function fetchFont(filename: string): Promise<ArrayBuffer> {
+  const url = `${FONT_BASE_URL}/${filename}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch font ${filename}: ${response.status} ${response.statusText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+
+  // Validate font data - TTF files start with specific bytes
+  const view = new DataView(arrayBuffer);
+  if (arrayBuffer.byteLength < 4) {
+    throw new Error(`Font ${filename} is too small: ${arrayBuffer.byteLength} bytes`);
+  }
+
+  // TTF/OTF magic numbers: 0x00010000 (TrueType) or 0x4F54544F (OpenType "OTTO")
+  const magic = view.getUint32(0);
+  if (magic !== 0x00010000 && magic !== 0x4F54544F) {
+    throw new Error(`Font ${filename} has invalid magic number: 0x${magic.toString(16)}`);
+  }
+
+  return arrayBuffer;
 }
 
-// Pre-load all fonts at module initialization
-const fontData = {
-  regular: loadFont('Geist-Regular.ttf'),
-  semibold: loadFont('Geist-SemiBold.ttf'),
-  bold: loadFont('Geist-Bold.ttf'),
-  black: loadFont('Geist-Black.ttf'),
-};
-
 /**
- * Returns pre-loaded fonts for OG image generation.
- * Fonts are loaded synchronously when this module is first imported.
+ * Fetches fonts for OG image generation from jsDelivr CDN.
+ * Uses Geist TTF fonts (Satori only supports TTF/OTF, not WOFF2).
  */
 export async function getOGFonts(): Promise<OGFontConfig[]> {
+  const [regular, semibold, bold, black] = await Promise.all([
+    fetchFont('Geist-Regular.ttf'),
+    fetchFont('Geist-SemiBold.ttf'),
+    fetchFont('Geist-Bold.ttf'),
+    fetchFont('Geist-Black.ttf'),
+  ]);
+
   return [
-    { name: 'Geist', data: fontData.regular, style: 'normal', weight: 400 },
-    { name: 'Geist', data: fontData.semibold, style: 'normal', weight: 600 },
-    { name: 'Geist', data: fontData.bold, style: 'normal', weight: 700 },
-    { name: 'Geist', data: fontData.black, style: 'normal', weight: 800 },
+    { name: 'Geist', data: regular, style: 'normal', weight: 400 },
+    { name: 'Geist', data: semibold, style: 'normal', weight: 600 },
+    { name: 'Geist', data: bold, style: 'normal', weight: 700 },
+    { name: 'Geist', data: black, style: 'normal', weight: 800 },
   ];
 }
