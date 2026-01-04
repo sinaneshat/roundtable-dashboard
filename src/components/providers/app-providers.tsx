@@ -7,7 +7,6 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { ReactNode } from 'react';
 
 import { GlobalErrorBoundary } from '@/components/errors/global-error-boundary';
-import { PwaInstallPrompt } from '@/components/pwa';
 import { Toaster } from '@/components/ui/toaster';
 import type { ModelPreferencesState } from '@/stores/preferences';
 
@@ -69,7 +68,6 @@ export function AppProviders({
                   {env.NEXT_PUBLIC_MAINTENANCE === 'true' ? <MaintenanceMessage /> : children}
                 </GlobalErrorBoundary>
                 <VersionUpdateModal />
-                <PwaInstallPrompt />
                 <Toaster />
               </NextIntlClientProvider>
             </NuqsAdapter>
