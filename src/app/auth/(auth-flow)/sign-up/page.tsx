@@ -5,9 +5,6 @@ import { AuthFormLoader } from '@/components/auth/auth-form-loader';
 import { BRAND } from '@/constants/brand';
 import { createMetadata } from '@/utils';
 
-// SSG: Pure static - auth form doesn't need dynamic rendering
-export const dynamic = 'force-static';
-
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta.signUp');
   const tSeo = await getTranslations('seo.keywords');

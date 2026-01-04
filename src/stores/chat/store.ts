@@ -993,40 +993,62 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       priority: index,
     }));
 
-    // ✅ BUG FIX: Preserve resumption state if prefilled by server
-    // When streamResumptionPrefilled is true, the server detected an incomplete round
-    // and prefilled waitingToStartStreaming, nextParticipantToTrigger, etc.
-    // We should NOT reset these values, otherwise placeholders won't show!
-    const preserveResumptionState = currentState.streamResumptionPrefilled;
+    // ✅ BUG FIX: Preserve streaming state during active operations
+    // Preserve state when:
+    // 1. streamResumptionPrefilled: Server detected incomplete round (resumption)
+    // 2. Active form submission: handleUpdateThreadAndSend set up streaming state
+    //
+    // Active form submission detection (must be specific, not just waitingToStartStreaming):
+    // - configChangeRoundNumber !== null: Set by handleUpdateThreadAndSend BEFORE PATCH
+    //   This is the key indicator that a form submission is in progress
+    // - isWaitingForChangelog: Set AFTER PATCH when config changes need changelog fetch
+    //
+    // NOTE: waitingToStartStreaming alone is NOT sufficient because it could be stale
+    // state from a previous session. configChangeRoundNumber and isWaitingForChangelog
+    // are only set during active form submissions and cleared after completion.
+    //
+    // Without this guard, PATCH response updating thread/participants can trigger
+    // initializeThread which would reset all streaming state and break placeholders.
+    const isResumption = currentState.streamResumptionPrefilled;
+    const hasActiveFormSubmission
+      = currentState.configChangeRoundNumber !== null
+        || currentState.isWaitingForChangelog;
+    const preserveStreamingState = isResumption || hasActiveFormSubmission;
     const resumptionRoundNumber = currentState.resumptionRoundNumber;
 
     set({
-      // ✅ CONDITIONAL: Only reset streaming state if NOT resuming
-      waitingToStartStreaming: preserveResumptionState ? currentState.waitingToStartStreaming : false,
-      streamingRoundNumber: preserveResumptionState ? resumptionRoundNumber : null,
-      nextParticipantToTrigger: preserveResumptionState ? currentState.nextParticipantToTrigger : null,
-      isModeratorStreaming: preserveResumptionState ? currentState.isModeratorStreaming : false,
-      // These are always reset
+      // ✅ CONDITIONAL: Only reset streaming state if NOT resuming or active submission
+      waitingToStartStreaming: preserveStreamingState ? currentState.waitingToStartStreaming : false,
+      streamingRoundNumber: preserveStreamingState
+        ? (currentState.streamingRoundNumber ?? resumptionRoundNumber)
+        : null,
+      nextParticipantToTrigger: preserveStreamingState ? currentState.nextParticipantToTrigger : null,
+      isModeratorStreaming: preserveStreamingState ? currentState.isModeratorStreaming : false,
+      // ✅ FIX: Also preserve changelog-related flags during active submission
+      isWaitingForChangelog: preserveStreamingState ? currentState.isWaitingForChangelog : false,
+      configChangeRoundNumber: preserveStreamingState ? currentState.configChangeRoundNumber : null,
+      // These can always be reset
       isRegenerating: false,
-      isWaitingForChangelog: false,
-      hasPendingConfigChanges: false,
+      hasPendingConfigChanges: preserveStreamingState ? currentState.hasPendingConfigChanges : false,
       regeneratingRoundNumber: null,
-      pendingMessage: null,
-      pendingAttachmentIds: null,
-      pendingFileParts: null,
-      expectedParticipantIds: null,
-      currentRoundNumber: null,
-      hasSentPendingMessage: false,
-      createdModeratorRounds: new Set<number>(),
-      triggeredPreSearchRounds: new Set<number>(),
-      triggeredModeratorRounds: new Set<number>(),
-      triggeredModeratorIds: new Set<string>(),
-      preSearchActivityTimes: new Map<number, number>(),
-      hasEarlyOptimisticMessage: false,
-      streamResumptionState: null,
-      resumptionAttempts: new Set<string>(),
-      pendingAnimations: new Set<number>(),
-      animationResolvers: new Map(),
+      // ✅ FIX: Preserve pending message state during active submission
+      pendingMessage: preserveStreamingState ? currentState.pendingMessage : null,
+      pendingAttachmentIds: preserveStreamingState ? currentState.pendingAttachmentIds : null,
+      pendingFileParts: preserveStreamingState ? currentState.pendingFileParts : null,
+      expectedParticipantIds: preserveStreamingState ? currentState.expectedParticipantIds : null,
+      currentRoundNumber: preserveStreamingState ? currentState.currentRoundNumber : null,
+      hasSentPendingMessage: preserveStreamingState ? currentState.hasSentPendingMessage : false,
+      // ✅ FIX: Preserve tracking sets during active submission to avoid duplicate triggers
+      createdModeratorRounds: preserveStreamingState ? currentState.createdModeratorRounds : new Set<number>(),
+      triggeredPreSearchRounds: preserveStreamingState ? currentState.triggeredPreSearchRounds : new Set<number>(),
+      triggeredModeratorRounds: preserveStreamingState ? currentState.triggeredModeratorRounds : new Set<number>(),
+      triggeredModeratorIds: preserveStreamingState ? currentState.triggeredModeratorIds : new Set<string>(),
+      preSearchActivityTimes: preserveStreamingState ? currentState.preSearchActivityTimes : new Map<number, number>(),
+      hasEarlyOptimisticMessage: preserveStreamingState ? currentState.hasEarlyOptimisticMessage : false,
+      streamResumptionState: preserveStreamingState ? currentState.streamResumptionState : null,
+      resumptionAttempts: preserveStreamingState ? currentState.resumptionAttempts : new Set<string>(),
+      pendingAnimations: preserveStreamingState ? currentState.pendingAnimations : new Set<number>(),
+      animationResolvers: preserveStreamingState ? currentState.animationResolvers : new Map(),
       thread,
       participants: sortedParticipants,
       messages: messagesToSet,

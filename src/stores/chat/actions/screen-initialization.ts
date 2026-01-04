@@ -76,16 +76,25 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     initializeThread: s.initializeThread,
   })));
 
-  // ✅ NON-INITIAL ROUND FIX: Check pendingMessage AND streamResumptionPrefilled
-  // - pendingMessage: Set by form-actions prepareForNewMessage(), also persisted by Zustand
-  // - streamResumptionPrefilled: Set by prefill effect AFTER render
+  // ✅ NON-INITIAL ROUND FIX: Check specific flags to detect active form submission
+  // - pendingMessage: Set by form-actions prepareForNewMessage() in overview flow
+  // - streamResumptionPrefilled: Set by prefill effect when server detected incomplete round
+  // - configChangeRoundNumber: Set by handleUpdateThreadAndSend BEFORE PATCH (KEY indicator)
+  // - isWaitingForChangelog: Set AFTER PATCH when config changes need changelog fetch
   //
-  // CRITICAL: Include streamResumptionPrefilled in selector so effect re-runs when prefill
-  // completes. Otherwise, the effect sees stale pendingMessage from persist and thinks
-  // it's an active form submission when it's actually resumption.
+  // CRITICAL: handleUpdateThreadAndSend does NOT set pendingMessage, so we must check
+  // configChangeRoundNumber and isWaitingForChangelog to detect active form submissions.
+  // These are the definitive indicators - they're only set during active submission and
+  // cleared after completion. Without this check, when PATCH response updates
+  // thread/participants, initializeThread gets called and resets streaming state.
+  //
+  // NOTE: waitingToStartStreaming is NOT used because it could be stale state from
+  // a previous session. configChangeRoundNumber/isWaitingForChangelog are reliable.
   const streamingStateSet = useChatStore(useShallow(s => ({
     pendingMessage: s.pendingMessage,
     streamResumptionPrefilled: s.streamResumptionPrefilled,
+    configChangeRoundNumber: s.configChangeRoundNumber,
+    isWaitingForChangelog: s.isWaitingForChangelog,
   })));
 
   // Track which thread we've initialized to prevent duplicate calls
@@ -104,21 +113,36 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     const isReady = threadId && participants.length > 0;
     const alreadyInitialized = initializedThreadIdRef.current === threadId;
 
-    // ✅ FIX: Skip ONLY for active form-actions submission, NOT for resumption
+    // ✅ FIX: Skip for active form-actions submission, NOT for resumption
     //
-    // Detection logic:
-    // - pendingMessage !== null: Could be active submission OR stale from Zustand persist
-    // - streamResumptionPrefilled: Set by prefill effect when this is a resumption
+    // Detection logic for ACTIVE FORM SUBMISSION:
+    // 1. pendingMessage !== null (set by prepareForNewMessage in overview flow)
+    // 2. configChangeRoundNumber !== null (set by handleUpdateThreadAndSend before PATCH)
+    //    This is the KEY indicator - it's only set during active form submission
+    // 3. isWaitingForChangelog (set after PATCH when config changes need changelog fetch)
     //
-    // If pendingMessage is set BUT prefill also ran, this is resumption (pendingMessage
-    // is stale from persist). If pendingMessage is set AND prefill hasn't run, this is
-    // an active form submission.
+    // NOTE: waitingToStartStreaming alone is NOT sufficient because it could be stale
+    // state from a previous session. configChangeRoundNumber and isWaitingForChangelog
+    // are only set during active form submissions and cleared after completion.
     //
-    // CRITICAL: This effect re-runs when streamResumptionPrefilled changes (it's in the
-    // selector), so even if first run incorrectly detects form submission, the second
-    // run after prefill will correctly detect resumption and call initializeThread.
-    const isFormActionsSubmission = streamingStateSet.pendingMessage !== null
-      && !streamingStateSet.streamResumptionPrefilled;
+    // handleUpdateThreadAndSend does NOT set pendingMessage, so we must check
+    // configChangeRoundNumber and isWaitingForChangelog instead. Without this check,
+    // when PATCH response updates thread/participants, this effect would call
+    // initializeThread which resets all streaming state and breaks placeholders.
+    //
+    // RESUMPTION detection:
+    // - streamResumptionPrefilled: Set by prefill effect when server detected incomplete round
+    // - If prefill ran, the streaming setup is for resumption, not form submission
+    const isResumption = streamingStateSet.streamResumptionPrefilled;
+    const hasActiveFormSubmission
+      = streamingStateSet.configChangeRoundNumber !== null
+        || streamingStateSet.isWaitingForChangelog;
+
+    // Active form submission = has specific submission flags AND is not resumption
+    // OR has pendingMessage (from overview flow prepareForNewMessage)
+    const isFormActionsSubmission
+      = (streamingStateSet.pendingMessage !== null || hasActiveFormSubmission)
+        && !isResumption;
 
     if (isReady && !alreadyInitialized && !isFormActionsSubmission) {
       initializedThreadIdRef.current = threadId;
