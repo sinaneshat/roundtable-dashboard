@@ -2,35 +2,44 @@ import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type React from 'react';
 
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
+import { getCachedPublicModels } from '@/lib/cache/models-cache';
+import { getCachedProducts } from '@/lib/cache/products-cache';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
-import { getProductsService } from '@/services/api';
 
-// Force dynamic to prevent build-time API calls
-export const dynamic = 'force-dynamic';
+// ISR: 24 hours (matches products and models cache duration)
+// Both use public API clients (no cookies) so SSG/ISR is safe
+export const revalidate = 86400;
 
 type PricingLayoutProps = {
   children: React.ReactNode;
 };
 
 /**
- * Pricing Layout - Dynamic with SSR prefetch
- * Same ChatLayoutShell as protected routes but NO auth required
- * Products prefetched at request time for fast hydration
+ * Pricing Layout - ISR with 24h revalidation
+ * - Products cached for 24 hours via unstable_cache (SSG-like)
+ * - Models cached for 24 hours via unstable_cache (SSG-like)
+ * - Both use public API clients (no cookies) for SSG/ISR compatibility
  */
 export default async function PricingLayout({ children }: PricingLayoutProps) {
   const queryClient = getQueryClient();
 
-  // Prefetch products at request time (SSR)
-  // Wrapped in try-catch to prevent Server Component failures in OpenNext preview
+  // Prefetch products and models with server-side caching
   try {
-    await queryClient.prefetchQuery({
-      queryKey: queryKeys.products.list(),
-      queryFn: getProductsService,
-      staleTime: Infinity,
-    });
+    await Promise.all([
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.products.list(),
+        queryFn: getCachedProducts,
+        staleTime: Infinity,
+      }),
+      // Models for pricing comparison - SSG-like caching (24h)
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.models.list(),
+        queryFn: getCachedPublicModels,
+        staleTime: Infinity,
+      }),
+    ]);
   } catch (error) {
-    // Log but don't crash - client will refetch on hydration
     console.error('[PricingLayout] Prefetch failed:', error);
   }
 

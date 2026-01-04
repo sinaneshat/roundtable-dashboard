@@ -1,26 +1,38 @@
+/**
+ * Dynamic Open Graph Image for Protected Chat Thread
+ * Uses Next.js ImageResponse API with server-side translations
+ *
+ * Note: This file uses Next.js Metadata API which requires named exports.
+ * The react-refresh warning is disabled as this is not a React component file.
+ */
 /* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
+import { getTranslations } from 'next-intl/server';
 
 import type { ChatMode } from '@/api/core/enums';
 import { ChatModes, DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
+import {
+  createGradient,
+  OG_COLORS,
+} from '@/lib/ui';
 import { getThreadBySlugService } from '@/services/api';
 
-export const alt = 'Chat Thread';
 export const size = {
   width: 1200,
   height: 630,
 };
 export const contentType = 'image/png';
+export const alt = `Chat Thread - ${BRAND.fullName}`;
 
-// Dynamic to avoid build-time API call errors
-export const dynamic = 'force-dynamic';
+// ISR: Cache fallback for crawlers (auth required so will use defaults)
+export const revalidate = 3600;
 
 const MODE_COLORS: Record<ChatMode, string> = {
-  [ChatModes.ANALYZING]: '#3b82f6',
-  [ChatModes.BRAINSTORMING]: '#8b5cf6',
-  [ChatModes.DEBATING]: '#ef4444',
-  [ChatModes.SOLVING]: '#10b981',
+  [ChatModes.ANALYZING]: OG_COLORS.analyzing,
+  [ChatModes.BRAINSTORMING]: OG_COLORS.brainstorming,
+  [ChatModes.DEBATING]: OG_COLORS.debating,
+  [ChatModes.SOLVING]: OG_COLORS.solving,
 } as const;
 
 export default async function Image({
@@ -30,13 +42,18 @@ export default async function Image({
 }) {
   const { slug } = await params;
 
-  let threadTitle = 'Chat Thread';
+  // Load translations
+  const t = await getTranslations();
+
+  // Default fallback values
+  const defaultTitle = t('chat.dashboard.title');
+  let threadTitle = defaultTitle;
   let threadMode = DEFAULT_CHAT_MODE;
 
   try {
     const threadResult = await getThreadBySlugService({ param: { slug } });
     if (threadResult?.success && threadResult.data?.thread) {
-      threadTitle = threadResult.data.thread.title || 'Chat Thread';
+      threadTitle = threadResult.data.thread.title || defaultTitle;
       threadMode = threadResult.data.thread.mode || DEFAULT_CHAT_MODE;
     }
   } catch {
@@ -55,11 +72,12 @@ export default async function Image({
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#000',
-          backgroundImage: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%)',
-          padding: '60px',
+          backgroundColor: OG_COLORS.background,
+          backgroundImage: createGradient(),
+          padding: 60,
         }}
       >
+        {/* Brand Header */}
         <div
           style={{
             display: 'flex',
@@ -71,7 +89,7 @@ export default async function Image({
             style={{
               fontSize: 36,
               fontWeight: 700,
-              color: '#fff',
+              color: OG_COLORS.textPrimary,
               letterSpacing: '-0.05em',
             }}
           >
@@ -79,11 +97,12 @@ export default async function Image({
           </div>
         </div>
 
+        {/* Thread Title */}
         <div
           style={{
             fontSize: threadTitle.length > 50 ? 48 : 56,
             fontWeight: 800,
-            color: '#fff',
+            color: OG_COLORS.textPrimary,
             textAlign: 'center',
             maxWidth: '85%',
             lineHeight: 1.2,
@@ -97,6 +116,7 @@ export default async function Image({
           {threadTitle}
         </div>
 
+        {/* Mode Badge */}
         <div
           style={{
             display: 'flex',
@@ -106,28 +126,28 @@ export default async function Image({
             borderRadius: 20,
             fontSize: 20,
             fontWeight: 600,
-            color: '#fff',
+            color: OG_COLORS.textPrimary,
             textTransform: 'capitalize',
             marginBottom: 20,
           }}
         >
-          {threadMode}
-          {' '}
-          Mode
+          {t(`moderator.mode.${threadMode}`)}
         </div>
 
+        {/* Subtitle */}
         <div
           style={{
             fontSize: 24,
-            color: '#a1a1aa',
+            color: OG_COLORS.textSecondary,
             textAlign: 'center',
             maxWidth: '70%',
             lineHeight: 1.4,
           }}
         >
-          Collaborate with AI models in real-time conversations
+          {BRAND.tagline}
         </div>
 
+        {/* Footer Brand */}
         <div
           style={{
             position: 'absolute',
@@ -136,10 +156,10 @@ export default async function Image({
             display: 'flex',
             alignItems: 'center',
             padding: '12px 24px',
-            backgroundColor: '#18181b',
+            backgroundColor: OG_COLORS.glassBackground,
             borderRadius: 8,
             fontSize: 18,
-            color: '#a1a1aa',
+            color: OG_COLORS.textMuted,
           }}
         >
           {BRAND.fullName}

@@ -13,7 +13,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { RoundPhase } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers';
-import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantIndex, getParticipantModelIds, getRoundNumber, hasError as checkHasError, rlog } from '@/lib/utils';
+import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getModeratorMetadata, getParticipantIndex, getParticipantModelIds, getRoundNumber, hasError as checkHasError, rlog } from '@/lib/utils';
 
 import {
   getMessageStreamingStatus,
@@ -1114,6 +1114,42 @@ export function useIncompleteRoundResumption(
     if (currentResumptionPhase !== RoundPhases.MODERATOR || !streamResumptionPrefilled) {
       rlog.moderator('skip', `phase=${currentResumptionPhase} prefilled=${streamResumptionPrefilled}`);
       return;
+    }
+
+    // ✅ FIX: Handle failed resumption with complete moderator message
+    // When moderator resumption fails but the moderator message is actually complete,
+    // we need to clear the streaming state flags to unstick the UI.
+    // This check MUST come BEFORE the isCreatingModerator guard because in the stuck
+    // state, isModeratorStreaming (which maps to isCreatingModerator) is true.
+    if (
+      moderatorResumption?.status === 'failed'
+      && resumptionRoundNumber !== null
+    ) {
+      const moderatorMessageForRound = getModeratorMessageForRound(
+        messages,
+        resumptionRoundNumber,
+      );
+      if (moderatorMessageForRound) {
+        // Check for valid finishReason (not UNKNOWN) - this means stream completed properly
+        // Use getModeratorMetadata since moderator messages have isModerator: true metadata
+        const metadata = getModeratorMetadata(moderatorMessageForRound.metadata);
+        const hasValidFinishReason = metadata?.finishReason
+          && metadata.finishReason !== FinishReasons.UNKNOWN;
+
+        if (hasValidFinishReason) {
+          // Moderator resumption failed but message is complete - clear all state
+          rlog.moderator(
+            'FAILED-BUT-COMPLETE',
+            `r${resumptionRoundNumber} clearing stuck state, finishReason=${metadata?.finishReason}`,
+          );
+          const resumptionKey = `${threadId}_moderator_${resumptionRoundNumber}`;
+          moderatorPhaseResumptionAttemptedRef.current = resumptionKey;
+          actions.clearStreamResumption();
+          actions.setWaitingToStartStreaming(false);
+          actions.setIsCreatingModerator(false);
+          return;
+        }
+      }
     }
 
     // Skip if already creating moderator (prevents double triggers)

@@ -8,10 +8,9 @@ import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { PendingAttachment } from '@/hooks/utils';
-import { getFileIconName, getFileTypeLabel } from '@/hooks/utils';
-import { formatDate, formatFileSize } from '@/lib/format';
+import { getFileIconName } from '@/hooks/utils';
+import { formatFileSize } from '@/lib/format';
 import { cn } from '@/lib/ui/cn';
 
 type ChatInputAttachmentsProps = {
@@ -42,77 +41,6 @@ function FileTypeIcon({ mimeType, className }: FileTypeIconProps) {
   }
 }
 
-type AttachmentTooltipContentProps = {
-  attachment: PendingAttachment;
-};
-
-function AttachmentTooltipContent({ attachment }: AttachmentTooltipContentProps) {
-  const t = useTranslations();
-  const { file, preview, status, uploadItem } = attachment;
-  const isImage = file.type.startsWith('image/');
-  const isUploading = status === UploadStatuses.UPLOADING;
-  const isFailed = status === UploadStatuses.FAILED;
-
-  return (
-    <div className="flex flex-col gap-2 max-w-[280px]">
-      {/* Large preview for images - use native img for object URLs */}
-      {isImage && preview?.url && (
-        <div className="relative w-full h-32 rounded-md overflow-hidden bg-muted">
-          {/* eslint-disable-next-line next/no-img-element -- Object URL from local file */}
-          <img
-            src={preview.url}
-            alt={file.name}
-            className="object-contain size-full"
-          />
-        </div>
-      )}
-
-      {/* File icon for non-images */}
-      {!isImage && (
-        <div className="flex items-center justify-center w-full h-16 rounded-md bg-muted/50">
-          <FileTypeIcon mimeType={file.type} className="size-8 text-muted-foreground/60" />
-        </div>
-      )}
-
-      {/* File details */}
-      <div className="space-y-1">
-        <p className="text-sm font-medium break-all line-clamp-2">{file.name}</p>
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-          <span>{formatFileSize(file.size)}</span>
-          <span>{getFileTypeLabel(file.type)}</span>
-          <span>
-            {formatDate(new Date(file.lastModified), {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            })}
-          </span>
-        </div>
-
-        {/* Status indicator */}
-        {isUploading && (
-          <div className="flex items-center gap-2 text-xs text-primary">
-            <div className="size-1.5 rounded-full bg-primary animate-pulse" />
-            <span>
-              {t('chat.attachments.uploading')}
-              {' '}
-              {uploadItem?.progress.percent ?? 0}
-              %
-            </span>
-          </div>
-        )}
-        {isFailed && (
-          <div className="flex items-center gap-2 text-xs text-destructive">
-            <div className="size-1.5 rounded-full bg-destructive" />
-            <span>{t('chat.attachments.uploadFailed')}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 type AttachmentChipProps = {
   attachment: PendingAttachment;
   onRemove?: () => void;
@@ -130,80 +58,78 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
     ? `${file.name.slice(0, 8)}...${file.name.slice(-4)}`
     : file.name;
 
+  // Build native title text
+  const titleText = `${file.name} (${formatFileSize(file.size)})`;
+
+  // Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop
   return (
-    <Tooltip delayDuration={800}>
-      <TooltipTrigger asChild>
-        <motion.div
-          layout
-          initial={{ opacity: 0, scale: 0.9, x: -10 }}
-          animate={{ opacity: 1, scale: 1, x: 0 }}
-          exit={{ opacity: 0, scale: 0.9, x: -10 }}
-          transition={{ duration: 0.15 }}
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.9, x: -10 }}
+      animate={{ opacity: 1, scale: 1, x: 0 }}
+      exit={{ opacity: 0, scale: 0.9, x: -10 }}
+      transition={{ duration: 0.15 }}
+      title={titleText}
+      className={cn(
+        'relative group flex items-center gap-1.5 shrink-0',
+        'h-8 px-1.5 pr-1 rounded-xl',
+        'bg-muted/60 border border-border/40',
+        'hover:bg-muted hover:border-border/60',
+        'transition-colors duration-150',
+        isFailed && 'border-destructive/40 bg-destructive/5',
+      )}
+    >
+      {/* Thumbnail/Icon */}
+      <div className="relative size-5 shrink-0 rounded overflow-hidden bg-background/50 flex items-center justify-center">
+        {isImage && preview?.url
+          ? (
+              /* eslint-disable-next-line next/no-img-element -- Object URL from local file */
+              <img
+                src={preview.url}
+                alt={file.name}
+                className="object-cover size-full"
+              />
+            )
+          : (
+              <FileTypeIcon mimeType={file.type} className="size-3" />
+            )}
+      </div>
+
+      {/* Filename */}
+      <span className="text-xs font-medium text-foreground/80 max-w-[80px] truncate">
+        {displayName}
+      </span>
+
+      {/* Upload progress indicator */}
+      {isUploading && (
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-lg overflow-hidden">
+          <Progress value={uploadProgress} className="h-0.5 rounded-none" />
+        </div>
+      )}
+
+      {/* Remove button - only shown when onRemove is provided */}
+      {onRemove && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRemove();
+          }}
           className={cn(
-            'relative group flex items-center gap-1.5 shrink-0',
-            'h-8 px-1.5 pr-1 rounded-xl',
-            'bg-muted/60 border border-border/40',
-            'hover:bg-muted hover:border-border/60',
-            'transition-colors duration-150',
-            isFailed && 'border-destructive/40 bg-destructive/5',
+            'size-4 shrink-0 rounded-full p-0',
+            'opacity-60 hover:opacity-100',
+            'hover:bg-destructive/20 hover:text-destructive',
+            'transition-all duration-150',
           )}
+          disabled={isUploading}
         >
-          {/* Thumbnail/Icon */}
-          <div className="relative size-5 shrink-0 rounded overflow-hidden bg-background/50 flex items-center justify-center">
-            {isImage && preview?.url
-              ? (
-                  /* eslint-disable-next-line next/no-img-element -- Object URL from local file */
-                  <img
-                    src={preview.url}
-                    alt={file.name}
-                    className="object-cover size-full"
-                  />
-                )
-              : (
-                  <FileTypeIcon mimeType={file.type} className="size-3" />
-                )}
-          </div>
-
-          {/* Filename */}
-          <span className="text-xs font-medium text-foreground/80 max-w-[80px] truncate">
-            {displayName}
-          </span>
-
-          {/* Upload progress indicator */}
-          {isUploading && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-lg overflow-hidden">
-              <Progress value={uploadProgress} className="h-0.5 rounded-none" />
-            </div>
-          )}
-
-          {/* Remove button - only shown when onRemove is provided */}
-          {onRemove && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onRemove();
-              }}
-              className={cn(
-                'size-4 shrink-0 rounded-full p-0',
-                'opacity-60 hover:opacity-100',
-                'hover:bg-destructive/20 hover:text-destructive',
-                'transition-all duration-150',
-              )}
-              disabled={isUploading}
-            >
-              <Icons.x className="size-2.5" />
-            </Button>
-          )}
-        </motion.div>
-      </TooltipTrigger>
-      <TooltipContent side="top" align="start" className="p-2">
-        <AttachmentTooltipContent attachment={attachment} />
-      </TooltipContent>
-    </Tooltip>
+          <Icons.x className="size-2.5" />
+        </Button>
+      )}
+    </motion.div>
   );
 }
 
@@ -258,29 +184,27 @@ export function ChatInputAttachments({
   }
 
   return (
-    <TooltipProvider>
-      <motion.div
-        initial={{ height: 0, opacity: 0 }}
-        animate={{ height: 'auto', opacity: 1 }}
-        exit={{ height: 0, opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        className="overflow-hidden"
-      >
-        <ScrollArea className="w-full">
-          <div className="flex items-center gap-1.5 px-3 sm:px-4 py-2 border-b border-border/30">
-            <AnimatePresence mode="popLayout">
-              {attachments.map(attachment => (
-                <AttachmentChip
-                  key={attachment.id}
-                  attachment={attachment}
-                  onRemove={onRemove ? () => onRemove(attachment.id) : undefined}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-          <ScrollBar orientation="horizontal" className="h-1.5" />
-        </ScrollArea>
-      </motion.div>
-    </TooltipProvider>
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="overflow-hidden"
+    >
+      <ScrollArea className="w-full">
+        <div className="flex items-center gap-1.5 px-3 sm:px-4 py-2 border-b border-border/30">
+          <AnimatePresence mode="popLayout">
+            {attachments.map(attachment => (
+              <AttachmentChip
+                key={attachment.id}
+                attachment={attachment}
+                onRemove={onRemove ? () => onRemove(attachment.id) : undefined}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
+        <ScrollBar orientation="horizontal" className="h-1.5" />
+      </ScrollArea>
+    </motion.div>
   );
 }

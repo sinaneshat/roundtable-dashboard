@@ -73,11 +73,11 @@ export async function invalidateThreadCache(
     await db.$cache.invalidate({ tags });
   }
 
-  // Invalidate Next.js 'use cache' for public thread (if slug provided)
-  // This ensures cached public thread pages are refreshed
-  // Using 'max' profile for stale-while-revalidate semantics
+  // Invalidate Next.js unstable_cache for public thread (if slug provided)
+  // Uses the bulk tag since unstable_cache doesn't support dynamic per-slug tags
+  // This invalidates ALL public thread caches - necessary for ISR pattern
   if (slug) {
-    revalidateTag(THREAD_CACHE_TAGS.publicThread(slug), 'max');
+    revalidateTag(THREAD_CACHE_TAGS.allPublicThreads, 'max');
   }
 
   // Invalidate thread messages cache (if threadId provided)
@@ -87,21 +87,24 @@ export async function invalidateThreadCache(
 }
 
 /**
- * Invalidate public thread cache only (Next.js 'use cache: remote')
+ * Invalidate public thread cache only (Next.js unstable_cache)
  *
  * Use this when you only need to invalidate the public thread SSR cache
  * without affecting Cloudflare KV cache.
  *
- * @param slug - Thread slug to invalidate
+ * Note: Uses bulk tag - invalidates ALL public thread caches
+ * since unstable_cache doesn't support per-slug dynamic tags.
+ *
+ * @param _slug - Thread slug (unused, kept for API compatibility)
  *
  * @example
  * ```ts
  * // When thread visibility changes
- * await invalidatePublicThreadCache(thread.slug);
+ * invalidatePublicThreadCache(thread.slug);
  * ```
  */
-export function invalidatePublicThreadCache(slug: string): void {
-  revalidateTag(THREAD_CACHE_TAGS.publicThread(slug), 'max');
+export function invalidatePublicThreadCache(_slug: string): void {
+  revalidateTag(THREAD_CACHE_TAGS.allPublicThreads, 'max');
 }
 
 /**

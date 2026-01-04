@@ -246,7 +246,10 @@ export function useFlowStateMachine(
   const storeApi = useChatStoreApi();
 
   // Track navigation state
+  // ✅ FIX: Use ref to track immediately, preventing re-entry during startTransition
+  // Refs update synchronously; state via startTransition is deferred → effects see stale state
   const [hasNavigated, setHasNavigated] = useState(false);
+  const hasNavigatedRef = useRef(false);
 
   const [streamingJustCompleted, setStreamingJustCompleted] = useState(false);
   const rafIdRef = useRef<number | null>(null);
@@ -456,11 +459,14 @@ export function useFlowStateMachine(
           // - All data (messages, summaries, etc.) is in Zustand store
           //
           // Mark as navigated to prevent repeated actions, but don't router.push
+          // ✅ FIX: Check REF not context.hasNavigated - ref updates synchronously
           if (
             mode === ScreenModes.OVERVIEW
             && context.threadSlug
-            && !context.hasNavigated
+            && !hasNavigatedRef.current
           ) {
+            // ✅ FIX: Set ref IMMEDIATELY to prevent re-entry before startTransition propagates
+            hasNavigatedRef.current = true;
             startTransition(() => {
               setHasNavigated(true);
             });
@@ -474,7 +480,10 @@ export function useFlowStateMachine(
           // =========================================================================
           // Mark as navigated but don't trigger router.push - overview screen already
           // shows thread content and URL is already correct from flow-controller.ts
-          if (mode === ScreenModes.OVERVIEW && action.slug) {
+          // ✅ FIX: Check REF to prevent re-entry - ref updates synchronously
+          if (mode === ScreenModes.OVERVIEW && action.slug && !hasNavigatedRef.current) {
+            // ✅ FIX: Set ref IMMEDIATELY to prevent re-entry before startTransition propagates
+            hasNavigatedRef.current = true;
             startTransition(() => {
               setHasNavigated(true);
             });

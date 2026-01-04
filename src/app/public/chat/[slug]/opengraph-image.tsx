@@ -46,8 +46,8 @@ export const size = {
 export const contentType = 'image/png';
 export const alt = 'Public AI Chat Thread';
 
-// Dynamic to avoid build-time fetch errors for logo/API calls
-export const dynamic = 'force-dynamic';
+// ISR: Match page cache (1 day) - regenerated when thread visibility changes
+export const revalidate = 86400;
 
 export default async function Image({
   params,

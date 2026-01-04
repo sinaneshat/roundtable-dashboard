@@ -21,9 +21,9 @@ export {
 } from './api-mocks';
 
 // ============================================================================
-// Other Testing Utilities
+// Chat Store Testing Utilities
 // ============================================================================
-export * from './chat-store-helpers';
+export { createStoreWrapper, createTestChatStore, getStoreState, resetStoreToDefaults } from './chat-store-helpers';
 
 // ============================================================================
 // Chat Test Factories (high-level factories with test-friendly defaults)

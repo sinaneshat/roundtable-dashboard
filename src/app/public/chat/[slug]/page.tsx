@@ -16,6 +16,10 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { createMetadata } from '@/utils';
 
+// ISR: 1 day (matches unstable_cache duration)
+// On-demand revalidation triggered via revalidateTag when visibility changes
+export const revalidate = 86400;
+
 export async function generateMetadata({
   params,
 }: {

@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 
-import { Slot } from "@radix-ui/react-slot"
+import { Slot } from "@/lib/ui/slot"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import type { ComponentVariant } from "@/api/core/enums"

@@ -3,7 +3,7 @@
 import type { ComponentProps, CSSProperties } from 'react';
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useState } from 'react';
 
-import { Slot } from "@radix-ui/react-slot";
+import { Slot } from "@/lib/ui/slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { useTranslations } from "next-intl";
 
@@ -22,10 +22,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  Tooltip,
   TooltipContent,
   TooltipProvider,
-  TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/utils";
 import { cn } from "@/lib/ui/cn";
@@ -57,6 +55,10 @@ function useSidebar() {
   }
 
   return context
+}
+
+function useSidebarOptional() {
+  return useContext(SidebarContext)
 }
 
 type SidebarProviderBaseProps = ComponentProps<"div">;
@@ -585,37 +587,23 @@ function SidebarMenuButton({
   const Comp = asChild ? Slot : "button"
   const { isMobile, state } = useSidebar()
 
-  const button = (
+  const tooltipText = tooltip
+    ? typeof tooltip === "string"
+      ? tooltip
+      : (tooltip.children as string) || ''
+    : undefined
+  const showNativeTooltip = tooltipText && state === "collapsed" && !isMobile
+
+  return (
     <Comp
       data-slot="sidebar-menu-button"
       data-sidebar="menu-button"
       data-size={size}
       data-active={isActive}
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+      title={showNativeTooltip ? tooltipText : undefined}
       {...props}
     />
-  )
-
-  if (!tooltip) {
-    return button
-  }
-
-  if (typeof tooltip === "string") {
-    tooltip = {
-      children: tooltip,
-    }
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent
-        side="right"
-        align="center"
-        hidden={state !== "collapsed" || isMobile}
-        {...tooltip}
-      />
-    </Tooltip>
   )
 }
 
@@ -697,10 +685,7 @@ function SidebarMenuSkeleton({
   showIcon = false,
   ...props
 }: SidebarMenuSkeletonProps) {
-  // Random width between 50 to 90%.
-  const width = useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+  const width = '75%'
 
   return (
     <div
@@ -817,6 +802,7 @@ export {
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
-  useSidebar
+  useSidebar,
+  useSidebarOptional
 };
 

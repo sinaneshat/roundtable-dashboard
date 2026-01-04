@@ -21,9 +21,10 @@ export const size = {
   height: 630,
 };
 export const contentType = 'image/png';
+export const alt = `Privacy Policy - ${BRAND.fullName}`;
 
-// Dynamic to avoid build-time fetch errors for logo
-export const dynamic = 'force-dynamic';
+// ISR: Regenerate every 24 hours (translations/logo are static)
+export const revalidate = 86400;
 
 export default async function Image() {
   // Load translations

@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { forwardRef } from 'react';
 
-import { Slot } from "@radix-ui/react-slot"
+import { Slot } from "@/lib/ui/slot"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { Icons } from "@/components/icons"

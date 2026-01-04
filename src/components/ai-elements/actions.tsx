@@ -1,12 +1,6 @@
 import type { HTMLAttributes } from 'react';
 
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 
 /**
@@ -41,9 +35,7 @@ export function Actions({ children, className, ...props }: ActionsProps) {
       className={cn('flex items-center gap-1 mt-2', className)}
       {...props}
     >
-      <TooltipProvider>
-        {children}
-      </TooltipProvider>
+      {children}
     </div>
   );
 }
@@ -72,31 +64,7 @@ export function Action({
   label,
   ...props
 }: ActionProps) {
-  // If tooltip or label provided, wrap in Tooltip
-  if (tooltip || label) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              'h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-foreground',
-              className,
-            )}
-            aria-label={label}
-            {...props}
-          >
-            {children}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{tooltip || label}</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
+  // Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop
   return (
     <Button
       variant="ghost"
@@ -106,6 +74,7 @@ export function Action({
         className,
       )}
       aria-label={label}
+      title={tooltip || label}
       {...props}
     >
       {children}

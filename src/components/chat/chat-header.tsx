@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { useSidebar } from '@/components/ui/sidebar';
+import { useSidebarOptional } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
@@ -53,7 +53,8 @@ function NavigationHeaderComponent({
 }: NavigationHeaderProps = {}) {
   const pathname = usePathname();
   const t = useTranslations();
-  const { setOpenMobile } = useSidebar();
+  const sidebarContext = useSidebarOptional();
+  const hasSidebar = sidebarContext !== null;
 
   const { storeThreadTitle, showInitialUI, createdThreadId, thread } = useChatStore(
     useShallow(s => ({
@@ -100,16 +101,18 @@ function NavigationHeaderComponent({
       )}
       >
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-          {/* Mobile sidebar trigger - ChatGPT-like pattern */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden size-9 shrink-0"
-            onClick={() => setOpenMobile(true)}
-            aria-label={t('accessibility.openSidebar')}
-          >
-            <Icons.menu className="size-5" />
-          </Button>
+          {/* Mobile sidebar trigger - only shown when sidebar provider exists */}
+          {hasSidebar && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden size-9 shrink-0"
+              onClick={() => sidebarContext.setOpenMobile(true)}
+              aria-label={t('accessibility.openSidebar')}
+            >
+              <Icons.menu className="size-5" />
+            </Button>
+          )}
           {showLogo && !isOverviewPage && (
             <>
               <Link href="/" className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 touch-manipulation">
@@ -164,7 +167,8 @@ function NavigationHeaderComponent({
 export const NavigationHeader = React.memo(NavigationHeaderComponent);
 function MinimalHeaderComponent({ className }: { className?: string } = {}) {
   const t = useTranslations();
-  const { setOpenMobile } = useSidebar();
+  const sidebarContext = useSidebarOptional();
+  const hasSidebar = sidebarContext !== null;
 
   const {
     showInitialUI,
@@ -202,18 +206,20 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
         className,
       )}
     >
-      {/* Mobile sidebar trigger - hidden on desktop where sidebar is visible */}
-      <div className="flex items-center px-3 sm:px-4 md:hidden">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-9 shrink-0"
-          onClick={() => setOpenMobile(true)}
-          aria-label={t('accessibility.openSidebar')}
-        >
-          <Icons.menu className="size-5" />
-        </Button>
-      </div>
+      {/* Mobile sidebar trigger - only shown when sidebar provider exists */}
+      {hasSidebar && (
+        <div className="flex items-center px-3 sm:px-4 md:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9 shrink-0"
+            onClick={() => sidebarContext.setOpenMobile(true)}
+            aria-label={t('accessibility.openSidebar')}
+          >
+            <Icons.menu className="size-5" />
+          </Button>
+        </div>
+      )}
       {/* Spacer for desktop - sidebar is visible there */}
       <div className="hidden md:block h-14 sm:h-16" />
     </header>

@@ -30,9 +30,9 @@
 
 export const STALE_TIMES = {
   // ============================================================================
-  // Products & Billing (rarely change)
+  // Products & Billing (SSG-like caching: matches server cache)
   // ============================================================================
-  products: 3600 * 1000, // 1 hour - products rarely change
+  products: 24 * 3600 * 1000, // 24 hours - matches server unstable_cache duration
   subscriptions: 2 * 60 * 1000, // 2 minutes - subscription status changes occasionally
 
   // ============================================================================
@@ -59,7 +59,7 @@ export const STALE_TIMES = {
   moderators: 30_000, // 30 seconds - round moderators update per round
   preSearch: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (same as summaries)
   messages: 10 * 1000, // 10 seconds - messages can be added in real-time
-  publicThreadDetail: 5 * 60 * 1000, // 5 minutes - public threads change less frequently
+  publicThreadDetail: 24 * 3600 * 1000, // 24 hours - matches ISR cache (1 day)
 
   // ============================================================================
   // User & Settings (infrequent changes)

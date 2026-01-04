@@ -33,6 +33,7 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
+import { useIsMounted } from '@/hooks/utils';
 import type { Session, User } from '@/lib/auth/types';
 import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
@@ -55,18 +56,21 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isFavoritesCollapsed, setIsFavoritesCollapsed] = useState(false);
   const [isChatsCollapsed, setIsChatsCollapsed] = useState(false);
-  const sidebarContentRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
   const handleNavigationReset = useNavigationReset();
+  const isMounted = useIsMounted();
   const {
     data: threadsData,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-    isLoading,
+    isLoading: queryLoading,
     isError,
     error,
   } = useThreadsQuery();
+  // Always show loading on server to prevent hydration mismatch
+  const isLoading = !isMounted || queryLoading;
   const { data: usageData } = useUsageStatsQuery();
   const subscriptionTier: SubscriptionTier = usageData?.data?.plan?.type === PlanTypes.PAID ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
   const isPaidUser = usageData?.data?.plan?.type === PlanTypes.PAID;
@@ -121,22 +125,26 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const nonFavoriteChats = useMemo(() =>
     chats.filter(chat => !chat.isFavorite), [chats]);
 
-  const handleScroll = useCallback(() => {
-    if (!sidebarContentRef.current || !hasNextPage || isFetchingNextPage)
-      return;
-    const { scrollTop, scrollHeight, clientHeight } = sidebarContentRef.current;
-    const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-    if (scrollPercentage > 0.8) {
-      fetchNextPage();
-    }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  // IntersectionObserver for infinite scroll pagination
   useEffect(() => {
-    const viewport = sidebarContentRef.current;
-    if (!viewport)
+    if (!hasNextPage || isFetchingNextPage)
       return;
-    viewport.addEventListener('scroll', handleScroll);
-    return () => viewport.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+    const sentinel = loadMoreRef.current;
+    if (!sentinel)
+      return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
   return (
     <>
       <TooltipProvider>
@@ -189,15 +197,13 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
 
               {/* Action Buttons - Expanded */}
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-                <SidebarMenuButton asChild isActive={pathname === '/chat'}>
-                  <Link href="/chat" onClick={handleNavLinkClick}>
-                    <Icons.plus className="size-4 shrink-0" />
-                    <span
-                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap max-w-48"
-                    >
-                      {t('navigation.newChat')}
-                    </span>
-                  </Link>
+                <SidebarMenuButton isActive={pathname === '/chat'} onClick={handleNavLinkClick}>
+                  <Icons.plus className="size-4 shrink-0" />
+                  <span
+                    className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap max-w-48"
+                  >
+                    {t('navigation.newChat')}
+                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -221,10 +227,12 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
 
               {/* Icon Buttons - Collapsed */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
-                <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
-                  <Link href="/chat" onClick={handleNavLinkClick}>
-                    <Icons.plus />
-                  </Link>
+                <SidebarMenuButton
+                  tooltip={t('navigation.newChat')}
+                  isActive={pathname === '/chat'}
+                  onClick={handleNavLinkClick}
+                >
+                  <Icons.plus />
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -245,7 +253,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
             </SidebarMenu>
           </SidebarHeader>
           <SidebarContent className="p-0 w-full min-w-0">
-            <ScrollArea ref={sidebarContentRef} className="w-full h-full">
+            <ScrollArea className="w-full h-full">
               <div className="flex flex-col w-full">
                 {/* Favorites Section */}
                 {!isLoading && !isError && favorites.length > 0 && (
@@ -345,6 +353,8 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                         {isFetchingNextPage && (
                           <ChatSidebarPaginationSkeleton count={20} />
                         )}
+                        {/* Sentinel for infinite scroll */}
+                        {hasNextPage && <div ref={loadMoreRef} className="h-1" />}
                       </>
                     )}
                   </SidebarGroup>
@@ -374,13 +384,11 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
             <SidebarMenu className="hidden group-data-[collapsible=icon]:flex">
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  asChild
                   tooltip={isPaidUser ? `${SUBSCRIPTION_TIER_NAMES[subscriptionTier]} Plan` : t('navigation.upgrade')}
                   isActive={pathname?.startsWith('/chat/pricing')}
+                  onClick={() => router.push('/chat/pricing')}
                 >
-                  <Link href="/chat/pricing">
-                    <Icons.sparkles className={isPaidUser ? 'text-success' : ''} />
-                  </Link>
+                  <Icons.sparkles className={isPaidUser ? 'text-success' : ''} />
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

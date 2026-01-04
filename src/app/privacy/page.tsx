@@ -6,6 +6,9 @@ import PrivacyScreen from '@/containers/screens/legal/PrivacyScreen';
 import { isArrayOf, isNonEmptyString } from '@/lib/utils/type-guards';
 import { createMetadata } from '@/utils';
 
+// ISR: Regenerate every 24 hours (static content)
+export const revalidate = 86400;
+
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta.legal.privacy');
   const tSeo = await getTranslations('seo.keywords');

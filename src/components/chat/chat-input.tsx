@@ -12,12 +12,6 @@ import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization-lazy';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { STRING_LIMITS } from '@/constants/validation';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import type { PendingAttachment } from '@/hooks/utils';
@@ -354,34 +348,25 @@ export const ChatInput = memo(({
                   {toolbar}
                 </div>
 
+                {/* Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop */}
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   {enableSpeech && isSpeechSupported && (
-                    <TooltipProvider delayDuration={800}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant={isListening ? 'default' : 'ghost'}
-                            onClick={toggleSpeech}
-                            disabled={isMicDisabled && !isListening}
-                            className={cn(
-                              'size-8 sm:size-9 shrink-0 rounded-full',
-                              isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
-                            )}
-                          >
-                            {isListening ? <Icons.stopCircle className="size-3.5 sm:size-4" /> : <Icons.mic className="size-3.5 sm:size-4" />}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          <p className="text-xs">
-                            {isListening
-                              ? t('chat.toolbar.tooltips.stopRecording')
-                              : t('chat.toolbar.tooltips.microphone')}
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant={isListening ? 'default' : 'ghost'}
+                      onClick={toggleSpeech}
+                      disabled={isMicDisabled && !isListening}
+                      title={isListening
+                        ? t('chat.toolbar.tooltips.stopRecording')
+                        : t('chat.toolbar.tooltips.microphone')}
+                      className={cn(
+                        'size-8 sm:size-9 shrink-0 rounded-full',
+                        isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
+                      )}
+                    >
+                      {isListening ? <Icons.stopCircle className="size-3.5 sm:size-4" /> : <Icons.mic className="size-3.5 sm:size-4" />}
+                    </Button>
                   )}
 
                   {isStreaming && onStop

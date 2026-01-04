@@ -10,11 +10,6 @@ import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon, getRoleBadgeStyle } from '@/lib/utils';
@@ -159,18 +154,16 @@ export function ModelItem({
                 {tModels('limitReached')}
               </Badge>
             )}
+            {/* Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop */}
             {showFileIncompatibilityWarning && !isDisabledDueToTier && !isDisabledDueToLimit && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="outline" className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1">
-                    <Icons.eyeOff className="size-2.5 sm:size-3" />
-                    {tModels('noVision')}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-[200px]">
-                  {tModels('noVisionTooltip')}
-                </TooltipContent>
-              </Tooltip>
+              <Badge
+                variant="outline"
+                title={tModels('noVisionTooltip')}
+                className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1"
+              >
+                <Icons.eyeOff className="size-2.5 sm:size-3" />
+                {tModels('noVision')}
+              </Badge>
             )}
 
             {!isDisabledDueToTier && (

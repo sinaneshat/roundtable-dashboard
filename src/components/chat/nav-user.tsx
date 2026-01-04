@@ -23,7 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SidebarMenuButton } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useCancelSubscriptionMutation,
@@ -132,7 +131,8 @@ export function NavUser({ initialSession }: NavUserProps) {
   const mounted = useBoolean(false);
   useEffect(() => {
     mounted.onTrue();
-  }, [mounted]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- onTrue is stable, mounted object changes on each render
+  }, []);
 
   if (!mounted.value) {
     return (
@@ -163,27 +163,28 @@ export function NavUser({ initialSession }: NavUserProps) {
   return (
     <>
       <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
-        <DropdownMenuTrigger asChild>
-          <SidebarMenuButton
-            size="lg"
-            tooltip={displayName}
-            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-          >
-            <Avatar className="h-8 w-8 rounded-full">
-              <AvatarImage
-                src={user?.image || undefined}
-                alt={displayName}
-              />
-              <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
-            </Avatar>
-            <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-              <span className="truncate font-semibold">
-                {displayName}
-              </span>
-              <span className="truncate text-xs">{displayEmail}</span>
-            </div>
-            <Icons.chevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
-          </SidebarMenuButton>
+        {/* Remove asChild to avoid React 19 + Radix compose-refs infinite loop */}
+        {/* SidebarMenuButton styles applied directly to trigger */}
+        <DropdownMenuTrigger
+          data-sidebar="menu-button"
+          data-size="lg"
+          title={displayName}
+          className="peer/menu-button flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-full px-4 py-2 text-start text-sm outline-hidden ring-sidebar-ring transition-all duration-200 hover:bg-accent hover:bg-white/[0.07] focus-visible:ring-2 active:bg-accent active:scale-[0.998] disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pe-10 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-accent data-[active=true]:font-medium data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground data-[state=open]:hover:bg-accent group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem] group-data-[collapsible=icon]:!flex-shrink-0 group-data-[collapsible=icon]:!flex-grow-0 group-data-[collapsible=icon]:items-center! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:gap-0! group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:rounded-full! group-data-[collapsible=icon]:aspect-square [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 h-11"
+        >
+          <Avatar className="h-8 w-8 rounded-full">
+            <AvatarImage
+              src={user?.image || undefined}
+              alt={displayName}
+            />
+            <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
+          </Avatar>
+          <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="truncate font-semibold">
+              {displayName}
+            </span>
+            <span className="truncate text-xs">{displayEmail}</span>
+          </div>
+          <Icons.chevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
         </DropdownMenuTrigger>
         <DropdownMenuContent
           className="w-[calc(var(--sidebar-width)-1.5rem)] min-w-56 rounded-lg"

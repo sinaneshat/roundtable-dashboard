@@ -103,11 +103,20 @@ export function SmartImage({
   );
 }
 
+type BorderRadiusClass = 'rounded-xl' | 'rounded-2xl' | 'rounded-lg' | 'rounded-md';
+
 type GradientImageProps = SmartImageProps & {
   gradient?: string;
   borderWidth?: number;
-  rounded?: string;
+  rounded?: BorderRadiusClass;
 };
+
+const RADIUS_MAP: Record<BorderRadiusClass, number> = {
+  'rounded-xl': 12,
+  'rounded-2xl': 16,
+  'rounded-lg': 8,
+  'rounded-md': 6,
+} as const;
 
 export function GradientImage({
   gradient = 'from-[#00ccb1] via-[#7b61ff] to-[#ffc414]',
@@ -117,13 +126,7 @@ export function GradientImage({
   className,
   ...imageProps
 }: GradientImageProps) {
-  const radiusMap: Record<string, number> = {
-    'rounded-xl': 12,
-    'rounded-2xl': 16,
-    'rounded-lg': 8,
-    'rounded-md': 6,
-  };
-  const outerRadius = radiusMap[rounded] || 12;
+  const outerRadius = RADIUS_MAP[rounded];
   const innerRadius = Math.max(0, outerRadius - borderWidth);
   const innerRounded = `rounded-[${innerRadius}px]`;
 

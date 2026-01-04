@@ -15,12 +15,6 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from '@/components/ui/drawer';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { useBoolean, useMediaQuery } from '@/hooks/utils';
 import { getChatModeById } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
@@ -87,7 +81,8 @@ export const ChatInputToolbarMenu = memo(({
 
   useEffect(() => {
     mounted.onTrue();
-  }, [mounted]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- onTrue is stable, mounted object changes on each render
+  }, []);
 
   if (!mounted.value) {
     return (
@@ -106,129 +101,100 @@ export const ChatInputToolbarMenu = memo(({
   }
 
   // After mount, show desktop version
+  // Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop
   if (isDesktop) {
     return (
-      <TooltipProvider delayDuration={800}>
-        <div className="flex items-center gap-2">
-          {/* Models button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={disabled || isModelsLoading}
-                onClick={onOpenModelModal}
-                className={cn(
-                  'h-9 rounded-2xl gap-1.5 text-xs px-3',
-                  hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/20',
-                )}
-              >
-                {isModelsLoading
-                  ? (
-                      <>
-                        <Icons.loader className="size-3.5 animate-spin" />
-                        <span>{t('chat.models.models')}</span>
-                      </>
-                    )
-                  : (
-                      <>
-                        {hasNoModelsSelected && <Icons.alertCircle className="size-3.5" />}
-                        <span>{t('chat.models.models')}</span>
-                        {!hasNoModelsSelected && (
-                          <AvatarGroup
-                            participants={selectedParticipants}
-                            allModels={allModels}
-                            size="sm"
-                            maxVisible={3}
-                          />
-                        )}
-                      </>
-                    )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              <p className="text-xs">{t('chat.toolbar.tooltips.models')}</p>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Mode button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={disabled}
-                onClick={onOpenModeModal}
-                className="h-9 rounded-2xl gap-1.5 text-xs px-3"
-              >
-                {ModeIcon && <ModeIcon className="size-4" />}
-                <span>{currentMode?.label || t('chat.modes.mode')}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              <p className="text-xs">{t('chat.toolbar.tooltips.mode')}</p>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Attach button - always visible when handler provided, disabled when blocked */}
-          {onAttachmentClick && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  disabled={disabled || !enableAttachments}
-                  onClick={handleAttachClick}
-                  className={cn(
-                    'size-9',
-                    attachmentCount > 0 && 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20',
-                  )}
-                >
-                  <Icons.paperclip className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <p className="text-xs">
-                  {enableAttachments
-                    ? t('chat.toolbar.tooltips.attach')
-                    : t('chat.toolbar.tooltips.attachDisabled')}
-                </p>
-              </TooltipContent>
-            </Tooltip>
+      <div className="flex items-center gap-2">
+        {/* Models button */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled || isModelsLoading}
+          onClick={onOpenModelModal}
+          title={t('chat.toolbar.tooltips.models')}
+          className={cn(
+            'h-9 rounded-2xl gap-1.5 text-xs px-3',
+            hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/20',
           )}
+        >
+          {isModelsLoading
+            ? (
+                <>
+                  <Icons.loader className="size-3.5 animate-spin" />
+                  <span>{t('chat.models.models')}</span>
+                </>
+              )
+            : (
+                <>
+                  {hasNoModelsSelected && <Icons.alertCircle className="size-3.5" />}
+                  <span>{t('chat.models.models')}</span>
+                  {!hasNoModelsSelected && (
+                    <AvatarGroup
+                      participants={selectedParticipants}
+                      allModels={allModels}
+                      size="sm"
+                      maxVisible={3}
+                    />
+                  )}
+                </>
+              )}
+        </Button>
 
-          {/* Web search toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                disabled={disabled}
-                onClick={() => onWebSearchToggle?.(!enableWebSearch)}
-                className={cn(
-                  'size-9 transition-colors',
-                  enableWebSearch
-                    ? 'border-blue-500/40 bg-blue-500/20 text-blue-300 hover:bg-blue-500/25'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Icons.globe className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              <p className="text-xs">
-                {enableWebSearch
-                  ? t('chat.toolbar.tooltips.webSearchEnabled')
-                  : t('chat.toolbar.tooltips.webSearch')}
-              </p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </TooltipProvider>
+        {/* Mode button */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={onOpenModeModal}
+          title={t('chat.toolbar.tooltips.mode')}
+          className="h-9 rounded-2xl gap-1.5 text-xs px-3"
+        >
+          {ModeIcon && <ModeIcon className="size-4" />}
+          <span>{currentMode?.label || t('chat.modes.mode')}</span>
+        </Button>
+
+        {/* Attach button - always visible when handler provided, disabled when blocked */}
+        {onAttachmentClick && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            disabled={disabled || !enableAttachments}
+            onClick={handleAttachClick}
+            title={enableAttachments
+              ? t('chat.toolbar.tooltips.attach')
+              : t('chat.toolbar.tooltips.attachDisabled')}
+            className={cn(
+              'size-9',
+              attachmentCount > 0 && 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20',
+            )}
+          >
+            <Icons.paperclip className="size-4" />
+          </Button>
+        )}
+
+        {/* Web search toggle */}
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          disabled={disabled}
+          onClick={() => onWebSearchToggle?.(!enableWebSearch)}
+          title={enableWebSearch
+            ? t('chat.toolbar.tooltips.webSearchEnabled')
+            : t('chat.toolbar.tooltips.webSearch')}
+          className={cn(
+            'size-9 transition-colors',
+            enableWebSearch
+              ? 'border-blue-500/40 bg-blue-500/20 text-blue-300 hover:bg-blue-500/25'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <Icons.globe className="size-4" />
+        </Button>
+      </div>
     );
   }
 

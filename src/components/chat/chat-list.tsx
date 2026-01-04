@@ -1,7 +1,7 @@
 'use client';
 import { motion } from 'motion/react';
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
@@ -24,14 +24,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LinkLoadingIndicator } from '@/components/ui/link-loading-indicator';
 import { StaggerItem } from '@/components/ui/motion';
 import {
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { TypewriterTitle } from '@/components/ui/typewriter-title';
 import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations';
 import { useCurrentPathname } from '@/hooks/utils';
 
@@ -101,13 +100,29 @@ function ChatItem({
   disableAnimation,
 }: ChatItemProps) {
   const t = useTranslations();
-  const chatUrl = `/chat/${chat.slug}`;
-  const [shouldPrefetch, setShouldPrefetch] = useState(false);
-  const handleMouseEnter = useCallback(() => setShouldPrefetch(true), []);
+  const router = useRouter();
+  // Store slug in ref to avoid callback recreation on slug changes
+  // This prevents re-renders when slug updates (e.g., AI title generation)
+  const slugRef = useRef(chat.slug);
+  slugRef.current = chat.slug;
 
   const handleRenameSubmit = useCallback((title: string) => {
     onRenameSubmit(chat, title);
   }, [chat, onRenameSubmit]);
+
+  // Prefetch on hover - uses ref to avoid callback recreation
+  const handleMouseEnter = useCallback(() => {
+    router.prefetch(`/chat/${slugRef.current}`);
+  }, [router]);
+
+  // Navigate on click - uses ref for stable callback across slug changes
+  // Avoids React 19 + Radix asChild compose-refs infinite loop
+  const handleClick = useCallback(() => {
+    router.push(`/chat/${slugRef.current}`);
+    if (isMobile && onNavigate) {
+      onNavigate();
+    }
+  }, [router, isMobile, onNavigate]);
 
   const content = (
     <SidebarMenuItem>
@@ -123,33 +138,24 @@ function ChatItem({
           )
         : (
             <SidebarMenuButton
-              asChild
               isActive={isActive}
+              onClick={handleClick}
+              onMouseEnter={handleMouseEnter}
             >
-              <Link
-                href={chatUrl}
-                prefetch={shouldPrefetch ? null : false}
-                onMouseEnter={handleMouseEnter}
-                onClick={() => {
-                  if (isMobile && onNavigate) {
-                    onNavigate();
-                  }
-                }}
-              >
-                <div className="truncate overflow-hidden text-ellipsis whitespace-nowrap max-w-52 flex items-center gap-1.5">
-                  <span className="truncate">{chat.title}</span>
-                  <LinkLoadingIndicator variant="spinner" size="xs" className="text-muted-foreground" />
-                </div>
-              </Link>
+              <TypewriterTitle
+                title={chat.title}
+                className="max-w-52"
+              />
             </SidebarMenuButton>
           )}
       {!isEditing && (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuAction showOnHover>
-              <Icons.moreHorizontal className="size-4" />
-              <span className="sr-only">{t('actions.more')}</span>
-            </SidebarMenuAction>
+          {/* Remove asChild to avoid React 19 + Radix compose-refs infinite loop */}
+          <DropdownMenuTrigger
+            className="absolute end-2 flex size-6 items-center justify-center p-0 outline-hidden cursor-pointer text-sidebar-foreground/60 ring-sidebar-ring hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring transition-all duration-150 ease-out [&>svg]:size-4 [&>svg]:shrink-0 after:absolute after:-inset-2 md:after:hidden peer-data-[size=default]/menu-button:top-1.5 group-data-[collapsible=icon]:hidden group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0"
+          >
+            <Icons.moreHorizontal className="size-4" />
+            <span className="sr-only">{t('actions.more')}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start">
             <DropdownMenuItem onClick={() => onRenameClick(chat)}>

@@ -5,12 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 
 type SocialShareButtonProps = {
@@ -48,36 +42,29 @@ export function SocialShareButton({
     }
   };
 
+  // Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop
   return (
-    <TooltipProvider>
-      <Tooltip delayDuration={800}>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size={showTextOnLargeScreens ? 'sm' : 'icon'}
-            aria-label={copySuccess ? t('linkCopied') : t('copyLink')}
-            onClick={handleCopyLink}
-            className={cn(
-              'transition-all duration-200',
-              showTextOnLargeScreens && 'gap-2',
-              copySuccess && 'text-green-500',
-              className,
-            )}
-          >
-            {copySuccess
-              ? <Icons.check className="size-4 animate-in zoom-in-75 duration-300" />
-              : <Icons.share className="size-4" />}
-            {showTextOnLargeScreens && (
-              <span className="hidden md:inline">
-                {copySuccess ? t('linkCopied') : t('copyLink')}
-              </span>
-            )}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p>{copySuccess ? t('linkCopied') : t('copyLink')}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Button
+      variant="ghost"
+      size={showTextOnLargeScreens ? 'sm' : 'icon'}
+      aria-label={copySuccess ? t('linkCopied') : t('copyLink')}
+      title={copySuccess ? t('linkCopied') : t('copyLink')}
+      onClick={handleCopyLink}
+      className={cn(
+        'transition-all duration-200',
+        showTextOnLargeScreens && 'gap-2',
+        copySuccess && 'text-green-500',
+        className,
+      )}
+    >
+      {copySuccess
+        ? <Icons.check className="size-4 animate-in zoom-in-75 duration-300" />
+        : <Icons.share className="size-4" />}
+      {showTextOnLargeScreens && (
+        <span className="hidden md:inline">
+          {copySuccess ? t('linkCopied') : t('copyLink')}
+        </span>
+      )}
+    </Button>
   );
 }

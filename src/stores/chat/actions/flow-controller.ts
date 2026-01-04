@@ -21,7 +21,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ScreenModes } from '@/api/core/enums';
@@ -168,9 +168,13 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   }, [queryClient, storeApi]);
 
   // Navigation tracking
+  // ✅ FIX: Use refs to track immediately, preventing re-entry during startTransition
+  // Refs update synchronously; state via startTransition is deferred → effects see stale state
   const [hasNavigated, setHasNavigated] = useState(false);
   const [hasUpdatedThread, setHasUpdatedThread] = useState(false);
   const [aiGeneratedSlug, setAiGeneratedSlug] = useState<string | null>(null);
+  const hasUpdatedThreadRef = useRef(false);
+  const hasNavigatedRef = useRef(false);
 
   // Disable controller if screen mode changed (navigated away)
   const isActive = enabled && streamingState.screenMode === ScreenModes.OVERVIEW;
@@ -178,6 +182,9 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   // Reset flags when returning to initial UI
   useEffect(() => {
     if (streamingState.showInitialUI) {
+      // ✅ FIX: Reset refs immediately (synchronous) before deferred state update
+      hasUpdatedThreadRef.current = false;
+      hasNavigatedRef.current = false;
       startTransition(() => {
         setHasNavigated(false);
         setHasUpdatedThread(false);
@@ -234,11 +241,15 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     // Track timeout for cleanup
     let invalidationTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
+    // ✅ FIX: Check REF not state - ref updates synchronously, state via startTransition is deferred
     if (
       slugData
       && slugData.isAiGeneratedTitle
-      && !hasUpdatedThread
+      && !hasUpdatedThreadRef.current
     ) {
+      // ✅ FIX: Set ref IMMEDIATELY to prevent re-entry before startTransition propagates
+      hasUpdatedThreadRef.current = true;
+
       startTransition(() => {
         setAiGeneratedSlug(slugData.slug);
         setHasUpdatedThread(true);
@@ -267,31 +278,34 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
           },
           (old: unknown) => {
             const parsedQuery = validateInfiniteQueryCache(old);
-            if (!parsedQuery)
+            if (!parsedQuery) {
               return old;
+            }
 
             return {
               ...parsedQuery,
               pages: parsedQuery.pages.map((page) => {
-                if (!page.success || !page.data?.items)
+                if (!page.success || !page.data?.items) {
                   return page;
+                }
+
+                const updatedItems = page.data.items.map((thread) => {
+                  if (thread.id !== currentThread.id)
+                    return thread;
+
+                  return {
+                    ...thread,
+                    title: slugData.title,
+                    slug: slugData.slug,
+                    isAiGeneratedTitle: true,
+                  };
+                });
 
                 return {
                   ...page,
                   data: {
                     ...page.data,
-                    items: page.data.items.map((thread) => {
-                      if (thread.id !== currentThread.id)
-                        return thread;
-
-                      // Update thread with AI-generated title and slug
-                      return {
-                        ...thread,
-                        title: slugData.title,
-                        slug: slugData.slug,
-                        isAiGeneratedTitle: true,
-                      };
-                    }),
+                    items: updatedItems,
                   },
                 };
               }),
@@ -369,11 +383,15 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
     // Navigate ONLY when moderator is fully completed + AI slug ready
     // Wait for participants to speak AND moderator to finish before navigating
-    const shouldNavigate = !hasNavigated
+    // ✅ FIX: Check REF not state - ref updates synchronously, state via startTransition is deferred
+    const shouldNavigate = !hasNavigatedRef.current
       && hasAiSlug
       && firstModeratorCompleted;
 
     if (shouldNavigate) {
+      // ✅ FIX: Set ref IMMEDIATELY to prevent re-entry before startTransition propagates
+      hasNavigatedRef.current = true;
+
       // Mark as navigated
       startTransition(() => {
         setHasNavigated(true);

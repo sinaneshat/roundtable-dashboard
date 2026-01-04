@@ -24,6 +24,7 @@ import {
   UIMessageRoles,
 } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
+import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 
 import { createChatStore } from '../store';
 
@@ -227,7 +228,7 @@ describe('resumption Placeholder Ordering', () => {
       const messageOrder = state.messages.map((m) => {
         if (m.role === UIMessageRoles.USER)
           return 'user';
-        const meta = m.metadata as Record<string, unknown>;
+        const meta = m.metadata as DbAssistantMessageMetadata & { isModerator?: boolean };
         if (meta?.isModerator)
           return 'moderator';
         return `participant-${meta?.participantIndex}`;
@@ -274,7 +275,7 @@ describe('resumption Placeholder Ordering', () => {
       const state = store.getState();
       const participantIndices = state.messages
         .filter(m => m.role === UIMessageRoles.ASSISTANT)
-        .map(m => (m.metadata as Record<string, unknown>)?.participantIndex);
+        .map(m => (m.metadata as DbAssistantMessageMetadata)?.participantIndex);
 
       // Participants should be in priority order: 0, 1, 2
       expect(participantIndices).toEqual([0, 1, 2]);
@@ -473,7 +474,7 @@ describe('resumption Placeholder Ordering', () => {
       const order = state.messages.map((m) => {
         if (m.role === UIMessageRoles.USER)
           return 'USER';
-        const meta = m.metadata as Record<string, unknown>;
+        const meta = m.metadata as DbAssistantMessageMetadata & { isModerator?: boolean };
         if (meta?.isModerator)
           return 'MODERATOR';
         return `P${meta?.participantIndex}`;
@@ -504,7 +505,7 @@ describe('resumption Placeholder Ordering', () => {
       const order = state.messages.map((m) => {
         if (m.role === UIMessageRoles.USER)
           return 'USER';
-        const meta = m.metadata as Record<string, unknown>;
+        const meta = m.metadata as DbAssistantMessageMetadata & { isModerator?: boolean };
         if (meta?.isModerator)
           return 'MODERATOR';
         return `P${meta?.participantIndex}`;

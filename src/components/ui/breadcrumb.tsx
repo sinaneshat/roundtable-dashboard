@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from 'react';
 
-import { Slot } from "@radix-ui/react-slot"
+import { Slot } from "@/lib/ui/slot"
 import { useTranslations } from 'next-intl';
 
 import { Icons } from '@/components/icons';

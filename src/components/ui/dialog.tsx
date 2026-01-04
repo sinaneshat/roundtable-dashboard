@@ -151,10 +151,7 @@ function DialogFooter({ className, glass = false, ...props }: DialogFooterProps)
     <div
       data-slot="dialog-footer"
       className={cn(
-        // Mobile: Stack vertically with gap
-        "flex flex-col-reverse gap-3",
-        // Desktop: Horizontal layout with proper spacing
-        "sm:flex-row sm:justify-end sm:gap-2",
+        "flex flex-col-reverse gap-3 sm:flex-row sm:justify-end sm:gap-2",
         glass && "bg-background px-4 sm:px-5 md:px-6 pb-4 sm:pb-5 md:pb-6 pt-3 sm:pt-4",
         className
       )}
