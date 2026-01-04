@@ -7,14 +7,12 @@ import { MessageRoles, ResourceUnavailableReasons } from '@/api/core/enums';
 import type { ThreadDetailPayload } from '@/api/routes/chat/schema';
 import { BRAND } from '@/constants/brand';
 import PublicChatThreadScreen from '@/containers/screens/chat/PublicChatThreadScreen';
-import {
-  getCachedPublicThread,
-  getCachedPublicThreadForMetadata,
-} from '@/lib/cache/thread-cache';
+import { getCachedPublicThreadForMetadata } from '@/lib/cache/thread-cache';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { listPublicThreadSlugsService } from '@/services/api';
+import { getPublicThreadService, listPublicThreadSlugsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
 // ISR: 1 day (matches unstable_cache duration)
@@ -100,12 +98,11 @@ export default async function PublicChatThreadPage({
   const queryClient = getQueryClient();
 
   try {
-    // Prefetch thread data using cached function with 'use cache: remote'
-    // This provides shared caching across serverless instances
+    // Prefetch thread data with matching staleTime as usePublicThreadQuery hook
     await queryClient.prefetchQuery({
       queryKey: queryKeys.threads.public(slug),
-      queryFn: () => getCachedPublicThread(slug),
-      staleTime: 5 * 60 * 1000,
+      queryFn: () => getPublicThreadService({ param: { slug } }),
+      staleTime: STALE_TIMES.publicThreadDetail,
     });
 
     const cachedData = queryClient.getQueryData<{ success: true; data: ThreadDetailPayload } | { success: false }>(queryKeys.threads.public(slug));
