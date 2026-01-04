@@ -1,6 +1,5 @@
 import type React from 'react';
 
-import { redirectIfAuthenticated } from '@/app/auth/actions';
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
 
 type AuthLayoutPageProps = {
@@ -8,11 +7,11 @@ type AuthLayoutPageProps = {
 };
 
 /**
- * Auth Flow Layout - Handles authenticated user redirects
- * No HydrationBoundary needed - no queries prefetched here
+ * Auth Flow Layout - Static layout for auth pages
+ *
+ * Authenticated user redirects are handled in middleware.ts (cookie-based).
+ * This allows auth pages to be SSG/ISR instead of dynamic.
  */
-export default async function AuthLayoutPage({ children }: AuthLayoutPageProps) {
-  await redirectIfAuthenticated();
-
+export default function AuthLayoutPage({ children }: AuthLayoutPageProps) {
   return <AuthShowcaseLayout>{children}</AuthShowcaseLayout>;
 }

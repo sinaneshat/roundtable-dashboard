@@ -1212,7 +1212,11 @@ export const ChatMessageList = memo(
                     ...messages.map(m => getRoundNumber(m.metadata) ?? 0),
                   );
                   const isActuallyLatestRound = roundNumber >= maxRoundInMessages;
-                  const isLatestRound = isActuallyLatestRound && (isStreamingRound || preSearchActive || preSearchComplete);
+                  // ✅ BUG FIX 3: If isStreamingRound is true, ALWAYS consider this the latest round
+                  // This is a defensive fix for race conditions where preSearch lookup might fail
+                  // during state synchronization (e.g., orchestrator refetch after pre-search completes).
+                  // The streamingRoundNumber is the authoritative signal for which round is active.
+                  const isLatestRound = isStreamingRound || (isActuallyLatestRound && (preSearchActive || preSearchComplete));
 
                   if (!isLatestRound || participants.length === 0) {
                     return null;

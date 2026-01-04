@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
  * Loading State for Auth Flow Layout
  *
  * Shows skeleton matching AuthShowcaseLayout structure during
- * server-side redirectIfAuthenticated() check.
+ * client-side navigation. Auth redirects handled in middleware.ts.
  */
 export default function AuthFlowLoading() {
   return (

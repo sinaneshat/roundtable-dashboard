@@ -1,11 +1,10 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 import { BRAND } from '@/constants/brand';
-import HomeScreen from '@/containers/screens/general/HomeScreen';
+import { auth } from '@/lib/auth';
 import { createMetadata } from '@/utils';
-
-// SSG: Pure static - landing page doesn't need dynamic rendering
-export const dynamic = 'force-static';
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
@@ -16,6 +15,23 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
+/**
+ * Home Page - Auth-based redirect
+ *
+ * Checks session server-side and redirects:
+ * - Authenticated → /chat
+ * - Unauthenticated → /auth/sign-in
+ *
+ * @see https://www.better-auth.com/docs/integrations/next
+ */
 export default async function Home() {
-  return <HomeScreen />;
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (session?.user) {
+    redirect('/chat');
+  }
+
+  redirect('/auth/sign-in');
 }

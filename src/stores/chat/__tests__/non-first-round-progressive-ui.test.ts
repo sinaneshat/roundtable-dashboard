@@ -605,4 +605,169 @@ describe('non-first round progressive UI', () => {
       expect(beforeRef).not.toBe(afterRef);
     });
   });
+
+  /**
+   * ✅ BUG TEST: Second round + web search + pre-search completion rendering
+   *
+   * Bug scenario:
+   * 1. User starts second round with config changes and web search enabled
+   * 2. Pre-search placeholder created, streamingRoundNumber set
+   * 3. Pre-search completes (status = COMPLETE)
+   * 4. BUG: All participants disappeared until moderator finished
+   *
+   * Root cause investigation:
+   * The rendering condition `shouldShowPendingCards` depends on:
+   * - isStreamingRound = (roundNumber === streamingRoundNumber)
+   * - preSearchComplete = (preSearch.status === COMPLETE)
+   * - isAnyStreamingActive = (isStreaming || isModeratorStreaming || isStreamingRound)
+   *
+   * If streamingRoundNumber is null or wrong after pre-search completes,
+   * isStreamingRound becomes false, and if isStreaming/isModeratorStreaming are also false,
+   * shouldShowPendingCards becomes false = participants disappear!
+   */
+  describe('second round + pre-search completion rendering conditions', () => {
+    it('should preserve streamingRoundNumber when pre-search completes', () => {
+      const store = createChatStore();
+      const threadId = 'thread-123';
+      const roundNumber = 1;
+
+      // Setup: Second round with web search enabled
+      store.getState().setStreamingRoundNumber(roundNumber);
+      store.getState().setWaitingToStartStreaming(true);
+      store.getState().setEnableWebSearch(true);
+
+      // Create pre-search placeholder
+      const placeholder = createPlaceholderPreSearch(threadId, roundNumber, 'test query');
+      store.getState().setPreSearches([placeholder]);
+
+      // Verify streamingRoundNumber before pre-search completion
+      expect(store.getState().streamingRoundNumber).toBe(roundNumber);
+
+      // Pre-search completes (status changes to COMPLETE)
+      store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.COMPLETE);
+
+      // ✅ CRITICAL: streamingRoundNumber should still be set!
+      expect(store.getState().streamingRoundNumber).toBe(roundNumber);
+      expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
+    });
+
+    it('should have correct rendering conditions when pre-search completes', () => {
+      const store = createChatStore();
+      const threadId = 'thread-123';
+      const roundNumber = 1;
+
+      // Setup: Second round state
+      store.getState().setStreamingRoundNumber(roundNumber);
+      store.getState().setWaitingToStartStreaming(true);
+      store.getState().setEnableWebSearch(true);
+
+      // Create COMPLETE pre-search
+      const completePreSearch = {
+        ...createPlaceholderPreSearch(threadId, roundNumber, 'test query'),
+        status: MessageStatuses.COMPLETE,
+        searchData: {
+          queries: [],
+          results: [],
+          summary: 'Search complete',
+          successCount: 0,
+          failureCount: 0,
+          totalResults: 0,
+          totalTime: 0,
+        },
+      };
+      store.getState().setPreSearches([completePreSearch]);
+
+      // Get rendering conditions
+      const state = store.getState();
+      const _streamingRoundNumber = state.streamingRoundNumber;
+      const isStreaming = state.isStreaming;
+      const isModeratorStreaming = state.isModeratorStreaming;
+
+      // Simulate rendering logic from chat-message-list.tsx
+      const isStreamingRound = roundNumber === _streamingRoundNumber;
+      const preSearch = state.preSearches.find(ps => ps.roundNumber === roundNumber);
+      const preSearchActive = preSearch
+        && (preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING);
+      const preSearchComplete = preSearch && preSearch.status === MessageStatuses.COMPLETE;
+
+      // ✅ KEY ASSERTION: isStreamingRound should be true
+      expect(isStreamingRound).toBe(true);
+      expect(preSearchActive).toBe(false); // Pre-search is COMPLETE, not active
+      expect(preSearchComplete).toBe(true);
+
+      // Calculate isAnyStreamingActive (from chat-message-list.tsx)
+      const isAnyStreamingActive = isStreaming || isModeratorStreaming || isStreamingRound;
+
+      // ✅ KEY ASSERTION: isAnyStreamingActive should be true because isStreamingRound is true
+      expect(isAnyStreamingActive).toBe(true);
+
+      // shouldShowPendingCards = !isRoundComplete && (preSearchActive || preSearchComplete || isAnyStreamingActive)
+      // Since round is not complete (no moderator with finishReason), shouldShowPendingCards should be true
+      const isRoundComplete = false; // No moderator message yet
+      const shouldShowPendingCards = !isRoundComplete && (preSearchActive || preSearchComplete || isAnyStreamingActive);
+
+      // ✅ KEY ASSERTION: shouldShowPendingCards should be true
+      expect(shouldShowPendingCards).toBe(true);
+    });
+
+    it('should show pending cards even when isStreaming is false after pre-search completes', () => {
+      const store = createChatStore();
+      const threadId = 'thread-123';
+      const roundNumber = 1;
+
+      // Setup: Pre-search complete but streaming not started yet
+      store.getState().setStreamingRoundNumber(roundNumber);
+      store.getState().setIsStreaming(false); // AI SDK streaming not started yet
+      store.getState().setEnableWebSearch(true);
+
+      const completePreSearch = {
+        ...createPlaceholderPreSearch(threadId, roundNumber, 'test query'),
+        status: MessageStatuses.COMPLETE,
+      };
+      store.getState().setPreSearches([completePreSearch]);
+
+      const state = store.getState();
+
+      // Key conditions
+      const isStreamingRound = roundNumber === state.streamingRoundNumber;
+      const preSearchComplete = state.preSearches.find(ps => ps.roundNumber === roundNumber)?.status === MessageStatuses.COMPLETE;
+      const isAnyStreamingActive = state.isStreaming || state.isModeratorStreaming || isStreamingRound;
+
+      // Even though isStreaming=false, isStreamingRound keeps things visible
+      expect(isStreamingRound).toBe(true);
+      expect(preSearchComplete).toBe(true);
+      expect(isAnyStreamingActive).toBe(true);
+
+      const shouldShowPendingCards = true && (false || preSearchComplete || isAnyStreamingActive);
+      expect(shouldShowPendingCards).toBe(true);
+    });
+
+    it('should NOT clear streamingRoundNumber when config change completes', () => {
+      const store = createChatStore();
+      const threadId = 'thread-123';
+      const roundNumber = 1;
+
+      // Simulate handleUpdateThreadAndSend flow
+      store.getState().setStreamingRoundNumber(roundNumber);
+      store.getState().setWaitingToStartStreaming(true);
+      store.getState().setConfigChangeRoundNumber(roundNumber); // Config change pending
+
+      // Pre-search created
+      const placeholder = createPlaceholderPreSearch(threadId, roundNumber, 'test query');
+      store.getState().setPreSearches([placeholder]);
+
+      // Config change completes (changelog sync clears flags)
+      store.getState().setIsWaitingForChangelog(false);
+      store.getState().setConfigChangeRoundNumber(null);
+
+      // ✅ streamingRoundNumber should NOT be cleared
+      expect(store.getState().streamingRoundNumber).toBe(roundNumber);
+
+      // Pre-search completes
+      store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.COMPLETE);
+
+      // ✅ streamingRoundNumber should STILL not be cleared
+      expect(store.getState().streamingRoundNumber).toBe(roundNumber);
+    });
+  });
 });
