@@ -4,6 +4,9 @@ import { BRAND } from '@/constants/brand';
 import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
 import { createMetadata } from '@/utils';
 
+// ISR: 24 hours - matches layout and product/model cache duration
+export const revalidate = 86400;
+
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: `Pricing - ${BRAND.fullName}`,

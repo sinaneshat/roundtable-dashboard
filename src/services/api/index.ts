@@ -143,6 +143,8 @@ export {
   type GetThreadStreamResumptionStateRequest,
   type GetThreadStreamResumptionStateResponse,
   getThreadStreamResumptionStateService,
+  type ListPublicThreadSlugsResponse,
+  listPublicThreadSlugsService,
   type ListThreadsRequest,
   type ListThreadsResponse,
   listThreadsService,

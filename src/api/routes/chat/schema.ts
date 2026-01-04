@@ -278,6 +278,24 @@ export const ThreadDetailPayloadSchema = z.object({
 export type ThreadDetailPayload = z.infer<typeof ThreadDetailPayloadSchema>;
 export const ThreadListResponseSchema = createCursorPaginatedResponseSchema(ChatThreadSchema).openapi('ThreadListResponse');
 export type ThreadListResponse = z.infer<typeof ThreadListResponseSchema>;
+
+// Public thread slugs list - for generateStaticParams (ISR/SSG)
+export const PublicThreadSlugSchema = z.object({
+  slug: z.string().openapi({
+    description: 'Thread slug for URL',
+    example: 'how-to-build-ai-app-abc123',
+  }),
+}).openapi('PublicThreadSlug');
+
+export const PublicThreadSlugsPayloadSchema = z.object({
+  slugs: z.array(PublicThreadSlugSchema).openapi({
+    description: 'List of public thread slugs',
+  }),
+}).openapi('PublicThreadSlugsPayload');
+
+export const PublicThreadSlugsResponseSchema = createApiResponseSchema(PublicThreadSlugsPayloadSchema).openapi('PublicThreadSlugsResponse');
+export type PublicThreadSlugsResponse = z.infer<typeof PublicThreadSlugsResponseSchema>;
+
 export const ThreadDetailResponseSchema = createApiResponseSchema(ThreadDetailPayloadSchema).openapi('ThreadDetailResponse');
 export type ThreadDetailResponse = z.infer<typeof ThreadDetailResponseSchema>;
 

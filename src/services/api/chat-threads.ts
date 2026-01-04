@@ -211,6 +211,28 @@ export async function getPublicThreadService(data: GetPublicThreadRequest) {
   return parseResponse(client.chat.public[':slug'].$get(params));
 }
 
+// ============================================================================
+// Public Thread Slugs Types (for SSG/ISR)
+// ============================================================================
+
+export type ListPublicThreadSlugsResponse = InferResponseType<
+  ApiClientType['chat']['public']['slugs']['$get']
+>;
+
+/**
+ * List all public thread slugs for SSG/ISR page generation
+ *
+ * Public endpoint - no authentication required.
+ * Used by generateStaticParams to pre-generate public thread pages.
+ *
+ * IMPORTANT: Uses createPublicApiClient() to avoid cookie access
+ * which would break SSG/ISR rendering.
+ */
+export async function listPublicThreadSlugsService(): Promise<ListPublicThreadSlugsResponse> {
+  const client = await createPublicApiClient();
+  return parseResponse(client.chat.public.slugs.$get());
+}
+
 /**
  * Get a thread by slug for the authenticated user
  * Protected endpoint - requires authentication (ownership check)

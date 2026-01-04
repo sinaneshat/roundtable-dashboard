@@ -60,6 +60,7 @@ export const STALE_TIMES = {
   preSearch: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (same as summaries)
   messages: 10 * 1000, // 10 seconds - messages can be added in real-time
   publicThreadDetail: 24 * 3600 * 1000, // 24 hours - matches ISR cache (1 day)
+  publicThreadSlugs: 24 * 3600 * 1000, // 24 hours - matches ISR cache (used for SSG)
 
   // ============================================================================
   // User & Settings (infrequent changes)

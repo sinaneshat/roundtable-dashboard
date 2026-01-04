@@ -97,6 +97,7 @@ import {
   getThreadStreamResumptionStateHandler,
   getUserPresetHandler,
   listCustomRolesHandler,
+  listPublicThreadSlugsHandler,
   listThreadsHandler,
   listUserPresetsHandler,
   resumeThreadStreamHandler,
@@ -131,6 +132,7 @@ import {
   getThreadStreamResumptionStateRoute,
   getUserPresetRoute,
   listCustomRolesRoute,
+  listPublicThreadSlugsRoute,
   listThreadsRoute,
   listUserPresetsRoute,
   resumeThreadStreamRoute,
@@ -552,6 +554,7 @@ const appRoutes = app
   .openapi(updateThreadRoute, updateThreadHandler) // Update thread (title, mode, status, metadata)
   .openapi(deleteThreadRoute, deleteThreadHandler) // Delete thread (soft delete)
   .openapi(getPublicThreadRoute, getPublicThreadHandler) // Get public thread by slug (no auth)
+  .openapi(listPublicThreadSlugsRoute, listPublicThreadSlugsHandler) // List public thread slugs for SSG (no auth)
   // Message Management
   .openapi(getThreadMessagesRoute, getThreadMessagesHandler) // Get thread messages
   .openapi(getThreadChangelogRoute, getThreadChangelogHandler) // Get configuration changelog

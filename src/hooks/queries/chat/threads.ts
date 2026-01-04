@@ -21,6 +21,7 @@ import {
   getThreadBySlugService,
   getThreadService,
   getThreadSlugStatusService,
+  listPublicThreadSlugsService,
   listThreadsService,
 } from '@/services/api';
 
@@ -98,6 +99,26 @@ export function usePublicThreadQuery(slug: string, enabled?: boolean) {
     queryFn: () => getPublicThreadService({ param: { slug } }),
     staleTime: STALE_TIMES.publicThreadDetail, // 1 minute - match server-side prefetch
     enabled: enabled !== undefined ? enabled : !!slug,
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to fetch all public thread slugs (for SSG/ISR page generation)
+ * Public endpoint - no authentication required
+ *
+ * Note: This hook is primarily used for server-side prefetching.
+ * Client-side use is rare but supported for consistency.
+ *
+ * @param enabled - Optional control over whether to fetch (default: true)
+ */
+export function usePublicThreadSlugsQuery(enabled?: boolean) {
+  return useQuery({
+    queryKey: queryKeys.threads.publicSlugs(),
+    queryFn: () => listPublicThreadSlugsService(),
+    staleTime: STALE_TIMES.publicThreadSlugs, // 24 hours - matches ISR cache
+    enabled: enabled !== undefined ? enabled : true,
     retry: false,
     throwOnError: false,
   });

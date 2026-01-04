@@ -4,6 +4,9 @@ import { BRAND } from '@/constants/brand';
 import AuthErrorScreen from '@/containers/screens/errors/AuthErrorScreen';
 import { createMetadata } from '@/utils';
 
+// SSG: Pure static - error page doesn't need dynamic rendering
+export const dynamic = 'force-static';
+
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: `Authentication Error - ${BRAND.fullName}`,

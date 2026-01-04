@@ -3,7 +3,6 @@ import './global.css';
 import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import type { Metadata, Viewport } from 'next';
-import { cookies } from 'next/headers';
 import { getMessages, getTranslations } from 'next-intl/server';
 
 import { DEFAULT_SEO_CONTENT_TYPE, isValidSeoContentType } from '@/api/core/enums';
@@ -17,7 +16,6 @@ import { LiquidGlassFilters } from '@/components/ui/liquid-glass-filters';
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 import { spaceGrotesk } from '@/lib/ui/fonts';
-import { parsePreferencesCookie, PREFERENCES_COOKIE_NAME } from '@/stores/preferences';
 import { createMetadata } from '@/utils';
 
 export const viewport: Viewport = {
@@ -62,9 +60,9 @@ export default async function Layout({ children }: { children: React.ReactNode }
   const now = undefined;
   const baseUrl = env.NEXT_PUBLIC_APP_URL || 'https://app.roundtable.now';
 
-  const cookieStore = await cookies();
-  const preferencesCookie = cookieStore.get(PREFERENCES_COOKIE_NAME);
-  const initialPreferences = parsePreferencesCookie(preferencesCookie?.value);
+  // NOTE: Preferences are hydrated client-side via Zustand persist
+  // This allows SSG/ISR for static pages (privacy, terms, auth, pricing)
+  // The store uses skipHydration:true + persist.rehydrate() on mount
 
   const contentTypeValue = tAeo('contentType');
   const contentType = isValidSeoContentType(contentTypeValue) ? contentTypeValue : DEFAULT_SEO_CONTENT_TYPE;
@@ -117,7 +115,6 @@ export default async function Layout({ children }: { children: React.ReactNode }
             NEXT_PUBLIC_MAINTENANCE: env.NEXT_PUBLIC_MAINTENANCE,
             NEXT_PUBLIC_POSTHOG_API_KEY: env.NEXT_PUBLIC_POSTHOG_API_KEY,
           }}
-          initialPreferences={initialPreferences}
         >
           <main>{children}</main>
         </AppProviders>

@@ -62,6 +62,7 @@ import type {
   getThreadBySlugRoute,
   getThreadRoute,
   getThreadSlugStatusRoute,
+  listPublicThreadSlugsRoute,
   listThreadsRoute,
   updateThreadRoute,
 } from '../route';
@@ -1334,6 +1335,39 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     });
   },
 );
+
+/**
+ * List Public Thread Slugs Handler
+ * Returns all public, active thread slugs for SSG/ISR page generation
+ * Used by generateStaticParams in public thread pages
+ */
+export const listPublicThreadSlugsHandler: RouteHandler<typeof listPublicThreadSlugsRoute, ApiEnv> = createHandler(
+  {
+    auth: 'public',
+    operationName: 'listPublicThreadSlugs',
+  },
+  async (c) => {
+    const db = await getDbAsync();
+
+    const publicThreads = await db.query.chatThread.findMany({
+      where: and(
+        eq(tables.chatThread.isPublic, true),
+        eq(tables.chatThread.status, ThreadStatusSchema.enum.active),
+      ),
+      columns: {
+        slug: true,
+      },
+      limit: 1000, // Reasonable limit for SSG build time
+    });
+
+    const slugs = publicThreads
+      .filter(thread => thread.slug)
+      .map(thread => ({ slug: thread.slug }));
+
+    return Responses.ok(c, { slugs });
+  },
+);
+
 export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, ApiEnv> = createHandler(
   {
     auth: 'session',

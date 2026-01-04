@@ -14,11 +14,27 @@ import {
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
+import { listPublicThreadSlugsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
 // ISR: 1 day (matches unstable_cache duration)
 // On-demand revalidation triggered via revalidateTag when visibility changes
 export const revalidate = 86400;
+
+// Pre-generate pages for all active public threads at build time
+// Uses RPC service - no direct database access in pages
+export async function generateStaticParams(): Promise<{ slug: string }[]> {
+  try {
+    const response = await listPublicThreadSlugsService();
+    if (!response.success || !response.data?.slugs) {
+      return [];
+    }
+    return response.data.slugs;
+  } catch (error) {
+    console.error('[generateStaticParams] Failed to fetch public thread slugs:', error);
+    return [];
+  }
+}
 
 export async function generateMetadata({
   params,

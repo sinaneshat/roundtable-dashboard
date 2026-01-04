@@ -18,6 +18,7 @@ import {
   PreSearchListResponseSchema,
   PreSearchRequestSchema,
   PreSearchResponseSchema,
+  PublicThreadSlugsResponseSchema,
   RoundFeedbackParamSchema,
   RoundFeedbackRequestSchema,
   RoundModeratorRequestSchema,
@@ -181,6 +182,24 @@ export const getPublicThreadRoute = createRoute({
     ...createPublicRouteResponses(),
   },
 });
+
+export const listPublicThreadSlugsRoute = createRoute({
+  method: 'get',
+  path: '/chat/public/slugs',
+  tags: ['chat'],
+  summary: 'List all public thread slugs',
+  description: 'Get all public thread slugs for SSG/ISR page generation. Returns active public threads only.',
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Public thread slugs retrieved successfully',
+      content: {
+        'application/json': { schema: PublicThreadSlugsResponseSchema },
+      },
+    },
+    ...createPublicRouteResponses(),
+  },
+});
+
 export const getThreadBySlugRoute = createRoute({
   method: 'get',
   path: '/chat/threads/slug/:slug',
