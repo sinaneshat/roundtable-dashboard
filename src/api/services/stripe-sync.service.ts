@@ -310,6 +310,58 @@ export async function syncStripeDataFromStripe(
     })
     .where(eq(tables.stripeCustomer.id, customerId));
 
+  // ✅ CRITICAL FIX: Sync product and price BEFORE subscription to satisfy FK constraints
+  // The subscription references priceId which references productId
+  // Order must be: product → price → subscription
+  const now = new Date();
+
+  // Prepare product upsert (must exist before price can reference it)
+  const productUpsert = db.insert(tables.stripeProduct).values({
+    id: product,
+    name: price.nickname || 'Subscription Plan',
+    description: null,
+    active: price.active,
+    defaultPriceId: price.id,
+    metadata: null,
+    images: null,
+    features: null,
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoUpdate({
+    target: tables.stripeProduct.id,
+    set: {
+      active: price.active,
+      defaultPriceId: price.id,
+      updatedAt: now,
+    },
+  });
+
+  // Prepare price upsert (must exist before subscription can reference it)
+  const priceUpsert = db.insert(tables.stripePrice).values({
+    id: price.id,
+    productId: product,
+    active: price.active,
+    currency: price.currency,
+    unitAmount: price.unit_amount ?? null,
+    type: price.type === 'one_time' ? 'one_time' : 'recurring',
+    interval: price.recurring?.interval ?? null,
+    intervalCount: price.recurring?.interval_count ?? null,
+    trialPeriodDays: null,
+    metadata: null,
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoUpdate({
+    target: tables.stripePrice.id,
+    set: {
+      active: price.active,
+      currency: price.currency,
+      unitAmount: price.unit_amount ?? null,
+      interval: price.recurring?.interval ?? null,
+      intervalCount: price.recurring?.interval_count ?? null,
+      updatedAt: now,
+    },
+  });
+
   // Prepare subscription upsert operation
   const subscriptionUpsert = db.insert(tables.stripeSubscription).values({
     id: subscription.id,
@@ -442,8 +494,11 @@ export async function syncStripeDataFromStripe(
 
   // Execute all operations atomically using batch (Cloudflare D1 batch-first architecture)
   // Using reusable batch helper from @/api/common/batch-operations
+  // ✅ CRITICAL: Order matters for FK constraints: product → price → subscription
   await executeBatch(db, [
     customerUpdate,
+    productUpsert, // Must exist before price references it
+    priceUpsert, // Must exist before subscription references it
     subscriptionUpsert,
     ...invoiceUpserts,
     ...paymentMethodUpserts,

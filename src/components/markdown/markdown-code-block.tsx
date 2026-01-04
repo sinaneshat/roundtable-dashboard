@@ -30,6 +30,10 @@ function extractLanguage(className: string | undefined): string {
   return match?.[1] ?? 'text';
 }
 
+function isReactNodeWithChildren(node: ReactNode): node is React.ReactElement<{ children: ReactNode }> {
+  return isValidElement(node) && isObject(node.props) && 'children' in node.props;
+}
+
 function extractTextContent(children: ReactNode): string {
   if (typeof children === 'string')
     return children;
@@ -37,8 +41,8 @@ function extractTextContent(children: ReactNode): string {
   if (Array.isArray(children))
     return children.map(extractTextContent).join('');
 
-  if (isValidElement(children) && isObject(children.props) && 'children' in children.props) {
-    return extractTextContent(children.props.children as ReactNode);
+  if (isReactNodeWithChildren(children)) {
+    return extractTextContent(children.props.children);
   }
 
   return '';
@@ -69,16 +73,20 @@ type MarkdownPreProps = {
   readonly children?: ReactNode;
 };
 
+function isCodeElement(child: ReactNode): child is React.ReactElement<{ className?: string; children?: ReactNode }> {
+  return isValidElement(child) && child.type === 'code' && isObject(child.props);
+}
+
 export function MarkdownPre({ children, className }: MarkdownPreProps) {
   const child = Array.isArray(children) ? children[0] : children;
 
   if (isValidElement(child) && child.type === CodeBlock)
     return child;
 
-  if (isValidElement(child) && child.type === 'code' && isObject(child.props)) {
+  if (isCodeElement(child)) {
     const codeClassName = typeof child.props.className === 'string' ? child.props.className : undefined;
     const language = extractLanguage(codeClassName);
-    const code = extractTextContent('children' in child.props ? (child.props.children as ReactNode) : undefined).trim();
+    const code = extractTextContent('children' in child.props ? child.props.children : undefined).trim();
 
     return (
       <CodeBlock code={code} language={language} showLineNumbers={code.split('\n').length > 3}>

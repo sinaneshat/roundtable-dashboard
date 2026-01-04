@@ -73,9 +73,12 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const chats: ChatSidebarItem[] = useMemo(() => {
     if (!threadsData?.pages)
       return [];
-    const threads = threadsData.pages.flatMap(page =>
-      page.success && page.data?.items ? page.data.items : [],
-    );
+    const threads = threadsData.pages.flatMap((page) => {
+      if (page.success && page.data?.items) {
+        return page.data.items;
+      }
+      return [];
+    });
     return threads.map(thread => ({
       id: thread.id,
       title: thread.title,

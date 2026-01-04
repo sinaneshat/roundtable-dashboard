@@ -61,19 +61,15 @@ type ModeratorDataInput
 export function hasModeratorData(
   data: ModeratorDataInput,
 ): data is ModeratorPayload | DeepPartial<ModeratorPayload> {
-  // Null/undefined check
   if (!data) {
     return false;
   }
 
-  // Type-safe access to properties for MODERATOR SCHEMA
   const summary = 'summary' in data ? data.summary : undefined;
   const metrics = 'metrics' in data ? data.metrics : undefined;
 
-  // Check if we have council moderator text (excluding whitespace-only)
   const hasSummaryText = typeof summary === 'string' && summary.trim().length > 0;
 
-  // Check if we have any metrics greater than 0
   const hasMetrics = isObject(metrics) && (
     (typeof metrics.engagement === 'number' && !Number.isNaN(metrics.engagement) && metrics.engagement > 0)
     || (typeof metrics.insight === 'number' && !Number.isNaN(metrics.insight) && metrics.insight > 0)
@@ -81,7 +77,6 @@ export function hasModeratorData(
     || (typeof metrics.clarity === 'number' && !Number.isNaN(metrics.clarity) && metrics.clarity > 0)
   );
 
-  // Returns true as soon as we have council moderator text OR any metrics
   return hasSummaryText || hasMetrics;
 }
 
@@ -102,16 +97,12 @@ export function hasModeratorData(
  * @returns Normalized data with clamped metrics
  */
 export function normalizeModeratorData<T>(data: T): T {
-  // ✅ TYPE-SAFE: Use type guard instead of force cast
   if (!isObject(data)) {
     return data;
   }
 
-  // Deep clone to avoid mutation - JSON round-trip preserves structure
-  // Type is preserved because we're cloning the exact same object structure
   const normalized: T = JSON.parse(JSON.stringify(data));
 
-  // Ensure metrics are clamped to 0-100 range if present
   if (isObject(normalized) && 'metrics' in normalized && isObject(normalized.metrics)) {
     const metrics = normalized.metrics;
     const clamp = (value: unknown): number | undefined => {
@@ -198,14 +189,10 @@ export function deduplicateModerators(
   const now = Date.now();
 
   const validModerators = uniqueById.filter((item) => {
-    // Exclude failed moderators
     if (excludeFailed && item.status === MessageStatuses.FAILED) {
       return false;
     }
 
-    // ✅ TIMEOUT PROTECTION: Exclude stuck streaming moderators
-    // If moderator has been 'streaming' or 'pending' for >60 seconds, treat as failed
-    // This prevents infinite loading when SSE streams fail
     if ((item.status === MessageStatuses.STREAMING || item.status === MessageStatuses.PENDING) && item.createdAt) {
       const createdTime = item.createdAt instanceof Date
         ? item.createdAt.getTime()
@@ -213,11 +200,10 @@ export function deduplicateModerators(
       const elapsed = now - createdTime;
 
       if (elapsed > MODERATOR_TIMEOUT_MS) {
-        return false; // Exclude stuck moderators
+        return false;
       }
     }
 
-    // Exclude moderator for the round being regenerated
     if (regeneratingRoundNumber !== null
       && regeneratingRoundNumber !== undefined
       && item.roundNumber === regeneratingRoundNumber) {
@@ -235,7 +221,6 @@ export function deduplicateModerators(
       return acc;
     }
 
-    // Priority: complete > streaming > pending
     const itemPriority = getStatusPriority(item.status);
     const existingPriority = getStatusPriority(existing.status);
 
@@ -244,7 +229,6 @@ export function deduplicateModerators(
       return acc;
     }
 
-    // If same priority, keep the most recent one
     if (itemPriority === existingPriority) {
       const itemTime = item.createdAt instanceof Date
         ? item.createdAt.getTime()
@@ -260,6 +244,5 @@ export function deduplicateModerators(
     return acc;
   }, new Map<number, StoredModeratorData>());
 
-  // Step 4: Sort by round number (ascending)
   return Array.from(deduplicatedByRound.values()).sort((a, b) => a.roundNumber - b.roundNumber);
 }

@@ -90,10 +90,17 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     isFetchingNextPage,
     isLoading,
   } = useThreadsQuery(debouncedSearch || undefined);
-  const threads = useMemo(() =>
-    threadsData?.pages.flatMap(page =>
-      page.success && page.data?.items ? page.data.items : [],
-    ) || [], [threadsData]);
+  const threads = useMemo(() => {
+    if (!threadsData?.pages) {
+      return [];
+    }
+    return threadsData.pages.flatMap((page) => {
+      if (page.success && page.data?.items) {
+        return page.data.items;
+      }
+      return [];
+    });
+  }, [threadsData]);
   const handleClose = useCallback(() => {
     setSearchQuery('');
     setSelectedIndex(0);
@@ -139,7 +146,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   }, []);
 
   const onClickOutside = useEffectEvent((event: MouseEvent) => {
-    if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+    if (modalRef.current && event.target instanceof Node && !modalRef.current.contains(event.target)) {
       handleClose();
     }
   });
@@ -170,8 +177,8 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     const scrollArea = scrollAreaRef.current;
     if (!scrollArea)
       return;
-    const viewport = scrollArea.querySelector('[data-slot="scroll-area-viewport"]') as HTMLDivElement;
-    if (!viewport)
+    const viewport = scrollArea.querySelector('[data-slot="scroll-area-viewport"]');
+    if (!viewport || !(viewport instanceof HTMLDivElement))
       return;
     scrollViewportRef.current = viewport;
     viewport.addEventListener('scroll', onScroll);

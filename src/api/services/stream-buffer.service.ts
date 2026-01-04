@@ -22,7 +22,7 @@
  * @see /src/api/types/streaming.ts for type definitions
  */
 
-import { StreamStatuses } from '@/api/core/enums';
+import { FinishReasons, StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
 import { LogHelpers } from '@/api/types/logger';
@@ -747,7 +747,7 @@ export function createLiveParticipantResumeStream(
             // Format matches the SSE format used by other chunks (data: + JSON)
             // The 'unknown' finishReason signals the stream was interrupted
             // This allows AI SDK to call onFinish so frontend can handle recovery
-            const syntheticFinish = `data: {"type":"finish","finishReason":"unknown","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
+            const syntheticFinish = `data: {"type":"finish","finishReason":"${FinishReasons.UNKNOWN}","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
             safeEnqueue(controller, encoder.encode(syntheticFinish));
 
             // Close the stream after sending finish event

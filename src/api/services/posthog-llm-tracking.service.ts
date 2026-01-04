@@ -19,6 +19,7 @@
  * AI SDK v6: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
  */
 
+import type { LanguageModelUsage } from 'ai';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 
@@ -237,7 +238,7 @@ type PostHogTool = {
  * 2. z.passthrough() creates incompatible types with internal properties type
  * 3. This is the public API that consumers use
  *
- * ✅ AI SDK TYPE REUSE: Uses LLMTrackingUsage for totalUsage
+ * ✅ AI SDK TYPE REUSE: Uses LanguageModelUsage from 'ai' package
  */
 export type LLMTrackingOptions = {
   modelPricing?: { input: number; output: number };
@@ -258,7 +259,7 @@ export type LLMTrackingOptions = {
   };
   tools?: PostHogTool[];
   cacheCreationInputTokens?: number;
-  totalUsage?: LLMTrackingUsage;
+  totalUsage?: LanguageModelUsage;
   reasoningTokens?: number;
   providerUrls?: {
     baseUrl?: string;
@@ -1430,7 +1431,7 @@ export async function trackQueryGeneration(
     modelId: string;
   },
   latencyMs: number,
-  usage?: { inputTokens: number; outputTokens: number },
+  usage?: LanguageModelUsage,
   options?: {
     isError?: boolean;
     error?: Error;

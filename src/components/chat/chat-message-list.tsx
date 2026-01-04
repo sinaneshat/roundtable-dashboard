@@ -1331,7 +1331,6 @@ export const ChatMessageList = memo(
                           // ✅ ANIMATION FIX: Still streaming if content exists but not finished
                           // This keeps the pulsating animation showing during active streaming
                           status = hasActuallyFinished ? MessageStatuses.COMPLETE : MessageStatuses.STREAMING;
-                          // Type boundary: AI SDK parts → MessagePart schema
                           parts = (participantMessage.parts || [])
                             .filter(p =>
                               p && (p.type === MessagePartTypes.TEXT

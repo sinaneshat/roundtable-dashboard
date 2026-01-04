@@ -1135,6 +1135,8 @@ async function trackRevenueFromWebhook(
   try {
     switch (event.type) {
       case 'invoice.paid': {
+        if (!isObject(obj) || !('amount_paid' in obj) || !('currency' in obj))
+          return;
         const invoice = obj as Stripe.Invoice;
         if (!invoice.amount_paid || invoice.amount_paid <= 0)
           return;
@@ -1179,6 +1181,8 @@ async function trackRevenueFromWebhook(
       }
 
       case 'invoice.payment_failed': {
+        if (!isObject(obj) || !('id' in obj))
+          return;
         const invoice = obj as Stripe.Invoice;
         const subscriptionData = 'subscription' in invoice ? invoice.subscription : null;
         const subscriptionId = typeof subscriptionData === 'string'
@@ -1194,6 +1198,8 @@ async function trackRevenueFromWebhook(
       }
 
       case 'customer.subscription.deleted': {
+        if (!isObject(obj) || !('id' in obj) || !('items' in obj))
+          return;
         const subscription = obj as Stripe.Subscription;
         await revenueTracking.subscriptionCanceled({
           subscription_id: subscription.id,
@@ -1203,6 +1209,8 @@ async function trackRevenueFromWebhook(
       }
 
       case 'customer.subscription.updated': {
+        if (!isObject(obj) || !('currency' in obj) || !('items' in obj))
+          return;
         const subscription = obj as Stripe.Subscription;
         const previousAttributes = event.data.previous_attributes;
 
@@ -1395,8 +1403,8 @@ export const syncCreditsAfterCheckoutHandler: RouteHandler<typeof syncCreditsAft
       // Found credit purchase - grant credits
       const lineItem = recentCreditPurchase.line_items?.data[0];
       const priceId = lineItem?.price?.id;
-      const creditsToGrant = priceId
-        ? CREDIT_CONFIG.CUSTOM_CREDITS.packages[priceId as keyof typeof CREDIT_CONFIG.CUSTOM_CREDITS.packages] ?? 0
+      const creditsToGrant = priceId && priceId in CREDIT_CONFIG.CUSTOM_CREDITS.packages
+        ? CREDIT_CONFIG.CUSTOM_CREDITS.packages[priceId as keyof typeof CREDIT_CONFIG.CUSTOM_CREDITS.packages]
         : 0;
 
       if (creditsToGrant > 0) {

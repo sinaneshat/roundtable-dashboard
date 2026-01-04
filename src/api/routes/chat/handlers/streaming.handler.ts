@@ -420,9 +420,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         });
 
         if (!existsInDb) {
-          // Message should have been created via PATCH - log warning if missing
-          console.error(`[stream] User message not found in DB, expected pre-persisted: ${lastMessage.id}`);
-          // Don't create it here - this indicates a bug in the message persistence flow
+          // Check if this is an optimistic message (created by frontend before PATCH)
+          // Optimistic messages have format: "optimistic-user-{roundNumber}-{timestamp}"
+          const isOptimisticMessage = lastMessage.id.startsWith('optimistic-');
+          if (!isOptimisticMessage) {
+            // Only warn for non-optimistic messages - those should have been persisted via PATCH
+            console.error(`[stream] User message not found in DB, expected pre-persisted: ${lastMessage.id}`);
+          }
+          // For optimistic messages, this is a timing race between store update and streaming
+          // The message will be persisted by the PATCH that's running concurrently
         }
       }
 
@@ -859,8 +865,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           });
 
           // ✅ BACKGROUND STREAMING: Detect timeout aborts
-          // Since we removed HTTP abort signal (Phase 1.1), abort errors now only come from:
-          // - AbortSignal.timeout() - stream exceeded time limit
+          // Abort errors come from AbortSignal.timeout() when stream exceeds time limit
           // On timeout, we preserve stream state for potential resumption
           const isAbortError
             = error instanceof Error
@@ -1054,6 +1059,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                       finishResult.totalUsage.totalTokens
                       ?? (finishResult.totalUsage.inputTokens ?? 0)
                       + (finishResult.totalUsage.outputTokens ?? 0),
+                    inputTokenDetails: finishResult.totalUsage.inputTokenDetails,
+                    outputTokenDetails: finishResult.totalUsage.outputTokenDetails,
                   }
                 : usage; // Fallback to usage if totalUsage not available
 
@@ -1245,9 +1252,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // Buffer the stream asynchronously (don't block the response)
           // The stream continues to the client automatically via the other tee branch
           const bufferStream = async () => {
-            try {
-              const reader = stream.getReader();
+            const reader = stream.getReader();
 
+            try {
               while (true) {
                 const { done, value } = await reader.read();
 
@@ -1263,7 +1270,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               }
             } catch (error) {
               // ✅ BACKGROUND STREAMING: Detect timeout aborts
-              // Since we removed HTTP abort signal (Phase 1.1), abort errors now only come from timeouts
+              // Abort errors come from AbortSignal.timeout() when stream exceeds time limit
               // On timeout, we preserve the buffer state - partial content may be valid
               const isAbortError
                 = error instanceof Error
@@ -1284,6 +1291,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               const errorMessage
                 = error instanceof Error ? error.message : 'Stream buffer error';
               await failStreamBuffer(streamMessageId, errorMessage, c.env);
+            } finally {
+              // ✅ FIX: Always release the reader lock to prevent "unused stream branch" warnings
+              // This ensures the stream is properly consumed/cleaned up in Cloudflare Workers
+              try {
+                reader.releaseLock();
+              } catch {
+                // Reader already released or stream already closed - ignore
+              }
             }
           };
 
@@ -1318,8 +1333,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           });
 
           // ✅ BACKGROUND STREAMING: Detect ONLY actual timeout aborts
-          // Since we removed HTTP abort signal (Phase 1.1), abort errors now only come from:
-          // - AbortSignal.timeout() - stream exceeded time limit
+          // Abort errors come from AbortSignal.timeout() when stream exceeds time limit
           // On timeout, we preserve stream state - partial content may be valid
           //
           // ⚠️ IMPORTANT: Do NOT check for generic "abort" or "cancel" strings!

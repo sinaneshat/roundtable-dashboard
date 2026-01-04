@@ -116,7 +116,6 @@ function generateR2Key(userId: string, uploadId: string, filename: string): stri
  * Validate MIME type against allowed list
  */
 function isAllowedMimeType(mimeType: string): boolean {
-  // Check against explicit list from enums.ts, plus allow any text/ types
   return (ALLOWED_MIME_TYPES as readonly string[]).includes(mimeType) || mimeType.startsWith('text/');
 }
 

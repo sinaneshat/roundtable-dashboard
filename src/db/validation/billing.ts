@@ -32,10 +32,10 @@ export type StripeMetadataType = z.infer<typeof StripeMetadataSchema>;
  * This represents the event.data.object which is the actual Stripe object
  * that triggered the event (customer, subscription, invoice, etc.)
  *
- * Uses z.record for Stripe's dynamic object structure while maintaining type safety.
- * The schema is permissive because different event types have different object shapes.
+ * Stripe webhook data is stored as JSON string blob for audit purposes.
+ * Event-specific processing extracts and validates relevant fields.
  */
-export const StripeWebhookEventDataSchema = z.record(z.string(), z.unknown()).nullable();
+export const StripeWebhookEventDataSchema = z.record(z.string(), z.string()).nullable();
 
 export type StripeWebhookEventData = z.infer<typeof StripeWebhookEventDataSchema>;
 

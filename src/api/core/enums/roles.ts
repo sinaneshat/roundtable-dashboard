@@ -1,8 +1,5 @@
 import { z } from '@hono/zod-openapi';
 
-import type { Icon } from '@/components/icons';
-import { Icons } from '@/components/icons';
-
 // ============================================================================
 // SHORT ROLE NAME
 // ============================================================================
@@ -30,6 +27,33 @@ export const ShortRoleNames = {
   BUILDER: 'Builder' as const,
   CRITIC: 'Critic' as const,
 } as const;
+
+// ============================================================================
+// ROLE ICON NAME (string literals - frontend maps to actual icon components)
+// ============================================================================
+
+export const ROLE_ICON_NAMES = [
+  'lightbulb',
+  'messageSquare',
+  'hammer',
+  'target',
+  'sparkles',
+  'graduationCap',
+  'users',
+  'briefcase',
+  'trendingUp',
+] as const;
+
+export const RoleIconNameSchema = z.enum(ROLE_ICON_NAMES).openapi({
+  description: 'Icon name for role template (maps to frontend icon component)',
+  example: 'lightbulb',
+});
+
+export type RoleIconName = z.infer<typeof RoleIconNameSchema>;
+
+// ============================================================================
+// ROLE CATEGORY METADATA
+// ============================================================================
 
 export const RoleCategoryMetadataSchema = z.object({
   bgColor: z.string(),
@@ -111,7 +135,7 @@ export const ROLE_NAME_MAPPINGS = {
 
 export type PredefinedRoleTemplate = {
   name: string;
-  icon: Icon;
+  iconName: RoleIconName;
   description: string;
   category: ShortRoleName;
 };
@@ -119,55 +143,55 @@ export type PredefinedRoleTemplate = {
 export const PREDEFINED_ROLE_TEMPLATES: readonly PredefinedRoleTemplate[] = [
   {
     name: 'The Ideator',
-    icon: Icons.lightbulb,
+    iconName: 'lightbulb',
     description: 'Generate creative ideas and innovative solutions',
     category: ShortRoleNames.IDEATOR,
   },
   {
     name: 'Devil\'s Advocate',
-    icon: Icons.messageSquare,
+    iconName: 'messageSquare',
     description: 'Challenge assumptions and identify potential issues',
     category: ShortRoleNames.CRITIC,
   },
   {
     name: 'Builder',
-    icon: Icons.hammer,
+    iconName: 'hammer',
     description: 'Focus on practical implementation and execution',
     category: ShortRoleNames.BUILDER,
   },
   {
     name: 'Practical Evaluator',
-    icon: Icons.target,
+    iconName: 'target',
     description: 'Assess feasibility and real-world applicability',
     category: ShortRoleNames.CRITIC,
   },
   {
     name: 'Visionary Thinker',
-    icon: Icons.sparkles,
+    iconName: 'sparkles',
     description: 'Think big picture and long-term strategy',
     category: ShortRoleNames.IDEATOR,
   },
   {
     name: 'Domain Expert',
-    icon: Icons.graduationCap,
+    iconName: 'graduationCap',
     description: 'Provide deep domain-specific knowledge',
     category: ShortRoleNames.ANALYST,
   },
   {
     name: 'User Advocate',
-    icon: Icons.users,
+    iconName: 'users',
     description: 'Champion user needs and experience',
     category: ShortRoleNames.ANALYST,
   },
   {
     name: 'Implementation Strategist',
-    icon: Icons.briefcase,
+    iconName: 'briefcase',
     description: 'Plan execution strategy and implementation',
     category: ShortRoleNames.STRATEGIST,
   },
   {
     name: 'The Data Analyst',
-    icon: Icons.trendingUp,
+    iconName: 'trendingUp',
     description: 'Analyze data and provide insights',
     category: ShortRoleNames.ANALYST,
   },

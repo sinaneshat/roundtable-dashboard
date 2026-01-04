@@ -26,6 +26,49 @@ const lineNumberTransformer: ShikiTransformer = {
   },
 };
 
+function isBundledLanguage(lang: string): lang is BundledLanguage {
+  const bundledLanguages = [
+    'javascript',
+    'typescript',
+    'jsx',
+    'tsx',
+    'python',
+    'java',
+    'c',
+    'cpp',
+    'csharp',
+    'go',
+    'rust',
+    'ruby',
+    'php',
+    'swift',
+    'kotlin',
+    'scala',
+    'r',
+    'sql',
+    'html',
+    'css',
+    'scss',
+    'sass',
+    'less',
+    'json',
+    'xml',
+    'yaml',
+    'markdown',
+    'bash',
+    'shell',
+    'powershell',
+    'dockerfile',
+    'graphql',
+    'lua',
+    'perl',
+    'haskell',
+    'elixir',
+    'clojure',
+  ];
+  return bundledLanguages.includes(lang.toLowerCase());
+}
+
 async function highlightCode(
   code: string,
   language: BundledLanguage | string,
@@ -42,14 +85,16 @@ async function highlightCode(
   try {
     const { codeToHtml } = await import('shiki');
 
+    const lang = isBundledLanguage(language) ? language : 'text';
+
     const [light, dark] = await Promise.all([
       codeToHtml(code, {
-        lang: language as BundledLanguage,
+        lang,
         theme: 'one-light',
         transformers,
       }),
       codeToHtml(code, {
-        lang: language as BundledLanguage,
+        lang,
         theme: 'one-dark-pro',
         transformers,
       }),

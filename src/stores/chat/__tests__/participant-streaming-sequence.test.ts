@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { FinishReason } from '@/api/core/enums';
+
 /**
  * Participant Streaming Sequence Tests
  *
@@ -15,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 type StreamPart = {
   type: 'text-delta' | 'reasoning-delta' | 'start' | 'finish' | 'start-step' | 'finish-step' | 'error';
   text?: string;
-  finishReason?: 'stop' | 'length' | 'content-filter' | 'tool-calls' | 'error' | 'other' | 'unknown';
+  finishReason?: FinishReason;
   usage?: {
     inputTokens: number;
     outputTokens: number;

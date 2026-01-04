@@ -258,7 +258,14 @@
         "maxMemories": "Max Memories",
         "customRoles": "Custom Roles",
         "status": "Status",
-        "activeUntilLabel": "Active until"
+        "activeUntilLabel": "Active until",
+        "paidDescription": "Your subscription includes the following features",
+        "freeDescription": "Your free plan includes the following features",
+        "models": "AI Models",
+        "credits": "Credits Balance",
+        "monthly": "Monthly Refresh",
+        "bonus": "Free Bonus",
+        "oneTime": "One-time"
       },
       "credits": {
         "title": "Credits Added!",

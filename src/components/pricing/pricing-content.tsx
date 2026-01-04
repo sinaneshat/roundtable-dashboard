@@ -14,6 +14,7 @@ import {
 } from '@/api/core/enums';
 import type { Price, Product, Subscription } from '@/api/routes/billing/schema';
 import { Icons } from '@/components/icons';
+import { PricingContentSkeleton } from '@/components/pricing/pricing-content-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -114,14 +115,7 @@ export function PricingContent({
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div className="flex flex-col items-center gap-3">
-          <Icons.loader className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-        </div>
-      </div>
-    );
+    return <PricingContentSkeleton />;
   }
 
   if (error) {

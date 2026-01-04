@@ -21,7 +21,7 @@ import { z } from 'zod';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { CreditAction, CreditTransactionType } from '@/api/core/enums';
-import { CreditActionSchema, CreditTransactionTypes, getGrantTransactionType, parsePlanType, PlanTypes, PlanTypeSchema, StripeSubscriptionStatuses } from '@/api/core/enums';
+import { CreditActionSchema, CreditTransactionTypes, DatabaseOperations, ErrorContextTypes, getGrantTransactionType, parsePlanType, PlanTypes, PlanTypeSchema, StripeSubscriptionStatuses } from '@/api/core/enums';
 import {
   calculateActualCredits,
   getActionCreditCost,
@@ -78,11 +78,14 @@ export type CreditDeduction = z.infer<typeof CreditDeductionSchema>;
 /**
  * Get or create user credit balance record
  * Creates a new record with signup credits for new users
+ *
+ * Uses SELECT-first + INSERT OR IGNORE pattern to handle race conditions atomically.
+ * This is more reliable than SELECT-then-INSERT which can fail under concurrent requests.
  */
 export async function ensureUserCreditRecord(userId: string): Promise<UserCreditBalance> {
   const db = await getDbAsync();
 
-  // Try to fetch existing record
+  // First check if record exists (fast path for existing users)
   const existingResults = await db
     .select()
     .from(tables.userCreditBalance)
@@ -93,12 +96,14 @@ export async function ensureUserCreditRecord(userId: string): Promise<UserCredit
     return existingResults[0];
   }
 
-  // Create new record with signup bonus
+  // Record doesn't exist - attempt to create with INSERT OR IGNORE
   const now = new Date();
   const planConfig = getPlanConfig('free');
+  let wasInserted = false;
 
   try {
-    const result = await db
+    // INSERT OR IGNORE - succeeds silently if record already exists (race condition)
+    const insertResult = await db
       .insert(tables.userCreditBalance)
       .values({
         id: ulid(),
@@ -111,63 +116,56 @@ export async function ensureUserCreditRecord(userId: string): Promise<UserCredit
         createdAt: now,
         updatedAt: now,
       })
+      .onConflictDoNothing({ target: tables.userCreditBalance.userId })
       .returning();
 
-    const newRecord = result[0];
-
-    if (newRecord) {
-      // Record signup bonus transaction
-      await recordTransaction({
-        userId,
-        type: CreditTransactionTypes.CREDIT_GRANT,
-        amount: planConfig.signupCredits,
-        balanceAfter: planConfig.signupCredits,
-        action: 'signup_bonus',
-        description: 'Free plan signup credits',
-      });
-
-      return newRecord;
-    }
-
-    // Fallback: fetch again in case of race condition
-    const retryResults = await db
-      .select()
-      .from(tables.userCreditBalance)
-      .where(eq(tables.userCreditBalance.userId, userId))
-      .limit(1);
-
-    if (retryResults[0]) {
-      return retryResults[0];
-    }
-
-    const errorContext: ErrorContext = {
-      errorType: 'database',
-      operation: 'insert',
-      table: 'userCreditBalance',
-      userId,
-    };
-    throw createError.database('Failed to create credit balance record', errorContext);
-  } catch (error) {
-    // Handle unique constraint violation (race condition)
-    const retryResults = await db
-      .select()
-      .from(tables.userCreditBalance)
-      .where(eq(tables.userCreditBalance.userId, userId))
-      .limit(1);
-
-    if (retryResults[0]) {
-      return retryResults[0];
-    }
-
-    const context: ErrorContext = {
-      errorType: 'database',
-      operation: 'insert',
-      table: 'user_credit_balance',
-      userId,
-    };
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    throw createError.internal(`Failed to create credit record: ${errorMsg}`, context);
+    // If returning has data, we inserted a new record
+    wasInserted = insertResult.length > 0;
+  } catch (insertError) {
+    // Log but don't fail - could be FK violation or other issue
+    console.error('[ensureUserCreditRecord] Insert failed, checking if record exists:', insertError);
   }
+
+  // Fetch the record (either newly created or existing from race condition)
+  const finalResults = await db
+    .select()
+    .from(tables.userCreditBalance)
+    .where(eq(tables.userCreditBalance.userId, userId))
+    .limit(1);
+
+  const record = finalResults[0];
+
+  if (record) {
+    // Record signup bonus transaction only if we actually inserted a new record
+    if (wasInserted && planConfig.signupCredits > 0) {
+      try {
+        await recordTransaction({
+          userId,
+          type: CreditTransactionTypes.CREDIT_GRANT,
+          amount: planConfig.signupCredits,
+          balanceAfter: planConfig.signupCredits,
+          action: 'signup_bonus',
+          description: 'Free plan signup credits',
+        });
+      } catch (txError) {
+        // Transaction recording failure shouldn't break user flow
+        console.error('[ensureUserCreditRecord] Failed to record signup transaction:', txError);
+      }
+    }
+    return record;
+  }
+
+  // Record doesn't exist after insert attempt - user doesn't exist (FK violation)
+  const context: ErrorContext = {
+    errorType: ErrorContextTypes.DATABASE,
+    operation: DatabaseOperations.INSERT,
+    table: 'user_credit_balance',
+    userId,
+  };
+  throw createError.internal(
+    `Failed to create credit record: User may not exist or database error occurred`,
+    context,
+  );
 }
 
 /**
@@ -296,7 +294,7 @@ export async function enforceCredits(userId: string, requiredCredits: number): P
     }
 
     const context: ErrorContext = {
-      errorType: 'resource',
+      errorType: ErrorContextTypes.RESOURCE,
       resource: 'credits',
       userId,
     };

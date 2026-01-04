@@ -148,13 +148,21 @@
     "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
     "AUTH_GOOGLE_ID": "440441347001-9k39tnfr8sahuf1i3n82utfutefp879b.apps.googleusercontent.com",
     "BETTER_AUTH_URL": "http://localhost:3000",
-    "OPEN_NEXT_DEBUG": "true",
     "NEXTJS_ENV": "development",
     "NODE_VERSION": "22.14.0",
     "PNPM_VERSION": "10.10.0",
     "NODE_ENV": "development",
     "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
-    "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+    "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com",
+    // Debug & Logging Configuration (Maximum Verbosity)
+    "OPEN_NEXT_DEBUG": "true",
+    "OPENNEXT_DEBUG": "true",
+    "NEXT_DEBUG": "true",
+    "DEBUG": "*",
+    "VERBOSE": "true",
+    "LOG_LEVEL": "debug",
+    "WRANGLER_LOG": "debug",
+    "MINIFLARE_LOG_LEVEL": "debug"
     // All sensitive secrets are managed via wrangler secret commands
   },
   "env": {
@@ -281,13 +289,19 @@
         "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
         "AUTH_GOOGLE_ID": "440441347001-9k39tnfr8sahuf1i3n82utfutefp879b.apps.googleusercontent.com",
         "BETTER_AUTH_URL": "https://app-preview.roundtable.now",
-        "OPEN_NEXT_DEBUG": "false",
         "NEXTJS_ENV": "production",
         "NODE_VERSION": "22.14.0",
         "PNPM_VERSION": "10.10.0",
         "NODE_ENV": "production",
         "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
         "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+        // Debug & Logging Configuration (Maximum Verbosity for Preview)
+        // "OPEN_NEXT_DEBUG": "true",
+        // "OPENNEXT_DEBUG": "true",
+        // "NEXT_DEBUG": "true",
+        // "DEBUG": "*",
+        // "VERBOSE": "true",
+        // "LOG_LEVEL": "debug"
         // All sensitive secrets are managed via wrangler secret commands
       }
     },
@@ -414,13 +428,19 @@
         "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51SPXN852vWNZ3v8w0JKMpuzcvZHMyvFLy0SRfadVpFXtIhfYwty1hNfmxSlyTFRfbTbpcOOKuPepnUUayr0Owy9v006fE9vdeS",
         "AUTH_GOOGLE_ID": "440441347001-9k39tnfr8sahuf1i3n82utfutefp879b.apps.googleusercontent.com",
         "BETTER_AUTH_URL": "https://app.roundtable.now",
-        "OPEN_NEXT_DEBUG": "false",
         "NEXTJS_ENV": "production",
         "NODE_VERSION": "22.14.0",
         "PNPM_VERSION": "10.10.0",
         "NODE_ENV": "production",
         "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
         "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+        // Debug & Logging Configuration (Maximum Verbosity for Production debugging)
+        // "OPEN_NEXT_DEBUG": "true",
+        // "OPENNEXT_DEBUG": "true",
+        // "NEXT_DEBUG": "true",
+        // "DEBUG": "*",
+        // "VERBOSE": "true",
+        // "LOG_LEVEL": "debug"
         // All sensitive secrets are managed via wrangler secret commands
       }
     }

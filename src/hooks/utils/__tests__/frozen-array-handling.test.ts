@@ -38,11 +38,12 @@ function deepFreeze<T>(obj: T): T {
   // Freeze the object itself
   Object.freeze(obj);
 
-  // Freeze all properties recursively
   Object.getOwnPropertyNames(obj).forEach((prop) => {
-    const value = (obj as Record<string, unknown>)[prop];
-    if (value && typeof value === 'object') {
-      deepFreeze(value);
+    if (obj !== null && typeof obj === 'object' && prop in obj) {
+      const value = (obj as Record<string, unknown>)[prop];
+      if (value && typeof value === 'object') {
+        deepFreeze(value);
+      }
     }
   });
 
@@ -55,14 +56,11 @@ function deepFreeze<T>(obj: T): T {
  */
 function createFrozenMessageArray(messages: UIMessage[]): UIMessage[] {
   const frozen = messages.map(msg => deepFreeze({ ...msg }));
-  return Object.freeze(frozen) as UIMessage[];
+  return Object.freeze(frozen);
 }
 
-/**
- * Check if an object or array is frozen
- */
-function isFrozen(obj: unknown): boolean {
-  return Object.isFrozen(obj);
+function isFrozen(obj: object | null): boolean {
+  return obj !== null && Object.isFrozen(obj);
 }
 
 // ============================================================================
@@ -133,7 +131,7 @@ describe('structuredClone with Frozen Arrays', () => {
 
     // Verify frozen
     expect(isFrozen(frozen)).toBe(true);
-    expect(() => (frozen as UIMessage[]).push(createBasicMessage('msg-2', 0)))
+    expect(() => frozen.push(createBasicMessage('msg-2', 0)))
       .toThrow(/Cannot add property/);
 
     // structuredClone should create mutable copy
@@ -188,7 +186,9 @@ describe('structuredClone with Frozen Arrays', () => {
     expect(isFrozen(frozen.parts)).toBe(true);
     expect(isFrozen(frozen.parts[0])).toBe(true);
     expect(isFrozen(frozen.metadata)).toBe(true);
-    expect(isFrozen((frozen.metadata as Record<string, unknown>).usage)).toBe(true);
+    expect(frozen.metadata && typeof frozen.metadata === 'object' && 'usage' in frozen.metadata
+      ? isFrozen(frozen.metadata.usage as object)
+      : true).toBe(true);
 
     // Clone should make all levels mutable
     const cloned = structuredClone(frozen);
@@ -381,7 +381,7 @@ describe('error Path with Frozen Arrays', () => {
         role: MessageRoles.ASSISTANT,
         parts: [],
         metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0 },
-      } as UIMessage,
+      } satisfies UIMessage,
     ];
     const frozen = createFrozenMessageArray(original);
 
@@ -463,7 +463,7 @@ describe('part State Update with Frozen Arrays', () => {
     const completedParts
       = frozenMessage.parts?.map((part) => {
         if ('state' in part && part.state === TextPartStates.STREAMING) {
-          return { ...part, state: TextPartStates.DONE as const };
+          return { ...part, state: TextPartStates.DONE };
         }
         return part;
       }) ?? [];
@@ -538,7 +538,7 @@ describe('real-World Scenario: Full Streaming Flow with Frozen Arrays', () => {
         role: MessageRoles.USER,
         parts: [{ type: 'text', text: 'User question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
-      } as UIMessage,
+      } satisfies UIMessage,
     ]);
 
     expect(isFrozen(storeMessages)).toBe(true);
@@ -581,7 +581,7 @@ describe('real-World Scenario: Full Streaming Flow with Frozen Arrays', () => {
         role: MessageRoles.USER,
         parts: [{ type: 'text', text: 'User question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
-      } as UIMessage,
+      } satisfies UIMessage,
       createStreamingMessage('msg-p0', 0),
     ]);
 
@@ -641,7 +641,7 @@ describe('aI SDK to Store Sync Isolation', () => {
     // The AI SDK's reference points to the same frozen object
     // (In real code, aiSdkMessage.parts would now be frozen too)
     // This causes: "Cannot add property 0, object is not extensible"
-    expect(() => (storeMessagesWithoutClone[0].parts as unknown[]).push({ type: 'text', text: 'Hello' }))
+    expect(() => storeMessagesWithoutClone[0].parts.push({ type: 'text', text: 'Hello' }))
       .toThrow(/Cannot add property/);
   });
 

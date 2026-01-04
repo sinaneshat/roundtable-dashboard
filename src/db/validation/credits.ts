@@ -24,7 +24,6 @@ import {
  * Credit Transaction Metadata Zod schema
  *
  * SINGLE SOURCE OF TRUTH for credit transaction metadata type
- * Replaces Record<string, unknown> with strictly typed fields
  */
 export const CreditTransactionMetadataSchema = z.object({
   // Error context (for failed transactions)

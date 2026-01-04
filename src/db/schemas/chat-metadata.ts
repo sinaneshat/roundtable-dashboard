@@ -42,6 +42,10 @@ import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 /**
  * Token usage schema - reusable across message metadata and API responses
  * Single source of truth for usage tracking structure
+ *
+ * DB BACKWARDS COMPATIBILITY: Uses legacy naming (promptTokens/completionTokens)
+ * for database schema stability. API layer (metadata-builder.ts) maps AI SDK naming
+ * (inputTokens/outputTokens) to DB naming before persistence.
  */
 export const UsageSchema = z.object({
   promptTokens: z.number().int().nonnegative(),
@@ -360,11 +364,7 @@ export type DbUserPresetMetadata = z.infer<typeof DbUserPresetMetadataSchema>;
 
 /**
  * Participant Change Metadata
- * For participant added/removed events
- *
- * participantId is optional because:
- * - When ADDING a participant, ID may not exist yet (being created)
- * - When REMOVING a participant, ID exists from database
+ * participantId is optional because ID may not exist yet when adding participants
  */
 const DbParticipantChangeDataSchema = z.object({
   type: z.literal(ChangelogChangeTypes.PARTICIPANT),

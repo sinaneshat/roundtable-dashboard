@@ -136,7 +136,15 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
                 </AccordionItem>
               </Accordion>
 
-              <Tabs value={activeTab} onValueChange={value => setActiveTab(value as ApiKeysModalTab)} className="w-full">
+              <Tabs
+                value={activeTab}
+                onValueChange={(value) => {
+                  if (value === ApiKeysModalTabs.LIST || value === ApiKeysModalTabs.CREATE) {
+                    setActiveTab(value);
+                  }
+                }}
+                className="w-full"
+              >
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value={ApiKeysModalTabs.LIST}>{t('apiKeys.tabs.list')}</TabsTrigger>
                   <TabsTrigger value={ApiKeysModalTabs.CREATE}>{t('apiKeys.tabs.create')}</TabsTrigger>

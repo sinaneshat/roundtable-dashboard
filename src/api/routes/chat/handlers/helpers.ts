@@ -2,7 +2,7 @@ import type { UIMessage } from 'ai';
 import { TypeValidationError, validateUIMessages } from 'ai';
 
 import { createError } from '@/api/common/error-handling';
-import { MessageRoles } from '@/api/core/enums';
+import { MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { ChatMessage } from '@/db/validation';
 
 /**
@@ -49,7 +49,11 @@ export async function chatMessagesToUIMessages(
 
     // ✅ TYPE-SAFE ROLE MAPPING: Convert 'tool' to 'assistant' for UI compatibility
     // UI SDK only accepts 'user' | 'assistant' | 'system', not 'tool'
-    const uiRole: UIMessage['role'] = msg.role === MessageRoles.TOOL ? MessageRoles.ASSISTANT : (msg.role as UIMessage['role']);
+    const uiRole: UIMessage['role'] = msg.role === MessageRoles.TOOL
+      ? UIMessageRoles.ASSISTANT
+      : msg.role === MessageRoles.USER
+        ? UIMessageRoles.USER
+        : UIMessageRoles.ASSISTANT;
 
     const result: UIMessage & { createdAt?: Date } = {
       id: msg.id,
@@ -67,7 +71,7 @@ export async function chatMessagesToUIMessages(
       result.createdAt = msg.createdAt;
     }
 
-    return result as UIMessage;
+    return result;
   });
 
   // ✅ AI SDK V6 VALIDATION: Use official validateUIMessages() instead of custom Zod

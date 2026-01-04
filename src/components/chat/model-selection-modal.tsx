@@ -114,11 +114,15 @@ export function ModelSelectionModal({
   } = useUserPresetsQuery(open);
 
   const userPresets = useMemo(() => {
-    if (!userPresetsData?.pages)
+    if (!userPresetsData?.pages) {
       return [];
-    return userPresetsData.pages.flatMap(page =>
-      page.success && page.data?.items ? page.data.items : [],
-    );
+    }
+    return userPresetsData.pages.flatMap((page) => {
+      if (page.success && page.data?.items) {
+        return page.data.items;
+      }
+      return [];
+    });
   }, [userPresetsData]);
 
   const isSavingPreset = useBoolean(false);
@@ -538,7 +542,7 @@ export function ModelSelectionModal({
                     <ScrollArea className="h-[min(420px,50vh)]">
                       <div className="flex flex-col">
                         {PREDEFINED_ROLE_TEMPLATES.map((role) => {
-                          const Icon = role.icon;
+                          const Icon = Icons[role.iconName];
                           const currentRole = selectedModelData?.participant?.role
                             ?? (selectedModelForRole ? pendingRoles[selectedModelForRole]?.role : undefined);
                           const isSelected = currentRole === role.name;
@@ -683,7 +687,11 @@ export function ModelSelectionModal({
                   >
                     <Tabs
                       value={activeTab}
-                      onValueChange={v => handleTabChange(v as ModelSelectionTab)}
+                      onValueChange={(v) => {
+                        if (v === ModelSelectionTabs.PRESETS || v === ModelSelectionTabs.CUSTOM) {
+                          handleTabChange(v);
+                        }
+                      }}
                       className="w-full"
                     >
                       <TabsList className="grid w-full grid-cols-2 mb-4">

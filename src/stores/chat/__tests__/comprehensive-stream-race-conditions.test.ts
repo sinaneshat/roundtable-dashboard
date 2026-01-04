@@ -82,7 +82,7 @@ function createAssistantMessage(
     id: `msg-${participantId}-r${roundNumber}`,
     role: MessageRoles.ASSISTANT,
     parts: hasText
-      ? [{ type: 'text', text: 'Response content', state: partState }]
+      ? [{ type: 'text', text: 'Response content', state: partState as 'streaming' | 'done' }]
       : [],
     metadata: {
       role: MessageRoles.ASSISTANT,

@@ -35,7 +35,6 @@ import type {
   DbAssistantMessageMetadata,
   DbMessageMetadata,
   DbPreSearchMessageMetadata,
-  DbUserMessageMetadata,
 } from '@/db/schemas/chat-metadata';
 import {
   DbAssistantMessageMetadataSchema,
@@ -171,11 +170,6 @@ export function chatMessageToUIMessage(
         }
       : null;
 
-  /**
-   * DB boundary type assertion: chatMessage.parts is JSON column (unknown)
-   * but at runtime contains valid UIMessage parts structure.
-   * Full Zod validation would add overhead on every message load.
-   */
   const normalizedParts = normalizeMessagePartStates(
     message.parts || [],
   ) as UIMessage['parts'];
@@ -239,9 +233,8 @@ export function chatMessagesToUIMessages(
             : null;
 
           if (participant && !hasParticipantEnrichment(message.metadata)) {
-            const baseMetadata = getAssistantMetadata(message.metadata);
             const metadataForEnrichment = buildAssistantMetadata(
-              baseMetadata || {},
+              getAssistantMetadata(message.metadata) || {},
               {
                 roundNumber: explicitRound,
                 participantId: participant.id,
@@ -273,30 +266,26 @@ export function chatMessagesToUIMessages(
     if (message.role === MessageRoles.ASSISTANT) {
       const validMetadata = getAssistantMetadata(message.metadata);
       if (validMetadata) {
-        const updated: DbAssistantMessageMetadata = {
-          ...validMetadata,
-          roundNumber: currentRound ?? 0,
-        };
-
         return {
           ...message,
-          metadata: updated,
+          metadata: {
+            ...validMetadata,
+            roundNumber: currentRound ?? 0,
+          },
         };
       }
     } else if (message.role === MessageRoles.USER) {
       const validMetadata = getUserMetadata(message.metadata);
       if (validMetadata) {
-        const updated: DbUserMessageMetadata = {
-          ...validMetadata,
-          roundNumber: currentRound ?? 0,
-        };
-
-        currentRound += 1;
-
-        return {
+        const result = {
           ...message,
-          metadata: updated,
+          metadata: {
+            ...validMetadata,
+            roundNumber: currentRound ?? 0,
+          },
         };
+        currentRound += 1;
+        return result;
       }
     }
 
@@ -312,19 +301,20 @@ export function chatMessagesToUIMessages(
           : null;
 
         if (participant) {
-          const existingMetadata = getAssistantMetadata(message.metadata);
-          enrichedMetadata = buildAssistantMetadata(existingMetadata || {}, {
-            roundNumber: currentRound ?? 0,
-            participantId: participant.id,
-            model: participant.modelId,
-            participantRole: participant.role,
-          });
+          enrichedMetadata = buildAssistantMetadata(
+            getAssistantMetadata(message.metadata) || {},
+            {
+              roundNumber: currentRound ?? 0,
+              participantId: participant.id,
+              model: participant.modelId,
+              participantRole: participant.role,
+            },
+          );
         } else {
           enrichedMetadata = null;
         }
       } else {
-        const preSearchMeta = getPreSearchMetadata(message.metadata);
-        enrichedMetadata = preSearchMeta;
+        enrichedMetadata = getPreSearchMetadata(message.metadata);
       }
     } else {
       enrichedMetadata = null;
@@ -456,16 +446,11 @@ export function getParticipantMessagesForRound(
       return false;
     }
 
-    const participantId = getParticipantId(m.metadata);
-
-    if (participantId == null) {
+    if (getParticipantId(m.metadata) == null) {
       return false;
     }
 
-    const msgRound = getRoundNumber(m.metadata);
-    const matches = msgRound === roundNumber;
-
-    return matches;
+    return getRoundNumber(m.metadata) === roundNumber;
   });
 
   return filtered;
@@ -564,9 +549,7 @@ export function createErrorUIMessage(
     ? ErrorMetadataSchema.safeParse(errorMetadata)
     : { success: false as const, data: undefined };
 
-  const metadata = validatedMetadata.success
-    ? validatedMetadata.data
-    : errorMetadata;
+  const metadata = validatedMetadata.success ? validatedMetadata.data : errorMetadata;
 
   const errorMeta = buildAssistantMetadata(
     {},
@@ -618,44 +601,23 @@ export function mergeParticipantMetadata(
 
   const hasBackendErrorFlag = validatedMetadata?.hasError === true;
   const hasBackendNoErrorFlag = validatedMetadata?.hasError === false;
-
   const skipPartsCheck = options?.hasGeneratedText === true;
 
-  const textParts
-    = message.parts?.filter(
-      p =>
-        p.type === MessagePartTypes.TEXT
-        || p.type === MessagePartTypes.REASONING,
-    ) || [];
+  const textParts = message.parts?.filter(
+    p => p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING,
+  ) || [];
   const hasTextContent = textParts.some(
-    part =>
-      'text' in part
-      && typeof part.text === 'string'
-      && part.text.trim().length > 0,
+    part => 'text' in part && typeof part.text === 'string' && part.text.trim().length > 0,
   );
-  const hasToolCalls
-    = message.parts?.some(p => p.type === MessagePartTypes.TOOL_CALL) || false;
-
+  const hasToolCalls = message.parts?.some(p => p.type === MessagePartTypes.TOOL_CALL) || false;
   const hasOutputTokens = (validatedMetadata?.usage?.completionTokens ?? 0) > 0;
-  const hasAnyContent
-    = skipPartsCheck || hasTextContent || hasToolCalls || hasOutputTokens;
-
+  const hasAnyContent = skipPartsCheck || hasTextContent || hasToolCalls || hasOutputTokens;
   const hasSuccessfulFinish = validatedMetadata?.finishReason === FinishReasons.STOP;
-
-  const backendMarkedSuccess = hasBackendNoErrorFlag;
-
-  const hasNoErrorSignal
-    = backendMarkedSuccess
-      || skipPartsCheck
-      || hasSuccessfulFinish
-      || hasAnyContent;
+  const hasNoErrorSignal = hasBackendNoErrorFlag || skipPartsCheck || hasSuccessfulFinish || hasAnyContent;
   const hasError = hasBackendErrorFlag || !hasNoErrorSignal;
 
   let errorMessage: string | undefined;
-  if (
-    validatedMetadata?.errorMessage
-    && typeof validatedMetadata.errorMessage === 'string'
-  ) {
+  if (validatedMetadata?.errorMessage && typeof validatedMetadata.errorMessage === 'string') {
     errorMessage = validatedMetadata.errorMessage;
   }
   if (!hasAnyContent && !errorMessage && hasError) {
@@ -664,33 +626,22 @@ export function mergeParticipantMetadata(
 
   const usageResult = UsageSchema.partial().safeParse(validatedMetadata?.usage);
   const usage = {
-    promptTokens: usageResult.success
-      ? (usageResult.data.promptTokens ?? 0)
-      : 0,
-    completionTokens: usageResult.success
-      ? (usageResult.data.completionTokens ?? 0)
-      : 0,
+    promptTokens: usageResult.success ? (usageResult.data.promptTokens ?? 0) : 0,
+    completionTokens: usageResult.success ? (usageResult.data.completionTokens ?? 0) : 0,
     totalTokens: usageResult.success ? (usageResult.data.totalTokens ?? 0) : 0,
   };
 
-  const finishReasonRaw = validatedMetadata?.finishReason
-    ? String(validatedMetadata.finishReason)
-    : 'unknown';
+  const finishReasonRaw = validatedMetadata?.finishReason ? String(validatedMetadata.finishReason) : 'unknown';
   const finishReasonResult = FinishReasonSchema.safeParse(finishReasonRaw);
-  const safeFinishReason: FinishReason = finishReasonResult.success
-    ? finishReasonResult.data
-    : 'unknown';
+  const safeFinishReason: FinishReason = finishReasonResult.success ? finishReasonResult.data : 'unknown';
 
-  const errorTypeRaw
-    = typeof validatedMetadata?.errorType === 'string'
-      ? validatedMetadata.errorType
-      : !hasAnyContent && hasError
-          ? 'empty_response'
-          : 'unknown';
+  const errorTypeRaw = typeof validatedMetadata?.errorType === 'string'
+    ? validatedMetadata.errorType
+    : !hasAnyContent && hasError
+        ? 'empty_response'
+        : 'unknown';
   const errorTypeResult = ErrorTypeSchema.safeParse(errorTypeRaw);
-  const safeErrorType: ErrorType = errorTypeResult.success
-    ? errorTypeResult.data
-    : 'unknown';
+  const safeErrorType: ErrorType = errorTypeResult.success ? errorTypeResult.data : 'unknown';
 
   const backendParticipantId = validatedMetadata?.participantId;
   const effectiveParticipantId = (typeof backendParticipantId === 'string' && backendParticipantId.length > 0)
@@ -703,8 +654,7 @@ export function mergeParticipantMetadata(
       usage,
       isTransient: validatedMetadata?.isTransient === true,
       isPartialResponse: validatedMetadata?.isPartialResponse === true,
-      ...(validatedMetadata?.createdAt
-        && typeof validatedMetadata.createdAt === 'string' && {
+      ...(validatedMetadata?.createdAt && typeof validatedMetadata.createdAt === 'string' && {
         createdAt: validatedMetadata.createdAt,
       }),
     },
@@ -715,10 +665,7 @@ export function mergeParticipantMetadata(
       model: participant.modelId,
       roundNumber,
       hasError,
-      ...(hasError && {
-        errorType: safeErrorType,
-        errorMessage,
-      }),
+      ...(hasError && { errorType: safeErrorType, errorMessage }),
     },
   );
 }
@@ -751,7 +698,6 @@ export function validateMessageOrder(
 
   let lastRound = 0;
   let userMessageSeenInCurrentRound = false;
-  // ✅ 0-BASED FIX: Expect first round to be 0 (was: 1)
   let expectedNextRound = 0;
   const roundsEncountered = new Set<number>();
 
@@ -760,7 +706,6 @@ export function validateMessageOrder(
     if (!msg)
       continue;
 
-    // ✅ 0-BASED FIX: Default to 0 for first round (was: ?? 1)
     const round = getRoundNumber(msg.metadata) ?? 0;
 
     // Check round progression
@@ -785,7 +730,6 @@ export function validateMessageOrder(
 
     roundsEncountered.add(round);
 
-    // Check user message position
     if (msg.role === MessageRoles.USER) {
       if (userMessageSeenInCurrentRound) {
         errors.push(
@@ -802,7 +746,6 @@ export function validateMessageOrder(
     }
   }
 
-  // Check sequential rounds
   const sortedRounds = Array.from(roundsEncountered).sort((a, b) => a - b);
   for (let i = 0; i < sortedRounds.length - 1; i++) {
     const current = sortedRounds[i];

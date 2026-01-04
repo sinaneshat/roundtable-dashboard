@@ -22,6 +22,7 @@ import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { getEnabledSortedParticipants, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 
 import type { SendMessage, StartRound } from './store-action-types';
+import { DevtoolsActionTypes } from './store-constants';
 import type { ResetFormPreferences } from './store-defaults';
 import {
   ANIMATION_DEFAULTS,
@@ -1221,7 +1222,7 @@ export function createChatStore() {
       {
         name: 'ChatStore',
         enabled: true,
-        anonymousActionType: 'unknown-action',
+        anonymousActionType: DevtoolsActionTypes.ANONYMOUS,
       },
     ),
   );

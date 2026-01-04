@@ -328,7 +328,7 @@ describe('message Streaming API', () => {
     it('handles finish event', () => {
       const event = {
         type: 'finish',
-        finishReason: 'stop',
+        finishReason: 'stop' as const,
         usage: {
           promptTokens: 100,
           completionTokens: 50,

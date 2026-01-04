@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useSidebar } from '@/components/ui/sidebar';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 
@@ -307,4 +308,15 @@ export function ChatPageHeader({
 }
 export function PageHeaderAction({ children }: { children: ReactNode }) {
   return <div className="flex items-center space-x-2">{children}</div>;
+}
+
+export function ChatPageHeaderSkeleton() {
+  return (
+    <div className="mx-auto px-3 sm:px-4 md:px-6 py-4">
+      <div className="space-y-1">
+        <Skeleton className="h-7 w-32" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+    </div>
+  );
 }

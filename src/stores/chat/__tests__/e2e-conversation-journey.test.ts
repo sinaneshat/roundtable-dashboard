@@ -17,6 +17,7 @@
  * - Simulated network delays and timeouts
  */
 
+import type { LanguageModelUsage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { FinishReasons, MessageRoles, MessageStatuses, ScreenModes, UIMessageRoles } from '@/api/core/enums';
@@ -910,9 +911,8 @@ describe('token Usage Tracking', () => {
       }),
     ];
 
-    type RoundUsage = { promptTokens: number; completionTokens: number; totalTokens: number };
     // ✅ TYPE-SAFE: Direct metadata access without casting
-    const usageByRound = messages.reduce<Record<number, RoundUsage>>((acc, msg) => {
+    const usageByRound = messages.reduce<Record<number, LanguageModelUsage>>((acc, msg) => {
       const round = msg.metadata.roundNumber;
       if (!acc[round]) {
         acc[round] = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };

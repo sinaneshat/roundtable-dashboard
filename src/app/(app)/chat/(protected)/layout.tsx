@@ -40,39 +40,45 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
   const session = await requireAuth();
 
   // Prefetch critical navigation data
-  await Promise.all([
-    queryClient.prefetchInfiniteQuery({
-      queryKey: queryKeys.threads.lists(undefined),
-      queryFn: async ({ pageParam }) => {
-        const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
-        const params: { cursor?: string; limit: number } = { limit };
-        if (pageParam)
-          params.cursor = pageParam;
-        return listThreadsService({ query: params });
-      },
-      initialPageParam: undefined as string | undefined,
-      getNextPageParam: lastPage =>
-        lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
-      pages: 1,
-      staleTime: STALE_TIMES.threads,
-    }),
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.subscriptions.list(),
-      queryFn: getSubscriptionsService,
-      staleTime: STALE_TIMES.subscriptions,
-    }),
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.usage.stats(),
-      queryFn: getUserUsageStatsService,
-      staleTime: STALE_TIMES.quota,
-    }),
-    // Models prefetch - staleTime Infinity means instant availability, no client refetch
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.models.list(),
-      queryFn: () => listModelsService(),
-      staleTime: STALE_TIMES.models,
-    }),
-  ]);
+  // Wrapped in try-catch to prevent Server Component failures in OpenNext preview
+  try {
+    await Promise.all([
+      queryClient.prefetchInfiniteQuery({
+        queryKey: queryKeys.threads.lists(undefined),
+        queryFn: async ({ pageParam }) => {
+          const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
+          const params: { cursor?: string; limit: number } = { limit };
+          if (pageParam)
+            params.cursor = pageParam;
+          return listThreadsService({ query: params });
+        },
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: lastPage =>
+          lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
+        pages: 1,
+        staleTime: STALE_TIMES.threads,
+      }),
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.subscriptions.list(),
+        queryFn: getSubscriptionsService,
+        staleTime: STALE_TIMES.subscriptions,
+      }),
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.usage.stats(),
+        queryFn: getUserUsageStatsService,
+        staleTime: STALE_TIMES.quota,
+      }),
+      // Models prefetch - staleTime Infinity means instant availability, no client refetch
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.models.list(),
+        queryFn: () => listModelsService(),
+        staleTime: STALE_TIMES.models,
+      }),
+    ]);
+  } catch (error) {
+    // Log but don't crash - client will refetch on hydration
+    console.error('[ChatLayout] Prefetch failed:', error);
+  }
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

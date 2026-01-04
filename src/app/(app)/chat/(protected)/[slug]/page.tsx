@@ -35,7 +35,14 @@ export default async function ChatThreadPage({
   const { slug } = await params;
   const queryClient = getQueryClient();
 
-  const threadResult = await getThreadBySlugService({ param: { slug } });
+  // Fetch thread with error handling for 404s
+  let threadResult;
+  try {
+    threadResult = await getThreadBySlugService({ param: { slug } });
+  } catch (error) {
+    console.error('[ChatThreadPage] Failed to fetch thread:', error);
+    redirect('/chat');
+  }
 
   if (!threadResult?.success || !threadResult.data?.thread) {
     redirect('/chat');
@@ -49,23 +56,28 @@ export default async function ChatThreadPage({
 
   // ✅ PERF FIX: Prefetch all thread data server-side to avoid client-side calls
   // Uses matching staleTime with client hooks to prevent refetch on hydration
-  await Promise.all([
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.threads.changelog(thread.id),
-      queryFn: () => getThreadChangelogService({ param: { id: thread.id } }),
-      staleTime: STALE_TIMES.threadChangelog, // ✅ FIX: Match client hook staleTime (Infinity)
-    }),
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.threads.preSearches(thread.id),
-      queryFn: () => getThreadPreSearchesService({ param: { id: thread.id } }),
-      staleTime: STALE_TIMES.preSearch,
-    }),
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.threads.feedback(thread.id),
-      queryFn: () => getThreadFeedbackService({ param: { id: thread.id } }),
-      staleTime: STALE_TIME_PRESETS.medium, // ✅ Match client hook staleTime (2 minutes)
-    }),
-  ]);
+  // Wrapped in try-catch to prevent Server Component failures
+  try {
+    await Promise.all([
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.threads.changelog(thread.id),
+        queryFn: () => getThreadChangelogService({ param: { id: thread.id } }),
+        staleTime: STALE_TIMES.threadChangelog, // ✅ FIX: Match client hook staleTime (Infinity)
+      }),
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.threads.preSearches(thread.id),
+        queryFn: () => getThreadPreSearchesService({ param: { id: thread.id } }),
+        staleTime: STALE_TIMES.preSearch,
+      }),
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.threads.feedback(thread.id),
+        queryFn: () => getThreadFeedbackService({ param: { id: thread.id } }),
+        staleTime: STALE_TIME_PRESETS.medium, // ✅ Match client hook staleTime (2 minutes)
+      }),
+    ]);
+  } catch (error) {
+    console.error('[ChatThreadPage] Prefetch failed:', error);
+  }
 
   queryClient.setQueryData(
     queryKeys.threads.detail(thread.id),

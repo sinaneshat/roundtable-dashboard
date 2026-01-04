@@ -7,12 +7,6 @@
  * ✅ SSE STREAMING: Streams search execution progress
  * ✅ SERVICE LAYER: Uses web-search.service.ts for business logic
  *
- * **REFACTOR NOTES**:
- * - Removed callback-based performPreSearches() function
- * - Direct integration with streamSearchQuery() and performWebSearch()
- * - Aligned with AI SDK v6 streamText with Output.object() pattern
- * - Maintained PreSearchDataPayloadSchema compatibility
- *
  * Architecture matches: src/api/routes/chat/handlers/moderator.handler.ts
  * Reference: backend-patterns.md lines 546-693 (SSE Streaming Pattern)
  */
@@ -26,7 +20,7 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, IdParamSchema, Responses, STREAMING_CONFIG, ThreadRoundParamSchema } from '@/api/core';
-import { IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PollingStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { FinishReasons, IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PollingStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { loadAttachmentContent } from '@/api/services/attachment-content.service';
 import {
   deductCreditsForAction,
@@ -1065,7 +1059,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           const errorMetadata = buildEmptyResponseError({
             inputTokens: 0,
             outputTokens: 0,
-            finishReason: 'failed',
+            finishReason: FinishReasons.FAILED,
           });
 
           await db.update(tables.chatPreSearch)
@@ -1116,7 +1110,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         const errorMetadata = extractErrorMetadata({
           providerMetadata: {},
           response: error,
-          finishReason: 'error',
+          finishReason: FinishReasons.ERROR,
           usage: { inputTokens: 0, outputTokens: 0 },
           text: '',
         });

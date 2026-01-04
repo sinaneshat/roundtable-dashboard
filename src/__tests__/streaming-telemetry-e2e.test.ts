@@ -10,7 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ParticipantStreamStatuses } from '@/api/core/enums';
+import { FinishReasons, ParticipantStreamStatuses } from '@/api/core/enums';
 import { act, createMockParticipant, createMockThread } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
 
@@ -77,8 +77,8 @@ function createStreamChunks(content: string, includeMetadata = true) {
   }
 
   if (includeMetadata) {
-    chunks.push(`e:{"finishReason":"stop"}\n`);
-    chunks.push(`d:{"finishReason":"stop","usage":{"inputTokens":100,"outputTokens":50}}\n`);
+    chunks.push(`e:{"finishReason":"${FinishReasons.STOP}"}\n`);
+    chunks.push(`d:{"finishReason":"${FinishReasons.STOP}","usage":{"inputTokens":100,"outputTokens":50}}\n`);
   }
 
   return chunks;

@@ -22,6 +22,8 @@
  * - product-logic.service.ts:745-776 (isTransientError)
  */
 
+import type { LanguageModelUsage } from 'ai';
+
 import { ErrorCategorySchema, FinishReasonSchema } from '@/api/core/enums';
 import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
 import { isObject } from '@/lib/utils';
@@ -44,10 +46,7 @@ export type OpenRouterErrorContext = {
   providerMetadata: unknown;
   response: unknown;
   finishReason: string;
-  usage?: {
-    inputTokens?: number;
-    outputTokens?: number;
-  };
+  usage?: LanguageModelUsage;
   text?: string;
 };
 
@@ -65,13 +64,12 @@ export type OpenRouterErrorContext = {
  * - Empty responses
  *
  * @param finishReason - Finish reason from streaming response
- * @param inputTokens - Number of input tokens consumed
- * @param outputTokens - Number of output tokens generated
+ * @param usage - AI SDK LanguageModelUsage with token counts
  * @returns Tuple of [errorMessage, providerMessage, errorCategory]
  *
  * @example
  * ```typescript
- * const [error, provider, category] = generateErrorMessage('stop', 1500, 0);
+ * const [error, provider, category] = generateErrorMessage('stop', { inputTokens: 1500, outputTokens: 0 });
  * // error: 'Returned empty response - possible content filtering or safety block'
  * // provider: 'Model completed but returned no content. Input: 1500 tokens...'
  * // category: 'content_filter'
@@ -79,9 +77,10 @@ export type OpenRouterErrorContext = {
  */
 export function generateErrorMessage(
   finishReason: string,
-  inputTokens: number,
-  outputTokens: number,
+  usage: LanguageModelUsage,
 ): [errorMessage: string, providerMessage: string, errorCategory: string] {
+  const inputTokens = usage.inputTokens ?? 0;
+  const outputTokens = usage.outputTokens ?? 0;
   const baseStats = `Input: ${inputTokens} tokens, Output: ${outputTokens} tokens, Status: ${finishReason}`;
 
   if (finishReason === FinishReasonSchema.enum.stop) {
@@ -244,7 +243,6 @@ export function buildErrorMetadataFields(
 
   // Determine if response is empty
   const outputTokens = context.usage?.outputTokens || 0;
-  const inputTokens = context.usage?.inputTokens || 0;
   const hasGeneratedText = (context.text?.trim().length || 0) > 0;
   const isEmptyResponse = outputTokens === 0 && !hasGeneratedText;
   const hasError = isEmptyResponse || !!openRouterError;
@@ -263,12 +261,11 @@ export function buildErrorMetadataFields(
       errorCategory = categorized !== ErrorCategorySchema.enum.provider_error
         ? categorized
         : (errorCategory || categorized);
-    } else if (outputTokens === 0) {
+    } else if (outputTokens === 0 && context.usage) {
       // Empty response - generate context-aware messages
       const [genError, genProvider, genCategory] = generateErrorMessage(
         context.finishReason,
-        inputTokens,
-        outputTokens,
+        context.usage,
       );
       errorMessage = genError;
       providerMessage = genProvider;

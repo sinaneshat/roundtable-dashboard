@@ -16,7 +16,7 @@
  */
 import { z } from '@hono/zod-openapi';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import type { UIMessage } from 'ai';
+import type { LanguageModelUsage, UIMessage } from 'ai';
 import { convertToModelMessages, generateText } from 'ai';
 
 import { createError } from '@/api/common/error-handling';
@@ -154,11 +154,7 @@ class OpenRouterService {
   async generateText(params: GenerateTextParams): Promise<{
     text: string;
     finishReason: string;
-    usage: {
-      promptTokens: number;
-      completionTokens: number;
-      totalTokens: number;
-    };
+    usage: LanguageModelUsage;
   }> {
     const client = this.getClient();
 
@@ -184,11 +180,7 @@ class OpenRouterService {
       return {
         text: result.text,
         finishReason: result.finishReason,
-        usage: {
-          promptTokens: result.usage.inputTokens ?? 0,
-          completionTokens: result.usage.outputTokens ?? 0,
-          totalTokens: result.usage.totalTokens ?? 0,
-        },
+        usage: result.usage,
       };
     } catch (error) {
       // ✅ PRESERVE ACTUAL ERROR: Include original error message for debugging

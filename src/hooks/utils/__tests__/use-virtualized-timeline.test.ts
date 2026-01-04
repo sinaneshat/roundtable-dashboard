@@ -34,11 +34,22 @@ const mockMeasureElement = vi.fn();
 const mockScrollToIndex = vi.fn();
 const mockScrollToOffset = vi.fn();
 
-// Track onChange callback for simulating virtualizer updates
-let capturedOnChange: ((instance: unknown) => void) | null = null;
+type VirtualizerInstance = {
+  getVirtualItems: () => unknown[];
+  getTotalSize: () => number;
+  measureElement: (element: Element | null) => void;
+  scrollToIndex: (index: number, options?: object) => void;
+  scrollToOffset: (offset: number, options?: object) => void;
+};
 
-const mockUseWindowVirtualizer = vi.fn((options: { onChange?: (instance: unknown) => void }) => {
-  // Capture onChange for testing
+type VirtualizerOptions = {
+  onChange?: (instance: VirtualizerInstance) => void;
+  [key: string]: unknown;
+};
+
+let capturedOnChange: ((instance: VirtualizerInstance) => void) | null = null;
+
+const mockUseWindowVirtualizer = vi.fn((options: VirtualizerOptions) => {
   if (options?.onChange) {
     capturedOnChange = options.onChange;
   }
@@ -51,9 +62,8 @@ const mockUseWindowVirtualizer = vi.fn((options: { onChange?: (instance: unknown
   };
 });
 
-// Mock TanStack Virtual
 vi.mock('@tanstack/react-virtual', () => ({
-  useWindowVirtualizer: (options: unknown) => mockUseWindowVirtualizer(options),
+  useWindowVirtualizer: (options: VirtualizerOptions) => mockUseWindowVirtualizer(options),
 }));
 
 // Track RAF callbacks for testing deferred execution
@@ -77,10 +87,10 @@ function createMockTimelineItem(
       data: [
         {
           id: `msg-${roundNumber}`,
-          role: 'user' as const,
+          role: 'user',
           content: 'Test message',
-          parts: [{ type: 'text' as const, text: 'Test message' }],
-        } as UIMessage,
+          parts: [{ type: 'text', text: 'Test message' }],
+        } satisfies UIMessage,
       ],
     };
   }
@@ -94,9 +104,9 @@ function createMockTimelineItem(
         id: `moderator-${roundNumber}`,
         threadId: 'thread-123',
         roundNumber,
-        mode: 'analyzing' as const,
+        mode: 'analyzing',
         userQuestion: 'Test question',
-        status: 'complete' as const,
+        status: 'complete',
         moderatorData: null,
         participantMessageIds: [],
         errorMessage: null,

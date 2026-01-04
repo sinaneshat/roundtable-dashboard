@@ -198,6 +198,24 @@ export const getDbAsync = cache(async () => {
 });
 
 /**
+ * Detect if running in Cloudflare Workers environment (not Node.js)
+ * Workers don't have Node.js fs/path modules available
+ */
+function isCloudflareWorkersRuntime(): boolean {
+  // Check for Cloudflare Workers runtime indicators
+  // In Workers, globalThis.navigator.userAgent includes 'Cloudflare-Workers'
+  if (typeof navigator !== 'undefined' && navigator.userAgent?.includes('Cloudflare-Workers')) {
+    return true;
+  }
+  // Check if running via opennextjs-cloudflare (preview or production)
+  // The presence of caches global is a Workers indicator
+  if (typeof caches !== 'undefined' && typeof (caches as unknown as { default?: unknown }).default !== 'undefined') {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Create database instance for the global db Proxy
  *
  * This function is called on each database property access via the Proxy pattern.
@@ -207,9 +225,38 @@ export const getDbAsync = cache(async () => {
  * 1. Next.js development (npm run dev) → Local SQLite with transactions
  * 2. NEXT_PUBLIC_WEBAPP_ENV=local → Local SQLite with transactions
  * 3. Cloudflare Workers (production/preview) → D1 with batch operations
- * 4. Fallback → Local SQLite
+ * 4. Fallback → Local SQLite (only in Node.js, NOT in Workers)
  */
 function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | ReturnType<typeof drizzleBetter<typeof schema>> {
+  // In Cloudflare Workers, we MUST use D1 - no fallback to local SQLite
+  // because fs module is not available in Workers runtime
+  if (isCloudflareWorkersRuntime()) {
+    const d1Database = getD1Binding();
+    if (d1Database) {
+      const kvBinding = getKVBinding();
+      const kvCache = kvBinding
+        ? new CloudflareKVCache({
+            kv: kvBinding,
+            global: false,
+            defaultTtl: 300,
+          })
+        : undefined;
+
+      return drizzleD1(d1Database, {
+        schema,
+        logger: false, // Disable logging in Workers
+        cache: kvCache,
+      });
+    }
+
+    // In Workers without D1, throw error - cannot fallback to local SQLite
+    throw new Error(
+      'D1 database binding not available in Cloudflare Workers. '
+      + 'Ensure DB binding is configured in wrangler.jsonc',
+    );
+  }
+
+  // Node.js environment (local development)
   // Check if running in Next.js development mode (npm run dev)
   const isNextDev = process.env.NODE_ENV === 'development' && !process.env.CLOUDFLARE_ENV;
   // Check if explicitly set to local environment
@@ -240,7 +287,7 @@ function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | Retur
     });
   }
 
-  // Final fallback to local SQLite if D1 not available
+  // Final fallback to local SQLite if D1 not available (only in Node.js)
   return initLocalDb();
 }
 

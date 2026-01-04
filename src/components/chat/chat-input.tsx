@@ -207,14 +207,14 @@ export const ChatInput = memo(({
       e.preventDefault();
       if (!isSubmitDisabled && hasValidInput) {
         const form = e.currentTarget.form || e.currentTarget;
-        const syntheticEvent = {
+        const syntheticEvent: FormEvent<HTMLFormElement | HTMLTextAreaElement> = {
           bubbles: e.bubbles,
           cancelable: e.cancelable,
           currentTarget: form,
           defaultPrevented: true,
           eventPhase: e.eventPhase,
           isTrusted: e.isTrusted,
-          nativeEvent: e.nativeEvent as Event,
+          nativeEvent: e.nativeEvent,
           target: form,
           timeStamp: e.timeStamp,
           type: 'submit',
@@ -223,7 +223,7 @@ export const ChatInput = memo(({
           stopPropagation: () => e.stopPropagation(),
           isPropagationStopped: () => false,
           persist: () => {},
-        } as FormEvent<HTMLFormElement | HTMLTextAreaElement>;
+        };
         onSubmit(syntheticEvent);
       }
     }

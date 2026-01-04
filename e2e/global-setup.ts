@@ -132,12 +132,17 @@ async function authenticateUser(
 /**
  * Set up billing data for test users using D1 database
  * Creates stripe_customer, payment_method, and subscription records
+ *
+ * Uses INSERT OR IGNORE to avoid overwriting existing data if tests run multiple times.
+ * Data is cleaned up by global-teardown.ts after tests complete.
  */
 function setupBillingData(): void {
   console.error('\n💳 Setting up billing data for E2E test users...\n');
 
-  const now = Date.now();
-  const futureDate = now + 365 * 24 * 60 * 60 * 1000; // 1 year from now
+  // ✅ FIX: Use Unix seconds (10 digits), NOT milliseconds (13 digits)
+  // Drizzle's mode: 'timestamp' expects seconds, not milliseconds
+  const now = Math.floor(Date.now() / 1000);
+  const futureDate = now + 365 * 24 * 60 * 60; // 1 year from now (in seconds)
 
   for (const user of ALL_TEST_USERS) {
     const userId = userIds.get(user.email);
@@ -146,51 +151,54 @@ function setupBillingData(): void {
       continue;
     }
 
-    const customerId = `cus_e2e_${user.tier}_${Date.now()}`;
-    const paymentMethodId = `pm_e2e_${user.tier}_${Date.now()}`;
+    // Use deterministic IDs based on user email to avoid duplicates
+    const emailHash = user.email.replace(/[^a-z0-9]/gi, '_');
+    const customerId = `cus_e2e_${emailHash}`;
+    const paymentMethodId = `pm_e2e_${emailHash}`;
 
     try {
-      // Create stripe_customer (NULL metadata to avoid JSON parsing issues)
-      const customerSql = `INSERT OR REPLACE INTO stripe_customer (id, user_id, email, name, default_payment_method_id, metadata, created_at, updated_at) VALUES ('${customerId}', '${userId}', '${user.email}', '${user.name}', '${paymentMethodId}', NULL, ${now}, ${now});`;
+      // Create stripe_customer - use INSERT OR IGNORE to skip if exists
+      const customerSql = `INSERT OR IGNORE INTO stripe_customer (id, user_id, email, name, default_payment_method_id, metadata, created_at, updated_at) VALUES ('${customerId}', '${userId}', '${user.email}', '${user.name}', '${paymentMethodId}', NULL, ${now}, ${now});`;
 
       execSync(`npx wrangler d1 execute DB --local --command="${customerSql}"`, {
         stdio: 'pipe',
         encoding: 'utf-8',
       });
 
-      // Create stripe_payment_method (NULL metadata to avoid JSON parsing issues)
-      const paymentSql = `INSERT OR REPLACE INTO stripe_payment_method (id, customer_id, type, card_brand, card_last4, card_exp_month, card_exp_year, is_default, metadata, created_at, updated_at) VALUES ('${paymentMethodId}', '${customerId}', 'card', 'visa', '4242', 12, 2030, 1, NULL, ${now}, ${now});`;
+      // Create stripe_payment_method - use INSERT OR IGNORE
+      const paymentSql = `INSERT OR IGNORE INTO stripe_payment_method (id, customer_id, type, card_brand, card_last4, card_exp_month, card_exp_year, is_default, metadata, created_at, updated_at) VALUES ('${paymentMethodId}', '${customerId}', 'card', 'visa', '4242', 12, 2030, 1, NULL, ${now}, ${now});`;
 
       execSync(`npx wrangler d1 execute DB --local --command="${paymentSql}"`, {
         stdio: 'pipe',
         encoding: 'utf-8',
       });
 
-      // Create subscription for Pro user (NULL metadata to avoid JSON parsing issues)
+      // Create subscription for Pro user
       if (user.tier === 'pro') {
-        const subscriptionId = `sub_e2e_pro_${Date.now()}`;
-        const subscriptionSql = `INSERT OR REPLACE INTO stripe_subscription (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, current_period_start, current_period_end, metadata, version, created_at, updated_at) VALUES ('${subscriptionId}', '${customerId}', '${userId}', 'active', 'price_1Shoc952vWNZ3v8wCuBiKKIA', 1, 0, ${now}, ${futureDate}, NULL, 1, ${now}, ${now});`;
+        const subscriptionId = `sub_e2e_${emailHash}`;
+        const subscriptionSql = `INSERT OR IGNORE INTO stripe_subscription (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, current_period_start, current_period_end, metadata, version, created_at, updated_at) VALUES ('${subscriptionId}', '${customerId}', '${userId}', 'active', 'price_1Shoc952vWNZ3v8wCuBiKKIA', 1, 0, ${now}, ${futureDate}, NULL, 1, ${now}, ${now});`;
 
         execSync(`npx wrangler d1 execute DB --local --command="${subscriptionSql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });
 
-        // Create credit balance for Pro user with monthly credits
-        const creditBalanceId = `01${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+        // Create credit balance for Pro user - use INSERT OR IGNORE
+        const creditBalanceId = `cb_e2e_${emailHash}`;
         const monthlyCredits = 50000; // Pro tier monthly credits
-        const creditBalanceSql = `INSERT OR REPLACE INTO user_credit_balance (id, user_id, balance, reserved_credits, plan_type, monthly_credits, pay_as_you_go_enabled, next_refill_at, version, created_at, updated_at) VALUES ('${creditBalanceId}', '${userId}', ${monthlyCredits}, 0, 'paid', ${monthlyCredits}, 0, ${futureDate}, 1, ${now}, ${now});`;
+        const creditBalanceSql = `INSERT OR IGNORE INTO user_credit_balance (id, user_id, balance, reserved_credits, plan_type, monthly_credits, pay_as_you_go_enabled, next_refill_at, version, created_at, updated_at) VALUES ('${creditBalanceId}', '${userId}', ${monthlyCredits}, 0, 'paid', ${monthlyCredits}, 0, ${futureDate}, 1, ${now}, ${now});`;
 
         execSync(`npx wrangler d1 execute DB --local --command="${creditBalanceSql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });
 
-        // Create user_chat_usage record with Pro tier
-        const usageId = `01${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-        const periodStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
-        const periodEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).getTime();
-        const usageSql = `INSERT OR REPLACE INTO user_chat_usage (id, user_id, current_period_start, current_period_end, threads_created, messages_created, custom_roles_created, analysis_generated, subscription_tier, is_annual, version, created_at, updated_at) VALUES ('${usageId}', '${userId}', ${periodStart}, ${periodEnd}, 0, 0, 0, 0, 'pro', 0, 1, ${now}, ${now});`;
+        // Create user_chat_usage record with Pro tier - use INSERT OR IGNORE
+        const usageId = `usage_e2e_${emailHash}`;
+        // ✅ FIX: Use Unix seconds (10 digits), NOT milliseconds (13 digits)
+        const periodStart = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() / 1000);
+        const periodEnd = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).getTime() / 1000);
+        const usageSql = `INSERT OR IGNORE INTO user_chat_usage (id, user_id, current_period_start, current_period_end, threads_created, messages_created, custom_roles_created, analysis_generated, subscription_tier, is_annual, version, created_at, updated_at) VALUES ('${usageId}', '${userId}', ${periodStart}, ${periodEnd}, 0, 0, 0, 0, 'pro', 0, 1, ${now}, ${now});`;
 
         execSync(`npx wrangler d1 execute DB --local --command="${usageSql}"`, {
           stdio: 'pipe',

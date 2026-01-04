@@ -52,11 +52,14 @@ export type ApiErrorDetails = z.infer<typeof ApiErrorDetailsSchema>;
 // ============================================================================
 
 export function isValidErrorCode(code: string): code is ErrorCode {
-  return ERROR_CODES.includes(code as ErrorCode);
+  return (ERROR_CODES as readonly string[]).includes(code);
 }
 
 function hasStringProperty(obj: object, key: string): boolean {
-  return key in obj && typeof (obj as Record<string, unknown>)[key] === 'string';
+  if (typeof obj !== 'object' || obj === null)
+    return false;
+  const record = obj as Record<string, unknown>;
+  return key in record && typeof record[key] === 'string';
 }
 
 function isNonNullObject(value: unknown): value is Record<string, unknown> {
@@ -71,7 +74,10 @@ function extractErrorDetails(context: unknown): ErrorDetails | undefined {
   const details: NonNullable<ErrorDetails> = {};
 
   if (hasStringProperty(context, 'errorType')) {
-    details.errorType = context.errorType as string;
+    const contextRecord = context as Record<string, unknown>;
+    if (typeof contextRecord.errorType === 'string') {
+      details.errorType = contextRecord.errorType;
+    }
   }
 
   const contextRecord: Record<string, ErrorContextValue> = {};

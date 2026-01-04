@@ -1,14 +1,14 @@
 /**
  * Type-Safe Metadata Builder
  *
- * ✅ MIGRATED TO NEW SINGLE SOURCE OF TRUTH: Uses DbAssistantMessageMetadata
- * Enforces all required fields at compile-time via TypeScript
+ * Enforces all required fields at compile-time via TypeScript.
+ * Uses DbAssistantMessageMetadata as single source of truth.
  *
  * PREVENTS: Missing fields that cause schema validation failures
  * ENSURES: Backend and frontend always create valid metadata
- *
- * Location: /src/lib/utils/metadata-builder.ts
  */
+
+import type { LanguageModelUsage } from 'ai';
 
 import type { CitationSourceType, ErrorType, FinishReason } from '@/api/core/enums';
 import { FinishReasons, MessageRoles } from '@/api/core/enums';
@@ -24,7 +24,6 @@ import type { RoundNumber } from '@/lib/schemas/round-schemas';
 
 /**
  * Required parameters for creating participant message metadata
- * TypeScript enforces ALL fields must be provided
  */
 export type ParticipantMetadataParams = {
   // Round tracking (0-based: first round is 0)
@@ -90,27 +89,11 @@ export type ParticipantMetadataParams = {
 
 /**
  * Create participant message metadata with type safety
- *
- * ✅ COMPILE-TIME SAFETY: TypeScript enforces all required fields
- * ✅ RUNTIME SAFETY: Validates against Zod schema (optional)
- * ✅ DEFAULT VALUES: Provides sensible defaults for optional fields
- *
- * @example
- * const metadata = createParticipantMetadata({
- *   roundNumber: 1,
- *   participantId: '01ABC123',
- *   participantIndex: 0, // First participant
- *   participantRole: null,
- *   model: 'gpt-4',
- * });
  */
 export function createParticipantMetadata(
   params: ParticipantMetadataParams,
 ): DbAssistantMessageMetadata {
-  // ✅ TYPE SAFETY: Return type is DbAssistantMessageMetadata (single source of truth)
-  // TypeScript ensures this object matches the Zod schema structure
   return {
-    // ✅ DISCRIMINATOR: Required 'role' field for type-safe metadata
     role: MessageRoles.ASSISTANT,
 
     // Required fields (no defaults)
@@ -128,7 +111,6 @@ export function createParticipantMetadata(
       totalTokens: 0,
     },
 
-    // Error state with defaults (CRITICAL: Must always be present)
     hasError: params.hasError ?? false,
     isTransient: params.isTransient ?? false,
     isPartialResponse: params.isPartialResponse ?? false,
@@ -173,14 +155,6 @@ export function createParticipantMetadata(
 /**
  * Update participant metadata with new fields
  * Preserves existing fields while updating specified ones
- *
- * ✅ TYPE SAFETY: Only allows valid DbAssistantMessageMetadata fields
- *
- * @example
- * const updated = updateParticipantMetadata(existingMetadata, {
- *   hasError: true,
- *   errorMessage: 'Model timeout',
- * });
  */
 export function updateParticipantMetadata(
   existing: DbAssistantMessageMetadata,
@@ -199,9 +173,6 @@ export function updateParticipantMetadata(
 /**
  * Create initial streaming metadata (before streaming starts)
  * Used in AI SDK messageMetadata callback with type='start'
- *
- * ✅ COMPILE-TIME GUARANTEE: All required fields must be provided
- * ✅ STREAMING DEFAULT: Sets finishReason='unknown' and usage=0
  */
 export function createStreamingMetadata(
   params: Omit<ParticipantMetadataParams, 'finishReason' | 'usage'>,
@@ -225,30 +196,22 @@ export function completeStreamingMetadata(
   streamMetadata: DbAssistantMessageMetadata,
   finishResult: {
     finishReason: FinishReason;
-    usage?: {
-      promptTokens?: number;
-      completionTokens?: number;
-      totalTokens?: number;
-    };
-    totalUsage?: {
-      promptTokens?: number;
-      completionTokens?: number;
-      totalTokens?: number;
-    };
+    usage?: LanguageModelUsage;
+    totalUsage?: LanguageModelUsage;
   },
 ): DbAssistantMessageMetadata {
-  // Use totalUsage as fallback for models like DeepSeek
   const usageData = finishResult.usage || finishResult.totalUsage;
+  const promptTokens = usageData?.inputTokens ?? 0;
+  const completionTokens = usageData?.outputTokens ?? 0;
+  const totalTokens = usageData?.totalTokens;
 
   return updateParticipantMetadata(streamMetadata, {
     finishReason: finishResult.finishReason,
     usage: usageData
       ? {
-          promptTokens: usageData.promptTokens ?? 0,
-          completionTokens: usageData.completionTokens ?? 0,
-          totalTokens:
-            usageData.totalTokens
-            ?? (usageData.promptTokens ?? 0) + (usageData.completionTokens ?? 0),
+          promptTokens,
+          completionTokens,
+          totalTokens: totalTokens ?? promptTokens + completionTokens,
         }
       : streamMetadata.usage,
   });
@@ -256,9 +219,6 @@ export function completeStreamingMetadata(
 
 /**
  * Create assistant message metadata with error state for failed streams
- * Used in AI SDK onError callback to update stream metadata
- *
- * @note Different from createErrorMetadata in error-schemas.ts which validates generic error metadata
  */
 export function createStreamErrorMetadata(
   streamMetadata: DbAssistantMessageMetadata,
@@ -289,7 +249,6 @@ export function createStreamErrorMetadata(
 
 /**
  * Type guard to check if metadata has all required participant fields
- * Useful for runtime validation in addition to compile-time checks
  */
 export function hasRequiredParticipantFields(
   metadata: unknown,
@@ -297,7 +256,6 @@ export function hasRequiredParticipantFields(
   if (!metadata || typeof metadata !== 'object')
     return false;
 
-  // ✅ TYPE-SAFE: Check all required fields exist without force casting
   return (
     'roundNumber' in metadata
     && typeof metadata.roundNumber === 'number'

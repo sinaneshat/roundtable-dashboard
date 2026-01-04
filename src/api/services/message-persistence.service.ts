@@ -13,6 +13,7 @@
  * by the moderator handler, not this service. This service only persists participant messages.
  */
 
+import type { FinishReason } from 'ai';
 import { eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
@@ -360,14 +361,7 @@ export async function saveStreamedMessage(
       participantIndex,
       participantRole,
       model: modelId,
-      finishReason: finishResult.finishReason as
-      | 'stop'
-      | 'length'
-      | 'content-filter'
-      | 'tool-calls'
-      | 'failed'
-      | 'other'
-      | 'unknown',
+      finishReason: finishResult.finishReason as FinishReason,
       usage: usageMetadata,
       hasError: finalHasError,
       errorType: finalErrorType,

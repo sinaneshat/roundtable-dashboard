@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/core/enums';
-import { PlanTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
+import { PlanTypes, PurchaseTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { getMaxModelsForTier, getMonthlyCreditsForTier } from '@/api/services/product-logic.service';
 import { PlanOverviewCard, StatusPage, StatusPageActions } from '@/components/billing';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
@@ -114,6 +114,23 @@ export function BillingSuccessClient() {
           <StatusPageActions
             primaryLabel={t('actions.goHome')}
             primaryHref="/chat"
+          />
+        )}
+      />
+    );
+  }
+
+  // No purchase was made - user visited page directly without checkout
+  if (syncResult?.data?.purchaseType === PurchaseTypes.NONE) {
+    return (
+      <StatusPage
+        variant="error"
+        title={t('billing.failure.noPurchaseFound')}
+        description={t('billing.failure.noPurchaseFoundDescription')}
+        actions={(
+          <StatusPageActions
+            primaryLabel={t('billing.success.viewPricing')}
+            primaryHref="/chat/pricing"
           />
         )}
       />

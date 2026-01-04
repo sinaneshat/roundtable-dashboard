@@ -27,11 +27,10 @@ import { useLayoutEffect, useMemo } from 'react';
 
 /**
  * Ref values type - constrained to valid ref value types
- * ✅ TYPE-SAFE: Uses object index signature without `unknown`
  * Excludes null/undefined from base constraint while allowing them as specific values
  * Callback type properly constrained with specific parameter types
  */
-type RefValues = { [key: string]: NonNullable<object> | string | number | boolean | null | undefined | ((...args: never[]) => unknown) };
+type RefValues = { [key: string]: NonNullable<object> | string | number | boolean | null | undefined | ((...args: never[]) => void) };
 
 /**
  * Generic hook to sync any values into refs with useLayoutEffect

@@ -3,12 +3,8 @@ import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import { user } from './auth';
 
-/**
- * Type definitions for Stripe metadata and webhook data
- * Defined inline to avoid circular imports with validation schemas
- */
 type StripeMetadataType = Record<string, string> | null;
-type StripeWebhookEventData = Record<string, unknown> | null;
+type StripeWebhookEventData = Record<string, string> | null;
 
 /**
  * Stripe Products - Represents items/services you sell

@@ -31,6 +31,9 @@ export default defineConfig({
   // Global setup - authenticates test users before running tests
   globalSetup: './e2e/global-setup.ts',
 
+  // Global teardown - cleans up E2E test data after tests complete
+  globalTeardown: './e2e/global-teardown.ts',
+
   // Reporter configuration
   reporter: process.env.CI
     ? [['html', { outputFolder: 'playwright-report' }], ['github'], ['list']]

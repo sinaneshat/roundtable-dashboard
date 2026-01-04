@@ -188,9 +188,15 @@ export default function ChatOverviewScreen() {
     [modelsData?.data?.items],
   );
 
-  const customRoles = customRolesData?.pages?.flatMap(page =>
-    (page?.success && page.data?.items) ? page.data.items : [],
-  ) ?? [];
+  const customRoles = useMemo(
+    () => customRolesData?.pages?.flatMap((page) => {
+      if (!page || typeof page !== 'object' || !('success' in page) || !page.success) {
+        return [];
+      }
+      return page.data?.items || [];
+    }) ?? [],
+    [customRolesData?.pages],
+  );
 
   const userTierConfig = modelsData?.data?.user_tier_config || {
     tier: 'free',
