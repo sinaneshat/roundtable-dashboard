@@ -62,10 +62,11 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Cache Components (Next.js 16+) - supported in OpenNext 1.14.7+
-  // Enables 'use cache' directive for Partial Prerendering
-  // @see https://github.com/opennextjs/opennextjs-cloudflare/releases
-  cacheComponents: true,
+  // Cache Components (Next.js 16+) - DISABLED
+  // PPR requires all dynamic data to be in Suspense boundaries,
+  // which conflicts with auth-protected routes that fetch user data
+  // TODO: Re-enable when routes are properly structured for PPR
+  cacheComponents: false,
 
   // External packages for Server Components bundling
   // Required for React Email to work in edge runtime and Cloudflare Workers

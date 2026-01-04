@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { cacheLife } from 'next/cache';
 
 import { BRAND } from '@/constants/brand';
 import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
@@ -23,8 +22,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PricingPage() {
-  'use cache';
-  cacheLife('hours');
-
   return <PricingScreen />;
 }

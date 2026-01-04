@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { cacheLife } from 'next/cache';
 import { getTranslations } from 'next-intl/server';
 
 import { BRAND } from '@/constants/brand';
@@ -32,8 +31,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PrivacyPage() {
-  'use cache';
-  cacheLife('max');
-
   return <PrivacyScreen />;
 }

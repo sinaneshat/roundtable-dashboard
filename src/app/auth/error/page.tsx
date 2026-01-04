@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { cacheLife } from 'next/cache';
 
 import { BRAND } from '@/constants/brand';
 import AuthErrorScreen from '@/containers/screens/errors/AuthErrorScreen';
@@ -14,8 +13,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function AuthErrorPage() {
-  'use cache';
-  cacheLife('max');
-
   return <AuthErrorScreen />;
 }
