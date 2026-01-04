@@ -14,9 +14,9 @@ import { ChatModes, DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
 import {
   createGradient,
-  getOGFonts,
   OG_COLORS,
 } from '@/lib/ui';
+import { getOGFonts } from '@/lib/ui/og-fonts.server';
 import { getThreadBySlugService } from '@/services/api';
 
 export const size = {

@@ -3,50 +3,14 @@
  *
  * Utilities for generating dynamic OG images with proper type safety.
  * Uses brand constants and type-safe mode color mapping.
+ *
+ * NOTE: Font loading is in og-fonts.server.ts (server-only, uses Node.js fs).
  */
 
 import type { ChatMode } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { getModelIconInfo } from '@/lib/utils';
-
-// ============================================================================
-// FONT LOADING FOR OG IMAGES
-// ============================================================================
-
-export type OGFontConfig = {
-  name: string;
-  data: ArrayBuffer;
-  style: 'normal' | 'italic';
-  weight: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
-};
-
-// Geist font TTF URLs from jsDelivr CDN (Satori requires TTF/OTF, not WOFF2)
-const GEIST_REGULAR_URL = 'https://cdn.jsdelivr.net/npm/geist@1.5.1/dist/fonts/geist-sans/Geist-Regular.ttf';
-const GEIST_SEMIBOLD_URL = 'https://cdn.jsdelivr.net/npm/geist@1.5.1/dist/fonts/geist-sans/Geist-SemiBold.ttf';
-const GEIST_BOLD_URL = 'https://cdn.jsdelivr.net/npm/geist@1.5.1/dist/fonts/geist-sans/Geist-Bold.ttf';
-const GEIST_BLACK_URL = 'https://cdn.jsdelivr.net/npm/geist@1.5.1/dist/fonts/geist-sans/Geist-Black.ttf';
-
-/**
- * Fetches fonts for OG image generation.
- * Uses Geist TTF fonts from jsDelivr CDN (matches app's main font).
- * Satori only supports TTF/OTF formats, not WOFF2.
- */
-export async function getOGFonts(): Promise<OGFontConfig[]> {
-  const [regular, semibold, bold, black] = await Promise.all([
-    fetch(GEIST_REGULAR_URL).then(res => res.arrayBuffer()),
-    fetch(GEIST_SEMIBOLD_URL).then(res => res.arrayBuffer()),
-    fetch(GEIST_BOLD_URL).then(res => res.arrayBuffer()),
-    fetch(GEIST_BLACK_URL).then(res => res.arrayBuffer()),
-  ]);
-
-  return [
-    { name: 'Geist', data: regular, style: 'normal', weight: 400 },
-    { name: 'Geist', data: semibold, style: 'normal', weight: 600 },
-    { name: 'Geist', data: bold, style: 'normal', weight: 700 },
-    { name: 'Geist', data: black, style: 'normal', weight: 800 },
-  ];
-}
 
 // ============================================================================
 // IMAGE CONVERSION

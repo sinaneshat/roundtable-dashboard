@@ -32,11 +32,11 @@ import {
   getModeColor,
   getModeIconBase64,
   getModelIconBase64,
-  getOGFonts,
   getUIIconBase64,
   OG_COLORS,
   truncateText,
 } from '@/lib/ui';
+import { getOGFonts } from '@/lib/ui/og-fonts.server';
 import { getPublicThreadService } from '@/services/api';
 
 // Open Graph Image metadata - must be direct exports (not re-exported)

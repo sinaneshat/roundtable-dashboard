@@ -9,7 +9,7 @@
 import { ImageResponse } from 'next/og';
 
 import { BRAND } from '@/constants/brand';
-import { getOGFonts } from '@/lib/ui';
+import { getOGFonts } from '@/lib/ui/og-fonts.server';
 
 // Open Graph Image metadata - must be direct exports (not re-exported)
 export const size = {

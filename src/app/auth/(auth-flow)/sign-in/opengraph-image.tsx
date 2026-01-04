@@ -13,9 +13,9 @@ import { BRAND } from '@/constants/brand';
 import {
   createGradient,
   getLogoBase64,
-  getOGFonts,
   OG_COLORS,
 } from '@/lib/ui';
+import { getOGFonts } from '@/lib/ui/og-fonts.server';
 
 export const size = {
   width: 1200,
