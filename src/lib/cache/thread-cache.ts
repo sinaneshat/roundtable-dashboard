@@ -53,29 +53,39 @@ export const THREAD_CACHE_TAGS = {
 /**
  * Get public thread data with server-side caching
  * ISR pattern: 1 day cache with tag-based invalidation on visibility change
+ *
+ * Tags used for invalidation:
+ * - `public-thread:{slug}` - Invalidate specific thread
+ * - `public-threads` - Invalidate all public threads (bulk operations)
  */
-export const getCachedPublicThread = unstable_cache(
-  async (slug: string): Promise<GetPublicThreadResponse> => {
-    return getPublicThreadService({ param: { slug } });
-  },
-  ['public-thread'],
-  {
-    revalidate: THREAD_CACHE_DURATIONS.publicThread,
-    tags: [THREAD_CACHE_TAGS.allPublicThreads],
-  },
-);
+export async function getCachedPublicThread(slug: string): Promise<GetPublicThreadResponse> {
+  const cachedFn = unstable_cache(
+    async (): Promise<GetPublicThreadResponse> => {
+      return getPublicThreadService({ param: { slug } });
+    },
+    ['public-thread', slug],
+    {
+      revalidate: THREAD_CACHE_DURATIONS.publicThread,
+      tags: [THREAD_CACHE_TAGS.publicThread(slug), THREAD_CACHE_TAGS.allPublicThreads],
+    },
+  );
+  return cachedFn();
+}
 
 /**
  * Get public thread data for metadata generation
  * Shares cache duration with getCachedPublicThread for consistency
  */
-export const getCachedPublicThreadForMetadata = unstable_cache(
-  async (slug: string): Promise<GetPublicThreadResponse> => {
-    return getPublicThreadService({ param: { slug } });
-  },
-  ['public-thread-metadata'],
-  {
-    revalidate: THREAD_CACHE_DURATIONS.publicThreadMetadata,
-    tags: [THREAD_CACHE_TAGS.allPublicThreads],
-  },
-);
+export async function getCachedPublicThreadForMetadata(slug: string): Promise<GetPublicThreadResponse> {
+  const cachedFn = unstable_cache(
+    async (): Promise<GetPublicThreadResponse> => {
+      return getPublicThreadService({ param: { slug } });
+    },
+    ['public-thread-metadata', slug],
+    {
+      revalidate: THREAD_CACHE_DURATIONS.publicThreadMetadata,
+      tags: [THREAD_CACHE_TAGS.publicThread(slug), THREAD_CACHE_TAGS.allPublicThreads],
+    },
+  );
+  return cachedFn();
+}

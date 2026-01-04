@@ -1,10 +1,11 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/lib/auth';
+import { THREAD_CACHE_TAGS } from '@/lib/cache/thread-cache';
 
 /**
  * Server action to handle post-authentication redirect
@@ -96,7 +97,15 @@ export async function revalidatePublicThread(
       return { success: false, error: 'Invalid action' };
     }
 
-    // Revalidate the public chat page
+    // Invalidate the unstable_cache for this thread's data
+    // This ensures fresh data is fetched on next request
+    // Profile 'max' uses stale-while-revalidate semantics
+    revalidateTag(THREAD_CACHE_TAGS.publicThread(slug), 'max');
+
+    // Invalidate all public threads cache (for sitemap regeneration)
+    revalidateTag(THREAD_CACHE_TAGS.allPublicThreads, 'max');
+
+    // Revalidate the public chat page path (triggers ISR regeneration)
     const publicPath = `/public/chat/${slug}`;
     revalidatePath(publicPath);
 

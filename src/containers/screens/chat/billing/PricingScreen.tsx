@@ -1,6 +1,5 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
@@ -8,7 +7,7 @@ import { useState } from 'react';
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
 import { ChatPageHeader } from '@/components/chat/chat-header';
 import { ChatPage } from '@/components/chat/chat-states';
-import { PricingContentSkeleton } from '@/components/pricing/pricing-content-skeleton';
+import { PricingContent } from '@/components/pricing/pricing-content';
 import {
   useCancelSubscriptionMutation,
   useCreateCheckoutSessionMutation,
@@ -22,14 +21,10 @@ import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
 
-const PricingContent = dynamic(
-  () => import('@/components/pricing/pricing-content').then(mod => ({ default: mod.PricingContent })),
-  {
-    loading: () => <PricingContentSkeleton />,
-    ssr: false,
-  },
-);
-
+/**
+ * Pricing Screen - Client component for billing management
+ * Products prefetched in layout.tsx via HydrationBoundary pattern
+ */
 export default function PricingScreen() {
   const router = useRouter();
   const t = useTranslations();
@@ -51,8 +46,9 @@ export default function PricingScreen() {
   const switchMutation = useSwitchSubscriptionMutation();
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
 
-  const products = productsData?.success ? productsData.data?.items || [] : [];
-  const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
+  // Products hydrated from server via HydrationBoundary in layout.tsx
+  const products = productsData?.success ? productsData.data?.items ?? [] : [];
+  const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
 
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
@@ -140,9 +136,6 @@ export default function PricingScreen() {
       setIsManagingBilling(false);
     }
   };
-
-  // Only block on products loading (prefetched via SSG, should be instant)
-  // Subscriptions load client-side but shouldn't block product display
 
   return (
     <ChatPage>
