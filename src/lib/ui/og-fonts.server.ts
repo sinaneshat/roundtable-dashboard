@@ -1,13 +1,13 @@
 /**
  * OG Image Font Loader (Server-only)
  *
- * This file uses Node.js fs module and must only be imported
- * in server-side contexts (OG image routes, not client components).
+ * Loads fonts synchronously at module initialization time.
+ * This runs during build, making fonts available for static OG image generation.
  */
 
-import type { Buffer } from 'node:buffer';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export type OGFontConfig = {
   name: string;
@@ -16,35 +16,34 @@ export type OGFontConfig = {
   weight: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
 };
 
-/**
- * Converts a Node.js Buffer to a proper ArrayBuffer.
- * Buffer.buffer returns a view into a shared ArrayBuffer with potential offsets,
- * so we need to copy to a new ArrayBuffer to avoid offset issues.
- */
-function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {
+// Get the directory of this module
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const fontsDir = join(__dirname, '../../assets/fonts');
+
+// Load fonts synchronously at module initialization (runs during build)
+function loadFont(filename: string): ArrayBuffer {
+  const buffer = readFileSync(join(fontsDir, filename));
+  // Convert Buffer to ArrayBuffer properly (avoid shared buffer offset issues)
   return new Uint8Array(buffer).buffer;
 }
 
+// Pre-load all fonts at module initialization
+const fontData = {
+  regular: loadFont('Geist-Regular.ttf'),
+  semibold: loadFont('Geist-SemiBold.ttf'),
+  bold: loadFont('Geist-Bold.ttf'),
+  black: loadFont('Geist-Black.ttf'),
+};
+
 /**
- * Loads fonts for OG image generation from local files.
- * Uses Geist TTF fonts bundled in public/fonts/ (Satori only supports TTF/OTF, not WOFF2).
- *
- * NOTE: This function uses Node.js fs and must only be called from server-side code.
+ * Returns pre-loaded fonts for OG image generation.
+ * Fonts are loaded synchronously when this module is first imported.
  */
 export async function getOGFonts(): Promise<OGFontConfig[]> {
-  const fontsDir = join(process.cwd(), 'public', 'fonts');
-
-  const [regular, semibold, bold, black] = await Promise.all([
-    readFile(join(fontsDir, 'Geist-Regular.ttf')),
-    readFile(join(fontsDir, 'Geist-SemiBold.ttf')),
-    readFile(join(fontsDir, 'Geist-Bold.ttf')),
-    readFile(join(fontsDir, 'Geist-Black.ttf')),
-  ]);
-
   return [
-    { name: 'Geist', data: bufferToArrayBuffer(regular), style: 'normal', weight: 400 },
-    { name: 'Geist', data: bufferToArrayBuffer(semibold), style: 'normal', weight: 600 },
-    { name: 'Geist', data: bufferToArrayBuffer(bold), style: 'normal', weight: 700 },
-    { name: 'Geist', data: bufferToArrayBuffer(black), style: 'normal', weight: 800 },
+    { name: 'Geist', data: fontData.regular, style: 'normal', weight: 400 },
+    { name: 'Geist', data: fontData.semibold, style: 'normal', weight: 600 },
+    { name: 'Geist', data: fontData.bold, style: 'normal', weight: 700 },
+    { name: 'Geist', data: fontData.black, style: 'normal', weight: 800 },
   ];
 }
