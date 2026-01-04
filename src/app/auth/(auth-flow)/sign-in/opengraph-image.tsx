@@ -24,8 +24,8 @@ export const size = {
 export const contentType = 'image/png';
 export const alt = `Sign In - ${BRAND.fullName}`;
 
-// ISR: Regenerate every 24 hours (translations/logo are static)
-export const revalidate = 86400;
+// Force dynamic to prevent build-time prerendering (fonts loaded at runtime)
+export const dynamic = 'force-dynamic';
 
 export default async function Image() {
   // Load translations, fonts, and logo in parallel

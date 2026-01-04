@@ -19,6 +19,9 @@ export const size = {
 export const contentType = 'image/png';
 export const alt = BRAND.fullName;
 
+// Force dynamic to prevent build-time prerendering (fonts loaded at runtime)
+export const dynamic = 'force-dynamic';
+
 export default async function Image() {
   const fonts = await getOGFonts();
 

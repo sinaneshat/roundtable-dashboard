@@ -26,8 +26,8 @@ export const size = {
 export const contentType = 'image/png';
 export const alt = `Chat Thread - ${BRAND.fullName}`;
 
-// ISR: Cache fallback for crawlers (auth required so will use defaults)
-export const revalidate = 3600;
+// Force dynamic to prevent build-time prerendering (fonts loaded at runtime)
+export const dynamic = 'force-dynamic';
 
 const MODE_COLORS: Record<ChatMode, string> = {
   [ChatModes.ANALYZING]: OG_COLORS.analyzing,
