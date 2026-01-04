@@ -13,6 +13,7 @@ import { BRAND } from '@/constants/brand';
 import {
   createGradient,
   getLogoBase64,
+  getOGFonts,
   OG_COLORS,
 } from '@/lib/ui';
 
@@ -27,16 +28,12 @@ export const alt = `Sign Up - ${BRAND.fullName}`;
 export const revalidate = 86400;
 
 export default async function Image() {
-  // Load translations
-  const t = await getTranslations();
-
-  // Load logo
-  let logoBase64: string;
-  try {
-    logoBase64 = await getLogoBase64();
-  } catch {
-    logoBase64 = '';
-  }
+  // Load translations and fonts in parallel
+  const [t, fonts, logoBase64] = await Promise.all([
+    getTranslations(),
+    getOGFonts(),
+    getLogoBase64().catch(() => ''),
+  ]);
 
   return new ImageResponse(
     (
@@ -195,6 +192,7 @@ export default async function Image() {
     ),
     {
       ...size,
+      fonts,
     },
   );
 }

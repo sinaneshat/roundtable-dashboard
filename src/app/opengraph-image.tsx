@@ -9,6 +9,7 @@
 import { ImageResponse } from 'next/og';
 
 import { BRAND } from '@/constants/brand';
+import { getOGFonts } from '@/lib/ui';
 
 // Open Graph Image metadata - must be direct exports (not re-exported)
 export const size = {
@@ -19,6 +20,8 @@ export const contentType = 'image/png';
 export const alt = BRAND.fullName;
 
 export default async function Image() {
+  const fonts = await getOGFonts();
+
   return new ImageResponse(
     (
       <div
@@ -102,6 +105,7 @@ export default async function Image() {
     ),
     {
       ...size,
+      fonts,
     },
   );
 }

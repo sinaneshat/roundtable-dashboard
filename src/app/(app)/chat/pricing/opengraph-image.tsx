@@ -14,6 +14,7 @@ import { BRAND } from '@/constants/brand';
 import {
   createGradient,
   getLogoBase64,
+  getOGFonts,
   OG_COLORS,
 } from '@/lib/ui';
 
@@ -28,16 +29,12 @@ export const alt = `Pricing - ${BRAND.fullName}`;
 export const revalidate = 86400;
 
 export default async function Image() {
-  // Load translations
-  const t = await getTranslations();
-
-  // Load logo
-  let logoBase64: string;
-  try {
-    logoBase64 = await getLogoBase64();
-  } catch {
-    logoBase64 = '';
-  }
+  // Load translations, fonts, and logo in parallel
+  const [t, fonts, logoBase64] = await Promise.all([
+    getTranslations(),
+    getOGFonts(),
+    getLogoBase64().catch(() => ''),
+  ]);
 
   // Actual subscription tiers: Free (10K credits) and Pro ($100/month, 1M credits)
   const tiers = [
@@ -199,6 +196,7 @@ export default async function Image() {
     ),
     {
       ...size,
+      fonts,
     },
   );
 }

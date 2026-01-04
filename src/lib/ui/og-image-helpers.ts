@@ -11,6 +11,44 @@ import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { getModelIconInfo } from '@/lib/utils';
 
 // ============================================================================
+// FONT LOADING FOR OG IMAGES
+// ============================================================================
+
+export type OGFontConfig = {
+  name: string;
+  data: ArrayBuffer;
+  style: 'normal' | 'italic';
+  weight: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
+};
+
+// Google Fonts URLs for Inter (widely compatible, good for OG images)
+const INTER_REGULAR_URL = 'https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2';
+const INTER_SEMIBOLD_URL = 'https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiJ-Ek-_EeA.woff2';
+const INTER_BOLD_URL = 'https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYAZ9hiJ-Ek-_EeA.woff2';
+const INTER_EXTRABOLD_URL = 'https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuDyYAZ9hiJ-Ek-_EeA.woff2';
+
+/**
+ * Fetches fonts for OG image generation.
+ * Uses Inter font from Google Fonts for reliable edge/worker compatibility.
+ * Returns font configs ready to use with ImageResponse.
+ */
+export async function getOGFonts(): Promise<OGFontConfig[]> {
+  const [regular, semibold, bold, extrabold] = await Promise.all([
+    fetch(INTER_REGULAR_URL).then(res => res.arrayBuffer()),
+    fetch(INTER_SEMIBOLD_URL).then(res => res.arrayBuffer()),
+    fetch(INTER_BOLD_URL).then(res => res.arrayBuffer()),
+    fetch(INTER_EXTRABOLD_URL).then(res => res.arrayBuffer()),
+  ]);
+
+  return [
+    { name: 'Inter', data: regular, style: 'normal', weight: 400 },
+    { name: 'Inter', data: semibold, style: 'normal', weight: 600 },
+    { name: 'Inter', data: bold, style: 'normal', weight: 700 },
+    { name: 'Inter', data: extrabold, style: 'normal', weight: 800 },
+  ];
+}
+
+// ============================================================================
 // IMAGE CONVERSION
 // ============================================================================
 

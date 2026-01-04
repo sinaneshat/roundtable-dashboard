@@ -14,6 +14,7 @@ import { ChatModes, DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
 import {
   createGradient,
+  getOGFonts,
   OG_COLORS,
 } from '@/lib/ui';
 import { getThreadBySlugService } from '@/services/api';
@@ -42,8 +43,11 @@ export default async function Image({
 }) {
   const { slug } = await params;
 
-  // Load translations
-  const t = await getTranslations();
+  // Load translations and fonts in parallel
+  const [t, fonts] = await Promise.all([
+    getTranslations(),
+    getOGFonts(),
+  ]);
 
   // Default fallback values
   const defaultTitle = t('chat.dashboard.title');
@@ -168,6 +172,7 @@ export default async function Image({
     ),
     {
       ...size,
+      fonts,
     },
   );
 }

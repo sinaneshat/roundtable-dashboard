@@ -32,6 +32,7 @@ import {
   getModeColor,
   getModeIconBase64,
   getModelIconBase64,
+  getOGFonts,
   getUIIconBase64,
   OG_COLORS,
   truncateText,
@@ -56,28 +57,13 @@ export default async function Image({
 }) {
   const { slug } = await params;
 
-  // Load all icons and assets
-  let logoBase64: string;
-  let robotIconBase64: string;
-  let messageIconBase64: string;
-
-  try {
-    logoBase64 = await getLogoBase64();
-  } catch {
-    logoBase64 = '';
-  }
-
-  try {
-    robotIconBase64 = await getUIIconBase64('robot');
-  } catch {
-    robotIconBase64 = '';
-  }
-
-  try {
-    messageIconBase64 = await getUIIconBase64('message');
-  } catch {
-    messageIconBase64 = '';
-  }
+  // Load fonts and icons in parallel
+  const [fonts, logoBase64, robotIconBase64, messageIconBase64] = await Promise.all([
+    getOGFonts(),
+    getLogoBase64().catch(() => ''),
+    getUIIconBase64('robot').catch(() => ''),
+    getUIIconBase64('message').catch(() => ''),
+  ]);
 
   try {
     // Fetch thread data for OG image generation
@@ -133,6 +119,7 @@ export default async function Image({
         ),
         {
           ...size,
+          fonts,
         },
       );
     }
@@ -446,6 +433,7 @@ export default async function Image({
       ),
       {
         ...size,
+        fonts,
       },
     );
   } catch {
@@ -497,6 +485,7 @@ export default async function Image({
       ),
       {
         ...size,
+        fonts,
       },
     );
   }
