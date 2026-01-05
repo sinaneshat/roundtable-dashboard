@@ -494,6 +494,22 @@ export const BillingErrorTypes = {
   UNKNOWN: 'unknown' as const,
 } as const;
 
+/**
+ * Type guard for BillingErrorType validation
+ * Use instead of type casting for type-safe validation from URL params
+ */
+export function isBillingErrorType(value: unknown): value is BillingErrorType {
+  return typeof value === 'string' && BILLING_ERROR_TYPES.includes(value as BillingErrorType);
+}
+
+/**
+ * Parse and validate BillingErrorType with fallback to default
+ * Use for URL params and external data that may be invalid
+ */
+export function parseBillingErrorType(value: unknown): BillingErrorType {
+  return isBillingErrorType(value) ? value : DEFAULT_BILLING_ERROR_TYPE;
+}
+
 // ============================================================================
 // PAYMENT METHOD TYPE
 // ============================================================================

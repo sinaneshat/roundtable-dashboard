@@ -166,7 +166,7 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
           tag: STATIC_CACHE_TAGS.ACTIVE_PRICES,
         });
 
-      // ✅ CREDITS: Filter to only show credit-based products (exclude legacy tier products)
+      // Filter to only show credit-based products
       const creditProductIds: Set<string> = new Set([
         CREDIT_CONFIG.PLANS.free.stripeProductId,
         CREDIT_CONFIG.PLANS.paid.stripeProductId,

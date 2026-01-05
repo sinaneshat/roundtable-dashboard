@@ -158,6 +158,8 @@ export function useThreadSlugStatusQuery(
   threadId: string | null,
   enabled: boolean = true,
 ) {
+  const { isAuthenticated } = useAuthCheck();
+
   return useQuery({
     queryKey: queryKeys.threads.slugStatus(threadId || 'null'),
     queryFn: () => {
@@ -167,20 +169,15 @@ export function useThreadSlugStatusQuery(
       return getThreadSlugStatusService({ param: { id: threadId } });
     },
     staleTime: 0, // Always fresh - we're polling for updates
-    // ✅ PERFORMANCE FIX: Reduce aggressive polling and pause when tab hidden
-    // Original: 3s always - 20 requests/min when enabled
-    // New: 10s when visible, false when hidden - 6 requests/min
-    refetchInterval: enabled && threadId
+    refetchInterval: isAuthenticated && enabled && threadId
       ? () => {
-          // Don't poll if tab is hidden (saves battery & server load)
           if (typeof document !== 'undefined' && document.hidden) {
             return false;
           }
-          // Poll every 10s when tab is visible (reduced from 3s)
           return 10 * 1000;
         }
       : false,
-    enabled: enabled && !!threadId, // Enable polling when threadId exists and not disabled by caller
+    enabled: isAuthenticated && enabled && !!threadId,
     retry: false,
     throwOnError: false,
   });

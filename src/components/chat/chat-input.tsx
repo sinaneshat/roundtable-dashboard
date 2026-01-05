@@ -403,3 +403,5 @@ export const ChatInput = memo(({
     </div>
   );
 });
+
+ChatInput.displayName = 'ChatInput';

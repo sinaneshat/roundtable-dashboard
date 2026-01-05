@@ -1,7 +1,7 @@
 import { relations } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import { BILLING_INTERVALS, INVOICE_STATUSES, PAYMENT_METHOD_TYPES, PRICE_TYPES } from '@/api/core/enums';
+import { BILLING_INTERVALS, INVOICE_STATUSES, PAYMENT_METHOD_TYPES, PRICE_TYPES, STRIPE_SUBSCRIPTION_STATUSES } from '@/api/core/enums';
 import type { StripeMetadataType, StripeWebhookEventData } from '@/db/validation/billing';
 
 import { user } from './auth';
@@ -105,16 +105,7 @@ export const stripeSubscription = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     status: text('status', {
-      enum: [
-        'incomplete',
-        'incomplete_expired',
-        'trialing',
-        'active',
-        'past_due',
-        'canceled',
-        'unpaid',
-        'paused',
-      ],
+      enum: STRIPE_SUBSCRIPTION_STATUSES,
     }).notNull(),
     priceId: text('price_id')
       .notNull()

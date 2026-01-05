@@ -7,6 +7,7 @@ import { Suspense } from 'react';
 
 import type { SubscriptionChangeType, SubscriptionTier } from '@/api/core/enums';
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers, SubscriptionTierSchema } from '@/api/core/enums';
+import type { Subscription } from '@/api/routes/billing/schema';
 import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
@@ -65,10 +66,10 @@ function SubscriptionChangedContent() {
   const { data: subscriptionData, isFetching: isSubscriptionsFetching } = useSubscriptionsQuery();
   const { data: usageStats, isFetching: isUsageStatsFetching } = useUsageStatsQuery();
 
-  const displaySubscription
-    = subscriptionData?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
-      || subscriptionData?.data?.items?.[0]
-      || null;
+  const displaySubscription: Subscription | null
+    = subscriptionData?.data?.items?.find((sub: Subscription) => sub.status === StripeSubscriptionStatuses.ACTIVE)
+      ?? subscriptionData?.data?.items?.[0]
+      ?? null;
 
   const isLoadingData = isSubscriptionsFetching || isUsageStatsFetching;
 

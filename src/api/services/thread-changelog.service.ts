@@ -7,7 +7,7 @@ import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import type { ChatMode } from '@/api/core/enums';
-import { ChangelogTypes } from '@/api/core/enums';
+import { ChangelogChangeTypes, ChangelogTypes } from '@/api/core/enums';
 import type { CreateChangelogParams } from '@/api/routes/chat/schema';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -128,7 +128,7 @@ export async function logModeChange(
     changeType: ChangelogTypes.MODIFIED,
     changeSummary: `Changed conversation mode from ${oldMode} to ${newMode}`,
     changeData: {
-      type: 'mode_change',
+      type: ChangelogChangeTypes.MODE_CHANGE,
       oldMode,
       newMode,
     },
@@ -156,7 +156,7 @@ export async function logParticipantAdded(
     changeType: ChangelogTypes.ADDED,
     changeSummary: summary,
     changeData: {
-      type: 'participant',
+      type: ChangelogChangeTypes.PARTICIPANT,
       participantId,
       modelId,
       role,
@@ -185,7 +185,7 @@ export async function logParticipantRemoved(
     changeType: ChangelogTypes.REMOVED,
     changeSummary: summary,
     changeData: {
-      type: 'participant',
+      type: ChangelogChangeTypes.PARTICIPANT,
       participantId,
       modelId,
       role,
@@ -213,9 +213,9 @@ export async function logParticipantUpdated(
     changeType: ChangelogTypes.MODIFIED,
     changeSummary: summary,
     changeData: {
-      type: 'participant_role',
+      type: ChangelogChangeTypes.PARTICIPANT_ROLE,
       participantId,
-      modelId, // ✅ Required for UI to display model info
+      modelId,
       oldRole,
       newRole,
     },
@@ -245,7 +245,7 @@ export async function logParticipantsReordered(
     changeType: ChangelogTypes.MODIFIED,
     changeSummary: `Reordered participants: ${participantNames}`,
     changeData: {
-      type: 'participant_reorder',
+      type: ChangelogChangeTypes.PARTICIPANT_REORDER,
       participants,
     },
   });
@@ -265,7 +265,7 @@ export async function logWebSearchToggle(
     changeType: ChangelogTypes.MODIFIED,
     changeSummary: enabled ? 'Enabled web search' : 'Disabled web search',
     changeData: {
-      type: 'web_search',
+      type: ChangelogChangeTypes.WEB_SEARCH,
       enabled,
     },
   });

@@ -3,7 +3,7 @@
 import { headers } from 'next/headers';
 
 import type { BillingErrorType } from '@/api/core/enums';
-import { BillingErrorTypes } from '@/api/core/enums';
+import { BillingErrorTypes, parseBillingErrorType } from '@/api/core/enums';
 import { auth } from '@/lib/auth';
 
 /**
@@ -58,14 +58,14 @@ export async function capturePaymentFailure(searchParams?: {
       };
     }
 
-    // 2. Determine error type from search params
-    const errorType = searchParams?.error_type as BillingErrorType | undefined;
+    // 2. Determine error type from search params using type-safe parser
+    const errorType = parseBillingErrorType(searchParams?.error_type);
 
     // 3. Capture detailed error information
     const errorData = {
       error: searchParams?.error || 'Payment processing failed',
       errorCode: searchParams?.error_code,
-      errorType: errorType || BillingErrorTypes.UNKNOWN,
+      errorType,
       stripeError: searchParams?.error,
       timestamp: new Date().toISOString(),
     };

@@ -304,9 +304,9 @@ function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | Retur
  * - Prevents connection reuse while satisfying Better Auth's API requirements
  *
  * OpenNext.js Compliance:
- * - ✅ No connection reuse (new instance per access)
- * - ✅ Works with Cloudflare Workers execution model
- * - ⚠️ Workaround for Better Auth's initialization constraints
+ * - No connection reuse (new instance per access)
+ * - Works with Cloudflare Workers execution model
+ * - Addresses Better Auth's module-load-time initialization constraints
  *
  * For all other use cases, use:
  * - getDb() for dynamic routes and server components

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
+import type { Subscription } from '@/api/routes/billing/schema';
 import { ChatPageHeader } from '@/components/chat/chat-header';
 import { ChatPage } from '@/components/chat/chat-states';
 import { PricingContent } from '@/components/pricing/pricing-content';
@@ -48,10 +49,10 @@ export default function PricingScreen() {
 
   // Products hydrated from server via HydrationBoundary in layout.tsx
   const products = productsData?.success ? productsData.data?.items ?? [] : [];
-  const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
+  const subscriptions: Subscription[] = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
 
   const activeSubscription = subscriptions.find(
-    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
+    (sub: Subscription) => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
 
   const handleSubscribe = async (priceId: string) => {

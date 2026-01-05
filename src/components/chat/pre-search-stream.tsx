@@ -653,3 +653,5 @@ export const PreSearchStream = memo(PreSearchStreamComponent, (prevProps, nextPr
     && prevProps.onStreamStart === nextProps.onStreamStart
   );
 });
+
+PreSearchStream.displayName = 'PreSearchStream';

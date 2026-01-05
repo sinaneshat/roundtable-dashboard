@@ -363,3 +363,5 @@ export const StreamingMarkdown = memo(function StreamingMarkdown({
     </div>
   );
 });
+
+StreamingText.displayName = 'StreamingText';

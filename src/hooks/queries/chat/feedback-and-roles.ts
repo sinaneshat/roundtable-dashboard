@@ -36,16 +36,14 @@ import {
  * @param enabled - Optional control over whether to fetch (default: true)
  */
 export function useThreadFeedbackQuery(threadId: string, enabled = true) {
+  const { isAuthenticated } = useAuthCheck();
+
   return useQuery({
     queryKey: queryKeys.threads.feedback(threadId),
     queryFn: () => getThreadFeedbackService({ param: { id: threadId } }),
     staleTime: STALE_TIME_PRESETS.medium, // 2 minutes - feedback changes occasionally
-    // ✅ CRITICAL FIX: Preserve previous data during refetches
-    // This prevents feedback buttons from losing state when query is invalidated
-    // Without this, feedback temporarily becomes empty during refetch,
-    // causing buttons to lose their like/dislike state momentarily
     placeholderData: previousData => previousData,
-    enabled,
+    enabled: isAuthenticated && !!threadId && enabled,
     retry: false,
     throwOnError: false,
   });

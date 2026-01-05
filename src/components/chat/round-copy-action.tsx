@@ -171,3 +171,5 @@ export const RoundCopyAction = memo(
     );
   },
 );
+
+RoundCopyAction.displayName = 'RoundCopyAction';

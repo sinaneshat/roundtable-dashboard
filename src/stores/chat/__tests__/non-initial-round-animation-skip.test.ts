@@ -35,7 +35,7 @@ import { getRoundNumberFromMetadata } from '@/lib/utils';
  *
  * This is the critical decision point:
  * - `skipEntranceAnimations` from screen initialization
- * - `optimistic-` prefix check (legacy, still useful for round 0)
+ * - `optimistic-` prefix check (used for round 0)
  * - `roundNumber > 0` check (the fix)
  */
 function shouldSkipUserMessageAnimation(

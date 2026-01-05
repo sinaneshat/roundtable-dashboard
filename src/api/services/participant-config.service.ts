@@ -19,7 +19,7 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 
 import { normalizeError } from '@/api/common/error-handling';
-import { ChangelogTypes, ChangelogTypeSchema } from '@/api/core/enums';
+import { ChangelogChangeTypes, ChangelogTypes, ChangelogTypeSchema } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { TypedLogger } from '@/api/types/logger';
 import type { DbType } from '@/db';
@@ -273,7 +273,7 @@ export function buildParticipantOperations(
         changeType: ChangelogTypes.REMOVED,
         changeSummary: `Removed ${displayName}`,
         changeData: {
-          type: 'participant',
+          type: ChangelogChangeTypes.PARTICIPANT,
           participantId: removed.id,
           modelId: removed.modelId,
           role: removed.role,
@@ -293,7 +293,7 @@ export function buildParticipantOperations(
         changeType: ChangelogTypes.ADDED,
         changeSummary: `Added ${displayName}`,
         changeData: {
-          type: 'participant',
+          type: ChangelogChangeTypes.PARTICIPANT,
           participantId: realDbId || added.id,
           modelId: added.modelId,
           role: added.role,
@@ -324,9 +324,9 @@ export function buildParticipantOperations(
           changeType: ChangelogTypes.MODIFIED,
           changeSummary: `Updated ${modelName} role from "${oldDisplay}" to "${newDisplay}"`,
           changeData: {
-            type: 'participant_role',
+            type: ChangelogChangeTypes.PARTICIPANT_ROLE,
             participantId: dbP.id,
-            modelId: updated.modelId, // ✅ Required for UI to display model info
+            modelId: updated.modelId,
             oldRole,
             newRole,
           },
@@ -344,10 +344,10 @@ export function buildParticipantOperations(
       const dbP = changes.allDbParticipants.find(db => db.modelId === reenabled.modelId);
       changelogEntries.push({
         id: ulid(),
-        changeType: ChangelogTypes.ADDED, // Treat as "added" for user-facing message
+        changeType: ChangelogTypes.ADDED,
         changeSummary: `Added ${displayName}`,
         changeData: {
-          type: 'participant',
+          type: ChangelogChangeTypes.PARTICIPANT,
           participantId: dbP?.id || reenabled.id,
           modelId: reenabled.modelId,
           role: reenabled.role,

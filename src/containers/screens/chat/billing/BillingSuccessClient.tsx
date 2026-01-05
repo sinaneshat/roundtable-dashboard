@@ -6,6 +6,7 @@ import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/core/enums';
 import { PlanTypes, PurchaseTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
+import type { Subscription } from '@/api/routes/billing/schema';
 import { getMaxModelsForTier, getMonthlyCreditsForTier } from '@/api/services/product-logic.service';
 import { PlanOverviewCard, StatusPage, StatusPageActions } from '@/components/billing';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
@@ -37,9 +38,9 @@ export function BillingSuccessClient() {
   const syncedCreditsBalance = syncResult?.data?.creditsBalance;
   const syncedTier = syncResult?.data?.tierChange?.newTier;
 
-  const displaySubscription = useMemo(() => {
+  const displaySubscription = useMemo((): Subscription | null => {
     return (
-      subscriptionData?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
+      subscriptionData?.data?.items?.find((sub: Subscription) => sub.status === StripeSubscriptionStatuses.ACTIVE)
       ?? subscriptionData?.data?.items?.[0]
       ?? null
     );

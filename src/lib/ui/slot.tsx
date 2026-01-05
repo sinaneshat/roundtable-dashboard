@@ -5,8 +5,7 @@ import { Children, cloneElement, isValidElement } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
-// Custom Slot implementation to avoid React 19 + Radix useComposedRefs infinite loop
-// See: https://github.com/radix-ui/primitives/issues/3675
+// Custom Slot for React 19 + Radix compatibility (avoids useComposedRefs issues)
 
 type SlotProps = {
   children?: ReactNode;
@@ -17,7 +16,7 @@ function isSlottableChild(child: ReactNode): child is ReactElement {
 }
 
 function Slot({ ref, children, ...props }: SlotProps & { ref?: Ref<HTMLElement> | null }) {
-  // eslint-disable-next-line react/no-children-to-array -- Intentional: Custom Slot for React 19 + Radix workaround
+  // eslint-disable-next-line react/no-children-to-array -- Required for React 19 + Radix compatibility
   const childArray = Children.toArray(children);
   const slottableChild = childArray.find(isSlottableChild);
 
@@ -44,7 +43,7 @@ function Slot({ ref, children, ...props }: SlotProps & { ref?: Ref<HTMLElement> 
     mergedProps.className = mergedClassName || undefined;
     mergedProps.ref = ref as Ref<unknown>;
 
-    // eslint-disable-next-line react/no-clone-element -- Intentional: Custom Slot for React 19 + Radix workaround
+    // eslint-disable-next-line react/no-clone-element -- Required for React 19 + Radix compatibility
     return cloneElement(slottableChild, mergedProps);
   }
 

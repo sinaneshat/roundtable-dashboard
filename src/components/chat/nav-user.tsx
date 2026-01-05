@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 import { StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
+import type { Subscription } from '@/api/routes/billing/schema';
 import { Icons } from '@/components/icons';
 import {
   Accordion,
@@ -90,9 +91,9 @@ export function NavUser({ initialSession }: NavUserProps) {
 
   const displayName = user?.name || t('user.defaultName');
   const displayEmail = user?.email || '';
-  const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
+  const subscriptions: Subscription[] = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
   const activeSubscription = subscriptions.find(
-    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
+    (sub: Subscription) => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
   const handleSignOut = async () => {
     await signOut();

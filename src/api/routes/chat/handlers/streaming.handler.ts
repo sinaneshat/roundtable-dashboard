@@ -1386,9 +1386,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             trackError().catch(() => {});
           }
 
-          // ✅ DEEPSEEK R1 WORKAROUND: Suppress logprobs validation errors
-          // These are non-fatal errors from DeepSeek R1's non-conforming logprobs structure
-          // Reference: https://github.com/vercel/ai/issues/9087
+          // Suppress DeepSeek R1 logprobs validation errors (non-conforming API structure)
           if (
             errorName === 'AI_TypeValidationError'
             && streamErrorMessage.includes('logprobs')
