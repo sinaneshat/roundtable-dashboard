@@ -35,6 +35,7 @@ import {
 import { createError, normalizeError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { AIModels } from '@/api/core';
+import { UIMessageRoles } from '@/api/core/enums/ai-sdk';
 import type {
   WebSearchActiveAnswerMode,
   WebSearchComplexity,
@@ -42,8 +43,14 @@ import type {
   WebSearchRawContentFormat,
   WebSearchTimeRange,
   WebSearchTopic,
-} from '@/api/core/enums';
-import { DEFAULT_ACTIVE_ANSWER_MODE, UIMessageRoles, WebSearchActiveAnswerModes, WebSearchAnswerModes, WebSearchRawContentFormats } from '@/api/core/enums';
+} from '@/api/core/enums/web-search';
+import {
+  DEFAULT_ACTIVE_ANSWER_MODE,
+  WebSearchActiveAnswerModes,
+  WebSearchAnswerModes,
+  WebSearchRawContentFormats,
+  WebSearchStreamEventTypes,
+} from '@/api/core/enums/web-search';
 import type {
   WebSearchParameters,
   WebSearchResult,
@@ -1448,10 +1455,11 @@ async function withRetry<T>(
  */
 /**
  * Stream event types for progressive search results
+ * Uses WebSearchStreamEventTypes enum for type discrimination
  */
 export type StreamSearchEvent
   = | {
-    type: 'metadata';
+    type: typeof WebSearchStreamEventTypes.METADATA;
     data: {
       query: string;
       maxResults: number;
@@ -1461,7 +1469,7 @@ export type StreamSearchEvent
     };
   }
   | {
-    type: 'result';
+    type: typeof WebSearchStreamEventTypes.RESULT;
     data: {
       result: WebSearchResultItem;
       index: number;
@@ -1471,11 +1479,11 @@ export type StreamSearchEvent
     };
   }
   | {
-    type: 'complete';
+    type: typeof WebSearchStreamEventTypes.COMPLETE;
     data: { totalResults: number; responseTime: number; requestId: string };
   }
   | {
-    type: 'error';
+    type: typeof WebSearchStreamEventTypes.ERROR;
     data: { error: string; requestId: string; responseTime: number };
   };
 
@@ -1493,7 +1501,7 @@ export async function* streamSearchResults(
     // PHASE 1: Yield Metadata Immediately
     // ============================================================================
     yield {
-      type: 'metadata',
+      type: WebSearchStreamEventTypes.METADATA,
       data: {
         query,
         maxResults,
@@ -1525,7 +1533,7 @@ export async function* streamSearchResults(
 
     if (searchResults.length === 0) {
       yield {
-        type: 'complete',
+        type: WebSearchStreamEventTypes.COMPLETE,
         data: {
           totalResults: 0,
           responseTime: performance.now() - startTime,
@@ -1560,7 +1568,7 @@ export async function* streamSearchResults(
       };
 
       yield {
-        type: 'result',
+        type: WebSearchStreamEventTypes.RESULT,
         data: {
           result: basicResult,
           index: i,
@@ -1647,7 +1655,7 @@ export async function* streamSearchResults(
 
           // ✅ YIELD ENHANCED VERSION (even if only metadata available)
           yield {
-            type: 'result',
+            type: WebSearchStreamEventTypes.RESULT,
             data: {
               result: enhancedResult,
               index: i,
@@ -1672,7 +1680,7 @@ export async function* streamSearchResults(
     // PHASE 4: Yield Completion
     // ============================================================================
     yield {
-      type: 'complete',
+      type: WebSearchStreamEventTypes.COMPLETE,
       data: {
         totalResults: resultsToProcess.length,
         responseTime: performance.now() - startTime,
@@ -1689,7 +1697,7 @@ export async function* streamSearchResults(
 
     // Yield error event
     yield {
-      type: 'error',
+      type: WebSearchStreamEventTypes.ERROR,
       data: {
         error: error instanceof Error ? error.message : 'Search failed',
         requestId,

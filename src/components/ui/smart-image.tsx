@@ -11,7 +11,7 @@ import { cn } from '@/lib/ui/cn';
 
 import { Skeleton } from './skeleton';
 
-type SmartImageProps = Omit<ImageProps, 'onLoad' | 'onError'> & {
+interface SmartImageProps extends Omit<ImageProps, 'onLoad' | 'onError'> {
   /** Custom fallback content when image fails to load */
   fallback?: ReactNode;
   /** Fallback text shown in default error state */
@@ -26,13 +26,13 @@ type SmartImageProps = Omit<ImageProps, 'onLoad' | 'onError'> & {
   onLoadError?: () => void;
   /** Show skeleton with shimmer animation */
   showSkeleton?: boolean;
-};
+}
 
 export function SmartImage({
   src,
   alt,
   fallback,
-  fallbackText = 'Image unavailable',
+  fallbackText,
   aspectRatio,
   containerClassName,
   className,
@@ -75,9 +75,11 @@ export function SmartImage({
 
       {imageState === ImageStates.ERROR && (
         fallback || (
-          <div className="absolute inset-0 flex items-center justify-center bg-muted/50 text-muted-foreground text-sm">
-            {fallbackText}
-          </div>
+          fallbackText && (
+            <div className="absolute inset-0 flex items-center justify-center bg-muted/50 text-muted-foreground text-sm">
+              {fallbackText}
+            </div>
+          )
         )
       )}
 
@@ -105,18 +107,18 @@ export function SmartImage({
 
 type BorderRadiusClass = 'rounded-xl' | 'rounded-2xl' | 'rounded-lg' | 'rounded-md';
 
-type GradientImageProps = SmartImageProps & {
+interface GradientImageProps extends SmartImageProps {
   gradient?: string;
   borderWidth?: number;
   rounded?: BorderRadiusClass;
-};
+}
 
 const RADIUS_MAP: Record<BorderRadiusClass, number> = {
   'rounded-xl': 12,
   'rounded-2xl': 16,
   'rounded-lg': 8,
   'rounded-md': 6,
-} as const;
+};
 
 export function GradientImage({
   gradient = 'from-[#00ccb1] via-[#7b61ff] to-[#ffc414]',

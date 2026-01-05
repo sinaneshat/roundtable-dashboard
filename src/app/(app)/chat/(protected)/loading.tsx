@@ -2,7 +2,7 @@ import Image from 'next/image';
 
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { cn } from '@/lib/ui/cn';
 
 export default function ChatOverviewLoading() {

@@ -15,13 +15,15 @@ import {
 import messages from '@/i18n/locales/en/common.json';
 import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 
+type ErrorDetails = {
+  message?: string;
+  stack?: string;
+  digest?: string;
+};
+
 type ErrorScreenProps = {
   reset: () => void;
-  error?: {
-    message?: string;
-    stack?: string;
-    digest?: string;
-  };
+  error?: ErrorDetails;
 };
 
 function ErrorScreenContent({ reset, error }: ErrorScreenProps) {
@@ -46,12 +48,12 @@ function ErrorScreenContent({ reset, error }: ErrorScreenProps) {
           {showDetails && (
             <details className="w-full rounded-lg bg-destructive/10 p-3 text-left" open>
               <summary className="cursor-pointer text-sm font-medium text-destructive">
-                Error Details (dev/preview only)
+                {t('states.error.detailsTitle')}
               </summary>
               <div className="mt-2 space-y-2">
                 {error.digest && (
                   <div className="text-xs">
-                    <strong>Digest:</strong>
+                    <strong>{t('states.error.digest')}</strong>
                     <code className="ml-2 rounded bg-black/10 px-1.5 py-0.5">
                       {error.digest}
                     </code>
@@ -59,7 +61,7 @@ function ErrorScreenContent({ reset, error }: ErrorScreenProps) {
                 )}
                 {error.message && (
                   <div className="text-xs">
-                    <strong>Error:</strong>
+                    <strong>{t('states.error.errorLabel')}</strong>
                     <pre className="mt-1 overflow-auto rounded bg-black/10 p-2 text-xs max-h-32">
                       {error.message}
                     </pre>
@@ -67,7 +69,7 @@ function ErrorScreenContent({ reset, error }: ErrorScreenProps) {
                 )}
                 {error.stack && (
                   <div className="text-xs">
-                    <strong>Stack Trace:</strong>
+                    <strong>{t('states.error.stackTrace')}</strong>
                     <pre className="mt-1 overflow-auto rounded bg-black/10 p-2 text-xs max-h-48">
                       {error.stack}
                     </pre>

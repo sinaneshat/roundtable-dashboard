@@ -866,7 +866,11 @@ describe('reset State Groups', () => {
   describe('moderator state reset', () => {
     it('contains moderator creation flags', () => {
       expect(MODERATOR_STATE_RESET).toHaveProperty('isModeratorStreaming');
-      expect(MODERATOR_STATE_RESET).toHaveProperty('isWaitingForChangelog');
+      // ⚠️ NOTE: isWaitingForChangelog and configChangeRoundNumber are NOT included
+      // in MODERATOR_STATE_RESET. They must ONLY be cleared by use-changelog-sync.ts
+      // after changelog is fetched. This ensures correct ordering: PATCH → changelog → streaming
+      expect(MODERATOR_STATE_RESET).not.toHaveProperty('isWaitingForChangelog');
+      expect(MODERATOR_STATE_RESET).not.toHaveProperty('configChangeRoundNumber');
     });
   });
 

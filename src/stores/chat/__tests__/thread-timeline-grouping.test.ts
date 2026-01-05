@@ -19,16 +19,16 @@
  * - Pre-search rendering incorrectly
  */
 
-import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { UIMessageRoles } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
-import { useThreadTimeline } from '@/hooks/utils/use-thread-timeline';
+import { useThreadTimeline } from '@/hooks/utils';
 import {
   createTestAssistantMessage,
   createTestModeratorMessage,
   createTestUserMessage,
+  renderHook,
 } from '@/lib/testing';
 
 // ============================================================================

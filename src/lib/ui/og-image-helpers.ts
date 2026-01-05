@@ -8,7 +8,7 @@
  */
 
 import type { ChatMode } from '@/api/core/enums';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { getModelIconInfo } from '@/lib/utils';
 

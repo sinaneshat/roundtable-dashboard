@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
-import { getParticipantCompletionStatus, isMessageComplete } from '@/stores/chat/utils/participant-completion-gate';
+import { getParticipantCompletionStatus, isMessageComplete } from '@/stores/chat';
 
 // ============================================================================
 // Test Utilities

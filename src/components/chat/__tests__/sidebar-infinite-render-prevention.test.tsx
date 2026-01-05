@@ -104,7 +104,6 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // Should NOT import SidebarMenuAction (removed as part of fix)
       const importsSidebarMenuAction = /import\s+\{[^}]*SidebarMenuAction[^}]*\}\s+from\s+['"]@\/components\/ui\/sidebar['"]/.test(content);
       expect(importsSidebarMenuAction).toBe(false);
     });

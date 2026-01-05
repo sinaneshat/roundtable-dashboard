@@ -22,7 +22,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageStatuses, ScreenModes } from '@/api/core/enums';
-import type { StoredPreSearch } from '@/stores/chat/store-schemas';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';

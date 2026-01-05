@@ -16,7 +16,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { TimelineItem } from '@/hooks/utils/use-thread-timeline';
+import type { TimelineItem } from '@/hooks/utils';
 
 // ============================================================================
 // TEST HELPERS - Pure function logic extracted from hook

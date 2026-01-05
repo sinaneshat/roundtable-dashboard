@@ -23,7 +23,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage } from '@/lib/testing';
-import { getUserMetadata } from '@/lib/utils/metadata';
+import { getUserMetadata } from '@/lib/utils';
 import type { ChatStore } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 

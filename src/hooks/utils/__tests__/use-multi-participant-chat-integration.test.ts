@@ -24,7 +24,8 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { MessageRoles, UIMessageRoles } from '@/api/core/enums';
-import { getUserMetadata } from '@/lib/utils';
+import { createInvalidMetadata } from '@/lib/testing/typed-test-mocks';
+import { getRoundNumber, getUserMetadata } from '@/lib/utils';
 
 // ============================================================================
 // Simulated Components
@@ -39,13 +40,6 @@ function simulateAiSdkToStoreSync(
   storeMessages: UIMessage[],
 ): UIMessage[] {
   const chatMessageIds = new Set(aiSdkMessages.map(m => m.id));
-
-  // Helper to get round number (mirrors getRoundNumber from lib/utils)
-  const getRound = (metadata: Record<string, unknown> | null | undefined): number | null => {
-    if (!metadata || typeof metadata.roundNumber !== 'number')
-      return null;
-    return metadata.roundNumber;
-  };
 
   // Find store-only messages
   const storeOnlyMessages = storeMessages.filter((m) => {
@@ -62,8 +56,8 @@ function simulateAiSdkToStoreSync(
     }
 
     // Preserve messages from different rounds (they might have been filtered by AI SDK)
-    const chatRounds = new Set(aiSdkMessages.map(cm => getRound(cm.metadata)));
-    const msgRound = getRound(m.metadata);
+    const chatRounds = new Set(aiSdkMessages.map(cm => getRoundNumber(cm.metadata)));
+    const msgRound = getRoundNumber(m.metadata);
     if (msgRound !== null && !chatRounds.has(msgRound))
       return true;
 
@@ -466,7 +460,7 @@ describe('useMultiParticipantChat Integration', () => {
           id: 'msg-null-meta',
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'Test' }],
-          metadata: null as unknown as Record<string, unknown>,
+          metadata: createInvalidMetadata('null'),
         },
       ];
 

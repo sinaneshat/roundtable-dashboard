@@ -21,6 +21,7 @@ import {
   createTestModeratorMessage,
   createTestUserMessage,
 } from '@/lib/testing';
+import { getRoundNumber } from '@/lib/utils';
 
 describe('submission Flow Sanity - State Transition Order', () => {
   it('should transition from initial UI to streaming in correct order', () => {
@@ -142,10 +143,9 @@ describe('submission Flow Sanity - State Transition Order', () => {
     expect(lastMessage).toBeDefined();
     expect(lastMessage!.metadata).toBeDefined();
 
-    // Type-safe assertion for roundNumber in metadata
-    const metadata = lastMessage!.metadata as Record<string, unknown>;
-    expect(metadata).toHaveProperty('roundNumber');
-    expect(metadata.roundNumber).toBe(currentRound);
+    // Type-safe metadata extraction
+    const messageRoundNumber = getRoundNumber(lastMessage!.metadata);
+    expect(messageRoundNumber).toBe(currentRound);
   });
 });
 

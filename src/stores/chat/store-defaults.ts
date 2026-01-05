@@ -219,12 +219,16 @@ export const STREAMING_STATE_RESET = {
  * Moderator creation flags
  * Used when moderator creation/streaming completes
  * Note: Moderator now renders inline via messages array with isModerator: true metadata
+ *
+ * ⚠️ CRITICAL: Do NOT include isWaitingForChangelog or configChangeRoundNumber here!
+ * These changelog blocking flags must ONLY be cleared by use-changelog-sync.ts
+ * after the changelog has been fetched. Clearing them here causes pre-search
+ * to execute before changelog is fetched, breaking the ordering guarantee:
+ * PATCH → changelog → pre-search/streaming
  */
 export const MODERATOR_STATE_RESET = {
   isModeratorStreaming: false,
-  isWaitingForChangelog: false,
-  configChangeRoundNumber: null, // Clear when changelog waiting is done
-} satisfies Pick<FlagsState, 'isModeratorStreaming' | 'isWaitingForChangelog'> & Pick<DataState, 'configChangeRoundNumber'>;
+} satisfies Pick<FlagsState, 'isModeratorStreaming'>;
 
 /**
  * Pending message state that must be cleared after message is sent

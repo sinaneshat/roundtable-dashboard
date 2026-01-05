@@ -36,7 +36,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { cn } from '@/lib/ui/cn';
 

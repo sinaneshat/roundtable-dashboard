@@ -1,7 +1,7 @@
 import { Column, Row, Section } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { colors, spacing } from '@/emails/design-tokens';
 
 import { EmailLink } from '../content/email-link';

@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import TermsScreen from '@/containers/screens/legal/TermsScreen';
-import { isArrayOf, isNonEmptyString } from '@/lib/utils/type-guards';
+import { isArrayOf, isNonEmptyString } from '@/lib/utils';
 import { createMetadata } from '@/utils';
 
 // SSG: Pure static - only changes on deploy

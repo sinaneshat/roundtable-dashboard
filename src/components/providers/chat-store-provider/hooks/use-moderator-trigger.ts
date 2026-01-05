@@ -5,10 +5,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
-import { FinishReasons, MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases, TextPartStates, UIMessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases, TextPartStates, UIMessageRoles } from '@/api/core/enums';
 import { getRoundNumber, isObject, rlog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
-import { isRoundComplete } from '@/stores/chat/utils/participant-completion-gate';
+import { isRoundComplete } from '@/stores/chat';
 
 type UseModeratorTriggerOptions = {
   store: ChatStoreApi;
@@ -179,7 +179,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
                   msg.id === moderatorId
                     ? {
                         ...msg,
-                        parts: [{ type: 'text' as const, text: textToSet, state: TextPartStates.STREAMING }],
+                        parts: [{ type: MessagePartTypes.TEXT, text: textToSet, state: TextPartStates.STREAMING }],
                       }
                     : msg,
                 ),
@@ -213,7 +213,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
                       msg.id === moderatorId
                         ? {
                             ...msg,
-                            parts: [{ type: 'text' as const, text: textToSet, state: TextPartStates.STREAMING }],
+                            parts: [{ type: MessagePartTypes.TEXT, text: textToSet, state: TextPartStates.STREAMING }],
                           }
                         : msg,
                     ),
@@ -250,7 +250,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
               msg.id === moderatorMessageId
                 ? {
                     ...msg,
-                    parts: [{ type: 'text' as const, text: finalText, state: TextPartStates.DONE }],
+                    parts: [{ type: MessagePartTypes.TEXT, text: finalText, state: TextPartStates.DONE }],
                     metadata: {
                       ...(msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}),
                       finishReason: FinishReasons.STOP,
@@ -262,7 +262,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
             const moderatorMessage = {
               id: moderatorMessageId,
               role: UIMessageRoles.ASSISTANT,
-              parts: [{ type: 'text' as const, text: finalText, state: TextPartStates.DONE }],
+              parts: [{ type: MessagePartTypes.TEXT, text: finalText, state: TextPartStates.DONE }],
               metadata: {
                 role: MessageRoles.ASSISTANT,
                 roundNumber,

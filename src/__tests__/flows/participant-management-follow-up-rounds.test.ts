@@ -27,10 +27,8 @@ import {
   createMockStoredPreSearch,
   createParticipantConfig,
 } from '@/lib/testing';
-import { shouldWaitForPreSearch } from '@/stores/chat/utils/pre-search-execution';
-
-import type { ChatStoreApi } from '../../stores/chat/store';
-import { createChatStore } from '../../stores/chat/store';
+import type { ChatStoreApi } from '@/stores/chat';
+import { createChatStore, shouldWaitForPreSearch } from '@/stores/chat';
 
 // ============================================================================
 // TEST SETUP HELPERS

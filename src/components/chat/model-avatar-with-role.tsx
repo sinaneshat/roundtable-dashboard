@@ -8,8 +8,7 @@ import { AvatarSizeMetadata, DEFAULT_AVATAR_SIZE, getShortRoleName } from '@/api
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/ui/cn';
-import { getProviderIcon } from '@/lib/utils/ai-display';
-import { getRoleColors } from '@/lib/utils/role-colors';
+import { getProviderIcon, getRoleColors } from '@/lib/utils';
 
 type ModelAvatarWithRoleProps = {
   model: EnhancedModelResponse;

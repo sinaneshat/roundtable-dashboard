@@ -5,7 +5,7 @@ import { permanentRedirect, redirect } from 'next/navigation';
 
 import { MessageRoles, ResourceUnavailableReasons } from '@/api/core/enums';
 import type { ThreadDetailPayload } from '@/api/routes/chat/schema';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import PublicChatThreadScreen from '@/containers/screens/chat/PublicChatThreadScreen';
 import { getCachedPublicThreadForMetadata } from '@/lib/cache/thread-cache';
 import { getQueryClient } from '@/lib/data/query-client';

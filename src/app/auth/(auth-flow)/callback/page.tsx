@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import AuthCallbackScreen from '@/containers/screens/auth/AuthCallbackScreen';
 import { createMetadata } from '@/utils';
 

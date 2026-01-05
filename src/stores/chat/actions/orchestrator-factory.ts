@@ -31,7 +31,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { hasStateChanged, mergeServerClientState } from '@/lib/utils';
-import type { ChatStore } from '@/stores/chat/store-schemas';
+import type { ChatStore } from '@/stores/chat';
 
 /**
  * Configuration for creating an orchestrator hook

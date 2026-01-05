@@ -22,9 +22,8 @@ import { useStore } from 'zustand';
 import { useThreadRoundChangelogQuery } from '@/hooks/queries';
 import { queryKeys } from '@/lib/data/query-keys';
 import { rlog } from '@/lib/utils';
-import type { ChatStoreApi } from '@/stores/chat';
-import type { ChangelogListCache } from '@/stores/chat/actions/types';
-import { validateChangelogListCache } from '@/stores/chat/actions/types';
+import type { ChangelogListCache, ChatStoreApi } from '@/stores/chat';
+import { validateChangelogListCache } from '@/stores/chat';
 
 type UseChangelogSyncParams = {
   store: ChatStoreApi;

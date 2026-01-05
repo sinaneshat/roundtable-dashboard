@@ -15,7 +15,7 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { MessageRoles } from '@/api/core/enums';
-import type { TimelineItem } from '@/hooks/utils/use-thread-timeline';
+import type { TimelineItem } from '@/hooks/utils';
 import { getRoundNumberFromMetadata } from '@/lib/utils';
 
 // Simulate useThreadTimeline's message grouping

@@ -28,7 +28,7 @@ import { describe, expect, it } from 'vitest';
 import { ChatModes, FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, ScreenModes, UIMessageRoles } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
 import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage } from '@/lib/testing';
-import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
+import { getCurrentRoundNumber } from '@/lib/utils';
 
 import { createChatStore } from '../store';
 

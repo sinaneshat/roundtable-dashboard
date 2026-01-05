@@ -97,13 +97,15 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       store.getState().setIsStreaming(false);
       store.getState().completeStreaming();
 
-      // completeStreaming spreads MODERATOR_STATE_RESET which clears isWaitingForChangelog
+      // ⚠️ CRITICAL: isWaitingForChangelog is NOT cleared by completeStreaming
+      // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched
+      // This ensures correct ordering: PATCH → changelog → pre-search/streaming
       const state = store.getState();
       expect(state.isStreaming).toBe(false);
       expect(state.waitingToStartStreaming).toBe(false);
-      // ✅ Actually, completeStreaming DOES clear isWaitingForChangelog (via MODERATOR_STATE_RESET)
-      // This test demonstrates that PATCH may be interrupted if user stops
-      expect(state.isWaitingForChangelog).toBe(false);
+      // The changelog flag remains true - it will be cleared by the changelog sync
+      // hook when it detects the stop or when the changelog fetch completes
+      expect(state.isWaitingForChangelog).toBe(true);
     });
 
     it('should allow changelog PATCH to create new participant even after stop', () => {
@@ -176,10 +178,12 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // Stop during fetch
       store.getState().completeStreaming();
 
-      // completeStreaming clears changelog waiting (via MODERATOR_STATE_RESET)
+      // ⚠️ NOTE: completeStreaming does NOT clear isWaitingForChangelog anymore
+      // The changelog flag must ONLY be cleared by use-changelog-sync.ts
+      // This ensures correct ordering: PATCH → changelog → pre-search/streaming
       const state = store.getState();
       expect(state.isStreaming).toBe(false);
-      expect(state.isWaitingForChangelog).toBe(false); // Cleared by completeStreaming
+      expect(state.isWaitingForChangelog).toBe(true); // NOT cleared by completeStreaming
     });
 
     it('should allow continuation after changelog timeout when stopped', () => {

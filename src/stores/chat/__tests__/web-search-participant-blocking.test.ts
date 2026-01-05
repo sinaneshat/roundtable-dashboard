@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MessageStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
-import { shouldWaitForPreSearch } from '@/stores/chat/utils/pre-search-execution';
+import { shouldWaitForPreSearch } from '@/stores/chat';
 
 import { createChatStore } from '../store';
 

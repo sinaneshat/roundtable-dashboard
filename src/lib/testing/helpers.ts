@@ -10,7 +10,7 @@ import type { AbstractIntlMessages } from 'next-intl';
 import type { UIMessageRole } from '@/api/core/enums';
 import { FinishReasons, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import { getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
+import { getParticipantIndex, getRoundNumber } from '@/lib/utils';
 
 // Type aliases for test messages - these are UIMessage with specific metadata shapes
 export type TestUserMessage = UIMessage;

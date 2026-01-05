@@ -34,7 +34,7 @@ import { createChatStore } from '@/stores/chat';
 /**
  * Check if an object or any nested property is frozen
  */
-function isFrozen(obj: unknown): boolean {
+function isFrozen(obj: object | null | undefined): boolean {
   return Object.isFrozen(obj);
 }
 
@@ -43,12 +43,12 @@ function isFrozen(obj: unknown): boolean {
  * Simulates Immer's Object.freeze() behavior in Zustand stores
  * (In tests, Immer may not freeze for performance - this simulates production behavior)
  */
-function deepFreeze<T>(obj: T): T {
+function deepFreeze<T extends object>(obj: T): T {
   Object.freeze(obj);
   Object.getOwnPropertyNames(obj).forEach((prop) => {
-    const value = (obj as Record<string, unknown>)[prop];
+    const value = obj[prop as keyof T];
     if (value && typeof value === 'object') {
-      deepFreeze(value);
+      deepFreeze(value as object);
     }
   });
   return obj;
@@ -99,24 +99,6 @@ function createAiSdkMessage(id: string, roundNumber: number, participantIndex = 
       roundNumber,
       participantId: `participant-${participantIndex}`,
       participantIndex,
-      model: 'test-model',
-    },
-  };
-}
-
-/**
- * Create a message with streaming content
- */
-function _createStreamingMessage(id: string, text: string, roundNumber: number): UIMessage {
-  return {
-    id,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text, state: TextPartStates.STREAMING }],
-    metadata: {
-      role: UIMessageRoles.ASSISTANT,
-      roundNumber,
-      participantId: 'p1',
-      participantIndex: 0,
       model: 'test-model',
     },
   };

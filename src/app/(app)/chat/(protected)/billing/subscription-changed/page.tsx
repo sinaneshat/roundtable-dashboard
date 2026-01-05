@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { SubscriptionChangedClient } from '@/containers/screens/chat/billing/SubscriptionChangedClient';
 import { createMetadata } from '@/utils';
 

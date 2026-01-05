@@ -174,21 +174,6 @@ export function hasParticipantsChanged(
   return !compareParticipants(current, updated, mode);
 }
 
-/**
- * Extract model IDs from participants as comma-separated string
- *
- * @param participants - Array of participants
- * @returns Sorted, comma-separated model IDs
- */
-export function getParticipantModelIdsString(
-  participants: ComparableParticipant[],
-): string {
-  return participants
-    .map(p => p.modelId)
-    .sort()
-    .join(',');
-}
-
 // ============================================================================
 // Enabled Participant Utilities (SINGLE SOURCE OF TRUTH)
 // Eliminates 30+ duplicate `.filter(p => p.isEnabled)` patterns
@@ -395,27 +380,6 @@ export function chatParticipantsToConfig(
 // ============================================================================
 // Validation Functions
 // ============================================================================
-
-/**
- * Validate participant model ID format
- *
- * Valid format: `provider/model` (e.g., "openai/gpt-4")
- *
- * @param modelId - Model ID to validate
- * @returns True if valid
- */
-export function validateParticipantModelId(modelId: string): boolean {
-  if (!modelId || typeof modelId !== 'string') {
-    return false;
-  }
-
-  const parts = modelId.split('/');
-  return parts.length === 2
-    && parts[0] !== undefined
-    && parts[0].length > 0
-    && parts[1] !== undefined
-    && parts[1].length > 0;
-}
 
 /**
  * Check if participant already exists in list

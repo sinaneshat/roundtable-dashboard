@@ -7,7 +7,7 @@ import { Logo } from '@/components/logo';
 import { Card } from '@/components/ui/card';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { ThreadMessagesSkeleton } from '@/components/ui/skeleton';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 
 // Client-only, deferred loading - LiveChatDemo is 350+ lines with ThreadTimeline
 // Only shown on desktop (lg:), so mobile users never load this

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { auth } from '@/lib/auth';
 import { createMetadata } from '@/utils';
 

@@ -11,6 +11,25 @@ import { hc } from 'hono/client';
 import type { AppType } from '@/api';
 import { getApiBaseUrl, getApiUrlAsync, getProductionApiUrl } from '@/lib/config/base-urls';
 
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+/**
+ * Centralized type for API client - used across all services
+ * This eliminates the need to repeat this type definition in every service
+ */
+export type ApiClientType = ReturnType<typeof hc<AppType>>;
+
+/**
+ * Export AppType for use in services layer
+ */
+export type { AppType };
+
+// ============================================================================
+// URL Helpers
+// ============================================================================
+
 /**
  * Get API base URL for Hono RPC client
  * Server-side: uses production API URL for SSG builds
@@ -23,6 +42,10 @@ function getClientApiUrl() {
   return getApiBaseUrl();
 }
 
+// ============================================================================
+// Client Factory Functions
+// ============================================================================
+
 /**
  * Create a type-safe Hono RPC client
  *
@@ -34,7 +57,7 @@ function getClientApiUrl() {
  * @param options - Client options
  * @param options.bypassCache - If true, adds cache-busting headers to bypass HTTP cache
  */
-export async function createApiClient(options?: { bypassCache?: boolean }) {
+export async function createApiClient(options?: { bypassCache?: boolean }): Promise<ApiClientType> {
   // Check if we're on server-side (Next.js server component or API route)
   if (typeof window === 'undefined') {
     // Server-side: Dynamically import cookies to avoid client-side bundling issues
@@ -91,7 +114,7 @@ export async function createApiClient(options?: { bypassCache?: boolean }) {
  * NOTE: Now async to properly detect Cloudflare runtime environment.
  * Uses getApiUrlAsync() to correctly resolve preview vs prod URLs.
  */
-export async function createPublicApiClient() {
+export async function createPublicApiClient(): Promise<ApiClientType> {
   // Server-side: use async env detection for proper Cloudflare context
   if (typeof window === 'undefined') {
     const apiUrl = await getApiUrlAsync();
@@ -109,19 +132,6 @@ export async function createPublicApiClient() {
     },
   });
 }
-
-/**
- * Centralized type for awaited API client - used across all services
- * This eliminates the need to repeat this type definition in every service
- *
- * Using ReturnType directly from hc to avoid deep type instantiation
- */
-export type ApiClientType = ReturnType<typeof hc<AppType>>;
-
-/**
- * Export AppType for use in services layer
- */
-export type { AppType };
 
 // ============================================================================
 // Authenticated Fetch Utility - For non-RPC requests (multipart, binary)

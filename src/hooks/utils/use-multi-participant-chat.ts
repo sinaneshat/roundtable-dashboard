@@ -14,7 +14,7 @@ import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractValidFileParts, isRenderableContent, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, mergeParticipantMetadata, rlog } from '@/lib/utils';
+import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, mergeParticipantMetadata, rlog } from '@/lib/utils';
 
 import { useSyncedRefs } from './use-synced-refs';
 
@@ -839,7 +839,7 @@ export function useMultiParticipantChat(
               if (existing) {
                 updated[existingIndex] = {
                   ...existing,
-                  parts: existing.parts?.length ? existing.parts : [{ type: 'text' as const, text: '' }],
+                  parts: existing.parts?.length ? existing.parts : [{ type: MessagePartTypes.TEXT, text: '' }],
                   metadata: {
                     ...(typeof existing.metadata === 'object' ? existing.metadata : {}),
                     hasError: true,
@@ -1869,7 +1869,7 @@ export function useMultiParticipantChat(
           setMessages(currentMessages =>
             structuredClone(currentMessages.map(m =>
               m.id === expectedMessageId
-                ? { ...m, parts: [], metadata: { ...m.metadata as object, finishReason: undefined } }
+                ? { ...m, parts: [], metadata: isObject(m.metadata) ? { ...m.metadata, finishReason: undefined } : { finishReason: undefined } }
                 : m,
             )),
           );

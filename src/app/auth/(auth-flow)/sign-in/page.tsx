@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
 import { AuthFormLoader } from '@/components/auth/auth-form-loader';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { createMetadata } from '@/utils';
 
 export async function generateMetadata(): Promise<Metadata> {

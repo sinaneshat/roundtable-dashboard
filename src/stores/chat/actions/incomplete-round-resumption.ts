@@ -730,9 +730,11 @@ export function useIncompleteRoundResumption(
     // Prepare for new message - this sets pendingMessage and adds optimistic user message
     actions.prepareForNewMessage(recoveredQuery, expectedModelIds);
 
-    // ✅ CRITICAL FIX: Clear isWaitingForChangelog immediately after prepareForNewMessage
-    // This MUST happen BEFORE marking as attempted, so pendingMessage effect can run
-    actions.setIsWaitingForChangelog(false);
+    // ⚠️ NOTE: Do NOT clear isWaitingForChangelog here!
+    // The changelog blocking flag must ONLY be cleared by use-changelog-sync.ts
+    // If the flag is set but configChangeRoundNumber is null, the safety mechanism
+    // in use-changelog-sync.ts (lines 152-156) will clear it automatically.
+    // Clearing it here causes race conditions with config change submissions.
 
     // ✅ ROBUSTNESS FIX: Set streamingRoundNumber and waitingToStartStreaming
     // to trigger the round resumption flow instead of relying solely on pendingMessage effect

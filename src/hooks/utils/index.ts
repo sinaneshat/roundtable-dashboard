@@ -60,9 +60,9 @@ export { useSyncedRefs } from './use-synced-refs';
 export type { TimelineItem, UseThreadTimelineOptions } from './use-thread-timeline';
 export { useThreadTimeline } from './use-thread-timeline';
 export { useIsFirstRender, useTimelineAnimations } from './use-timeline-animations';
-// useToast is exported for internal use by Toaster component
+// useToast and toast are exported for internal use by Toaster component and toast-manager
 // For application code, use toastManager/showApiErrorToast from @/lib/toast
-export { useToast } from './use-toast';
+export { toast, useToast } from './use-toast';
 export type { UseVirtualizedTimelineOptions, UseVirtualizedTimelineResult } from './use-virtualized-timeline';
 export { useVirtualizedTimeline } from './use-virtualized-timeline';
 export { useVisualViewportPosition } from './use-visual-viewport-position';

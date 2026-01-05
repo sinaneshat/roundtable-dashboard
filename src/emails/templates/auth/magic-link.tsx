@@ -12,7 +12,7 @@ import {
   Text,
 } from '@react-email/components';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { Logo } from '@/emails/components/header/logo';
 import { colors, spacing, typography } from '@/emails/design-tokens';
 

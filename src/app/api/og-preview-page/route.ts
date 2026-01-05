@@ -6,7 +6,7 @@
  */
 import { NextResponse } from 'next/server';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 
 export async function GET() {
   const html = `

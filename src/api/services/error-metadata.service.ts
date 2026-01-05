@@ -17,8 +17,7 @@ import { z } from 'zod';
 import type { ErrorCategory } from '@/api/core/enums';
 import { ErrorCategorySchema, FinishReasonSchema } from '@/api/core/enums';
 import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
-import { isObject } from '@/lib/utils';
-import { isTransientError } from '@/lib/utils/error-metadata-builders';
+import { isObject, isTransientError } from '@/lib/utils';
 
 // ============================================================================
 // TYPE DEFINITIONS (Zod Schemas - Single Source of Truth)

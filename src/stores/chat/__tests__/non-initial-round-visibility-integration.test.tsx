@@ -8,27 +8,36 @@
  * They should show IMMEDIATELY when submit is pressed.
  */
 
-import { renderHook } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatModes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils';
+import { renderHook } from '@/lib/testing';
 import { getRoundNumber } from '@/lib/utils';
 
 import { createChatStore } from '../store';
 
-// Mock i18n
-vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
-}));
+// Mock i18n - use importOriginal to keep NextIntlClientProvider
+vi.mock('next-intl', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next-intl')>();
+  return {
+    ...actual,
+    useTranslations: () => (key: string) => key,
+  };
+});
 
-// Mock model queries
-vi.mock('@/hooks/queries', () => ({
-  useModelsQuery: () => ({ data: null, isLoading: false }),
-  useThreadPreSearchesQuery: () => ({ data: [], isLoading: false }),
-}));
+// Mock model queries - use importOriginal to keep other exports
+vi.mock('@/hooks/queries', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/queries')>();
+  return {
+    ...actual,
+    useModelsQuery: () => ({ data: null, isLoading: false }),
+    useThreadPreSearchesQuery: () => ({ data: [], isLoading: false }),
+    useThreadRoundChangelogQuery: () => ({ data: null, isLoading: false }),
+  };
+});
 
 describe('non-Initial Round Visibility - Integration', () => {
   let store: ReturnType<typeof createChatStore>;

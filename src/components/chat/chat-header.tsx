@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useSidebarOptional } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { cn } from '@/lib/ui/cn';
 
 import { ChatScrollButton } from './chat-scroll-button';

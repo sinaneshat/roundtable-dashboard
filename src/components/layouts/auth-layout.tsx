@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { Logo } from '@/components/logo';
 import { RadialGlow } from '@/components/ui/radial-glow';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 
 type AuthLayoutProps = {
   children: React.ReactNode;

@@ -84,24 +84,33 @@ export function createPartialSchema<T extends z.ZodRawShape>(
   return schema.partial();
 }
 
-export function createUpdateSchema<T extends z.ZodRawShape, K extends keyof T>(
+/**
+ * Creates a schema with specified fields omitted
+ * Use for creating update/partial schemas from base schemas
+ * Note: Different from drizzle-zod's createUpdateSchema which derives from table
+ */
+export function createOmitSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   omitFields: readonly K[],
 ) {
+  // Note: Type assertion required due to Zod's complex Mask type inference
+  // Object.fromEntries creates Record<string, boolean> which must be cast to Zod's expected type
   const omitObj = Object.fromEntries(
     omitFields.map(key => [key, true]),
-  );
-  return schema.omit(omitObj as unknown as Parameters<typeof schema.omit>[0]);
+  ) as Record<K, true> as Parameters<(typeof schema)['omit']>[0];
+  return schema.omit(omitObj);
 }
 
 export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   pickFields: readonly K[],
 ) {
+  // Note: Type assertion required due to Zod's complex Mask type inference
+  // Object.fromEntries creates Record<string, boolean> which must be cast to Zod's expected type
   const pickObj = Object.fromEntries(
     pickFields.map(key => [key, true]),
-  );
-  return schema.pick(pickObj as unknown as Parameters<typeof schema.pick>[0]);
+  ) as Record<K, true> as Parameters<(typeof schema)['pick']>[0];
+  return schema.pick(pickObj);
 }
 
 export const FilterValueSchema = z.union([

@@ -19,8 +19,6 @@ type SidebarLoadingFallbackProps = {
 };
 
 /**
- * SidebarLoadingFallback
- *
  * Reusable sidebar loading state for Suspense boundaries.
  * Exact structural match with AppSidebar - same width, spacing, padding.
  */

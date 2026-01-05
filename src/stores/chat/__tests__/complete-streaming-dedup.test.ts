@@ -66,11 +66,14 @@ describe('completeStreaming Deduplication', () => {
       expect(store.getState().isModeratorStreaming).toBe(true);
       expect(store.getState().isWaitingForChangelog).toBe(true);
 
-      // completeStreaming should reset both moderator flags
+      // completeStreaming should reset isModeratorStreaming
       store.getState().completeStreaming();
 
       expect(store.getState().isModeratorStreaming).toBe(false);
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      // ⚠️ CRITICAL: isWaitingForChangelog is NOT cleared by completeStreaming
+      // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched
+      // This ensures correct ordering: PATCH → changelog → pre-search/streaming
+      expect(store.getState().isWaitingForChangelog).toBe(true);
     });
 
     it('should not require separate completeModeratorStream call', () => {

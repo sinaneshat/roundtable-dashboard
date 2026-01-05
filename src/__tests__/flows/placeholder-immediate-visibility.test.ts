@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest';
 
 import { FinishReasons, MessageRoles, MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
 import { createTestUserMessage } from '@/lib/testing';
-import { getRoundNumber } from '@/lib/utils/metadata';
+import { getRoundNumber } from '@/lib/utils';
 
 import { createChatStore } from '../../stores/chat/store';
 

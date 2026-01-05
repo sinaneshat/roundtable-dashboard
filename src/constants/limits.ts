@@ -8,7 +8,7 @@
  *
  * USAGE:
  * ```ts
- * import { LIMITS } from '@/constants/limits';
+ * import { LIMITS } from '@/constants';
  *
  * const limit = LIMITS.STANDARD_PAGE; // 20
  * ```

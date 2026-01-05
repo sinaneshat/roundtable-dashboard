@@ -15,7 +15,7 @@ import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollAwareParticipant, ScrollAwareUserMessage, ScrollFromTop } from '@/components/ui/motion';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useModelLookup } from '@/hooks/utils';

@@ -18,7 +18,7 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { PaymentMethodType, StripeSubscriptionStatus } from '@/api/core/enums';
-import { BillingIntervals, DEFAULT_PAYMENT_METHOD_TYPE, isPaymentMethodType, StripeSubscriptionStatusSchema } from '@/api/core/enums';
+import { BillingIntervals, DEFAULT_PAYMENT_METHOD_TYPE, InvoiceStatuses, isPaymentMethodType, PriceTypes, StripeSubscriptionStatusSchema } from '@/api/core/enums';
 import { stripeService } from '@/api/services/stripe.service';
 import { syncUserQuotaFromSubscription } from '@/api/services/usage-tracking.service';
 import * as tables from '@/db';
@@ -343,7 +343,7 @@ export async function syncStripeDataFromStripe(
     active: price.active,
     currency: price.currency,
     unitAmount: price.unit_amount ?? null,
-    type: price.type === 'one_time' ? 'one_time' : 'recurring',
+    type: price.type === PriceTypes.ONE_TIME ? PriceTypes.ONE_TIME : PriceTypes.RECURRING,
     interval: price.recurring?.interval ?? null,
     intervalCount: price.recurring?.interval_count ?? null,
     trialPeriodDays: null,
@@ -415,7 +415,7 @@ export async function syncStripeDataFromStripe(
           : null
       : null;
 
-    const isPaid = invoice.status === 'paid';
+    const isPaid = invoice.status === InvoiceStatuses.PAID;
 
     return db.insert(tables.stripeInvoice).values({
       id: invoice.id,

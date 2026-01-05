@@ -3,7 +3,7 @@ import { useTranslations } from 'next-intl';
 
 import type { LogoSize, LogoVariant } from '@/api/core/enums';
 import { LogoSizeMetadata, LogoSizes, LogoVariants } from '@/api/core/enums';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { cn } from '@/lib/ui/cn';
 
 type Props = {

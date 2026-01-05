@@ -1,4 +1,4 @@
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 /**

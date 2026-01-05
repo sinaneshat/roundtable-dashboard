@@ -27,7 +27,7 @@ import { z } from 'zod';
 
 import type { SortDirection } from '@/api/core/enums';
 import { SortDirections, SortDirectionSchema } from '@/api/core/enums';
-import { API } from '@/constants/application';
+import { API } from '@/constants';
 
 // ============================================================================
 // PAGINATION CONSTANTS

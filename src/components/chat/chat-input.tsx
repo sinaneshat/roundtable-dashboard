@@ -12,7 +12,7 @@ import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization-lazy';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { STRING_LIMITS } from '@/constants/validation';
+import { STRING_LIMITS } from '@/constants';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import type { PendingAttachment } from '@/hooks/utils';
 import {

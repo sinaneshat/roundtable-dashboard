@@ -1,4 +1,4 @@
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 
 import { EmailLink } from '../content/email-link';
 import { EmailSection } from '../content/email-section';

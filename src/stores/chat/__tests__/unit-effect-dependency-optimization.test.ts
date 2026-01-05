@@ -21,20 +21,19 @@
  * - flow-loading.ts: Loading state calculation
  */
 
-import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FlowStates, MessageRoles, ScreenModes } from '@/api/core/enums';
-import { createChatStore } from '@/stores/chat';
-import { useFlowController } from '@/stores/chat/actions/flow-controller';
-import { useFlowLoading } from '@/stores/chat/actions/flow-loading';
-import { useFlowStateMachine } from '@/stores/chat/actions/flow-state-machine';
+import { createChatStore, useFlowController, useFlowLoading, useFlowStateMachine } from '@/stores/chat';
 
 import {
+  act,
   createStoreWrapper,
   createTestAssistantMessage,
   createTestModeratorMessage,
   createTestUserMessage,
+  renderHook,
+  waitFor,
 } from '../../../lib/testing';
 
 // ============================================================================

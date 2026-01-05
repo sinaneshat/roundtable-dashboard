@@ -173,9 +173,10 @@ describe('streaming State Cleanup Between Rounds', () => {
       // ✅ CRITICAL: isModeratorStreaming should be cleared
       expect(store.getState().isModeratorStreaming).toBe(false);
 
-      // ✅ FIX VERIFIED: completeModeratorStream() now clears isWaitingForChangelog
-      // This ensures clean state for next round
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      // ⚠️ NOTE: isWaitingForChangelog is NOT cleared by completeModeratorStream()
+      // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched.
+      // This ensures correct ordering: PATCH → changelog → pre-search/streaming
+      expect(store.getState().isWaitingForChangelog).toBe(true);
     });
 
     it('should clear moderator state when completeStreaming is called', () => {
@@ -188,9 +189,13 @@ describe('streaming State Cleanup Between Rounds', () => {
       // Complete all streaming (includes moderator cleanup)
       store.getState().completeStreaming();
 
-      // ✅ CRITICAL: completeStreaming should clear moderator state too
+      // ✅ CRITICAL: completeStreaming should clear isModeratorStreaming
       expect(store.getState().isModeratorStreaming).toBe(false);
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+
+      // ⚠️ NOTE: isWaitingForChangelog is NOT cleared by completeStreaming()
+      // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched.
+      // This ensures correct ordering: PATCH → changelog → pre-search/streaming
+      expect(store.getState().isWaitingForChangelog).toBe(true);
     });
   });
 
@@ -415,9 +420,11 @@ describe('streaming State Cleanup Between Rounds', () => {
 
       expect(store.getState().isModeratorStreaming).toBe(false);
 
-      // ✅ FIX VERIFIED: completeModeratorStream() now clears isWaitingForChangelog
-      // Clean state for next round
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      // ⚠️ NOTE: isWaitingForChangelog is NOT cleared by completeModeratorStream()
+      // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched.
+      // For this test, we simulate changelog sync clearing the flag
+      store.getState().setIsWaitingForChangelog(false);
+      store.getState().setConfigChangeRoundNumber(null);
 
       // ===== FINAL CLEANUP =====
       store.getState().completeStreaming();
@@ -432,8 +439,9 @@ describe('streaming State Cleanup Between Rounds', () => {
       expect(finalState.waitingToStartStreaming).toBe(false);
       expect(finalState.currentParticipantIndex).toBe(0);
 
-      // MODERATOR_STATE_RESET
+      // MODERATOR_STATE_RESET (only isModeratorStreaming is in this reset now)
       expect(finalState.isModeratorStreaming).toBe(false);
+      // ⚠️ changelog flags cleared by simulated changelog sync above
       expect(finalState.isWaitingForChangelog).toBe(false);
 
       // PENDING_MESSAGE_STATE_RESET

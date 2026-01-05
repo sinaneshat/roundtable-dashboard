@@ -1,7 +1,7 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';

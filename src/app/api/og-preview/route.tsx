@@ -14,7 +14,7 @@
 import { ImageResponse } from 'next/og';
 
 import { ChatModes } from '@/api/core/enums';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import {
   createGradient,
   getLogoBase64,

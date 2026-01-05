@@ -27,7 +27,7 @@ import {
   createTestUserMessage,
   renderHook,
 } from '@/lib/testing';
-import { getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
+import { getParticipantIndex, getRoundNumber } from '@/lib/utils';
 
 import { createChatStore } from '../store';
 

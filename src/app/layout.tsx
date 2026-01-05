@@ -13,7 +13,7 @@ import {
   StructuredData,
 } from '@/components/seo';
 import { LiquidGlassFilters } from '@/components/ui/liquid-glass-filters';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { cn } from '@/lib/ui/cn';
 import { spaceGrotesk } from '@/lib/ui/fonts';
 import { createMetadata } from '@/utils';

@@ -2,6 +2,8 @@
 
 import { headers } from 'next/headers';
 
+import type { BillingErrorType } from '@/api/core/enums';
+import { BillingErrorTypes } from '@/api/core/enums';
 import { auth } from '@/lib/auth';
 
 /**
@@ -34,7 +36,7 @@ export async function capturePaymentFailure(searchParams?: {
   data?: {
     error?: string;
     errorCode?: string;
-    errorType?: 'payment_failed' | 'sync_failed' | 'authentication_failed' | 'unknown';
+    errorType?: BillingErrorType;
     stripeError?: string;
     timestamp?: string;
   };
@@ -49,7 +51,7 @@ export async function capturePaymentFailure(searchParams?: {
       return {
         success: false,
         data: {
-          errorType: 'authentication_failed',
+          errorType: BillingErrorTypes.AUTHENTICATION_FAILED,
           error: 'Session expired',
           timestamp: new Date().toISOString(),
         },
@@ -57,18 +59,13 @@ export async function capturePaymentFailure(searchParams?: {
     }
 
     // 2. Determine error type from search params
-    const errorType = searchParams?.error_type as
-      | 'payment_failed'
-      | 'sync_failed'
-      | 'authentication_failed'
-      | 'unknown'
-      | undefined;
+    const errorType = searchParams?.error_type as BillingErrorType | undefined;
 
     // 3. Capture detailed error information
     const errorData = {
       error: searchParams?.error || 'Payment processing failed',
       errorCode: searchParams?.error_code,
-      errorType: errorType || 'unknown',
+      errorType: errorType || BillingErrorTypes.UNKNOWN,
       stripeError: searchParams?.error,
       timestamp: new Date().toISOString(),
     };
@@ -84,7 +81,7 @@ export async function capturePaymentFailure(searchParams?: {
     return {
       success: false,
       data: {
-        errorType: 'unknown',
+        errorType: BillingErrorTypes.UNKNOWN,
         error: error instanceof Error ? error.message : 'Unknown error occurred',
         timestamp: new Date().toISOString(),
       },

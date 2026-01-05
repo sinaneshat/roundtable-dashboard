@@ -8,7 +8,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { getOGFonts } from '@/lib/ui/og-fonts.server';
 
 // Open Graph Image metadata - must be direct exports (not re-exported)

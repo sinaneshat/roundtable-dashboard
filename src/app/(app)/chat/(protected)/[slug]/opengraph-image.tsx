@@ -11,7 +11,7 @@ import { getTranslations } from 'next-intl/server';
 
 import type { ChatMode } from '@/api/core/enums';
 import { ChatModes, DEFAULT_CHAT_MODE } from '@/api/core/enums';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import {
   createGradient,
   OG_COLORS,

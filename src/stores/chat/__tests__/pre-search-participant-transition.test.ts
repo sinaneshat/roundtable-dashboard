@@ -21,8 +21,7 @@ import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MessageRoles, MessageStatuses } from '@/api/core/enums';
-import type { ChatParticipant } from '@/api/routes/chat/schema';
-import type { StoredPreSearch } from '@/stores/chat/store-schemas';
+import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 
 import { getParticipantCompletionStatus } from '../utils/participant-completion-gate';
 

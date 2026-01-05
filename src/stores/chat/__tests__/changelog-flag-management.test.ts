@@ -525,9 +525,12 @@ describe('changelog Flag Management', () => {
 
       const state = store.getState();
       expect(state.isModeratorStreaming).toBe(false);
-      expect(state.isWaitingForChangelog).toBe(false);
-      // Note: configChangeRoundNumber is NOT cleared by completeModeratorStream
-      // It's cleared separately by the changelog sync logic
+      // ⚠️ CRITICAL: isWaitingForChangelog is NOT cleared by completeModeratorStream
+      // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched
+      // This ensures correct ordering: PATCH → changelog → pre-search/streaming
+      expect(state.isWaitingForChangelog).toBe(true);
+      // configChangeRoundNumber is also NOT cleared by completeModeratorStream
+      expect(state.configChangeRoundNumber).toBe(1);
     });
 
     it('should set flags in prepareForNewMessage when hasPendingConfigChanges', () => {
@@ -828,7 +831,7 @@ describe('changelog Flag Management', () => {
       expect(state.configChangeRoundNumber).toBe(null);
     });
 
-    it('should clear flags on completeStreaming', () => {
+    it('should NOT clear changelog flags on completeStreaming', () => {
       // Set flags
       store.getState().setIsWaitingForChangelog(true);
       store.getState().setConfigChangeRoundNumber(1);
@@ -837,9 +840,11 @@ describe('changelog Flag Management', () => {
       store.getState().completeStreaming();
 
       const state = store.getState();
-      // completeStreaming uses STREAMING_STATE_RESET which includes these flags
-      expect(state.isWaitingForChangelog).toBe(false);
-      expect(state.configChangeRoundNumber).toBe(null);
+      // ⚠️ CRITICAL: isWaitingForChangelog and configChangeRoundNumber are NOT
+      // cleared by completeStreaming. They must ONLY be cleared by use-changelog-sync.ts
+      // after changelog is fetched. This ensures correct ordering: PATCH → changelog → streaming
+      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.configChangeRoundNumber).toBe(1);
     });
   });
 });

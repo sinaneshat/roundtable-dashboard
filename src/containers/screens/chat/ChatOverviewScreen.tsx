@@ -9,7 +9,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { ChatModeSchema, MessageStatuses, ScreenModes, UploadStatuses } from '@/api/core/enums';
+import { ChatModeSchema, MessageStatuses, ScreenModes, SubscriptionTiers, UploadStatuses } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
@@ -20,7 +20,7 @@ import {
   useModelPreferencesStore,
 } from '@/components/providers';
 import { QuickStartSkeleton } from '@/components/ui/skeleton';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
   useBoolean,
@@ -200,7 +200,7 @@ export default function ChatOverviewScreen() {
   );
 
   const userTierConfig = modelsData?.data?.user_tier_config || {
-    tier: 'free',
+    tier: SubscriptionTiers.FREE,
     tier_name: 'Free',
     max_models: 2,
     can_upgrade: true,
@@ -533,7 +533,6 @@ export default function ChatOverviewScreen() {
           await formActions.handleUpdateThreadAndSend(existingThreadId, attachmentIds, attachmentInfos);
           chatAttachments.clearAttachments();
         } catch (error) {
-          console.error('[ChatOverview] Error sending message:', error);
           showApiErrorToast('Error sending message', error);
         }
       } else {
@@ -559,7 +558,6 @@ export default function ChatOverviewScreen() {
           hasSentInitialPromptRef.current = true;
           chatAttachments.clearAttachments();
         } catch (error) {
-          console.error('[ChatOverview] Error creating thread:', error);
           showApiErrorToast('Error creating thread', error);
         }
       }

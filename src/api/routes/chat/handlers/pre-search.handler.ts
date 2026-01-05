@@ -108,7 +108,7 @@ async function analyzeImagesForSearchContext(
   try {
     // Build message parts for vision model
     const textPart = {
-      type: 'text' as const,
+      type: MessagePartTypes.TEXT,
       text: IMAGE_ANALYSIS_FOR_SEARCH_PROMPT,
     };
 

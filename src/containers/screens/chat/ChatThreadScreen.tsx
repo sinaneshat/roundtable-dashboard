@@ -22,13 +22,11 @@ import {
   threadHasVisionRequiredFiles,
 } from '@/lib/utils';
 import {
+  areAllParticipantsCompleteForRound,
+  getModeratorMessageForRound,
   useChatFormActions,
   useScreenInitialization,
 } from '@/stores/chat';
-import {
-  areAllParticipantsCompleteForRound,
-  getModeratorMessageForRound,
-} from '@/stores/chat/utils/participant-completion-gate';
 
 import { ChatView } from './ChatView';
 

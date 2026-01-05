@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 
 /**
  * PWA Manifest

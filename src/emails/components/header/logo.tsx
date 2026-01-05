@@ -1,6 +1,6 @@
 import { Img } from '@react-email/components';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { assets } from '@/emails/design-tokens';
 
 type LogoProps = {

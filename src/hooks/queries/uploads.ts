@@ -15,7 +15,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import type { ChatAttachmentStatus } from '@/api/core/enums';
-import { LIMITS } from '@/constants/limits';
+import { LIMITS } from '@/constants';
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';

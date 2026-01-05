@@ -25,8 +25,7 @@ import { z } from 'zod';
 
 import { MessageRoles } from '@/api/core/enums';
 import { getPostHogClient } from '@/lib/analytics/posthog-server';
-import { isObject } from '@/lib/utils';
-import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders';
+import { isObject, isTransientErrorFromObject } from '@/lib/utils';
 
 // ============================================================================
 // TYPE DEFINITIONS (Using AI SDK Types)

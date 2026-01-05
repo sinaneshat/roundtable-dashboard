@@ -5,12 +5,10 @@
  * Prevents client errors (4xx) from retrying while allowing transient errors (5xx, network) to retry
  */
 
-type ErrorWithStatus = {
-  status: number;
-};
+type ErrorWithStatus = Error & { status: number };
 
-function isErrorWithStatus(error: Error): error is Error & ErrorWithStatus {
-  return 'status' in error && typeof (error as ErrorWithStatus).status === 'number';
+function isErrorWithStatus(error: Error): error is ErrorWithStatus {
+  return 'status' in error && typeof (error as Record<string, unknown>).status === 'number';
 }
 
 /**

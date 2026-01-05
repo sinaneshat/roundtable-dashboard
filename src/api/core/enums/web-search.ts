@@ -12,6 +12,8 @@ import { z } from '@hono/zod-openapi';
 
 export const PRE_SEARCH_STATUSES = ['idle', 'streaming', 'active', 'complete', 'failed'] as const;
 
+export const DEFAULT_PRE_SEARCH_STATUS: PreSearchStatus = 'idle';
+
 export const PreSearchStatusSchema = z.enum(PRE_SEARCH_STATUSES).openapi({
   description: 'Pre-search operation status',
   example: 'active',
@@ -32,6 +34,8 @@ export const PreSearchStatuses = {
 // ============================================================================
 
 export const PRE_SEARCH_QUERY_STATUSES = ['active', 'complete'] as const;
+
+export const DEFAULT_PRE_SEARCH_QUERY_STATUS: PreSearchQueryStatus = 'active';
 
 export const PreSearchQueryStatusSchema = z.enum(PRE_SEARCH_QUERY_STATUSES).openapi({
   description: 'Individual pre-search query status',
@@ -73,6 +77,8 @@ export const PreSearchQueryStateStatuses = {
 
 export const SEARCH_RESULT_STATUSES = ['searching', 'processing', 'complete', 'error'] as const;
 
+export const DEFAULT_SEARCH_RESULT_STATUS: SearchResultStatus = 'searching';
+
 export const SearchResultStatusSchema = z.enum(SEARCH_RESULT_STATUSES).openapi({
   description: 'Status of a search result processing',
   example: 'complete',
@@ -93,6 +99,8 @@ export const SearchResultStatuses = {
 
 export const QUERY_RESULT_STATUSES = ['pending', 'success', 'failed'] as const;
 
+export const DEFAULT_QUERY_RESULT_STATUS: QueryResultStatus = 'pending';
+
 export const QueryResultStatusSchema = z.enum(QUERY_RESULT_STATUSES).openapi({
   description: 'Status of an individual search query result',
   example: 'success',
@@ -111,6 +119,8 @@ export const QueryResultStatuses = {
 // ============================================================================
 
 export const PRE_SEARCH_SSE_EVENTS = ['start', 'query', 'result', 'answer_chunk', 'answer_complete', 'answer_error', 'complete', 'done', 'failed'] as const;
+
+export const DEFAULT_PRE_SEARCH_SSE_EVENT: PreSearchSseEvent = 'start';
 
 export const PreSearchSseEventSchema = z.enum(PRE_SEARCH_SSE_EVENTS).openapi({
   description: 'Server-Sent Events (SSE) event names for pre-search streaming',
@@ -137,6 +147,8 @@ export const PreSearchSseEvents = {
 
 export const WEB_SEARCH_COMPLEXITIES = ['basic', 'moderate', 'deep'] as const;
 
+export const DEFAULT_WEB_SEARCH_COMPLEXITY: WebSearchComplexity = 'basic';
+
 export const WebSearchComplexitySchema = z.enum(WEB_SEARCH_COMPLEXITIES).openapi({
   description: 'Web search complexity level',
   example: 'moderate',
@@ -156,6 +168,8 @@ export const WebSearchComplexities = {
 
 export const WEB_SEARCH_DEPTHS = ['basic', 'advanced'] as const;
 
+export const DEFAULT_WEB_SEARCH_DEPTH: WebSearchDepth = 'basic';
+
 export const WebSearchDepthSchema = z.enum(WEB_SEARCH_DEPTHS).openapi({
   description: 'Web search thoroughness level',
   example: 'basic',
@@ -173,6 +187,8 @@ export const WebSearchDepths = {
 // ============================================================================
 
 export const QUERY_ANALYSIS_COMPLEXITIES = ['simple', 'moderate', 'complex'] as const;
+
+export const DEFAULT_QUERY_ANALYSIS_COMPLEXITY: QueryAnalysisComplexity = 'simple';
 
 export const QueryAnalysisComplexitySchema = z.enum(QUERY_ANALYSIS_COMPLEXITIES).openapi({
   description: 'User query complexity level for determining search strategy',
@@ -258,6 +274,8 @@ export const WebSearchContentTypes = {
 
 export const WEB_SEARCH_TOPICS = ['general', 'news', 'finance', 'health', 'scientific', 'travel'] as const;
 
+export const DEFAULT_WEB_SEARCH_TOPIC: WebSearchTopic = 'general';
+
 export const WebSearchTopicSchema = z.enum(WEB_SEARCH_TOPICS).openapi({
   description: 'Search topic category for specialized search optimization',
   example: 'general',
@@ -279,6 +297,8 @@ export const WebSearchTopics = {
 // ============================================================================
 
 export const WEB_SEARCH_TIME_RANGES = ['day', 'week', 'month', 'year', 'd', 'w', 'm', 'y'] as const;
+
+export const DEFAULT_WEB_SEARCH_TIME_RANGE: WebSearchTimeRange = 'week';
 
 export const WebSearchTimeRangeSchema = z.enum(WEB_SEARCH_TIME_RANGES).openapi({
   description: 'Time range filter for search results',
@@ -304,6 +324,8 @@ export const WebSearchTimeRanges = {
 
 export const WEB_SEARCH_RAW_CONTENT_FORMATS = ['markdown', 'text'] as const;
 
+export const DEFAULT_WEB_SEARCH_RAW_CONTENT_FORMAT: WebSearchRawContentFormat = 'markdown';
+
 export const WebSearchRawContentFormatSchema = z.enum(WEB_SEARCH_RAW_CONTENT_FORMATS).openapi({
   description: 'Format for raw content extraction',
   example: 'markdown',
@@ -321,6 +343,8 @@ export const WebSearchRawContentFormats = {
 // ============================================================================
 
 export const WEB_SEARCH_ANSWER_MODES = ['none', 'basic', 'advanced'] as const;
+
+export const DEFAULT_WEB_SEARCH_ANSWER_MODE: WebSearchAnswerMode = 'basic';
 
 export const WebSearchAnswerModeSchema = z.enum(WEB_SEARCH_ANSWER_MODES).openapi({
   description: 'LLM-generated answer summary mode',
@@ -361,6 +385,8 @@ export const WebSearchActiveAnswerModes = {
 
 export const WEB_SEARCH_STREAMING_STAGES = ['query', 'search', 'synthesize'] as const;
 
+export const DEFAULT_WEB_SEARCH_STREAMING_STAGE: WebSearchStreamingStage = 'query';
+
 export const WebSearchStreamingStageSchema = z.enum(WEB_SEARCH_STREAMING_STAGES).openapi({
   description: 'Current stage of web search streaming process',
   example: 'search',
@@ -372,6 +398,28 @@ export const WebSearchStreamingStages = {
   QUERY: 'query' as const,
   SEARCH: 'search' as const,
   SYNTHESIZE: 'synthesize' as const,
+} as const;
+
+// ============================================================================
+// WEB SEARCH STREAM EVENT TYPES
+// ============================================================================
+
+export const WEB_SEARCH_STREAM_EVENT_TYPES = ['metadata', 'result', 'complete', 'error'] as const;
+
+export const DEFAULT_WEB_SEARCH_STREAM_EVENT_TYPE: WebSearchStreamEventType = 'metadata';
+
+export const WebSearchStreamEventTypeSchema = z.enum(WEB_SEARCH_STREAM_EVENT_TYPES).openapi({
+  description: 'Event types for progressive web search streaming',
+  example: 'result',
+});
+
+export type WebSearchStreamEventType = z.infer<typeof WebSearchStreamEventTypeSchema>;
+
+export const WebSearchStreamEventTypes = {
+  METADATA: 'metadata' as const,
+  RESULT: 'result' as const,
+  COMPLETE: 'complete' as const,
+  ERROR: 'error' as const,
 } as const;
 
 // ============================================================================

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import AuthErrorScreen from '@/containers/screens/errors/AuthErrorScreen';
 import { createMetadata } from '@/utils';
 

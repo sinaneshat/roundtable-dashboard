@@ -5,7 +5,7 @@ import type { BaseToastVariant, ToastPosition, ToastVariant } from '@/api/core/e
 import { BaseToastVariants, ToastVariants } from '@/api/core/enums';
 import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
-import { toast as baseToast } from '@/hooks/utils/use-toast';
+import { toast as baseToast } from '@/hooks/utils';
 
 function createToastActionElement(label: string, onClick: () => void): ToastActionElement {
   return React.createElement(

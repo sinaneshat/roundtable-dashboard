@@ -4,8 +4,7 @@ import type React from 'react';
 
 import { requireAuth } from '@/app/auth/actions';
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
-import { BRAND } from '@/constants/brand';
-import { LIMITS } from '@/constants/limits';
+import { BRAND, LIMITS } from '@/constants';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';

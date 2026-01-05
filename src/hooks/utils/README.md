@@ -6,7 +6,7 @@ Custom React hooks for common patterns and features.
 
 Hooks are organized by purpose rather than bundled into large files. Each hook has a single responsibility for better discoverability and maintainability.
 
-**Current Status:** 14 hooks (consolidated)
+**Current Status:** 27 hooks (organized by purpose)
 
 ## Categories
 

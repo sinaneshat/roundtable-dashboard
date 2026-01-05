@@ -16,6 +16,7 @@ import Stripe from 'stripe';
 
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
+import { PriceTypes } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 
 // ============================================================================
@@ -328,7 +329,7 @@ class StripeService {
     let checkoutMode: 'subscription' | 'payment' = params.mode || 'subscription';
     if (!params.mode) {
       const price = await stripe.prices.retrieve(params.priceId);
-      checkoutMode = price.type === 'recurring' ? 'subscription' : 'payment';
+      checkoutMode = price.type === PriceTypes.RECURRING ? 'subscription' : 'payment';
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {

@@ -35,7 +35,7 @@ import {
 import {
   getModeratorMessageForRound,
   getParticipantCompletionStatus,
-} from '@/stores/chat/utils/participant-completion-gate';
+} from '@/stores/chat';
 
 // ============================================================================
 // TEST CONFIGURATION

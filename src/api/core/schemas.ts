@@ -21,7 +21,7 @@
 
 import { z } from '@hono/zod-openapi';
 
-import { API } from '@/constants/application';
+import { API } from '@/constants';
 
 import {
   AuthFailureReasonSchema,

@@ -24,7 +24,7 @@
 import { ImageResponse } from 'next/og';
 
 import { MessageRoles } from '@/api/core/enums';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import {
   createGradient,

@@ -18,8 +18,9 @@ import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview, UploadItem } from '@/hooks/utils';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
+import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import { getEnabledSortedParticipants, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
+import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 
 import type { SendMessage, StartRound } from './store-action-types';
 import type { ResetFormPreferences } from './store-defaults';
@@ -375,12 +376,9 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
           draft.messages[existingIdx] = castDraft(message);
         } else if (newHasContent && existingHasContent) {
           // Both have content - keep newer if it has more text
-          const existingTextLength = existing?.parts
-            ?.filter(p => p.type === MessagePartTypes.TEXT && 'text' in p)
-            .reduce((len, p) => len + ((p as { text: string }).text?.length || 0), 0) ?? 0;
-          const newTextLength = message.parts
-            ?.filter(p => p.type === MessagePartTypes.TEXT && 'text' in p)
-            .reduce((len, p) => len + ((p as { text: string }).text?.length || 0), 0) ?? 0;
+          // TYPE-SAFE: extractTextFromMessage handles unknown parts via isMessagePart type guard
+          const existingTextLength = extractTextFromMessage(existing).length;
+          const newTextLength = extractTextFromMessage(message).length;
 
           if (newTextLength >= existingTextLength) {
             draft.messages[existingIdx] = castDraft(message);
@@ -448,14 +446,11 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
         if (!msg)
           continue;
 
-        const meta = msg.metadata as { roundNumber?: number; participantIndex?: number; role?: string } | undefined;
-        if (!meta)
-          continue;
+        // TYPE-SAFE: Use metadata extraction utilities instead of type casting
+        const roundNum = getRoundNumber(msg.metadata);
+        const pIdx = getParticipantIndex(msg.metadata);
 
-        const roundNum = meta.roundNumber;
-        const pIdx = meta.participantIndex;
-
-        if (roundNum === undefined || pIdx === undefined)
+        if (roundNum === null || pIdx === null)
           continue;
         if (msg.role !== MessageRoles.ASSISTANT)
           continue;
@@ -499,10 +494,14 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
     set({ isRegenerating: value }, false, 'flags/setIsRegenerating'),
   setIsModeratorStreaming: (value: boolean) =>
     set({ isModeratorStreaming: value }, false, 'flags/setIsModeratorStreaming'),
+  // ⚠️ CRITICAL: Only clear isModeratorStreaming here, NOT isWaitingForChangelog!
+  // The changelog blocking flag must ONLY be cleared by use-changelog-sync.ts
+  // after the changelog has been fetched. Clearing it here causes pre-search
+  // to execute before changelog is fetched, breaking the ordering guarantee:
+  // PATCH → changelog → pre-search/streaming
   completeModeratorStream: () =>
     set({
       isModeratorStreaming: false,
-      isWaitingForChangelog: false,
     }, false, 'flags/completeModeratorStream'),
   setIsWaitingForChangelog: (value: boolean) =>
     set({ isWaitingForChangelog: value }, false, 'flags/setIsWaitingForChangelog'),

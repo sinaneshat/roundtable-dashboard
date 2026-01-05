@@ -52,6 +52,9 @@ export {
   validateThreadsListPages,
   validateUsageStatsCache,
 } from './actions/types';
+// Cache validation types
+export type { ChangelogListCache } from './actions/types';
+export { validateChangelogListCache } from './actions/types';
 export type { ChatStoreApi } from './store';
 export { createChatStore } from './store';
 // Store Constants
@@ -62,6 +65,17 @@ export {
 } from './store-constants';
 // Store
 export type { ChatStore } from './store-schemas';
+// Participant completion gate utilities
+export type { ParticipantCompletionStatus, ParticipantDebugInfo } from './utils/participant-completion-gate';
+export {
+  areAllParticipantsCompleteForRound,
+  getModeratorMessageForRound,
+  getParticipantCompletionStatus,
+  isMessageComplete,
+  isRoundComplete,
+  ParticipantCompletionStatusSchema,
+  ParticipantDebugInfoSchema,
+} from './utils/participant-completion-gate';
 // Pre-search utilities
 export type { ExecutePreSearchOptions } from './utils/pre-search-execution';
 export {

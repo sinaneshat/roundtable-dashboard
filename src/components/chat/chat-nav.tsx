@@ -31,7 +31,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useIsMounted } from '@/hooks/utils';
 import type { Session, User } from '@/lib/auth/types';

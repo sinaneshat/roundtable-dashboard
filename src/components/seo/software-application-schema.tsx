@@ -1,4 +1,4 @@
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 
 // Stable default values to prevent re-renders
 const DEFAULT_FEATURES = [

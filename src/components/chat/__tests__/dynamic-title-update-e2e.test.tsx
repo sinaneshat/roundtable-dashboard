@@ -19,8 +19,6 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
 import React, { useEffect, useRef } from 'react';
@@ -28,6 +26,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatSidebarItem } from '@/api/routes/chat/schema';
 import testMessages from '@/i18n/locales/en/common.json';
+import { act, render, screen, userEvent } from '@/lib/testing';
 
 // ============================================================================
 // MOCKS
@@ -63,10 +62,14 @@ vi.mock('@/hooks/mutations', () => ({
   }),
 }));
 
-vi.mock('@/hooks/utils', () => ({
-  useCurrentPathname: () => '/chat',
-  useIsMobile: () => false,
-}));
+vi.mock('@/hooks/utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/utils')>();
+  return {
+    ...actual,
+    useCurrentPathname: () => '/chat',
+    useIsMobile: () => false,
+  };
+});
 
 // ============================================================================
 // TEST UTILITIES

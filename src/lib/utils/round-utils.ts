@@ -114,7 +114,3 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
 
   return result;
 }
-
-export function isLastRound(roundNumber: number, messages: UIMessage[]): boolean {
-  return roundNumber === getMaxRoundNumber(messages);
-}

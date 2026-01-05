@@ -25,6 +25,7 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { MessageRoles } from '@/api/core/enums';
+import { createInvalidMetadata } from '@/lib/testing/typed-test-mocks';
 import { getUserMetadata } from '@/lib/utils';
 
 /**
@@ -297,7 +298,7 @@ describe('non-Initial Round User Message Sync', () => {
           id: 'msg-null-meta',
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'No metadata' }],
-          metadata: null as unknown as Record<string, unknown>,
+          metadata: createInvalidMetadata('null'),
         },
       ];
       const chatMessages: UIMessage[] = [];

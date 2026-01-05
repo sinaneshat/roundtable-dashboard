@@ -634,9 +634,12 @@ describe('streaming Completion Optimization', () => {
       expect(finalState.waitingToStartStreaming).toBe(false);
       expect(finalState.currentParticipantIndex).toBe(0);
 
-      // MODERATOR_STATE_RESET
+      // MODERATOR_STATE_RESET (only isModeratorStreaming is cleared)
       expect(finalState.isModeratorStreaming).toBe(false);
-      expect(finalState.isWaitingForChangelog).toBe(false);
+      // ⚠️ NOTE: isWaitingForChangelog is NOT cleared by completeStreaming()
+      // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched.
+      // This ensures correct ordering: PATCH → changelog → pre-search/streaming
+      expect(finalState.isWaitingForChangelog).toBe(true);
 
       // PENDING_MESSAGE_STATE_RESET
       expect(finalState.pendingMessage).toBeNull();

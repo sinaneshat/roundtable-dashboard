@@ -14,7 +14,6 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render as rtlRender } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -24,7 +23,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import { ChatStoreProvider, useChatStore } from '@/components/providers';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
-import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage, screen } from '@/lib/testing';
+import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage, render as rtlRender, screen } from '@/lib/testing';
 
 // Test messages from helpers.ts
 const messages = {

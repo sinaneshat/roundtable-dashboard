@@ -27,7 +27,7 @@ import {
 import { CursorPaginationQuerySchema } from '@/api/core/pagination';
 import { CoreSchemas, createApiResponseSchema, createCursorPaginatedResponseSchema } from '@/api/core/schemas';
 import { StreamStateSchema } from '@/api/types/streaming';
-import { STRING_LIMITS } from '@/constants/validation';
+import { STRING_LIMITS } from '@/constants';
 import {
   DbChangelogDataSchema,
   DbCustomRoleMetadataSchema,

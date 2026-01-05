@@ -42,6 +42,7 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { MessageRoles } from '@/api/core/enums';
+import { createInvalidMetadata } from '@/lib/testing/typed-test-mocks';
 import { getRoundNumberFromMetadata } from '@/lib/utils';
 
 /**
@@ -350,7 +351,7 @@ describe('user Message Animation Skip Logic', () => {
           id: 'message-null-metadata',
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'Null metadata' }],
-          metadata: null as unknown as Record<string, unknown>,
+          metadata: createInvalidMetadata('null'),
         };
 
         // getRoundNumberFromMetadata returns 0 for null
@@ -363,7 +364,7 @@ describe('user Message Animation Skip Logic', () => {
           id: 'message-undefined-metadata',
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'Undefined metadata' }],
-          metadata: undefined as unknown as Record<string, unknown>,
+          metadata: createInvalidMetadata('undefined'),
         };
 
         // Should NOT skip (defaults to round 0)

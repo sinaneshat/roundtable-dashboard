@@ -7,7 +7,7 @@ import { isValidElement } from 'react';
 import { InlineCode } from '@/components/ai-elements/code-block';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/ui/cn';
-import { isObject } from '@/lib/utils/type-guards';
+import { isObject } from '@/lib/utils';
 
 // Dynamic import CodeBlock to defer shiki (~800KB) until code is rendered
 const CodeBlock = dynamic(

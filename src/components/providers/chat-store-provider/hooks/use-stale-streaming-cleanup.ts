@@ -23,7 +23,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { rlog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
-import { isRoundComplete } from '@/stores/chat/utils/participant-completion-gate';
+import { isRoundComplete } from '@/stores/chat';
 
 type UseStaleStreamingCleanupParams = {
   store: ChatStoreApi;

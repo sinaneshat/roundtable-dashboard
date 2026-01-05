@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MessageRoles } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
-import type { TimelineItem } from '@/hooks/utils/use-thread-timeline';
+import type { TimelineItem } from '@/hooks/utils';
 import { getRoundNumberFromMetadata } from '@/lib/utils';
 
 // =====================

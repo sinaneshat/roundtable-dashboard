@@ -9,7 +9,7 @@
 import { ImageResponse } from 'next/og';
 import { getTranslations } from 'next-intl/server';
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import {
   createGradient,
   getLogoBase64,
