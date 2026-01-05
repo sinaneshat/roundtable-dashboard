@@ -14,19 +14,10 @@
  * Based on React Testing Library + Zustand store patterns
  */
 
-import { act, renderHook } from '@testing-library/react';
-import type { PropsWithChildren } from 'react';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { describe, expect, it } from 'vitest';
 import { useShallow } from 'zustand/react/shallow';
 
-import { MessageStatuses } from '@/api/core/enums';
-import {
-  createStoreWrapper,
-  createTestAssistantMessage,
-  createTestChatStore,
-  createTestUserMessage,
-} from '@/lib/testing';
 import { useChatStore } from '@/stores/chat';
 
 // ============================================================================
@@ -36,7 +27,7 @@ import { useChatStore } from '@/stores/chat';
 /**
  * Hook to track component render count
  */
-function useRenderCount(): number {
+function _useRenderCount(): number {
   const renderCount = useRef(0);
 
   useEffect(() => {
@@ -48,29 +39,44 @@ function useRenderCount(): number {
 
 /**
  * Component that tracks renders with global subscription (BAD pattern)
+ * Kept for documentation purposes - demonstrates anti-pattern
  */
-function GlobalSubscriptionComponent() {
-  const renderCount = useRenderCount();
+function _GlobalSubscriptionComponent() {
+  const renderCount = _useRenderCount();
   const store = useChatStore(); // BAD: subscribes to entire store
 
-  return <div data-render-count={renderCount}>{store.messages.length} messages</div>;
+  return (
+    <div data-render-count={renderCount}>
+      {store.messages.length}
+      {' '}
+      messages
+    </div>
+  );
 }
 
 /**
  * Component that tracks renders with scoped subscription (GOOD pattern)
+ * Kept for documentation purposes - demonstrates recommended pattern
  */
-function ScopedSubscriptionComponent() {
-  const renderCount = useRenderCount();
+function _ScopedSubscriptionComponent() {
+  const renderCount = _useRenderCount();
   const messageCount = useChatStore(state => state.messages.length);
 
-  return <div data-render-count={renderCount}>{messageCount} messages</div>;
+  return (
+    <div data-render-count={renderCount}>
+      {messageCount}
+      {' '}
+      messages
+    </div>
+  );
 }
 
 /**
  * Component that tracks renders with useShallow batching (BEST pattern)
+ * Kept for documentation purposes - demonstrates optimal pattern
  */
-function BatchedSubscriptionComponent() {
-  const renderCount = useRenderCount();
+function _BatchedSubscriptionComponent() {
+  const renderCount = _useRenderCount();
   const { messageCount, isStreaming } = useChatStore(
     useShallow(state => ({
       messageCount: state.messages.length,
@@ -80,16 +86,20 @@ function BatchedSubscriptionComponent() {
 
   return (
     <div data-render-count={renderCount}>
-      {messageCount} messages, streaming: {String(isStreaming)}
+      {messageCount}
+      {' '}
+      messages, streaming:
+      {String(isStreaming)}
     </div>
   );
 }
 
 /**
  * Component that tracks renders during streaming
+ * Kept for documentation purposes - demonstrates streaming optimization
  */
-function StreamingComponent() {
-  const renderCount = useRenderCount();
+function _StreamingComponent() {
+  const renderCount = _useRenderCount();
   const { isStreaming, currentIndex } = useChatStore(
     useShallow(state => ({
       isStreaming: state.isStreaming,
@@ -99,7 +109,12 @@ function StreamingComponent() {
 
   return (
     <div data-render-count={renderCount}>
-      Streaming: {String(isStreaming)}, Index: {currentIndex}
+      Streaming:
+      {' '}
+      {String(isStreaming)}
+      , Index:
+      {' '}
+      {currentIndex}
     </div>
   );
 }

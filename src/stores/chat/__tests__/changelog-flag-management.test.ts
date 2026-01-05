@@ -17,13 +17,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MessageRoles, ScreenModes } from '@/api/core/enums';
+import { ScreenModes } from '@/api/core/enums';
 import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
 
-describe('Changelog Flag Management', () => {
+describe('changelog Flag Management', () => {
   let store: ChatStoreApi;
 
   beforeEach(() => {
@@ -31,7 +31,7 @@ describe('Changelog Flag Management', () => {
     vi.clearAllMocks();
   });
 
-  describe('Flag State Management', () => {
+  describe('flag State Management', () => {
     it('should initialize with both flags false/null', () => {
       const state = store.getState();
 
@@ -86,7 +86,7 @@ describe('Changelog Flag Management', () => {
     });
   });
 
-  describe('Query Trigger Conditions', () => {
+  describe('query Trigger Conditions', () => {
     it('should require BOTH flags to be true/non-null for query to run', () => {
       // Condition: shouldFetch = isWaitingForChangelog && configChangeRoundNumber !== null
 
@@ -149,7 +149,7 @@ describe('Changelog Flag Management', () => {
     });
   });
 
-  describe('Flag Clearing Logic', () => {
+  describe('flag Clearing Logic', () => {
     it('should clear both flags after successful changelog merge', () => {
       // Set flags
       store.getState().setIsWaitingForChangelog(true);
@@ -208,7 +208,7 @@ describe('Changelog Flag Management', () => {
     });
   });
 
-  describe('Multi-Round Scenarios', () => {
+  describe('multi-Round Scenarios', () => {
     it('should handle Round 0 with config changes', () => {
       // Round 0 with config changes
       store.getState().setIsWaitingForChangelog(true);
@@ -343,7 +343,7 @@ describe('Changelog Flag Management', () => {
     });
   });
 
-  describe('Edge Cases - Preventing Stuck States', () => {
+  describe('edge Cases - Preventing Stuck States', () => {
     it('should handle PATCH failure by clearing flags on error', () => {
       // Set flags before PATCH
       store.getState().setIsWaitingForChangelog(true);
@@ -423,7 +423,7 @@ describe('Changelog Flag Management', () => {
     });
   });
 
-  describe('Flag Interaction with Other State', () => {
+  describe('flag Interaction with Other State', () => {
     it('should preserve flags during initializeThread when hasActiveFormSubmission', () => {
       // Set flags as if form submission is in progress
       store.getState().setIsWaitingForChangelog(true);
@@ -607,7 +607,7 @@ describe('Changelog Flag Management', () => {
     });
   });
 
-  describe('Timeout Safety Mechanism', () => {
+  describe('timeout Safety Mechanism', () => {
     it('should clear flags after timeout if not cleared by normal flow', () => {
       // Set flags
       store.getState().setIsWaitingForChangelog(true);
@@ -647,7 +647,7 @@ describe('Changelog Flag Management', () => {
     });
   });
 
-  describe('Flag Consistency Validation', () => {
+  describe('flag Consistency Validation', () => {
     it('should never have isWaitingForChangelog=false with non-null configChangeRoundNumber', () => {
       // This would be an inconsistent state that shouldn't happen
 
@@ -707,7 +707,7 @@ describe('Changelog Flag Management', () => {
     });
   });
 
-  describe('Integration with hasPendingConfigChanges', () => {
+  describe('integration with hasPendingConfigChanges', () => {
     it('should work with hasPendingConfigChanges flag', () => {
       // User makes config changes
       store.getState().setHasPendingConfigChanges(true);
@@ -753,7 +753,7 @@ describe('Changelog Flag Management', () => {
     });
   });
 
-  describe('Round Number Tracking', () => {
+  describe('round Number Tracking', () => {
     it('should track different round numbers correctly', () => {
       const rounds = [0, 1, 2, 5, 10];
 
@@ -784,7 +784,7 @@ describe('Changelog Flag Management', () => {
     });
   });
 
-  describe('Reset Operations', () => {
+  describe('reset Operations', () => {
     it('should clear flags on resetToNewChat', () => {
       // Set flags
       store.getState().setIsWaitingForChangelog(true);

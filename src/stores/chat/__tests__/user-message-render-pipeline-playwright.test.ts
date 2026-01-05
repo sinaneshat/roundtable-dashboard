@@ -17,11 +17,11 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { getRoundNumberFromMetadata } from '@/lib/utils';
 
 import { createChatStore } from '../store';
-import type { StoredPreSearch } from '@/api/routes/chat/schema';
 
 // ============================================================================
 // TEST HELPERS
@@ -191,8 +191,8 @@ function simulateUseThreadTimeline(
 // TESTS
 // ============================================================================
 
-describe('User Message Render Pipeline', () => {
-  describe('Store to Timeline Flow', () => {
+describe('user Message Render Pipeline', () => {
+  describe('store to Timeline Flow', () => {
     it('should include optimistic user message in store messages immediately after submission', () => {
       const store = createChatStore();
       const threadId = 'test-thread';
@@ -288,7 +288,7 @@ describe('User Message Render Pipeline', () => {
     });
   });
 
-  describe('Pre-search and Placeholder Visibility', () => {
+  describe('pre-search and Placeholder Visibility', () => {
     it('should show pre-search placeholder for round 1 when web search enabled', () => {
       const store = createChatStore();
       const threadId = 'test-thread';
@@ -368,7 +368,7 @@ describe('User Message Render Pipeline', () => {
     });
   });
 
-  describe('Streaming Round Placeholder Logic', () => {
+  describe('streaming Round Placeholder Logic', () => {
     it('should set streamingRoundNumber to enable placeholder rendering', () => {
       const store = createChatStore();
       const threadId = 'test-thread';
@@ -392,7 +392,7 @@ describe('User Message Render Pipeline', () => {
       expect(store.getState().waitingToStartStreaming).toBe(true);
 
       // Rendering conditions
-      const isStreamingRound = 1 === store.getState().streamingRoundNumber;
+      const isStreamingRound = store.getState().streamingRoundNumber === 1;
       expect(isStreamingRound).toBe(true);
 
       // Placeholder should show because:
@@ -429,12 +429,12 @@ describe('User Message Render Pipeline', () => {
       expect(store.getState().streamingRoundNumber).toBe(1);
 
       // This enables placeholder rendering
-      const isStreamingRound = 1 === store.getState().streamingRoundNumber;
+      const isStreamingRound = store.getState().streamingRoundNumber === 1;
       expect(isStreamingRound).toBe(true);
     });
   });
 
-  describe('Full Pipeline E2E', () => {
+  describe('full Pipeline E2E', () => {
     it('should show user message and placeholders immediately after round 1 submission', () => {
       const store = createChatStore();
       const threadId = 'test-thread';
@@ -534,7 +534,7 @@ describe('User Message Render Pipeline', () => {
       expect(store.getState().preSearches).toHaveLength(1);
     });
 
-    it('BUG REPRODUCTION: user message disappears after initializeThread with messages reset', () => {
+    it('bUG REPRODUCTION: user message disappears after initializeThread with messages reset', () => {
       const store = createChatStore();
       const threadId = 'test-thread';
       const thread = createThread(threadId);

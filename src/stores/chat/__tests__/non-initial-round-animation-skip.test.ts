@@ -60,8 +60,8 @@ function shouldSkipUserMessageAnimation(
   return false;
 }
 
-describe('Non-Initial Round Animation Skip', () => {
-  describe('Animation Skip Logic', () => {
+describe('non-Initial Round Animation Skip', () => {
+  describe('animation Skip Logic', () => {
     it('should NOT skip animation for round 0 user message with normal ID', () => {
       const message: UIMessage = {
         id: '01KE5W6ER2Q1SFYSXNDZ0YZZVJ',
@@ -84,7 +84,7 @@ describe('Non-Initial Round Animation Skip', () => {
       expect(shouldSkipUserMessageAnimation(message, false)).toBe(true);
     });
 
-    it('CRITICAL: should skip animation for round 1 user message (non-initial)', () => {
+    it('cRITICAL: should skip animation for round 1 user message (non-initial)', () => {
       const message: UIMessage = {
         id: '01KE5W6ER2Q1SFYSXNDZ0YZZVJ',
         role: MessageRoles.USER,
@@ -96,7 +96,7 @@ describe('Non-Initial Round Animation Skip', () => {
       expect(shouldSkipUserMessageAnimation(message, false)).toBe(true);
     });
 
-    it('CRITICAL: should skip animation for round 2+ user messages', () => {
+    it('cRITICAL: should skip animation for round 2+ user messages', () => {
       const rounds = [2, 3, 5, 10];
 
       for (const roundNumber of rounds) {
@@ -132,7 +132,7 @@ describe('Non-Initial Round Animation Skip', () => {
     });
   });
 
-  describe('Optimistic to DB ID Transition (Critical Edge Case)', () => {
+  describe('optimistic to DB ID Transition (Critical Edge Case)', () => {
     /**
      * This scenario tests the exact bug that was discovered:
      * 1. User submits round 1 message
@@ -143,7 +143,7 @@ describe('Non-Initial Round Animation Skip', () => {
      * 6. OLD BUG: Animation triggers, opacity: 0, message invisible
      * 7. FIX: roundNumber > 0 still skips animation, message remains visible
      */
-    it('CRITICAL: should skip animation after optimistic ID replaced by DB ID', () => {
+    it('cRITICAL: should skip animation after optimistic ID replaced by DB ID', () => {
       // Step 1: Optimistic message (animation skipped via optimistic- prefix)
       const optimisticMessage: UIMessage = {
         id: 'optimistic-user-1736128000000',
@@ -202,7 +202,7 @@ describe('Non-Initial Round Animation Skip', () => {
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('edge Cases', () => {
     it('should handle missing roundNumber metadata (default to 0)', () => {
       const message: UIMessage = {
         id: 'message-without-round',
@@ -249,12 +249,12 @@ describe('Non-Initial Round Animation Skip', () => {
     });
   });
 
-  describe('Visibility Guarantee', () => {
+  describe('visibility Guarantee', () => {
     /**
      * These tests verify the core guarantee:
      * "User messages MUST be visible immediately after submission, regardless of scroll position"
      */
-    it('GUARANTEE: non-initial round user messages always visible (skip animation)', () => {
+    it('gUARANTEE: non-initial round user messages always visible (skip animation)', () => {
       // Generate various realistic scenarios
       const scenarios = [
         // Typical follow-up
@@ -286,7 +286,7 @@ describe('Non-Initial Round Animation Skip', () => {
       }
     });
 
-    it('GUARANTEE: initial round persisted messages still animate normally', () => {
+    it('gUARANTEE: initial round persisted messages still animate normally', () => {
       const message: UIMessage = {
         id: '01KE5W6ER2Q1SFYSXNDZ0YZZVJ',
         role: MessageRoles.USER,

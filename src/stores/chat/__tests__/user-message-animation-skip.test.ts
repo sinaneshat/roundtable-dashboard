@@ -96,7 +96,7 @@ function shouldSkipUserMessageAnimation(
   return skipDueToRound || skipDueToMessage;
 }
 
-describe('User Message Animation Skip Logic', () => {
+describe('user Message Animation Skip Logic', () => {
   describe('shouldAnimateMessage (Base Function)', () => {
     it('should animate normal message IDs by default', () => {
       const messageId = '01KE5W6ER2Q1SFYSXNDZ0YZZVJ';
@@ -136,7 +136,7 @@ describe('User Message Animation Skip Logic', () => {
   });
 
   describe('shouldSkipUserMessageAnimation (Critical Fix)', () => {
-    describe('Initial Round (roundNumber = 0)', () => {
+    describe('initial Round (roundNumber = 0)', () => {
       it('should NOT skip animation for round 0 persisted messages', () => {
         const message: UIMessage = {
           id: '01KE5W6ER2Q1SFYSXNDZ0YZZVJ',
@@ -166,7 +166,7 @@ describe('User Message Animation Skip Logic', () => {
       });
     });
 
-    describe('Non-Initial Rounds (roundNumber > 0) - CRITICAL FIX', () => {
+    describe('non-Initial Rounds (roundNumber > 0) - CRITICAL FIX', () => {
       it('should skip animation for round 1 persisted messages', () => {
         const message: UIMessage = {
           id: 'thread_r1_user',
@@ -211,7 +211,7 @@ describe('User Message Animation Skip Logic', () => {
       });
     });
 
-    describe('ID Transition Bug (Optimistic to DB) - THE CRITICAL EDGE CASE', () => {
+    describe('iD Transition Bug (Optimistic to DB) - THE CRITICAL EDGE CASE', () => {
       /**
        * This is the exact bug scenario that was discovered and fixed.
        *
@@ -227,7 +227,7 @@ describe('User Message Animation Skip Logic', () => {
        * 9. Message stays invisible (opacity: 0)
        * 10. FIX: roundNumber > 0 still returns true → message stays visible
        */
-      it('CRITICAL BUG FIX: should maintain skip when optimistic ID replaced by DB ID', () => {
+      it('cRITICAL BUG FIX: should maintain skip when optimistic ID replaced by DB ID', () => {
         // Phase 1: Optimistic message (animation skipped via optimistic prefix)
         const optimisticMessage: UIMessage = {
           id: 'optimistic-user-1736128000000',
@@ -261,13 +261,13 @@ describe('User Message Animation Skip Logic', () => {
       });
 
       it('should handle multiple ID transitions across rounds', () => {
-        interface TransitionPhase {
+        type TransitionPhase = {
           round: number;
           id: string;
           isOptimistic: boolean;
           expectedSkip: boolean;
           reason: string;
-        }
+        };
 
         const transitions: TransitionPhase[] = [
           {
@@ -332,7 +332,7 @@ describe('User Message Animation Skip Logic', () => {
       });
     });
 
-    describe('Edge Cases', () => {
+    describe('edge Cases', () => {
       it('should handle missing roundNumber metadata (defaults to 0)', () => {
         const message: UIMessage = {
           id: 'message-without-round',
@@ -415,12 +415,12 @@ describe('User Message Animation Skip Logic', () => {
       });
     });
 
-    describe('Visibility Guarantees', () => {
+    describe('visibility Guarantees', () => {
       /**
        * Core guarantee: User messages MUST be visible immediately after submission
        * regardless of viewport position or ID transitions
        */
-      it('GUARANTEE: non-initial round messages always visible', () => {
+      it('gUARANTEE: non-initial round messages always visible', () => {
         const scenarios = [
           // Standard DB ID
           { id: 'thread_r1_user', round: 1, optimistic: false },
@@ -452,7 +452,7 @@ describe('User Message Animation Skip Logic', () => {
         });
       });
 
-      it('GUARANTEE: initial round persisted messages still animate', () => {
+      it('gUARANTEE: initial round persisted messages still animate', () => {
         const message: UIMessage = {
           id: 'thread_r0_user',
           role: MessageRoles.USER,
@@ -464,7 +464,7 @@ describe('User Message Animation Skip Logic', () => {
         expect(shouldSkipUserMessageAnimation(message, false)).toBe(false);
       });
 
-      it('GUARANTEE: optimistic messages in ANY round skip animation', () => {
+      it('gUARANTEE: optimistic messages in ANY round skip animation', () => {
         const rounds = [0, 1, 2, 5, 10];
 
         rounds.forEach((roundNumber) => {
@@ -486,13 +486,13 @@ describe('User Message Animation Skip Logic', () => {
     });
   });
 
-  describe('Real-World Scenarios', () => {
+  describe('real-World Scenarios', () => {
     it('should handle typical conversation flow correctly', () => {
-      interface ConversationPhase {
+      type ConversationPhase = {
         description: string;
         message: UIMessage;
         expectedSkip: boolean;
-      }
+      };
 
       const conversationFlow: ConversationPhase[] = [
         // Initial message submission
@@ -641,17 +641,17 @@ describe('User Message Animation Skip Logic', () => {
     });
   });
 
-  describe('Logic Truth Table', () => {
+  describe('logic Truth Table', () => {
     /**
      * Complete truth table for all combinations
      */
-    interface LogicCase {
+    type LogicCase = {
       skipEntranceAnimations: boolean;
       roundNumber: number;
       isOptimisticId: boolean;
       expectedSkip: boolean;
       description: string;
-    }
+    };
 
     const logicCases: LogicCase[] = [
       // skipEntranceAnimations = true (overrides everything)

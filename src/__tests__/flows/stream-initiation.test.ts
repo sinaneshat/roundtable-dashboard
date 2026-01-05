@@ -42,7 +42,7 @@ import { createChatStore } from '../../stores/chat/store';
 // TEST HELPERS
 // ============================================================================
 
-interface MockThread {
+type MockThread = {
   id: string;
   userId: string;
   title: string;
@@ -56,9 +56,9 @@ interface MockThread {
   createdAt: Date;
   updatedAt: Date;
   lastMessageAt: Date;
-}
+};
 
-interface MockParticipant {
+type MockParticipant = {
   id: string;
   threadId: string;
   modelId: string;
@@ -67,7 +67,7 @@ interface MockParticipant {
   isEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
-}
+};
 
 function createMockThread(overrides: {
   enableWebSearch?: boolean;
@@ -193,7 +193,7 @@ function canStreamingProceed(state: ChatStore): {
 // STREAM INITIATION - PREREQUISITE CHECKS
 // ============================================================================
 
-describe('Stream Initiation - Prerequisites', () => {
+describe('stream Initiation - Prerequisites', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -267,7 +267,7 @@ describe('Stream Initiation - Prerequisites', () => {
 // STREAM INITIATION - PATCH COMPLETION BLOCKING
 // ============================================================================
 
-describe('Stream Initiation - Patch Completion Blocking', () => {
+describe('stream Initiation - Patch Completion Blocking', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -329,7 +329,7 @@ describe('Stream Initiation - Patch Completion Blocking', () => {
 // STREAM INITIATION - PRE-SEARCH COMPLETION BLOCKING
 // ============================================================================
 
-describe('Stream Initiation - Pre-Search Completion Blocking', () => {
+describe('stream Initiation - Pre-Search Completion Blocking', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -403,7 +403,7 @@ describe('Stream Initiation - Pre-Search Completion Blocking', () => {
 // STREAM INITIATION - COMBINED BLOCKING SCENARIOS
 // ============================================================================
 
-describe('Stream Initiation - Combined Blocking', () => {
+describe('stream Initiation - Combined Blocking', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -477,7 +477,7 @@ describe('Stream Initiation - Combined Blocking', () => {
 // STREAM INITIATION - PARTICIPANT ORDER
 // ============================================================================
 
-describe('Stream Initiation - Participant Order', () => {
+describe('stream Initiation - Participant Order', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -543,7 +543,7 @@ describe('Stream Initiation - Participant Order', () => {
 // STREAM INITIATION - WAITING MECHANISM
 // ============================================================================
 
-describe('Stream Initiation - Waiting Mechanism', () => {
+describe('stream Initiation - Waiting Mechanism', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -627,7 +627,7 @@ describe('Stream Initiation - Waiting Mechanism', () => {
 // STREAM INITIATION - MULTI-ROUND SCENARIOS
 // ============================================================================
 
-describe('Stream Initiation - Multi-Round', () => {
+describe('stream Initiation - Multi-Round', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -695,7 +695,7 @@ describe('Stream Initiation - Multi-Round', () => {
 // STREAM INITIATION - PREMATURE START PREVENTION
 // ============================================================================
 
-describe('Stream Initiation - Premature Start Prevention', () => {
+describe('stream Initiation - Premature Start Prevention', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -775,7 +775,7 @@ describe('Stream Initiation - Premature Start Prevention', () => {
 // STREAM INITIATION - PARTICIPANT CONFIGURATION VARIATIONS
 // ============================================================================
 
-describe('Stream Initiation - Participant Configurations', () => {
+describe('stream Initiation - Participant Configurations', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -829,7 +829,7 @@ describe('Stream Initiation - Participant Configurations', () => {
 // STREAM INITIATION - OPTIMISTIC USER MESSAGE
 // ============================================================================
 
-describe('Stream Initiation - Optimistic User Message', () => {
+describe('stream Initiation - Optimistic User Message', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {

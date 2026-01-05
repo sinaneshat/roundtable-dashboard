@@ -23,8 +23,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ChangelogChangeTypesExtended, ChatModes } from '@/api/core/enums';
 import type { ChatMode } from '@/api/core/enums';
+import { ChangelogChangeTypesExtended, ChatModes } from '@/api/core/enums';
 import { createMockParticipant, createMockThread } from '@/lib/testing';
 
 // ============================================================================
@@ -127,7 +127,8 @@ function validateFlowOrder(flow: SubmissionFlow[]): boolean {
     const currentStep = flow[i];
     const previousStep = flow[i - 1];
 
-    if (!currentStep || !previousStep) continue;
+    if (!currentStep || !previousStep)
+      continue;
 
     const currentOrder = stepOrder[currentStep.step];
     const previousOrder = stepOrder[previousStep.step];
@@ -170,7 +171,7 @@ function createRoundState(
 // TEST SUITE: Mode Change Detection
 // ============================================================================
 
-describe('Conversation Mode Changes - Detection', () => {
+describe('conversation Mode Changes - Detection', () => {
   it('should detect mode change from DEBATING to BRAINSTORMING', () => {
     const change = detectModeChange(ChatModes.DEBATING, ChatModes.BRAINSTORMING, 1);
 
@@ -223,7 +224,7 @@ describe('Conversation Mode Changes - Detection', () => {
 // TEST SUITE: Changelog Creation
 // ============================================================================
 
-describe('Conversation Mode Changes - Changelog Creation', () => {
+describe('conversation Mode Changes - Changelog Creation', () => {
   it('should create changelog entry for mode change', () => {
     const thread = createMockThread({ mode: ChatModes.DEBATING });
     const newMode = ChatModes.BRAINSTORMING;
@@ -290,7 +291,7 @@ describe('Conversation Mode Changes - Changelog Creation', () => {
 // TEST SUITE: Submission Flow with Mode Changes
 // ============================================================================
 
-describe('Conversation Mode Changes - Submission Flow', () => {
+describe('conversation Mode Changes - Submission Flow', () => {
   it('should follow correct order: PATCH → CHANGELOG → PARTICIPANT → MODERATOR', () => {
     const flow = simulateSubmissionFlow(true, false, 2);
 
@@ -360,7 +361,7 @@ describe('Conversation Mode Changes - Submission Flow', () => {
 // TEST SUITE: Mode-Specific Council Moderator Evaluation
 // ============================================================================
 
-describe('Conversation Mode Changes - Moderator Adaptation', () => {
+describe('conversation Mode Changes - Moderator Adaptation', () => {
   it('should adapt evaluation criteria to BRAINSTORMING mode', () => {
     const evaluationCriteria = {
       [ChatModes.BRAINSTORMING]: ['Creativity', 'Diversity', 'Practicality', 'Innovation'],
@@ -443,7 +444,7 @@ describe('Conversation Mode Changes - Moderator Adaptation', () => {
 // TEST SUITE: Mode Changes with Other Config Changes
 // ============================================================================
 
-describe('Conversation Mode Changes - Combined with Other Changes', () => {
+describe('conversation Mode Changes - Combined with Other Changes', () => {
   it('should combine mode change with participant addition', () => {
     const thread = createMockThread({ mode: ChatModes.DEBATING });
     const participants = [createMockParticipant(0), createMockParticipant(1)];
@@ -552,7 +553,7 @@ describe('Conversation Mode Changes - Combined with Other Changes', () => {
 // TEST SUITE: Mode Transition Matrix
 // ============================================================================
 
-describe('Conversation Mode Changes - Transition Matrix', () => {
+describe('conversation Mode Changes - Transition Matrix', () => {
   const modes = [
     ChatModes.BRAINSTORMING,
     ChatModes.ANALYZING,
@@ -586,7 +587,7 @@ describe('Conversation Mode Changes - Transition Matrix', () => {
 // TEST SUITE: Edge Cases
 // ============================================================================
 
-describe('Conversation Mode Changes - Edge Cases', () => {
+describe('conversation Mode Changes - Edge Cases', () => {
   it('should handle rapid mode changes across multiple rounds', () => {
     const rounds: RoundState[] = [
       createRoundState(0, ChatModes.DEBATING, false),
@@ -632,8 +633,7 @@ describe('Conversation Mode Changes - Edge Cases', () => {
 
   it('should not create changelog when mode unchanged for many rounds', () => {
     const rounds: RoundState[] = Array.from({ length: 10 }, (_, i) =>
-      createRoundState(i, ChatModes.DEBATING, false),
-    );
+      createRoundState(i, ChatModes.DEBATING, false));
 
     rounds.forEach((round) => {
       expect(round.mode).toBe(ChatModes.DEBATING);
@@ -684,7 +684,7 @@ describe('Conversation Mode Changes - Edge Cases', () => {
 // TEST SUITE: Streaming State Management
 // ============================================================================
 
-describe('Conversation Mode Changes - Streaming State', () => {
+describe('conversation Mode Changes - Streaming State', () => {
   it('should not allow mode change during streaming', () => {
     const roundState = createRoundState(1, ChatModes.DEBATING, false);
     roundState.isStreaming = true;

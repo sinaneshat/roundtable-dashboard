@@ -21,7 +21,6 @@ import { FinishReasons, MessageRoles, MessageStatuses, MODERATOR_PARTICIPANT_IND
 import { createTestUserMessage } from '@/lib/testing';
 
 import { createChatStore } from '../../stores/chat/store';
-import type { ChatStore } from '../../stores/chat/store-schemas';
 
 // ============================================================================
 // Test Utilities
@@ -127,7 +126,7 @@ function createPreSearch(roundNumber: number, status: string = MessageStatuses.P
 // Test Suite: Multi-Round Placeholder Behavior
 // ============================================================================
 
-describe('Multi-Round Placeholder Behavior', () => {
+describe('multi-Round Placeholder Behavior', () => {
   it('should show placeholders for second round after first round completes', () => {
     const store = createChatStore();
 
@@ -230,7 +229,7 @@ describe('Multi-Round Placeholder Behavior', () => {
 // Test Suite: Configuration Change Impact on Placeholders
 // ============================================================================
 
-describe('Configuration Changes Impact on Placeholders', () => {
+describe('configuration Changes Impact on Placeholders', () => {
   it('should update placeholders when participants added mid-conversation', () => {
     const store = createChatStore();
 
@@ -312,7 +311,7 @@ describe('Configuration Changes Impact on Placeholders', () => {
 // Test Suite: Pre-Search Placeholder Integration
 // ============================================================================
 
-describe('Pre-Search Placeholder Integration', () => {
+describe('pre-Search Placeholder Integration', () => {
   it('should show pre-search placeholder before participant placeholders', () => {
     const store = createChatStore();
 
@@ -424,7 +423,7 @@ describe('Pre-Search Placeholder Integration', () => {
 // Test Suite: Error Handling & Edge Cases
 // ============================================================================
 
-describe('Error Handling & Edge Cases', () => {
+describe('error Handling & Edge Cases', () => {
   it('should show placeholder with error state for failed participant', () => {
     const store = createChatStore();
 
@@ -543,7 +542,7 @@ describe('Error Handling & Edge Cases', () => {
 // Test Suite: Placeholder Visibility Rules
 // ============================================================================
 
-describe('Placeholder Visibility Rules', () => {
+describe('placeholder Visibility Rules', () => {
   it('should hide placeholders when streamingRoundNumber is null', () => {
     const store = createChatStore();
 
@@ -605,7 +604,7 @@ describe('Placeholder Visibility Rules', () => {
 // Test Suite: Moderator Placeholder Specific Behavior
 // ============================================================================
 
-describe('Moderator Placeholder Specific Behavior', () => {
+describe('moderator Placeholder Specific Behavior', () => {
   it('should keep moderator placeholder visible throughout participant streaming', () => {
     const store = createChatStore();
 

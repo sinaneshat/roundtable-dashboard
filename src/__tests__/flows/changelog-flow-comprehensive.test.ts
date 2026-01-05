@@ -27,10 +27,7 @@ import { ChangelogTypes, ChatModes, MessageStatuses } from '@/api/core/enums';
 import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
 import { queryKeys } from '@/lib/data/query-keys';
 import {
-  createInitialStoreState,
   createMockStoredPreSearch,
-  createMockThread,
-  createParticipantConfig,
 } from '@/lib/testing/chat-test-factories';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
@@ -91,11 +88,11 @@ function createMockChangelog(
 
 describe('changelog Called When Config Changes Exist', () => {
   let store: ChatStoreApi;
-  let mockQueryClient: MockQueryClient & QueryClient;
+  let _mockQueryClient: MockQueryClient & QueryClient;
 
   beforeEach(() => {
     store = createChatStore();
-    mockQueryClient = createMockQueryClient();
+    _mockQueryClient = createMockQueryClient();
   });
 
   describe('config change detection', () => {
@@ -423,7 +420,7 @@ describe('changelog Timing: After User Message PATCH', () => {
     store = createChatStore();
   });
 
-  describe('PATCH completion triggers changelog', () => {
+  describe('pATCH completion triggers changelog', () => {
     it('sets configChangeRoundNumber during PATCH request', () => {
       const state = store.getState();
 

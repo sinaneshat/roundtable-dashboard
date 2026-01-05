@@ -203,7 +203,7 @@ function deduplicateMessages(messages: UIMessage[]): UIMessage[] {
 // TESTS
 // ============================================================================
 
-describe('Message Visibility E2E', () => {
+describe('message Visibility E2E', () => {
   let store: ReturnType<typeof createChatStore>;
   let thread: ChatThread;
   let participants: ChatParticipant[];
@@ -224,17 +224,17 @@ describe('Message Visibility E2E', () => {
     store.getState().initializeThread(thread, participants, round0Messages);
   });
 
-  describe('Round 0 (Initial Round) Visibility', () => {
-    it('STEP 1: User message stored in Zustand store', () => {
+  describe('round 0 (Initial Round) Visibility', () => {
+    it('sTEP 1: User message stored in Zustand store', () => {
       const messages = store.getState().messages;
       const userMessages = messages.filter(m => m.role === MessageRoles.USER);
 
-      expect(userMessages.length).toBe(1);
+      expect(userMessages).toHaveLength(1);
       expect(userMessages[0].parts[0]).toEqual({ type: 'text', text: 'Initial question' });
       expect(getRoundNumber(userMessages[0].metadata)).toBe(0);
     });
 
-    it('STEP 2: User message grouped by timeline', () => {
+    it('sTEP 2: User message grouped by timeline', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
 
@@ -247,23 +247,23 @@ describe('Message Visibility E2E', () => {
       expect(userMessage!.parts[0]).toEqual({ type: 'text', text: 'Initial question' });
     });
 
-    it('STEP 3: User message survives deduplication', () => {
+    it('sTEP 3: User message survives deduplication', () => {
       const messages = store.getState().messages;
       const deduplicated = deduplicateMessages(messages);
 
       const userMessages = deduplicated.filter(m => m.role === MessageRoles.USER);
-      expect(userMessages.length).toBe(1);
+      expect(userMessages).toHaveLength(1);
       expect(userMessages[0].parts[0]).toEqual({ type: 'text', text: 'Initial question' });
     });
 
-    it('STEP 4: All messages visible in final render pipeline', () => {
+    it('sTEP 4: All messages visible in final render pipeline', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
       const round0 = messagesByRound.get(0)!;
       const deduplicated = deduplicateMessages(round0);
 
       // Should have: 1 user + 2 participants + 1 moderator = 4 messages
-      expect(deduplicated.length).toBe(4);
+      expect(deduplicated).toHaveLength(4);
 
       const userMsg = deduplicated.find(m => m.role === MessageRoles.USER);
       const assistantMsgs = deduplicated.filter(
@@ -272,13 +272,13 @@ describe('Message Visibility E2E', () => {
       const moderatorMsg = deduplicated.find(m => m.metadata?.isModerator === true);
 
       expect(userMsg).toBeDefined();
-      expect(assistantMsgs.length).toBe(2);
+      expect(assistantMsgs).toHaveLength(2);
       expect(moderatorMsg).toBeDefined();
     });
   });
 
-  describe('Round 1 (Non-Initial Round) Visibility', () => {
-    it('STEP 1: Optimistic user message stored immediately', () => {
+  describe('round 1 (Non-Initial Round) Visibility', () => {
+    it('sTEP 1: Optimistic user message stored immediately', () => {
       const optimisticMsg = createUserMessage(1, 'Follow-up question', true);
       store.getState().setMessages(msgs => [...msgs, optimisticMsg]);
 
@@ -287,11 +287,11 @@ describe('Message Visibility E2E', () => {
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
 
-      expect(round1UserMsgs.length).toBe(1);
+      expect(round1UserMsgs).toHaveLength(1);
       expect(round1UserMsgs[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
     });
 
-    it('STEP 2: Optimistic message grouped in timeline', () => {
+    it('sTEP 2: Optimistic message grouped in timeline', () => {
       const optimisticMsg = createUserMessage(1, 'Follow-up question', true);
       store.getState().setMessages(msgs => [...msgs, optimisticMsg]);
 
@@ -301,12 +301,12 @@ describe('Message Visibility E2E', () => {
       expect(messagesByRound.has(1)).toBe(true);
 
       const round1 = messagesByRound.get(1)!;
-      expect(round1.length).toBe(1);
+      expect(round1).toHaveLength(1);
       expect(round1[0].role).toBe(MessageRoles.USER);
       expect(round1[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
     });
 
-    it('STEP 3: Optimistic message survives deduplication BEFORE DB message', () => {
+    it('sTEP 3: Optimistic message survives deduplication BEFORE DB message', () => {
       const optimisticMsg = createUserMessage(1, 'Follow-up question', true);
       store.getState().setMessages(msgs => [...msgs, optimisticMsg]);
 
@@ -315,12 +315,12 @@ describe('Message Visibility E2E', () => {
       const round1 = messagesByRound.get(1)!;
       const deduplicated = deduplicateMessages(round1);
 
-      expect(deduplicated.length).toBe(1);
+      expect(deduplicated).toHaveLength(1);
       expect(deduplicated[0].role).toBe(MessageRoles.USER);
       expect(deduplicated[0].id).toContain('optimistic-');
     });
 
-    it('STEP 4: DB message replaces optimistic after persistence', () => {
+    it('sTEP 4: DB message replaces optimistic after persistence', () => {
       // Add optimistic
       const optimisticMsg = createUserMessage(1, 'Follow-up question', true);
       store.getState().setMessages(msgs => [...msgs, optimisticMsg]);
@@ -335,12 +335,12 @@ describe('Message Visibility E2E', () => {
       const deduplicated = deduplicateMessages(round1);
 
       // Should have only DB message (optimistic replaced)
-      expect(deduplicated.length).toBe(1);
+      expect(deduplicated).toHaveLength(1);
       expect(deduplicated[0].id).toBe('thread_r1_user');
       expect(deduplicated[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
     });
 
-    it('STEP 5: User message visible throughout streaming lifecycle', () => {
+    it('sTEP 5: User message visible throughout streaming lifecycle', () => {
       // Initial state: Add optimistic message
       const optimisticMsg = createUserMessage(1, 'Follow-up', true);
       store.getState().setMessages(msgs => [...msgs, optimisticMsg]);
@@ -360,7 +360,7 @@ describe('Message Visibility E2E', () => {
 
       messages = store.getState().messages;
       round1Msgs = messages.filter(m => getRoundNumber(m.metadata) === 1);
-      expect(round1Msgs.length).toBe(1);
+      expect(round1Msgs).toHaveLength(1);
       expect(round1Msgs[0].id).toBe('thread_r1_user');
 
       // State 3: During streaming (add participant responses)
@@ -374,7 +374,7 @@ describe('Message Visibility E2E', () => {
       const userMsgs = messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
-      expect(userMsgs.length).toBe(1);
+      expect(userMsgs).toHaveLength(1);
 
       // State 4: After streaming completes
       store.getState().setMessages(msgs => [
@@ -389,11 +389,11 @@ describe('Message Visibility E2E', () => {
       const finalUserMsgs = messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
-      expect(finalUserMsgs.length).toBe(1);
+      expect(finalUserMsgs).toHaveLength(1);
     });
   });
 
-  describe('Round 2+ (Multiple Non-Initial Rounds) Visibility', () => {
+  describe('round 2+ (Multiple Non-Initial Rounds) Visibility', () => {
     beforeEach(() => {
       // Complete round 1 first
       const round1Messages = [
@@ -405,18 +405,18 @@ describe('Message Visibility E2E', () => {
       store.getState().setMessages(msgs => [...msgs, ...round1Messages]);
     });
 
-    it('STEP 1: Round 2 user message stored correctly', () => {
+    it('sTEP 1: Round 2 user message stored correctly', () => {
       const optimisticMsg = createUserMessage(2, 'Follow-up 2', true);
       store.getState().setMessages(msgs => [...msgs, optimisticMsg]);
 
       const messages = store.getState().messages;
       const round2Msgs = messages.filter(m => getRoundNumber(m.metadata) === 2);
 
-      expect(round2Msgs.length).toBe(1);
+      expect(round2Msgs).toHaveLength(1);
       expect(round2Msgs[0].role).toBe(MessageRoles.USER);
     });
 
-    it('STEP 2: All rounds grouped correctly in timeline', () => {
+    it('sTEP 2: All rounds grouped correctly in timeline', () => {
       const optimisticMsg = createUserMessage(2, 'Follow-up 2', true);
       store.getState().setMessages(msgs => [...msgs, optimisticMsg]);
 
@@ -429,7 +429,7 @@ describe('Message Visibility E2E', () => {
       expect(messagesByRound.has(2)).toBe(true);
     });
 
-    it('STEP 3: Each round maintains correct user message', () => {
+    it('sTEP 3: Each round maintains correct user message', () => {
       const optimisticMsg = createUserMessage(2, 'Follow-up 2', true);
       store.getState().setMessages(msgs => [...msgs, optimisticMsg]);
 
@@ -456,7 +456,7 @@ describe('Message Visibility E2E', () => {
     });
   });
 
-  describe('Message ID Changes Dont Affect Visibility', () => {
+  describe('message ID Changes Dont Affect Visibility', () => {
     it('optimistic ID to DB ID transition preserves visibility', () => {
       const optimisticMsg = createUserMessage(1, 'Question', true);
       const optimisticId = optimisticMsg.id;
@@ -466,7 +466,7 @@ describe('Message Visibility E2E', () => {
 
       let messages = store.getState().messages;
       let round1 = messages.filter(m => getRoundNumber(m.metadata) === 1);
-      expect(round1.length).toBe(1);
+      expect(round1).toHaveLength(1);
       expect(round1[0].id).toBe(optimisticId);
 
       // Replace with DB message
@@ -475,7 +475,7 @@ describe('Message Visibility E2E', () => {
 
       messages = store.getState().messages;
       round1 = messages.filter(m => getRoundNumber(m.metadata) === 1);
-      expect(round1.length).toBe(1);
+      expect(round1).toHaveLength(1);
       expect(round1[0].id).toBe('thread_r1_user');
     });
 
@@ -500,7 +500,7 @@ describe('Message Visibility E2E', () => {
     });
   });
 
-  describe('Deduplication Edge Cases', () => {
+  describe('deduplication Edge Cases', () => {
     it('does NOT remove visible messages when DB message arrives first (race condition)', () => {
       // Race condition: DB message arrives before optimistic
       const dbMsg = createUserMessage(1, 'Question', false);
@@ -513,7 +513,7 @@ describe('Message Visibility E2E', () => {
       const deduplicated = deduplicateMessages(round1);
 
       // Should only have DB message (optimistic filtered out)
-      expect(deduplicated.length).toBe(1);
+      expect(deduplicated).toHaveLength(1);
       expect(deduplicated[0].id).toBe('thread_r1_user');
     });
 
@@ -535,7 +535,7 @@ describe('Message Visibility E2E', () => {
       const messages = store.getState().messages;
       const round1 = messages.filter(m => getRoundNumber(m.metadata) === 1);
 
-      expect(round1.length).toBe(1);
+      expect(round1).toHaveLength(1);
       expect(round1[0].id).toBe('thread_r1_user');
     });
   });
@@ -553,7 +553,7 @@ describe('Message Visibility E2E', () => {
       const messages = store.getState().messages;
       const round1Msgs = messages.filter(m => getRoundNumber(m.metadata) === 1);
 
-      expect(round1Msgs.length).toBe(1);
+      expect(round1Msgs).toHaveLength(1);
       expect(round1Msgs[0].role).toBe(MessageRoles.USER);
     });
 
@@ -587,7 +587,7 @@ describe('Message Visibility E2E', () => {
     });
   });
 
-  describe('Complete Visibility Pipeline for All Message Types', () => {
+  describe('complete Visibility Pipeline for All Message Types', () => {
     it('user message: round 0', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
@@ -639,7 +639,7 @@ describe('Message Visibility E2E', () => {
       const participantMsgs = deduplicated.filter(
         m => m.role === MessageRoles.ASSISTANT && !m.metadata?.isModerator,
       );
-      expect(participantMsgs.length).toBe(2);
+      expect(participantMsgs).toHaveLength(2);
     });
 
     it('participant message: round 1', () => {
@@ -658,7 +658,7 @@ describe('Message Visibility E2E', () => {
       const participantMsgs = deduplicated.filter(
         m => m.role === MessageRoles.ASSISTANT && !m.metadata?.isModerator,
       );
-      expect(participantMsgs.length).toBe(2);
+      expect(participantMsgs).toHaveLength(2);
     });
 
     it('moderator message: round 0', () => {

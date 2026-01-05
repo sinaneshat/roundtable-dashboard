@@ -15,13 +15,13 @@
  */
 
 import type { UIMessage } from 'ai';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MessageStatuses, ScreenModes, UIMessageRoles } from '@/api/core/enums';
+import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import {
+  createMockParticipant,
   createMockStoredPreSearch,
   createMockThread,
-  createMockParticipant,
 } from '@/lib/testing/chat-test-factories';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
@@ -51,8 +51,8 @@ function setupFollowUpRoundState(store: ChatStoreApi, options: {
 }) {
   const {
     enableWebSearch = true,
-    hasConfigChanges = true,
-    preSearchStatus = MessageStatuses.PENDING,
+    hasConfigChanges: _hasConfigChanges = true,
+    preSearchStatus: _preSearchStatus = MessageStatuses.PENDING,
   } = options;
 
   const thread = createMockThread({ enableWebSearch });
@@ -241,7 +241,7 @@ describe('participants Must Start After Pre-Search Completes', () => {
   });
 
   describe('pre-search blocking', () => {
-    it('PENDING pre-search blocks participant streaming', () => {
+    it('pENDING pre-search blocks participant streaming', () => {
       setupFollowUpRoundState(store, { enableWebSearch: true });
 
       const preSearch = createMockStoredPreSearch(1, MessageStatuses.PENDING);
@@ -258,7 +258,7 @@ describe('participants Must Start After Pre-Search Completes', () => {
       expect(isBlocked).toBe(true);
     });
 
-    it('STREAMING pre-search blocks participant streaming', () => {
+    it('sTREAMING pre-search blocks participant streaming', () => {
       setupFollowUpRoundState(store, { enableWebSearch: true });
 
       const preSearch = createMockStoredPreSearch(1, MessageStatuses.STREAMING);
@@ -274,7 +274,7 @@ describe('participants Must Start After Pre-Search Completes', () => {
       expect(isBlocked).toBe(true);
     });
 
-    it('COMPLETE pre-search allows participant streaming', () => {
+    it('cOMPLETE pre-search allows participant streaming', () => {
       setupFollowUpRoundState(store, { enableWebSearch: true });
 
       const preSearch = createMockStoredPreSearch(1, MessageStatuses.COMPLETE);
@@ -290,7 +290,7 @@ describe('participants Must Start After Pre-Search Completes', () => {
       expect(isBlocked).toBe(false);
     });
 
-    it('FAILED pre-search allows participant streaming', () => {
+    it('fAILED pre-search allows participant streaming', () => {
       setupFollowUpRoundState(store, { enableWebSearch: true });
 
       const preSearch = createMockStoredPreSearch(1, MessageStatuses.FAILED);

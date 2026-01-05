@@ -85,8 +85,8 @@ function createAssistantMessage(id: string, roundNumber: number): UIMessage {
   };
 }
 
-describe('User Message Deduplication', () => {
-  describe('Optimistic Message Handling', () => {
+describe('user Message Deduplication', () => {
+  describe('optimistic Message Handling', () => {
     it('should include ONLY optimistic message when no DB message exists (round 1 just submitted)', () => {
       const messages: UIMessage[] = [
         createUserMessage('thread_r0_user', 0, 'Round 0'),
@@ -99,7 +99,7 @@ describe('User Message Deduplication', () => {
         m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1,
       );
 
-      expect(round1Users.length).toBe(1);
+      expect(round1Users).toHaveLength(1);
       expect(round1Users[0].id).toBe('optimistic-user-1');
 
       // CRITICAL: Message must be in final render output
@@ -119,7 +119,7 @@ describe('User Message Deduplication', () => {
         m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1,
       );
 
-      expect(round1Users.length).toBe(1);
+      expect(round1Users).toHaveLength(1);
       expect(round1Users[0].id).toBe('thread_r1_user');
 
       // CRITICAL: User message STILL visible, just with different ID
@@ -144,7 +144,7 @@ describe('User Message Deduplication', () => {
       );
 
       // Should have exactly 1 user message for round 1
-      expect(round1Users.length).toBe(1);
+      expect(round1Users).toHaveLength(1);
       // Should be the DB message
       expect(round1Users[0].id).toBe('thread_r1_user');
 
@@ -155,7 +155,7 @@ describe('User Message Deduplication', () => {
     });
   });
 
-  describe('Immediate Visibility After Submission', () => {
+  describe('immediate Visibility After Submission', () => {
     it('should have user message visible immediately after optimistic add (no duplicates in store)', () => {
       // Simulate state IMMEDIATELY after handleUpdateThreadAndSend adds optimistic message
       const messages: UIMessage[] = [
@@ -171,7 +171,7 @@ describe('User Message Deduplication', () => {
       const round1Users = result.filter(
         m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1,
       );
-      expect(round1Users.length).toBe(1);
+      expect(round1Users).toHaveLength(1);
       expect(round1Users[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up' });
     });
 
@@ -182,16 +182,16 @@ describe('User Message Deduplication', () => {
 
       const result = simulateDeduplication(messages);
 
-      expect(result.length).toBe(1);
+      expect(result).toHaveLength(1);
       expect(result[0].role).toBe(MessageRoles.USER);
       expect(result[0].metadata?.roundNumber).toBe(1);
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('edge Cases', () => {
     it('should handle empty messages', () => {
       const result = simulateDeduplication([]);
-      expect(result.length).toBe(0);
+      expect(result).toHaveLength(0);
     });
 
     it('should handle single optimistic message for round 0', () => {
@@ -200,7 +200,7 @@ describe('User Message Deduplication', () => {
       ];
 
       const result = simulateDeduplication(messages);
-      expect(result.length).toBe(1);
+      expect(result).toHaveLength(1);
       expect(result[0].id).toBe('optimistic-user-0');
     });
 
@@ -216,12 +216,12 @@ describe('User Message Deduplication', () => {
 
       // Should have both assistant messages
       const assistants = result.filter(m => m.role === MessageRoles.ASSISTANT);
-      expect(assistants.length).toBe(2);
+      expect(assistants).toHaveLength(2);
     });
   });
 
-  describe('Visibility Guarantees - Messages Never Disappear', () => {
-    it('GUARANTEE: user message for round N always visible after submission', () => {
+  describe('visibility Guarantees - Messages Never Disappear', () => {
+    it('gUARANTEE: user message for round N always visible after submission', () => {
       // Test all rounds 0-5
       for (let roundNum = 0; roundNum <= 5; roundNum++) {
         const messages: UIMessage[] = [];
@@ -245,7 +245,7 @@ describe('User Message Deduplication', () => {
       }
     });
 
-    it('GUARANTEE: user message visible through ID transitions (optimistic -> DB)', () => {
+    it('gUARANTEE: user message visible through ID transitions (optimistic -> DB)', () => {
       const roundNum = 1;
 
       // State 1: Optimistic only
@@ -274,7 +274,7 @@ describe('User Message Deduplication', () => {
       expect(result3.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === roundNum)).toBe(true);
     });
 
-    it('GUARANTEE: deduplication never removes ALL user messages for a round', () => {
+    it('gUARANTEE: deduplication never removes ALL user messages for a round', () => {
       // Even with duplicate messages, at least one should remain
       const messages: UIMessage[] = [
         createUserMessage('thread_r0_user', 0, 'Q0'),
@@ -295,7 +295,7 @@ describe('User Message Deduplication', () => {
       expect(round1Users[0].parts[0]).toEqual({ type: 'text', text: 'Q1' });
     });
 
-    it('GUARANTEE: message visibility independent of message order', () => {
+    it('gUARANTEE: message visibility independent of message order', () => {
       // Test different orderings of the same messages
       const orderings = [
         // Order 1: Optimistic first
@@ -328,7 +328,7 @@ describe('User Message Deduplication', () => {
       });
     });
 
-    it('GUARANTEE: concurrent round submissions maintain visibility for all rounds', () => {
+    it('gUARANTEE: concurrent round submissions maintain visibility for all rounds', () => {
       // Simulate rapid consecutive submissions
       const messages: UIMessage[] = [
         createUserMessage('thread_r0_user', 0, 'Q0'),

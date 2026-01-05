@@ -29,14 +29,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
 
-describe('Config Change Flow Ordering - Flag States and Blocking', () => {
+describe('config Change Flow Ordering - Flag States and Blocking', () => {
   let store: ChatStoreApi;
 
   beforeEach(() => {
     store = createChatStore();
   });
 
-  describe('Flag Setting Order in handleUpdateThreadAndSend', () => {
+  describe('flag Setting Order in handleUpdateThreadAndSend', () => {
     it('should set configChangeRoundNumber BEFORE PATCH starts', () => {
       // Initial state: both flags cleared
       expect(store.getState().configChangeRoundNumber).toBeNull();
@@ -254,7 +254,7 @@ describe('Config Change Flow Ordering - Flag States and Blocking', () => {
     });
   });
 
-  describe('Config Change Types - Web Search Toggle', () => {
+  describe('config Change Types - Web Search Toggle', () => {
     it('should set flags when web search toggles from OFF to ON', () => {
       const roundNumber = 1;
 
@@ -340,7 +340,7 @@ describe('Config Change Flow Ordering - Flag States and Blocking', () => {
     });
   });
 
-  describe('Config Change Types - Mode Changes', () => {
+  describe('config Change Types - Mode Changes', () => {
     it('should set flags when mode changes between rounds', () => {
       const roundNumber = 1;
 
@@ -392,7 +392,7 @@ describe('Config Change Flow Ordering - Flag States and Blocking', () => {
     });
   });
 
-  describe('Config Change Types - Participant Changes', () => {
+  describe('config Change Types - Participant Changes', () => {
     it('should set flags when participants are added', () => {
       const roundNumber = 1;
 
@@ -488,7 +488,7 @@ describe('Config Change Flow Ordering - Flag States and Blocking', () => {
     });
   });
 
-  describe('Race Condition Prevention - PATCH → Changelog → Pre-search → Streams', () => {
+  describe('race Condition Prevention - PATCH → Changelog → Pre-search → Streams', () => {
     it('should prevent pre-search from starting before PATCH completes', () => {
       const roundNumber = 1;
 
@@ -594,7 +594,7 @@ describe('Config Change Flow Ordering - Flag States and Blocking', () => {
     });
   });
 
-  describe('Edge Cases and Error Scenarios', () => {
+  describe('edge Cases and Error Scenarios', () => {
     it('should handle changelog fetch timeout by clearing flags', () => {
       const roundNumber = 1;
 
@@ -688,7 +688,7 @@ describe('Config Change Flow Ordering - Flag States and Blocking', () => {
     });
   });
 
-  describe('Multiple Config Changes in Same Submission', () => {
+  describe('multiple Config Changes in Same Submission', () => {
     it('should handle web search + mode change together', () => {
       const roundNumber = 1;
 

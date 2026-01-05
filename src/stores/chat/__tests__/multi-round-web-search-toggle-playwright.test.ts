@@ -472,7 +472,7 @@ describe('scenario 3: ON → OFF → ON - Toggle Back and Forth', () => {
     ]);
 
     store.getState().setScreenMode(ScreenModes.THREAD);
-    expect(store.getState().preSearches.length).toBe(0);
+    expect(store.getState().preSearches).toHaveLength(0);
 
     // Round 1: ON
     store.getState().setEnableWebSearch(true);
@@ -489,7 +489,7 @@ describe('scenario 3: ON → OFF → ON - Toggle Back and Forth', () => {
     expect(store.getState().preSearches.find(ps => ps.roundNumber === 3)).toBeDefined();
 
     // Verify independent pre-search states
-    expect(store.getState().preSearches.length).toBe(2); // Round 1 and Round 3
+    expect(store.getState().preSearches).toHaveLength(2); // Round 1 and Round 3
     expect(store.getState().preSearches.map(ps => ps.roundNumber)).toEqual([1, 3]);
   });
 });
@@ -673,7 +673,7 @@ describe('bUG SCENARIO: Web Search Enabled + Preset Participants', () => {
     expect(state.screenMode).toBe(ScreenModes.THREAD);
     expect(state.enableWebSearch).toBe(true);
     expect(state.pendingMessage).toBeTruthy();
-    expect(state.expectedParticipantIds.length).toBe(2);
+    expect(state.expectedParticipantIds).toHaveLength(2);
 
     const preSearch = state.preSearches.find(ps => ps.roundNumber === 1);
     expect(preSearch?.status).toBe(MessageStatuses.PENDING);
@@ -1245,7 +1245,7 @@ describe('cOMPLETE E2E JOURNEY: 3-Round Toggle', () => {
 
     // Verify Round 0 state
     expect(store.getState().enableWebSearch).toBe(false);
-    expect(store.getState().preSearches.length).toBe(0);
+    expect(store.getState().preSearches).toHaveLength(0);
 
     // =====================================================
     // Round 1: Web search ON
@@ -1305,15 +1305,13 @@ describe('cOMPLETE E2E JOURNEY: 3-Round Toggle', () => {
     // Final Verification
     // =====================================================
     // Only Round 1 has pre-search
-    expect(store.getState().preSearches.length).toBe(1);
+    expect(store.getState().preSearches).toHaveLength(1);
     expect(store.getState().preSearches[0]?.roundNumber).toBe(1);
     expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
 
     // Messages from all rounds
     const rounds = new Set(
-      store.getState().messages
-        .map(m => (m.metadata as { roundNumber?: number })?.roundNumber)
-        .filter((r): r is number => r !== undefined),
+      store.getState().messages.map(m => (m.metadata as { roundNumber?: number })?.roundNumber).filter((r): r is number => r !== undefined),
     );
     expect(rounds.size).toBe(3); // Rounds 0, 1, 2
     expect([...rounds].sort()).toEqual([0, 1, 2]);

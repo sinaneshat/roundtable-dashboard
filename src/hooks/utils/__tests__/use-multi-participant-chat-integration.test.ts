@@ -196,7 +196,7 @@ function createAssistantMessage(
 // ============================================================================
 
 describe('useMultiParticipantChat Integration', () => {
-  describe('AI SDK Messages Don\'t Overwrite Store Messages', () => {
+  describe('aI SDK Messages Don't Overwrite Store Messages', () => {
     it('should preserve original user message when AI SDK creates participant trigger', () => {
       // STEP 1: Store has original user message (from form submission + PATCH completion)
       const storeMessages: UIMessage[] = [
@@ -227,7 +227,7 @@ describe('useMultiParticipantChat Integration', () => {
         m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1,
       );
 
-      expect(round1UserMessages.length).toBe(1);
+      expect(round1UserMessages).toHaveLength(1);
       expect(round1UserMessages[0].id).toBe('thread-1_r1_user');
       expect(round1UserMessages[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up' });
     });
@@ -253,7 +253,7 @@ describe('useMultiParticipantChat Integration', () => {
 
       // All 3 user messages should be visible
       const userMessages = deduplicated.filter(m => m.role === MessageRoles.USER);
-      expect(userMessages.length).toBe(3);
+      expect(userMessages).toHaveLength(3);
       expect(userMessages.map(m => m.metadata?.roundNumber)).toEqual([0, 1, 2]);
 
       // No participant trigger messages should be visible
@@ -265,7 +265,7 @@ describe('useMultiParticipantChat Integration', () => {
     });
   });
 
-  describe('Hydration Works Correctly from Store to AI SDK', () => {
+  describe('hydration Works Correctly from Store to AI SDK', () => {
     it('should hydrate AI SDK with store messages on mount', () => {
       // Store has a complete conversation
       const storeMessages: UIMessage[] = [
@@ -281,7 +281,7 @@ describe('useMultiParticipantChat Integration', () => {
       // This is handled by the `messages` prop in useChat, not by sync
       const hydratedAiSdk = [...storeMessages];
 
-      expect(hydratedAiSdk.length).toBe(3);
+      expect(hydratedAiSdk).toHaveLength(3);
       expect(hydratedAiSdk).toEqual(storeMessages);
     });
 
@@ -303,16 +303,16 @@ describe('useMultiParticipantChat Integration', () => {
 
       // Thread 1 hydration
       let aiSdkMessages = [...thread1Messages];
-      expect(aiSdkMessages.length).toBe(2);
+      expect(aiSdkMessages).toHaveLength(2);
 
       // Thread switch: AI SDK should receive thread 2 messages
       aiSdkMessages = [...thread2Messages];
-      expect(aiSdkMessages.length).toBe(2);
+      expect(aiSdkMessages).toHaveLength(2);
       expect(aiSdkMessages[0].id).toBe('thread-2_r0_user');
     });
   });
 
-  describe('Message Sync During Streaming Preserves Original Messages', () => {
+  describe('message Sync During Streaming Preserves Original Messages', () => {
     it('should preserve all previous messages when syncing streaming updates', () => {
       // Store has complete round 0 + user message for round 1
       const storeMessages: UIMessage[] = [
@@ -330,19 +330,19 @@ describe('useMultiParticipantChat Integration', () => {
       // Sync cycle 1
       let merged = simulateAiSdkToStoreSync(aiSdkMessages, storeMessages);
       // Should preserve: AI SDK messages + store-only messages (round 0 user, round 0 assistant, round 1 user)
-      expect(merged.length).toBe(5); // trigger + streaming assistant + round 0 user + round 0 assistant + round 1 user
+      expect(merged).toHaveLength(5); // trigger + streaming assistant + round 0 user + round 0 assistant + round 1 user
 
       // AI SDK continues streaming
       aiSdkMessages[1] = createAssistantMessage('thread-1', 1, 0, 'Chunk 1... Chunk 2...');
 
       // Sync cycle 2
       merged = simulateAiSdkToStoreSync(aiSdkMessages, merged);
-      expect(merged.length).toBe(5);
+      expect(merged).toHaveLength(5);
 
       // Verify all original messages still present after deduplication
       const deduplicated = simulateDeduplication(merged);
-      expect(deduplicated.filter(m => m.role === MessageRoles.USER).length).toBe(2);
-      expect(deduplicated.filter(m => m.role === MessageRoles.ASSISTANT).length).toBe(2);
+      expect(deduplicated.filter(m => m.role === MessageRoles.USER)).toHaveLength(2);
+      expect(deduplicated.filter(m => m.role === MessageRoles.ASSISTANT)).toHaveLength(2);
     });
 
     it('should handle rapid sync cycles during streaming without message loss', () => {
@@ -370,7 +370,7 @@ describe('useMultiParticipantChat Integration', () => {
       // Original user message should still be present
       const deduplicated = simulateDeduplication(merged);
       const userMessages = deduplicated.filter(m => m.role === MessageRoles.USER);
-      expect(userMessages.length).toBe(1);
+      expect(userMessages).toHaveLength(1);
       expect(userMessages[0].id).toBe('thread-1_r0_user');
     });
   });
@@ -409,8 +409,8 @@ describe('useMultiParticipantChat Integration', () => {
 
       // Deduplication should show 2 user messages, 2 assistant messages
       const deduplicated = simulateDeduplication(merged);
-      expect(deduplicated.filter(m => m.role === MessageRoles.USER).length).toBe(2);
-      expect(deduplicated.filter(m => m.role === MessageRoles.ASSISTANT).length).toBe(2);
+      expect(deduplicated.filter(m => m.role === MessageRoles.USER)).toHaveLength(2);
+      expect(deduplicated.filter(m => m.role === MessageRoles.ASSISTANT)).toHaveLength(2);
     });
 
     it('should not create duplicate messages on repeated syncs', () => {
@@ -431,11 +431,11 @@ describe('useMultiParticipantChat Integration', () => {
 
       // Should not duplicate messages
       const deduplicated = simulateDeduplication(merged);
-      expect(deduplicated.length).toBe(2); // 1 user + 1 assistant
+      expect(deduplicated).toHaveLength(2); // 1 user + 1 assistant
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('edge Cases', () => {
     it('should handle empty AI SDK messages', () => {
       const storeMessages: UIMessage[] = [
         createDbUserMessage('thread-1', 0, 'Hello'),
@@ -444,7 +444,7 @@ describe('useMultiParticipantChat Integration', () => {
       const aiSdkMessages: UIMessage[] = [];
 
       const merged = simulateAiSdkToStoreSync(aiSdkMessages, storeMessages);
-      expect(merged.length).toBe(1);
+      expect(merged).toHaveLength(1);
       expect(merged[0].id).toBe('thread-1_r0_user');
     });
 
@@ -456,7 +456,7 @@ describe('useMultiParticipantChat Integration', () => {
       ];
 
       const merged = simulateAiSdkToStoreSync(aiSdkMessages, storeMessages);
-      expect(merged.length).toBe(1);
+      expect(merged).toHaveLength(1);
       expect(merged[0].metadata?.isParticipantTrigger).toBe(true);
     });
 
@@ -473,7 +473,7 @@ describe('useMultiParticipantChat Integration', () => {
       const aiSdkMessages: UIMessage[] = [];
 
       const merged = simulateAiSdkToStoreSync(aiSdkMessages, storeMessages);
-      expect(merged.length).toBe(1);
+      expect(merged).toHaveLength(1);
     });
 
     it('should preserve messages with missing roundNumber', () => {
@@ -489,12 +489,12 @@ describe('useMultiParticipantChat Integration', () => {
       const aiSdkMessages: UIMessage[] = [];
 
       const merged = simulateAiSdkToStoreSync(aiSdkMessages, storeMessages);
-      expect(merged.length).toBe(1);
+      expect(merged).toHaveLength(1);
     });
   });
 
-  describe('Full Flow Simulation: Form Submit to Streaming', () => {
-    it('CRITICAL E2E: User message remains visible throughout entire flow', () => {
+  describe('full Flow Simulation: Form Submit to Streaming', () => {
+    it('cRITICAL E2E: User message remains visible throughout entire flow', () => {
       // STEP 1: User submits round 1 - optimistic message added
       let storeMessages: UIMessage[] = [
         createDbUserMessage('thread-1', 0, 'Round 0'),
@@ -504,7 +504,7 @@ describe('useMultiParticipantChat Integration', () => {
 
       // Verify optimistic is visible
       let deduplicated = simulateDeduplication(storeMessages);
-      expect(deduplicated.filter(m => m.role === MessageRoles.USER).length).toBe(2);
+      expect(deduplicated.filter(m => m.role === MessageRoles.USER)).toHaveLength(2);
 
       // STEP 2: PATCH /threads/:id completes - DB message replaces optimistic
       storeMessages = [
@@ -515,7 +515,7 @@ describe('useMultiParticipantChat Integration', () => {
 
       // Verify DB message is visible
       deduplicated = simulateDeduplication(storeMessages);
-      expect(deduplicated.filter(m => m.role === MessageRoles.USER).length).toBe(2);
+      expect(deduplicated.filter(m => m.role === MessageRoles.USER)).toHaveLength(2);
       expect(deduplicated.find(m => m.id === 'thread-1_r1_user')).toBeDefined();
 
       // STEP 3: AI SDK starts streaming - creates participant trigger
@@ -531,7 +531,7 @@ describe('useMultiParticipantChat Integration', () => {
 
       // Deduplication filters out participant trigger
       deduplicated = simulateDeduplication(storeMessages);
-      expect(deduplicated.filter(m => m.role === MessageRoles.USER).length).toBe(2);
+      expect(deduplicated.filter(m => m.role === MessageRoles.USER)).toHaveLength(2);
       expect(deduplicated.find(m => m.id === 'thread-1_r1_user')).toBeDefined();
 
       // STEP 4: AI SDK adds streaming assistant message
@@ -540,7 +540,7 @@ describe('useMultiParticipantChat Integration', () => {
 
       // User message still visible
       deduplicated = simulateDeduplication(storeMessages);
-      expect(deduplicated.filter(m => m.role === MessageRoles.USER).length).toBe(2);
+      expect(deduplicated.filter(m => m.role === MessageRoles.USER)).toHaveLength(2);
 
       // STEP 5: Multiple sync cycles as streaming continues
       for (let i = 2; i <= 5; i++) {

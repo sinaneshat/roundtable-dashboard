@@ -16,7 +16,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { MessageRoles, MessageStatuses } from '@/api/core/enums';
+import { MessageRoles } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { TimelineItem } from '@/hooks/utils/use-thread-timeline';
 import { getRoundNumberFromMetadata } from '@/lib/utils';
@@ -24,12 +24,12 @@ import { getRoundNumberFromMetadata } from '@/lib/utils';
 // =====================
 // Step 1: Store Simulation
 // =====================
-interface SimulatedStoreState {
+type SimulatedStoreState = {
   messages: UIMessage[];
   streamingRoundNumber: number | null;
   isStreaming: boolean;
   preSearches: StoredPreSearch[];
-}
+};
 
 function createInitialStoreState(): SimulatedStoreState {
   return {
@@ -108,8 +108,10 @@ function simulateUseThreadTimeline(
   // Sort messages within each round (user first, then by participantIndex)
   messagesByRound.forEach((roundMessages) => {
     roundMessages.sort((a, b) => {
-      if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER) return -1;
-      if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER) return 1;
+      if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER)
+        return -1;
+      if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
+        return 1;
       const aIdx = (a.metadata?.participantIndex as number) ?? 999;
       const bIdx = (b.metadata?.participantIndex as number) ?? 999;
       return aIdx - bIdx;
@@ -133,7 +135,8 @@ function simulateUseThreadTimeline(
     const hasMessages = roundMessages && roundMessages.length > 0;
     const hasPreSearch = !!roundPreSearch;
 
-    if (!hasMessages && !hasPreSearch) return;
+    if (!hasMessages && !hasPreSearch)
+      return;
 
     // Pre-search timeline item only when NO messages exist
     if (hasPreSearch && !hasMessages) {
@@ -168,7 +171,8 @@ function simulateChatMessageListDeduplication(messages: UIMessage[]): UIMessage[
   const result: UIMessage[] = [];
 
   for (const message of messages) {
-    if (seenMessageIds.has(message.id)) continue;
+    if (seenMessageIds.has(message.id))
+      continue;
 
     if (message.role === MessageRoles.USER) {
       const roundNum = message.metadata?.roundNumber as number | undefined;
@@ -176,7 +180,8 @@ function simulateChatMessageListDeduplication(messages: UIMessage[]): UIMessage[
         const existingIdx = userRoundToIdx.get(roundNum);
         if (existingIdx !== undefined) {
           const isOptimistic = message.id.startsWith('optimistic-');
-          if (isOptimistic) continue;
+          if (isOptimistic)
+            continue;
           const isDeterministic = message.id.includes('_r') && message.id.includes('_user');
           if (isDeterministic) {
             result[existingIdx] = message;
@@ -265,22 +270,22 @@ function simulateMessageGroups(
 // =====================
 // TESTS
 // =====================
-describe('Full Render Pipeline Simulation', () => {
-  describe('Store to Timeline', () => {
+describe('full Render Pipeline Simulation', () => {
+  describe('store to Timeline', () => {
     it('should create round 1 timeline item after optimistic message added', () => {
       const initial = createInitialStoreState();
       const afterSubmit = addOptimisticUserMessage(initial, 1, 'Follow-up question');
 
       const timeline = simulateUseThreadTimeline(afterSubmit.messages);
 
-      expect(timeline.length).toBe(2);
+      expect(timeline).toHaveLength(2);
       expect(timeline[0].roundNumber).toBe(0);
       expect(timeline[1].roundNumber).toBe(1);
       expect(timeline[1].type).toBe('messages');
     });
   });
 
-  describe('Timeline to ChatMessageList', () => {
+  describe('timeline to ChatMessageList', () => {
     it('should pass round 1 messages to ChatMessageList', () => {
       const initial = createInitialStoreState();
       const afterSubmit = addOptimisticUserMessage(initial, 1, 'Follow-up question');
@@ -292,12 +297,12 @@ describe('Full Render Pipeline Simulation', () => {
       expect(round1Item!.type).toBe('messages');
 
       const round1Messages = round1Item!.data as UIMessage[];
-      expect(round1Messages.length).toBe(1);
+      expect(round1Messages).toHaveLength(1);
       expect(round1Messages[0].role).toBe(MessageRoles.USER);
     });
   });
 
-  describe('ChatMessageList Deduplication', () => {
+  describe('chatMessageList Deduplication', () => {
     it('should preserve optimistic user message in round 1', () => {
       const initial = createInitialStoreState();
       const afterSubmit = addOptimisticUserMessage(initial, 1, 'Follow-up question');
@@ -308,13 +313,13 @@ describe('Full Render Pipeline Simulation', () => {
 
       const deduplicated = simulateChatMessageListDeduplication(round1Messages);
 
-      expect(deduplicated.length).toBe(1);
+      expect(deduplicated).toHaveLength(1);
       expect(deduplicated[0].role).toBe(MessageRoles.USER);
       expect(deduplicated[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
     });
   });
 
-  describe('ChatMessageList Message Groups', () => {
+  describe('chatMessageList Message Groups', () => {
     it('should create user-group for round 1 when NOT streaming yet', () => {
       const initial = createInitialStoreState();
       const afterSubmit = addOptimisticUserMessage(initial, 1, 'Follow-up');
@@ -327,7 +332,7 @@ describe('Full Render Pipeline Simulation', () => {
       // Not streaming yet (waiting for API)
       const groups = simulateMessageGroups(deduplicated, 1, false);
 
-      expect(groups.length).toBe(1);
+      expect(groups).toHaveLength(1);
       expect(groups[0].type).toBe('user-group');
       expect(groups[0].roundNumber).toBe(1);
     });
@@ -345,13 +350,13 @@ describe('Full Render Pipeline Simulation', () => {
       const groups = simulateMessageGroups(deduplicated, 1, true);
 
       // User message should STILL be in groups (only assistants are skipped)
-      expect(groups.length).toBe(1);
+      expect(groups).toHaveLength(1);
       expect(groups[0].type).toBe('user-group');
     });
   });
 
-  describe('Full Pipeline Critical Path', () => {
-    it('CRITICAL: User message should be renderable immediately after submission', () => {
+  describe('full Pipeline Critical Path', () => {
+    it('cRITICAL: User message should be renderable immediately after submission', () => {
       // Step 1: Initial state with round 0 complete
       const initial = createInitialStoreState();
 
@@ -368,20 +373,20 @@ describe('Full Render Pipeline Simulation', () => {
 
       // Step 4: Get messages for round 1 (what ChatMessageList receives)
       const round1Messages = round1Item!.data as UIMessage[];
-      expect(round1Messages.length).toBe(1);
+      expect(round1Messages).toHaveLength(1);
 
       // Step 5: Deduplicate (what ChatMessageList does internally)
       const deduplicated = simulateChatMessageListDeduplication(round1Messages);
-      expect(deduplicated.length).toBe(1);
+      expect(deduplicated).toHaveLength(1);
 
       // Step 6: Create message groups (what ChatMessageList does for rendering)
       // At this point isStreaming is still false (waiting for API)
       const groups = simulateMessageGroups(deduplicated, 1, false);
 
       // CRITICAL ASSERTION: User message group should exist and be renderable
-      expect(groups.length).toBe(1);
+      expect(groups).toHaveLength(1);
       expect(groups[0].type).toBe('user-group');
-      expect(groups[0].messages.length).toBe(1);
+      expect(groups[0].messages).toHaveLength(1);
       expect(groups[0].messages[0].message.parts[0]).toEqual({
         type: 'text',
         text: 'My follow-up question',

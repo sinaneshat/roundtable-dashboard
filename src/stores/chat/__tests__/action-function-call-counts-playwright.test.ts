@@ -15,11 +15,11 @@
  */
 
 import type { UIMessage } from 'ai';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { MessagePartTypes, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { MessagePartTypes, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
-import { createTestAssistantMessage, createTestChatStore, createTestUserMessage } from '@/lib/testing';
+import { createTestChatStore } from '@/lib/testing';
 
 // ============================================================================
 // Test Helpers
@@ -243,7 +243,7 @@ describe('handleUpdateThreadAndSend Action Call Counts', () => {
 // PATCH Response Processing Action Counts
 // ============================================================================
 
-describe('PATCH Response Processing Action Counts', () => {
+describe('pATCH Response Processing Action Counts', () => {
   it('should call setThread exactly once when PATCH returns thread', () => {
     const store = createTestChatStore();
     const thread = createMockThread();
@@ -609,7 +609,7 @@ describe('completeStreaming Call Frequency', () => {
 // Atomic State Updates
 // ============================================================================
 
-describe('Atomic State Updates', () => {
+describe('atomic State Updates', () => {
   it('should update streaming state atomically (no partial states)', () => {
     const store = createTestChatStore();
 
@@ -714,7 +714,7 @@ describe('Atomic State Updates', () => {
 // Pre-Search Action Counts
 // ============================================================================
 
-describe('Pre-Search Action Call Counts', () => {
+describe('pre-Search Action Call Counts', () => {
   it('should call addPreSearch exactly once when web search enabled', () => {
     const store = createTestChatStore();
     const thread = createMockThread({ enableWebSearch: true });
@@ -795,7 +795,7 @@ describe('Pre-Search Action Call Counts', () => {
 // Moderator Action Counts
 // ============================================================================
 
-describe('Moderator Action Call Counts', () => {
+describe('moderator Action Call Counts', () => {
   it('should call setIsModeratorStreaming exactly twice per round (true → false)', () => {
     const store = createTestChatStore();
 
@@ -847,7 +847,7 @@ describe('Moderator Action Call Counts', () => {
 // Action Sequencing
 // ============================================================================
 
-describe('Action Sequencing', () => {
+describe('action Sequencing', () => {
   it('should follow correct sequence: optimistic → PATCH → streaming', () => {
     const store = createTestChatStore();
     const thread = createMockThread();

@@ -23,7 +23,6 @@ import { describe, expect, it } from 'vitest';
 
 import type { MessageStatus } from '@/api/core/enums/chat';
 import { MessageStatuses } from '@/api/core/enums/chat';
-import type { RoundPhase } from '@/api/core/enums/streaming';
 import { RoundPhases } from '@/api/core/enums/streaming';
 
 import { createChatStore } from '../../stores/chat/store';
@@ -763,14 +762,14 @@ describe('chat Input - Edge Cases', () => {
   });
 
   it('should block input when showLoader is true', () => {
-    const store = createChatStore();
+    const _store = createChatStore();
 
     // showLoader is not a setter in the store, so skip this test
     // The blocking logic checks for showLoader but it's managed differently
   });
 
   it('should block input when isModelsLoading is true', () => {
-    const store = createChatStore();
+    const _store = createChatStore();
 
     // isModelsLoading is not a setter in the store, so skip this test
     // The blocking logic checks for it but it's managed via screen state

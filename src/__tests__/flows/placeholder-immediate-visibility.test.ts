@@ -71,7 +71,7 @@ function createParticipantMessage(
   };
 }
 
-function createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage {
+function _createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
     role: MessageRoles.ASSISTANT,
@@ -93,7 +93,7 @@ function createModeratorPlaceholder(threadId: string, roundNumber: number): UIMe
 // Test Suite: Participant Placeholders Show Immediately
 // ============================================================================
 
-describe('Participant Placeholders - Immediate Visibility', () => {
+describe('participant Placeholders - Immediate Visibility', () => {
   it('should enable placeholder visibility the moment streamingRoundNumber is set', () => {
     const store = createChatStore();
 
@@ -268,7 +268,7 @@ describe('Participant Placeholders - Immediate Visibility', () => {
 // Test Suite: Web Search Placeholder
 // ============================================================================
 
-describe('Web Search Placeholder - Immediate Visibility', () => {
+describe('web Search Placeholder - Immediate Visibility', () => {
   it('should show web search placeholder when enableWebSearch is true', () => {
     const store = createChatStore();
 
@@ -408,7 +408,7 @@ describe('Web Search Placeholder - Immediate Visibility', () => {
 // Test Suite: Moderator Placeholder
 // ============================================================================
 
-describe('Moderator Placeholder - Immediate Visibility', () => {
+describe('moderator Placeholder - Immediate Visibility', () => {
   it('should enable moderator placeholder visibility when streamingRoundNumber is set', () => {
     const store = createChatStore();
 
@@ -544,7 +544,7 @@ describe('Moderator Placeholder - Immediate Visibility', () => {
 // Test Suite: Placeholder Timing - Before Streams Begin
 // ============================================================================
 
-describe('Placeholder Timing - Before Stream Tokens Arrive', () => {
+describe('placeholder Timing - Before Stream Tokens Arrive', () => {
   it('should show ALL placeholders before first stream token arrives', () => {
     const store = createChatStore();
 
@@ -715,7 +715,7 @@ describe('Placeholder Timing - Before Stream Tokens Arrive', () => {
 // Test Suite: Placeholder Content Based on Configuration
 // ============================================================================
 
-describe('Placeholder Content - Based on Configuration', () => {
+describe('placeholder Content - Based on Configuration', () => {
   it('should show placeholders for exact participant count', () => {
     const store = createChatStore();
 

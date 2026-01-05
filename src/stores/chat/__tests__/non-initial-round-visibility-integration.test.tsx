@@ -8,14 +8,14 @@
  * They should show IMMEDIATELY when submit is pressed.
  */
 
-import type { UIMessage } from 'ai';
 import { renderHook } from '@testing-library/react';
+import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatModes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
-import { getRoundNumber } from '@/lib/utils';
 import { useThreadTimeline } from '@/hooks/utils';
+import { getRoundNumber } from '@/lib/utils';
 
 import { createChatStore } from '../store';
 
@@ -30,7 +30,7 @@ vi.mock('@/hooks/queries', () => ({
   useThreadPreSearchesQuery: () => ({ data: [], isLoading: false }),
 }));
 
-describe('Non-Initial Round Visibility - Integration', () => {
+describe('non-Initial Round Visibility - Integration', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -127,7 +127,7 @@ describe('Non-Initial Round Visibility - Integration', () => {
     it('should create timeline item for round 1 immediately after optimistic message added', () => {
       // Initial state - only round 0
       const initialMessages = store.getState().messages;
-      expect(initialMessages.length).toBe(3);
+      expect(initialMessages).toHaveLength(3);
 
       // Use renderHook to test useThreadTimeline
       const { result, rerender } = renderHook(
@@ -140,7 +140,7 @@ describe('Non-Initial Round Visibility - Integration', () => {
       );
 
       // Should have 1 timeline item for round 0
-      expect(result.current.length).toBe(1);
+      expect(result.current).toHaveLength(1);
       expect(result.current[0].roundNumber).toBe(0);
 
       // Add optimistic message for round 1
@@ -158,19 +158,19 @@ describe('Non-Initial Round Visibility - Integration', () => {
 
       // Get updated messages
       const updatedMessages = store.getState().messages;
-      expect(updatedMessages.length).toBe(4);
+      expect(updatedMessages).toHaveLength(4);
 
       // Re-render hook with new messages
       rerender({ messages: updatedMessages });
 
       // Should now have 2 timeline items
-      expect(result.current.length).toBe(2);
+      expect(result.current).toHaveLength(2);
       expect(result.current[1].roundNumber).toBe(1);
       expect(result.current[1].type).toBe('messages');
 
       // Round 1 should have the user message
       const round1Data = result.current[1].data as UIMessage[];
-      expect(round1Data.length).toBe(1);
+      expect(round1Data).toHaveLength(1);
       expect(round1Data[0].role).toBe(MessageRoles.USER);
     });
 
@@ -201,7 +201,7 @@ describe('Non-Initial Round Visibility - Integration', () => {
       );
 
       // Should have 2 timeline items: round 0 messages + round 1 pre-search
-      expect(result.current.length).toBe(2);
+      expect(result.current).toHaveLength(2);
       expect(result.current[1].type).toBe('pre-search');
       expect(result.current[1].roundNumber).toBe(1);
     });
@@ -242,16 +242,16 @@ describe('Non-Initial Round Visibility - Integration', () => {
 
       // Should have 2 timeline items: round 0 messages, round 1 messages
       // (pre-search is NOT a separate item when messages exist - rendered by ChatMessageList)
-      expect(result.current.length).toBe(2);
+      expect(result.current).toHaveLength(2);
       expect(result.current[1].type).toBe('messages');
 
       const round1Data = result.current[1].data as UIMessage[];
-      expect(round1Data.length).toBe(1);
+      expect(round1Data).toHaveLength(1);
       expect(round1Data[0].role).toBe(MessageRoles.USER);
     });
   });
 
-  describe('Store State After Submission', () => {
+  describe('store State After Submission', () => {
     it('should have correct state for immediate visibility', () => {
       const nextRound = 1;
 
@@ -282,7 +282,7 @@ describe('Non-Initial Round Visibility - Integration', () => {
       const round1Messages = state.messages.filter(
         m => getRoundNumber(m.metadata) === nextRound,
       );
-      expect(round1Messages.length).toBe(1);
+      expect(round1Messages).toHaveLength(1);
 
       // streamingRoundNumber should be set (enables placeholders)
       expect(state.streamingRoundNumber).toBe(nextRound);
@@ -335,11 +335,11 @@ describe('Non-Initial Round Visibility - Integration', () => {
       const round1Messages = state.messages.filter(
         m => getRoundNumber(m.metadata) === nextRound,
       );
-      expect(round1Messages.length).toBe(1);
+      expect(round1Messages).toHaveLength(1);
     });
   });
 
-  describe('Timeline Visibility Conditions', () => {
+  describe('timeline Visibility Conditions', () => {
     it('timeline should include round 1 when only user message exists', () => {
       // Add only user message for round 1
       store.getState().setMessages(msgs => [

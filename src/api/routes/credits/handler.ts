@@ -1,7 +1,8 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
-import { CreditActions, CreditTransactionTypes, PlanTypes, UsageStatuses } from '@/api/core/enums';
+import type { CreditTransactionTypes, UsageStatus } from '@/api/core/enums';
+import { CreditActions, PlanTypes, UsageStatuses } from '@/api/core/enums';
 import {
   canAffordCredits,
   getUserCreditBalance,
@@ -54,7 +55,7 @@ export const getCreditBalanceHandler: RouteHandler<
       : 0;
 
     // Determine status based on remaining credits
-    let status = UsageStatuses.DEFAULT;
+    let status: UsageStatus = UsageStatuses.DEFAULT;
     if (available <= 0) {
       status = UsageStatuses.CRITICAL;
     } else if (percentage >= 80) {

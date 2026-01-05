@@ -19,7 +19,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { FinishReasons, MessagePartTypes, UIMessageRoles } from '@/api/core/enums';
 import { createTestAssistantMessage, createTestChatStore, createTestUserMessage } from '@/lib/testing';
 
-import { createChatStore } from '../store';
+import type { createChatStore } from '../store';
 
 // ============================================================================
 // Update Tracking Utilities
@@ -121,7 +121,7 @@ function createModeratorStreamingMessage(
 // E2E Test Scenarios
 // ============================================================================
 
-describe('Render Counts and Update Frequency E2E', () => {
+describe('render Counts and Update Frequency E2E', () => {
   describe('handleUpdateThreadAndSend Submission Flow', () => {
     it('should minimize store updates during thread creation and first message submission', () => {
       const store = createTestChatStore();
@@ -188,7 +188,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('Participant Streaming Update Frequency', () => {
+  describe('participant Streaming Update Frequency', () => {
     it('should track updates during first participant streaming', () => {
       const store = createTestChatStore();
       const tracker = createUpdateTracker();
@@ -393,7 +393,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('Council Moderator Streaming Updates', () => {
+  describe('council Moderator Streaming Updates', () => {
     it('should track updates during moderator streaming', () => {
       const store = createTestChatStore();
       const tracker = createUpdateTracker();
@@ -471,7 +471,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('PATCH and Changelog Fetch Updates', () => {
+  describe('pATCH and Changelog Fetch Updates', () => {
     it('should not cause excessive re-renders during PATCH response processing', () => {
       const store = createTestChatStore();
       const tracker = createUpdateTracker();
@@ -632,7 +632,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('Batch Updates with Single set() Calls', () => {
+  describe('batch Updates with Single set() Calls', () => {
     it('should update multiple fields with single set() call', () => {
       const store = createTestChatStore();
       const tracker = createUpdateTracker();
@@ -691,7 +691,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('Animation and Transition Timing', () => {
+  describe('animation and Transition Timing', () => {
     it('should track timing between participant transitions', () => {
       const store = createTestChatStore();
       const transitionTimestamps: number[] = [];
@@ -778,7 +778,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('Complete Round E2E Update Count', () => {
+  describe('complete Round E2E Update Count', () => {
     it('should track total updates for complete round (user → 3 participants → moderator)', () => {
       const store = createTestChatStore();
       const tracker = createUpdateTracker();
@@ -901,7 +901,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('Performance Regression Detection', () => {
+  describe('performance Regression Detection', () => {
     it('should flag if updates exceed 100 for single round', () => {
       const store = createTestChatStore();
       let updateCount = 0;
@@ -964,7 +964,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('Render Optimization: Minimal Re-Renders', () => {
+  describe('render Optimization: Minimal Re-Renders', () => {
     it('should minimize re-renders during message submission', () => {
       const store = createTestChatStore();
       const renderTracker = {
@@ -1112,7 +1112,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('Render Optimization: Batched State Updates', () => {
+  describe('render Optimization: Batched State Updates', () => {
     it('should batch multiple state changes in completeStreaming', () => {
       const store = createTestChatStore();
       const stateChanges = {
@@ -1236,7 +1236,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('Render Optimization: Placeholder Visibility Stability', () => {
+  describe('render Optimization: Placeholder Visibility Stability', () => {
     it('should maintain placeholder visibility during state updates', () => {
       const store = createTestChatStore();
       const placeholderStates: boolean[] = [];
@@ -1401,7 +1401,7 @@ describe('Render Counts and Update Frequency E2E', () => {
     });
   });
 
-  describe('Render Optimization: Progressive UI Updates', () => {
+  describe('render Optimization: Progressive UI Updates', () => {
     it('should progressively update UI without full re-mount during streaming', () => {
       const store = createTestChatStore();
       const messageLengthProgression: number[] = [];

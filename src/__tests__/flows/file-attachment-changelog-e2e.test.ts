@@ -199,7 +199,7 @@ function addRound(
 // TESTS: File Addition Between Rounds
 // ============================================================================
 
-describe('File Attachment Changelog E2E', () => {
+describe('file Attachment Changelog E2E', () => {
   describe('file Addition Between Rounds', () => {
     it('should detect single file addition in Round 1', () => {
       // Round 0: No attachments
@@ -464,8 +464,8 @@ describe('File Attachment Changelog E2E', () => {
 
   describe('file Changes Combined with No Other Changes', () => {
     it('should show changelog for file changes only (no participant changes)', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      const participants = [createMockParticipant(0), createMockParticipant(1)];
+      const _thread = createMockThread({ id: 'thread-123' });
+      const _participants = [createMockParticipant(0), createMockParticipant(1)];
       const attachments = [createMockAttachment(0, { id: 'att-1' })];
 
       let state = createInitialConversation([], attachments);
@@ -645,8 +645,7 @@ describe('File Attachment Changelog E2E', () => {
 
     it('should handle large file count changes (10 files added)', () => {
       const attachments = Array.from({ length: 10 }, (_, i) =>
-        createMockAttachment(i, { id: `att-${i}` }),
-      );
+        createMockAttachment(i, { id: `att-${i}` }));
       let state = createInitialConversation([], attachments);
 
       const allIds = attachments.map(a => a.id);

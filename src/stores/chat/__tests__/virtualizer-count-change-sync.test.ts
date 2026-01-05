@@ -90,19 +90,19 @@ function createMockVirtualizerStateManager() {
   };
 }
 
-describe('Virtualizer Count Change Sync', () => {
-  describe('Count Change Detection', () => {
+describe('virtualizer Count Change Sync', () => {
+  describe('count Change Detection', () => {
     it('should detect count increase from 1 to 2', () => {
       const manager = createMockVirtualizerStateManager();
 
       // Initial state with 1 item
       manager.handleCountChange(1);
-      expect(manager.getState().virtualItems.length).toBe(1);
+      expect(manager.getState().virtualItems).toHaveLength(1);
       expect(manager.getSyncCallCount()).toBe(1);
 
       // Add new item (non-initial round submission)
       manager.handleCountChange(2);
-      expect(manager.getState().virtualItems.length).toBe(2);
+      expect(manager.getState().virtualItems).toHaveLength(2);
       expect(manager.getSyncCallCount()).toBe(2); // Sync called again
     });
 
@@ -125,12 +125,12 @@ describe('Virtualizer Count Change Sync', () => {
       manager.handleCountChange(2);
       manager.handleCountChange(3);
 
-      expect(manager.getState().virtualItems.length).toBe(3);
+      expect(manager.getState().virtualItems).toHaveLength(3);
       expect(manager.getSyncCallCount()).toBe(3);
     });
   });
 
-  describe('Timeline Item Visibility After Non-Initial Round Submission', () => {
+  describe('timeline Item Visibility After Non-Initial Round Submission', () => {
     it('should have correct timeline item count after optimistic message added', () => {
       // BEFORE submission: round 0 complete (3 messages: user + 2 participants)
       const beforeSubmission: UIMessage[] = [
@@ -155,7 +155,7 @@ describe('Virtualizer Count Change Sync', () => {
       ];
 
       const timelineBefore = createTimelineItems(beforeSubmission);
-      expect(timelineBefore.length).toBe(1); // Only round 0
+      expect(timelineBefore).toHaveLength(1); // Only round 0
 
       // AFTER submission: add optimistic user message for round 1
       const afterSubmission: UIMessage[] = [
@@ -169,13 +169,13 @@ describe('Virtualizer Count Change Sync', () => {
       ];
 
       const timelineAfter = createTimelineItems(afterSubmission);
-      expect(timelineAfter.length).toBe(2); // Round 0 + Round 1
+      expect(timelineAfter).toHaveLength(2); // Round 0 + Round 1
 
       // Verify round 1 has the user message
       const round1 = timelineAfter.find(item => item.roundNumber === 1);
       expect(round1).toBeDefined();
       expect(round1!.type).toBe('messages');
-      expect((round1!.data as UIMessage[]).length).toBe(1);
+      expect((round1!.data as UIMessage[])).toHaveLength(1);
     });
 
     it('should trigger virtualizer sync when timeline count increases', () => {
@@ -184,27 +184,27 @@ describe('Virtualizer Count Change Sync', () => {
       // Initial: 1 timeline item (round 0)
       manager.handleCountChange(1);
       const initialVirtualItems = manager.getState().virtualItems;
-      expect(initialVirtualItems.length).toBe(1);
+      expect(initialVirtualItems).toHaveLength(1);
 
       // After submission: 2 timeline items (round 0 + round 1)
       manager.handleCountChange(2);
       const afterVirtualItems = manager.getState().virtualItems;
-      expect(afterVirtualItems.length).toBe(2);
+      expect(afterVirtualItems).toHaveLength(2);
 
       // New item should have correct index
       expect(afterVirtualItems[1].index).toBe(1);
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('edge Cases', () => {
     it('should handle count decrease (message deletion)', () => {
       const manager = createMockVirtualizerStateManager();
 
       manager.handleCountChange(3);
-      expect(manager.getState().virtualItems.length).toBe(3);
+      expect(manager.getState().virtualItems).toHaveLength(3);
 
       manager.handleCountChange(2);
-      expect(manager.getState().virtualItems.length).toBe(2);
+      expect(manager.getState().virtualItems).toHaveLength(2);
       expect(manager.getSyncCallCount()).toBe(2);
     });
 
@@ -214,7 +214,7 @@ describe('Virtualizer Count Change Sync', () => {
       manager.handleCountChange(3);
       manager.handleCountChange(0);
 
-      expect(manager.getState().virtualItems.length).toBe(0);
+      expect(manager.getState().virtualItems).toHaveLength(0);
     });
 
     it('should handle initial load with multiple items', () => {
@@ -222,18 +222,18 @@ describe('Virtualizer Count Change Sync', () => {
 
       // Initial load with 5 rounds already complete
       manager.handleCountChange(5);
-      expect(manager.getState().virtualItems.length).toBe(5);
+      expect(manager.getState().virtualItems).toHaveLength(5);
       expect(manager.getSyncCallCount()).toBe(1);
     });
   });
 
-  describe('Critical Scenario: Non-Initial Round User Message Visibility', () => {
-    it('CRITICAL: virtualizer state should update immediately when new round added', () => {
+  describe('critical Scenario: Non-Initial Round User Message Visibility', () => {
+    it('cRITICAL: virtualizer state should update immediately when new round added', () => {
       const manager = createMockVirtualizerStateManager();
 
       // Simulate thread with round 0 complete
       manager.handleCountChange(1);
-      expect(manager.getState().virtualItems.length).toBe(1);
+      expect(manager.getState().virtualItems).toHaveLength(1);
 
       // User submits message for round 1 (non-initial)
       // This MUST trigger a sync to make the new item visible
@@ -241,7 +241,7 @@ describe('Virtualizer Count Change Sync', () => {
 
       // CRITICAL ASSERTION: New item MUST be in virtualItems
       const virtualItems = manager.getState().virtualItems;
-      expect(virtualItems.length).toBe(2);
+      expect(virtualItems).toHaveLength(2);
       expect(virtualItems[1]).toBeDefined();
       expect(virtualItems[1].index).toBe(1);
 
@@ -249,7 +249,7 @@ describe('Virtualizer Count Change Sync', () => {
       expect(manager.getSyncCallCount()).toBe(2);
     });
 
-    it('CRITICAL: each new item should have correct positioning data', () => {
+    it('cRITICAL: each new item should have correct positioning data', () => {
       const manager = createMockVirtualizerStateManager();
 
       // Add 3 items sequentially (simulating 3 rounds)

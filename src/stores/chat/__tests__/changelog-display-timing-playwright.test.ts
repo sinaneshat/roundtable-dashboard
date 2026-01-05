@@ -24,7 +24,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChangelogChangeTypesExtended, ChatModes, MessageStatuses } from '@/api/core/enums';
+import { ChangelogChangeTypesExtended, MessageStatuses } from '@/api/core/enums';
 import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ChatStoreApi } from '@/stores/chat';
@@ -196,7 +196,7 @@ describe('changelog Summary Display', () => {
 
       const modifiedCount = changelog.changeData.changes.filter(
         c => c.type === ChangelogChangeTypesExtended.MODIFIED
-        || c.type === ChangelogChangeTypesExtended.REORDERED,
+          || c.type === ChangelogChangeTypesExtended.REORDERED,
       ).length;
 
       expect(modifiedCount).toBe(2);

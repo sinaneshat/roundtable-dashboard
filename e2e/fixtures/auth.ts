@@ -101,9 +101,9 @@ export const test = base.extend<AuthFixtures>({
     if (currentUrl.includes('/auth/') || !hasAuthFile) {
       // Auth state expired, invalid, or missing - re-login
       if (!hasAuthFile) {
-        console.warn('⚠️ Auth file missing for free user, authenticating...');
+        console.error('⚠️ Auth file missing for free user, authenticating...');
       } else {
-        console.warn('⚠️ Auth state expired for free user, re-authenticating...');
+        console.error('⚠️ Auth state expired for free user, re-authenticating...');
       }
       await performLogin(page, TEST_USER_FREE);
       // Save updated state
@@ -135,9 +135,9 @@ export const test = base.extend<AuthFixtures>({
 
     if (currentUrl.includes('/auth/') || !hasAuthFile) {
       if (!hasAuthFile) {
-        console.warn('⚠️ Auth file missing for pro user, authenticating...');
+        console.error('⚠️ Auth file missing for pro user, authenticating...');
       } else {
-        console.warn('⚠️ Auth state expired for pro user, re-authenticating...');
+        console.error('⚠️ Auth state expired for pro user, re-authenticating...');
       }
       await performLogin(page, TEST_USER_PRO);
       await context.storageState({ path: authFile });
@@ -168,9 +168,9 @@ export const test = base.extend<AuthFixtures>({
 
     if (currentUrl.includes('/auth/') || !hasAuthFile) {
       if (!hasAuthFile) {
-        console.warn('⚠️ Auth file missing for admin user, authenticating...');
+        console.error('⚠️ Auth file missing for admin user, authenticating...');
       } else {
-        console.warn('⚠️ Auth state expired for admin user, re-authenticating...');
+        console.error('⚠️ Auth state expired for admin user, re-authenticating...');
       }
       await performLogin(page, TEST_USER_ADMIN);
       await context.storageState({ path: authFile });

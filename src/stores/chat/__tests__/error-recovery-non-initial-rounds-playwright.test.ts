@@ -33,7 +33,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import {
   createMockParticipants,
   createMockThread,
@@ -49,7 +49,7 @@ import type { StoredPreSearch } from '../store-action-types';
 // PATCH FAILURE RECOVERY - OPTIMISTIC MESSAGE REMOVED
 // ============================================================================
 
-describe('PATCH Failure Recovery - Round 1+', () => {
+describe('pATCH Failure Recovery - Round 1+', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -380,7 +380,7 @@ describe('PATCH Failure Recovery - Round 1+', () => {
 // CHANGELOG FETCH FAILURE - TIMEOUT AND CONTINUE
 // ============================================================================
 
-describe('Changelog Fetch Failure - Round 1+', () => {
+describe('changelog Fetch Failure - Round 1+', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -463,7 +463,7 @@ describe('Changelog Fetch Failure - Round 1+', () => {
 // PRE-SEARCH FAILURE - MARK AS FAILED AND CONTINUE
 // ============================================================================
 
-describe('Pre-Search Failure - Round 1+', () => {
+describe('pre-Search Failure - Round 1+', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -607,7 +607,7 @@ describe('Pre-Search Failure - Round 1+', () => {
 // PARTICIPANT STREAMING FAILURE - CONTINUE WITH OTHERS
 // ============================================================================
 
-describe('Participant Streaming Failure - Round 1+', () => {
+describe('participant Streaming Failure - Round 1+', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -631,7 +631,7 @@ describe('Participant Streaming Failure - Round 1+', () => {
     ]);
   });
 
-  it('P1 fails in Round 1 - P0 and P2 continue streaming', () => {
+  it('p1 fails in Round 1 - P0 and P2 continue streaming', () => {
     const state = getStoreState(store);
 
     const r1UserMessage = createTestUserMessage({
@@ -801,7 +801,7 @@ describe('Participant Streaming Failure - Round 1+', () => {
 // MODERATOR FAILURE - ROUND COMPLETES ANYWAY
 // ============================================================================
 
-describe('Moderator Failure - Round 1+', () => {
+describe('moderator Failure - Round 1+', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -918,7 +918,7 @@ describe('Moderator Failure - Round 1+', () => {
 // MULTIPLE ERRORS IN SAME ROUND
 // ============================================================================
 
-describe('Multiple Errors in Same Round - Round 1+', () => {
+describe('multiple Errors in Same Round - Round 1+', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -1078,7 +1078,7 @@ describe('Multiple Errors in Same Round - Round 1+', () => {
 // RECOVERY FROM ERROR STATE - CAN SUBMIT AGAIN
 // ============================================================================
 
-describe('Recovery from Error State - Round 1+', () => {
+describe('recovery from Error State - Round 1+', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -1211,7 +1211,7 @@ describe('Recovery from Error State - Round 1+', () => {
 // NETWORK INTERRUPTION RECOVERY
 // ============================================================================
 
-describe('Network Interruption Recovery - Round 1+', () => {
+describe('network Interruption Recovery - Round 1+', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -1316,7 +1316,7 @@ describe('Network Interruption Recovery - Round 1+', () => {
 // COMPLETE ERROR RECOVERY JOURNEY - ROUND 1+
 // ============================================================================
 
-describe('Complete Error Recovery Journey - Round 1+', () => {
+describe('complete Error Recovery Journey - Round 1+', () => {
   it('handles multiple consecutive errors across rounds and recovers', () => {
     const store = createChatStore();
     const state = getStoreState(store);

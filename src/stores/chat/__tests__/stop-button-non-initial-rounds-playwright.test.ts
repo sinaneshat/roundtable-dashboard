@@ -17,7 +17,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatParticipant } from '@/db/validation';
 
 import { createChatStore } from '../store';
@@ -37,8 +37,8 @@ function createMockParticipant(id: string, modelId: string, priority: number): C
   };
 }
 
-describe('Stop Button Non-Initial Rounds E2E', () => {
-  describe('Stop During PATCH (Changelog Creation)', () => {
+describe('stop Button Non-Initial Rounds E2E', () => {
+  describe('stop During PATCH (Changelog Creation)', () => {
     it('should allow PATCH to complete even if stop clicked during changelog creation', () => {
       const store = createChatStore();
 
@@ -154,7 +154,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
     });
   });
 
-  describe('Stop During Changelog Fetch', () => {
+  describe('stop During Changelog Fetch', () => {
     it('should abort changelog fetch and allow continuation when stopped', () => {
       const store = createChatStore();
 
@@ -199,7 +199,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
     });
   });
 
-  describe('Stop During Pre-Search Phase', () => {
+  describe('stop During Pre-Search Phase', () => {
     it('should mark PENDING pre-search as FAILED when stopped before execution', () => {
       const store = createChatStore();
 
@@ -294,7 +294,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
     });
   });
 
-  describe('Stop During Participant Streaming', () => {
+  describe('stop During Participant Streaming', () => {
     it('should stop first participant immediately in Round 1', () => {
       const store = createChatStore();
 
@@ -445,7 +445,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
     });
   });
 
-  describe('Stop Between Participants', () => {
+  describe('stop Between Participants', () => {
     it('should prevent P1 from starting when stopped between P0 and P1', () => {
       const store = createChatStore();
 
@@ -550,7 +550,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
     });
   });
 
-  describe('Stop During Moderator Streaming', () => {
+  describe('stop During Moderator Streaming', () => {
     it('should stop moderator streaming in Round 1', () => {
       const store = createChatStore();
 
@@ -747,7 +747,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
     });
   });
 
-  describe('Can Submit New Message After Stop', () => {
+  describe('can Submit New Message After Stop', () => {
     it('should allow submitting new message (Round 2) after stopping Round 1', () => {
       const store = createChatStore();
 
@@ -870,7 +870,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
     });
   });
 
-  describe('Stop Button Visibility State', () => {
+  describe('stop Button Visibility State', () => {
     it('should show stop button only during participant streaming in Round 1', () => {
       const store = createChatStore();
 
@@ -925,7 +925,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
     });
   });
 
-  describe('Edge Cases - Multi-Round Stop Scenarios', () => {
+  describe('edge Cases - Multi-Round Stop Scenarios', () => {
     it('should handle stop during Round 3 with previous rounds complete', () => {
       const store = createChatStore();
 
@@ -1048,8 +1048,8 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
     });
   });
 
-  describe('Comprehensive Stop Button Behavior', () => {
-    describe('Stop Button Visibility - isStreaming Flag', () => {
+  describe('comprehensive Stop Button Behavior', () => {
+    describe('stop Button Visibility - isStreaming Flag', () => {
       it('should show stop button when isStreaming=true during Round 1 participant streaming', () => {
         const store = createChatStore();
 
@@ -1110,7 +1110,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
       });
     });
 
-    describe('Stop Action - Terminating Streaming Correctly', () => {
+    describe('stop Action - Terminating Streaming Correctly', () => {
       it('should terminate participant streaming immediately when stopped in Round 1', () => {
         const store = createChatStore();
 
@@ -1197,7 +1197,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
       });
     });
 
-    describe('Partial Content Preservation After Stop', () => {
+    describe('partial Content Preservation After Stop', () => {
       it('should preserve partial participant message content after stop in Round 1', () => {
         const store = createChatStore();
 
@@ -1308,7 +1308,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
       });
     });
 
-    describe('UI Showing Partial Content After Stop', () => {
+    describe('uI Showing Partial Content After Stop', () => {
       it('should display partial content in messages array for UI to render in Round 1', () => {
         const store = createChatStore();
 
@@ -1403,7 +1403,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
       });
     });
 
-    describe('State Cleanup After Stop - Streaming Ends But Content Preserved', () => {
+    describe('state Cleanup After Stop - Streaming Ends But Content Preserved', () => {
       it('should clear streaming flags but preserve message content in Round 1', () => {
         const store = createChatStore();
 
@@ -1501,7 +1501,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
       });
     });
 
-    describe('Submitting New Message After Stop', () => {
+    describe('submitting New Message After Stop', () => {
       it('should allow submission of Round 2 message after stopping Round 1', () => {
         const store = createChatStore();
 
@@ -1570,7 +1570,7 @@ describe('Stop Button Non-Initial Rounds E2E', () => {
       });
     });
 
-    describe('Edge Cases - Stop Timing and Race Conditions', () => {
+    describe('edge Cases - Stop Timing and Race Conditions', () => {
       it('should handle stop immediately after isStreaming=true in Round 1', () => {
         const store = createChatStore();
 

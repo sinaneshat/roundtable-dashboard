@@ -18,7 +18,7 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { PaymentMethodType, StripeSubscriptionStatus } from '@/api/core/enums';
-import { BillingIntervals, DEFAULT_PAYMENT_METHOD_TYPE, isPaymentMethodType, StripeSubscriptionStatusSchema } from '@/api/core/enums';
+import { BillingIntervals, DEFAULT_PAYMENT_METHOD_TYPE, isPaymentMethodType, PaymentMethodTypes, StripeSubscriptionStatusSchema } from '@/api/core/enums';
 import { stripeService } from '@/api/services/stripe.service';
 import { syncUserQuotaFromSubscription } from '@/api/services/usage-tracking.service';
 import * as tables from '@/db';
@@ -259,7 +259,7 @@ export async function syncStripeDataFromStripe(
     const stripe = stripeService.getClient();
     paymentMethods = await stripe.paymentMethods.list({
       customer: customerId,
-      type: DEFAULT_PAYMENT_METHOD_TYPE,
+      type: PaymentMethodTypes.CARD, // Stripe-specific type for payment method query
     });
   } catch {
     throw createError.internal('Failed to sync payment method data from Stripe', {

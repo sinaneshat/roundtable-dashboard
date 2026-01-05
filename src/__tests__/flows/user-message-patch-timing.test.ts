@@ -26,7 +26,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChatModes, FinishReasons, MessageRoles } from '@/api/core/enums';
+import { ChatModes, MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import {
   createMockParticipant,
@@ -42,7 +42,7 @@ import { createChatStore } from '../../stores/chat/store';
 // TEST SETUP
 // ============================================================================
 
-describe('User Message Submission and Patching Flow - Timing', () => {
+describe('user Message Submission and Patching Flow - Timing', () => {
   let store: ChatStoreApi;
   let thread: ChatThread;
   let participants: ChatParticipant[];

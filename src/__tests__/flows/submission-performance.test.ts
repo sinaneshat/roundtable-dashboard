@@ -14,7 +14,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { ChatModes, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { MessageStatuses } from '@/api/core/enums';
 import {
   createTestAssistantMessage,
   createTestChatStore,
@@ -278,11 +278,11 @@ describe('submission Flow Performance - Sequential Participant Streaming', () =>
     const unsubscribe = store.subscribe((state) => {
       const lastMessage = state.messages[state.messages.length - 1];
       if (
-        lastMessage &&
-        lastMessage.metadata &&
-        typeof lastMessage.metadata === 'object' &&
-        'participantIndex' in lastMessage.metadata &&
-        typeof lastMessage.metadata.participantIndex === 'number'
+        lastMessage
+        && lastMessage.metadata
+        && typeof lastMessage.metadata === 'object'
+        && 'participantIndex' in lastMessage.metadata
+        && typeof lastMessage.metadata.participantIndex === 'number'
       ) {
         const index = lastMessage.metadata.participantIndex;
         const count = (participantUpdates.get(index) ?? 0) + 1;
@@ -530,7 +530,7 @@ describe('submission Flow Performance - Regression Baselines', () => {
     // Verify no duplicate IDs
     const messageIds = messages.map(m => m.id);
     const uniqueIds = new Set(messageIds);
-    expect(messageIds.length).toBe(uniqueIds.size);
+    expect(messageIds).toHaveLength(uniqueIds.size);
 
     // Store should have exactly 4 messages (1 user + 3 assistant)
     expect(store.getState().messages).toHaveLength(4);

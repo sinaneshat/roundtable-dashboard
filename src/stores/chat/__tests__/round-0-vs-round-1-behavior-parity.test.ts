@@ -126,7 +126,7 @@ function createAssistantMessage(
 // USER MESSAGE VISIBILITY PARITY TESTS
 // ============================================================================
 
-describe('Round 0 vs Round 1+ Behavior Parity', () => {
+describe('round 0 vs Round 1+ Behavior Parity', () => {
   let store: ReturnType<typeof createChatStore>;
   let thread: ChatThread;
   let participants: ChatParticipant[];
@@ -137,8 +137,8 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
     participants = createMockParticipants();
   });
 
-  describe('User Message Visibility', () => {
-    it('PARITY: user message should be in store immediately after submission (both rounds)', () => {
+  describe('user Message Visibility', () => {
+    it('pARITY: user message should be in store immediately after submission (both rounds)', () => {
       // Round 0
       const round0UserMsg = createUserMessage(0, 'Round 0 question', true);
       store.getState().setMessages([round0UserMsg]);
@@ -146,7 +146,7 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       const round0Messages = store.getState().messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 0,
       );
-      expect(round0Messages.length).toBe(1);
+      expect(round0Messages).toHaveLength(1);
 
       // Round 1
       const round1UserMsg = createUserMessage(1, 'Round 1 question', true);
@@ -155,13 +155,13 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       const round1Messages = store.getState().messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
-      expect(round1Messages.length).toBe(1);
+      expect(round1Messages).toHaveLength(1);
 
       // PARITY CHECK: Both rounds should have exactly 1 user message
-      expect(round0Messages.length).toBe(round1Messages.length);
+      expect(round0Messages).toHaveLength(round1Messages.length);
     });
 
-    it('PARITY: optimistic user message should persist across rounds', () => {
+    it('pARITY: optimistic user message should persist across rounds', () => {
       // Round 0 optimistic message
       const round0Optimistic = createUserMessage(0, 'Round 0 question', true);
       store.getState().setMessages([round0Optimistic]);
@@ -186,7 +186,7 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       expect(round1Present).toBe(true);
     });
 
-    it('PARITY: user message should survive ID change from optimistic to DB ID (both rounds)', () => {
+    it('pARITY: user message should survive ID change from optimistic to DB ID (both rounds)', () => {
       // Round 0: optimistic -> DB ID
       const round0Optimistic = createUserMessage(0, 'Round 0 question', true);
       store.getState().setMessages([round0Optimistic]);
@@ -216,12 +216,12 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       );
 
       // PARITY CHECK: Both rounds should have exactly 1 user message after ID change
-      expect(round0AfterPersist.length).toBe(1);
-      expect(round1AfterPersist.length).toBe(1);
-      expect(round0AfterPersist.length).toBe(round1AfterPersist.length);
+      expect(round0AfterPersist).toHaveLength(1);
+      expect(round1AfterPersist).toHaveLength(1);
+      expect(round0AfterPersist).toHaveLength(round1AfterPersist.length);
     });
 
-    it('CRITICAL: user message must NOT be replaced by participant trigger message (round 1+)', () => {
+    it('cRITICAL: user message must NOT be replaced by participant trigger message (round 1+)', () => {
       // Setup: Round 0 complete
       store.getState().initializeThread(thread, participants, [
         createUserMessage(0, 'Round 0 question'),
@@ -236,7 +236,7 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       const userMessagesBeforeTrigger = store.getState().messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
-      expect(userMessagesBeforeTrigger.length).toBe(1);
+      expect(userMessagesBeforeTrigger).toHaveLength(1);
 
       // Simulate AI SDK adding participant trigger message
       const participantTrigger: UIMessage = {
@@ -254,19 +254,21 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
 
       // CRITICAL CHECK: Original user message MUST still be present
       const userMessagesAfterTrigger = store.getState().messages.filter((m) => {
-        if (m.role !== MessageRoles.USER) return false;
-        if (getRoundNumber(m.metadata) !== 1) return false;
+        if (m.role !== MessageRoles.USER)
+          return false;
+        if (getRoundNumber(m.metadata) !== 1)
+          return false;
         const metadata = m.metadata as { isParticipantTrigger?: boolean };
         return !metadata.isParticipantTrigger;
       });
 
-      expect(userMessagesAfterTrigger.length).toBe(1);
+      expect(userMessagesAfterTrigger).toHaveLength(1);
       expect(userMessagesAfterTrigger[0]?.id).toBe(round1UserMsg.id);
     });
   });
 
-  describe('State Initialization Parity', () => {
-    it('PARITY: streamingRoundNumber should be set for both round 0 and round 1', () => {
+  describe('state Initialization Parity', () => {
+    it('pARITY: streamingRoundNumber should be set for both round 0 and round 1', () => {
       // Round 0
       store.getState().setStreamingRoundNumber(0);
       expect(store.getState().streamingRoundNumber).toBe(0);
@@ -279,7 +281,7 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       expect(typeof store.getState().streamingRoundNumber).toBe('number');
     });
 
-    it('PARITY: expectedParticipantIds should be set for both rounds', () => {
+    it('pARITY: expectedParticipantIds should be set for both rounds', () => {
       const expectedIds = participants.map(p => p.modelId);
 
       // Round 0
@@ -294,7 +296,7 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       expect(round0Ids).toEqual(round1Ids);
     });
 
-    it('PARITY: waitingToStartStreaming should behave identically', () => {
+    it('pARITY: waitingToStartStreaming should behave identically', () => {
       // Round 0
       store.getState().setWaitingToStartStreaming(true);
       const round0Waiting = store.getState().waitingToStartStreaming;
@@ -309,8 +311,8 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
     });
   });
 
-  describe('Animation Skip Behavior Parity', () => {
-    it('CRITICAL: round 0 persisted messages should animate normally', () => {
+  describe('animation Skip Behavior Parity', () => {
+    it('cRITICAL: round 0 persisted messages should animate normally', () => {
       const round0Message = createUserMessage(0, 'Round 0 question', false);
       const roundNumber = getRoundNumber(round0Message.metadata);
       const isOptimistic = (round0Message.metadata as { isOptimistic?: boolean })?.isOptimistic;
@@ -321,7 +323,7 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       expect(shouldSkipAnimation).toBe(false);
     });
 
-    it('CRITICAL: round 1+ messages should ALWAYS skip animation', () => {
+    it('cRITICAL: round 1+ messages should ALWAYS skip animation', () => {
       // Test multiple scenarios for round 1+
       const scenarios = [
         { round: 1, optimistic: false, desc: 'round 1 persisted' },
@@ -341,7 +343,7 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       }
     });
 
-    it('PARITY: optimistic messages should skip animation in ALL rounds', () => {
+    it('pARITY: optimistic messages should skip animation in ALL rounds', () => {
       const rounds = [0, 1, 2, 3];
 
       for (const roundNum of rounds) {
@@ -353,8 +355,8 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
     });
   });
 
-  describe('Message Count Parity', () => {
-    it('PARITY: message count should follow same pattern across rounds', () => {
+  describe('message Count Parity', () => {
+    it('pARITY: message count should follow same pattern across rounds', () => {
       // Round 0: 1 user + 2 participants = 3 messages
       const round0Messages = [
         createUserMessage(0, 'Round 0'),
@@ -384,7 +386,7 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       expect(round0Count).toBe(3);
     });
 
-    it('PARITY: user message should be first message in each round', () => {
+    it('pARITY: user message should be first message in each round', () => {
       store.getState().setMessages([
         createUserMessage(0, 'Round 0'),
         createAssistantMessage(0, 0, 'Response'),
@@ -407,8 +409,8 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
     });
   });
 
-  describe('Timeline Rendering Parity', () => {
-    it('PARITY: both rounds should create timeline items with same structure', () => {
+  describe('timeline Rendering Parity', () => {
+    it('pARITY: both rounds should create timeline items with same structure', () => {
       store.getState().setMessages([
         createUserMessage(0, 'Round 0'),
         createAssistantMessage(0, 0, 'Response 0-0'),
@@ -423,8 +425,8 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       const round1 = messages.filter(m => getRoundNumber(m.metadata) === 1);
 
       // Both should have user message + participant response
-      expect(round0.length).toBe(2);
-      expect(round1.length).toBe(2);
+      expect(round0).toHaveLength(2);
+      expect(round1).toHaveLength(2);
 
       // Both should have same structure: USER, ASSISTANT
       expect(round0[0]?.role).toBe(MessageRoles.USER);
@@ -436,7 +438,7 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       expect(round0.map(m => m.role)).toEqual(round1.map(m => m.role));
     });
 
-    it('CRITICAL: round 1+ should be included in timeline even with only user message', () => {
+    it('cRITICAL: round 1+ should be included in timeline even with only user message', () => {
       // Round 0 complete
       store.getState().setMessages([
         createUserMessage(0, 'Round 0'),
@@ -460,8 +462,8 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
     });
   });
 
-  describe('State Reset Prevention', () => {
-    it('CRITICAL: initializeThread must NOT reset streaming state during active submission', () => {
+  describe('state Reset Prevention', () => {
+    it('cRITICAL: initializeThread must NOT reset streaming state during active submission', () => {
       // Setup: Round 0 complete
       store.getState().initializeThread(thread, participants, [
         createUserMessage(0, 'Round 0'),
@@ -488,7 +490,7 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       expect(afterRoundNumber).toBe(1);
     });
 
-    it('CRITICAL: optimistic message should survive initializeThread', () => {
+    it('cRITICAL: optimistic message should survive initializeThread', () => {
       // Round 0 complete
       store.getState().initializeThread(thread, participants, [
         createUserMessage(0, 'Round 0'),
@@ -515,13 +517,13 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       );
 
       // CRITICAL: Optimistic message should still be present
-      expect(beforeMessages.length).toBe(1);
-      expect(afterMessages.length).toBe(1);
+      expect(beforeMessages).toHaveLength(1);
+      expect(afterMessages).toHaveLength(1);
       expect(afterMessages[0]?.id).toBe(optimisticMsg.id);
     });
   });
 
-  describe('Edge Cases: Round Number Validation', () => {
+  describe('edge Cases: Round Number Validation', () => {
     it('should handle round numbers up to 10+', () => {
       const highRounds = [10, 15, 20];
 
@@ -548,8 +550,8 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
     });
   });
 
-  describe('Complete Multi-Round Journey', () => {
-    it('INTEGRATION: complete 3-round conversation should maintain parity', () => {
+  describe('complete Multi-Round Journey', () => {
+    it('iNTEGRATION: complete 3-round conversation should maintain parity', () => {
       // Round 0
       store.getState().initializeThread(thread, participants, [
         createUserMessage(0, 'Round 0 question'),
@@ -586,9 +588,9 @@ describe('Round 0 vs Round 1+ Behavior Parity', () => {
       );
 
       // PARITY CHECK: All rounds should have exactly 1 user message
-      expect(round0UserMessages.length).toBe(1);
-      expect(round1UserMessages.length).toBe(1);
-      expect(round2UserMessages.length).toBe(1);
+      expect(round0UserMessages).toHaveLength(1);
+      expect(round1UserMessages).toHaveLength(1);
+      expect(round2UserMessages).toHaveLength(1);
 
       // All rounds should have same message structure
       const round0Count = store.getState().messages.filter(

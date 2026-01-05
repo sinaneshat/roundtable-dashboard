@@ -183,7 +183,7 @@ function simulateMessageSync(
 // TESTS
 // ============================================================================
 
-describe('Form Actions Message Persistence', () => {
+describe('form Actions Message Persistence', () => {
   let store: ReturnType<typeof createChatStore>;
   let thread: ChatThread;
   let participants: ChatParticipant[];
@@ -204,7 +204,7 @@ describe('Form Actions Message Persistence', () => {
     store.getState().initializeThread(thread, participants, round0Messages);
   });
 
-  describe('Optimistic Message Creation', () => {
+  describe('optimistic Message Creation', () => {
     it('should create optimistic message with correct metadata', () => {
       const nextRound = 1;
       const userText = 'Follow-up question';
@@ -238,13 +238,13 @@ describe('Form Actions Message Persistence', () => {
         fileParts,
       });
 
-      expect(optimisticMessage.parts.length).toBe(2); // File + text
+      expect(optimisticMessage.parts).toHaveLength(2); // File + text
       expect(optimisticMessage.parts[0]).toEqual(fileParts[0]);
       expect(optimisticMessage.parts[1]).toEqual({ type: 'text', text: 'Analyze this document' });
     });
   });
 
-  describe('Optimistic Message Addition to Store', () => {
+  describe('optimistic Message Addition to Store', () => {
     it('should add optimistic message immediately to store', () => {
       const initialCount = store.getState().messages.length;
 
@@ -256,7 +256,7 @@ describe('Form Actions Message Persistence', () => {
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
 
       const newState = store.getState();
-      expect(newState.messages.length).toBe(initialCount + 1);
+      expect(newState.messages).toHaveLength(initialCount + 1);
 
       const lastMessage = newState.messages[newState.messages.length - 1];
       expect(lastMessage?.id).toBe(optimisticMessage.id);
@@ -285,7 +285,7 @@ describe('Form Actions Message Persistence', () => {
     });
   });
 
-  describe('CRITICAL: Message ID Replacement After PATCH', () => {
+  describe('cRITICAL: Message ID Replacement After PATCH', () => {
     it('should replace optimistic message ID with persisted ID', () => {
       // Step 1: Add optimistic message
       const optimisticMessage = createOptimisticUserMessage({
@@ -350,7 +350,7 @@ describe('Form Actions Message Persistence', () => {
     });
   });
 
-  describe('CRITICAL: Message Persistence During AI SDK Sync', () => {
+  describe('cRITICAL: Message Persistence During AI SDK Sync', () => {
     it('should preserve user message when AI SDK sync introduces participant trigger', () => {
       // Step 1: User submits round 1 (optimistic message)
       const optimisticMessage = createOptimisticUserMessage({
@@ -408,7 +408,7 @@ describe('Form Actions Message Persistence', () => {
         return m.role === MessageRoles.USER && !meta?.isParticipantTrigger;
       });
 
-      expect(nonTriggerUserMessages.length).toBe(2); // Round 0 + Round 1
+      expect(nonTriggerUserMessages).toHaveLength(2); // Round 0 + Round 1
       expect(nonTriggerUserMessages.find(m => m.id === persistedId)).toBeDefined();
     });
 
@@ -428,7 +428,7 @@ describe('Form Actions Message Persistence', () => {
       let userMessages = store.getState().messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
-      expect(userMessages.length).toBe(1);
+      expect(userMessages).toHaveLength(1);
       expect(userMessages[0].id).toBe(optimisticMessage.id);
 
       // ============ PHASE 2: PATCH ID Replacement ============
@@ -449,7 +449,7 @@ describe('Form Actions Message Persistence', () => {
       userMessages = store.getState().messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
-      expect(userMessages.length).toBe(1);
+      expect(userMessages).toHaveLength(1);
       expect(userMessages[0].id).toBe(persistedId);
 
       // ============ PHASE 3: AI SDK Sync ============
@@ -482,12 +482,12 @@ describe('Form Actions Message Persistence', () => {
       const round1UserMessages = finalMessages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
-      expect(round1UserMessages.length).toBe(1);
+      expect(round1UserMessages).toHaveLength(1);
       expect(round1UserMessages[0].id).toBe(persistedId);
     });
   });
 
-  describe('CRITICAL: StreamingRoundNumber Synchronization', () => {
+  describe('cRITICAL: StreamingRoundNumber Synchronization', () => {
     it('should set streamingRoundNumber immediately after optimistic add', () => {
       expect(store.getState().streamingRoundNumber).toBeNull();
 
@@ -543,7 +543,7 @@ describe('Form Actions Message Persistence', () => {
     });
   });
 
-  describe('CRITICAL: Config Change Round Number Blocking', () => {
+  describe('cRITICAL: Config Change Round Number Blocking', () => {
     it('should set configChangeRoundNumber to block streaming before PATCH', () => {
       expect(store.getState().configChangeRoundNumber).toBeNull();
 
@@ -583,11 +583,11 @@ describe('Form Actions Message Persistence', () => {
       const round1Messages = state.messages.filter(
         m => getRoundNumber(m.metadata) === 1,
       );
-      expect(round1Messages.length).toBe(1);
+      expect(round1Messages).toHaveLength(1);
     });
   });
 
-  describe('Edge Cases: Multiple Rounds', () => {
+  describe('edge Cases: Multiple Rounds', () => {
     it('should preserve messages from all rounds during sync', () => {
       // Setup: Complete round 1
       const round1Messages = [
@@ -641,7 +641,7 @@ describe('Form Actions Message Persistence', () => {
         return !meta?.isParticipantTrigger;
       });
 
-      expect(nonTriggerUserMessages.length).toBe(3); // Round 0, 1, 2
+      expect(nonTriggerUserMessages).toHaveLength(3); // Round 0, 1, 2
       expect(nonTriggerUserMessages.find(m => getRoundNumber(m.metadata) === 0)).toBeDefined();
       expect(nonTriggerUserMessages.find(m => getRoundNumber(m.metadata) === 1)).toBeDefined();
       expect(nonTriggerUserMessages.find(m => getRoundNumber(m.metadata) === 2)).toBeDefined();
@@ -681,7 +681,7 @@ describe('Form Actions Message Persistence', () => {
     });
   });
 
-  describe('Error Handling: Rollback on PATCH Failure', () => {
+  describe('error Handling: Rollback on PATCH Failure', () => {
     it('should remove optimistic message on PATCH error', () => {
       const optimisticMessage = createOptimisticUserMessage({
         roundNumber: 1,
@@ -723,7 +723,7 @@ describe('Form Actions Message Persistence', () => {
       expect(state.streamingRoundNumber).toBeNull();
       expect(state.configChangeRoundNumber).toBeNull();
       expect(state.waitingToStartStreaming).toBe(false);
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1).length).toBe(0);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1)).toHaveLength(0);
     });
   });
 });

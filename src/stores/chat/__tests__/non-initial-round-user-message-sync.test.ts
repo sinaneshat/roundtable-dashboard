@@ -65,7 +65,7 @@ function mergeMessages(
   return [...chatMessages, ...storeOnlyMessages];
 }
 
-describe('Non-Initial Round User Message Sync', () => {
+describe('non-Initial Round User Message Sync', () => {
   describe('filterStoreOnlyMessages', () => {
     it('should preserve original user message when AI SDK has participant trigger', () => {
       // Store has the original user message (from form submission)
@@ -91,7 +91,7 @@ describe('Non-Initial Round User Message Sync', () => {
       const preserved = filterStoreOnlyMessages(storeMessages, chatMessages);
 
       // Original user message MUST be preserved
-      expect(preserved.length).toBe(1);
+      expect(preserved).toHaveLength(1);
       expect(preserved[0].id).toBe('01KE5WMBVDFY');
     });
 
@@ -111,7 +111,7 @@ describe('Non-Initial Round User Message Sync', () => {
       const preserved = filterStoreOnlyMessages(storeMessages, chatMessages);
 
       // Participant trigger should NOT be preserved
-      expect(preserved.length).toBe(0);
+      expect(preserved).toHaveLength(0);
     });
 
     it('should preserve original user messages from multiple rounds', () => {
@@ -144,7 +144,7 @@ describe('Non-Initial Round User Message Sync', () => {
       const preserved = filterStoreOnlyMessages(storeMessages, chatMessages);
 
       // Both original user messages should be preserved
-      expect(preserved.length).toBe(2);
+      expect(preserved).toHaveLength(2);
       expect(preserved.map(m => m.id).sort()).toEqual(['user-r0', 'user-r1']);
     });
 
@@ -163,12 +163,12 @@ describe('Non-Initial Round User Message Sync', () => {
       const preserved = filterStoreOnlyMessages(storeMessages, chatMessages);
 
       // Should not preserve since it's already in AI SDK
-      expect(preserved.length).toBe(0);
+      expect(preserved).toHaveLength(0);
     });
   });
 
   describe('mergeMessages', () => {
-    it('CRITICAL: merged result should contain original user message after AI SDK sync', () => {
+    it('cRITICAL: merged result should contain original user message after AI SDK sync', () => {
       // This is the exact scenario that was broken:
       // 1. Store has original user message from round 1
       // 2. AI SDK has participant trigger for round 1
@@ -194,7 +194,7 @@ describe('Non-Initial Round User Message Sync', () => {
       const merged = mergeMessages(chatMessages, storeMessages);
 
       // Merged should have BOTH messages
-      expect(merged.length).toBe(2);
+      expect(merged).toHaveLength(2);
 
       // Original user message MUST be in the result
       const originalInMerged = merged.find(m => m.id === '01KE5WMBVDFY');
@@ -255,12 +255,12 @@ describe('Non-Initial Round User Message Sync', () => {
       });
 
       // Both original user messages should be preserved
-      expect(nonTriggerUserMessages.length).toBe(2);
+      expect(nonTriggerUserMessages).toHaveLength(2);
       expect(nonTriggerUserMessages.map(m => m.id).sort()).toEqual(['user-r0', 'user-r1']);
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('edge Cases', () => {
     it('should handle empty store messages', () => {
       const storeMessages: UIMessage[] = [];
       const chatMessages: UIMessage[] = [
@@ -273,7 +273,7 @@ describe('Non-Initial Round User Message Sync', () => {
       ];
 
       const merged = mergeMessages(chatMessages, storeMessages);
-      expect(merged.length).toBe(1);
+      expect(merged).toHaveLength(1);
     });
 
     it('should handle empty AI SDK messages', () => {
@@ -288,7 +288,7 @@ describe('Non-Initial Round User Message Sync', () => {
       const chatMessages: UIMessage[] = [];
 
       const merged = mergeMessages(chatMessages, storeMessages);
-      expect(merged.length).toBe(1);
+      expect(merged).toHaveLength(1);
     });
 
     it('should handle null metadata gracefully', () => {
@@ -305,12 +305,12 @@ describe('Non-Initial Round User Message Sync', () => {
       const preserved = filterStoreOnlyMessages(storeMessages, chatMessages);
 
       // Should preserve since getUserMetadata returns null (not a participant trigger)
-      expect(preserved.length).toBe(1);
+      expect(preserved).toHaveLength(1);
     });
   });
 
-  describe('REGRESSION: Round 0 vs Round 1+ Behavior', () => {
-    it('CRITICAL: round 0 user messages should be preserved during sync', () => {
+  describe('rEGRESSION: Round 0 vs Round 1+ Behavior', () => {
+    it('cRITICAL: round 0 user messages should be preserved during sync', () => {
       const round0UserMsg: UIMessage = {
         id: '01KE5WMBVDFY_R0',
         role: MessageRoles.USER,
@@ -323,11 +323,11 @@ describe('Non-Initial Round User Message Sync', () => {
 
       const merged = mergeMessages(chatMessages, storeMessages);
 
-      expect(merged.length).toBe(1);
+      expect(merged).toHaveLength(1);
       expect(merged[0]?.id).toBe('01KE5WMBVDFY_R0');
     });
 
-    it('CRITICAL: round 1+ user messages should be preserved during sync', () => {
+    it('cRITICAL: round 1+ user messages should be preserved during sync', () => {
       const round1UserMsg: UIMessage = {
         id: '01KE5WMBVDFY_R1',
         role: MessageRoles.USER,
@@ -340,11 +340,11 @@ describe('Non-Initial Round User Message Sync', () => {
 
       const merged = mergeMessages(chatMessages, storeMessages);
 
-      expect(merged.length).toBe(1);
+      expect(merged).toHaveLength(1);
       expect(merged[0]?.id).toBe('01KE5WMBVDFY_R1');
     });
 
-    it('CRITICAL: both round 0 and round 1 user messages preserved in multi-round conversation', () => {
+    it('cRITICAL: both round 0 and round 1 user messages preserved in multi-round conversation', () => {
       const round0UserMsg: UIMessage = {
         id: '01KE5WMBVDFY_R0',
         role: MessageRoles.USER,
@@ -373,14 +373,14 @@ describe('Non-Initial Round User Message Sync', () => {
 
       // Should have: round 0 user msg + round 1 trigger + round 1 original user msg
       const userMessages = merged.filter(m => m.role === MessageRoles.USER);
-      expect(userMessages.length).toBe(3);
+      expect(userMessages).toHaveLength(3);
 
       // Both original user messages should be present
       expect(merged.some(m => m.id === '01KE5WMBVDFY_R0')).toBe(true);
       expect(merged.some(m => m.id === '01KE5WMBVDFY_R1')).toBe(true);
     });
 
-    it('CRITICAL: participant trigger should NOT replace original user message in ANY round', () => {
+    it('cRITICAL: participant trigger should NOT replace original user message in ANY round', () => {
       const testRounds = [0, 1, 2, 3];
 
       for (const roundNum of testRounds) {
@@ -404,7 +404,7 @@ describe('Non-Initial Round User Message Sync', () => {
         const merged = mergeMessages(chatMessages, storeMessages);
 
         // Should have BOTH messages
-        expect(merged.length).toBe(2);
+        expect(merged).toHaveLength(2);
         expect(merged.some(m => m.id === `user-r${roundNum}`)).toBe(true);
       }
     });

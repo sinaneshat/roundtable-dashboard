@@ -972,7 +972,7 @@ describe('screen Mode Context for Placeholders', () => {
     // User submits second round
     store.getState().prepareForNewMessage('Second question', ['model-0']);
 
-    let state = store.getState();
+    const state = store.getState();
     expect(state.screenMode).toBe(ScreenModes.THREAD);
 
     // prepareForNewMessage sets streamingRoundNumber on THREAD screen

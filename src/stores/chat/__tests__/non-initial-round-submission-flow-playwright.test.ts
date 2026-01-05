@@ -23,7 +23,7 @@
  * @see docs/FLOW_DOCUMENTATION.md Part 6 - Configuration Changes Mid-Conversation
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { ChatModes, FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, ScreenModes, UIMessageRoles } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -1596,7 +1596,7 @@ describe('edge cases', () => {
 // CRITICAL: MESSAGE VISIBILITY THROUGHOUT SUBMISSION FLOW
 // ============================================================================
 
-describe('CRITICAL: User message visibility during non-initial round submission', () => {
+describe('cRITICAL: User message visibility during non-initial round submission', () => {
   it('should maintain user message visibility from optimistic add through PATCH completion', () => {
     const store = createChatStore();
     const participants = [createParticipant(0)];
@@ -1624,7 +1624,7 @@ describe('CRITICAL: User message visibility during non-initial round submission'
     let round1UserMessages = store.getState().messages.filter(
       m => m.role === UIMessageRoles.USER && m.metadata.roundNumber === 1,
     );
-    expect(round1UserMessages.length).toBe(1);
+    expect(round1UserMessages).toHaveLength(1);
     expect(round1UserMessages[0]?.id).toBe('optimistic-user-1-12345');
 
     // PHASE 2: PATCH completes - replace optimistic with persisted
@@ -1647,7 +1647,7 @@ describe('CRITICAL: User message visibility during non-initial round submission'
     round1UserMessages = store.getState().messages.filter(
       m => m.role === UIMessageRoles.USER && m.metadata.roundNumber === 1,
     );
-    expect(round1UserMessages.length).toBe(1);
+    expect(round1UserMessages).toHaveLength(1);
     expect(round1UserMessages[0]?.id).toBe('db-message-r1-user');
   });
 
@@ -1666,18 +1666,18 @@ describe('CRITICAL: User message visibility during non-initial round submission'
 
     // Verify message present before streaming
     let round1Messages = store.getState().messages.filter(m => m.metadata.roundNumber === 1);
-    expect(round1Messages.length).toBe(1);
+    expect(round1Messages).toHaveLength(1);
     expect(round1Messages[0]?.role).toBe(UIMessageRoles.USER);
 
     // Start streaming
     store.getState().setWaitingToStartStreaming(true);
     round1Messages = store.getState().messages.filter(m => m.metadata.roundNumber === 1);
-    expect(round1Messages.length).toBe(1);
+    expect(round1Messages).toHaveLength(1);
 
     store.getState().setWaitingToStartStreaming(false);
     store.getState().setIsStreaming(true);
     round1Messages = store.getState().messages.filter(m => m.metadata.roundNumber === 1);
-    expect(round1Messages.length).toBe(1);
+    expect(round1Messages).toHaveLength(1);
 
     // Add first assistant message
     store.getState().setMessages([
@@ -1686,7 +1686,7 @@ describe('CRITICAL: User message visibility during non-initial round submission'
     ]);
 
     round1Messages = store.getState().messages.filter(m => m.metadata.roundNumber === 1);
-    expect(round1Messages.length).toBe(2); // User + assistant
+    expect(round1Messages).toHaveLength(2); // User + assistant
     const userMsg = round1Messages.find(m => m.role === UIMessageRoles.USER);
     expect(userMsg).toBeDefined();
     expect(userMsg!.parts[0]).toEqual({ type: MessagePartTypes.TEXT, text: 'Follow-up' });
@@ -1720,7 +1720,7 @@ describe('CRITICAL: User message visibility during non-initial round submission'
     const round1Messages = store.getState().messages.filter(
       m => m.role === UIMessageRoles.USER && m.metadata.roundNumber === 1,
     );
-    expect(round1Messages.length).toBe(1);
+    expect(round1Messages).toHaveLength(1);
     expect(store.getState().configChangeRoundNumber).toBe(1);
   });
 
@@ -1760,7 +1760,7 @@ describe('CRITICAL: User message visibility during non-initial round submission'
     const round1Messages = store.getState().messages.filter(
       m => m.metadata.roundNumber === 1,
     );
-    expect(round1Messages.length).toBe(1);
+    expect(round1Messages).toHaveLength(1);
     expect(round1Messages[0]?.role).toBe(UIMessageRoles.USER);
     expect(store.getState().streamingRoundNumber).toBe(1);
   });
@@ -1867,6 +1867,6 @@ describe('CRITICAL: User message visibility during non-initial round submission'
     // Optimistic message should be removed
     expect(store.getState().messages.find(m => m.id === optimisticId)).toBeUndefined();
     const round1Messages = store.getState().messages.filter(m => m.metadata.roundNumber === 1);
-    expect(round1Messages.length).toBe(0);
+    expect(round1Messages).toHaveLength(0);
   });
 });

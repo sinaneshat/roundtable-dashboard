@@ -35,7 +35,6 @@ import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/sch
 import { getRoundNumber } from '@/lib/utils';
 
 import { createChatStore } from '../store';
-import type { ChatStore } from '../store-schemas';
 
 // ============================================================================
 // TEST HELPER FUNCTIONS
@@ -140,15 +139,17 @@ function createPreSearch(roundNumber: number, status: string = MessageStatuses.P
     roundNumber,
     userQuery: `Query for round ${roundNumber}`,
     status,
-    searchData: status === MessageStatuses.COMPLETE ? {
-      queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
-      results: [],
-      summary: 'test summary',
-      successCount: 1,
-      failureCount: 0,
-      totalResults: 0,
-      totalTime: 100,
-    } : null,
+    searchData: status === MessageStatuses.COMPLETE
+      ? {
+          queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
+          results: [],
+          summary: 'test summary',
+          successCount: 1,
+          failureCount: 0,
+          totalResults: 0,
+          totalTime: 100,
+        }
+      : null,
     errorMessage: null,
     createdAt: new Date(),
     completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
@@ -185,7 +186,7 @@ function verifyStreamingVisibilityState(
 
   // 3. Verify participants are available for placeholder rendering
   if (options.expectPlaceholders && options.participantCount) {
-    expect(state.participants.length).toBe(options.participantCount);
+    expect(state.participants).toHaveLength(options.participantCount);
   }
 
   // 4. Verify pre-search if expected
@@ -231,7 +232,7 @@ describe('streaming visibility during flow', () => {
       const userMessages = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 0,
       );
-      expect(userMessages.length).toBe(1);
+      expect(userMessages).toHaveLength(1);
       expect(userMessages[0]!.parts[0]).toHaveProperty('text', 'What is AI?');
     });
 
@@ -250,7 +251,7 @@ describe('streaming visibility during flow', () => {
 
       // Verify each participant can have a placeholder
       const state = store.getState();
-      expect(state.participants.length).toBe(2);
+      expect(state.participants).toHaveLength(2);
       expect(state.participants[0]!.modelId).toBeDefined();
       expect(state.participants[1]!.modelId).toBeDefined();
     });
@@ -272,7 +273,7 @@ describe('streaming visibility during flow', () => {
       const assistantMessages = state.messages.filter(
         m => m.role === MessageRoles.ASSISTANT && getRoundNumber(m.metadata) === 0,
       );
-      expect(assistantMessages.length).toBe(1);
+      expect(assistantMessages).toHaveLength(1);
       expect(assistantMessages[0]!.parts[0]).toHaveProperty('text', 'Hello');
 
       // Update with more content (simulating streaming chunks)
@@ -341,7 +342,7 @@ describe('streaming visibility during flow', () => {
       const round1UserMessages = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
-      expect(round1UserMessages.length).toBe(1);
+      expect(round1UserMessages).toHaveLength(1);
       expect(round1UserMessages[0]!.parts[0]).toHaveProperty('text', 'Second question');
       expect(round1UserMessages[0]!.metadata.isOptimistic).toBe(true);
     });
@@ -376,7 +377,7 @@ describe('streaming visibility during flow', () => {
       const beforeStreamingUserMsgs = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
-      expect(beforeStreamingUserMsgs.length).toBe(1);
+      expect(beforeStreamingUserMsgs).toHaveLength(1);
 
       // Start streaming
       store.getState().setIsStreaming(true);
@@ -389,7 +390,7 @@ describe('streaming visibility during flow', () => {
       const afterStreamingUserMsgs = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
-      expect(afterStreamingUserMsgs.length).toBe(1);
+      expect(afterStreamingUserMsgs).toHaveLength(1);
       expect(afterStreamingUserMsgs[0]!.id).toBe(optimisticMsg.id);
     });
 
@@ -413,7 +414,7 @@ describe('streaming visibility during flow', () => {
       const round1AssistantMsgs = state.messages.filter(
         m => m.role === MessageRoles.ASSISTANT && getRoundNumber(m.metadata) === 1,
       );
-      expect(round1AssistantMsgs.length).toBe(1);
+      expect(round1AssistantMsgs).toHaveLength(1);
       expect(round1AssistantMsgs[0]!.parts[0]).toHaveProperty('text', 'Starting to answer');
 
       // Update with more content
@@ -443,7 +444,7 @@ describe('streaming visibility during flow', () => {
 
       let state = store.getState();
       expect(state.currentParticipantIndex).toBe(0);
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1 && m.role === MessageRoles.ASSISTANT).length).toBe(1);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1 && m.role === MessageRoles.ASSISTANT)).toHaveLength(1);
 
       // Second participant streams
       store.getState().setCurrentParticipantIndex(1);
@@ -452,11 +453,11 @@ describe('streaming visibility during flow', () => {
 
       state = store.getState();
       expect(state.currentParticipantIndex).toBe(1);
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1 && m.role === MessageRoles.ASSISTANT).length).toBe(2);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1 && m.role === MessageRoles.ASSISTANT)).toHaveLength(2);
 
       // CRITICAL: Both messages visible DURING streaming
       const round1Messages = state.messages.filter(m => getRoundNumber(m.metadata) === 1);
-      expect(round1Messages.length).toBe(3); // 1 user + 2 assistant
+      expect(round1Messages).toHaveLength(3); // 1 user + 2 assistant
     });
 
     it('should preserve visibility across PATCH response update in round 1', () => {
@@ -475,7 +476,7 @@ describe('streaming visibility during flow', () => {
       const beforePatchMsgs = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
-      expect(beforePatchMsgs.length).toBe(1);
+      expect(beforePatchMsgs).toHaveLength(1);
       expect(beforePatchMsgs[0]!.id).toBe(optimisticId);
 
       // Simulate PATCH response: Replace optimistic with persisted message
@@ -491,7 +492,7 @@ describe('streaming visibility during flow', () => {
       const afterPatchMsgs = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
-      expect(afterPatchMsgs.length).toBe(1);
+      expect(afterPatchMsgs).toHaveLength(1);
       expect(afterPatchMsgs[0]!.id).toBe('thread_r1_user');
       expect(afterPatchMsgs[0]!.parts[0]).toHaveProperty('text', 'Question');
     });
@@ -513,7 +514,7 @@ describe('streaming visibility during flow', () => {
 
       // Verify round 0 messages visible
       let state = store.getState();
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0).length).toBe(3);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0)).toHaveLength(3);
 
       // Round 1
       const r1UserMsg = createUserMessage(1, 'Q1');
@@ -530,8 +531,8 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: All round 0 and round 1 messages visible
       state = store.getState();
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0).length).toBe(3);
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1).length).toBe(3);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0)).toHaveLength(3);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1)).toHaveLength(3);
 
       // Complete round 1
       store.getState().setIsStreaming(false);
@@ -545,9 +546,9 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: All previous messages still visible while round 2 streams
       state = store.getState();
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0).length).toBe(3);
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1).length).toBe(3);
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 2).length).toBe(1);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0)).toHaveLength(3);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1)).toHaveLength(3);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 2)).toHaveLength(1);
       expect(state.isStreaming).toBe(true);
       expect(state.streamingRoundNumber).toBe(2);
     });
@@ -637,7 +638,7 @@ describe('streaming visibility during flow', () => {
       // CRITICAL: Round 1 optimistic message should be preserved
       const state = store.getState();
       const round1Messages = state.messages.filter(m => getRoundNumber(m.metadata) === 1);
-      expect(round1Messages.length).toBe(1);
+      expect(round1Messages).toHaveLength(1);
       expect(round1Messages[0]!.role).toBe(MessageRoles.USER);
     });
   });
@@ -669,7 +670,7 @@ describe('streaming visibility during flow', () => {
       const userMessages = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
-      expect(userMessages.length).toBe(1);
+      expect(userMessages).toHaveLength(1);
     });
 
     it('should handle rapid consecutive submissions', () => {
@@ -681,7 +682,7 @@ describe('streaming visibility during flow', () => {
 
       // Verify round 0 user message visible
       let state = store.getState();
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0).length).toBe(1);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0)).toHaveLength(1);
 
       // Complete round 0
       store.getState().setMessages(msgs => [
@@ -697,8 +698,8 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: Both rounds should be visible
       state = store.getState();
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0).length).toBe(3);
-      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1).length).toBe(1);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0)).toHaveLength(3);
+      expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1)).toHaveLength(1);
     });
 
     it('should maintain visibility when web search enabled mid-conversation', () => {

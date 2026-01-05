@@ -191,7 +191,7 @@ describe('determineCurrentPhase logic', () => {
   });
 
   describe('bug scenario: phase mismatch', () => {
-    it('OLD BUG: would return MODERATOR when participants incomplete', () => {
+    it('oLD BUG: would return MODERATOR when participants incomplete', () => {
       // This was the bug: allComplete=true incorrectly set, falls through to MODERATOR
       // The old code had: return RoundPhases.MODERATOR as default
 
@@ -295,9 +295,12 @@ describe('client-side phase validation', () => {
     // Check if participants are actually complete
     const enabledParticipants = state.participants.filter(p => p.isEnabled);
     const completedParticipants = state.messages.filter((msg) => {
-      if (msg.role !== 'assistant') return false;
-      if (msg.metadata.roundNumber !== state.resumptionRoundNumber) return false;
-      if (msg.metadata.isModerator) return false;
+      if (msg.role !== 'assistant')
+        return false;
+      if (msg.metadata.roundNumber !== state.resumptionRoundNumber)
+        return false;
+      if (msg.metadata.isModerator)
+        return false;
       return true;
     });
 

@@ -89,8 +89,8 @@ function createAssistantMessage(roundNumber: number, participantIndex: number): 
   };
 }
 
-describe('Virtualized Timeline Item Visibility', () => {
-  describe('Timeline Item Creation', () => {
+describe('virtualized Timeline Item Visibility', () => {
+  describe('timeline Item Creation', () => {
     it('should create timeline item for new round with optimistic user message', () => {
       const messages: UIMessage[] = [
         createUserMessage(0, 'Round 0'),
@@ -102,13 +102,13 @@ describe('Virtualized Timeline Item Visibility', () => {
 
       const timeline = createTimelineItems(messages);
 
-      expect(timeline.length).toBe(2);
+      expect(timeline).toHaveLength(2);
       expect(timeline[0].roundNumber).toBe(0);
       expect(timeline[1].roundNumber).toBe(1);
     });
   });
 
-  describe('Virtualization Visibility', () => {
+  describe('virtualization Visibility', () => {
     // Constants matching ThreadTimeline's configuration
     const VIEWPORT_HEIGHT = 800;
     const ESTIMATED_ITEM_SIZE = 200;
@@ -131,7 +131,7 @@ describe('Virtualized Timeline Item Visibility', () => {
       );
 
       // With only 2 items and overscan of 5, ALL items should be visible
-      expect(visibleItems.length).toBe(2);
+      expect(visibleItems).toHaveLength(2);
       expect(visibleItems[0].roundNumber).toBe(0);
       expect(visibleItems[1].roundNumber).toBe(1);
     });
@@ -158,7 +158,7 @@ describe('Virtualized Timeline Item Visibility', () => {
       );
 
       // Both rounds should be visible
-      expect(visibleItems.length).toBe(2);
+      expect(visibleItems).toHaveLength(2);
       expect(visibleItems.some(item => item.roundNumber === 1)).toBe(true);
     });
 
@@ -177,7 +177,7 @@ describe('Virtualized Timeline Item Visibility', () => {
     });
   });
 
-  describe('Critical Path: Immediate Visibility After Submission', () => {
+  describe('critical Path: Immediate Visibility After Submission', () => {
     it('should have round 1 in visible items immediately after optimistic message added', () => {
       // BEFORE submission: only round 0
       const beforeSubmission: UIMessage[] = [
@@ -187,7 +187,7 @@ describe('Virtualized Timeline Item Visibility', () => {
       ];
 
       const timelineBefore = createTimelineItems(beforeSubmission);
-      expect(timelineBefore.length).toBe(1);
+      expect(timelineBefore).toHaveLength(1);
 
       // AFTER submission: round 0 + optimistic round 1
       const afterSubmission: UIMessage[] = [
@@ -196,7 +196,7 @@ describe('Virtualized Timeline Item Visibility', () => {
       ];
 
       const timelineAfter = createTimelineItems(afterSubmission);
-      expect(timelineAfter.length).toBe(2);
+      expect(timelineAfter).toHaveLength(2);
 
       // Check that virtualization would include the new item
       const visibleAfter = getVisibleItems(
@@ -207,7 +207,7 @@ describe('Virtualized Timeline Item Visibility', () => {
         5,
       );
 
-      expect(visibleAfter.length).toBe(2);
+      expect(visibleAfter).toHaveLength(2);
       expect(visibleAfter[1].roundNumber).toBe(1);
       expect((visibleAfter[1].data as UIMessage[])[0].parts[0]).toEqual({
         type: 'text',

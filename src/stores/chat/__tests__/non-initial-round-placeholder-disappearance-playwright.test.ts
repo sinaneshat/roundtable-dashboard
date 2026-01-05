@@ -22,14 +22,13 @@
  * - OR use waitingToStartStreaming in the submission detection logic
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 import { createChatStore } from '../store';
-import type { StoredPreSearch } from '@/api/routes/chat/schema';
 
 describe('non-initial round placeholder disappearance', () => {
   // Test helper: create a store with a completed round 0

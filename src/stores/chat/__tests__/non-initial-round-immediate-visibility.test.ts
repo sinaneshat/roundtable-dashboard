@@ -152,7 +152,7 @@ function createModeratorMessage(roundNumber: number, text: string): UIMessage {
   };
 }
 
-describe('Non-Initial Round Immediate Visibility', () => {
+describe('non-Initial Round Immediate Visibility', () => {
   let store: ReturnType<typeof createChatStore>;
   let thread: ChatThread;
   let participants: ChatParticipant[];
@@ -176,7 +176,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
     ]);
   });
 
-  describe('Immediate State Changes After Submission', () => {
+  describe('immediate State Changes After Submission', () => {
     it('should add optimistic user message to store immediately', () => {
       const state = store.getState();
       const initialMessageCount = state.messages.length;
@@ -196,7 +196,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
 
       const newState = store.getState();
-      expect(newState.messages.length).toBe(initialMessageCount + 1);
+      expect(newState.messages).toHaveLength(initialMessageCount + 1);
 
       // Verify the optimistic message is in the store
       const lastMessage = newState.messages[newState.messages.length - 1];
@@ -263,7 +263,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
       const userMessages = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRoundNumber,
       );
-      expect(userMessages.length).toBe(1);
+      expect(userMessages).toHaveLength(1);
 
       // streamingRoundNumber should be set (enables placeholder rendering)
       expect(state.streamingRoundNumber).toBe(nextRoundNumber);
@@ -274,7 +274,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
     });
   });
 
-  describe('Timeline Item Creation for Non-Initial Round', () => {
+  describe('timeline Item Creation for Non-Initial Round', () => {
     it('should create timeline item for optimistic user message', () => {
       // Add optimistic message for round 1
       const optimisticMessage: UIMessage = {
@@ -304,7 +304,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
       // Round 1 should have the user message
       const round1Messages = messagesByRound.get(1);
       expect(round1Messages).toBeDefined();
-      expect(round1Messages!.length).toBe(1);
+      expect(round1Messages!).toHaveLength(1);
       expect(round1Messages![0].role).toBe(MessageRoles.USER);
     });
 
@@ -337,7 +337,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
     });
   });
 
-  describe('Placeholder Visibility Conditions', () => {
+  describe('placeholder Visibility Conditions', () => {
     it('streamingRoundNumber enables placeholder rendering', () => {
       // Setup: Add optimistic message and set streamingRoundNumber
       const nextRound = 1;
@@ -369,7 +369,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
       const round1UserMessages = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
-      expect(round1UserMessages.length).toBe(1);
+      expect(round1UserMessages).toHaveLength(1);
     });
 
     it('participants array should be available for placeholder rendering', () => {
@@ -404,11 +404,11 @@ describe('Non-Initial Round Immediate Visibility', () => {
       const round1Messages = newState.messages.filter(
         m => getRoundNumber(m.metadata) === 1,
       );
-      expect(round1Messages.length).toBe(1);
+      expect(round1Messages).toHaveLength(1);
     });
   });
 
-  describe('Pre-Search Placeholder for Non-Initial Rounds', () => {
+  describe('pre-Search Placeholder for Non-Initial Rounds', () => {
     it('should add pre-search placeholder immediately when web search enabled', () => {
       // Enable web search on thread
       store.setState({ enableWebSearch: true });
@@ -533,12 +533,12 @@ describe('Non-Initial Round Immediate Visibility', () => {
       const round1Messages = state.messages.filter(
         m => getRoundNumber(m.metadata) === nextRound,
       );
-      expect(round1Messages.length).toBe(1);
+      expect(round1Messages).toHaveLength(1);
       expect(round1Messages[0].role).toBe(MessageRoles.USER);
     });
   });
 
-  describe('Complete Non-Initial Round Submission Flow', () => {
+  describe('complete Non-Initial Round Submission Flow', () => {
     it('should have correct state immediately after all submission actions', () => {
       const nextRound = 1;
       const userText = 'This is my second question';
@@ -584,14 +584,14 @@ describe('Non-Initial Round Immediate Visibility', () => {
       const userMessages = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
-      expect(userMessages.length).toBe(1);
+      expect(userMessages).toHaveLength(1);
       expect(userMessages[0].parts[0]).toEqual({ type: 'text', text: userText });
 
       // 2. streamingRoundNumber is set (enables placeholder visibility)
       expect(state.streamingRoundNumber).toBe(nextRound);
 
       // 3. Participants are available (needed for placeholder cards)
-      expect(state.participants.length).toBe(2);
+      expect(state.participants).toHaveLength(2);
 
       // 4. Submission flags are set
       expect(state.configChangeRoundNumber).toBe(nextRound);
@@ -640,7 +640,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
       const round1Messages = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
-      expect(round1Messages.length).toBe(1);
+      expect(round1Messages).toHaveLength(1);
       expect(round1Messages[0].id).toBe(`thread_r${nextRound}_user`);
 
       // streamingRoundNumber should still be set
@@ -651,7 +651,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('edge Cases', () => {
     it('should handle rapid consecutive submissions correctly', () => {
       // Submit round 1
       store.getState().setMessages(msgs => [
@@ -667,7 +667,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
 
       const state1 = store.getState();
       expect(state1.streamingRoundNumber).toBe(1);
-      expect(state1.messages.filter(m => getRoundNumber(m.metadata) === 1).length).toBe(1);
+      expect(state1.messages.filter(m => getRoundNumber(m.metadata) === 1)).toHaveLength(1);
     });
 
     it('should maintain user message visibility even if streaming starts before PATCH completes', () => {
@@ -694,14 +694,14 @@ describe('Non-Initial Round Immediate Visibility', () => {
       const userMessages = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
-      expect(userMessages.length).toBe(1);
+      expect(userMessages).toHaveLength(1);
       expect(state.isStreaming).toBe(true);
       expect(state.streamingRoundNumber).toBe(nextRound);
     });
   });
 
-  describe('REGRESSION: User Message Disappearance Bug', () => {
-    it('CRITICAL: user message must remain visible throughout entire submission flow', () => {
+  describe('rEGRESSION: User Message Disappearance Bug', () => {
+    it('cRITICAL: user message must remain visible throughout entire submission flow', () => {
       const nextRound = 1;
 
       // Step 1: Add optimistic user message
@@ -716,7 +716,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
       const afterOptimistic = store.getState().messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
-      expect(afterOptimistic.length).toBe(1);
+      expect(afterOptimistic).toHaveLength(1);
 
       // Step 2: PATCH completes, replace with DB ID
       const dbMsg: UIMessage = {
@@ -732,7 +732,7 @@ describe('Non-Initial Round Immediate Visibility', () => {
       const afterPatch = store.getState().messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
-      expect(afterPatch.length).toBe(1);
+      expect(afterPatch).toHaveLength(1);
       expect(afterPatch[0]?.id).toBe('01KE5WMBVDFY');
 
       // Step 3: AI SDK adds participant trigger
@@ -749,14 +749,14 @@ describe('Non-Initial Round Immediate Visibility', () => {
       );
 
       // CRITICAL: Should have BOTH original and trigger message
-      expect(afterTrigger.length).toBe(2);
+      expect(afterTrigger).toHaveLength(2);
 
       // Original message should still be present
       const originalPresent = afterTrigger.some(m => m.id === '01KE5WMBVDFY');
       expect(originalPresent).toBe(true);
     });
 
-    it('CRITICAL: comparing round 0 vs round 1 user message visibility', () => {
+    it('cRITICAL: comparing round 0 vs round 1 user message visibility', () => {
       // Round 0 flow
       const round0UserMsg = createUserMessage(0, 'Round 0 question');
       store.getState().initializeThread(thread, participants, [round0UserMsg]);
@@ -775,12 +775,12 @@ describe('Non-Initial Round Immediate Visibility', () => {
       );
 
       // CRITICAL: Both rounds must have exactly 1 user message
-      expect(round0Messages.length).toBe(1);
-      expect(round1Messages.length).toBe(1);
-      expect(round0Messages.length).toBe(round1Messages.length);
+      expect(round0Messages).toHaveLength(1);
+      expect(round1Messages).toHaveLength(1);
+      expect(round0Messages).toHaveLength(round1Messages.length);
     });
 
-    it('CRITICAL: animation skip must apply to ALL non-initial rounds', () => {
+    it('cRITICAL: animation skip must apply to ALL non-initial rounds', () => {
       const testRounds = [1, 2, 3, 5, 10];
 
       for (const roundNum of testRounds) {

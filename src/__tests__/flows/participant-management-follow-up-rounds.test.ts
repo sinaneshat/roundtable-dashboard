@@ -20,10 +20,9 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ChangelogChangeTypesExtended, MessageStatuses } from '@/api/core/enums';
-import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
+import { MessageStatuses } from '@/api/core/enums';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import {
-  createInitialStoreState,
   createMockParticipant,
   createMockStoredPreSearch,
   createParticipantConfig,
@@ -39,8 +38,7 @@ import { createChatStore } from '../../stores/chat/store';
 
 function setupStoreWithInitialRound(store: ChatStoreApi, participantCount = 2) {
   const participants = Array.from({ length: participantCount }, (_, i) =>
-    createMockParticipant(i, { threadId: 'thread-1' }),
-  );
+    createMockParticipant(i, { threadId: 'thread-1' }));
 
   store.getState().updateParticipants(participants);
   store.getState().setSelectedParticipants(

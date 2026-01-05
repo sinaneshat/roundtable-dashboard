@@ -379,7 +379,7 @@ export function useVirtualizedTimeline({
     }
 
     // Schedule sync for next frame - outside React's lifecycle
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Deferred via RAF to avoid flushSync during render
+
     pendingRafRef.current = requestAnimationFrame(() => {
       pendingRafRef.current = null;
       const newVirtualItems = virtualizer.getVirtualItems();

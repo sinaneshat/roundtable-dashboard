@@ -19,7 +19,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import {
   createMockStoredPreSearch,

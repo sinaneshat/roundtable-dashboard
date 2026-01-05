@@ -29,7 +29,6 @@ import type { ChatParticipant, ChatThread } from '@/db/validation';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
-import type { StoredPreSearch } from '../store-schemas';
 import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 
 // ============================================================================
@@ -439,7 +438,7 @@ describe('config Change Flow Sanity Check', () => {
       // ============================================================================
       // ROUND 1: Add participant
       // ============================================================================
-      let participants = [
+      const participants = [
         ...store.getState().participants,
         createMockParticipant(2, { modelId: 'gemini-pro' }),
       ];

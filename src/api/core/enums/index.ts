@@ -89,6 +89,8 @@ export {
   DEFAULT_BILLING_INTERVAL,
   DEFAULT_CREDIT_ACTION,
   DEFAULT_CREDIT_TRANSACTION_TYPE,
+  // Payment method type
+  DEFAULT_PAYMENT_METHOD_TYPE,
   DEFAULT_PLAN_TYPE,
   // Purchase type (checkout result)
   DEFAULT_PURCHASE_TYPE,
@@ -102,11 +104,16 @@ export {
   getGrantTransactionType,
   getUsageStatusFromPercentage,
   isCreditTransactionType,
+  isPaymentMethodType,
   isPlanType,
   isPurchaseType,
   isSubscriptionPlanType,
   isUIBillingInterval,
   parsePlanType,
+  PAYMENT_METHOD_TYPES,
+  type PaymentMethodType,
+  PaymentMethodTypes,
+  PaymentMethodTypeSchema,
   PLAN_TYPES,
   type PlanType,
   PlanTypes,
@@ -136,13 +143,6 @@ export {
   UsageStatuses,
   UsageStatusMetadata,
   UsageStatusSchema,
-  // Payment method type
-  DEFAULT_PAYMENT_METHOD_TYPE,
-  isPaymentMethodType,
-  PAYMENT_METHOD_TYPES,
-  type PaymentMethodType,
-  PaymentMethodTypes,
-  PaymentMethodTypeSchema,
 } from './billing';
 
 // Chat, thread, and message enums

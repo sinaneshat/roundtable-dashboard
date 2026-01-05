@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import {
   createTestAssistantMessage,
   createTestChatStore,
@@ -370,16 +370,16 @@ describe('submission Flow Sanity - Message Ordering', () => {
       const curr = storedMessages[i];
 
       if (
-        prev &&
-        curr &&
-        prev.metadata &&
-        curr.metadata &&
-        typeof prev.metadata === 'object' &&
-        typeof curr.metadata === 'object' &&
-        'createdAt' in prev.metadata &&
-        'createdAt' in curr.metadata &&
-        typeof prev.metadata.createdAt === 'string' &&
-        typeof curr.metadata.createdAt === 'string'
+        prev
+        && curr
+        && prev.metadata
+        && curr.metadata
+        && typeof prev.metadata === 'object'
+        && typeof curr.metadata === 'object'
+        && 'createdAt' in prev.metadata
+        && 'createdAt' in curr.metadata
+        && typeof prev.metadata.createdAt === 'string'
+        && typeof curr.metadata.createdAt === 'string'
       ) {
         const prevTime = new Date(prev.metadata.createdAt).getTime();
         const currTime = new Date(curr.metadata.createdAt).getTime();
@@ -457,11 +457,11 @@ describe('submission Flow Sanity - Message Ordering', () => {
     const participantIndices: number[] = [];
     storedMessages.forEach((msg) => {
       if (
-        msg.role === 'assistant' &&
-        msg.metadata &&
-        typeof msg.metadata === 'object' &&
-        'participantIndex' in msg.metadata &&
-        typeof msg.metadata.participantIndex === 'number'
+        msg.role === 'assistant'
+        && msg.metadata
+        && typeof msg.metadata === 'object'
+        && 'participantIndex' in msg.metadata
+        && typeof msg.metadata.participantIndex === 'number'
       ) {
         participantIndices.push(msg.metadata.participantIndex);
       }
@@ -509,11 +509,11 @@ describe('submission Flow Sanity - Council Moderator Integration', () => {
 
     // Find moderator message
     const moderatorIndex = storedMessages.findIndex(
-      (msg) =>
-        msg.metadata &&
-        typeof msg.metadata === 'object' &&
-        'isModerator' in msg.metadata &&
-        msg.metadata.isModerator === true,
+      msg =>
+        msg.metadata
+        && typeof msg.metadata === 'object'
+        && 'isModerator' in msg.metadata
+        && msg.metadata.isModerator === true,
     );
 
     // Moderator should be last message

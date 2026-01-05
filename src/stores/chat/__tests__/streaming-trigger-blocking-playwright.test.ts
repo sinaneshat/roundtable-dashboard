@@ -1003,7 +1003,7 @@ describe('streaming Trigger Blocking - waitingToStartStreaming + Flags', () => {
     store.getState().setWaitingToStartStreaming(true);
 
     // PATCH in flight, no flags cleared yet
-    let result = canStreamingProceed(store.getState());
+    const result = canStreamingProceed(store.getState());
     expect(result.canProceed).toBe(false);
 
     // waitingToStartStreaming remains true
@@ -1017,7 +1017,7 @@ describe('streaming Trigger Blocking - waitingToStartStreaming + Flags', () => {
     store.getState().setIsWaitingForChangelog(true);
 
     // Changelog fetching
-    let result = canStreamingProceed(store.getState());
+    const result = canStreamingProceed(store.getState());
     expect(result.canProceed).toBe(false);
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
 

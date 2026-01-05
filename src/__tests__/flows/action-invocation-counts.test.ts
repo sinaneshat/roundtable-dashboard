@@ -451,7 +451,7 @@ describe('action Invocation Counts - Multi-Round Flow', () => {
 describe('action Invocation Counts - Error Scenarios', () => {
   it('should not call actions when validation fails', () => {
     const store = createTestChatStore();
-    const setStreamingSpy = vi.spyOn(store.getState(), 'setIsStreaming');
+    const _setStreamingSpy = vi.spyOn(store.getState(), 'setIsStreaming');
 
     // Attempt to start streaming without setting round number
     // (This should be prevented by provider logic, but store allows it)

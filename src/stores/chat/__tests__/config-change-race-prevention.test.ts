@@ -123,15 +123,17 @@ function createPreSearch(roundNumber: number, status: MessageStatuses, options: 
     roundNumber,
     userQuery: options.userQuery || `Query for round ${roundNumber}`,
     status,
-    searchData: status === MessageStatuses.COMPLETE ? {
-      queries: [],
-      results: [],
-      summary: '',
-      successCount: 0,
-      failureCount: 0,
-      totalResults: 0,
-      totalTime: 0,
-    } : null,
+    searchData: status === MessageStatuses.COMPLETE
+      ? {
+          queries: [],
+          results: [],
+          summary: '',
+          successCount: 0,
+          failureCount: 0,
+          totalResults: 0,
+          totalTime: 0,
+        }
+      : null,
     createdAt: new Date(),
     completedAt: options.completedAt ?? null,
     errorMessage: null,
@@ -184,7 +186,7 @@ function createDelayedChangelogMock(delayMs: number) {
 // Test Suites
 // ============================================================================
 
-describe('Config Change Race Prevention - PATCH Ordering', () => {
+describe('config Change Race Prevention - PATCH Ordering', () => {
   let store: ChatStoreApi;
 
   beforeEach(() => {
@@ -196,7 +198,7 @@ describe('Config Change Race Prevention - PATCH Ordering', () => {
     vi.useRealTimers();
   });
 
-  describe('Race Condition 1: Pre-search Before PATCH', () => {
+  describe('race Condition 1: Pre-search Before PATCH', () => {
     it('should block pre-search execution while configChangeRoundNumber is set', async () => {
       // Setup: Thread exists with round 0 complete
       const thread = createMockThread({ enableWebSearch: false });
@@ -321,7 +323,7 @@ describe('Config Change Race Prevention - PATCH Ordering', () => {
     });
   });
 
-  describe('Race Condition 2: Streaming Before Changelog', () => {
+  describe('race Condition 2: Streaming Before Changelog', () => {
     it('should block streaming while isWaitingForChangelog is true', () => {
       const thread = createMockThread({ enableWebSearch: false });
       store.getState().initializeThread(thread, createMockParticipants(), [
@@ -435,7 +437,7 @@ describe('Config Change Race Prevention - PATCH Ordering', () => {
     });
   });
 
-  describe('Race Condition 3: Concurrent Submissions', () => {
+  describe('race Condition 3: Concurrent Submissions', () => {
     it('should prevent round 2 from starting while round 1 is pending', () => {
       const thread = createMockThread({ enableWebSearch: false });
       store.getState().initializeThread(thread, createMockParticipants(), [
@@ -537,7 +539,7 @@ describe('Config Change Race Prevention - PATCH Ordering', () => {
     });
   });
 
-  describe('State Consistency Tests', () => {
+  describe('state Consistency Tests', () => {
     it('should never have isWaitingForChangelog=true and configChangeRoundNumber=null', () => {
       const thread = createMockThread({ enableWebSearch: false });
       store.getState().initializeThread(thread, createMockParticipants(), [
@@ -708,7 +710,7 @@ describe('Config Change Race Prevention - PATCH Ordering', () => {
     });
   });
 
-  describe('Screen Mode Transitions', () => {
+  describe('screen Mode Transitions', () => {
     it('should handle OVERVIEW screen submission with config changes', () => {
       // Initial thread creation on OVERVIEW screen
       store.getState().setScreenMode(ScreenModes.OVERVIEW);
@@ -797,7 +799,7 @@ describe('Config Change Race Prevention - PATCH Ordering', () => {
     });
   });
 
-  describe('Stress Test: Rapid Config Toggles', () => {
+  describe('stress Test: Rapid Config Toggles', () => {
     it('should handle rapid web search toggles', () => {
       const thread = createMockThread({ enableWebSearch: false });
       store.getState().initializeThread(thread, createMockParticipants(), [

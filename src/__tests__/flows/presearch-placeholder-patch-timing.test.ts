@@ -25,7 +25,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChatModes, MessageRoles } from '@/api/core/enums';
+import { ChatModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import {
   createMockParticipant,
@@ -41,7 +41,7 @@ import { createChatStore } from '../../stores/chat/store';
 // TEST SETUP
 // ============================================================================
 
-describe('Pre-Search Placeholder and Message Patching Flow - Timing', () => {
+describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
   let store: ChatStoreApi;
   let thread: ChatThread;
   let participants: ChatParticipant[];
@@ -665,7 +665,7 @@ describe('Pre-Search Placeholder and Message Patching Flow - Timing', () => {
       // NOTE: form-actions.ts doesn't remove pre-search on PATCH failure
 
       // ASSERT: Pre-search still exists
-      expect(store.getState().preSearches.length).toBe(preSearchCount);
+      expect(store.getState().preSearches).toHaveLength(preSearchCount);
     });
 
     it('should handle pre-search FAILED status gracefully', () => {

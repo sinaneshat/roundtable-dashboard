@@ -251,7 +251,7 @@ async function globalSetup(config: FullConfig): Promise<void> {
   }
 
   // Check if we have valid auth files already
-  const requiredUsers = ALL_TEST_USERS.filter((u) => u.tier !== 'admin'); // Admin is optional
+  const requiredUsers = ALL_TEST_USERS.filter(u => u.tier !== 'admin'); // Admin is optional
   const allAuthFilesValid = requiredUsers.every((user) => {
     const authFile = path.join(authDir, `${user.tier}-user.json`);
     return isAuthFileValid(authFile);
@@ -281,11 +281,11 @@ async function globalSetup(config: FullConfig): Promise<void> {
       return;
     }
     throw new Error(
-      'No valid auth files and server not running.\n' +
-        'Either:\n' +
-        '  1. Start the server: pnpm dev\n' +
-        '  2. Run seed script: pnpm test:e2e:seed\n' +
-        'Then run tests again.',
+      'No valid auth files and server not running.\n'
+      + 'Either:\n'
+      + '  1. Start the server: pnpm dev\n'
+      + '  2. Run seed script: pnpm test:e2e:seed\n'
+      + 'Then run tests again.',
     );
   }
 
