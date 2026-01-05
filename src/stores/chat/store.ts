@@ -66,7 +66,14 @@ import type {
   UISlice,
 } from './store-schemas';
 
-enableMapSet();
+// Enable immer Map/Set support lazily to avoid module initialization order issues
+let immerMapSetEnabled = false;
+function ensureMapSetEnabled() {
+  if (!immerMapSetEnabled) {
+    enableMapSet();
+    immerMapSetEnabled = true;
+  }
+}
 
 type SliceCreator<S> = StateCreator<
   ChatStore,
@@ -1224,6 +1231,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 });
 
 export function createChatStore() {
+  ensureMapSetEnabled();
   const store = createStore<ChatStore>()(
     devtools(
       immer(

@@ -505,7 +505,7 @@ describe('config Change + Pre-Search Ordering E2E', () => {
   });
 
   describe('regression Tests', () => {
-    it('REGRESSION: prevents pre-search before PATCH completes', async () => {
+    it('rEGRESSION: prevents pre-search before PATCH completes', async () => {
       const thread = createMockThread({ enableWebSearch: false });
       store.getState().initializeThread(thread, createMockParticipants(), []);
 
@@ -543,7 +543,7 @@ describe('config Change + Pre-Search Ordering E2E', () => {
       expect(isPreSearchBlocked(store)).toBe(false);
     });
 
-    it('REGRESSION: prevents pre-search before changelog completes', async () => {
+    it('rEGRESSION: prevents pre-search before changelog completes', async () => {
       const thread = createMockThread({ enableWebSearch: false });
       store.getState().initializeThread(thread, createMockParticipants(), []);
 
@@ -567,7 +567,7 @@ describe('config Change + Pre-Search Ordering E2E', () => {
       expect(isPreSearchBlocked(store)).toBe(false);
     });
 
-    it('REGRESSION: network order is PATCH → changelog → pre-search', async () => {
+    it('rEGRESSION: network order is PATCH → changelog → pre-search', async () => {
       const thread = createMockThread({ enableWebSearch: false });
       store.getState().initializeThread(thread, createMockParticipants(), []);
 
@@ -625,7 +625,7 @@ describe('config Change + Pre-Search Ordering E2E', () => {
       expect(store.getState().isWaitingForChangelog).toBe(true);
     });
 
-    it('REGRESSION: initializeThread preserves enableWebSearch when hasPendingConfigChanges is true', () => {
+    it('rEGRESSION: initializeThread preserves enableWebSearch when hasPendingConfigChanges is true', () => {
       // This bug caused user's web search toggle to be wiped when query refetched
       const thread = createMockThread({ enableWebSearch: false });
       store.getState().initializeThread(thread, createMockParticipants(), []);
@@ -647,7 +647,7 @@ describe('config Change + Pre-Search Ordering E2E', () => {
       expect(store.getState().enableWebSearch).toBe(true);
     });
 
-    it('REGRESSION: initializeThread preserves selectedMode when hasPendingConfigChanges is true', () => {
+    it('rEGRESSION: initializeThread preserves selectedMode when hasPendingConfigChanges is true', () => {
       const thread = createMockThread({ mode: ChatModes.BRAINSTORMING });
       store.getState().initializeThread(thread, createMockParticipants(), []);
 

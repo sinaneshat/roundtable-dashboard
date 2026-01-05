@@ -47,6 +47,7 @@ const nextConfig: NextConfig = {
     viewTransition: true,
   },
 
+  reactStrictMode: true,
   // External packages for Server Components bundling
   // Required for React Email to work in edge runtime and Cloudflare Workers
   // @see https://github.com/resend/react-email/issues/977

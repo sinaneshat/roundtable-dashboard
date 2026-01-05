@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { ChatMode } from '@/api/core/enums';
 import { MessageRoles } from '@/api/core/enums';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
-import { useChatStore } from '@/components/providers';
+import { useChatStore, useChatStoreApi } from '@/components/providers';
 import {
   useCreateThreadMutation,
   useUpdateThreadMutation,
@@ -45,6 +45,7 @@ export type UseChatFormActionsReturn = {
 };
 export function useChatFormActions(): UseChatFormActionsReturn {
   const queryClient = useQueryClient();
+  const storeApi = useChatStoreApi();
 
   const formState = useChatStore(useShallow(s => ({
     inputValue: s.inputValue,
@@ -53,16 +54,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     enableWebSearch: s.enableWebSearch,
   })));
 
-  const threadState = useChatStore(useShallow(s => ({
-    thread: s.thread,
-    participants: s.participants,
-    messages: s.messages,
-    pendingAttachments: s.pendingAttachments,
-    // ✅ FIX: Track pending config changes for changelog detection
-    // hasPendingConfigChanges is set when user toggles ANY config (web search, mode, participants)
-    // This catches cases where user toggles OFF→ON (same final value, but still a "change")
-    hasPendingConfigChanges: s.hasPendingConfigChanges,
-  })));
+  // Note: We intentionally use storeApi.getState() instead of a subscribed threadState
+  // to avoid stale closure issues where closure captures old values after state updates
+  // from previous rounds. See handleUpdateThreadAndSend for the pattern.
+
   const actions = useChatStore(useShallow(s => ({
     setInputValue: s.setInputValue,
     resetForm: s.resetForm,
@@ -233,34 +228,51 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       return;
     }
 
-    // Calculate round number FIRST (before any state changes)
-    let nextRoundNumber = calculateNextRoundNumber(threadState.messages);
-    if (nextRoundNumber === 0 && threadState.messages.length > 0) {
-      const round0AssistantMessages = threadState.messages.filter(
+    // ✅ FIX: Get FRESH state at execution time, not stale closure values
+    // This prevents bugs where closure-captured values are stale after previous rounds
+    // Example bug: thread.enableWebSearch=true after round 1, but stale closure has false
+    // → webSearchChanged incorrectly calculated as false → changelog not triggered
+    // CRITICAL: Get ALL values that are used for comparison or payload from fresh state
+    const freshState = storeApi.getState();
+    const freshThread = freshState.thread;
+    const freshParticipants = freshState.participants;
+    const freshMessages = freshState.messages;
+    const freshHasPendingConfigChanges = freshState.hasPendingConfigChanges;
+    // ✅ FIX: Also get form values from fresh state to avoid stale closure issues
+    const freshSelectedMode = freshState.selectedMode;
+    const freshEnableWebSearch = freshState.enableWebSearch;
+    const freshSelectedParticipants = freshState.selectedParticipants;
+
+    // Calculate round number FIRST using FRESH messages state
+    let nextRoundNumber = calculateNextRoundNumber(freshMessages);
+    if (nextRoundNumber === 0 && freshMessages.length > 0) {
+      const round0AssistantMessages = freshMessages.filter(
         m => m.role === MessageRoles.ASSISTANT && getRoundNumber(m.metadata) === 0,
       );
       if (round0AssistantMessages.length > 0) {
-        const userMessages = threadState.messages.filter(m => m.role === MessageRoles.USER);
+        const userMessages = freshMessages.filter(m => m.role === MessageRoles.USER);
         nextRoundNumber = userMessages.length;
       }
     }
 
-    // Prepare config change detection
+    // Prepare config change detection using FRESH state for BOTH sides of comparison
     const { updateResult, updatePayloads, optimisticParticipants } = prepareParticipantUpdate(
-      threadState.participants,
-      formState.selectedParticipants,
+      freshParticipants,
+      freshSelectedParticipants,
       threadId,
     );
 
-    const currentModeId = threadState.thread?.mode || null;
-    const currentWebSearch = threadState.thread?.enableWebSearch || false;
-    const modeChanged = currentModeId !== formState.selectedMode;
-    const webSearchChanged = currentWebSearch !== formState.enableWebSearch;
+    const currentModeId = freshThread?.mode || null;
+    const currentWebSearch = freshThread?.enableWebSearch || false;
+    // ✅ FIX: Use fresh form values for comparison to avoid stale closure issues
+    const modeChanged = currentModeId !== freshSelectedMode;
+    const webSearchChanged = currentWebSearch !== freshEnableWebSearch;
 
     const hasParticipantChanges = shouldUpdateParticipantConfig(updateResult);
     // ✅ FIX: Only trigger changelog sync when there are ACTUAL config changes
     // This prevents unnecessary changelog fetches when user just sends a message
-    const hasAnyChanges = hasParticipantChanges || modeChanged || webSearchChanged || threadState.hasPendingConfigChanges;
+    // Uses freshHasPendingConfigChanges from fresh state to ensure accurate detection
+    const hasAnyChanges = hasParticipantChanges || modeChanged || webSearchChanged || freshHasPendingConfigChanges;
 
     // ✅ IMMEDIATE UI FEEDBACK: Add optimistic user message BEFORE any async operations
     // This ensures the streaming trigger sees the correct round when it runs
@@ -285,7 +297,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       return [...currentMessages, optimisticMessage];
     });
     actions.setStreamingRoundNumber(nextRoundNumber);
-    actions.setExpectedParticipantIds(getParticipantModelIds(threadState.participants));
+    actions.setExpectedParticipantIds(getParticipantModelIds(freshParticipants));
 
     // Optimistically update participants in store if changes exist
     if (hasParticipantChanges) {
@@ -305,7 +317,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
     // ✅ FIX: Create pre-search placeholder AFTER blocking flag is set
     // This ensures effects see configChangeRoundNumber and block appropriately
-    if (formState.enableWebSearch) {
+    // Use fresh enableWebSearch value to avoid stale closure issues
+    if (freshEnableWebSearch) {
       actions.addPreSearch(createPlaceholderPreSearch({
         threadId,
         roundNumber: nextRoundNumber,
@@ -323,13 +336,14 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
     try {
       // ✅ PATCH in background: Persist message to DB
+      // Use fresh form values to ensure payload reflects current user selections
       const response = await updateThreadMutation.mutateAsync({
         param: { id: threadId },
         json: {
-          // Config changes (if any)
+          // Config changes (if any) - use fresh values to avoid stale closure issues
           participants: hasParticipantChanges ? updatePayloads : undefined,
-          mode: modeChanged ? formState.selectedMode : undefined,
-          enableWebSearch: webSearchChanged ? formState.enableWebSearch : undefined,
+          mode: modeChanged && freshSelectedMode ? freshSelectedMode : undefined,
+          enableWebSearch: webSearchChanged ? freshEnableWebSearch : undefined,
           // ALWAYS include the user message
           newMessage: {
             content: trimmed,
@@ -403,7 +417,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     }
   }, [
     formState,
-    threadState,
+    storeApi,
     updateThreadMutation,
     actions,
   ]);
@@ -438,14 +452,20 @@ export function useChatFormActions(): UseChatFormActionsReturn {
    * ✅ CRITICAL: Set hasPendingConfigChanges FIRST to prevent race condition
    * If initializeThread is called between setEnableWebSearch and setHasPendingConfigChanges,
    * it would see hasPendingConfigChanges=false and reset enableWebSearch to thread value.
+   *
+   * ✅ FIX: Use fresh state to check for thread existence
+   * Closure values can be stale after state updates from previous rounds
    */
   const handleWebSearchToggle = useCallback((enabled: boolean) => {
     // Set flag FIRST to prevent initializeThread from resetting the change
-    if (threadState.thread) {
+    // Use fresh state to avoid stale closure issues
+    const freshThread = storeApi.getState().thread;
+    const freshCreatedThreadId = storeApi.getState().createdThreadId;
+    if (freshThread || freshCreatedThreadId) {
       actions.setHasPendingConfigChanges(true);
     }
     actions.setEnableWebSearch(enabled);
-  }, [actions, threadState.thread]);
+  }, [actions, storeApi]);
 
   // ✅ SUBMIT STATE: Track whether any submission is in progress
   // This enables immediate UI feedback (loading spinner) on submit button
