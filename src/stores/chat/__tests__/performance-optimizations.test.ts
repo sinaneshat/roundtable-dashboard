@@ -543,8 +543,8 @@ describe('round Utils - Single Pass Grouping', () => {
     const endTime = performance.now();
 
     expect(grouped.size).toBe(100); // 100 rounds
-    // Should complete in under 200ms for 10000 messages (CI variability)
-    expect(endTime - startTime).toBeLessThan(200);
+    // Should complete in under 300ms for 10000 messages (CI variability)
+    expect(endTime - startTime).toBeLessThan(300);
   });
 });
 

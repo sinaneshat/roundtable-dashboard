@@ -23,45 +23,6 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
 
-  // Experimental features
-  experimental: {
-    // Optimize package imports for better tree-shaking (reduces Cloudflare bundle size)
-    // Note: lucide-react, date-fns, recharts are optimized by default in Next.js 16+
-    // @see https://nextjs.org/docs/app/api-reference/config/next-config-js/optimizePackageImports
-    optimizePackageImports: [
-      // UI libraries
-      '@radix-ui/react-icons',
-      'cmdk',
-      'vaul',
-      'react-day-picker',
-      // Animation
-      'motion',
-      // Forms
-      'react-hook-form',
-      '@hookform/resolvers',
-      // Data/State
-      '@tanstack/react-query',
-      '@tanstack/react-virtual',
-      'zustand',
-      'immer',
-      // AI SDK
-      'ai',
-      '@ai-sdk/react',
-      // Utilities
-      'chroma-js',
-      'clsx',
-      'class-variance-authority',
-      'tailwind-merge',
-      'fuse.js',
-      // Analytics
-      'posthog-js',
-      // Markdown/Syntax
-      'react-markdown',
-      'shiki',
-      // Note: @react-email/components excluded - in serverExternalPackages
-    ],
-  },
-
   // Cache Components (Next.js 16+) - DISABLED
   // PPR requires all dynamic data to be in Suspense boundaries,
   // which conflicts with auth-protected routes that fetch user data
