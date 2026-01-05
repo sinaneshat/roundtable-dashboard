@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
 
   // Production optimizations
   poweredByHeader: false,
-  productionBrowserSourceMaps: false,
+  productionBrowserSourceMaps: true, // Temporarily enabled to debug Lo error
 
   // Stable experimental features (production-ready since Next.js 13.5+)
   experimental: {
@@ -36,6 +36,8 @@ const nextConfig: NextConfig = {
       'date-fns',
       '@radix-ui/react-icons',
       'motion',
+      'ai',
+      '@ai-sdk/react',
     ],
 
     // View Transitions API integration (Baseline 2025)
@@ -285,6 +287,19 @@ const nextConfig: NextConfig = {
         pathname: '/s2/favicons**',
       },
     ],
+  },
+
+  // DEBUG: Webpack config to identify minified error 'Lo'
+  // Disables minification and uses named modules for readable stack traces
+  webpack: (config, { isServer }) => {
+    if (!isServer && process.env.DEBUG_MINIFY === 'true') {
+      // Disable minification to see actual function names
+      config.optimization.minimize = false;
+      // Use named modules instead of numeric IDs
+      config.optimization.moduleIds = 'named';
+      config.optimization.chunkIds = 'named';
+    }
+    return config;
   },
 
 };

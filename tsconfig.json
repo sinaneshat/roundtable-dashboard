@@ -64,10 +64,10 @@
     "node_modules",
     "scripts",
     "open-next.config.ts",
-    ".open-next/**/*",
-    ".next/**/*",
-    "out/**/*",
-    "dist/**/*",
+    ".open-next",
+    ".next",
+    "out",
+    "dist",
     "public/sw.js",
     "**/*.test.ts",
     "**/*.test.tsx",
@@ -76,6 +76,11 @@
     "**/__tests__/**/*",
     "vitest.setup.ts",
     "vitest.config.ts",
-    "__mocks__/**/*"
+    "__mocks__/**/*",
+    "e2e/**/*",
+    "playwright.config.ts",
+    "playwright-no-webserver.config.ts",
+    "commitlint.config.ts",
+    "custom-worker.ts"
   ]
 }
