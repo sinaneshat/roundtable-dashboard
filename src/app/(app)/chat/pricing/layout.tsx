@@ -15,7 +15,8 @@ type PricingLayoutProps = {
  * Pricing page requires authentication to show subscription info
  */
 export default async function PricingLayout({ children }: PricingLayoutProps) {
-  const session = await requireAuth();
+  // Auth check - redirects if not authenticated
+  await requireAuth();
 
-  return <ChatLayoutShell session={session}>{children}</ChatLayoutShell>;
+  return <ChatLayoutShell>{children}</ChatLayoutShell>;
 }

@@ -402,7 +402,8 @@ async function putFileLocal(
     // Convert to buffer (cross-realm safe checks)
     let buffer: Uint8Array;
     if (Buffer.isBuffer(data)) {
-      buffer = data;
+      // Buffer.isBuffer narrows to Buffer which extends Uint8Array
+      buffer = data as Uint8Array;
     } else if (isArrayBuffer(data)) {
       buffer = Buffer.from(data);
     } else if (data instanceof Uint8Array || ArrayBuffer.isView(data)) {
