@@ -1124,7 +1124,7 @@ export function useIncompleteRoundResumption(
     // This check MUST come BEFORE the isCreatingModerator guard because in the stuck
     // state, isModeratorStreaming (which maps to isCreatingModerator) is true.
     if (
-      moderatorResumption?.status === 'failed'
+      moderatorResumption?.status === MessageStatuses.FAILED
       && resumptionRoundNumber !== null
     ) {
       const moderatorMessageForRound = getModeratorMessageForRound(

@@ -3,9 +3,10 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError } from '@/api/common/error-handling';
-import type { ErrorContext } from '@/api/core';
 import type { DatabaseOperation } from '@/api/core/enums';
 import { ErrorCodes } from '@/api/core/enums';
+
+import type { ErrorContext } from './schemas';
 
 export const ApiErrors = {
   notFound: (resource: string, resourceId?: string, userId?: string) => {

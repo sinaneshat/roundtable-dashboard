@@ -26,7 +26,8 @@ import type { LanguageModelUsage } from 'ai';
 
 import { ErrorCategorySchema, FinishReasonSchema } from '@/api/core/enums';
 import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
-import { isObject } from '@/lib/utils';
+
+import { isObject } from './type-guards';
 
 // ============================================================================
 // Types

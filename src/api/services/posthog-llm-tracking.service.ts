@@ -857,24 +857,34 @@ export async function trackLLMError(
       responseBody: z.string().optional(),
     });
 
-    const errorDetails: Record<string, unknown> = {
+    const ErrorDetailsSchema = z.object({
+      error_message: z.string(),
+      error_name: z.string(),
+      error_stack: z.string().optional(),
+      http_status: z.number().optional(),
+      response_body: z.string().optional(),
+    });
+
+    type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
+
+    const baseErrorDetails: ErrorDetails = {
       error_message: error.message,
       error_name: error.name,
       error_stack: error.stack,
     };
 
-    // Validate and extract HTTP error properties if present
-    if (isObject(error)) {
-      const httpProps = HttpErrorPropsSchema.safeParse(error);
-      if (httpProps.success) {
-        if (httpProps.data.statusCode !== undefined) {
-          errorDetails.http_status = httpProps.data.statusCode;
-        }
-        if (httpProps.data.responseBody !== undefined) {
-          errorDetails.response_body = httpProps.data.responseBody;
-        }
-      }
-    }
+    const errorDetails: ErrorDetails = isObject(error)
+      ? (() => {
+          const httpProps = HttpErrorPropsSchema.safeParse(error);
+          return httpProps.success
+            ? {
+                ...baseErrorDetails,
+                ...(httpProps.data.statusCode !== undefined && { http_status: httpProps.data.statusCode }),
+                ...(httpProps.data.responseBody !== undefined && { response_body: httpProps.data.responseBody }),
+              }
+            : baseErrorDetails;
+        })()
+      : baseErrorDetails;
 
     // Capture exception with trace linking
     // ✅ BETTER AUTH DISTINCT ID: Use Better Auth session.id as PostHog distinct ID

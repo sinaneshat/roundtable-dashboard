@@ -8,7 +8,7 @@ import type { UIMessage } from 'ai';
 import type { AbstractIntlMessages } from 'next-intl';
 
 import type { UIMessageRole } from '@/api/core/enums';
-import { FinishReasons, MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import { getParticipantIndex, getRoundNumber } from '@/lib/utils';
 
@@ -57,7 +57,7 @@ export function createTestUIMessage(data: {
   return {
     id: data.id,
     role: data.role,
-    parts: data.parts ?? [{ type: 'text', text: data.content }],
+    parts: data.parts ?? [{ type: MessagePartTypes.TEXT, text: data.content }],
     metadata: data.metadata,
   };
 }
@@ -72,7 +72,7 @@ export function createTestUserMessage(data: {
   return {
     id: data.id,
     role: UIMessageRoles.USER,
-    parts: data.parts ?? [{ type: 'text', text: data.content }],
+    parts: data.parts ?? [{ type: MessagePartTypes.TEXT, text: data.content }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber: data.roundNumber,
@@ -96,7 +96,7 @@ export function createTestAssistantMessage(data: {
   return {
     id: data.id,
     role: UIMessageRoles.ASSISTANT,
-    parts: data.parts ?? [{ type: 'text', text: data.content }],
+    parts: data.parts ?? [{ type: MessagePartTypes.TEXT, text: data.content }],
     metadata: {
       role: MessageRoles.ASSISTANT,
       roundNumber: data.roundNumber,
@@ -128,7 +128,7 @@ export function createTestModeratorMessage(data: {
   createdAt?: string;
   parts?: Array<{ type: 'text'; text: string }>;
 }): UIMessage {
-  const parts: Array<{ type: 'text'; text: string }> = data.parts ?? [{ type: 'text', text: data.content }];
+  const parts: Array<{ type: 'text'; text: string }> = data.parts ?? [{ type: MessagePartTypes.TEXT, text: data.content }];
   return {
     id: data.id,
     role: UIMessageRoles.ASSISTANT,

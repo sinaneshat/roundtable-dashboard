@@ -1,6 +1,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { and, eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
+import { z } from 'zod';
 
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError } from '@/api/common/error-handling';
@@ -1119,6 +1120,41 @@ const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [
 ];
 
 /**
+ * Stripe Invoice Schema - Runtime validation for webhook objects
+ */
+const StripeInvoiceSchema = z.object({
+  id: z.string(),
+  amount_paid: z.number(),
+  currency: z.string(),
+  subscription: z.union([z.string(), z.object({ id: z.string() }), z.null()]).optional(),
+  billing_reason: z.string().optional(),
+  lines: z.object({
+    data: z.array(z.object({
+      description: z.string().optional(),
+    })),
+  }).optional(),
+  last_finalization_error: z.object({
+    message: z.string().optional(),
+  }).optional(),
+});
+
+/**
+ * Stripe Subscription Schema - Runtime validation for webhook objects
+ */
+const StripeSubscriptionSchema = z.object({
+  id: z.string(),
+  currency: z.string().optional(),
+  items: z.object({
+    data: z.array(z.object({
+      price: z.object({
+        unit_amount: z.number().optional(),
+        nickname: z.string().optional(),
+      }).optional(),
+    })),
+  }).optional(),
+});
+
+/**
  * Track Revenue Events to PostHog
  *
  * Captures key billing events for PostHog Revenue Analytics.
@@ -1135,9 +1171,10 @@ async function trackRevenueFromWebhook(
   try {
     switch (event.type) {
       case 'invoice.paid': {
-        if (!isObject(obj) || !('amount_paid' in obj) || !('currency' in obj))
+        const invoiceResult = StripeInvoiceSchema.safeParse(obj);
+        if (!invoiceResult.success)
           return;
-        const invoice = obj as Stripe.Invoice;
+        const invoice = invoiceResult.data;
         if (!invoice.amount_paid || invoice.amount_paid <= 0)
           return;
 
@@ -1181,9 +1218,10 @@ async function trackRevenueFromWebhook(
       }
 
       case 'invoice.payment_failed': {
-        if (!isObject(obj) || !('id' in obj))
+        const invoiceResult = StripeInvoiceSchema.safeParse(obj);
+        if (!invoiceResult.success)
           return;
-        const invoice = obj as Stripe.Invoice;
+        const invoice = invoiceResult.data;
         const subscriptionData = 'subscription' in invoice ? invoice.subscription : null;
         const subscriptionId = typeof subscriptionData === 'string'
           ? subscriptionData
@@ -1198,9 +1236,10 @@ async function trackRevenueFromWebhook(
       }
 
       case 'customer.subscription.deleted': {
-        if (!isObject(obj) || !('id' in obj) || !('items' in obj))
+        const subscriptionResult = StripeSubscriptionSchema.safeParse(obj);
+        if (!subscriptionResult.success)
           return;
-        const subscription = obj as Stripe.Subscription;
+        const subscription = subscriptionResult.data;
         await revenueTracking.subscriptionCanceled({
           subscription_id: subscription.id,
           product: subscription.items?.data[0]?.price?.nickname ?? undefined,
@@ -1209,9 +1248,10 @@ async function trackRevenueFromWebhook(
       }
 
       case 'customer.subscription.updated': {
-        if (!isObject(obj) || !('currency' in obj) || !('items' in obj))
+        const subscriptionResult = StripeSubscriptionSchema.safeParse(obj);
+        if (!subscriptionResult.success)
           return;
-        const subscription = obj as Stripe.Subscription;
+        const subscription = subscriptionResult.data;
         const previousAttributes = event.data.previous_attributes;
 
         // Check if plan changed (upgrade/downgrade)
@@ -1403,8 +1443,10 @@ export const syncCreditsAfterCheckoutHandler: RouteHandler<typeof syncCreditsAft
       // Found credit purchase - grant credits
       const lineItem = recentCreditPurchase.line_items?.data[0];
       const priceId = lineItem?.price?.id;
-      const creditsToGrant = priceId && priceId in CREDIT_CONFIG.CUSTOM_CREDITS.packages
-        ? CREDIT_CONFIG.CUSTOM_CREDITS.packages[priceId as keyof typeof CREDIT_CONFIG.CUSTOM_CREDITS.packages]
+
+      const creditPackages = CREDIT_CONFIG.CUSTOM_CREDITS.packages;
+      const creditsToGrant = priceId && Object.hasOwn(creditPackages, priceId)
+        ? creditPackages[priceId as keyof typeof creditPackages]
         : 0;
 
       if (creditsToGrant > 0) {

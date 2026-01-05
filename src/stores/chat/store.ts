@@ -287,11 +287,23 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
 const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
   ...THREAD_DEFAULTS,
 
-  setThread: (thread: ChatThread | null) =>
+  setThread: (thread: ChatThread | null) => {
+    // ✅ UNIFIED FIX: Sync BOTH enableWebSearch AND selectedMode from thread
+    // This ensures form state stays in sync with thread after PATCH responses
+    // But preserve user's form selections if they have pending config changes
+    const currentState = get();
+    const shouldSyncFormValues = thread && !currentState.hasPendingConfigChanges;
+
     set({
       thread,
-      ...(thread ? { enableWebSearch: thread.enableWebSearch } : {}),
-    }, false, 'thread/setThread'),
+      ...(shouldSyncFormValues
+        ? {
+            enableWebSearch: thread.enableWebSearch,
+            selectedMode: ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
+          }
+        : {}),
+    }, false, 'thread/setThread');
+  },
   setParticipants: (participants: ChatParticipant[]) =>
     set({ participants: sortByPriority(participants) }, false, 'thread/setParticipants'),
   setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => {

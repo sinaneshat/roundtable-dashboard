@@ -1,7 +1,6 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import type { ComponentType } from 'react';
 
 import { Icons } from '@/components/icons';
 import { cn } from '@/lib/ui/cn';
@@ -42,7 +41,7 @@ function VoiceVisualizationSkeleton() {
   );
 }
 
-const VoiceVisualizationInternal = dynamic(
+const VoiceVisualizationInternal = dynamic<VoiceVisualizationProps>(
   () => import('@/components/chat/voice-visualization').then(m => ({
     default: m.VoiceVisualization,
   })),
@@ -50,7 +49,7 @@ const VoiceVisualizationInternal = dynamic(
     ssr: false,
     loading: () => <VoiceVisualizationSkeleton />,
   },
-) as ComponentType<VoiceVisualizationProps>;
+);
 
 export function VoiceVisualization(props: VoiceVisualizationProps) {
   // Only render if active

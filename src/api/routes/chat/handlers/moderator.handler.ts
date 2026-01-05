@@ -20,7 +20,7 @@ import { getErrorMessage, getErrorName } from '@/api/common/error-types';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/api/core';
 import type { ChatMode } from '@/api/core/enums';
-import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, PollingStatuses } from '@/api/core/enums';
 import {
   deductCreditsForAction,
   enforceCredits,
@@ -736,7 +736,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
 
       if (participantOnlyMessages.length === 0) {
         return Responses.polling(c, {
-          status: 'pending',
+          status: PollingStatuses.PENDING,
           message: `Messages for round ${roundNum} are still being processed. Please poll for completion.`,
           retryAfterMs: 1000,
         });

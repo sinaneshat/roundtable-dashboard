@@ -490,7 +490,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
     });
 
     const moderatorRecordData = moderatorRecord
-      ? { id: moderatorRecord.id, status: 'complete' as const }
+      ? { id: moderatorRecord.id, status: MessageStatuses.COMPLETE }
       : null;
 
     let moderatorStreamId: string | null = null;

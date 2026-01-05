@@ -18,9 +18,10 @@ import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import type { ErrorContext } from '@/api/core';
 import type { ApiErrorSeverity, ErrorCode } from '@/api/core/enums';
 import { ApiErrorSeverities, ErrorCodes } from '@/api/core/enums';
+
+import type { ErrorContext } from './schemas';
 
 const ERROR_SEVERITY = ApiErrorSeverities;
 const ERROR_CODES = ErrorCodes;

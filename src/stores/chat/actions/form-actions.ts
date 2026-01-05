@@ -375,7 +375,12 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         actions.setSelectedParticipants(syncedParticipantConfigs);
       }
 
-      // Update thread from response if changed
+      // ✅ UNIFIED FIX: Clear hasPendingConfigChanges BEFORE setThread
+      // This allows setThread to sync form values (selectedMode, enableWebSearch) from thread
+      // Order matters: clear flag → setThread syncs form values → set changelog flag
+      actions.setHasPendingConfigChanges(false);
+
+      // Update thread from response - this now syncs form values since hasPendingConfigChanges is false
       if (response?.data?.thread) {
         actions.setThread(transformChatThread(response.data.thread));
       }
@@ -392,10 +397,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       if (hasAnyChanges) {
         actions.setIsWaitingForChangelog(true);
       }
-
-      // ✅ FIX: Clear hasPendingConfigChanges after successful submission
-      // This prevents it from persisting to subsequent rounds
-      actions.setHasPendingConfigChanges(false);
 
       // ✅ NOTE: NOT calling prepareForNewMessage here
       // That function resets isStreaming=false which would break already-started streaming

@@ -19,6 +19,7 @@ import {
   DEFAULT_CHAT_MODE,
   MessagePartTypes,
   MessageRoles,
+  MessageStatuses,
   ProjectIndexStatusSchema,
   ThreadStatuses,
 } from '@/api/core/enums';
@@ -1012,7 +1013,7 @@ async function toolGetRoundSummary(
   return mcpResult({
     summaryId: moderatorMessage.id,
     roundNumber: moderatorMessage.roundNumber,
-    status: 'complete',
+    status: MessageStatuses.COMPLETE,
     data: { summary: summaryText },
   });
 }

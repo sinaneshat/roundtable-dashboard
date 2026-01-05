@@ -1,7 +1,6 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import type { ComponentType } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PendingAttachment } from '@/hooks/utils';
@@ -23,7 +22,7 @@ function ChatInputAttachmentsSkeleton() {
   );
 }
 
-const ChatInputAttachmentsInternal = dynamic(
+const ChatInputAttachmentsInternal = dynamic<ChatInputAttachmentsProps>(
   () => import('@/components/chat/chat-input-attachments').then(m => ({
     default: m.ChatInputAttachments,
   })),
@@ -31,7 +30,7 @@ const ChatInputAttachmentsInternal = dynamic(
     ssr: false,
     loading: () => <ChatInputAttachmentsSkeleton />,
   },
-) as ComponentType<ChatInputAttachmentsProps>;
+);
 
 export function ChatInputAttachments(props: ChatInputAttachmentsProps) {
   // Only render if there are attachments

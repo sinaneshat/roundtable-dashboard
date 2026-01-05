@@ -156,7 +156,7 @@ export function createOptimisticTestMessage(content: string, tempId: string) {
     content,
     createdAt: new Date(),
     isOptimistic: true as const,
-    status: 'pending' as const,
+    status: MessageStatuses.PENDING,
   };
 }
 

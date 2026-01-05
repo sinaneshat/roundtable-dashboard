@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 
 import { MessageStatuses, ScreenModes } from '@/api/core/enums';
-import type { StoredPreSearch } from '@/api/routes/chat/schema';
+import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { act } from '@/lib/testing';
 
 type MockParticipant = {
@@ -39,7 +39,7 @@ type MockStoreState = {
   hasPreSearchBeenTriggered: (round: number) => boolean;
   markPreSearchTriggered: (round: number) => void;
   updatePreSearchStatus: (round: number, status: string) => void;
-  updatePreSearchData: (round: number, data: Record<string, unknown>) => void;
+  updatePreSearchData: (round: number, data: PreSearchDataPayload) => void;
   updatePreSearchActivity: (round: number) => void;
   clearPreSearchActivity: (round: number) => void;
   clearPreSearchTracking: (round: number) => void;

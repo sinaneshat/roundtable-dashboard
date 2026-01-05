@@ -1,7 +1,6 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import type { ComponentType } from 'react';
 
 import type { ChatMode } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
@@ -54,7 +53,7 @@ function ChatInputToolbarMobileSkeleton() {
   );
 }
 
-const ChatInputToolbarMenuInternal = dynamic(
+const ChatInputToolbarMenuInternal = dynamic<ChatInputToolbarMenuProps>(
   () => import('@/components/chat/chat-input-toolbar-menu').then(m => ({
     default: m.ChatInputToolbarMenu,
   })),
@@ -67,7 +66,7 @@ const ChatInputToolbarMenuInternal = dynamic(
       </>
     ),
   },
-) as ComponentType<ChatInputToolbarMenuProps>;
+);
 
 export function ChatInputToolbarMenu(props: ChatInputToolbarMenuProps) {
   return <ChatInputToolbarMenuInternal {...props} />;

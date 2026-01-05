@@ -659,7 +659,7 @@ export function hasRenderableContent(parts: MessagePart[]): boolean {
  * // { type: 'text', text: 'Hello world!' }
  */
 export function createTextPart(text: string): MessagePart {
-  return { type: 'text', text };
+  return { type: MessagePartTypes.TEXT, text };
 }
 
 /**
@@ -673,7 +673,7 @@ export function createTextPart(text: string): MessagePart {
  * // { type: 'reasoning', text: 'Let me think...' }
  */
 export function createReasoningPart(text: string): MessagePart {
-  return { type: 'reasoning', text };
+  return { type: MessagePartTypes.REASONING, text };
 }
 
 // ============================================================================

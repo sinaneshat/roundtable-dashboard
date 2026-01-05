@@ -211,13 +211,11 @@ export const ACTIVITY_TIMEOUT_MS = 30_000; // 30s without activity = stalled
  * - isPreSearchActivityStalled: No recent activity (data flow stopped)
  *
  * @param lastActivityTime - Last activity timestamp from store (or undefined if no tracking)
- * @param _createdTime - Pre-search creation timestamp (unused - kept for API compatibility)
  * @param now - Current timestamp (default: Date.now())
  * @returns True if pre-search has stalled (no recent activity)
  */
 export function isPreSearchActivityStalled(
   lastActivityTime: number | undefined,
-  _createdTime: number,
   now = Date.now(),
 ): boolean {
   // ✅ FIX: Only check activity timeout AFTER we've received at least one SSE event
@@ -249,17 +247,13 @@ export function shouldPreSearchTimeout(
     return false;
   }
 
-  const createdTime = preSearch.createdAt instanceof Date
-    ? preSearch.createdAt.getTime()
-    : new Date(preSearch.createdAt).getTime();
-
   // Check total elapsed time timeout
   if (isPreSearchTimedOut(preSearch, now)) {
     return true;
   }
 
   // Check activity-based timeout (no recent SSE events)
-  if (isPreSearchActivityStalled(lastActivityTime, createdTime, now)) {
+  if (isPreSearchActivityStalled(lastActivityTime, now)) {
     return true;
   }
 

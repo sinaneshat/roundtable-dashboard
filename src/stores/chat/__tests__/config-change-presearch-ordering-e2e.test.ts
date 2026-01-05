@@ -27,8 +27,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChatModes, MessageRoles, MessageStatuses, ThreadStatuses } from '@/api/core/enums';
-import type { ChatParticipant, ChatThread, StoredPreSearch, UIMessage } from '@/api/routes/chat/schema';
+import { ChatModes, MessageStatuses, ThreadStatuses } from '@/api/core/enums';
+import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
@@ -78,16 +78,6 @@ function createMockParticipants(): ChatParticipant[] {
       updatedAt: new Date(),
     },
   ];
-}
-
-function createMockUserMessage(roundNumber: number): UIMessage {
-  return {
-    id: `msg-user-${roundNumber}`,
-    role: MessageRoles.USER,
-    content: `Test message for round ${roundNumber}`,
-    createdAt: new Date(),
-    metadata: { roundNumber },
-  };
 }
 
 function createMockPreSearch(roundNumber: number): StoredPreSearch {

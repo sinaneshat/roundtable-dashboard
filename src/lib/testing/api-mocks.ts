@@ -4,7 +4,7 @@
  * Type-safe mocks following Zod schema patterns from backend routes.
  */
 
-import { ChatModes, FinishReasons, MessageRoles, PreSearchStatuses, ThreadStatuses } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessagePartTypes, MessageRoles, PreSearchStatuses, ThreadStatuses } from '@/api/core/enums';
 import type {
   MessagesListResponse,
   PreSearchListResponse,
@@ -64,7 +64,7 @@ export function createMockMessage(overrides?: Partial<ChatMessage>): ChatMessage
     threadId: '01KA1K2GD2PP0BJH2VZ9J6QRBA',
     participantId: null,
     role: MessageRoles.USER,
-    parts: [{ type: 'text', text: 'Test message' }],
+    parts: [{ type: MessagePartTypes.TEXT, text: 'Test message' }],
     roundNumber: 0,
     toolCalls: null,
     metadata: {
@@ -90,7 +90,7 @@ export function createMockAssistantMessage(
     threadId,
     participantId,
     role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text: `Response from participant ${participantIndex}` }],
+    parts: [{ type: MessagePartTypes.TEXT, text: `Response from participant ${participantIndex}` }],
     roundNumber,
     toolCalls: null,
     metadata: {
@@ -152,7 +152,7 @@ export function createMockMessagesListResponse(
       id: `user_r${roundNumber}`,
       threadId,
       roundNumber,
-      parts: [{ type: 'text', text: `User question for round ${roundNumber}` }],
+      parts: [{ type: MessagePartTypes.TEXT, text: `User question for round ${roundNumber}` }],
       metadata: {
         role: MessageRoles.USER,
         roundNumber,

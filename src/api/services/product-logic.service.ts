@@ -885,8 +885,11 @@ export function getAIParamsForMode(mode: ChatMode): {
   topP: number;
   maxTokens: number;
 } {
-  // MODE_SPECIFIC_AI_PARAMS is guaranteed to have all ChatMode keys
-  return MODE_SPECIFIC_AI_PARAMS[mode as keyof typeof MODE_SPECIFIC_AI_PARAMS];
+  const params = MODE_SPECIFIC_AI_PARAMS[mode];
+  if (!params) {
+    throw new Error(`Invalid chat mode: ${mode}`);
+  }
+  return params;
 }
 
 /**

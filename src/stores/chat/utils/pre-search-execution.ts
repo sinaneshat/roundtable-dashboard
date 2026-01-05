@@ -16,7 +16,7 @@ import type { ChatStoreApi } from '../store';
 /**
  * Get effective web search enabled state for the CURRENT round.
  *
- * ✅ FIX: Form state is ALWAYS the source of truth for the current round.
+ * Form state is ALWAYS the source of truth for the current round.
  * Thread.enableWebSearch is only a default/preference synced on load.
  * Users can toggle web search ON/OFF at any point during a conversation.
  *
@@ -25,16 +25,14 @@ import type { ChatStoreApi } from '../store';
  * - Thread's stored `enableWebSearch` is a default/preference synced on load
  * - Per-round decision: each round can have different web search setting
  *
- * @param _thread - The chat thread (unused, kept for API compatibility)
- * @param formEnableWebSearch - Form state (ALWAYS used)
+ * @param _thread - Thread context (semantic param for API clarity)
+ * @param formEnableWebSearch - Form state (source of truth)
  * @returns boolean - true if web search enabled for current round
  */
 export function getEffectiveWebSearchEnabled(
   _thread: ChatThread | null,
   formEnableWebSearch: boolean,
 ): boolean {
-  // ✅ FIX: Form state is ALWAYS the source of truth for the current round
-  // This allows users to toggle web search ON/OFF at any point mid-conversation
   return formEnableWebSearch;
 }
 

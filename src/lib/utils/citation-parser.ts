@@ -13,7 +13,7 @@
  */
 
 import type { CitationPrefix, CitationSourceType } from '@/api/core/enums';
-import { CITATION_PREFIXES, CitationPrefixToSourceType } from '@/api/core/enums';
+import { CITATION_PREFIXES, CitationPrefixToSourceType, CitationSegmentTypes } from '@/api/core/enums';
 import type { DbCitation } from '@/db/schemas/chat-metadata';
 
 // ============================================================================
@@ -171,7 +171,7 @@ export function parseCitations(text: string): ParsedCitationResult {
     // Add preceding text as segment
     if (match.index > lastIndex) {
       segments.push({
-        type: 'text',
+        type: CitationSegmentTypes.TEXT,
         content: text.slice(lastIndex, match.index),
       });
     }
@@ -196,7 +196,7 @@ export function parseCitations(text: string): ParsedCitationResult {
 
     // Add citation segment
     segments.push({
-      type: 'citation',
+      type: CitationSegmentTypes.CITATION,
       content: marker,
       citation,
     });
@@ -213,14 +213,14 @@ export function parseCitations(text: string): ParsedCitationResult {
   // Add remaining text as segment
   if (lastIndex < text.length) {
     segments.push({
-      type: 'text',
+      type: CitationSegmentTypes.TEXT,
       content: text.slice(lastIndex),
     });
   }
 
   // Generate plain text (citations removed)
   const plainText = segments
-    .filter(s => s.type === 'text')
+    .filter(s => s.type === CitationSegmentTypes.TEXT)
     .map(s => s.content)
     .join('');
 

@@ -20,12 +20,13 @@ import type { UIMessage } from 'ai';
 import { MessagePartTypes } from '@/api/core/enums';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { ChatParticipant } from '@/db/validation/chat';
+
 import {
   getMessageMetadata,
   getModel,
   getParticipantId,
   getParticipantIndex,
-} from '@/lib/utils';
+} from './metadata';
 
 // ============================================================================
 // Participant Message Maps Type

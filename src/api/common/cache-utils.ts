@@ -87,27 +87,6 @@ export async function invalidateThreadCache(
 }
 
 /**
- * Invalidate public thread cache only (Next.js unstable_cache)
- *
- * Use this when you only need to invalidate the public thread SSR cache
- * without affecting Cloudflare KV cache.
- *
- * Note: Uses bulk tag - invalidates ALL public thread caches
- * since unstable_cache doesn't support per-slug dynamic tags.
- *
- * @param _slug - Thread slug (unused, kept for API compatibility)
- *
- * @example
- * ```ts
- * // When thread visibility changes
- * invalidatePublicThreadCache(thread.slug);
- * ```
- */
-export function invalidatePublicThreadCache(_slug: string): void {
-  revalidateTag(THREAD_CACHE_TAGS.allPublicThreads, 'max');
-}
-
-/**
  * Invalidate thread messages cache only (Next.js 'use cache')
  *
  * Use this when new messages are added to a thread.
