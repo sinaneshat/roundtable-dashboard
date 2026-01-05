@@ -42,6 +42,14 @@ export function useChangelogSync({
 
   // Track last merged round to prevent duplicate merges
   const lastMergedRoundRef = useRef<number | null>(null);
+  // Track last thread ID to reset ref when thread changes
+  const lastThreadIdRef = useRef<string | null>(null);
+
+  // Reset lastMergedRoundRef when thread changes to avoid stale state
+  if (effectiveThreadId !== lastThreadIdRef.current) {
+    lastMergedRoundRef.current = null;
+    lastThreadIdRef.current = effectiveThreadId;
+  }
 
   // Fetch round-specific changelog when waiting
   const shouldFetch = isWaitingForChangelog && configChangeRoundNumber !== null && !!effectiveThreadId;
@@ -67,8 +75,18 @@ export function useChangelogSync({
     if (configChangeRoundNumber === null)
       return;
     // Prevent duplicate merges for the same round
-    if (lastMergedRoundRef.current === configChangeRoundNumber)
+    // ✅ CRITICAL FIX: Still clear flags even when skipping duplicate merge
+    // Without this, the streaming flow would be stuck waiting for flags to clear
+    if (lastMergedRoundRef.current === configChangeRoundNumber) {
+      const state = store.getState();
+      // Only clear if flags are still set (race condition safety)
+      if (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) {
+        rlog.trigger('changelog-duplicate', `round=${configChangeRoundNumber} already merged, clearing stale flags`);
+        state.setIsWaitingForChangelog(false);
+        state.setConfigChangeRoundNumber(null);
+      }
       return;
+    }
 
     const newItems = roundChangelogData.data.items || [];
     const state = store.getState();

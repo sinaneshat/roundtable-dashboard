@@ -143,6 +143,7 @@ export default function ChatOverviewScreen() {
     removeParticipant,
     updateParticipant,
     setEnableWebSearch,
+    setHasPendingConfigChanges,
     resetToOverview,
   } = useChatStore(
     useShallow(s => ({
@@ -159,6 +160,7 @@ export default function ChatOverviewScreen() {
       removeParticipant: s.removeParticipant,
       updateParticipant: s.updateParticipant,
       setEnableWebSearch: s.setEnableWebSearch,
+      setHasPendingConfigChanges: s.setHasPendingConfigChanges,
       resetToOverview: s.resetToOverview,
     })),
   );
@@ -623,9 +625,16 @@ export default function ChatOverviewScreen() {
   }, [setSelectedParticipants, setModelOrder, setPersistedModelOrder, setPersistedModelIds]);
 
   const handleWebSearchToggle = useCallback((enabled: boolean) => {
+    // ✅ CRITICAL: Set hasPendingConfigChanges FIRST to prevent race condition
+    // If initializeThread is called between setEnableWebSearch and setHasPendingConfigChanges,
+    // it would see hasPendingConfigChanges=false and reset enableWebSearch to thread value.
+    // By setting the flag first, initializeThread will preserve the user's change.
+    if (currentThread || createdThreadId) {
+      setHasPendingConfigChanges(true);
+    }
     setEnableWebSearch(enabled);
     setPersistedWebSearch(enabled);
-  }, [setEnableWebSearch, setPersistedWebSearch]);
+  }, [setEnableWebSearch, setPersistedWebSearch, currentThread, createdThreadId, setHasPendingConfigChanges]);
 
   const handlePresetSelect = useCallback((preset: ModelPreset) => {
     const result = filterPresetParticipants(

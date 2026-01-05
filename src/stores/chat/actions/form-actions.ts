@@ -418,10 +418,13 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   /**
    * Change mode and mark as having pending changes
    * Used by ChatThreadScreen
+   *
+   * ✅ CRITICAL: Set hasPendingConfigChanges FIRST to prevent race condition
    */
   const handleModeChange = useCallback((mode: ChatMode) => {
-    actions.setSelectedMode(mode);
+    // Set flag FIRST to prevent initializeThread from resetting the change
     actions.setHasPendingConfigChanges(true);
+    actions.setSelectedMode(mode);
   }, [actions]);
 
   /**
@@ -431,13 +434,17 @@ export function useChatFormActions(): UseChatFormActionsReturn {
    * ✅ FIX: When a thread already exists (after creation but before screenMode transitions),
    * set hasPendingConfigChanges so the system waits for changelog before streaming.
    * For truly new threads (no thread yet), don't set the flag since there's nothing to compare against.
+   *
+   * ✅ CRITICAL: Set hasPendingConfigChanges FIRST to prevent race condition
+   * If initializeThread is called between setEnableWebSearch and setHasPendingConfigChanges,
+   * it would see hasPendingConfigChanges=false and reset enableWebSearch to thread value.
    */
   const handleWebSearchToggle = useCallback((enabled: boolean) => {
-    actions.setEnableWebSearch(enabled);
-    // If thread exists, treat this as a config change that needs changelog wait
+    // Set flag FIRST to prevent initializeThread from resetting the change
     if (threadState.thread) {
       actions.setHasPendingConfigChanges(true);
     }
+    actions.setEnableWebSearch(enabled);
   }, [actions, threadState.thread]);
 
   // ✅ SUBMIT STATE: Track whether any submission is in progress

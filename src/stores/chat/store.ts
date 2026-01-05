@@ -1053,9 +1053,14 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       messages: messagesToSet,
       error: null,
       isStreaming: false,
-      enableWebSearch: thread.enableWebSearch,
-      selectedMode: ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
-      selectedParticipants: formParticipants,
+      // ✅ FIX: Preserve form state if user has pending config changes
+      // Without this, toggling web search and then a query refetch would wipe the user's change
+      // hasPendingConfigChanges is set when user toggles any config (mode, web search, participants)
+      enableWebSearch: currentState.hasPendingConfigChanges ? currentState.enableWebSearch : thread.enableWebSearch,
+      selectedMode: currentState.hasPendingConfigChanges
+        ? currentState.selectedMode
+        : ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
+      selectedParticipants: currentState.hasPendingConfigChanges ? currentState.selectedParticipants : formParticipants,
       showInitialUI: false,
       hasInitiallyLoaded: true,
     }, false, 'operations/initializeThread');
