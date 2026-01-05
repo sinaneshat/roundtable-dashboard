@@ -23,6 +23,44 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
 
+  // Experimental features
+  experimental: {
+    // Optimize package imports for better tree-shaking
+    // Required to prevent production build errors with barrel exports
+    // @see https://nextjs.org/docs/app/api-reference/config/next-config-js/optimizePackageImports
+    optimizePackageImports: [
+      // Animation - REQUIRED: motion barrel exports break without optimization
+      'motion',
+      // UI libraries with barrel exports
+      '@radix-ui/react-icons',
+      'cmdk',
+      'vaul',
+      'react-day-picker',
+      // Forms
+      'react-hook-form',
+      '@hookform/resolvers',
+      // Data/State
+      '@tanstack/react-query',
+      '@tanstack/react-virtual',
+      'zustand',
+      'immer',
+      // AI SDK
+      'ai',
+      '@ai-sdk/react',
+      // Utilities
+      'chroma-js',
+      'clsx',
+      'class-variance-authority',
+      'tailwind-merge',
+      'fuse.js',
+      // Analytics
+      'posthog-js',
+      // Markdown/Syntax
+      'react-markdown',
+      'shiki',
+    ],
+  },
+
   // Cache Components (Next.js 16+) - DISABLED
   // PPR requires all dynamic data to be in Suspense boundaries,
   // which conflicts with auth-protected routes that fetch user data
@@ -280,4 +318,8 @@ const nextConfig: NextConfig = {
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 export default withNextIntl(nextConfig);
-initOpenNextCloudflareForDev();
+
+// Only initialize OpenNext Cloudflare bindings in development
+if (isDev) {
+  initOpenNextCloudflareForDev();
+}

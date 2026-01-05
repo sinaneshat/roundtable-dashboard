@@ -301,7 +301,6 @@ export function ChatView({
 
   const threadActions = useThreadActions({
     slug: slug || '',
-    threadId: effectiveThreadId,
     isRoundInProgress: isStreaming || isModeratorStreaming,
   });
 

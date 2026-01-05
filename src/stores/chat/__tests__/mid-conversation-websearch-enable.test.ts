@@ -211,7 +211,12 @@ describe('mid-Conversation Web Search Enable Bug', () => {
         createUserMessage(nextRoundNumber, 'Second question'),
       ]);
 
+      // ✅ CRITICAL ORDER: Set blocking flag BEFORE addPreSearch
+      // This prevents effects from executing pre-search before PATCH/changelog complete
+      store.getState().setConfigChangeRoundNumber(nextRoundNumber);
+
       // Create PENDING pre-search (as handleUpdateThreadAndSend does)
+      // This is called AFTER setConfigChangeRoundNumber to ensure effects see the blocking flag
       store.getState().addPreSearch({
         id: `placeholder-presearch-thread-123-${nextRoundNumber}`,
         threadId: 'thread-123',
@@ -255,31 +260,36 @@ describe('mid-Conversation Web Search Enable Bug', () => {
       expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
 
       // =====================================================
-      // THIS IS THE BUG:
-      // - We're on THREAD screen (not OVERVIEW)
-      // - useStreamingTrigger only runs on OVERVIEW
-      // - Pre-search is PENDING but nobody executes it
-      // - usePendingMessage just waits for PENDING/STREAMING to complete
-      // - Result: Stuck forever waiting
+      // BLOCKING STATE VERIFICATION:
+      // - configChangeRoundNumber is set → blocks pre-search execution
+      // - Pre-search is PENDING, waiting for PATCH → changelog → then execute
+      // - System correctly blocks until PATCH/changelog complete
       // =====================================================
 
-      // Verify the conditions that cause the bug
-      const bugConditions = {
-        screenModeIsThread: store.getState().screenMode === ScreenModes.THREAD,
+      // Verify blocking state is active
+      const blockingState = {
+        configChangeRoundNumberSet: store.getState().configChangeRoundNumber === nextRoundNumber,
+        isWaitingForChangelogFalse: store.getState().isWaitingForChangelog === false, // PATCH not done
         preSearchIsPending: preSearchForRound?.status === MessageStatuses.PENDING,
+        screenModeIsThread: store.getState().screenMode === ScreenModes.THREAD,
         webSearchEnabledInForm: store.getState().enableWebSearch === true,
-        webSearchDisabledInThread: store.getState().thread?.enableWebSearch === false,
         waitingToStartStreaming: store.getState().waitingToStartStreaming === true,
         notStreaming: store.getState().isStreaming === false,
       };
 
-      // All conditions that cause the bug are present
-      expect(bugConditions.screenModeIsThread).toBe(true);
-      expect(bugConditions.preSearchIsPending).toBe(true);
-      expect(bugConditions.webSearchEnabledInForm).toBe(true);
-      expect(bugConditions.webSearchDisabledInThread).toBe(true);
-      expect(bugConditions.waitingToStartStreaming).toBe(true);
-      expect(bugConditions.notStreaming).toBe(true);
+      // Verify blocking is correctly enforced
+      expect(blockingState.configChangeRoundNumberSet).toBe(true);
+      expect(blockingState.isWaitingForChangelogFalse).toBe(true);
+      expect(blockingState.preSearchIsPending).toBe(true);
+      expect(blockingState.screenModeIsThread).toBe(true);
+      expect(blockingState.webSearchEnabledInForm).toBe(true);
+      expect(blockingState.waitingToStartStreaming).toBe(true);
+      expect(blockingState.notStreaming).toBe(true);
+
+      // The blocking condition: configChangeRoundNumber !== null OR isWaitingForChangelog
+      const isBlocked = store.getState().configChangeRoundNumber !== null
+        || store.getState().isWaitingForChangelog;
+      expect(isBlocked).toBe(true);
     });
 
     it('should detect PENDING pre-search needs execution on THREAD screen', () => {

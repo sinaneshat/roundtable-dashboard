@@ -291,9 +291,16 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       actions.updateParticipants(optimisticParticipants);
     }
 
-    // ✅ FIX: Create pre-search placeholder BEFORE setting waitingToStartStreaming
-    // This ensures the streaming trigger waits for pre-search when web search is enabled
-    // ✅ FIX: Add pre-search regardless of config changes - UI should show placeholder immediately
+    // ✅ CRITICAL ORDER FIX: Set blocking flag BEFORE any state that triggers effects
+    // configChangeRoundNumber MUST be set BEFORE addPreSearch to prevent race condition:
+    // - addPreSearch triggers usePendingMessage effect
+    // - Effect checks configChangeRoundNumber for blocking
+    // - If flag not set, pre-search executes before PATCH completes
+    // Order: block flag → pre-search placeholder → waitingToStart → PATCH → changelog → execute pre-search → streams
+    actions.setConfigChangeRoundNumber(nextRoundNumber);
+
+    // ✅ FIX: Create pre-search placeholder AFTER blocking flag is set
+    // This ensures effects see configChangeRoundNumber and block appropriately
     if (formState.enableWebSearch) {
       actions.addPreSearch(createPlaceholderPreSearch({
         threadId,
@@ -301,12 +308,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         userQuery: trimmed,
       }));
     }
-
-    // ✅ RACE FIX: ALWAYS block streaming until PATCH + changelog completes
-    // configChangeRoundNumber blocks pre-search/streaming until PATCH completes
-    // isWaitingForChangelog is set AFTER PATCH to trigger changelog fetch
-    // Order: PATCH → changelog → pre-search → streams
-    actions.setConfigChangeRoundNumber(nextRoundNumber);
 
     // NOW set waitingToStartStreaming - trigger will see correct round from optimistic message
     actions.setWaitingToStartStreaming(true);
