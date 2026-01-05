@@ -5,10 +5,11 @@ import { BRAND } from '@/constants/brand';
 import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getProductsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-// ISR: 24 hours - matches products cache duration
+// ISR: 24 hours - matches STALE_TIMES.products
 export const revalidate = 86400;
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,7 +31,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /**
  * Pricing Page - ISR with 24h revalidation
- * Prefetches products server-side with matching staleTime as client hook
+ * Prefetches products with STALE_TIMES.products matching useProductsQuery hook
  */
 export default async function PricingPage() {
   const queryClient = getQueryClient();
@@ -40,7 +41,7 @@ export default async function PricingPage() {
     await queryClient.prefetchQuery({
       queryKey: queryKeys.products.list(),
       queryFn: () => getProductsService(),
-      staleTime: Infinity, // Match client hook staleTime
+      staleTime: STALE_TIMES.products, // 24 hours - matches client hook
     });
   } catch (error) {
     console.error('[PricingPage] Products prefetch failed:', error);

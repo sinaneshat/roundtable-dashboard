@@ -136,6 +136,13 @@ export {
   UsageStatuses,
   UsageStatusMetadata,
   UsageStatusSchema,
+  // Payment method type
+  DEFAULT_PAYMENT_METHOD_TYPE,
+  isPaymentMethodType,
+  PAYMENT_METHOD_TYPES,
+  type PaymentMethodType,
+  PaymentMethodTypes,
+  PaymentMethodTypeSchema,
 } from './billing';
 
 // Chat, thread, and message enums

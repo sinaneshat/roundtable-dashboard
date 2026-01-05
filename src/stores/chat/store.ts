@@ -1001,7 +1001,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     // Active form submission detection (must be specific, not just waitingToStartStreaming):
     // - configChangeRoundNumber !== null: Set by handleUpdateThreadAndSend BEFORE PATCH
     //   This is the key indicator that a form submission is in progress
-    // - isWaitingForChangelog: Set AFTER PATCH when config changes need changelog fetch
+    // - isWaitingForChangelog: Set AFTER PATCH (always set, cleared by use-changelog-sync)
     //
     // NOTE: waitingToStartStreaming alone is NOT sufficient because it could be stale
     // state from a previous session. configChangeRoundNumber and isWaitingForChangelog

@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { FinishReasons, MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases, TextPartStates, UIMessageRoles } from '@/api/core/enums';
 import { getRoundNumber, isObject, rlog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
+import { isRoundComplete } from '@/stores/chat/utils/participant-completion-gate';
 
 type UseModeratorTriggerOptions = {
   store: ChatStoreApi;
@@ -85,8 +86,18 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     const moderatorId = `${freshThreadId}_r${roundNumber}_moderator`;
     if (state.hasModeratorStreamBeenTriggered(moderatorId, roundNumber)) {
       rlog.moderator('skip', `r${roundNumber} already triggered`);
-      // ✅ FLASH FIX: Don't call completeStreaming() - original trigger will handle cleanup
-      // Calling it here would abort the in-progress moderator stream
+
+      // ✅ FIX: Check if the round is actually complete but streamingRoundNumber is stale
+      // This can happen if the original trigger completed but completeStreaming() wasn't called
+      // (e.g., due to component unmount, error, or race condition)
+      if (state.streamingRoundNumber === roundNumber) {
+        const roundComplete = isRoundComplete(state.messages, state.participants, roundNumber);
+        if (roundComplete) {
+          rlog.moderator('cleanup', `r${roundNumber} complete but streamingRoundNumber stale - cleaning up`);
+          state.completeStreaming();
+        }
+      }
+
       return;
     }
 

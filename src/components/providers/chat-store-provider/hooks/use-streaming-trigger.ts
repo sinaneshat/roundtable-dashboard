@@ -82,6 +82,10 @@ export function useStreamingTrigger({
 
   // Main round 0 trigger effect
   useEffect(() => {
+    const effectRound = getCurrentRoundNumber(storeMessages);
+
+    rlog.trigger('effect-run', `waitingToStart=${waitingToStart} round=${effectRound} isReady=${chat.isReady} configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
+
     if (!waitingToStart) {
       startRoundCalledForRoundRef.current = null;
       return;
@@ -90,30 +94,38 @@ export function useStreamingTrigger({
     const currentScreenMode = storeScreenMode;
 
     // Only handle overview screen - thread screen uses continueFromParticipant
-    if (currentScreenMode !== ScreenModes.OVERVIEW)
+    if (currentScreenMode !== ScreenModes.OVERVIEW) {
+      rlog.trigger('block-screenmode', `screenMode=${currentScreenMode}, expected=OVERVIEW`);
       return;
+    }
 
     // Wait for required conditions
-    if (!chat.startRound || storeParticipants.length === 0 || storeMessages.length === 0)
+    if (!chat.startRound || storeParticipants.length === 0 || storeMessages.length === 0) {
+      rlog.trigger('block-conditions', `startRound=${!!chat.startRound} participants=${storeParticipants.length} messages=${storeMessages.length}`);
       return;
+    }
 
     // ✅ CHANGELOG: Wait for changelog to be fetched before streaming when config changed
     // configChangeRoundNumber is set BEFORE PATCH (signals pending changes)
     // isWaitingForChangelog is set AFTER PATCH (triggers changelog fetch)
     // Both must be null/false for streaming to proceed
-    if (configChangeRoundNumber !== null || isWaitingForChangelog)
+    if (configChangeRoundNumber !== null || isWaitingForChangelog) {
+      rlog.trigger('block-changelog', `configChangeRoundNumber=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
       return;
+    }
 
     // Wait for pre-search completion before streaming participants
     // ✅ BUG FIX: Use form state (user's current intent) instead of thread.enableWebSearch
     // During submission, thread.enableWebSearch is stale (not yet updated via PATCH)
     // Form state is the source of truth for what the user wants NOW
     const webSearchEnabled = formEnableWebSearch;
+    const currentRound = getCurrentRoundNumber(storeMessages);
+
     if (webSearchEnabled) {
-      const currentRound = getCurrentRoundNumber(storeMessages);
       const currentRoundPreSearch = storePreSearches.find(ps => ps.roundNumber === currentRound);
 
       if (!currentRoundPreSearch) {
+        rlog.trigger('block-presearch-missing', `round=${currentRound} webSearch=true noPreSearch`);
         return;
       }
 
@@ -287,6 +299,7 @@ export function useStreamingTrigger({
       // Check animation status
       const isPreSearchAnimating = storePendingAnimations.has(AnimationIndices.PRE_SEARCH);
       if (isPreSearchAnimating) {
+        rlog.trigger('block-presearch-animating', `round=${currentRound} animating=true`);
         return;
       }
 
@@ -298,18 +311,20 @@ export function useStreamingTrigger({
         const timeSinceComplete = Date.now() - completedTime;
 
         if (timeSinceComplete < 50) {
+          rlog.trigger('block-presearch-timing', `round=${currentRound} timeSinceComplete=${timeSinceComplete}ms`);
           return;
         }
       }
     }
 
     // Prevent duplicate startRound calls
-    const currentRound = getCurrentRoundNumber(storeMessages);
     if (startRoundCalledForRoundRef.current === currentRound) {
+      rlog.trigger('block-duplicate', `round=${currentRound} alreadyCalled=true`);
       return;
     }
 
     if (chat.isTriggeringRef.current || chat.isStreamingRef.current) {
+      rlog.trigger('block-refs', `round=${currentRound} triggering=${chat.isTriggeringRef.current} streaming=${chat.isStreamingRef.current}`);
       return;
     }
 
@@ -319,9 +334,11 @@ export function useStreamingTrigger({
     // Bug: Pre-search completes → effect runs → ref set → startRound returns early
     // → status becomes ready → effect re-runs → ref already set → blocked forever
     if (!chat.isReady) {
+      rlog.trigger('block-notready', `round=${currentRound} chat.isReady=false (AI SDK not ready)`);
       return;
     }
 
+    rlog.trigger('proceed', `round=${currentRound} calling startRound with ${storeParticipants.length} participants`);
     startRoundCalledForRoundRef.current = currentRound;
 
     // ✅ RACE CONDITION FIX: Moderator placeholder is now added in useModeratorTrigger

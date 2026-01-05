@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
+import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { extractFileContextForSearch, getCurrentRoundNumber, getEnabledParticipantModelIds, rlog } from '@/lib/utils';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
@@ -37,6 +38,7 @@ export function usePendingMessage({
     hasSentPendingMessage,
     isStreaming,
     isWaitingForChangelog,
+    configChangeRoundNumber,
     screenMode,
     participants,
     preSearches,
@@ -50,6 +52,7 @@ export function usePendingMessage({
     hasSentPendingMessage: s.hasSentPendingMessage,
     isStreaming: s.isStreaming,
     isWaitingForChangelog: s.isWaitingForChangelog,
+    configChangeRoundNumber: s.configChangeRoundNumber,
     screenMode: s.screenMode,
     participants: s.participants,
     preSearches: s.preSearches,
@@ -96,8 +99,13 @@ export function usePendingMessage({
       return;
     }
 
+    // ✅ FIX: Block on BOTH changelog flags to ensure proper ordering:
+    // Order: PATCH → changelog → pre-search → streams
+    // configChangeRoundNumber is set BEFORE PATCH to block streaming
+    // isWaitingForChangelog is set BEFORE PATCH to trigger changelog fetch
     const isInitialThreadCreation = screenMode === ScreenModes.OVERVIEW && waitingToStart;
-    if (isWaitingForChangelog && !isInitialThreadCreation) {
+    if ((isWaitingForChangelog || configChangeRoundNumber !== null) && !isInitialThreadCreation) {
+      rlog.presearch('block-changelog', `configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
       return;
     }
 
@@ -247,6 +255,7 @@ export function usePendingMessage({
     hasSentPendingMessage,
     isStreaming,
     isWaitingForChangelog,
+    configChangeRoundNumber,
     screenMode,
     participants,
     preSearches,
@@ -263,4 +272,154 @@ export function usePendingMessage({
   useEffect(() => {
     preSearchExecutionRef.current = new Set();
   }, [effectiveThreadId]);
+
+  // ✅ BUG FIX: Execute PENDING pre-searches for non-initial rounds on THREAD screen
+  // The main effect above requires pendingMessage to be set, but for non-initial rounds
+  // handleUpdateThreadAndSend does NOT call prepareForNewMessage (intentionally).
+  // This leaves pre-search in PENDING state forever, blocking streaming.
+  //
+  // This separate effect handles pre-search execution when:
+  // 1. We're on THREAD screen (non-initial round submission)
+  // 2. Web search is enabled
+  // 3. Pre-search is PENDING
+  // 4. waitingToStart is true (submission in progress)
+  // 5. pendingMessage is null (non-initial round pattern)
+  // 6. ✅ FIX: Changelog has been fetched (both flags cleared)
+  useEffect(() => {
+    // Only for THREAD screen non-initial rounds
+    if (screenMode !== ScreenModes.THREAD) {
+      return;
+    }
+
+    // Only when waiting to start (submission in progress)
+    if (!waitingToStart) {
+      return;
+    }
+
+    // Only when pendingMessage is NOT set (non-initial round pattern)
+    // Initial rounds use the main effect via pendingMessage
+    if (pendingMessage) {
+      return;
+    }
+
+    // ✅ FIX: Block until changelog is fetched
+    // Order: PATCH → changelog → pre-search → streams
+    if (isWaitingForChangelog || configChangeRoundNumber !== null) {
+      rlog.presearch('block-changelog-non-initial', `configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
+      return;
+    }
+
+    // Check web search enabled
+    const webSearchEnabled = getEffectiveWebSearchEnabled(thread, formEnableWebSearch);
+    if (!webSearchEnabled) {
+      return;
+    }
+
+    // Find pre-search for current round
+    const currentRound = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
+    const preSearchForRound = Array.isArray(preSearches)
+      ? preSearches.find(ps => ps.roundNumber === currentRound)
+      : undefined;
+
+    // Only execute PENDING pre-searches
+    if (!preSearchForRound || preSearchForRound.status !== MessageStatuses.PENDING) {
+      return;
+    }
+
+    // Prevent duplicate execution
+    if (preSearchExecutionRef.current.has(currentRound)) {
+      return;
+    }
+
+    const currentState = store.getState();
+
+    // Atomic check-and-mark to prevent duplicate execution
+    const didMark = currentState.tryMarkPreSearchTriggered(currentRound);
+    if (!didMark) {
+      return;
+    }
+
+    preSearchExecutionRef.current.add(currentRound);
+
+    const threadIdForSearch = thread?.id || effectiveThreadId;
+    rlog.presearch('execute-non-initial', `r${currentRound} executing PENDING pre-search (non-initial round)`);
+
+    // Extract user query from messages (since pendingMessage is null)
+    const userMessageForRound = messages.find((msg) => {
+      if (msg.role !== 'user') {
+        return false;
+      }
+      const msgRound = getCurrentRoundNumber([msg]);
+      return msgRound === currentRound;
+    });
+    const userQuery = userMessageForRound
+      ? extractTextFromMessage(userMessageForRound)
+      : preSearchForRound.userQuery || '';
+
+    if (!userQuery) {
+      rlog.presearch('execute-fail', `r${currentRound} no user query found`);
+      return;
+    }
+
+    queueMicrotask(() => {
+      const executeSearch = async () => {
+        try {
+          const attachments = store.getState().getAttachments();
+          const fileContext = await extractFileContextForSearch(attachments);
+          const attachmentIds = store.getState().pendingAttachmentIds || undefined;
+
+          // Update status to STREAMING
+          store.getState().updatePreSearchStatus(currentRound, MessageStatuses.STREAMING);
+
+          const response = await executePreSearchStreamService({
+            param: { threadId: threadIdForSearch, roundNumber: String(currentRound) },
+            json: { userQuery, fileContext: fileContext || undefined, attachmentIds },
+          });
+
+          if (!response.ok && response.status !== 409) {
+            rlog.presearch('execute-fail', `status=${response.status}`);
+            store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
+            store.getState().clearPreSearchActivity(currentRound);
+            return;
+          }
+
+          const searchData = await readPreSearchStreamData(
+            response,
+            () => store.getState().updatePreSearchActivity(currentRound),
+            partialData => store.getState().updatePartialPreSearchData(currentRound, partialData),
+          );
+
+          if (searchData) {
+            store.getState().updatePreSearchData(currentRound, searchData);
+          } else {
+            store.getState().updatePreSearchStatus(currentRound, MessageStatuses.COMPLETE);
+          }
+
+          store.getState().clearPreSearchActivity(currentRound);
+          queryClientRef.current.invalidateQueries({
+            queryKey: queryKeys.threads.preSearches(threadIdForSearch),
+          });
+        } catch (error) {
+          rlog.presearch('execute-error', error instanceof Error ? error.message : String(error));
+          store.getState().clearPreSearchActivity(currentRound);
+          store.getState().clearPreSearchTracking(currentRound);
+        }
+      };
+
+      executeSearch();
+    });
+  }, [
+    screenMode,
+    waitingToStart,
+    pendingMessage,
+    thread,
+    formEnableWebSearch,
+    messages,
+    preSearches,
+    effectiveThreadId,
+    store,
+    queryClientRef,
+    isWaitingForChangelog,
+    configChangeRoundNumber,
+  ]);
 }

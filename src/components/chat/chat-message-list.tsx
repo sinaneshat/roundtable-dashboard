@@ -603,9 +603,21 @@ export const ChatMessageList = memo(
     // ✅ ANIMATION: Using whileInView for scroll-triggered animations
     // The viewport={{ once: true }} in motion components handles "don't re-animate"
     // So we always return true here unless explicitly disabled
-    const shouldAnimateMessage = (_messageId: string): boolean => {
+    //
+    // ✅ OPTIMISTIC MESSAGE FIX: Skip animation for optimistic user messages
+    // Optimistic messages are added when user submits a new round. Since there's
+    // no auto-scroll (by design), the new message may be outside the viewport.
+    // whileInView animation wouldn't trigger, leaving the message at opacity:0.
+    // By skipping animation for optimistic messages, they appear immediately.
+    const shouldAnimateMessage = (messageId: string): boolean => {
       // Skip all animations when explicitly requested (e.g., demo already completed)
       if (skipEntranceAnimations) {
+        return false;
+      }
+      // ✅ FIX: Skip animation for optimistic messages (appear immediately)
+      // Optimistic messages have IDs starting with 'optimistic-'
+      // These are user messages just submitted - they should be visible immediately
+      if (messageId.startsWith('optimistic-')) {
         return false;
       }
       // Always animate - whileInView with once:true handles scroll trigger
@@ -1106,10 +1118,15 @@ export const ChatMessageList = memo(
                       part => part.type === MessagePartTypes.TEXT,
                     );
 
+                    // ✅ FIX: Skip animation for ALL user messages in non-initial rounds
+                    // Not just optimistic messages - because when the DB ID replaces the
+                    // optimistic ID, we don't want the component to remount with opacity:0
+                    const skipUserMsgAnimation = roundNumber > 0 || !shouldAnimateMessage(message.id);
+
                     return (
                       <ScrollAwareUserMessage
                         key={messageKey}
-                        skipAnimation={!shouldAnimateMessage(message.id)}
+                        skipAnimation={skipUserMsgAnimation}
                         enableScrollEffect
                         className="w-full"
                       >

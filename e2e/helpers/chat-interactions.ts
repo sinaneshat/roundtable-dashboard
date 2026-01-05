@@ -83,7 +83,7 @@ export async function waitForAIResponse(page: Page, timeout = 60000): Promise<vo
 /**
  * Wait for navigation to a thread page (/chat/[slug])
  */
-export async function waitForThreadNavigation(page: Page, timeout = 180000): Promise<void> {
+export async function waitForThreadNavigation(page: Page, timeout = 60000): Promise<void> {
   await page.waitForURL(/\/chat\/[\w-]+/, { timeout });
 }
 

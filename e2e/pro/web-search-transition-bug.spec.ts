@@ -44,13 +44,27 @@ test.describe('Web Search Mid-Conversation Enable Bug', () => {
     await expect(input).toBeEnabled({ timeout: 15000 });
 
     // Verify web search is OFF (default state)
-    const webSearchToggle = page.getByRole('switch', { name: /web search/i });
-    const isWebSearchOn = await webSearchToggle.isChecked().catch(() => false);
+    // Web search is a button, not a switch
+    // Look for button by title attribute (desktop) or text content (mobile)
+    const getWebSearchButton = () => page.locator('button[title*="web search" i]')
+      .or(page.locator('button:has-text("Web Search")'))
+      .first();
 
-    if (isWebSearchOn) {
-      // Turn off web search for round 1
-      await webSearchToggle.click();
-      await page.waitForTimeout(300);
+    const webSearchToggle = getWebSearchButton();
+
+    // Wait for button to be visible, if it's not visible, skip web search setup
+    const isVisible = await webSearchToggle.isVisible({ timeout: 5000 }).catch(() => false);
+
+    if (isVisible) {
+      const hasActiveClass = await webSearchToggle.evaluate((el) => {
+        return el.classList.contains('bg-blue-500/20') || el.classList.contains('border-blue-500/40');
+      }).catch(() => false);
+
+      if (hasActiveClass) {
+        // Turn off web search for round 1
+        await webSearchToggle.click();
+        await page.waitForTimeout(300);
+      }
     }
 
     // Submit first message
@@ -69,19 +83,29 @@ test.describe('Web Search Mid-Conversation Enable Bug', () => {
     // ENABLE WEB SEARCH MID-CONVERSATION
     // =========================================================
 
-    // Find and enable web search toggle
-    const webSearchToggle2 = page.getByRole('switch', { name: /web search/i });
+    // Find and enable web search toggle (button, not switch)
+    const webSearchToggle2 = getWebSearchButton();
     await expect(webSearchToggle2).toBeVisible({ timeout: 10000 });
 
-    // Enable web search
-    const isChecked = await webSearchToggle2.isChecked();
-    if (!isChecked) {
+    // Check if web search is already enabled by checking for active styling
+    const isActive = await webSearchToggle2.evaluate((el) => {
+      return el.classList.contains('bg-blue-500/20') || el.classList.contains('border-blue-500/40');
+    }).catch(() => false);
+
+    // Enable web search if not already enabled
+    if (!isActive) {
       await webSearchToggle2.click();
       await page.waitForTimeout(500);
     }
 
-    // Verify web search is now ON
-    await expect(webSearchToggle2).toBeChecked({ timeout: 5000 });
+    // Verify web search is now ON by checking for active styling
+    await webSearchToggle2.evaluate((el) => {
+      return el.classList.contains('bg-blue-500/20') || el.classList.contains('border-blue-500/40');
+    }).then((hasClass) => {
+      if (!hasClass) {
+        throw new Error('Web search toggle does not have active styling after clicking');
+      }
+    });
 
     // =========================================================
     // ROUND 2: Submit with web search enabled
@@ -133,12 +157,21 @@ test.describe('Web Search Mid-Conversation Enable Bug', () => {
     const input = getMessageInput(page);
     await expect(input).toBeEnabled({ timeout: 15000 });
 
-    // Enable web search
-    const webSearchToggle = page.getByRole('switch', { name: /web search/i });
+    // Helper to get web search button
+    const getWebSearchButton = () => page.locator('button[title*="web search" i]')
+      .or(page.locator('button:has-text("Web Search")'))
+      .first();
+
+    // Enable web search (button, not switch)
+    const webSearchToggle = getWebSearchButton();
     await expect(webSearchToggle).toBeVisible({ timeout: 10000 });
 
-    const isChecked = await webSearchToggle.isChecked();
-    if (!isChecked) {
+    // Check if web search is already enabled
+    const isActive = await webSearchToggle.evaluate((el) => {
+      return el.classList.contains('bg-blue-500/20') || el.classList.contains('border-blue-500/40');
+    }).catch(() => false);
+
+    if (!isActive) {
       await webSearchToggle.click();
       await page.waitForTimeout(500);
     }

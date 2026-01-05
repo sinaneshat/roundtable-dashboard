@@ -135,7 +135,8 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
-    "test:e2e:cleanup": "npx wrangler d1 execute DB --local --file=./e2e/cleanup-e2e-data.sql && rm -rf .playwright/auth && echo '✅ E2E test data cleaned up'"
+    "test:e2e:cleanup": "npx wrangler d1 execute DB --local --file=./e2e/cleanup-e2e-data.sql && rm -rf .playwright/auth && echo '✅ E2E test data cleaned up'",
+    "test:e2e:seed": "tsx scripts/setup-e2e-auth.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.6",

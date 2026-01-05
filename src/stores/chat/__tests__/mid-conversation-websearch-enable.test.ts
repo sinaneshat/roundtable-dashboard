@@ -587,4 +587,592 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       expect(conditions.notAlreadyTriggered).toBe(true);
     });
   });
+
+  describe('non-initial round pre-search execution (pendingMessage=null)', () => {
+    /**
+     * BUG FIX TEST: For non-initial rounds, handleUpdateThreadAndSend does NOT call
+     * prepareForNewMessage, so pendingMessage is null. The original usePendingMessage
+     * hook was gated behind pendingMessage, causing pre-search to stay PENDING forever.
+     *
+     * This test verifies that pre-search execution can happen when:
+     * - pendingMessage is null (non-initial round pattern)
+     * - waitingToStart is true
+     * - screenMode is THREAD
+     * - web search is enabled
+     * - pre-search is PENDING
+     */
+    it('should have correct conditions for non-initial round pre-search execution', () => {
+      // Setup: Initialize thread with round 0 complete
+      const thread = createMockThread({ enableWebSearch: false });
+      const participants = createMockParticipants();
+
+      store.getState().initializeThread(thread, participants, [
+        createUserMessage(0, 'Initial question'),
+        createAssistantMessage(0, 0),
+        createAssistantMessage(0, 1),
+        createModeratorMessage(0),
+      ]);
+
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // User enables web search mid-conversation
+      store.getState().setEnableWebSearch(true);
+      store.getState().setHasPendingConfigChanges(true);
+
+      // Add round 1 user message
+      const round1UserMsg = createUserMessage(1, 'Follow-up with web search');
+      store.getState().setMessages([...store.getState().messages, round1UserMsg]);
+
+      // Add PENDING pre-search (as handleUpdateThreadAndSend does)
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'Follow-up with web search',
+        status: MessageStatuses.PENDING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      // Set streaming state (as handleUpdateThreadAndSend does)
+      // NOTE: pendingMessage is NOT set for non-initial rounds
+      store.getState().setStreamingRoundNumber(1);
+      store.getState().setWaitingToStartStreaming(true);
+      store.getState().setNextParticipantToTrigger(0);
+
+      // Verify state for non-initial round execution
+      const state = store.getState();
+
+      // Key condition: pendingMessage is NULL for non-initial rounds
+      expect(state.pendingMessage).toBeNull();
+
+      // All other conditions for pre-search execution
+      expect(state.screenMode).toBe(ScreenModes.THREAD);
+      expect(state.waitingToStartStreaming).toBe(true);
+      expect(getEffectiveWebSearchEnabled(state.thread, state.enableWebSearch)).toBe(true);
+
+      const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === 1);
+      expect(preSearchForRound).toBeDefined();
+      expect(preSearchForRound?.status).toBe(MessageStatuses.PENDING);
+
+      // This is the condition that would block the old code:
+      // The main effect in usePendingMessage requires pendingMessage to be set
+      // The new effect handles this case when pendingMessage is null
+    });
+
+    it('should detect web search toggle WITHOUT mode or participant changes', () => {
+      // This tests the exact bug scenario described by the user:
+      // "web search enabled midway of a conversation, not detecting it
+      // unless coupled with mode or participant count changes"
+
+      const thread = createMockThread({
+        enableWebSearch: false, // Initially disabled
+        mode: 'brainstorm',
+      });
+      const participants = createMockParticipants();
+
+      store.getState().initializeThread(thread, participants, [
+        createUserMessage(0),
+        createAssistantMessage(0, 0),
+        createAssistantMessage(0, 1),
+        createModeratorMessage(0),
+      ]);
+
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // Only toggle web search - NO mode or participant changes
+      store.getState().setEnableWebSearch(true);
+      store.getState().setHasPendingConfigChanges(true);
+
+      // Verify config change detection
+      const state = store.getState();
+      const webSearchChanged = state.thread!.enableWebSearch !== state.enableWebSearch;
+      const modeChanged = false; // Same mode
+      const participantsChanged = false; // Same participants
+
+      // Web search change should be detected even without other changes
+      expect(webSearchChanged).toBe(true);
+      expect(modeChanged).toBe(false);
+      expect(participantsChanged).toBe(false);
+
+      // Form state should be the source of truth
+      expect(getEffectiveWebSearchEnabled(state.thread, state.enableWebSearch)).toBe(true);
+    });
+
+    it('should have user message available in messages for pre-search execution', () => {
+      // The new effect extracts user query from messages (not pendingMessage)
+
+      const thread = createMockThread({ enableWebSearch: false });
+      const participants = createMockParticipants();
+
+      store.getState().initializeThread(thread, participants, [
+        createUserMessage(0),
+        createAssistantMessage(0, 0),
+      ]);
+
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+
+      // Add round 1 user message BEFORE pre-search placeholder
+      const round1Msg = createUserMessage(1, 'Query for web search');
+      store.getState().setMessages([...store.getState().messages, round1Msg]);
+
+      // Add pre-search placeholder
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'Query for web search',
+        status: MessageStatuses.PENDING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      store.getState().setStreamingRoundNumber(1);
+      store.getState().setWaitingToStartStreaming(true);
+
+      // Verify user message is available in messages for query extraction
+      const state = store.getState();
+      const round1UserMessages = state.messages.filter(
+        m => m.role === 'user'
+          && m.metadata
+          && typeof m.metadata === 'object'
+          && 'roundNumber' in m.metadata
+          && m.metadata.roundNumber === 1,
+      );
+
+      expect(round1UserMessages).toHaveLength(1);
+      expect(round1UserMessages[0]?.parts[0]).toEqual({ type: 'text', text: 'Query for web search' });
+    });
+
+    it('should handle pre-search status transition PENDING → STREAMING → COMPLETE', () => {
+      const thread = createMockThread({ enableWebSearch: false });
+      store.getState().initializeThread(thread, createMockParticipants(), [
+        createUserMessage(0),
+        createAssistantMessage(0, 0),
+      ]);
+
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+
+      // Add PENDING pre-search
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'test query',
+        status: MessageStatuses.PENDING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      // Verify PENDING status
+      let preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      expect(preSearch?.status).toBe(MessageStatuses.PENDING);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+
+      // Transition to STREAMING
+      store.getState().updatePreSearchStatus(1, MessageStatuses.STREAMING);
+      preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      expect(preSearch?.status).toBe(MessageStatuses.STREAMING);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+
+      // Transition to COMPLETE
+      store.getState().updatePreSearchStatus(1, MessageStatuses.COMPLETE);
+      preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      expect(preSearch?.status).toBe(MessageStatuses.COMPLETE);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+    });
+
+    it('should handle pre-search failure gracefully', () => {
+      const thread = createMockThread({ enableWebSearch: false });
+      store.getState().initializeThread(thread, createMockParticipants(), [
+        createUserMessage(0),
+        createAssistantMessage(0, 0),
+      ]);
+
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+
+      // Add PENDING pre-search
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'test query',
+        status: MessageStatuses.PENDING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      // Simulate failure
+      store.getState().updatePreSearchStatus(1, MessageStatuses.FAILED);
+
+      const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      expect(preSearch?.status).toBe(MessageStatuses.FAILED);
+
+      // Should NOT wait for failed pre-search - streaming can proceed
+      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+    });
+
+    it('should prevent duplicate execution with atomic tryMarkPreSearchTriggered', () => {
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // First attempt should succeed
+      const firstAttempt = store.getState().tryMarkPreSearchTriggered(1);
+      expect(firstAttempt).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+
+      // Second attempt should fail (already marked)
+      const secondAttempt = store.getState().tryMarkPreSearchTriggered(1);
+      expect(secondAttempt).toBe(false);
+
+      // Third attempt should also fail
+      const thirdAttempt = store.getState().tryMarkPreSearchTriggered(1);
+      expect(thirdAttempt).toBe(false);
+
+      // Verify only one trigger happened
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+    });
+
+    it('should handle multiple rounds with web search enabled', () => {
+      const thread = createMockThread({ enableWebSearch: true });
+      store.getState().initializeThread(thread, createMockParticipants(), []);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+
+      // Add pre-searches for multiple rounds
+      [1, 2, 3].forEach((roundNumber) => {
+        store.getState().addPreSearch({
+          id: `presearch-r${roundNumber}`,
+          threadId: 'thread-123',
+          roundNumber,
+          userQuery: `Query for round ${roundNumber}`,
+          status: MessageStatuses.PENDING,
+          searchData: null,
+          createdAt: new Date(),
+          completedAt: null,
+          errorMessage: null,
+        });
+      });
+
+      // Each round should have its own pre-search
+      expect(store.getState().preSearches).toHaveLength(3);
+
+      // Each round's pre-search is independent
+      const r1 = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      const r2 = store.getState().preSearches.find(ps => ps.roundNumber === 2);
+      const r3 = store.getState().preSearches.find(ps => ps.roundNumber === 3);
+
+      expect(r1?.status).toBe(MessageStatuses.PENDING);
+      expect(r2?.status).toBe(MessageStatuses.PENDING);
+      expect(r3?.status).toBe(MessageStatuses.PENDING);
+
+      // Complete round 1, others should still be pending
+      store.getState().updatePreSearchStatus(1, MessageStatuses.COMPLETE);
+      expect(store.getState().preSearches.find(ps => ps.roundNumber === 1)?.status)
+        .toBe(MessageStatuses.COMPLETE);
+      expect(store.getState().preSearches.find(ps => ps.roundNumber === 2)?.status)
+        .toBe(MessageStatuses.PENDING);
+    });
+
+    it('should handle web search disabled mid-conversation after enabling', () => {
+      const thread = createMockThread({ enableWebSearch: false });
+      store.getState().initializeThread(thread, createMockParticipants(), [
+        createUserMessage(0),
+        createAssistantMessage(0, 0),
+      ]);
+
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // Enable web search
+      store.getState().setEnableWebSearch(true);
+      expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch))
+        .toBe(true);
+
+      // Add pre-search for round 1
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'test',
+        status: MessageStatuses.PENDING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      // Disable web search before pre-search completes
+      store.getState().setEnableWebSearch(false);
+      expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch))
+        .toBe(false);
+
+      // When web search disabled, should NOT wait for pre-search
+      const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      expect(shouldWaitForPreSearch(false, preSearch)).toBe(false);
+    });
+
+    it('should reset pre-search tracking on thread change', () => {
+      // Track pre-search for round 1 on first thread
+      store.getState().tryMarkPreSearchTriggered(1);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+
+      // Initialize new thread (simulates navigation)
+      const newThread = { ...createMockThread(), id: 'thread-456' };
+      store.getState().initializeThread(newThread, createMockParticipants(), []);
+
+      // Tracking should be reset
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+    });
+
+    it('should handle pre-search when thread already has enableWebSearch true', () => {
+      // Thread was created with web search enabled
+      const thread = createMockThread({ enableWebSearch: true });
+      store.getState().initializeThread(thread, createMockParticipants(), [
+        createUserMessage(0),
+        createAssistantMessage(0, 0),
+      ]);
+
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true); // Form state matches thread
+
+      // Verify both thread and form have web search enabled
+      expect(store.getState().thread?.enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBe(true);
+
+      // getEffectiveWebSearchEnabled should return true
+      expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch))
+        .toBe(true);
+
+      // Pre-search should work normally
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'test',
+        status: MessageStatuses.PENDING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+    });
+  });
+
+  describe('pre-search activity tracking', () => {
+    it('should track and clear pre-search activity', () => {
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'test',
+        status: MessageStatuses.PENDING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      // Update activity
+      store.getState().updatePreSearchActivity(1);
+      expect(store.getState().preSearchActivityTimes.has(1)).toBe(true);
+
+      // Clear activity
+      store.getState().clearPreSearchActivity(1);
+      expect(store.getState().preSearchActivityTimes.has(1)).toBe(false);
+    });
+
+    it('should update partial pre-search data during streaming', () => {
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'test',
+        status: MessageStatuses.STREAMING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      const partialData = {
+        queries: ['partial query'],
+        results: [],
+        summary: '',
+        successCount: 0,
+        failureCount: 0,
+        totalResults: 0,
+        totalTime: 0,
+      };
+
+      store.getState().updatePartialPreSearchData(1, partialData);
+
+      const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      expect(preSearch?.searchData).toEqual(partialData);
+    });
+
+    it('should finalize pre-search data on completion', () => {
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'test',
+        status: MessageStatuses.STREAMING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      const finalData = {
+        queries: ['test query'],
+        results: [{ url: 'https://example.com', title: 'Result', snippet: 'Content' }],
+        summary: 'Search summary',
+        successCount: 1,
+        failureCount: 0,
+        totalResults: 1,
+        totalTime: 500,
+      };
+
+      store.getState().updatePreSearchData(1, finalData);
+
+      const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      expect(preSearch?.status).toBe(MessageStatuses.COMPLETE);
+      expect(preSearch?.searchData).toEqual(finalData);
+      expect(preSearch?.completedAt).toBeDefined();
+    });
+  });
+
+  describe('edge cases for non-initial round pre-search', () => {
+    it('should handle case when messages array is empty', () => {
+      const thread = createMockThread({ enableWebSearch: true });
+      store.getState().initializeThread(thread, createMockParticipants(), []);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+      store.getState().setWaitingToStartStreaming(true);
+
+      // No messages = no round to determine
+      const state = store.getState();
+      expect(state.messages).toHaveLength(0);
+
+      // Pre-search execution should not proceed without messages
+      // (no user query to extract)
+    });
+
+    it('should handle waitingToStartStreaming = false', () => {
+      const thread = createMockThread({ enableWebSearch: false });
+      store.getState().initializeThread(thread, createMockParticipants(), [
+        createUserMessage(0),
+      ]);
+
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+      store.getState().setWaitingToStartStreaming(false);
+
+      // Add PENDING pre-search
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'test',
+        status: MessageStatuses.PENDING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      // With waitingToStart=false, the non-initial round effect won't execute
+      const state = store.getState();
+      expect(state.waitingToStartStreaming).toBe(false);
+    });
+
+    it('should handle OVERVIEW screen with non-initial round', () => {
+      const thread = createMockThread({ enableWebSearch: false });
+      store.getState().initializeThread(thread, createMockParticipants(), [
+        createUserMessage(0),
+        createAssistantMessage(0, 0),
+      ]);
+
+      // On OVERVIEW screen, not THREAD
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
+      store.getState().setEnableWebSearch(true);
+      store.getState().setWaitingToStartStreaming(true);
+
+      const state = store.getState();
+      expect(state.screenMode).toBe(ScreenModes.OVERVIEW);
+
+      // Non-initial round effect only applies to THREAD screen
+      // OVERVIEW screen has its own handling via useStreamingTrigger
+    });
+
+    it('should handle pendingMessage being set (initial round pattern)', () => {
+      const thread = createMockThread({ enableWebSearch: false });
+      store.getState().initializeThread(thread, createMockParticipants(), []);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+
+      // Set pendingMessage (initial round pattern)
+      store.getState().setPendingMessage('Initial question');
+      store.getState().setExpectedParticipantIds(['model-a', 'model-b']);
+      store.getState().setWaitingToStartStreaming(true);
+
+      const state = store.getState();
+      expect(state.pendingMessage).toBe('Initial question');
+
+      // When pendingMessage is set, the main effect handles pre-search
+      // The non-initial round effect only kicks in when pendingMessage is null
+    });
+
+    it('should extract user query from pre-search fallback when not in messages', () => {
+      const thread = createMockThread({ enableWebSearch: false });
+      store.getState().initializeThread(thread, createMockParticipants(), [
+        createUserMessage(0),
+        createAssistantMessage(0, 0),
+      ]);
+
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+
+      // Add pre-search with userQuery but no matching user message for round 1
+      store.getState().addPreSearch({
+        id: 'presearch-r1',
+        threadId: 'thread-123',
+        roundNumber: 1,
+        userQuery: 'Pre-search query from placeholder',
+        status: MessageStatuses.PENDING,
+        searchData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
+      // No round 1 user message in messages array
+      const state = store.getState();
+      const round1UserMsgs = state.messages.filter(
+        m => m.role === 'user'
+          && m.metadata
+          && typeof m.metadata === 'object'
+          && 'roundNumber' in m.metadata
+          && m.metadata.roundNumber === 1,
+      );
+      expect(round1UserMsgs).toHaveLength(0);
+
+      // Pre-search has the query as fallback
+      const preSearch = state.preSearches.find(ps => ps.roundNumber === 1);
+      expect(preSearch?.userQuery).toBe('Pre-search query from placeholder');
+    });
+  });
 });

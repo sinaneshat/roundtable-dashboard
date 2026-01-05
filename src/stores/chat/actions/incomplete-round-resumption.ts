@@ -1173,6 +1173,37 @@ export function useIncompleteRoundResumption(
       return;
     }
 
+    // ✅ FIX: Validate that participants are actually complete before moderator phase
+    // This is a client-side defense against server-side phase detection bugs.
+    // If server says "moderator phase" but participants aren't complete, redirect to participants.
+    const participantCompletionCheck = getParticipantCompletionStatus(
+      messages,
+      participants,
+      resumptionRoundNumber,
+    );
+
+    if (!participantCompletionCheck.allComplete) {
+      // Server sent moderator phase but participants aren't done!
+      // Clear the moderator phase and let participant resumption handle it
+      rlog.moderator(
+        'PHASE-MISMATCH',
+        `r${resumptionRoundNumber} server said moderator but only ${participantCompletionCheck.completedCount}/${participantCompletionCheck.expectedCount} participants complete`,
+      );
+      moderatorPhaseResumptionAttemptedRef.current = resumptionKey;
+
+      // Transition to participants phase instead
+      actions.transitionToParticipantsPhase();
+
+      // Trigger participant resumption
+      const nextIdx = participantCompletionCheck.expectedCount > 0
+        ? participantCompletionCheck.completedCount
+        : 0;
+      actions.setStreamingRoundNumber(resumptionRoundNumber);
+      actions.setNextParticipantToTrigger(nextIdx);
+      actions.setWaitingToStartStreaming(true);
+      return;
+    }
+
     // ✅ STRICT STREAMING CHECK: Block moderator if AI SDK is still streaming
     // This is the FIRST gate - never trigger moderator while any streaming is active.
     // This catches cases where:

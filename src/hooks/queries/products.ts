@@ -19,13 +19,14 @@ import {
  * Hook to fetch all products with pricing plans
  * Public endpoint - no authentication required
  *
- * SSG: Data is baked at build time, never refetch on client
+ * SSG/ISR: Data prefetched on server, cached on client
+ * Uses STALE_TIMES.products for consistency with server prefetch
  */
 export function useProductsQuery() {
   return useQuery({
     queryKey: queryKeys.products.list(),
     queryFn: () => getProductsService(),
-    staleTime: Infinity, // SSG: data baked at build time
+    staleTime: STALE_TIMES.products, // 24 hours - matches server prefetch
     gcTime: Infinity, // Keep in cache forever
     refetchOnMount: false,
     refetchOnWindowFocus: false,

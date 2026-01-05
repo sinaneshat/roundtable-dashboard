@@ -5,6 +5,7 @@ export { useNavigationCleanup } from './use-navigation-cleanup';
 export { usePendingMessage } from './use-pending-message';
 export { usePreSearchResumption } from './use-pre-search-resumption';
 export { useRoundResumption } from './use-round-resumption';
+export { useStaleStreamingCleanup } from './use-stale-streaming-cleanup';
 export { useStateSync } from './use-state-sync';
 export { useStreamActivityTracker } from './use-stream-activity-tracker';
 export { useStreamingTrigger } from './use-streaming-trigger';

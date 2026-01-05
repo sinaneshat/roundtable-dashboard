@@ -130,23 +130,19 @@ test.describe('Auth Error Page', () => {
   test('has button to try again', async ({ page }) => {
     await page.goto('/auth/error');
 
-    // Should have "Try Again" button
-    const actionButton = page.getByRole('button', { name: /try again/i });
-    await expect(actionButton).toBeVisible();
+    // Should have "Try Again" link (rendered as link via Button asChild)
+    const actionLink = page.getByRole('link', { name: /try again/i });
+    await expect(actionLink).toBeVisible();
   });
 
   test('try again button navigates away from error', async ({ page }) => {
     await page.goto('/auth/error');
 
-    // Click try again
-    const tryAgainButton = page.getByRole('button', { name: /try again/i });
-    await tryAgainButton.click();
+    // Click try again link
+    const tryAgainLink = page.getByRole('link', { name: /try again/i });
+    await tryAgainLink.click();
 
-    // Should navigate away from error page (may go to sign-in or previous page)
-    await page.waitForTimeout(1000);
-    // Just verify we're no longer on the error page or the click worked
-    await expect(page.getByRole('button', { name: /try again/i })).not.toBeVisible({ timeout: 5000 }).catch(() => {
-      // Button might still be visible if navigation is slow - that's OK
-    });
+    // Should navigate to sign-in page
+    await expect(page).toHaveURL(/\/auth\/sign-in/, { timeout: 5000 });
   });
 });

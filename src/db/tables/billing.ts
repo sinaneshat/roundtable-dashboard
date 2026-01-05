@@ -1,6 +1,7 @@
 import { relations } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import { PAYMENT_METHOD_TYPES } from '@/api/core/enums';
 import type { StripeMetadataType, StripeWebhookEventData } from '@/db/validation/billing';
 
 import { user } from './auth';
@@ -163,7 +164,7 @@ export const stripePaymentMethod = sqliteTable(
     customerId: text('customer_id')
       .notNull()
       .references(() => stripeCustomer.id, { onDelete: 'cascade' }),
-    type: text('type', { enum: ['card', 'bank_account', 'sepa_debit'] }).notNull(),
+    type: text('type', { enum: PAYMENT_METHOD_TYPES }).notNull(),
     // Card details
     cardBrand: text('card_brand'), // visa, mastercard, etc.
     cardLast4: text('card_last4'),

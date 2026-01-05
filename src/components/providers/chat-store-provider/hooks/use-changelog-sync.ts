@@ -21,6 +21,7 @@ import { useStore } from 'zustand';
 
 import { useThreadRoundChangelogQuery } from '@/hooks/queries';
 import { queryKeys } from '@/lib/data/query-keys';
+import { rlog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import type { ChangelogListCache } from '@/stores/chat/actions/types';
 import { validateChangelogListCache } from '@/stores/chat/actions/types';
@@ -45,6 +46,11 @@ export function useChangelogSync({
 
   // Fetch round-specific changelog when waiting
   const shouldFetch = isWaitingForChangelog && configChangeRoundNumber !== null && !!effectiveThreadId;
+
+  if (shouldFetch) {
+    rlog.trigger('changelog-fetch', `round=${configChangeRoundNumber} waiting=${isWaitingForChangelog}`);
+  }
+
   const { data: roundChangelogData, isSuccess: roundChangelogSuccess } = useThreadRoundChangelogQuery(
     effectiveThreadId,
     configChangeRoundNumber ?? 0,
@@ -53,8 +59,12 @@ export function useChangelogSync({
 
   // Merge changelog data into cache when fetched
   useEffect(() => {
-    if (!roundChangelogSuccess || !roundChangelogData?.success)
+    if (!roundChangelogSuccess || !roundChangelogData?.success) {
+      if (shouldFetch) {
+        rlog.trigger('changelog-waiting', `round=${configChangeRoundNumber} success=${roundChangelogSuccess}`);
+      }
       return;
+    }
     if (configChangeRoundNumber === null)
       return;
     // Prevent duplicate merges for the same round
@@ -66,6 +76,7 @@ export function useChangelogSync({
 
     if (newItems.length === 0) {
       // No new changelog entries, but still clear the waiting flag
+      rlog.trigger('changelog-clear', `round=${configChangeRoundNumber} items=0 (no changes)`);
       state.setIsWaitingForChangelog(false);
       state.setConfigChangeRoundNumber(null);
       lastMergedRoundRef.current = configChangeRoundNumber;
@@ -103,6 +114,7 @@ export function useChangelogSync({
     );
 
     // Clear flags after successful merge
+    rlog.trigger('changelog-merged', `round=${configChangeRoundNumber} items=${newItems.length} clearing flags`);
     state.setIsWaitingForChangelog(false);
     state.setConfigChangeRoundNumber(null);
     lastMergedRoundRef.current = configChangeRoundNumber;
@@ -122,10 +134,24 @@ export function useChangelogSync({
 
     const timeout = setTimeout(() => {
       const state = store.getState();
+      rlog.trigger('changelog-timeout', 'clearing flags after 30s timeout');
       state.setIsWaitingForChangelog(false);
       state.setConfigChangeRoundNumber(null);
     }, 30000); // 30 second timeout
 
     return () => clearTimeout(timeout);
   }, [isWaitingForChangelog, store]);
+
+  // ✅ BUG FIX: Handle inconsistent state where isWaitingForChangelog=true but configChangeRoundNumber=null
+  // This can happen due to race conditions between multiple hooks or initializeThread calls.
+  // When this occurs, the changelog fetch condition (shouldFetch) will never be true,
+  // so isWaitingForChangelog will never be cleared, blocking streaming forever.
+  // This effect detects the inconsistency and clears isWaitingForChangelog immediately.
+  useEffect(() => {
+    if (isWaitingForChangelog && configChangeRoundNumber === null) {
+      rlog.trigger('changelog-inconsistent', 'isWaitingForChangelog=true but configChangeRoundNumber=null, clearing');
+      const state = store.getState();
+      state.setIsWaitingForChangelog(false);
+    }
+  }, [isWaitingForChangelog, configChangeRoundNumber, store]);
 }

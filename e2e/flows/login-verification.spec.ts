@@ -22,11 +22,17 @@ test.describe('Login Verification', () => {
   });
 
   test('authenticated user sees chat interface elements', async ({ page }) => {
+    // Use same navigation strategy as first test for consistency
     await page.goto('/chat');
     await page.waitForLoadState('networkidle');
 
-    // Should see the message input
-    const input = page.locator('textarea, [role="textbox"]').first();
-    await expect(input).toBeVisible({ timeout: 10000 });
+    // Should NOT be redirected
+    await expect(page).toHaveURL(/\/chat/);
+
+    // Wait for the chat interface to fully hydrate
+    // The textarea appears after React hydration and store initialization
+    const textarea = page.locator('textarea[placeholder]').first();
+    await expect(textarea).toBeVisible({ timeout: 20000 });
+    await expect(textarea).toBeEnabled();
   });
 });

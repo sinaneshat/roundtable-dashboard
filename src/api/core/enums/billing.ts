@@ -493,3 +493,36 @@ export const BillingErrorTypes = {
   AUTHENTICATION_FAILED: 'authentication_failed' as const,
   UNKNOWN: 'unknown' as const,
 } as const;
+
+// ============================================================================
+// PAYMENT METHOD TYPE
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const PAYMENT_METHOD_TYPES = ['card', 'bank_account', 'sepa_debit'] as const;
+
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const PaymentMethodTypeSchema = z.enum(PAYMENT_METHOD_TYPES).openapi({
+  description: 'Type of payment method (Stripe)',
+  example: 'card',
+});
+
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type PaymentMethodType = z.infer<typeof PaymentMethodTypeSchema>;
+
+// 4️⃣ DEFAULT VALUE
+export const DEFAULT_PAYMENT_METHOD_TYPE: PaymentMethodType = 'card';
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const PaymentMethodTypes = {
+  CARD: 'card' as const,
+  BANK_ACCOUNT: 'bank_account' as const,
+  SEPA_DEBIT: 'sepa_debit' as const,
+} as const;
+
+/**
+ * Type guard for PaymentMethodType validation
+ */
+export function isPaymentMethodType(value: unknown): value is PaymentMethodType {
+  return typeof value === 'string' && PAYMENT_METHOD_TYPES.includes(value as PaymentMethodType);
+}

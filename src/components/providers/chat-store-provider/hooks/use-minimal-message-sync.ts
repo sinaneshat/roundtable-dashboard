@@ -22,7 +22,8 @@ import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { getRoundNumber, isModeratorMessage } from '@/lib/utils';
+import { MessageRoles } from '@/api/core/enums';
+import { getRoundNumber, getUserMetadata, isModeratorMessage } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseMinimalMessageSyncParams = {
@@ -111,6 +112,18 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
       // During streaming, moderator messages might not be in AI SDK yet
       if (isModeratorMessage(m))
         return true;
+
+      // ✅ CRITICAL FIX: Preserve non-participant-trigger user messages
+      // AI SDK creates its own user message (isParticipantTrigger=true) for streaming.
+      // The original user message from form submission has a different ID and must be preserved.
+      // Without this, the original user message gets replaced by the participant trigger,
+      // which is then filtered out by deduplication, causing the user message to disappear.
+      if (m.role === MessageRoles.USER) {
+        const userMeta = getUserMetadata(m.metadata);
+        if (!userMeta?.isParticipantTrigger) {
+          return true; // Always preserve the original user message
+        }
+      }
 
       // Preserve messages from different rounds (they might have been filtered by AI SDK)
       const chatRounds = new Set(chatMessages.map(cm => getRoundNumber(cm.metadata)));

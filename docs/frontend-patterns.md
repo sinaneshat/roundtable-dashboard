@@ -364,7 +364,11 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
 
 **Current Implementation Status:**
 
-The application uses TanStack Query v5 for API data fetching, with centralized configuration in `/src/lib/data/`. The hooks directory (`/src/hooks/utils/`) contains only utility hooks (currently just `useBoolean`). There are NO domain-specific data fetching hooks or abstraction layers - components use TanStack Query directly.
+The application uses TanStack Query v5 for API data fetching, with centralized configuration in `/src/lib/data/`. The hooks directory is organized into three categories:
+
+- `/src/hooks/queries/` - Query hooks for data fetching (READ operations)
+- `/src/hooks/mutations/` - Mutation hooks for data updates (CREATE/UPDATE/DELETE operations)
+- `/src/hooks/utils/` - Utility hooks for UI state and common patterns
 
 **QueryClient Configuration:**
 ```typescript
@@ -409,7 +413,7 @@ export function getQueryClient() {
 
 **Data Fetching Architecture:**
 
-The application follows a separation between authentication and business data:
+The application follows a separation between authentication and business data, with proper hook abstraction layers:
 
 ```typescript
 // For Authentication: Use Better Auth directly (NOT TanStack Query)
@@ -422,30 +426,105 @@ export function UserProfile() {
   return <div>User: {session?.user.name}</div>
 }
 
-// For API Data: Use TanStack Query
-import { useQuery } from '@tanstack/react-query'
+// For API Data: Use Query Hooks from /src/hooks/queries
+import { useProductsQuery, useModelsQuery } from '@/hooks/queries'
 
-export function ApiHealthCheck() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['health', 'check'],
-    queryFn: async () => {
-      const response = await fetch('/api/v1/health')
-      return response.json()
-    },
-  })
+export function PricingScreen() {
+  const { data: productsData, isLoading } = useProductsQuery()
+  const products = productsData?.success ? productsData.data?.items ?? [] : []
 
   if (isLoading) return <div>Loading...</div>
-  return <div>Status: {data?.status}</div>
+  return <div>Products: {products.length}</div>
 }
 
-// Pattern: Better Auth for user/org data, TanStack Query for API data
-// Direct query usage in components (no abstraction layer yet)
+// For Mutations: Use Mutation Hooks from /src/hooks/mutations
+import { useCreateCheckoutSessionMutation } from '@/hooks/mutations'
+
+export function SubscribeButton({ priceId }: { priceId: string }) {
+  const createCheckout = useCreateCheckoutSessionMutation()
+
+  const handleClick = async () => {
+    const result = await createCheckout.mutateAsync({ json: { priceId } })
+    if (result.success && result.data?.url) {
+      window.location.href = result.data.url
+    }
+  }
+
+  return (
+    <button onClick={handleClick} disabled={createCheckout.isPending}>
+      {createCheckout.isPending ? 'Processing...' : 'Subscribe'}
+    </button>
+  )
+}
+
+// Pattern: Better Auth for auth, Query hooks for reads, Mutation hooks for writes
 // Type-safe API calls with proper error handling
+// Centralized configuration in /src/lib/data/
+```
+
+**Query Hooks Pattern:**
+```typescript
+// File: src/hooks/queries/products.ts
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
+import { getProductsService } from '@/services/api';
+
+/**
+ * Hook to fetch all products with pricing plans
+ * Public endpoint - no authentication required
+ *
+ * SSG/ISR: Data prefetched on server, cached on client
+ * Uses STALE_TIMES.products for consistency with server prefetch
+ */
+export function useProductsQuery() {
+  return useQuery({
+    queryKey: queryKeys.products.list(),
+    queryFn: () => getProductsService(),
+    staleTime: STALE_TIMES.products, // 24 hours - matches server prefetch
+    gcTime: Infinity, // Keep in cache forever
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+}
+
+// Pattern: Query hooks encapsulate service calls
+// Consistent configuration via STALE_TIMES
+// Type-safe responses from API services
+```
+
+**Mutation Hooks Pattern:**
+```typescript
+// File: src/hooks/mutations/subscriptions.ts
+'use client';
+
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/data/query-keys';
+import { createCheckoutSessionService } from '@/services/api';
+
+export function useCreateCheckoutSessionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createCheckoutSessionService,
+    onSuccess: () => {
+      // Invalidate related queries on success
+      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all() });
+    },
+  });
+}
+
+// Pattern: Mutation hooks handle CREATE/UPDATE/DELETE
+// Automatic cache invalidation on success
+// Type-safe mutation parameters
 ```
 
 **Utility Hooks:**
 ```typescript
-// File: src/hooks/utils/useBoolean.ts (ONLY utility hook that exists)
+// File: src/hooks/utils/useBoolean.ts
 'use client';
 
 import { useCallback, useState } from 'react';
@@ -474,9 +553,15 @@ export function useBoolean(defaultValue?: boolean) {
   };
 }
 
+// File: src/hooks/utils/useChatAttachments.ts - More complex utility hook
+export function useChatAttachments() {
+  // Manages file upload state, validation, preview URLs
+  // Not for API data fetching - pure UI state management
+}
+
 // Pattern: Utility hooks for common UI state patterns
-// No data fetching abstraction layer exists
-// Components use TanStack Query directly
+// No API data fetching - use query/mutation hooks for that
+// Reusable logic for forms, modals, toggles, etc.
 ```
 
 ### Client-Side State Management

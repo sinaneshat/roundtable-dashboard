@@ -1,7 +1,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
-import type { UsageStatus } from '@/api/core/enums';
+import { CreditActions, CreditTransactionTypes, PlanTypes, UsageStatuses } from '@/api/core/enums';
 import {
   canAffordCredits,
   getUserCreditBalance,
@@ -45,7 +45,7 @@ export const getCreditBalanceHandler: RouteHandler<
     const available = creditBalance.available;
 
     // Calculate percentage used from monthly/signup allocation
-    const totalAllocation = creditBalance.planType === 'paid'
+    const totalAllocation = creditBalance.planType === PlanTypes.PAID
       ? creditBalance.monthlyCredits
       : CREDIT_CONFIG.PLANS.free.signupCredits;
 
@@ -54,11 +54,11 @@ export const getCreditBalanceHandler: RouteHandler<
       : 0;
 
     // Determine status based on remaining credits
-    let status: UsageStatus = 'default';
+    let status = UsageStatuses.DEFAULT;
     if (available <= 0) {
-      status = 'critical';
+      status = UsageStatuses.CRITICAL;
     } else if (percentage >= 80) {
-      status = 'warning';
+      status = UsageStatuses.WARNING;
     }
 
     return Responses.ok(c, {
@@ -103,7 +103,7 @@ export const getCreditTransactionsHandler: RouteHandler<
 
     const { transactions, total } = await getUserTransactionHistory(
       user.id,
-      { limit, offset, type: query.type as 'deduction' | 'credit_grant' | undefined },
+      { limit, offset, type: query.type as typeof CreditTransactionTypes.DEDUCTION | typeof CreditTransactionTypes.CREDIT_GRANT | undefined },
     );
 
     return Responses.ok(c, {
@@ -152,24 +152,24 @@ export const estimateCreditCostHandler: RouteHandler<
     let estimatedCredits = 0;
 
     switch (body.action) {
-      case 'ai_response':
-      case 'user_message': {
+      case CreditActions.AI_RESPONSE:
+      case CreditActions.USER_MESSAGE: {
         // Streaming estimation
         const participantCount = body.params?.participantCount ?? 1;
         const inputTokens = body.params?.estimatedInputTokens;
         estimatedCredits = estimateStreamingCredits(participantCount, inputTokens);
         break;
       }
-      case 'web_search':
+      case CreditActions.WEB_SEARCH:
         estimatedCredits = tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.webSearchQuery);
         break;
-      case 'thread_creation':
+      case CreditActions.THREAD_CREATION:
         estimatedCredits = tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.threadCreation);
         break;
-      case 'file_reading':
+      case CreditActions.FILE_READING:
         estimatedCredits = tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.fileReading);
         break;
-      case 'analysis_generation':
+      case CreditActions.ANALYSIS_GENERATION:
         estimatedCredits = tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.analysisGeneration);
         break;
       default:

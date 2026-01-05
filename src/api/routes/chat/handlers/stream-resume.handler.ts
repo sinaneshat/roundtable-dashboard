@@ -211,6 +211,7 @@ function determineCurrentPhase(
   participantStatus: ParticipantPhaseStatus,
   moderatorStatus: ModeratorPhaseStatus | null,
 ): RoundPhase {
+  // Phase 1: Pre-search (if enabled and still in progress)
   if (preSearchStatus?.enabled) {
     const status = preSearchStatus.status;
     if (status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING) {
@@ -218,10 +219,14 @@ function determineCurrentPhase(
     }
   }
 
+  // Phase 2: Participants (if not all complete)
+  // ✅ FIX: This MUST return PARTICIPANTS if participants aren't done
+  // The old code would fall through to MODERATOR as default
   if (!participantStatus.allComplete) {
     return RoundPhases.PARTICIPANTS;
   }
 
+  // Phase 3: Moderator (if all participants done)
   if (moderatorStatus) {
     const status = moderatorStatus.status;
     if (status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING) {
@@ -230,9 +235,21 @@ function determineCurrentPhase(
     if (status === MessageStatuses.COMPLETE) {
       return RoundPhases.COMPLETE;
     }
+    // ✅ FIX: If moderator status exists but is FAILED, still need moderator
+    if (status === MessageStatuses.FAILED) {
+      return RoundPhases.MODERATOR;
+    }
   }
 
-  return RoundPhases.MODERATOR;
+  // ✅ FIX: If all participants complete but no moderator exists/started, need moderator
+  // Only return MODERATOR phase if we've confirmed participants are actually complete
+  if (participantStatus.allComplete && participantStatus.totalParticipants !== null && participantStatus.totalParticipants > 0) {
+    return RoundPhases.MODERATOR;
+  }
+
+  // ✅ FIX: Default to IDLE instead of MODERATOR
+  // This prevents stuck state when phase can't be determined
+  return RoundPhases.IDLE;
 }
 
 function isStreamStale(lastChunkTime: number, createdTime: number, hasChunks: boolean, staleTimeoutMs = 30000): boolean {
@@ -431,17 +448,29 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
       const totalParticipants = participants.length;
 
+      // ✅ FIX: Query all assistant messages then filter out moderators
+      // Previously counted moderators as participants, causing premature allComplete=true
       const assistantMessages = await db.query.chatMessage.findMany({
         where: and(
           eq(tables.chatMessage.threadId, threadId),
           eq(tables.chatMessage.roundNumber, currentRoundNumber),
           eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
         ),
-        columns: { id: true },
+        columns: { id: true, metadata: true },
+      });
+
+      // Filter out moderator messages (they have isModerator: true in metadata)
+      const participantMessages = assistantMessages.filter((msg) => {
+        const metadata = msg.metadata;
+        if (!metadata || typeof metadata !== 'object') {
+          return true; // No metadata = not a moderator
+        }
+        return !('isModerator' in metadata && metadata.isModerator === true);
       });
 
       participantStatus.totalParticipants = totalParticipants;
-      participantStatus.allComplete = assistantMessages.length >= totalParticipants;
+      // ✅ FIX: Use filtered participant messages count, not all assistant messages
+      participantStatus.allComplete = participantMessages.length >= totalParticipants;
     }
 
     let moderatorStatus: ModeratorPhaseStatus | null = null;

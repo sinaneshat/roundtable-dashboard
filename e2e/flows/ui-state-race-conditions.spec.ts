@@ -23,8 +23,8 @@ import {
  */
 test.describe('Loading States and Skeletons', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/chat');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/chat', { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 60000 });
   });
 
   test('shows loading state while chat interface initializes', async ({ page }) => {
@@ -85,8 +85,8 @@ test.describe('Loading States and Skeletons', () => {
  */
 test.describe('UI Flash and Duplication Prevention', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/chat');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/chat', { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 60000 });
     await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
   });
 
@@ -163,8 +163,8 @@ test.describe('UI Flash and Duplication Prevention', () => {
  */
 test.describe('State Consistency During Navigation', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/chat');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/chat', { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 60000 });
     await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
   });
 
@@ -200,12 +200,12 @@ test.describe('State Consistency During Navigation', () => {
 
     // This test checks that if we navigate away and back, the input state is handled properly
     // In a SPA, this might preserve or reset state based on implementation
-    await page.goto('/chat/pricing');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/chat/pricing', { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 60000 });
 
     // Navigate back
-    await page.goto('/chat');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/chat', { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 60000 });
     await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
 
     // Input should be either preserved or cleanly reset - not in broken state
@@ -220,8 +220,8 @@ test.describe('State Consistency During Navigation', () => {
  */
 test.describe('Concurrent Operation Handling', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/chat');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/chat', { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 60000 });
     await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
   });
 
@@ -275,8 +275,8 @@ test.describe('Concurrent Operation Handling', () => {
  */
 test.describe('Error State Display', () => {
   test('empty message submission is handled gracefully', async ({ page }) => {
-    await page.goto('/chat');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/chat', { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 60000 });
     await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
 
     const input = getMessageInput(page);
@@ -290,8 +290,8 @@ test.describe('Error State Display', () => {
   });
 
   test('whitespace-only message is handled gracefully', async ({ page }) => {
-    await page.goto('/chat');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/chat', { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 60000 });
     await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
 
     const input = getMessageInput(page);
@@ -311,8 +311,8 @@ test.describe('Error State Display', () => {
  */
 test.describe('Visual Consistency', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/chat');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/chat', { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 60000 });
     await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
   });
 

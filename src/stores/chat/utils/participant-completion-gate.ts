@@ -327,3 +327,43 @@ export function getMessageStreamingStatus(
 
   return hasStreamingParts ? MessageStatuses.STREAMING : MessageStatuses.COMPLETE;
 }
+
+// ============================================================================
+// Round Completion Check (includes moderator)
+// ============================================================================
+
+/**
+ * Check if an entire round is complete (all participants + moderator)
+ *
+ * This is used to detect stale streaming state where streamingRoundNumber
+ * is still set but the entire round has actually completed.
+ *
+ * A round is complete when:
+ * 1. All participants have complete messages (finishReason or content)
+ * 2. Moderator message exists and is complete (finishReason or content)
+ *
+ * @param messages - Array of UI messages
+ * @param participants - Array of participants
+ * @param roundNumber - Round number to check
+ * @returns true if the entire round (participants + moderator) is complete
+ */
+export function isRoundComplete(
+  messages: UIMessage[],
+  participants: ChatParticipant[],
+  roundNumber: number,
+): boolean {
+  // Check if all participants are complete
+  const participantStatus = getParticipantCompletionStatus(messages, participants, roundNumber);
+  if (!participantStatus.allComplete) {
+    return false;
+  }
+
+  // Check if moderator exists and is complete
+  const moderatorMessage = getModeratorMessageForRound(messages, roundNumber);
+  if (!moderatorMessage) {
+    return false;
+  }
+
+  // Check if moderator is complete (not streaming and has content/finishReason)
+  return isMessageComplete(moderatorMessage);
+}

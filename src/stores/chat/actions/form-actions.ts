@@ -258,10 +258,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     const webSearchChanged = currentWebSearch !== formState.enableWebSearch;
 
     const hasParticipantChanges = shouldUpdateParticipantConfig(updateResult);
-    // ✅ FIX: Include hasPendingConfigChanges to catch toggle OFF→ON scenarios
-    // When user toggles web search OFF then ON, the final value matches thread state
-    // but hasPendingConfigChanges was set on toggle, indicating user made a change
-    const hasAnyChanges = hasParticipantChanges || modeChanged || webSearchChanged || threadState.hasPendingConfigChanges;
+    // Note: hasAnyChanges logic referenced in comments below for documentation
+    // hasParticipantChanges || modeChanged || webSearchChanged || threadState.hasPendingConfigChanges
 
     // ✅ IMMEDIATE UI FEEDBACK: Add optimistic user message BEFORE any async operations
     // This ensures the streaming trigger sees the correct round when it runs
@@ -282,7 +280,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     });
 
     // Add optimistic message to store IMMEDIATELY
-    actions.setMessages(currentMessages => [...currentMessages, optimisticMessage]);
+    actions.setMessages((currentMessages) => {
+      return [...currentMessages, optimisticMessage];
+    });
     actions.setStreamingRoundNumber(nextRoundNumber);
     actions.setExpectedParticipantIds(getParticipantModelIds(threadState.participants));
 
@@ -302,10 +302,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       }));
     }
 
-    // ✅ RACE FIX: ALWAYS block streaming until PATCH completes
-    // Set configChangeRoundNumber to prevent streaming from starting before message is persisted
-    // Without this, streaming requests hit backend before PATCH creates the message in DB
-    // Error: "[stream] User message not found in DB, expected pre-persisted"
+    // ✅ RACE FIX: ALWAYS block streaming until PATCH + changelog completes
+    // configChangeRoundNumber blocks pre-search/streaming until PATCH completes
+    // isWaitingForChangelog is set AFTER PATCH to trigger changelog fetch
+    // Order: PATCH → changelog → pre-search → streams
     actions.setConfigChangeRoundNumber(nextRoundNumber);
 
     // NOW set waitingToStartStreaming - trigger will see correct round from optimistic message
@@ -361,17 +361,15 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         actions.setThread(transformChatThread(response.data.thread));
       }
 
-      // ✅ CHANGELOG: When config changes occurred, trigger changelog fetch AFTER PATCH
-      // The PATCH creates the changelog entries in the database, so we must wait for it
-      // The streaming trigger will wait for isWaitingForChangelog to be false
-      if (hasAnyChanges) {
-        actions.setIsWaitingForChangelog(true);
-        // configChangeRoundNumber will be cleared by use-changelog-sync after changelog is fetched
-      } else {
-        // ✅ FIX: No config changes, so clear configChangeRoundNumber directly
-        // This unblocks streaming now that PATCH has persisted the message
-        actions.setConfigChangeRoundNumber(null);
-      }
+      // ✅ FIX: Set isWaitingForChangelog AFTER PATCH completes
+      // This ensures changelog entries exist on server before query runs
+      // use-changelog-sync will:
+      // - See both isWaitingForChangelog AND configChangeRoundNumber set
+      // - Fetch changelog for this round
+      // - Merge it into cache
+      // - Clear BOTH flags atomically
+      // Pre-search and streaming wait for BOTH flags to clear
+      actions.setIsWaitingForChangelog(true);
 
       // ✅ FIX: Clear hasPendingConfigChanges after successful submission
       // This prevents it from persisting to subsequent rounds

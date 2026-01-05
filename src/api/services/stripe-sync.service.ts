@@ -17,8 +17,8 @@ import type Stripe from 'stripe';
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import type { StripeSubscriptionStatus } from '@/api/core/enums';
-import { BillingIntervals, StripeSubscriptionStatusSchema } from '@/api/core/enums';
+import type { PaymentMethodType, StripeSubscriptionStatus } from '@/api/core/enums';
+import { BillingIntervals, DEFAULT_PAYMENT_METHOD_TYPE, isPaymentMethodType, StripeSubscriptionStatusSchema } from '@/api/core/enums';
 import { stripeService } from '@/api/services/stripe.service';
 import { syncUserQuotaFromSubscription } from '@/api/services/usage-tracking.service';
 import * as tables from '@/db';
@@ -259,7 +259,7 @@ export async function syncStripeDataFromStripe(
     const stripe = stripeService.getClient();
     paymentMethods = await stripe.paymentMethods.list({
       customer: customerId,
-      type: 'card',
+      type: DEFAULT_PAYMENT_METHOD_TYPE,
     });
   } catch {
     throw createError.internal('Failed to sync payment method data from Stripe', {
@@ -458,11 +458,10 @@ export async function syncStripeDataFromStripe(
   const paymentMethodUpserts = paymentMethods.data.map((pm) => {
     const isDefault = pm.id === defaultPaymentMethodId;
 
-    // ✅ TYPE-SAFE: Validate payment method type against allowed values
-    const allowedTypes = ['card', 'bank_account', 'sepa_debit'] as const;
-    const paymentType = allowedTypes.includes(pm.type as typeof allowedTypes[number])
-      ? (pm.type as 'card' | 'bank_account' | 'sepa_debit')
-      : 'card'; // Default fallback
+    // ✅ TYPE-SAFE: Validate payment method type using enum type guard
+    const paymentType: PaymentMethodType = isPaymentMethodType(pm.type)
+      ? pm.type
+      : DEFAULT_PAYMENT_METHOD_TYPE;
 
     return db.insert(tables.stripePaymentMethod).values({
       id: pm.id,

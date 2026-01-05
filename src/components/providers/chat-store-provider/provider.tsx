@@ -23,6 +23,7 @@ import {
   usePendingMessage,
   usePreSearchResumption,
   useRoundResumption,
+  useStaleStreamingCleanup,
   useStateSync,
   useStreamActivityTracker,
   useStreamingTrigger,
@@ -302,6 +303,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     store,
     lastStreamActivityRef,
   });
+
+  // ✅ STALE STATE CLEANUP: Detect and clean up stale streaming state
+  // This catches edge cases where streamingRoundNumber is stuck but round is complete
+  useStaleStreamingCleanup({ store });
 
   useNavigationCleanup({
     store,

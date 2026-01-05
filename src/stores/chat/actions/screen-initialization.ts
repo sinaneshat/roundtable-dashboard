@@ -80,7 +80,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // - pendingMessage: Set by form-actions prepareForNewMessage() in overview flow
   // - streamResumptionPrefilled: Set by prefill effect when server detected incomplete round
   // - configChangeRoundNumber: Set by handleUpdateThreadAndSend BEFORE PATCH (KEY indicator)
-  // - isWaitingForChangelog: Set AFTER PATCH when config changes need changelog fetch
+  // - isWaitingForChangelog: Set AFTER PATCH (always set, cleared by use-changelog-sync)
   //
   // CRITICAL: handleUpdateThreadAndSend does NOT set pendingMessage, so we must check
   // configChangeRoundNumber and isWaitingForChangelog to detect active form submissions.
@@ -119,7 +119,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     // 1. pendingMessage !== null (set by prepareForNewMessage in overview flow)
     // 2. configChangeRoundNumber !== null (set by handleUpdateThreadAndSend before PATCH)
     //    This is the KEY indicator - it's only set during active form submission
-    // 3. isWaitingForChangelog (set after PATCH when config changes need changelog fetch)
+    // 3. isWaitingForChangelog (set after PATCH, always set, cleared by use-changelog-sync)
     //
     // NOTE: waitingToStartStreaming alone is NOT sufficient because it could be stale
     // state from a previous session. configChangeRoundNumber and isWaitingForChangelog

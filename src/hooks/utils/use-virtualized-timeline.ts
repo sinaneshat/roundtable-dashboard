@@ -343,6 +343,53 @@ export function useVirtualizedTimeline({
     }
   }, [shouldEnable]);
 
+  // ✅ FIX: Sync virtualizer state when timeline item COUNT changes
+  // TanStack Virtual's onChange callback only fires on scroll/resize events, NOT on count changes.
+  // When a new timeline item is added (e.g., user submits non-initial round message),
+  // the virtualizer's internal count updates but onChange isn't triggered because
+  // there's no scroll event. This leaves virtualItems stale with old count.
+  //
+  // This effect detects count changes and forces a state sync via RAF,
+  // ensuring new timeline items are immediately visible without requiring scroll.
+  const prevCountRef = useRef<number>(0);
+  useLayoutEffect(() => {
+    // Only sync if:
+    // 1. Virtualizer is enabled
+    // 2. Initial sync already completed
+    // 3. Count actually changed (not just re-render)
+    if (!shouldEnable || !hasInitialSyncRef.current) {
+      prevCountRef.current = timelineItems.length;
+      return;
+    }
+
+    const prevCount = prevCountRef.current;
+    const newCount = timelineItems.length;
+
+    // Skip if count hasn't changed
+    if (prevCount === newCount) {
+      return;
+    }
+
+    // Update ref for next comparison
+    prevCountRef.current = newCount;
+
+    // Cancel any pending RAF to avoid stale updates
+    if (pendingRafRef.current !== null) {
+      cancelAnimationFrame(pendingRafRef.current);
+    }
+
+    // Schedule sync for next frame - outside React's lifecycle
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Deferred via RAF to avoid flushSync during render
+    pendingRafRef.current = requestAnimationFrame(() => {
+      pendingRafRef.current = null;
+      const newVirtualItems = virtualizer.getVirtualItems();
+      setVirtualizerState({
+        virtualItems: newVirtualItems,
+        totalSize: virtualizer.getTotalSize(),
+      });
+    });
+  }, [shouldEnable, timelineItems.length, virtualizer]);
+
   // Cleanup pending RAF on unmount
   useLayoutEffect(() => {
     return () => {

@@ -118,13 +118,14 @@ export default function ChatOverviewScreen() {
     })),
   );
 
-  const { showInitialUI, isCreatingThread, createdThreadId, waitingToStartStreaming, streamingRoundNumber } = useChatStore(
+  const { showInitialUI, isCreatingThread, createdThreadId, waitingToStartStreaming, streamingRoundNumber, pendingMessage } = useChatStore(
     useShallow(s => ({
       showInitialUI: s.showInitialUI,
       isCreatingThread: s.isCreatingThread,
       createdThreadId: s.createdThreadId,
       waitingToStartStreaming: s.waitingToStartStreaming,
       streamingRoundNumber: s.streamingRoundNumber,
+      pendingMessage: s.pendingMessage,
     })),
   );
 
@@ -205,8 +206,13 @@ export default function ChatOverviewScreen() {
     can_upgrade: true,
   };
 
-  const modelOrder = useChatStore(s => s.modelOrder);
-  const setModelOrder = useChatStore(s => s.setModelOrder);
+  // ✅ ZUSTAND v5: Batch modelOrder selectors with useShallow
+  const { modelOrder, setModelOrder } = useChatStore(
+    useShallow(s => ({
+      modelOrder: s.modelOrder,
+      setModelOrder: s.setModelOrder,
+    })),
+  );
 
   const accessibleModelIds = useMemo(() => {
     if (allEnabledModels.length === 0)
@@ -457,7 +463,6 @@ export default function ChatOverviewScreen() {
     ),
   });
 
-  const pendingMessage = useChatStore(s => s.pendingMessage);
   // ✅ FIX: Add streamingRoundNumber check to prevent submit during entire round
   const isRoundInProgress = streamingRoundNumber !== null;
   const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || Boolean(pendingMessage) || formActions.isSubmitting || isRoundInProgress;

@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+
 import type { Page } from '@playwright/test';
 import { test as base } from '@playwright/test';
 
@@ -82,20 +84,30 @@ export const test = base.extend<AuthFixtures>({
    */
 
   authenticatedPage: async ({ browser }, use) => {
+    const authFile = '.playwright/auth/free-user.json';
+    const hasAuthFile = fs.existsSync(authFile);
+
     const context = await browser.newContext({
-      storageState: '.playwright/auth/free-user.json',
+      storageState: hasAuthFile ? authFile : undefined,
     });
     const page = await context.newPage();
 
     // Verify auth state is valid, re-login if needed
-    await page.goto('/chat');
+    await page.goto('/chat', { timeout: 30000 });
+    await page.waitForLoadState('networkidle', { timeout: 30000 });
+
     const currentUrl = page.url();
 
-    if (currentUrl.includes('/auth/')) {
-      // Auth state expired, re-login
+    if (currentUrl.includes('/auth/') || !hasAuthFile) {
+      // Auth state expired, invalid, or missing - re-login
+      if (!hasAuthFile) {
+        console.warn('⚠️ Auth file missing for free user, authenticating...');
+      } else {
+        console.warn('⚠️ Auth state expired for free user, re-authenticating...');
+      }
       await performLogin(page, TEST_USER_FREE);
       // Save updated state
-      await context.storageState({ path: '.playwright/auth/free-user.json' });
+      await context.storageState({ path: authFile });
     }
 
     // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright's use, not React's
@@ -108,17 +120,27 @@ export const test = base.extend<AuthFixtures>({
    */
 
   proUserPage: async ({ browser }, use) => {
+    const authFile = '.playwright/auth/pro-user.json';
+    const hasAuthFile = fs.existsSync(authFile);
+
     const context = await browser.newContext({
-      storageState: '.playwright/auth/pro-user.json',
+      storageState: hasAuthFile ? authFile : undefined,
     });
     const page = await context.newPage();
 
-    await page.goto('/chat');
+    await page.goto('/chat', { timeout: 30000 });
+    await page.waitForLoadState('networkidle', { timeout: 30000 });
+
     const currentUrl = page.url();
 
-    if (currentUrl.includes('/auth/')) {
+    if (currentUrl.includes('/auth/') || !hasAuthFile) {
+      if (!hasAuthFile) {
+        console.warn('⚠️ Auth file missing for pro user, authenticating...');
+      } else {
+        console.warn('⚠️ Auth state expired for pro user, re-authenticating...');
+      }
       await performLogin(page, TEST_USER_PRO);
-      await context.storageState({ path: '.playwright/auth/pro-user.json' });
+      await context.storageState({ path: authFile });
     }
 
     // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright's use, not React's
@@ -131,17 +153,27 @@ export const test = base.extend<AuthFixtures>({
    */
 
   adminPage: async ({ browser }, use) => {
+    const authFile = '.playwright/auth/admin-user.json';
+    const hasAuthFile = fs.existsSync(authFile);
+
     const context = await browser.newContext({
-      storageState: '.playwright/auth/admin-user.json',
+      storageState: hasAuthFile ? authFile : undefined,
     });
     const page = await context.newPage();
 
-    await page.goto('/chat');
+    await page.goto('/chat', { timeout: 30000 });
+    await page.waitForLoadState('networkidle', { timeout: 30000 });
+
     const currentUrl = page.url();
 
-    if (currentUrl.includes('/auth/')) {
+    if (currentUrl.includes('/auth/') || !hasAuthFile) {
+      if (!hasAuthFile) {
+        console.warn('⚠️ Auth file missing for admin user, authenticating...');
+      } else {
+        console.warn('⚠️ Auth state expired for admin user, re-authenticating...');
+      }
       await performLogin(page, TEST_USER_ADMIN);
-      await context.storageState({ path: '.playwright/auth/admin-user.json' });
+      await context.storageState({ path: authFile });
     }
 
     // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright's use, not React's

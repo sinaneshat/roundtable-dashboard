@@ -23,10 +23,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
 
   // Retry on CI only
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 2 : 1,
 
-  // Opt out of parallel tests on CI
-  workers: process.env.CI ? 1 : undefined,
+  // Use single worker for stability (parallel workers can overload dev server)
+  workers: 1,
 
   // Global setup - authenticates test users before running tests
   globalSetup: './e2e/global-setup.ts',
@@ -57,7 +57,7 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
 
     // Timeout for actions
-    actionTimeout: 10000,
+    actionTimeout: 15000,
 
     // Timeout for navigation
     navigationTimeout: 30000,

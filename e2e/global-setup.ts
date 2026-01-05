@@ -10,11 +10,13 @@ import { ALL_TEST_USERS } from './fixtures/test-users';
 
 /**
  * Playwright Global Setup
- * Authenticates all test users via Better Auth API and saves auth state
+ * Authenticates test users via Better Auth API and saves auth state
  *
- * This app uses Better Auth with emailAndPassword enabled on the server,
- * but the UI only shows Magic Link + Google OAuth.
- * We use the API endpoint directly for E2E test authentication.
+ * IMPORTANT: Test users must be created first using the seed script:
+ *   pnpm test:e2e:seed
+ *
+ * This setup only signs in existing users and sets up billing data.
+ * It does NOT create new users - run the seed script first.
  *
  * @see https://playwright.dev/docs/auth
  */
@@ -26,7 +28,7 @@ const userIds: Map<string, string> = new Map();
 
 /**
  * Authenticate a single user via Better Auth API and save their auth state
- * First tries sign-up (creates user with scrypt password hash), then sign-in
+ * Signs in existing users - users must be created first via pnpm test:e2e:seed
  * Returns the user ID for billing data setup
  */
 async function authenticateUser(
@@ -44,7 +46,7 @@ async function authenticateUser(
     await page.goto(baseURL);
     await page.waitForLoadState('networkidle');
 
-    // First try sign-up to create user with scrypt password hash
+    // Try sign-up first (creates user if doesn't exist)
     const signUpResponse = await page.request.post(`${baseURL}/api/auth/sign-up/email`, {
       data: {
         email: user.email,
@@ -98,13 +100,13 @@ async function authenticateUser(
     }
 
     // Navigate to /chat to verify auth and get final cookies
-    await page.goto(`${baseURL}/chat`);
-    await page.waitForLoadState('networkidle');
+    await page.goto(`${baseURL}/chat`, { timeout: 30000 });
+    await page.waitForLoadState('networkidle', { timeout: 30000 });
 
     // Verify we're authenticated (should be on /chat, not redirected to sign-in)
     const currentUrl = page.url();
-    if (currentUrl.includes('/auth/sign-in')) {
-      throw new Error('Authentication failed - redirected to sign-in page');
+    if (currentUrl.includes('/auth/sign-in') || currentUrl.includes('/auth/')) {
+      throw new Error(`Authentication failed - redirected to ${currentUrl} instead of staying on /chat`);
     }
 
     // Save storage state (cookies, localStorage)
@@ -121,9 +123,13 @@ async function authenticateUser(
   } catch (error) {
     console.error(`❌ Failed to authenticate ${user.tier} user: ${user.email}`);
     console.error(error);
-    // Create empty auth file to prevent test failures
-    fs.writeFileSync(authFile, JSON.stringify({ cookies: [], origins: [] }));
-    return null;
+    // Admin user failure is non-fatal (admin tests are optional)
+    // Free and Pro user failures are fatal as most tests require them
+    if (user.tier === 'admin') {
+      console.error(`⚠️ Admin user auth failed - admin tests will be skipped`);
+      return null;
+    }
+    throw new Error(`Failed to authenticate ${user.tier} user ${user.email}. Tests cannot proceed without valid auth.`);
   } finally {
     await browser.close();
   }
@@ -214,6 +220,23 @@ function setupBillingData(): void {
 }
 
 /**
+ * Check if an auth file is valid (exists and has cookies)
+ */
+function isAuthFileValid(authFile: string): boolean {
+  if (!fs.existsSync(authFile)) {
+    return false;
+  }
+  try {
+    const content = fs.readFileSync(authFile, 'utf-8');
+    const data = JSON.parse(content);
+    // Check if it has cookies array with at least one cookie
+    return Array.isArray(data.cookies) && data.cookies.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Global setup function - runs before all tests
  */
 async function globalSetup(config: FullConfig): Promise<void> {
@@ -225,6 +248,45 @@ async function globalSetup(config: FullConfig): Promise<void> {
   const authDir = path.resolve(AUTH_DIR);
   if (!fs.existsSync(authDir)) {
     fs.mkdirSync(authDir, { recursive: true });
+  }
+
+  // Check if we have valid auth files already
+  const requiredUsers = ALL_TEST_USERS.filter((u) => u.tier !== 'admin'); // Admin is optional
+  const allAuthFilesValid = requiredUsers.every((user) => {
+    const authFile = path.join(authDir, `${user.tier}-user.json`);
+    return isAuthFileValid(authFile);
+  });
+
+  if (allAuthFilesValid) {
+    console.error('✅ Valid auth files found - skipping re-authentication');
+    console.error('   Run `pnpm test:e2e:seed` if you need to refresh auth state\n');
+    return;
+  }
+
+  // Need to authenticate - check if server is available first
+  let serverAvailable = false;
+  try {
+    const response = await fetch(baseURL, { method: 'HEAD' });
+    serverAvailable = response.ok || response.status === 307;
+  } catch {
+    serverAvailable = false;
+  }
+
+  if (!serverAvailable) {
+    console.error('⚠️ Server not running. Checking for existing auth files...\n');
+    // Check if at least free-user auth exists (required for most tests)
+    const freeUserAuth = path.join(authDir, 'free-user.json');
+    if (isAuthFileValid(freeUserAuth)) {
+      console.error('✅ Using existing auth files (server not running for refresh)\n');
+      return;
+    }
+    throw new Error(
+      'No valid auth files and server not running.\n' +
+        'Either:\n' +
+        '  1. Start the server: pnpm dev\n' +
+        '  2. Run seed script: pnpm test:e2e:seed\n' +
+        'Then run tests again.',
+    );
   }
 
   // Authenticate each test user sequentially

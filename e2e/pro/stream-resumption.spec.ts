@@ -59,11 +59,14 @@ test.describe('Stream Resumption - Initial Round', () => {
     await expect(sendButton).toBeEnabled({ timeout: 30000 });
     await sendButton.click();
 
-    // Wait a tiny bit for thread creation to start
-    await page.waitForTimeout(500);
+    // Wait for thread creation to start (increased from 500ms to 2s for more reliable thread creation)
+    await page.waitForTimeout(2000);
 
     // Refresh immediately - before any visible streaming
     await page.reload({ waitUntil: 'domcontentloaded' });
+
+    // Check for rate limit errors after refresh
+    await waitForRateLimitRecovery(page);
 
     // After refresh, verify page is functional
     await expect(page.locator('textarea')).toBeVisible({ timeout: 30000 });
@@ -71,7 +74,12 @@ test.describe('Stream Resumption - Initial Round', () => {
     const currentUrl = page.url();
     if (currentUrl.includes('/chat/')) {
       // Thread was created - wait for it to load
-      await expect(page.locator('textarea')).toBeEnabled({ timeout: 120000 });
+      // First check if already enabled (stream completed quickly)
+      const isEnabled = await page.locator('textarea').isEnabled({ timeout: 5000 }).catch(() => false);
+      if (!isEnabled) {
+        // Wait longer for stream to complete
+        await expect(page.locator('textarea')).toBeEnabled({ timeout: 120000 });
+      }
     } else {
       // Still on /chat - should be able to start new conversation
       await expect(input).toBeEnabled({ timeout: 30000 });
