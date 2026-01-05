@@ -857,15 +857,13 @@ export async function trackLLMError(
       responseBody: z.string().optional(),
     });
 
-    const ErrorDetailsSchema = z.object({
-      error_message: z.string(),
-      error_name: z.string(),
-      error_stack: z.string().optional(),
-      http_status: z.number().optional(),
-      response_body: z.string().optional(),
-    });
-
-    type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
+    type ErrorDetails = {
+      error_message: string;
+      error_name: string;
+      error_stack?: string;
+      http_status?: number;
+      response_body?: string;
+    };
 
     const baseErrorDetails: ErrorDetails = {
       error_message: error.message,

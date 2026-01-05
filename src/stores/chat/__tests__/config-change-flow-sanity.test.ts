@@ -40,7 +40,7 @@ function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
     id: 'thread-123',
     title: 'Test Thread',
     slug: 'test-thread',
-    mode: ChatModes.PANEL,
+    mode: ChatModes.DEBATING,
     status: 'active',
     isFavorite: false,
     isPublic: false,
@@ -167,7 +167,7 @@ describe('config Change Flow Sanity Check', () => {
     store = createChatStore();
 
     // Initialize with Round 0 complete
-    const mockThread = createMockThread({ enableWebSearch: false, mode: ChatModes.PANEL });
+    const mockThread = createMockThread({ enableWebSearch: false, mode: ChatModes.DEBATING });
     const round0Participants = [
       createMockParticipant(0, { modelId: 'gpt-4', role: 'Analyst' }),
       createMockParticipant(1, { modelId: 'claude-3', role: 'Critic' }),
@@ -192,7 +192,7 @@ describe('config Change Flow Sanity Check', () => {
       ];
       state.setParticipants(round1Participants);
       state.setEnableWebSearch(true); // CHANGED
-      state.setSelectedMode(ChatModes.COUNCIL); // CHANGED
+      state.setSelectedMode(ChatModes.SOLVING); // CHANGED
 
       // ============================================================================
       // STEP 2: User submits message
@@ -226,7 +226,7 @@ describe('config Change Flow Sanity Check', () => {
       // ============================================================================
       const updatedThread = createMockThread({
         enableWebSearch: true,
-        mode: ChatModes.COUNCIL,
+        mode: ChatModes.SOLVING,
         updatedAt: new Date(),
       });
 
@@ -463,7 +463,7 @@ describe('config Change Flow Sanity Check', () => {
       // ============================================================================
       // ROUND 2: Change mode
       // ============================================================================
-      state.setSelectedMode(ChatModes.COUNCIL);
+      state.setSelectedMode(ChatModes.SOLVING);
 
       simulateSubmission(store, {
         roundNumber: 2,
@@ -475,7 +475,7 @@ describe('config Change Flow Sanity Check', () => {
 
       simulatePatchCompletion(store, {
         hasAnyChanges: true,
-        thread: createMockThread({ mode: ChatModes.COUNCIL, updatedAt: new Date() }),
+        thread: createMockThread({ mode: ChatModes.SOLVING, updatedAt: new Date() }),
         participants,
       });
 
@@ -500,7 +500,7 @@ describe('config Change Flow Sanity Check', () => {
       simulatePatchCompletion(store, {
         hasAnyChanges: true,
         thread: createMockThread({
-          mode: ChatModes.COUNCIL,
+          mode: ChatModes.SOLVING,
           enableWebSearch: true,
           updatedAt: new Date(),
         }),
@@ -511,7 +511,7 @@ describe('config Change Flow Sanity Check', () => {
 
       // Verify final state
       const currentState = store.getState();
-      expect(currentState.selectedMode).toBe(ChatModes.COUNCIL);
+      expect(currentState.selectedMode).toBe(ChatModes.SOLVING);
       expect(currentState.enableWebSearch).toBe(true);
       expect(currentState.participants).toHaveLength(3);
     });
@@ -606,8 +606,8 @@ describe('config Change Flow Sanity Check', () => {
       state.setEnableWebSearch(false);
       state.setEnableWebSearch(true);
 
-      state.setSelectedMode(ChatModes.PANEL);
-      state.setSelectedMode(ChatModes.COUNCIL);
+      state.setSelectedMode(ChatModes.DEBATING);
+      state.setSelectedMode(ChatModes.SOLVING);
 
       // Final state at submission
       const participants = store.getState().participants;
@@ -623,7 +623,7 @@ describe('config Change Flow Sanity Check', () => {
       // Should use final state
       const currentState = store.getState();
       expect(currentState.enableWebSearch).toBe(true);
-      expect(currentState.selectedMode).toBe(ChatModes.COUNCIL);
+      expect(currentState.selectedMode).toBe(ChatModes.SOLVING);
     });
   });
 
@@ -660,7 +660,7 @@ describe('config Change Flow Sanity Check', () => {
       state.setScreenMode(ScreenModes.THREAD);
 
       // Config changes in thread
-      state.setSelectedMode(ChatModes.COUNCIL);
+      state.setSelectedMode(ChatModes.SOLVING);
 
       const participants = store.getState().participants;
 

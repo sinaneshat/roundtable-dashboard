@@ -1267,14 +1267,14 @@ async function trackRevenueFromWebhook(
           if (currentAmount > previousAmount) {
             await revenueTracking.subscriptionUpgraded({
               revenue: currentAmount,
-              currency: subscription.currency.toUpperCase(),
+              currency: (subscription.currency ?? 'usd').toUpperCase(),
               subscription_id: subscription.id,
               product: subscription.items?.data[0]?.price?.nickname ?? undefined,
             }, { userId });
           } else if (currentAmount < previousAmount) {
             await revenueTracking.subscriptionDowngraded({
               revenue: currentAmount,
-              currency: subscription.currency.toUpperCase(),
+              currency: (subscription.currency ?? 'usd').toUpperCase(),
               subscription_id: subscription.id,
               product: subscription.items?.data[0]?.price?.nickname ?? undefined,
             }, { userId });

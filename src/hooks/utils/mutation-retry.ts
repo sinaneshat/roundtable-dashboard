@@ -8,7 +8,7 @@
 type ErrorWithStatus = Error & { status: number };
 
 function isErrorWithStatus(error: Error): error is ErrorWithStatus {
-  return 'status' in error && typeof (error as Record<string, unknown>).status === 'number';
+  return 'status' in error && typeof error.status === 'number';
 }
 
 /**

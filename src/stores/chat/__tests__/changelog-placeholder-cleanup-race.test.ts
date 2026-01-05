@@ -114,7 +114,7 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
     id: threadId,
     title: 'Test Thread',
     slug,
-    mode: ChatModes.PANEL,
+    mode: ChatModes.DEBATING,
     status: 'active',
     isFavorite: false,
     isPublic: false,
