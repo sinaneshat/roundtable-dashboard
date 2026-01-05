@@ -545,7 +545,15 @@ describe('multiple pre-searches at different lifecycle stages', () => {
     state.setConfigChangeRoundNumber(2);
 
     // Round 1 completes
-    state.updatePreSearchStatus(1, MessageStatuses.COMPLETE);
+    state.updatePreSearchData(1, {
+      queries: [],
+      results: [],
+      summary: 'Complete',
+      successCount: 1,
+      failureCount: 0,
+      totalResults: 1,
+      totalTime: 1000,
+    });
 
     const round1 = state.preSearches.find(p => p.roundNumber === 1);
     expect(round1?.status).toBe(MessageStatuses.COMPLETE);

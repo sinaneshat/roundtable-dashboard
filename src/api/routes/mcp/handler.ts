@@ -20,6 +20,7 @@ import {
   MessagePartTypes,
   MessageRoles,
   ProjectIndexStatusSchema,
+  ThreadStatuses,
 } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { getAllModels, getModelById } from '@/api/services/models-config.service';
@@ -585,7 +586,7 @@ async function toolCreateThread(
     title: input.title,
     slug,
     mode: input.mode || DEFAULT_CHAT_MODE,
-    status: 'active',
+    status: ThreadStatuses.ACTIVE,
     isPublic: input.isPublic || false,
     version: 1,
     createdAt: new Date(),
