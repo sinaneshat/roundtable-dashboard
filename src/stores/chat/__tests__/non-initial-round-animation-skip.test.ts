@@ -190,14 +190,10 @@ describe('non-Initial Round Animation Skip', () => {
         };
 
         const shouldSkip = shouldSkipUserMessageAnimation(message, false);
+        const shouldAnimate = round === 0 && phase === 'persisted';
 
-        if (round === 0 && phase === 'persisted') {
-          // Only round 0 persisted messages should animate
-          expect(shouldSkip).toBe(false);
-        } else {
-          // All other cases should skip animation
-          expect(shouldSkip).toBe(true);
-        }
+        // Only round 0 persisted messages should animate, all others skip
+        expect(shouldSkip).toBe(!shouldAnimate);
       }
     });
   });

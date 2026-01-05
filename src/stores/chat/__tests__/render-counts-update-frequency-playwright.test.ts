@@ -1512,11 +1512,11 @@ describe('render Counts and Update Frequency E2E', () => {
       expect(participantIndexTimeline).toContain(1);
       expect(participantIndexTimeline).toContain(2);
 
-      // No backwards transitions (e.g., 2 → 1)
+      // No backwards transitions (e.g., 2 → 1) - verify forward progress only
       for (let i = 1; i < participantIndexTimeline.length; i++) {
-        if (participantIndexTimeline[i]! > participantIndexTimeline[i - 1]!) {
-          expect(participantIndexTimeline[i]).toBeGreaterThan(participantIndexTimeline[i - 1]!);
-        }
+        const curr = participantIndexTimeline[i]!;
+        const prev = participantIndexTimeline[i - 1]!;
+        expect(curr >= prev).toBe(true);
       }
     });
 

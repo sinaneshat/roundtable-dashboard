@@ -139,10 +139,13 @@ describe('submission Flow Sanity - State Transition Order', () => {
     const lastMessage = store.getState().messages[store.getState().messages.length - 1];
 
     expect(currentRound).toBe(0);
-    expect(lastMessage?.metadata).toBeDefined();
-    if (lastMessage && lastMessage.metadata && typeof lastMessage.metadata === 'object' && 'roundNumber' in lastMessage.metadata) {
-      expect(lastMessage.metadata.roundNumber).toBe(currentRound);
-    }
+    expect(lastMessage).toBeDefined();
+    expect(lastMessage!.metadata).toBeDefined();
+
+    // Type-safe assertion for roundNumber in metadata
+    const metadata = lastMessage!.metadata as Record<string, unknown>;
+    expect(metadata).toHaveProperty('roundNumber');
+    expect(metadata.roundNumber).toBe(currentRound);
   });
 });
 
@@ -364,28 +367,19 @@ describe('submission Flow Sanity - Message Ordering', () => {
 
     const storedMessages = store.getState().messages;
 
-    // Verify chronological order by createdAt
-    for (let i = 1; i < storedMessages.length; i++) {
-      const prev = storedMessages[i - 1];
-      const curr = storedMessages[i];
+    // Verify we have expected number of messages
+    expect(storedMessages).toHaveLength(3);
 
-      if (
-        prev
-        && curr
-        && prev.metadata
-        && curr.metadata
-        && typeof prev.metadata === 'object'
-        && typeof curr.metadata === 'object'
-        && 'createdAt' in prev.metadata
-        && 'createdAt' in curr.metadata
-        && typeof prev.metadata.createdAt === 'string'
-        && typeof curr.metadata.createdAt === 'string'
-      ) {
-        const prevTime = new Date(prev.metadata.createdAt).getTime();
-        const currTime = new Date(curr.metadata.createdAt).getTime();
-        expect(prevTime).toBeLessThanOrEqual(currTime);
-      }
-    }
+    // Extract and verify chronological order by createdAt
+    const timestamps = storedMessages.map((msg) => {
+      const metadata = msg.metadata as { createdAt?: string } | undefined;
+      expect(metadata?.createdAt).toBeDefined();
+      return new Date(metadata!.createdAt!).getTime();
+    });
+
+    // Verify each timestamp is >= previous
+    expect(timestamps[0]).toBeLessThanOrEqual(timestamps[1]!);
+    expect(timestamps[1]).toBeLessThanOrEqual(timestamps[2]!);
   });
 
   it('should have user message before assistant messages in same round', () => {

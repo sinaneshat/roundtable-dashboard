@@ -207,14 +207,12 @@ describe('conversation Mode Changes - Detection', () => {
     modes.forEach((fromMode) => {
       modes.forEach((toMode) => {
         const change = detectModeChange(fromMode, toMode, 1);
+        const isSameMode = fromMode === toMode;
 
-        if (fromMode === toMode) {
-          expect(change).toBeNull();
-        } else {
-          expect(change).not.toBeNull();
-          expect(change?.oldMode).toBe(fromMode);
-          expect(change?.newMode).toBe(toMode);
-        }
+        // Use unconditional assertions
+        expect(change === null).toBe(isSameMode);
+        expect(change?.oldMode).toBe(isSameMode ? undefined : fromMode);
+        expect(change?.newMode).toBe(isSameMode ? undefined : toMode);
       });
     });
   });
@@ -569,15 +567,13 @@ describe('conversation Mode Changes - Transition Matrix', () => {
 
       it(testName, () => {
         const change = detectModeChange(fromMode, toMode, 1);
+        const isSameMode = fromMode === toMode;
 
-        if (fromMode === toMode) {
-          expect(change).toBeNull();
-        } else {
-          expect(change).not.toBeNull();
-          expect(change?.oldMode).toBe(fromMode);
-          expect(change?.newMode).toBe(toMode);
-          expect(change?.type).toBe(ChangelogChangeTypesExtended.MODE_CHANGED);
-        }
+        // Use unconditional assertions
+        expect(change === null).toBe(isSameMode);
+        expect(change?.oldMode).toBe(isSameMode ? undefined : fromMode);
+        expect(change?.newMode).toBe(isSameMode ? undefined : toMode);
+        expect(change?.type).toBe(isSameMode ? undefined : ChangelogChangeTypesExtended.MODE_CHANGED);
       });
     });
   });
@@ -602,14 +598,20 @@ describe('conversation Mode Changes - Edge Cases', () => {
       ]),
     ];
 
-    rounds.forEach((round, index) => {
-      if (index === 0) {
-        expect(round.hasChangelog).toBe(false);
-      } else {
-        expect(round.hasChangelog).toBe(true);
-        expect(round.changelogEntries).toHaveLength(1);
-      }
-    });
+    // Verify rounds array is populated before iterating
+    expect(rounds).toHaveLength(4);
+
+    // First round: no changelog
+    expect(rounds[0]!.hasChangelog).toBe(false);
+    expect(rounds[0]!.changelogEntries).toHaveLength(0);
+
+    // Subsequent rounds: have changelog with 1 entry each
+    expect(rounds[1]!.hasChangelog).toBe(true);
+    expect(rounds[1]!.changelogEntries).toHaveLength(1);
+    expect(rounds[2]!.hasChangelog).toBe(true);
+    expect(rounds[2]!.changelogEntries).toHaveLength(1);
+    expect(rounds[3]!.hasChangelog).toBe(true);
+    expect(rounds[3]!.changelogEntries).toHaveLength(1);
   });
 
   it('should handle mode change then reverting back', () => {

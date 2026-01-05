@@ -340,13 +340,10 @@ describe('changelog Fetch Timing', () => {
         { type: 'removed', participantId: 'p2' },
       ]);
 
-      mockQueryClient.setQueryData.mockImplementation((key, updater) => {
-        if (typeof updater === 'function') {
-          const updated = updater(existingCache);
-          expect(updated.data.items).toHaveLength(2);
-          expect(updated.data.items[0]?.roundNumber).toBe(2); // Newest first
-          expect(updated.data.items[1]?.roundNumber).toBe(1);
-        }
+      let capturedResult: { data: { items: { roundNumber: number }[] } } | null = null;
+      mockQueryClient.setQueryData.mockImplementation((_key, updater) => {
+        const result = typeof updater === 'function' ? updater(existingCache) : updater;
+        capturedResult = result as typeof capturedResult;
       });
 
       // Simulate merge
@@ -367,6 +364,10 @@ describe('changelog Fetch Timing', () => {
       );
 
       expect(mockQueryClient.setQueryData).toHaveBeenCalled();
+      expect(capturedResult).not.toBeNull();
+      expect(capturedResult!.data.items).toHaveLength(2);
+      expect(capturedResult!.data.items[0]?.roundNumber).toBe(2); // Newest first
+      expect(capturedResult!.data.items[1]?.roundNumber).toBe(1);
     });
 
     it('clears waiting flags after successful merge', () => {
@@ -844,15 +845,10 @@ describe('changelog Edge Cases', () => {
       ]); // Same round, same ID
 
       // Simulate use-changelog-sync.ts:89-93 (duplicate check)
-      mockQueryClient.setQueryData.mockImplementation((key, updater) => {
-        if (typeof updater === 'function') {
-          const updated = updater(existingCache);
-          const existingIds = new Set(existingCache.data.items.map(item => item.id));
-          const uniqueNewItems = [newChangelog].filter(item => !existingIds.has(item.id));
-
-          expect(uniqueNewItems).toHaveLength(0); // Duplicate detected
-          expect(updated.data.items).toHaveLength(1); // No duplicate added
-        }
+      let capturedUpdated: typeof existingCache | null = null;
+      mockQueryClient.setQueryData.mockImplementation((_key, updater) => {
+        const result = typeof updater === 'function' ? updater(existingCache) : updater;
+        capturedUpdated = result as typeof existingCache;
       });
 
       mockQueryClient.setQueryData(
@@ -870,6 +866,12 @@ describe('changelog Edge Cases', () => {
           };
         },
       );
+
+      const existingIds = new Set(existingCache.data.items.map(item => item.id));
+      const uniqueNewItems = [newChangelog].filter(item => !existingIds.has(item.id));
+
+      expect(uniqueNewItems).toHaveLength(0); // Duplicate detected
+      expect(capturedUpdated?.data.items).toHaveLength(1); // No duplicate added
     });
   });
 });

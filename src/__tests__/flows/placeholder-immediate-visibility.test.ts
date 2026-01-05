@@ -71,7 +71,7 @@ function createParticipantMessage(
   };
 }
 
-function _createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage { // eslint-disable-line ts/no-unused-vars
+function _createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
     role: MessageRoles.ASSISTANT,
@@ -705,9 +705,12 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
     const streamEvent = visibilityMarkers.find(m => m.event === 'first-stream-token');
 
     expect(placeholderEvent).toBeDefined();
-    if (streamEvent) {
-      expect(placeholderEvent!.timestamp).toBeLessThanOrEqual(streamEvent.timestamp);
-    }
+    // Verify timing - if stream event exists, placeholder should have been visible before/at stream start
+
+    const placeholderBeforeStream = streamEvent
+      ? placeholderEvent!.timestamp <= streamEvent.timestamp
+      : true; // No stream event to compare
+    expect(placeholderBeforeStream).toBe(true);
   });
 });
 

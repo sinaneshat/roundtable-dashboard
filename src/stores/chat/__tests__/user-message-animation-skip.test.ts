@@ -604,14 +604,8 @@ describe('user Message Animation Skip Logic', () => {
         };
 
         const shouldSkip = shouldSkipUserMessageAnimation(message, false);
-
-        if (round === 0) {
-          // Round 0 should animate
-          expect(shouldSkip).toBe(false);
-        } else {
-          // Round 1+ should skip
-          expect(shouldSkip).toBe(true);
-        }
+        // Round 0 should animate, Round 1+ should skip
+        expect(shouldSkip).toBe(round !== 0);
       });
     });
 

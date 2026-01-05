@@ -730,10 +730,9 @@ describe('accordion Visibility and Content Accuracy', () => {
       ]);
 
       let capturedResult: { data: { items: { roundNumber: number }[] } } | null = null;
-      mockQueryClient.setQueryData.mockImplementation((key, updater) => {
-        if (typeof updater === 'function') {
-          capturedResult = updater(existingCache);
-        }
+      mockQueryClient.setQueryData.mockImplementation((_key, updater) => {
+        const result = typeof updater === 'function' ? updater(existingCache) : updater;
+        capturedResult = result as typeof capturedResult;
       });
 
       mockQueryClient.setQueryData(
@@ -773,15 +772,10 @@ describe('accordion Visibility and Content Accuracy', () => {
         { type: 'added', participantId: 'p1' },
       ]); // Same round, same ID
 
-      mockQueryClient.setQueryData.mockImplementation((key, updater) => {
-        if (typeof updater === 'function') {
-          const updated = updater(existingCache);
-          const existingIds = new Set(existingCache.data.items.map(item => item.id));
-          const uniqueNewItems = [duplicateChangelog].filter(item => !existingIds.has(item.id));
-
-          expect(uniqueNewItems).toHaveLength(0); // Duplicate detected
-          expect(updated.data.items).toHaveLength(1); // No duplicate added
-        }
+      let capturedUpdated: typeof existingCache | null = null;
+      mockQueryClient.setQueryData.mockImplementation((_key, updater) => {
+        const result = typeof updater === 'function' ? updater(existingCache) : updater;
+        capturedUpdated = result as typeof existingCache;
       });
 
       mockQueryClient.setQueryData(
@@ -799,6 +793,12 @@ describe('accordion Visibility and Content Accuracy', () => {
           };
         },
       );
+
+      const existingIds = new Set(existingCache.data.items.map(item => item.id));
+      const uniqueNewItems = [duplicateChangelog].filter(item => !existingIds.has(item.id));
+
+      expect(uniqueNewItems).toHaveLength(0); // Duplicate detected
+      expect(capturedUpdated?.data.items).toHaveLength(1); // No duplicate added
     });
   });
 });

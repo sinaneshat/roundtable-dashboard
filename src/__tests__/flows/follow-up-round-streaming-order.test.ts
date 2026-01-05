@@ -51,8 +51,8 @@ function setupFollowUpRoundState(store: ChatStoreApi, options: {
 }) {
   const {
     enableWebSearch = true,
-    hasConfigChanges: _hasConfigChanges = true, // eslint-disable-line ts/no-unused-vars
-    preSearchStatus: _preSearchStatus = MessageStatuses.PENDING, // eslint-disable-line ts/no-unused-vars
+    hasConfigChanges: _hasConfigChanges = true,
+    preSearchStatus: _preSearchStatus = MessageStatuses.PENDING,
   } = options;
 
   const thread = createMockThread({ enableWebSearch });
@@ -340,15 +340,20 @@ describe('participants Must Start After Pre-Search Completes', () => {
       const state = store.getState();
       const currentPreSearch = state.preSearches.find(ps => ps.roundNumber === 1);
 
-      if (currentPreSearch?.completedAt) {
-        const completedTime = currentPreSearch.completedAt instanceof Date
-          ? currentPreSearch.completedAt.getTime()
-          : new Date(currentPreSearch.completedAt).getTime();
-        const timeSinceComplete = Date.now() - completedTime;
+      // Verify pre-search exists
+      expect(currentPreSearch).toBeDefined();
 
-        // Within 50ms, should wait
-        expect(timeSinceComplete).toBeLessThan(100); // Allow some test execution time
-      }
+      // Pre-search is complete, verify timing is reasonable
+      const completedAt = currentPreSearch!.completedAt;
+      expect(completedAt).toBeDefined();
+
+      const timestamp = completedAt instanceof Date
+        ? completedAt.getTime()
+        : new Date(completedAt!).getTime();
+      const timeSinceComplete = Date.now() - timestamp;
+
+      // Within 100ms of completion, should wait
+      expect(timeSinceComplete).toBeLessThan(100);
     });
   });
 });

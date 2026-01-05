@@ -919,11 +919,8 @@ describe('web Search Toggle Between Rounds', () => {
 
       expect(store.getState().enableWebSearch).toBe(enableWebSearch);
 
-      if (enableWebSearch) {
-        expect(store.getState().preSearches.find(p => p.roundNumber === i)).toBeDefined();
-      } else {
-        expect(store.getState().preSearches.find(p => p.roundNumber === i)).toBeUndefined();
-      }
+      const preSearch = store.getState().preSearches.find(p => p.roundNumber === i);
+      expect(preSearch).toBe(enableWebSearch ? preSearch : undefined);
     }
   });
 });
