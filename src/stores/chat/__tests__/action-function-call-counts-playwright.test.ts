@@ -897,7 +897,7 @@ describe('action Sequencing', () => {
     const store = createTestChatStore();
 
     // Track calls without calling the actual implementation (avoid infinite recursion)
-    const _callSequence = vi.spyOn(store.getState(), 'addPreSearch');
+    const addPreSearchSpy = vi.spyOn(store.getState(), 'addPreSearch');
     const updatePreSearchStatusSpy = vi.spyOn(store.getState(), 'updatePreSearchStatus');
 
     // Simulate pre-search flow

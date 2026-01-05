@@ -322,7 +322,7 @@ describe('changelog Fetch Timing', () => {
   describe('fetch completion and cache merge', () => {
     it('merges new changelog entries into cache', () => {
       const mockQueryClient = createMockQueryClient();
-      const _state = 'thread-123';
+      const effectiveThreadId = 'thread-123';
 
       // Simulate existing cache (from use-changelog-sync.ts:76-103)
       const existingCache = {
