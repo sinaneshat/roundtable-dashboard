@@ -71,7 +71,7 @@ function createParticipantMessage(
   };
 }
 
-function _createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage {
+function _createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage { // eslint-disable-line ts/no-unused-vars
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
     role: MessageRoles.ASSISTANT,

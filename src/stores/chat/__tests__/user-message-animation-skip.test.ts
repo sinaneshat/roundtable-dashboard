@@ -314,7 +314,7 @@ describe('user Message Animation Skip Logic', () => {
           },
         ];
 
-        transitions.forEach(({ round, id, isOptimistic, expectedSkip, reason }) => {
+        transitions.forEach(({ round, id, isOptimistic, expectedSkip, reason: _reason }) => {
           const message: UIMessage = {
             id,
             role: MessageRoles.USER,
@@ -581,7 +581,7 @@ describe('user Message Animation Skip Logic', () => {
         },
       ];
 
-      conversationFlow.forEach(({ description, message, expectedSkip }) => {
+      conversationFlow.forEach(({ description: _description, message, expectedSkip }) => {
         const result = shouldSkipUserMessageAnimation(message, false);
         expect(result).toBe(expectedSkip);
       });

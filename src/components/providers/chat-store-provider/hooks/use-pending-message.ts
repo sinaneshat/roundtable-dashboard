@@ -102,8 +102,10 @@ export function usePendingMessage({
     // ✅ FIX: Block on BOTH changelog flags to ensure proper ordering:
     // Order: PATCH → changelog → pre-search → streams
     // configChangeRoundNumber is set BEFORE PATCH to block streaming
-    // isWaitingForChangelog is set BEFORE PATCH to trigger changelog fetch
-    const isInitialThreadCreation = screenMode === ScreenModes.OVERVIEW && waitingToStart;
+    // isWaitingForChangelog is set AFTER PATCH to trigger changelog fetch
+    // Initial thread creation (handleCreateThread) does NOT set configChangeRoundNumber,
+    // only handleUpdateThreadAndSend does. So if configChangeRoundNumber is set, it's NOT initial.
+    const isInitialThreadCreation = screenMode === ScreenModes.OVERVIEW && waitingToStart && configChangeRoundNumber === null;
     if ((isWaitingForChangelog || configChangeRoundNumber !== null) && !isInitialThreadCreation) {
       rlog.presearch('block-changelog', `configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
       return;

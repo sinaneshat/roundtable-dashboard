@@ -42,12 +42,12 @@ type MockQueryClient = {
   invalidateQueries: ReturnType<typeof vi.fn>;
 };
 
-function createMockQueryClient(): MockQueryClient & QueryClient {
+function createMockQueryClient(): MockQueryClient & Partial<QueryClient> {
   return {
     setQueryData: vi.fn(),
     getQueryData: vi.fn(),
     invalidateQueries: vi.fn(),
-  } as unknown as MockQueryClient & QueryClient;
+  };
 }
 
 function createMockChangelog(
@@ -729,12 +729,10 @@ describe('accordion Visibility and Content Accuracy', () => {
         { type: 'removed', participantId: 'p2' },
       ]);
 
+      let capturedResult: { data: { items: { roundNumber: number }[] } } | null = null;
       mockQueryClient.setQueryData.mockImplementation((key, updater) => {
         if (typeof updater === 'function') {
-          const updated = updater(existingCache);
-          expect(updated.data.items).toHaveLength(2);
-          expect(updated.data.items[0]?.roundNumber).toBe(2); // Newest first
-          expect(updated.data.items[1]?.roundNumber).toBe(1);
+          capturedResult = updater(existingCache);
         }
       });
 
@@ -755,6 +753,10 @@ describe('accordion Visibility and Content Accuracy', () => {
       );
 
       expect(mockQueryClient.setQueryData).toHaveBeenCalled();
+      expect(capturedResult).not.toBeNull();
+      expect(capturedResult!.data.items).toHaveLength(2);
+      expect(capturedResult!.data.items[0]?.roundNumber).toBe(2); // Newest first
+      expect(capturedResult!.data.items[1]?.roundNumber).toBe(1);
     });
 
     it('prevents duplicate changelog entries', () => {

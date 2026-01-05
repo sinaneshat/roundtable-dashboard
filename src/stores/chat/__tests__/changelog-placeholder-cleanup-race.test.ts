@@ -41,7 +41,7 @@ function simulateHandleUpdateThreadAndSend(
   },
 ) {
   const state = store.getState();
-  const { threadId, message, roundNumber, hasConfigChanges, enableWebSearch } = options;
+  const { threadId, message, roundNumber, enableWebSearch } = options;
 
   // 1. Create and add optimistic user message
   const optimisticMessage = createOptimisticUserMessage({

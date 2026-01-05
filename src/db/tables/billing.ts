@@ -1,7 +1,7 @@
 import { relations } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import { PAYMENT_METHOD_TYPES } from '@/api/core/enums';
+import { BILLING_INTERVALS, INVOICE_STATUSES, PAYMENT_METHOD_TYPES, PRICE_TYPES } from '@/api/core/enums';
 import type { StripeMetadataType, StripeWebhookEventData } from '@/db/validation/billing';
 
 import { user } from './auth';
@@ -44,11 +44,11 @@ export const stripePrice = sqliteTable(
     active: integer('active', { mode: 'boolean' }).default(true).notNull(),
     currency: text('currency').notNull().default('usd'), // ISO currency code
     unitAmount: integer('unit_amount'), // Price in smallest currency unit (cents for USD)
-    type: text('type', { enum: ['one_time', 'recurring'] })
+    type: text('type', { enum: PRICE_TYPES })
       .notNull()
       .default('recurring'),
     interval: text('interval', {
-      enum: ['day', 'week', 'month', 'year'],
+      enum: BILLING_INTERVALS,
     }), // For recurring prices
     intervalCount: integer('interval_count').default(1), // Billing frequency (e.g., every 3 months)
     trialPeriodDays: integer('trial_period_days'), // Free trial duration
@@ -203,7 +203,7 @@ export const stripeInvoice = sqliteTable(
       { onDelete: 'set null' },
     ),
     status: text('status', {
-      enum: ['draft', 'open', 'paid', 'uncollectible', 'void'],
+      enum: INVOICE_STATUSES,
     }).notNull(),
     amountDue: integer('amount_due').notNull(), // Amount in smallest currency unit
     amountPaid: integer('amount_paid').notNull(),

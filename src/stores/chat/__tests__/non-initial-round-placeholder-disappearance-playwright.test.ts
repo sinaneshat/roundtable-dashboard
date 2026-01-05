@@ -296,7 +296,7 @@ describe('non-initial round placeholder disappearance', () => {
 
   describe('correct behavior: streaming starts after initializeThread', () => {
     it('should allow streamingRoundNumber to be cleared when streaming actually completes', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { store } = createStoreWithCompletedRound0();
       const nextRoundNumber = 1;
 
       // Setup submission
@@ -566,7 +566,7 @@ describe('non-initial round placeholder disappearance', () => {
 
   describe('pre-search completion should not hide placeholders', () => {
     it('should keep placeholders visible when pre-search completes but streaming not started', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { store, thread } = createStoreWithCompletedRound0();
       const nextRoundNumber = 1;
 
       // Setup

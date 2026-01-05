@@ -317,7 +317,7 @@ describe('user Message Deduplication', () => {
         ],
       ];
 
-      orderings.forEach((messages, index) => {
+      orderings.forEach((messages, _index) => {
         const result = simulateDeduplication(messages);
         const round1User = result.find(
           m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1,

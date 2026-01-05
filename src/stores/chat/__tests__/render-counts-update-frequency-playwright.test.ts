@@ -57,7 +57,7 @@ function trackUpdate(tracker: UpdateTracker, state: ReturnType<typeof createChat
   });
 }
 
-function getUpdatesPerSecond(tracker: UpdateTracker): number {
+function _getUpdatesPerSecond(tracker: UpdateTracker): number {
   if (tracker.timestamps.length < 2)
     return 0;
   const first = tracker.timestamps[0]!;

@@ -554,10 +554,8 @@ describe('scenario 4: Each Round Has Independent Web Search Setting', () => {
 // ============================================================================
 
 describe('scenario 5: Form State is Source of Truth', () => {
-  let store: ChatStoreApi;
-
   beforeEach(() => {
-    store = createChatStore();
+    createChatStore();
   });
 
   it('should use form state when thread has web search disabled', () => {

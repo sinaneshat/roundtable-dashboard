@@ -526,3 +526,56 @@ export const PaymentMethodTypes = {
 export function isPaymentMethodType(value: unknown): value is PaymentMethodType {
   return typeof value === 'string' && PAYMENT_METHOD_TYPES.includes(value as PaymentMethodType);
 }
+
+// ============================================================================
+// PRICE TYPE (Stripe price billing type)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const PRICE_TYPES = ['one_time', 'recurring'] as const;
+
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const PriceTypeSchema = z.enum(PRICE_TYPES).openapi({
+  description: 'Stripe price billing type',
+  example: 'recurring',
+});
+
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type PriceType = z.infer<typeof PriceTypeSchema>;
+
+// 4️⃣ DEFAULT VALUE
+export const DEFAULT_PRICE_TYPE: PriceType = 'recurring';
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const PriceTypes = {
+  ONE_TIME: 'one_time' as const,
+  RECURRING: 'recurring' as const,
+} as const;
+
+// ============================================================================
+// INVOICE STATUS (Stripe invoice lifecycle)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const INVOICE_STATUSES = ['draft', 'open', 'paid', 'uncollectible', 'void'] as const;
+
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const InvoiceStatusSchema = z.enum(INVOICE_STATUSES).openapi({
+  description: 'Stripe invoice lifecycle status',
+  example: 'paid',
+});
+
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type InvoiceStatus = z.infer<typeof InvoiceStatusSchema>;
+
+// 4️⃣ DEFAULT VALUE
+export const DEFAULT_INVOICE_STATUS: InvoiceStatus = 'draft';
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const InvoiceStatuses = {
+  DRAFT: 'draft' as const,
+  OPEN: 'open' as const,
+  PAID: 'paid' as const,
+  UNCOLLECTIBLE: 'uncollectible' as const,
+  VOID: 'void' as const,
+} as const;

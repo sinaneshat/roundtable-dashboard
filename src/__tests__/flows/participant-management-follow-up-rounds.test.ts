@@ -425,9 +425,9 @@ describe('participant Role Changes Between Rounds', () => {
 
   describe('role Assignment and Removal', () => {
     it('should handle role added where none existed', () => {
-      const initialParticipants = setupStoreWithInitialRound(store, 2);
+      setupStoreWithInitialRound(store, 2);
 
-      const participant0 = createMockParticipant(0, {
+      const _initialParticipants = createMockParticipant(0, {
         threadId: 'thread-1',
         role: null,
       });

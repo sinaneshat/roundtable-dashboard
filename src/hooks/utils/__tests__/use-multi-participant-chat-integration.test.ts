@@ -196,7 +196,7 @@ function createAssistantMessage(
 // ============================================================================
 
 describe('useMultiParticipantChat Integration', () => {
-  describe('aI SDK Messages Don't Overwrite Store Messages', () => {
+  describe('ai SDK Messages Do Not Overwrite Store Messages', () => {
     it('should preserve original user message when AI SDK creates participant trigger', () => {
       // STEP 1: Store has original user message (from form submission + PATCH completion)
       const storeMessages: UIMessage[] = [
@@ -275,7 +275,7 @@ describe('useMultiParticipantChat Integration', () => {
       ];
 
       // AI SDK starts empty (before hydration)
-      const aiSdkMessages: UIMessage[] = [];
+      const _aiSdkMessages: UIMessage[] = [];
 
       // Hydration happens: pass store messages to AI SDK's initial messages
       // This is handled by the `messages` prop in useChat, not by sync
@@ -384,7 +384,7 @@ describe('useMultiParticipantChat Integration', () => {
       ];
 
       // User submits round 1 - optimistic message added
-      const storeAfterSubmit = [
+      const _storeAfterSubmit = [
         ...existingStoreMessages,
         createOptimisticUserMessage(1, 'Round 1'),
       ];

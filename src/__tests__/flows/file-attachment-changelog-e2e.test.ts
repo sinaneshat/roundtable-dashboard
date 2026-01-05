@@ -478,7 +478,7 @@ describe('file Attachment Changelog E2E', () => {
       expect(state.rounds[1]?.changes?.[0]?.type).toBe('file_attachment');
 
       // Verify participants didn't change (would be tested separately in actual implementation)
-      expect(participants).toHaveLength(2); // Same as Round 0
+      expect(_participants).toHaveLength(2); // Same as Round 0
     });
 
     it('should show changelog even if only file removal occurred', () => {

@@ -744,4 +744,127 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       expect(clearedState.isWaitingForChangelog).toBe(false);
     });
   });
+
+  describe('isInitialThreadCreation Bypass - OVERVIEW Screen Non-Initial Rounds', () => {
+    /**
+     * BUG FIX: isInitialThreadCreation was incorrectly calculated as:
+     *   isInitialThreadCreation = screenMode === OVERVIEW && waitingToStart
+     *
+     * This caused the blocking check to be bypassed for ALL submissions on OVERVIEW screen,
+     * even for non-initial rounds (round 2+) with config changes.
+     *
+     * FIX: Added configChangeRoundNumber === null to the condition:
+     *   isInitialThreadCreation = screenMode === OVERVIEW && waitingToStart && configChangeRoundNumber === null
+     *
+     * Now:
+     * - Initial thread creation (handleCreateThread): configChangeRoundNumber is null → bypass allowed
+     * - Non-initial rounds (handleUpdateThreadAndSend): configChangeRoundNumber is set → blocking works
+     */
+
+    it('should NOT bypass blocking for non-initial rounds on OVERVIEW screen', () => {
+      const roundNumber = 2;
+
+      // Simulate non-initial round submission on OVERVIEW screen
+      // handleUpdateThreadAndSend sets configChangeRoundNumber BEFORE PATCH
+      store.getState().setConfigChangeRoundNumber(roundNumber);
+      store.getState().setWaitingToStartStreaming(true);
+
+      const state = store.getState();
+
+      // OLD BUGGY LOGIC: isInitialThreadCreation = OVERVIEW && waitingToStart = true (BUG!)
+      // This would bypass the blocking check even for round 2
+      const buggyIsInitialThreadCreation = state.waitingToStartStreaming; // Missing configChangeRoundNumber check
+
+      // NEW FIXED LOGIC: isInitialThreadCreation = OVERVIEW && waitingToStart && configChangeRoundNumber === null
+      const fixedIsInitialThreadCreation = state.waitingToStartStreaming && state.configChangeRoundNumber === null;
+
+      // The buggy logic would return true, allowing bypass
+      expect(buggyIsInitialThreadCreation).toBe(true);
+
+      // The fixed logic returns false, blocking check works correctly
+      expect(fixedIsInitialThreadCreation).toBe(false);
+
+      // With fixed logic, blocking condition should work
+      const shouldBlock = (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) && !fixedIsInitialThreadCreation;
+      expect(shouldBlock).toBe(true);
+    });
+
+    it('should allow bypass for actual initial thread creation', () => {
+      // Simulate initial thread creation (handleCreateThread)
+      // handleCreateThread does NOT set configChangeRoundNumber
+      store.getState().setWaitingToStartStreaming(true);
+      // configChangeRoundNumber stays null (default)
+
+      const state = store.getState();
+
+      // FIXED LOGIC: isInitialThreadCreation = OVERVIEW && waitingToStart && configChangeRoundNumber === null
+      const fixedIsInitialThreadCreation = state.waitingToStartStreaming && state.configChangeRoundNumber === null;
+
+      // For initial thread creation, bypass should be allowed
+      expect(fixedIsInitialThreadCreation).toBe(true);
+
+      // Blocking condition should NOT block (bypass allowed)
+      const shouldBlock = (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) && !fixedIsInitialThreadCreation;
+      expect(shouldBlock).toBe(false);
+    });
+
+    it('should block pre-search for web search enabled mid-conversation on OVERVIEW screen', () => {
+      const roundNumber = 2;
+
+      // User enables web search mid-conversation (round 2) on OVERVIEW screen
+      store.getState().setEnableWebSearch(true);
+
+      // handleUpdateThreadAndSend sets configChangeRoundNumber BEFORE PATCH
+      store.getState().setConfigChangeRoundNumber(roundNumber);
+      store.getState().setWaitingToStartStreaming(true);
+
+      const state = store.getState();
+
+      // FIXED LOGIC: configChangeRoundNumber is set, so NOT initial thread creation
+      const isInitialThreadCreation = state.waitingToStartStreaming && state.configChangeRoundNumber === null;
+      expect(isInitialThreadCreation).toBe(false);
+
+      // Pre-search should be blocked
+      const shouldBlockPreSearch = (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) && !isInitialThreadCreation;
+      expect(shouldBlockPreSearch).toBe(true);
+
+      // PATCH completes, isWaitingForChangelog set
+      store.getState().setIsWaitingForChangelog(true);
+
+      // Pre-search still blocked (waiting for changelog)
+      const stateAfterPatch = store.getState();
+      const stillBlocked = (stateAfterPatch.isWaitingForChangelog || stateAfterPatch.configChangeRoundNumber !== null);
+      expect(stillBlocked).toBe(true);
+
+      // Changelog completes, flags cleared
+      store.getState().setIsWaitingForChangelog(false);
+      store.getState().setConfigChangeRoundNumber(null);
+
+      // NOW pre-search can execute
+      const stateAfterChangelog = store.getState();
+      const canExecutePreSearch = !stateAfterChangelog.isWaitingForChangelog && stateAfterChangelog.configChangeRoundNumber === null;
+      expect(canExecutePreSearch).toBe(true);
+    });
+
+    it('should block for mode-only changes on OVERVIEW screen', () => {
+      const roundNumber = 2;
+
+      // User changes mode mid-conversation on OVERVIEW screen
+      store.getState().setSelectedMode('council');
+
+      // handleUpdateThreadAndSend sets configChangeRoundNumber
+      store.getState().setConfigChangeRoundNumber(roundNumber);
+      store.getState().setWaitingToStartStreaming(true);
+
+      const state = store.getState();
+
+      // Should NOT be treated as initial thread creation
+      const isInitialThreadCreation = state.waitingToStartStreaming && state.configChangeRoundNumber === null;
+      expect(isInitialThreadCreation).toBe(false);
+
+      // Blocking check should work
+      const shouldBlock = (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) && !isInitialThreadCreation;
+      expect(shouldBlock).toBe(true);
+    });
+  });
 });

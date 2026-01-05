@@ -162,7 +162,6 @@ function simulateChangelogCompletion(store: ChatStoreApi): void {
 
 describe('config Change Flow Sanity Check', () => {
   let store: ChatStoreApi;
-  const threadId = 'thread-123';
 
   beforeEach(() => {
     store = createChatStore();
@@ -286,8 +285,6 @@ describe('config Change Flow Sanity Check', () => {
     });
 
     it('verifies complete flow: submission → PATCH → streaming (NO changes)', () => {
-      const state = store.getState();
-
       // ============================================================================
       // STEP 1: User submits message WITHOUT config changes
       // ============================================================================
@@ -545,8 +542,6 @@ describe('config Change Flow Sanity Check', () => {
     });
 
     it('handles PATCH failure (flags should remain set)', () => {
-      const state = store.getState();
-
       // Simulate submission
       const participants = store.getState().participants;
 

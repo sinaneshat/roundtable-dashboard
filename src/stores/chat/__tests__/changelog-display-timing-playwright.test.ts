@@ -39,11 +39,11 @@ type MockQueryClient = {
   getQueryData: ReturnType<typeof vi.fn>;
 };
 
-function createMockQueryClient(): MockQueryClient & QueryClient {
+function createMockQueryClient(): MockQueryClient & Partial<QueryClient> {
   return {
     setQueryData: vi.fn(),
     getQueryData: vi.fn(),
-  } as unknown as MockQueryClient & QueryClient;
+  };
 }
 
 function createMockChangelog(
@@ -322,8 +322,7 @@ describe('changelog Fetch Timing', () => {
   describe('fetch completion and cache merge', () => {
     it('merges new changelog entries into cache', () => {
       const mockQueryClient = createMockQueryClient();
-      const state = store.getState();
-      const effectiveThreadId = 'thread-123';
+      const _state = 'thread-123';
 
       // Simulate existing cache (from use-changelog-sync.ts:76-103)
       const existingCache = {
@@ -829,7 +828,6 @@ describe('changelog Edge Cases', () => {
 
   describe('duplicate prevention', () => {
     it('prevents duplicate changelog merges for same round', () => {
-      const state = store.getState();
       const mockQueryClient = createMockQueryClient();
 
       const existingCache = {
@@ -891,7 +889,6 @@ describe('changelog Accordion Display and Timeline Position', () => {
 
   describe('accordion appearance conditions', () => {
     it('shows accordion when config changes are made', () => {
-      const state = store.getState();
       const changelog = createMockChangelog(1, [
         { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
       ]);
@@ -1034,9 +1031,6 @@ describe('changelog Does Not Block Placeholders', () => {
       state.setWaitingToStartStreaming(true);
       state.setStreamingRoundNumber(2);
       state.setCurrentRoundNumber(2);
-
-      // Re-fetch state after mutations
-      const updatedState = store.getState();
 
       // Participant placeholders should be visible based on expectedParticipantIds
       // Even though changelog is still loading, the placeholders are independent

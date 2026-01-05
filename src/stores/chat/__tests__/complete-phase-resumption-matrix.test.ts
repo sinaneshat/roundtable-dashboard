@@ -22,6 +22,7 @@
  * - Multiple effects trying to resume the same phase
  */
 
+import type { UIMessage } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RoundPhase } from '@/api/core/enums';
@@ -210,7 +211,7 @@ describe('interruption Point 1: After submit, before thread creation', () => {
   });
 
   it('should show empty chat UI when no thread exists', () => {
-    const messages: unknown[] = [];
+    const messages: UIMessage[] = [];
     const thread = null;
 
     expect(messages).toHaveLength(0);
@@ -319,7 +320,7 @@ describe('interruption Point 4: Pre-search COMPLETE, participant 0 not started',
   it('should detect orphaned pre-search with no user message', () => {
     const preSearch = createMockStoredPreSearch(0, MessageStatuses.COMPLETE);
     preSearch.userQuery = 'User query text';
-    const messages: unknown[] = []; // No messages - user message was lost
+    const messages: UIMessage[] = []; // No messages - user message was lost
 
     const hasOrphanedPreSearch = preSearch.status === MessageStatuses.COMPLETE
       && preSearch.userQuery

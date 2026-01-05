@@ -51,8 +51,8 @@ function setupFollowUpRoundState(store: ChatStoreApi, options: {
 }) {
   const {
     enableWebSearch = true,
-    hasConfigChanges: _hasConfigChanges = true,
-    preSearchStatus: _preSearchStatus = MessageStatuses.PENDING,
+    hasConfigChanges: _hasConfigChanges = true, // eslint-disable-line ts/no-unused-vars
+    preSearchStatus: _preSearchStatus = MessageStatuses.PENDING, // eslint-disable-line ts/no-unused-vars
   } = options;
 
   const thread = createMockThread({ enableWebSearch });

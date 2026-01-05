@@ -896,10 +896,8 @@ describe('action Sequencing', () => {
   it('should sequence pre-search actions: create → execute → complete', () => {
     const store = createTestChatStore();
 
-    const callSequence: string[] = [];
-
     // Track calls without calling the actual implementation (avoid infinite recursion)
-    const addPreSearchSpy = vi.spyOn(store.getState(), 'addPreSearch');
+    const _callSequence = vi.spyOn(store.getState(), 'addPreSearch');
     const updatePreSearchStatusSpy = vi.spyOn(store.getState(), 'updatePreSearchStatus');
 
     // Simulate pre-search flow

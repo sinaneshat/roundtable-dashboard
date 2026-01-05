@@ -125,6 +125,7 @@ export function useChangelogSync({
     effectiveThreadId,
     queryClientRef,
     store,
+    shouldFetch,
   ]);
 
   // Safety timeout for edge cases where changelog fetch fails or takes too long

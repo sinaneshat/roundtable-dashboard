@@ -14,113 +14,13 @@
  * Based on React Testing Library + Zustand store patterns
  */
 
-import { useEffect, useRef } from 'react';
 import { describe, expect, it } from 'vitest';
-import { useShallow } from 'zustand/react/shallow';
-
-import { useChatStore } from '@/stores/chat';
 
 // ============================================================================
-// Render Count Tracking Utilities
-// ============================================================================
-
-/**
- * Hook to track component render count
- */
-function _useRenderCount(): number {
-  const renderCount = useRef(0);
-
-  useEffect(() => {
-    renderCount.current += 1;
-  });
-
-  return renderCount.current;
-}
-
-/**
- * Component that tracks renders with global subscription (BAD pattern)
- * Kept for documentation purposes - demonstrates anti-pattern
- */
-function _GlobalSubscriptionComponent() {
-  const renderCount = _useRenderCount();
-  const store = useChatStore(); // BAD: subscribes to entire store
-
-  return (
-    <div data-render-count={renderCount}>
-      {store.messages.length}
-      {' '}
-      messages
-    </div>
-  );
-}
-
-/**
- * Component that tracks renders with scoped subscription (GOOD pattern)
- * Kept for documentation purposes - demonstrates recommended pattern
- */
-function _ScopedSubscriptionComponent() {
-  const renderCount = _useRenderCount();
-  const messageCount = useChatStore(state => state.messages.length);
-
-  return (
-    <div data-render-count={renderCount}>
-      {messageCount}
-      {' '}
-      messages
-    </div>
-  );
-}
-
-/**
- * Component that tracks renders with useShallow batching (BEST pattern)
- * Kept for documentation purposes - demonstrates optimal pattern
- */
-function _BatchedSubscriptionComponent() {
-  const renderCount = _useRenderCount();
-  const { messageCount, isStreaming } = useChatStore(
-    useShallow(state => ({
-      messageCount: state.messages.length,
-      isStreaming: state.isStreaming,
-    })),
-  );
-
-  return (
-    <div data-render-count={renderCount}>
-      {messageCount}
-      {' '}
-      messages, streaming:
-      {String(isStreaming)}
-    </div>
-  );
-}
-
-/**
- * Component that tracks renders during streaming
- * Kept for documentation purposes - demonstrates streaming optimization
- */
-function _StreamingComponent() {
-  const renderCount = _useRenderCount();
-  const { isStreaming, currentIndex } = useChatStore(
-    useShallow(state => ({
-      isStreaming: state.isStreaming,
-      currentIndex: state.currentParticipantIndex,
-    })),
-  );
-
-  return (
-    <div data-render-count={renderCount}>
-      Streaming:
-      {' '}
-      {String(isStreaming)}
-      , Index:
-      {' '}
-      {currentIndex}
-    </div>
-  );
-}
-
-// ============================================================================
-// Render Count Tests - Global vs Scoped Subscriptions
+// Render Count Tracking Tests
+//
+// These tests document component subscription patterns and render behavior.
+// Example components are shown in JSDoc comments within each test.
 // ============================================================================
 
 describe('render Count Tracking - Subscription Patterns', () => {
