@@ -1,17 +1,19 @@
-// OpenNext Cloudflare integration for local development
-// @see https://opennext.js.org/cloudflare
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
+
+// Initialize OpenNext Cloudflare for development - must be called before any other code
+// Only runs if CLOUDFLARE_API_TOKEN is set (to avoid OAuth login prompts when empty)
+// Set token in .env to enable full Cloudflare bindings (AI, Browser, etc.)
+if (process.env.NODE_ENV === 'development' && process.env.CLOUDFLARE_API_TOKEN) {
+  initOpenNextCloudflareForDev();
+}
 
 const isDev = process.env.NODE_ENV === 'development';
 
 const nextConfig: NextConfig = {
   // Required for OpenNext deployment
   output: 'standalone',
-
-  // Required for PostHog API trailing slashes
-  skipTrailingSlashRedirect: true,
 
   // Compiler optimizations
   compiler: {
@@ -23,62 +25,53 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
 
-  // Experimental features
+  // Stable experimental features (production-ready since Next.js 13.5+)
   experimental: {
     // Optimize package imports for better tree-shaking
-    // Required to prevent production build errors with barrel exports
-    // @see https://nextjs.org/docs/app/api-reference/config/next-config-js/optimizePackageImports
+    // Battle-tested since 13.5, widely used in production
+    // Reduces module loading by 15-70% depending on library
     optimizePackageImports: [
-      // Animation - REQUIRED: motion barrel exports break without optimization
-      'motion',
-      // UI libraries with barrel exports
+      'lucide-react',
+      'recharts',
+      'date-fns',
       '@radix-ui/react-icons',
-      'cmdk',
-      'vaul',
-      'react-day-picker',
-      // Forms
-      'react-hook-form',
-      '@hookform/resolvers',
-      // Data/State
-      '@tanstack/react-query',
-      '@tanstack/react-virtual',
-      'zustand',
-      'immer',
-      // AI SDK
-      'ai',
-      '@ai-sdk/react',
-      // Utilities
-      'chroma-js',
-      'clsx',
-      'class-variance-authority',
-      'tailwind-merge',
-      'fuse.js',
-      // Analytics
-      'posthog-js',
-      // Markdown/Syntax
-      'react-markdown',
-      'shiki',
+      'motion',
     ],
-  },
 
-  // Cache Components (Next.js 16+) - DISABLED
-  // PPR requires all dynamic data to be in Suspense boundaries,
-  // which conflicts with auth-protected routes that fetch user data
-  // TODO: Re-enable when routes are properly structured for PPR
-  cacheComponents: false,
+    // View Transitions API integration (Baseline 2025)
+    // Browser support: Chrome 111+, Safari 18+, Firefox 144+
+    // Enables smooth page transitions during client-side navigation
+    // https://developer.chrome.com/docs/web-platform/view-transitions
+    viewTransition: true,
+  },
 
   // External packages for Server Components bundling
   // Required for React Email to work in edge runtime and Cloudflare Workers
   // @see https://github.com/resend/react-email/issues/977
-  // @see https://opennext.js.org/cloudflare/howtos/workerd-specific-packages
   serverExternalPackages: [
     '@react-email/components',
     '@react-email/html',
     '@react-email/render',
     'react-email',
-    // workerd-specific packages per OpenNext docs
-    'jose',
   ],
+
+  // Block service worker in development to prevent caching issues
+  async rewrites() {
+    if (isDev) {
+      return {
+        beforeFiles: [
+          {
+            // Block sw.js requests in dev - return 404 via non-existent path
+            source: '/sw.js',
+            destination: '/_dev-sw-blocked',
+          },
+        ],
+        afterFiles: [],
+        fallback: [],
+      };
+    }
+    return { beforeFiles: [], afterFiles: [], fallback: [] };
+  },
 
   // Cache optimization headers
   async headers() {
@@ -145,24 +138,6 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Service Worker - no cache to ensure updates are picked up
-        source: '/sw.js',
-        headers: [
-          {
-            key: 'Content-Type',
-            value: 'application/javascript; charset=utf-8',
-          },
-          {
-            key: 'Cache-Control',
-            value: 'no-cache, no-store, must-revalidate',
-          },
-          {
-            key: 'Service-Worker-Allowed',
-            value: '/',
-          },
-        ],
-      },
-      {
         // Public assets folder (manifest.webmanifest served by Next.js)
         source: '/(robots.txt|sitemap.xml)',
         headers: [
@@ -172,6 +147,19 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Block service worker caching in development
+      ...(isDev
+        ? [
+            {
+              source: '/sw.js',
+              headers: [
+                { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+                { key: 'Pragma', value: 'no-cache' },
+                { key: 'Expires', value: '0' },
+              ],
+            },
+          ]
+        : []),
       {
         // API routes - no cache by default (handled by middleware)
         source: '/api/:path*',
@@ -252,20 +240,6 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // PostHog reverse proxy - bypasses ad blockers (10-30% more events captured)
-  async rewrites() {
-    return [
-      {
-        source: '/ingest/static/:path*',
-        destination: 'https://us-assets.i.posthog.com/static/:path*',
-      },
-      {
-        source: '/ingest/:path*',
-        destination: 'https://us.i.posthog.com/:path*',
-      },
-    ];
-  },
-
   // Optimize images
   images: {
     formats: ['image/avif', 'image/webp'],
@@ -318,8 +292,3 @@ const nextConfig: NextConfig = {
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 export default withNextIntl(nextConfig);
-
-// Only initialize OpenNext Cloudflare bindings in development
-if (isDev) {
-  initOpenNextCloudflareForDev();
-}
