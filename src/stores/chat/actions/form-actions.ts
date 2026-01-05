@@ -258,8 +258,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     const webSearchChanged = currentWebSearch !== formState.enableWebSearch;
 
     const hasParticipantChanges = shouldUpdateParticipantConfig(updateResult);
-    // Note: hasAnyChanges logic referenced in comments below for documentation
-    // hasParticipantChanges || modeChanged || webSearchChanged || threadState.hasPendingConfigChanges
+    // ✅ FIX: Only trigger changelog sync when there are ACTUAL config changes
+    // This prevents unnecessary changelog fetches when user just sends a message
+    const hasAnyChanges = hasParticipantChanges || modeChanged || webSearchChanged || threadState.hasPendingConfigChanges;
 
     // ✅ IMMEDIATE UI FEEDBACK: Add optimistic user message BEFORE any async operations
     // This ensures the streaming trigger sees the correct round when it runs
@@ -297,7 +298,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     // - Effect checks configChangeRoundNumber for blocking
     // - If flag not set, pre-search executes before PATCH completes
     // Order: block flag → pre-search placeholder → waitingToStart → PATCH → changelog → execute pre-search → streams
-    actions.setConfigChangeRoundNumber(nextRoundNumber);
+    // ⚠️ ONLY set if there are actual config changes - prevents unnecessary changelog fetches
+    if (hasAnyChanges) {
+      actions.setConfigChangeRoundNumber(nextRoundNumber);
+    }
 
     // ✅ FIX: Create pre-search placeholder AFTER blocking flag is set
     // This ensures effects see configChangeRoundNumber and block appropriately
@@ -362,7 +366,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         actions.setThread(transformChatThread(response.data.thread));
       }
 
-      // ✅ FIX: Set isWaitingForChangelog AFTER PATCH completes
+      // ✅ FIX: Set isWaitingForChangelog AFTER PATCH completes (only if config changed)
       // This ensures changelog entries exist on server before query runs
       // use-changelog-sync will:
       // - See both isWaitingForChangelog AND configChangeRoundNumber set
@@ -370,7 +374,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // - Merge it into cache
       // - Clear BOTH flags atomically
       // Pre-search and streaming wait for BOTH flags to clear
-      actions.setIsWaitingForChangelog(true);
+      // ⚠️ ONLY set if there are actual config changes - prevents unnecessary changelog fetches
+      if (hasAnyChanges) {
+        actions.setIsWaitingForChangelog(true);
+      }
 
       // ✅ FIX: Clear hasPendingConfigChanges after successful submission
       // This prevents it from persisting to subsequent rounds

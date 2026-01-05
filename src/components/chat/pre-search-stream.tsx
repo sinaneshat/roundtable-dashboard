@@ -57,11 +57,20 @@ function PreSearchStreamComponent({
 
   const store = use(ChatStoreContext);
 
-  const { tryMarkPreSearchTriggered, markPreSearchTriggered, clearPreSearchTracking } = useChatStore(
+  const {
+    tryMarkPreSearchTriggered,
+    markPreSearchTriggered,
+    clearPreSearchTracking,
+    isWaitingForChangelog,
+    configChangeRoundNumber,
+  } = useChatStore(
     useShallow(s => ({
       tryMarkPreSearchTriggered: s.tryMarkPreSearchTriggered,
       markPreSearchTriggered: s.markPreSearchTriggered,
       clearPreSearchTracking: s.clearPreSearchTracking,
+      // ✅ FIX: Subscribe to changelog blocking flags
+      isWaitingForChangelog: s.isWaitingForChangelog,
+      configChangeRoundNumber: s.configChangeRoundNumber,
     })),
   );
 
@@ -94,6 +103,15 @@ function PreSearchStreamComponent({
   isAutoRetryingOnFalseRef.current = isAutoRetrying.onFalse;
 
   useEffect(() => {
+    // ✅ FIX: Block pre-search execution until changelog is fetched
+    // Order: PATCH → changelog → pre-search → participant streams
+    // configChangeRoundNumber is set BEFORE PATCH (signals pending config changes)
+    // isWaitingForChangelog is set AFTER PATCH (triggers changelog fetch)
+    // Both must be null/false before pre-search can proceed
+    if (isWaitingForChangelog || configChangeRoundNumber !== null) {
+      return;
+    }
+
     if (preSearch.status !== MessageStatuses.PENDING && preSearch.status !== MessageStatuses.STREAMING) {
       return;
     }
@@ -342,7 +360,7 @@ function PreSearchStreamComponent({
     });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, store, tryMarkPreSearchTriggered, clearPreSearchTracking, forceRetryCount]);
+  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, store, tryMarkPreSearchTriggered, clearPreSearchTracking, forceRetryCount, isWaitingForChangelog, configChangeRoundNumber]);
 
   const isPollingRef = useRef(false);
 
