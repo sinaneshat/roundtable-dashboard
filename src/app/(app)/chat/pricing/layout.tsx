@@ -1,6 +1,5 @@
 import type React from 'react';
 
-import { requireAuth } from '@/app/auth/actions';
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
 
 // ISR: 24 hours (matches page revalidation)
@@ -11,12 +10,9 @@ type PricingLayoutProps = {
 };
 
 /**
- * Pricing Layout - Auth Required
- * Pricing page requires authentication to show subscription info
+ * Pricing Layout - Public (No Auth)
+ * Public pricing page for product listing - no authentication required
  */
-export default async function PricingLayout({ children }: PricingLayoutProps) {
-  // Auth check - redirects if not authenticated
-  await requireAuth();
-
+export default function PricingLayout({ children }: PricingLayoutProps) {
   return <ChatLayoutShell>{children}</ChatLayoutShell>;
 }

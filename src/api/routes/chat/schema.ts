@@ -5,8 +5,10 @@ import {
   ChangelogTypeSchema,
   ChatModes,
   ChatModeSchema,
+  ConsensusStatusSchema,
   CoreAssumptionFocusTypeSchema,
   DEFAULT_CHAT_MODE,
+  LimitationImportanceSchema,
   MessagePartTypeSchema,
   MessageStatusSchema,
   ParticipantStreamStatusSchema,
@@ -947,75 +949,15 @@ export const ModeratorPromptConfigSchema = z.object({
 
 export type ModeratorPromptConfig = z.infer<typeof ModeratorPromptConfigSchema>;
 
-export const MODERATOR_REQUIRED_SECTIONS = [
-  'summaryConclusion',
-  'questionOverview',
-  'participants',
-] as const;
-
-export const ModeratorRequiredSectionSchema = z.enum(MODERATOR_REQUIRED_SECTIONS).openapi({
-  description: 'Required council moderator section',
-  example: 'summaryConclusion',
-});
-
-export type ModeratorRequiredSection = z.infer<typeof ModeratorRequiredSectionSchema>;
-
-export const MODERATOR_OPTIONAL_SECTIONS = [
-  'primaryPerspectives',
-  'areasOfAgreement',
-  'coreAssumptionsAndTensions',
-  'tradeOffsAndImplications',
-  'limitationsAndBlindSpots',
-  'consensusStatus',
-  'integratedAnalysis',
-  'keyExchanges',
-  'keyUncertainties',
-] as const;
-
-export const ModeratorOptionalSectionSchema = z.enum(MODERATOR_OPTIONAL_SECTIONS).openapi({
-  description: 'Optional council moderator section',
-  example: 'primaryPerspectives',
-});
-
-export type ModeratorOptionalSection = z.infer<typeof ModeratorOptionalSectionSchema>;
-
-export const MODERATOR_ALL_SECTIONS = [
-  ...MODERATOR_REQUIRED_SECTIONS,
-  ...MODERATOR_OPTIONAL_SECTIONS,
-] as const;
-
-export const ModeratorSectionSchema = z.enum(MODERATOR_ALL_SECTIONS).openapi({
-  description: 'Council moderator section identifier',
-});
-
-export type ModeratorSection = z.infer<typeof ModeratorSectionSchema>;
-
-export const CONSENSUS_STATUSES = [
-  'clear_consensus',
-  'conditional_consensus',
-  'multiple_viable_views',
-  'no_consensus',
-] as const;
-
-export const ConsensusStatusSchema = z.enum(CONSENSUS_STATUSES).openapi({
-  description: 'Consensus status of the discussion',
-  example: 'conditional_consensus',
-});
-
-export type ConsensusStatus = z.infer<typeof ConsensusStatusSchema>;
-
-export const LIMITATION_IMPORTANCE_LEVELS = [
-  'critical',
-  'secondary',
-  'out_of_scope',
-] as const;
-
-export const LimitationImportanceSchema = z.enum(LIMITATION_IMPORTANCE_LEVELS).openapi({
-  description: 'Importance level of a limitation or blind spot',
-  example: 'critical',
-});
-
-export type LimitationImportance = z.infer<typeof LimitationImportanceSchema>;
+// Types re-exported from @/api/core/enums for backwards compatibility
+export type {
+  ConsensusStatus,
+  LimitationImportance,
+  ModeratorOptionalSection,
+  ModeratorRequiredSection,
+  ModeratorSection,
+  ModeratorStyleConstraint,
+} from '@/api/core/enums';
 
 export const CouncilModeratorSectionsSchema = z.object({
   // Required sections
@@ -1110,21 +1052,6 @@ export const CouncilModeratorSectionsSchema = z.object({
 }).openapi('CouncilModeratorSections');
 
 export type CouncilModeratorSections = z.infer<typeof CouncilModeratorSectionsSchema>;
-
-export const MODERATOR_STYLE_CONSTRAINTS = [
-  'precise_restrained_non_performative',
-  'no_emotional_language',
-  'no_internal_system_references',
-  'no_conversation_narration',
-  'treat_cross_model_challenges_as_structural_tensions',
-  'omit_empty_sections',
-] as const;
-
-export const ModeratorStyleConstraintSchema = z.enum(MODERATOR_STYLE_CONSTRAINTS).openapi({
-  description: 'Style constraint for moderator output',
-});
-
-export type ModeratorStyleConstraint = z.infer<typeof ModeratorStyleConstraintSchema>;
 
 export const ChatThreadCacheSchema = z.object({
   id: z.string(),

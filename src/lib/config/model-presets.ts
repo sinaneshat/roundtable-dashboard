@@ -8,7 +8,7 @@
 import { z } from '@hono/zod-openapi';
 
 import type { SubscriptionTier } from '@/api/core/enums';
-import { ChatModeSchema, SUBSCRIPTION_TIERS, SubscriptionTierSchema } from '@/api/core/enums';
+import { ChatModeSchema, SUBSCRIPTION_TIERS, SubscriptionTiers, SubscriptionTierSchema } from '@/api/core/enums';
 import type { Icon } from '@/components/icons';
 import { Icons } from '@/components/icons';
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
@@ -88,7 +88,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Quick Perspectives',
     description: 'Fast framing and contrasting viewpoints for early exploration',
     icon: Icons.messagesSquare,
-    requiredTier: 'free',
+    requiredTier: SubscriptionTiers.FREE,
     order: 1,
     mode: 'analyzing',
     searchEnabled: false,
@@ -103,7 +103,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Balanced Discussion',
     description: 'Well-rounded conversation with reasoning and alternative framing',
     icon: Icons.scale,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 2,
     mode: 'analyzing',
     searchEnabled: false,
@@ -118,7 +118,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Creative Exploration',
     description: 'Ideation and conceptual exploration with grounded creativity',
     icon: Icons.lightbulb,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 3,
     mode: 'brainstorming',
     searchEnabled: false,
@@ -133,7 +133,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Critical Debate',
     description: 'Stress-testing ideas with real disagreement and trade-offs',
     icon: Icons.swords,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 4,
     mode: 'debating',
     searchEnabled: false,
@@ -149,7 +149,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Devil\'s Advocate Panel',
     description: 'Challenge decisions with opposing viewpoints to stress-test your thinking',
     icon: Icons.shieldAlert,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 5,
     mode: 'debating',
     searchEnabled: false,
@@ -164,7 +164,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Deep Analysis',
     description: 'Maximum reasoning depth for complex, ambiguous problems',
     icon: Icons.brain,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 6,
     mode: 'analyzing',
     searchEnabled: false,
@@ -179,7 +179,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Research & Evidence Review',
     description: 'Fact-finding with source comparison and synthesis',
     icon: Icons.fileSearch,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 7,
     mode: 'analyzing',
     searchEnabled: true,
@@ -194,7 +194,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Technical Review',
     description: 'Architecture, correctness, and implementation trade-offs',
     icon: Icons.wrench,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 8,
     mode: 'solving',
     searchEnabled: 'conditional',

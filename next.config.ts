@@ -44,7 +44,9 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  cacheComponents: false,
+  // cacheComponents disabled - incompatible with Next.js 16 + opennextjs-cloudflare
+  // Re-enable when @opennextjs/cloudflare fully supports Next.js 16
+  // cacheComponents: true,
 
   serverExternalPackages: [
     '@react-email/components',

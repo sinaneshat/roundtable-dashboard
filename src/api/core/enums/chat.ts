@@ -346,3 +346,190 @@ export const ChangelogChangeTypesExtended = {
   REORDERED: 'reordered' as const,
   MODE_CHANGED: 'mode-changed' as const,
 } as const;
+
+// ============================================================================
+// MODERATOR REQUIRED SECTIONS
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const MODERATOR_REQUIRED_SECTIONS = [
+  'summaryConclusion',
+  'questionOverview',
+  'participants',
+] as const;
+
+// 2. ZOD SCHEMA
+export const ModeratorRequiredSectionSchema = z.enum(MODERATOR_REQUIRED_SECTIONS).openapi({
+  description: 'Required council moderator section',
+  example: 'summaryConclusion',
+});
+
+// 3. TYPESCRIPT TYPE
+export type ModeratorRequiredSection = z.infer<typeof ModeratorRequiredSectionSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_MODERATOR_REQUIRED_SECTION: ModeratorRequiredSection = 'summaryConclusion';
+
+// 5. CONSTANT OBJECT
+export const ModeratorRequiredSections = {
+  SUMMARY_CONCLUSION: 'summaryConclusion' as const,
+  QUESTION_OVERVIEW: 'questionOverview' as const,
+  PARTICIPANTS: 'participants' as const,
+} as const;
+
+// ============================================================================
+// MODERATOR OPTIONAL SECTIONS
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const MODERATOR_OPTIONAL_SECTIONS = [
+  'primaryPerspectives',
+  'areasOfAgreement',
+  'coreAssumptionsAndTensions',
+  'tradeOffsAndImplications',
+  'limitationsAndBlindSpots',
+  'consensusStatus',
+  'integratedAnalysis',
+  'keyExchanges',
+  'keyUncertainties',
+] as const;
+
+// 2. ZOD SCHEMA
+export const ModeratorOptionalSectionSchema = z.enum(MODERATOR_OPTIONAL_SECTIONS).openapi({
+  description: 'Optional council moderator section',
+  example: 'primaryPerspectives',
+});
+
+// 3. TYPESCRIPT TYPE
+export type ModeratorOptionalSection = z.infer<typeof ModeratorOptionalSectionSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_MODERATOR_OPTIONAL_SECTION: ModeratorOptionalSection = 'primaryPerspectives';
+
+// 5. CONSTANT OBJECT
+export const ModeratorOptionalSections = {
+  PRIMARY_PERSPECTIVES: 'primaryPerspectives' as const,
+  AREAS_OF_AGREEMENT: 'areasOfAgreement' as const,
+  CORE_ASSUMPTIONS_AND_TENSIONS: 'coreAssumptionsAndTensions' as const,
+  TRADE_OFFS_AND_IMPLICATIONS: 'tradeOffsAndImplications' as const,
+  LIMITATIONS_AND_BLIND_SPOTS: 'limitationsAndBlindSpots' as const,
+  CONSENSUS_STATUS: 'consensusStatus' as const,
+  INTEGRATED_ANALYSIS: 'integratedAnalysis' as const,
+  KEY_EXCHANGES: 'keyExchanges' as const,
+  KEY_UNCERTAINTIES: 'keyUncertainties' as const,
+} as const;
+
+// ============================================================================
+// MODERATOR ALL SECTIONS (Combined)
+// ============================================================================
+
+// 1. ARRAY CONSTANT (composed from required + optional)
+export const MODERATOR_ALL_SECTIONS = [
+  ...MODERATOR_REQUIRED_SECTIONS,
+  ...MODERATOR_OPTIONAL_SECTIONS,
+] as const;
+
+// 2. ZOD SCHEMA
+export const ModeratorSectionSchema = z.enum(MODERATOR_ALL_SECTIONS).openapi({
+  description: 'Council moderator section identifier',
+});
+
+// 3. TYPESCRIPT TYPE
+export type ModeratorSection = z.infer<typeof ModeratorSectionSchema>;
+
+// ============================================================================
+// CONSENSUS STATUS
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const CONSENSUS_STATUSES = [
+  'clear_consensus',
+  'conditional_consensus',
+  'multiple_viable_views',
+  'no_consensus',
+] as const;
+
+// 2. ZOD SCHEMA
+export const ConsensusStatusSchema = z.enum(CONSENSUS_STATUSES).openapi({
+  description: 'Consensus status of the discussion',
+  example: 'conditional_consensus',
+});
+
+// 3. TYPESCRIPT TYPE
+export type ConsensusStatus = z.infer<typeof ConsensusStatusSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_CONSENSUS_STATUS: ConsensusStatus = 'no_consensus';
+
+// 5. CONSTANT OBJECT
+export const ConsensusStatuses = {
+  CLEAR_CONSENSUS: 'clear_consensus' as const,
+  CONDITIONAL_CONSENSUS: 'conditional_consensus' as const,
+  MULTIPLE_VIABLE_VIEWS: 'multiple_viable_views' as const,
+  NO_CONSENSUS: 'no_consensus' as const,
+} as const;
+
+// ============================================================================
+// LIMITATION IMPORTANCE
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const LIMITATION_IMPORTANCE_LEVELS = [
+  'critical',
+  'secondary',
+  'out_of_scope',
+] as const;
+
+// 2. ZOD SCHEMA
+export const LimitationImportanceSchema = z.enum(LIMITATION_IMPORTANCE_LEVELS).openapi({
+  description: 'Importance level of a limitation or blind spot',
+  example: 'critical',
+});
+
+// 3. TYPESCRIPT TYPE
+export type LimitationImportance = z.infer<typeof LimitationImportanceSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_LIMITATION_IMPORTANCE: LimitationImportance = 'secondary';
+
+// 5. CONSTANT OBJECT
+export const LimitationImportances = {
+  CRITICAL: 'critical' as const,
+  SECONDARY: 'secondary' as const,
+  OUT_OF_SCOPE: 'out_of_scope' as const,
+} as const;
+
+// ============================================================================
+// MODERATOR STYLE CONSTRAINTS
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const MODERATOR_STYLE_CONSTRAINTS = [
+  'precise_restrained_non_performative',
+  'no_emotional_language',
+  'no_internal_system_references',
+  'no_conversation_narration',
+  'treat_cross_model_challenges_as_structural_tensions',
+  'omit_empty_sections',
+] as const;
+
+// 2. ZOD SCHEMA
+export const ModeratorStyleConstraintSchema = z.enum(MODERATOR_STYLE_CONSTRAINTS).openapi({
+  description: 'Style constraint for moderator output',
+});
+
+// 3. TYPESCRIPT TYPE
+export type ModeratorStyleConstraint = z.infer<typeof ModeratorStyleConstraintSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_MODERATOR_STYLE_CONSTRAINT: ModeratorStyleConstraint = 'precise_restrained_non_performative';
+
+// 5. CONSTANT OBJECT
+export const ModeratorStyleConstraints = {
+  PRECISE_RESTRAINED_NON_PERFORMATIVE: 'precise_restrained_non_performative' as const,
+  NO_EMOTIONAL_LANGUAGE: 'no_emotional_language' as const,
+  NO_INTERNAL_SYSTEM_REFERENCES: 'no_internal_system_references' as const,
+  NO_CONVERSATION_NARRATION: 'no_conversation_narration' as const,
+  TREAT_CROSS_MODEL_CHALLENGES_AS_STRUCTURAL_TENSIONS: 'treat_cross_model_challenges_as_structural_tensions' as const,
+  OMIT_EMPTY_SECTIONS: 'omit_empty_sections' as const,
+} as const;
