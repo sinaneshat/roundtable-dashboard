@@ -726,7 +726,14 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       // ✅ UPSERT: Insert participants individually with onConflictDoUpdate
       // Follows stripe-sync.service.ts pattern for race condition handling
       // Each insert handles its own conflict - if (threadId, modelId) exists, update instead
+      // ✅ RACE CONDITION FIX: Deduplicate by modelId to prevent batch conflicts
+      // If same modelId appears twice in input, only process first occurrence
+      const seenModelIds = new Set<string>();
       for (const participant of participantsToInsert) {
+        if (seenModelIds.has(participant.modelId)) {
+          continue; // Skip duplicate modelId
+        }
+        seenModelIds.add(participant.modelId);
         batchOperations.push(
           db.insert(tables.chatParticipant)
             .values(participant)

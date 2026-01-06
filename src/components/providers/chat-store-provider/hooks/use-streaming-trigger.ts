@@ -59,6 +59,7 @@ export function useStreamingTrigger({
     formEnableWebSearch,
     isWaitingForChangelog,
     configChangeRoundNumber,
+    isPatchInProgress,
   } = useStore(store, useShallow(s => ({
     waitingToStart: s.waitingToStartStreaming,
     storeParticipants: s.participants,
@@ -74,6 +75,8 @@ export function useStreamingTrigger({
     isWaitingForChangelog: s.isWaitingForChangelog,
     // configChangeRoundNumber signals pending config changes (set before PATCH)
     configChangeRoundNumber: s.configChangeRoundNumber,
+    // ✅ PATCH BLOCKING: Wait for PATCH to complete before streaming
+    isPatchInProgress: s.isPatchInProgress,
   })));
 
   // Race condition guard
@@ -112,8 +115,8 @@ export function useStreamingTrigger({
     // handleCreateThread does NOT set configChangeRoundNumber - only handleUpdateThreadAndSend does
     // So if configChangeRoundNumber is null AND we're on OVERVIEW screen = initial thread
     const isInitialThreadCreation = currentScreenMode === ScreenModes.OVERVIEW && waitingToStart && configChangeRoundNumber === null;
-    if ((configChangeRoundNumber !== null || isWaitingForChangelog) && !isInitialThreadCreation) {
-      rlog.trigger('block-changelog', `configChangeRoundNumber=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
+    if ((configChangeRoundNumber !== null || isWaitingForChangelog || isPatchInProgress) && !isInitialThreadCreation) {
+      rlog.trigger('block-changelog', `configChangeRoundNumber=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog} isPatchInProgress=${isPatchInProgress}`);
       return;
     }
 
@@ -358,7 +361,7 @@ export function useStreamingTrigger({
       chat.startRound(storeParticipants, storeMessages);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waitingToStart, chat.startRound, chat.isReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId, formEnableWebSearch, configChangeRoundNumber, isWaitingForChangelog]);
+  }, [waitingToStart, chat.startRound, chat.isReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId, formEnableWebSearch, configChangeRoundNumber, isWaitingForChangelog, isPatchInProgress]);
 
   // Clear waitingToStartStreaming when streaming begins
   useEffect(() => {

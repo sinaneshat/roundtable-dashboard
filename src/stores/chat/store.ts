@@ -536,6 +536,8 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
     set({ isWaitingForChangelog: value }, false, 'flags/setIsWaitingForChangelog'),
   setHasPendingConfigChanges: (value: boolean) =>
     set({ hasPendingConfigChanges: value }, false, 'flags/setHasPendingConfigChanges'),
+  setIsPatchInProgress: (value: boolean) =>
+    set({ isPatchInProgress: value }, false, 'flags/setIsPatchInProgress'),
 });
 
 const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({

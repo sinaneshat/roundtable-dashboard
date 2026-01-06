@@ -101,6 +101,8 @@ export const FLAGS_DEFAULTS = {
   isModeratorStreaming: false,
   isWaitingForChangelog: false,
   hasPendingConfigChanges: false,
+  /** ✅ PATCH BLOCKING: Prevents streaming from starting during PATCH */
+  isPatchInProgress: false,
 } satisfies FlagsState;
 
 // ============================================================================
@@ -309,6 +311,7 @@ export const COMPLETE_RESET_STATE = {
   isModeratorStreaming: FLAGS_DEFAULTS.isModeratorStreaming,
   isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
   hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
+  isPatchInProgress: FLAGS_DEFAULTS.isPatchInProgress,
   // Data state
   regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
   pendingMessage: DATA_DEFAULTS.pendingMessage,
@@ -366,6 +369,7 @@ export const THREAD_RESET_STATE = {
   isModeratorStreaming: FLAGS_DEFAULTS.isModeratorStreaming,
   isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
   hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
+  isPatchInProgress: FLAGS_DEFAULTS.isPatchInProgress,
   // Data state
   regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
   pendingMessage: DATA_DEFAULTS.pendingMessage,

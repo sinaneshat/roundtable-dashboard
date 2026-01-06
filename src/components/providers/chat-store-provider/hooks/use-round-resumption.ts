@@ -55,6 +55,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     storeScreenMode,
     isWaitingForChangelog,
     configChangeRoundNumber,
+    isPatchInProgress,
     // ✅ BUG FIX: Use form state for web search, NOT thread.enableWebSearch
     // Form state is the source of truth for current round web search decision
     // Thread's enableWebSearch is just a default/preference synced on load
@@ -72,6 +73,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     isWaitingForChangelog: s.isWaitingForChangelog,
     // configChangeRoundNumber signals pending config changes (set before PATCH)
     configChangeRoundNumber: s.configChangeRoundNumber,
+    // ✅ PATCH BLOCKING: Wait for PATCH to complete before streaming
+    isPatchInProgress: s.isPatchInProgress,
     // ✅ BUG FIX: Form state for web search toggle (user's current intent)
     storeEnableWebSearch: s.enableWebSearch,
   })));
@@ -151,7 +154,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     // configChangeRoundNumber is set BEFORE PATCH (signals pending changes)
     // isWaitingForChangelog is set AFTER PATCH (triggers changelog fetch)
     // Both must be null/false for streaming to proceed
-    if (configChangeRoundNumber !== null || isWaitingForChangelog)
+    // ✅ PATCH BLOCKING: Also wait for PATCH to complete to ensure participants have real ULIDs
+    if (configChangeRoundNumber !== null || isWaitingForChangelog || isPatchInProgress)
       return;
 
     // Generate unique key for this resumption attempt
@@ -187,19 +191,77 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
           || latestState.screenMode === ScreenModes.OVERVIEW // ✅ RACE FIX: Let useStreamingTrigger handle overview
           || latestState.configChangeRoundNumber !== null // ✅ FIX: Wait for PATCH to complete
           || latestState.isWaitingForChangelog // ✅ CHANGELOG: Wait for changelog before streaming
+          || latestState.isPatchInProgress // ✅ PATCH BLOCKING: Wait for PATCH to ensure real ULIDs
         ) {
           return;
         }
 
         // Check if AI SDK is now ready
         if (!chat.isReady) {
-          // Still not ready - schedule another retry with toggle pattern
-          // Toggle waitingToStartStreaming to force effect re-run since setting same value doesn't notify
-          retryTimeoutRef.current = setTimeout(() => {
-            latestState.setWaitingToStartStreaming(false);
-            // Use queueMicrotask to ensure the false is processed before setting true
-            queueMicrotask(() => latestState.setWaitingToStartStreaming(true));
-          }, 200);
+          // Still not ready - schedule recursive retry with direct execution
+          // ✅ FIX: Don't rely on toggle pattern (fails with React 18 batching)
+          // Instead, recursively poll until ready and execute directly
+          const maxRetries = 20; // 2 seconds max (20 * 100ms)
+          let retryCount = 0;
+
+          const pollUntilReady = () => {
+            retryCount++;
+            if (retryCount > maxRetries) {
+              rlog.trigger('resume-timeout', `gave up after ${maxRetries} retries`);
+              return;
+            }
+
+            // Re-fetch latest state each poll
+            const pollState = store.getState();
+            const pollParticipants = pollState.participants;
+            const pollMessages = pollState.messages;
+            const pollThread = pollState.thread;
+            const pollPreSearches = pollState.preSearches;
+            const pollNextParticipant = pollState.nextParticipantToTrigger;
+
+            // Verify conditions still hold
+            if (!pollState.waitingToStartStreaming
+              || pollNextParticipant === null
+              || pollState.isStreaming
+              || pollParticipants.length === 0
+              || pollMessages.length === 0
+              || pollState.screenMode === ScreenModes.OVERVIEW
+              || pollState.configChangeRoundNumber !== null
+              || pollState.isWaitingForChangelog
+              || pollState.isPatchInProgress // ✅ PATCH BLOCKING: Wait for PATCH
+            ) {
+              return; // Conditions no longer valid, stop polling
+            }
+
+            // Check if AI SDK is now ready
+            if (!chat.isReady) {
+              retryTimeoutRef.current = setTimeout(pollUntilReady, 100);
+              return;
+            }
+
+            // Check pre-search blocking
+            const pollRound = getCurrentRoundNumber(pollMessages);
+            const pollWebSearchEnabled = pollState.enableWebSearch;
+            const pollPreSearchForRound = pollPreSearches.find(ps => ps.roundNumber === pollRound);
+            if (shouldWaitForPreSearch(pollWebSearchEnabled, pollPreSearchForRound)) {
+              retryTimeoutRef.current = setTimeout(pollUntilReady, 100);
+              return;
+            }
+
+            // Generate resumption key and check for duplicates
+            const pollThreadId = pollThread?.id || 'unknown';
+            const pollResumptionKey = `${pollThreadId}-r${pollRound}-p${getParticipantIndex(pollNextParticipant)}`;
+            if (resumptionTriggeredRef.current === pollResumptionKey) {
+              return;
+            }
+
+            // Ready! Execute continuation
+            resumptionTriggeredRef.current = pollResumptionKey;
+            rlog.trigger('resume-poll', `p${getParticipantIndex(pollNextParticipant)} after ${retryCount} polls`);
+            chat.continueFromParticipant(pollNextParticipant, pollParticipants);
+          };
+
+          retryTimeoutRef.current = setTimeout(pollUntilReady, 100);
           return;
         }
 
@@ -253,7 +315,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         retryTimeoutRef.current = null;
       }
     };
-  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, configChangeRoundNumber, isWaitingForChangelog, storeEnableWebSearch, chat, store]);
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, configChangeRoundNumber, isWaitingForChangelog, isPatchInProgress, storeEnableWebSearch, chat, store]);
 
   // Safety timeout for thread screen resumption
   useEffect(() => {

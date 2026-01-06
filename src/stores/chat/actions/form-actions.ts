@@ -82,6 +82,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     // ✅ CHANGELOG: Actions for config change tracking
     setIsWaitingForChangelog: s.setIsWaitingForChangelog,
     setConfigChangeRoundNumber: s.setConfigChangeRoundNumber,
+    // ✅ PATCH BLOCKING: Prevents streaming race condition
+    setIsPatchInProgress: s.setIsPatchInProgress,
   })));
 
   const createThreadMutation = useCreateThreadMutation();
@@ -346,6 +348,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     actions.setInputValue('');
     actions.clearAttachments();
 
+    // ✅ PATCH BLOCKING: Set flag to prevent streaming from starting during PATCH
+    // This ensures streaming waits for participants to be updated with real ULIDs
+    actions.setIsPatchInProgress(true);
+
     try {
       // ✅ PATCH in background: Persist message to DB
       // Use fresh form values to ensure payload reflects current user selections
@@ -420,6 +426,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         actions.setIsWaitingForChangelog(true);
       }
 
+      // ✅ PATCH BLOCKING: Clear flag after PATCH succeeds and participants are updated
+      actions.setIsPatchInProgress(false);
+
       // ✅ NOTE: NOT calling prepareForNewMessage here
       // That function resets isStreaming=false which would break already-started streaming
       // Streaming is triggered BEFORE PATCH via optimistic message + waitingToStartStreaming
@@ -438,6 +447,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // If either flag remains set, streaming will be blocked forever
       actions.setConfigChangeRoundNumber(null);
       actions.setIsWaitingForChangelog(false);
+      // ✅ PATCH BLOCKING: Clear flag on error
+      actions.setIsPatchInProgress(false);
 
       showApiErrorToast('Error updating thread', error);
     }

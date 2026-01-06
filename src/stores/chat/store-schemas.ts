@@ -102,6 +102,7 @@ import type {
   SetHasInitiallyLoaded,
   SetHasPendingConfigChanges,
   SetHasSentPendingMessage,
+  SetIsPatchInProgress,
   SetInputValue,
   SetIsCreatingThread,
   SetIsModeratorStreaming,
@@ -291,6 +292,8 @@ export const FlagsStateSchema = z.object({
   isModeratorStreaming: z.boolean(),
   isWaitingForChangelog: z.boolean(),
   hasPendingConfigChanges: z.boolean(),
+  /** ✅ PATCH BLOCKING: True while thread PATCH is in progress - prevents streaming race */
+  isPatchInProgress: z.boolean(),
 });
 
 export const FlagsActionsSchema = z.object({
@@ -300,6 +303,7 @@ export const FlagsActionsSchema = z.object({
   completeModeratorStream: z.custom<CompleteModeratorStream>(),
   setIsWaitingForChangelog: z.custom<SetIsWaitingForChangelog>(),
   setHasPendingConfigChanges: z.custom<SetHasPendingConfigChanges>(),
+  setIsPatchInProgress: z.custom<SetIsPatchInProgress>(),
 });
 
 export const FlagsSliceSchema = z.intersection(FlagsStateSchema, FlagsActionsSchema);

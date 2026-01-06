@@ -182,6 +182,8 @@ export function buildParticipantOperations(
 
   // =========================================================================
   // INSERT OPERATIONS - New participants
+  // ✅ RACE CONDITION FIX: Use onConflictDoUpdate to handle concurrent PATCH/streaming
+  // If PATCH already inserted the participant, streaming will update instead of fail
   // =========================================================================
   const insertOps = addedParticipants.map((provided) => {
     const newId = ulid(); // Generate real database ID
@@ -197,6 +199,15 @@ export function buildParticipantOperations(
       settings: null,
       createdAt: new Date(),
       updatedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: [tables.chatParticipant.threadId, tables.chatParticipant.modelId],
+      set: {
+        role: provided.role ?? null,
+        customRoleId: provided.customRoleId ?? null,
+        priority: provided.priority,
+        isEnabled: provided.isEnabled ?? true,
+        updatedAt: new Date(),
+      },
     });
   });
 
