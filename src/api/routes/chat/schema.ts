@@ -253,6 +253,10 @@ export const UpdateThreadRequestSchema = chatThreadUpdateSchema
       .optional()
       .openapi({ description: 'Complete list of participants with their updated state' }),
     newMessage: z.object({
+      id: z.string().optional().openapi({
+        description: 'Optional message ID - if provided, will be used instead of generating a new one. Critical for streaming which expects the message to exist with this exact ID.',
+        example: 'msg_abc123',
+      }),
       content: MessageContentSchema,
       roundNumber: RoundNumberSchema,
       attachmentIds: z.array(z.string()).optional(),

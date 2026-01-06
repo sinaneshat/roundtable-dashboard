@@ -363,7 +363,13 @@ export function useChatFormActions(): UseChatFormActionsReturn {
           mode: modeChanged && freshSelectedMode ? freshSelectedMode : undefined,
           enableWebSearch: webSearchChanged ? freshEnableWebSearch : undefined,
           // ALWAYS include the user message
+          // ✅ CRITICAL FIX: Include optimistic message ID so backend uses same ID
+          // Without this, backend creates message with NEW ULID, but AI SDK still has
+          // the optimistic ID. Streaming fails because backend can't find the message.
+          // By sending the optimistic ID, backend uses it for persistence, keeping
+          // frontend and backend in sync.
           newMessage: {
+            id: optimisticMessage.id,
             content: trimmed,
             roundNumber: nextRoundNumber,
             attachmentIds: attachmentIds?.length ? attachmentIds : undefined,

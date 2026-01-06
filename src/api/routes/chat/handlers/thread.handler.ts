@@ -1073,9 +1073,13 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     }
 
     // ✅ NEW MESSAGE CREATION: Create user message if provided
+    // ✅ CRITICAL FIX: Use provided ID if present, otherwise generate new ULID
+    // Streaming handler expects user messages to be pre-persisted with the EXACT ID
+    // that the frontend sends in the streaming request. If we generate a different ID,
+    // streaming will fail with "User message not found in DB" error.
     let createdMessage: typeof tables.chatMessage.$inferSelect | undefined;
     if (body.newMessage) {
-      const messageId = ulid();
+      const messageId = body.newMessage.id || ulid();
       const messageParts: Array<{ type: 'text'; text: string }> = [
         { type: MessagePartTypes.TEXT, text: body.newMessage.content },
       ];

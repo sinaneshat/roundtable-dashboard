@@ -20,7 +20,7 @@
  * @see use-streaming-trigger.ts - Checks isPatchInProgress before streaming
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ChatModes, ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
