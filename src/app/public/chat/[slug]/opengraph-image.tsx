@@ -1,26 +1,3 @@
-/**
- * Dynamic Open Graph Image for Public Chat Threads
- * Enhanced with design system colors, actual model icons, and glass-morphism
- *
- * Features:
- * - Uses actual Roundtable logo (base64 encoded)
- * - Shows real AI model icons for participants
- * - Glass-morphism design matching the app
- * - Chat mode with color coding
- * - ISR with 24-hour revalidation
- * - Proper error handling and fallbacks
- *
- * Best Practices (Next.js Official):
- * - Uses ImageResponse from 'next/og'
- * - Base64 encoding for local images
- * - Proper size and contentType exports
- * - ISR configuration matching page
- * - Dynamic params from route
- *
- * Note: This file uses Next.js Metadata API which requires named exports.
- * The react-refresh warning is disabled as this is not a React component file.
- */
-/* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
 
 import { MessageRoles } from '@/api/core/enums';

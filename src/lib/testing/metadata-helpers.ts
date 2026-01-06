@@ -148,3 +148,16 @@ export function assertAssistantMetadata(message: UIMessage): DbAssistantMessageM
   }
   return message.metadata;
 }
+
+/**
+ * Safely check if metadata indicates optimistic message
+ * REPLACES: `(m.metadata as { isOptimistic?: boolean }).isOptimistic === true`
+ */
+export function isOptimisticMessage(metadata: unknown): boolean {
+  return (
+    metadata !== null
+    && typeof metadata === 'object'
+    && 'isOptimistic' in metadata
+    && metadata.isOptimistic === true
+  );
+}

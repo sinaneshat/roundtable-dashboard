@@ -9,30 +9,16 @@
  * and to auto-filter model selection based on uploaded files.
  */
 
-import type { IncompatibilityReason, VisualMimeType } from '@/api/core/enums';
+import type { IncompatibilityReason } from '@/api/core/enums';
 import {
   IncompatibilityReasons,
   isVisualMimeType,
-  VISUAL_MIME_TYPES,
 } from '@/api/core/enums';
 
-// ============================================================================
-// RE-EXPORTS FROM CENTRALIZED ENUMS
-// ============================================================================
-
 /**
- * MIME types that require vision capability to process
- * ✅ SINGLE SOURCE: Re-exports VISUAL_MIME_TYPES from @/api/core/enums/file-types
+ * Check if a MIME type requires vision capability.
+ * Domain-specific wrapper around isVisualMimeType.
  *
- * Models without vision capability will have these file types filtered out
- * on the backend. We expose this on frontend to proactively disable selection.
- */
-export const VISION_REQUIRED_MIME_TYPES = VISUAL_MIME_TYPES;
-export type VisionRequiredMimeType = VisualMimeType;
-
-/**
- * Check if a MIME type requires vision capability
- * ✅ SINGLE SOURCE: Delegates to isVisualMimeType from @/api/core/enums
  * @param mimeType - MIME type to check
  * @returns true if the MIME type requires vision capability
  */

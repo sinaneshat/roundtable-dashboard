@@ -96,8 +96,8 @@ describe('useProductsQuery', () => {
       });
 
       expect(result.current.data?.success).toBe(true);
-      expect(result.current.data?.data?.products).toHaveLength(3);
-      expect(result.current.data?.data?.products).toEqual(mockProducts);
+      expect(result.current.data?.data?.items).toHaveLength(3);
+      expect(result.current.data?.data?.items).toEqual(mockProducts);
     });
 
     it('should return products with associated pricing plans', async () => {
@@ -114,10 +114,10 @@ describe('useProductsQuery', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      const product = result.current.data?.data?.products[0];
+      const product = result.current.data?.data?.items?.[0];
       expect(product?.prices).toBeDefined();
       expect(product?.prices).toHaveLength(1);
-      expect(product?.prices[0]?.id).toBe('price_pro_monthly');
+      expect(product?.prices?.[0]?.id).toBe('price_pro_monthly');
     });
 
     it('should return empty list when no products exist', async () => {
@@ -133,7 +133,7 @@ describe('useProductsQuery', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(result.current.data?.data?.products).toHaveLength(0);
+      expect(result.current.data?.data?.items).toHaveLength(0);
       expect(result.current.data?.success).toBe(true);
     });
   });
@@ -162,7 +162,7 @@ describe('useProductsQuery', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(serviceSpy).toHaveBeenCalledTimes(1);
-      expect(result.current.data?.data?.products).toHaveLength(2);
+      expect(result.current.data?.data?.items).toHaveLength(2);
     });
 
     it('should not refetch on mount due to refetchOnMount: false', async () => {
@@ -361,13 +361,13 @@ describe('useProductsQuery', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(result.current.data?.data?.products).toHaveLength(1);
+      expect(result.current.data?.data?.items).toHaveLength(1);
 
       // Invalidate cache
       await queryClient.invalidateQueries({ queryKey: ['products', 'list'] });
 
       await waitFor(() => {
-        expect(result.current.data?.data?.products).toHaveLength(3);
+        expect(result.current.data?.data?.items).toHaveLength(3);
       });
 
       expect(serviceSpy).toHaveBeenCalledTimes(2);

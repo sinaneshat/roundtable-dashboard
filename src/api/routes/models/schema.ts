@@ -172,7 +172,7 @@ export const ListModelsResponseSchema = createApiResponseSchema(
     total: z.number(),
     default_model_id: z.string(), // Default model selected based on user's tier
     user_tier_config: UserTierConfigSchema, // User's tier configuration with limits
-  }),
-);
+  }).openapi('ListModelsPayload'),
+).openapi('ListModelsResponse');
 
 export type ListModelsResponse = z.infer<typeof ListModelsResponseSchema>;

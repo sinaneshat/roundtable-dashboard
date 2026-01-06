@@ -35,6 +35,10 @@ export { createStoreWrapper, createTestChatStore, getStoreState, resetStoreToDef
 // ============================================================================
 export * from './chat-test-factories';
 export * from './helpers';
+// ============================================================================
+// Metadata Helpers (type-safe metadata extraction for tests)
+// ============================================================================
+export * from './metadata-helpers';
 export { render, renderHook } from './render';
 // ============================================================================
 // Subscription Test Mocks

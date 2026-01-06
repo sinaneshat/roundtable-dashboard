@@ -24,7 +24,15 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils';
-import { createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
+import {
+  createTestAssistantMessage,
+  createTestUserMessage,
+  getMetadataParticipantIndex,
+  getMetadataRoundNumber,
+  isMetadataModerator,
+  isOptimisticMessage,
+  renderHook,
+} from '@/lib/testing';
 import { getParticipantModelIds } from '@/lib/utils';
 
 import { createChatStore } from '../store';
@@ -136,7 +144,7 @@ describe('message Duplication Detection', () => {
       // Simulate potential duplication bug
       const messages = store.getState().messages;
       const round0UserMessages = messages.filter(
-        m => m.role === MessageRoles.USER && (m.metadata as { roundNumber: number }).roundNumber === 0,
+        m => m.role === MessageRoles.USER && getMetadataRoundNumber(m.metadata) === 0,
       );
 
       // ASSERTION: Only ONE user message per round
@@ -159,7 +167,7 @@ describe('message Duplication Detection', () => {
 
       const messagesAfterFirst = store.getState().messages;
       const round1UserMsgsAfterFirst = messagesAfterFirst.filter(
-        m => m.role === MessageRoles.USER && (m.metadata as { roundNumber: number }).roundNumber === 1,
+        m => m.role === MessageRoles.USER && getMetadataRoundNumber(m.metadata) === 1,
       );
 
       // prepareForNewMessage adds optimistic user message on thread screen
@@ -170,7 +178,7 @@ describe('message Duplication Detection', () => {
 
       const messagesAfterSecond = store.getState().messages;
       const round1UserMsgsAfterSecond = messagesAfterSecond.filter(
-        m => m.role === MessageRoles.USER && (m.metadata as { roundNumber: number }).roundNumber === 1,
+        m => m.role === MessageRoles.USER && getMetadataRoundNumber(m.metadata) === 1,
       );
 
       // CRITICAL: Must still be only 1 user message for round 1
@@ -193,7 +201,7 @@ describe('message Duplication Detection', () => {
       const userMsgCountByRound = new Map<number, number>();
       for (const msg of messages) {
         if (msg.role === MessageRoles.USER) {
-          const round = (msg.metadata as { roundNumber: number }).roundNumber;
+          const round = getMetadataRoundNumber(msg.metadata) ?? 0;
           userMsgCountByRound.set(round, (userMsgCountByRound.get(round) || 0) + 1);
         }
       }
@@ -220,7 +228,9 @@ describe('message Duplication Detection', () => {
       const duplicates: string[] = [];
 
       for (const msg of assistantMsgs) {
-        const key = `r${(msg.metadata as { roundNumber: number }).roundNumber}_p${(msg.metadata as { participantIndex: number }).participantIndex}`;
+        const roundNum = getMetadataRoundNumber(msg.metadata) ?? 0;
+        const partIdx = getMetadataParticipantIndex(msg.metadata) ?? 0;
+        const key = `r${roundNum}_p${partIdx}`;
         if (seen.has(key)) {
           duplicates.push(key);
         }
@@ -404,8 +414,8 @@ describe('second Round Specific Duplication Issues', () => {
 
     // Verify no duplicates
     const messages = store.getState().messages;
-    const round0Msgs = messages.filter(m => (m.metadata as { roundNumber: number }).roundNumber === 0);
-    const round1Msgs = messages.filter(m => (m.metadata as { roundNumber: number }).roundNumber === 1);
+    const round0Msgs = messages.filter(m => getMetadataRoundNumber(m.metadata) === 0);
+    const round1Msgs = messages.filter(m => getMetadataRoundNumber(m.metadata) === 1);
 
     // Round 0: 1 user + 2 assistants
     expect(round0Msgs).toHaveLength(3);
@@ -443,7 +453,7 @@ describe('second Round Specific Duplication Issues', () => {
 
     const messages = store.getState().messages;
     const round1UserMsgs = messages.filter(
-      m => m.role === MessageRoles.USER && (m.metadata as { roundNumber: number }).roundNumber === 1,
+      m => m.role === MessageRoles.USER && getMetadataRoundNumber(m.metadata) === 1,
     );
 
     // Should have at most 1 user message for round 1
@@ -476,7 +486,7 @@ describe('full Flow E2E - No Duplication', () => {
     store.getState().completeStreaming();
 
     // Verify round 0
-    expect(store.getState().messages.filter(m => (m.metadata as { roundNumber: number }).roundNumber === 0)).toHaveLength(3);
+    expect(store.getState().messages.filter(m => getMetadataRoundNumber(m.metadata) === 0)).toHaveLength(3);
     expect(store.getState().preSearches.filter(ps => ps.roundNumber === 0)).toHaveLength(1);
 
     // ===== ROUND 1 =====
@@ -495,7 +505,7 @@ describe('full Flow E2E - No Duplication', () => {
     store.getState().completeStreaming();
 
     // Verify round 1 (optimistic user msg may or may not be present)
-    const round1Msgs = store.getState().messages.filter(m => (m.metadata as { roundNumber: number }).roundNumber === 1);
+    const round1Msgs = store.getState().messages.filter(m => getMetadataRoundNumber(m.metadata) === 1);
     expect(round1Msgs.length).toBeGreaterThanOrEqual(2); // At least 2 assistant messages
     expect(store.getState().preSearches.filter(ps => ps.roundNumber === 1)).toHaveLength(1);
 
@@ -527,15 +537,13 @@ describe('full Flow E2E - No Duplication', () => {
 
     // Verify moderator messages (summaries are now messages with metadata.isModerator: true)
     const moderatorMessages = allMessages.filter((m) => {
-      const meta = m.metadata as { role?: string; isModerator?: boolean; roundNumber?: number };
-      return meta.role === MessageRoles.ASSISTANT && meta.isModerator === true;
+      return m.role === MessageRoles.ASSISTANT && isMetadataModerator(m.metadata);
     });
 
     // Should have one moderator message per round (if summaries were added)
     // Count moderator messages per round
     const moderatorRounds = moderatorMessages.map((m) => {
-      const meta = m.metadata as { roundNumber: number };
-      return meta.roundNumber;
+      return getMetadataRoundNumber(m.metadata) ?? 0;
     });
 
     // Verify no duplicate moderator messages per round
@@ -605,8 +613,8 @@ describe('full Flow E2E - No Duplication', () => {
     const messages = store.getState().messages;
     const preSearches = store.getState().preSearches;
 
-    expect(messages.filter(m => (m.metadata as { roundNumber: number }).roundNumber === 0)).toHaveLength(2);
-    expect(messages.filter(m => (m.metadata as { roundNumber: number }).roundNumber === 1)).toHaveLength(2);
+    expect(messages.filter(m => getMetadataRoundNumber(m.metadata) === 0)).toHaveLength(2);
+    expect(messages.filter(m => getMetadataRoundNumber(m.metadata) === 1)).toHaveLength(2);
     expect(preSearches).toHaveLength(2);
   });
 });
@@ -720,11 +728,11 @@ describe('optimistic Message Handling', () => {
 
     const messages = store.getState().messages;
     const round1UserMsg = messages.find(
-      m => m.role === MessageRoles.USER && (m.metadata as { roundNumber: number }).roundNumber === 1,
+      m => m.role === MessageRoles.USER && getMetadataRoundNumber(m.metadata) === 1,
     );
 
     // Optimistic message should exist and have isOptimistic flag
     expect(round1UserMsg).toBeDefined();
-    expect((round1UserMsg?.metadata as { isOptimistic?: boolean }).isOptimistic).toBe(true);
+    expect(isOptimisticMessage(round1UserMsg?.metadata)).toBe(true);
   });
 });

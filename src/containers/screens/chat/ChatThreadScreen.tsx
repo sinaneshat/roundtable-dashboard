@@ -73,6 +73,8 @@ function useThreadHeaderUpdater({
 
   useEffect(() => {
     setThreadActions(threadActions);
+    // Cleanup: reset thread actions when navigating away
+    return () => setThreadActions(null);
   }, [threadActions, setThreadActions]);
 }
 

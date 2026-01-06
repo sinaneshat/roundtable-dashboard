@@ -97,6 +97,14 @@ export default antfu(
     },
   },
   {
+    // Next.js Metadata API files (opengraph-image, twitter-image, etc.) require named exports
+    // These are not React component files - they generate static images
+    files: ['**/opengraph-image.tsx', '**/twitter-image.tsx', '**/icon.tsx', '**/apple-icon.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
     rules: {
       'perfectionist/sort-imports': 'off',
       'import/order': 'off', // Avoid conflicts with `simple-import-sort` plugin

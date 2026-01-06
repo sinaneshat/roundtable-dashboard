@@ -1059,7 +1059,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       },
     });
     if (!updatedThreadWithParticipants) {
-      throw createError.notFound('Thread not found after update');
+      throw createError.notFound('Thread not found after update', ErrorContextBuilders.resourceNotFound('thread', id, user.id));
     }
     if (body.status !== undefined) {
       await invalidateThreadCache(db, user.id, id, thread.slug);

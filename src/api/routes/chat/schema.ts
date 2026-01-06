@@ -949,16 +949,6 @@ export const ModeratorPromptConfigSchema = z.object({
 
 export type ModeratorPromptConfig = z.infer<typeof ModeratorPromptConfigSchema>;
 
-// Types re-exported from @/api/core/enums for backwards compatibility
-export type {
-  ConsensusStatus,
-  LimitationImportance,
-  ModeratorOptionalSection,
-  ModeratorRequiredSection,
-  ModeratorSection,
-  ModeratorStyleConstraint,
-} from '@/api/core/enums';
-
 export const CouncilModeratorSectionsSchema = z.object({
   // Required sections
   summaryConclusion: z.object({

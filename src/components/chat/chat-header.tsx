@@ -73,8 +73,11 @@ function NavigationHeaderComponent({
   // Only apply on /chat - NOT on static routes like /chat/pricing
   const hasActiveThread = pathname === '/chat' && !showInitialUI && (createdThreadId || thread);
 
-  const threadTitle = threadTitleProp ?? (showSidebarTrigger ? storeThreadTitle : null);
-  const threadActions = threadActionsProp ?? (showSidebarTrigger ? context.threadActions : null);
+  // Only use store thread title on thread pages or when there's an active thread from overview
+  // Static routes should never show thread title from store
+  const shouldUseStoreThreadTitle = !isStaticRoute && (hasActiveThread || (pathname?.startsWith('/chat/') && pathname !== '/chat'));
+  const threadTitle = threadTitleProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? storeThreadTitle : null);
+  const threadActions = threadActionsProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? context.threadActions : null);
   const isThreadPage = (
     (pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute)
     || pathname?.startsWith('/public/chat/')

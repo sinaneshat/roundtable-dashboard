@@ -20,6 +20,7 @@ import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { executeBatch } from '@/api/common/batch-operations';
+import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import {
   createError,
   normalizeError,
@@ -153,7 +154,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       }
 
       if (!threadId) {
-        throw createError.badRequest('Thread ID is required for streaming');
+        throw createError.badRequest('Thread ID is required for streaming', ErrorContextBuilders.validation('threadId'));
       }
 
       const db = await getDbAsync();
@@ -175,11 +176,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       });
 
       if (!thread) {
-        throw createError.notFound('Thread not found');
+        throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', threadId, user.id));
       }
 
       if (thread.userId !== user.id) {
-        throw createError.unauthorized('Not authorized to access this thread');
+        throw createError.unauthorized('Not authorized to access this thread', ErrorContextBuilders.authorization('thread', threadId, user.id));
       }
 
       // =========================================================================
@@ -793,7 +794,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // =========================================================================
       const firstParticipant = participants[0];
       if (!firstParticipant) {
-        throw createError.badRequest('No participants configured for thread');
+        throw createError.badRequest('No participants configured for thread', ErrorContextBuilders.validation('participants'));
       }
       const highestMultiplierModel = participants.reduce((max, p) => {
         const multiplier = getModelCreditMultiplierById(p.modelId, getModelById);

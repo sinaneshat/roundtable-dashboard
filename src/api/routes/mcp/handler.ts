@@ -12,6 +12,7 @@ import { convertToModelMessages, streamText, validateUIMessages } from 'ai';
 import { and, asc, desc, eq, like } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
+import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses } from '@/api/core';
@@ -559,9 +560,9 @@ async function toolCreateThread(
   for (const p of input.participants) {
     const model = allModels.find(m => m.id === p.modelId);
     if (!model)
-      throw createError.badRequest(`Model not found: ${p.modelId}`);
+      throw createError.badRequest(`Model not found: ${p.modelId}`, ErrorContextBuilders.resourceNotFound('model', p.modelId));
     if (!canAccessModelByPricing(userTier, model)) {
-      throw createError.unauthorized(`Model requires higher tier: ${p.modelId}`);
+      throw createError.unauthorized(`Model requires higher tier: ${p.modelId}`, ErrorContextBuilders.authorization('model', p.modelId, user.id));
     }
   }
 
@@ -574,7 +575,7 @@ async function toolCreateThread(
       ),
     });
     if (!project)
-      throw createError.notFound(`Project not found: ${input.projectId}`);
+      throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
   }
 
   const threadId = ulid();
@@ -636,9 +637,9 @@ async function toolGetThread(
   });
 
   if (!thread)
-    throw createError.notFound('Thread not found');
+    throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', input.threadId, user.id));
   if (thread.userId !== user.id && !thread.isPublic) {
-    throw createError.unauthorized('Access denied');
+    throw createError.unauthorized('Access denied', ErrorContextBuilders.authorization('thread', input.threadId, user.id));
   }
 
   const messages = input.includeMessages !== false
@@ -770,7 +771,7 @@ async function toolGenerateResponses(
   });
 
   if (participants.length === 0) {
-    throw createError.badRequest('No enabled participants');
+    throw createError.badRequest('No enabled participants', ErrorContextBuilders.validation('participants'));
   }
 
   const roundResult = await calculateRoundNumber({
@@ -1029,15 +1030,15 @@ async function toolAddParticipant(
   });
 
   if (participants.length >= 10) {
-    throw createError.badRequest('Maximum 10 participants allowed');
+    throw createError.badRequest('Maximum 10 participants allowed', ErrorContextBuilders.validation('participants'));
   }
 
   const userTier = await getUserTier(user.id);
   const model = getAllModels().find(m => m.id === input.modelId);
   if (!model)
-    throw createError.badRequest(`Model not found: ${input.modelId}`);
+    throw createError.badRequest(`Model not found: ${input.modelId}`, ErrorContextBuilders.resourceNotFound('model', input.modelId));
   if (!canAccessModelByPricing(userTier, model)) {
-    throw createError.unauthorized(`Model requires higher tier: ${input.modelId}`);
+    throw createError.unauthorized(`Model requires higher tier: ${input.modelId}`, ErrorContextBuilders.authorization('model', input.modelId, user.id));
   }
 
   const participantId = ulid();
@@ -1071,7 +1072,7 @@ async function toolUpdateParticipant(
   });
 
   if (!participant)
-    throw createError.notFound('Participant not found');
+    throw createError.notFound('Participant not found', ErrorContextBuilders.resourceNotFound('participant', input.participantId));
 
   const updates = {
     updatedAt: new Date(),
@@ -1188,7 +1189,7 @@ async function toolGetProject(
   });
 
   if (!project)
-    throw createError.notFound(`Project not found: ${input.projectId}`);
+    throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
 
   // Get counts
   const attachments = await db.query.projectAttachment.findMany({
@@ -1278,7 +1279,7 @@ async function toolUpdateProject(
   });
 
   if (!existing)
-    throw createError.notFound(`Project not found: ${input.projectId}`);
+    throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
 
   const updates = {
     updatedAt: new Date(),
@@ -1316,7 +1317,7 @@ async function toolDeleteProject(
   });
 
   if (!project)
-    throw createError.notFound(`Project not found: ${input.projectId}`);
+    throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
 
   const attachments = await db.query.projectAttachment.findMany({
     where: eq(tables.projectAttachment.projectId, input.projectId),
@@ -1346,7 +1347,7 @@ async function toolListProjectThreads(
   });
 
   if (!project)
-    throw createError.notFound(`Project not found: ${input.projectId}`);
+    throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
 
   const threads = await db.query.chatThread.findMany({
     where: eq(tables.chatThread.projectId, input.projectId),
@@ -1386,7 +1387,7 @@ async function toolListKnowledgeFiles(
   });
 
   if (!project)
-    throw createError.notFound(`Project not found: ${input.projectId}`);
+    throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
 
   const filters = [eq(tables.projectAttachment.projectId, input.projectId)];
   if (input.status) {
@@ -1433,7 +1434,7 @@ async function toolDeleteKnowledgeFile(
   });
 
   if (!project)
-    throw createError.notFound(`Project not found: ${input.projectId}`);
+    throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
 
   // Get attachment reference
   const attachment = await db.query.projectAttachment.findFirst({
@@ -1444,7 +1445,7 @@ async function toolDeleteKnowledgeFile(
   });
 
   if (!attachment)
-    throw createError.notFound(`Attachment not found: ${input.fileId}`);
+    throw createError.notFound(`Attachment not found: ${input.fileId}`, ErrorContextBuilders.resourceNotFound('attachment', input.fileId));
 
   await db.delete(tables.projectAttachment).where(eq(tables.projectAttachment.id, input.fileId));
 

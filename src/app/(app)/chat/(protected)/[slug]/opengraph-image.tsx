@@ -1,11 +1,3 @@
-/**
- * Dynamic Open Graph Image for Protected Chat Thread
- * Uses Next.js ImageResponse API with server-side translations
- *
- * Note: This file uses Next.js Metadata API which requires named exports.
- * The react-refresh warning is disabled as this is not a React component file.
- */
-/* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
 import { getTranslations } from 'next-intl/server';
 

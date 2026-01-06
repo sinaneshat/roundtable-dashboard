@@ -1,11 +1,3 @@
-/**
- * Default Open Graph Image for all pages
- * Uses Next.js ImageResponse API with Cache Components
- *
- * Note: This file uses Next.js Metadata API which requires named exports.
- * The react-refresh warning is disabled as this is not a React component file.
- */
-/* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
 
 import { BRAND } from '@/constants';

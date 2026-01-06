@@ -43,7 +43,9 @@ function createTestQueryClient() {
     defaultOptions: {
       queries: {
         retry: false,
-        gcTime: 0,
+        // Use a small but non-zero gcTime to prevent immediate cache eviction
+        // when invalidateQueries is called after setQueryData
+        gcTime: 1000,
       },
       mutations: {
         retry: false,
@@ -137,10 +139,13 @@ describe('useSwitchSubscriptionMutation', () => {
       );
 
       expect(cachedData?.data?.items[0].priceId).toBe('price_monthly_pro');
-      expect(apiServices.switchSubscriptionService).toHaveBeenCalledWith({
-        param: { id: 'sub_old' },
-        json: { newPriceId: 'price_monthly_pro' },
-      });
+      expect(apiServices.switchSubscriptionService).toHaveBeenCalledWith(
+        expect.objectContaining({
+          param: { id: 'sub_old' },
+          json: { newPriceId: 'price_monthly_pro' },
+        }),
+        expect.anything(),
+      );
     });
 
     it('should invalidate subscription queries after switch', async () => {

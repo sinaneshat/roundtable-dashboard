@@ -11,18 +11,17 @@ import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 import { validateEmailDomain } from '../utils';
 
-/** Build-time placeholder - used when no runtime context available */
-const BUILD_PLACEHOLDER_SECRET = 'build-placeholder-secret-min-32-chars';
-
 /**
- * Get auth secret following OpenNext.js patterns.
+ * Get auth secret from available sources.
+ *
+ * ⚠️ CRITICAL: This function is called during lazy auth initialization.
+ * At that point, getCloudflareContext() should be available (inside a request).
  *
  * Priority:
  * 1. Cloudflare runtime env (getCloudflareContext) - production/preview
- * 2. process.env - local dev (.env files) or Cloudflare build vars
- * 3. Build placeholder - SSG phase when no context available
+ * 2. process.env - local dev (.env files)
  *
- * @see src/db/index.ts for similar pattern with getCloudflareContext fallbacks
+ * @throws Error if no secret is available (prevents insecure fallback)
  */
 function getAuthSecret(): string {
   // 1. Try Cloudflare runtime context (production/preview)
@@ -32,20 +31,23 @@ function getAuthSecret(): string {
       return env.BETTER_AUTH_SECRET as string;
     }
   } catch {
-    // Context not available (build time or local dev without wrangler)
+    // Context not available - continue to fallback
   }
 
-  // 2. Fall back to process.env (local dev .env or CI build vars)
+  // 2. Fall back to process.env (local dev .env)
   if (process.env.BETTER_AUTH_SECRET) {
     return process.env.BETTER_AUTH_SECRET;
   }
 
-  // 3. Build placeholder (SSG phase - auth not used anyway)
-  return BUILD_PLACEHOLDER_SECRET;
+  // 3. NO FALLBACK - throw error to prevent insecure operation
+  // This is better than silently using a placeholder that causes 401 errors
+  throw new Error(
+    'BETTER_AUTH_SECRET not found. Set it via wrangler secret (production) or .env (local dev).',
+  );
 }
 
 /**
- * Get Google OAuth credentials following OpenNext.js patterns.
+ * Get Google OAuth credentials from available sources.
  * Priority: Cloudflare runtime → process.env fallback → empty string
  */
 function getGoogleOAuthCredentials(): { clientId: string; clientSecret: string } {
@@ -59,7 +61,7 @@ function getGoogleOAuthCredentials(): { clientId: string; clientSecret: string }
       };
     }
   } catch {
-    // Context not available (build time or local dev)
+    // Context not available - continue to fallback
   }
 
   // 2. Fall back to process.env
@@ -100,123 +102,165 @@ function createAuthAdapter() {
 }
 
 /**
- * Better Auth Configuration - Simple User Authentication
- * No organizations, just basic user auth
+ * Create Better Auth instance with runtime configuration.
+ *
+ * This function creates the auth instance when called, allowing
+ * access to Cloudflare context for secrets.
  */
-export const auth = betterAuth({
-  secret: getAuthSecret(),
-  baseURL: process.env.BETTER_AUTH_URL || `${getAppBaseUrl()}/api/auth`,
-  database: createAuthAdapter(),
+function createAuth() {
+  return betterAuth({
+    secret: getAuthSecret(),
+    baseURL: process.env.BETTER_AUTH_URL || `${getAppBaseUrl()}/api/auth`,
+    database: createAuthAdapter(),
 
-  // Email domain restriction for local and preview environments
-  // Following official better-auth pattern: https://better-auth.com/docs/concepts/hooks
-  hooks: {
-    before: createAuthMiddleware(async (ctx) => {
-      // Validate email domain using reusable utility
-      // Handles: /sign-up/email, /sign-in/email, /sign-in/magic-link
-      validateEmailDomain(ctx);
-    }),
-  },
-
-  // Session configuration
-  session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // 1 day
-    cookieCache: {
-      enabled: true,
-      maxAge: 60 * 15, // 15 minutes cache
+    // Email domain restriction for local and preview environments
+    // Following official better-auth pattern: https://better-auth.com/docs/concepts/hooks
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        // Validate email domain using reusable utility
+        // Handles: /sign-up/email, /sign-in/email, /sign-in/magic-link
+        validateEmailDomain(ctx);
+      }),
     },
-  },
 
-  // Security configuration
-  advanced: {
-    crossSubDomainCookies: {
-      enabled: false,
-    },
-    // Use secure cookies only in production (HTTPS)
-    // Localhost/development requires non-secure cookies for HTTP
-    useSecureCookies: process.env.NODE_ENV === 'production',
-    database: {
-      generateId: () => crypto.randomUUID(),
-    },
-  },
-
-  // Trusted origins
-  trustedOrigins: [
-    getAppBaseUrl(),
-    ...(process.env.NODE_ENV === 'development' ? ['http://localhost:3000'] : []),
-  ],
-
-  user: {
-    changeEmail: {
-      enabled: false, // Disabled for security
-    },
-  },
-
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: false,
-  },
-
-  socialProviders: {
-    google: {
-      clientId: getGoogleOAuthCredentials().clientId,
-      clientSecret: getGoogleOAuthCredentials().clientSecret,
-    },
-  },
-
-  plugins: [
-    nextCookies(),
-    magicLink({
-      sendMagicLink: async ({ email, url }) => {
-        try {
-          const { emailService } = await import('@/lib/email/ses-service');
-          await emailService.sendMagicLink(email, url);
-        } catch (error) {
-          console.error('Failed to send magic link email:', error);
-          // Better Auth will show this error to the user
-          const errorMessage = error instanceof Error ? error.message : 'Failed to send magic link email';
-          throw new Error(`Unable to send login email: ${errorMessage}`);
-        }
-      },
-    }),
-    apiKey({
-      // API Key Headers - specify which headers to check for API keys
-      // Default is 'x-api-key', but can specify multiple headers
-      // @see https://www.better-auth.com/docs/plugins/api-key#configure-api-key-headers
-      apiKeyHeaders: 'x-api-key', // Can also be array: ['x-api-key', 'authorization']
-
-      // Custom prefix for API keys (e.g., rpnd_abc123...)
-      defaultPrefix: 'rpnd_',
-
-      // Key configuration
-      defaultKeyLength: 64,
-      requireName: true,
-
-      // Metadata support - allows storing custom data with API keys
-      enableMetadata: true,
-
-      // Expiration settings
-      keyExpiration: {
-        defaultExpiresIn: null, // No expiration by default
-        disableCustomExpiresTime: false,
-        minExpiresIn: 1, // Minimum 1 day
-        maxExpiresIn: 365, // Maximum 1 year
-      },
-
-      // Rate limiting configuration
-      rateLimit: {
+    // Session configuration
+    session: {
+      expiresIn: 60 * 60 * 24 * 7, // 7 days
+      updateAge: 60 * 60 * 24, // 1 day
+      cookieCache: {
         enabled: true,
-        timeWindow: 1000 * 60 * 60 * 24, // 24 hours
-        maxRequests: 1000, // 1000 requests per day by default
+        maxAge: 60 * 15, // 15 minutes cache
       },
+    },
 
-      // Sessions from API keys - enabled by default in Better Auth
-      // When a valid API key is found in the specified headers, Better Auth automatically
-      // creates a mock session for the user. This allows endpoints using getSession() to
-      // work seamlessly with both session cookies and API keys.
-      // To disable this behavior, set: disableSessionForAPIKeys: true
-      // @see https://www.better-auth.com/docs/plugins/api-key#sessions-from-api-keys
-    }),
-  ],
+    // Security configuration
+    advanced: {
+      crossSubDomainCookies: {
+        enabled: false,
+      },
+      // Use secure cookies only in production (HTTPS)
+      // Localhost/development requires non-secure cookies for HTTP
+      useSecureCookies: process.env.NODE_ENV === 'production',
+      database: {
+        generateId: () => crypto.randomUUID(),
+      },
+    },
+
+    // Trusted origins
+    trustedOrigins: [
+      getAppBaseUrl(),
+      ...(process.env.NODE_ENV === 'development' ? ['http://localhost:3000'] : []),
+    ],
+
+    user: {
+      changeEmail: {
+        enabled: false, // Disabled for security
+      },
+    },
+
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: false,
+    },
+
+    socialProviders: {
+      google: {
+        clientId: getGoogleOAuthCredentials().clientId,
+        clientSecret: getGoogleOAuthCredentials().clientSecret,
+      },
+    },
+
+    plugins: [
+      nextCookies(),
+      magicLink({
+        sendMagicLink: async ({ email, url }) => {
+          try {
+            const { emailService } = await import('@/lib/email/ses-service');
+            await emailService.sendMagicLink(email, url);
+          } catch (error) {
+            console.error('Failed to send magic link email:', error);
+            // Better Auth will show this error to the user
+            const errorMessage = error instanceof Error ? error.message : 'Failed to send magic link email';
+            throw new Error(`Unable to send login email: ${errorMessage}`);
+          }
+        },
+      }),
+      apiKey({
+        // API Key Headers - specify which headers to check for API keys
+        // Default is 'x-api-key', but can specify multiple headers
+        // @see https://www.better-auth.com/docs/plugins/api-key#configure-api-key-headers
+        apiKeyHeaders: 'x-api-key', // Can also be array: ['x-api-key', 'authorization']
+
+        // Custom prefix for API keys (e.g., rpnd_abc123...)
+        defaultPrefix: 'rpnd_',
+
+        // Key configuration
+        defaultKeyLength: 64,
+        requireName: true,
+
+        // Metadata support - allows storing custom data with API keys
+        enableMetadata: true,
+
+        // Expiration settings
+        keyExpiration: {
+          defaultExpiresIn: null, // No expiration by default
+          disableCustomExpiresTime: false,
+          minExpiresIn: 1, // Minimum 1 day
+          maxExpiresIn: 365, // Maximum 1 year
+        },
+
+        // Rate limiting configuration
+        rateLimit: {
+          enabled: true,
+          timeWindow: 1000 * 60 * 60 * 24, // 24 hours
+          maxRequests: 1000, // 1000 requests per day by default
+        },
+
+        // Sessions from API keys - enabled by default in Better Auth
+        // When a valid API key is found in the specified headers, Better Auth automatically
+        // creates a mock session for the user. This allows endpoints using getSession() to
+        // work seamlessly with both session cookies and API keys.
+        // To disable this behavior, set: disableSessionForAPIKeys: true
+        // @see https://www.better-auth.com/docs/plugins/api-key#sessions-from-api-keys
+      }),
+    ],
+  });
+}
+
+// Lazy auth instance - created on first access
+let _authInstance: ReturnType<typeof createAuth> | null = null;
+
+/**
+ * Get the auth instance (lazy initialization).
+ *
+ * ⚠️ IMPORTANT: This uses lazy initialization to ensure getCloudflareContext()
+ * is available when the auth secret is read. The first call to this getter
+ * should happen inside a request handler, not at module load time.
+ *
+ * For the Next.js auth route handler, we use createAuth() directly since
+ * it's invoked per-request.
+ */
+function getAuth() {
+  if (!_authInstance) {
+    _authInstance = createAuth();
+  }
+  return _authInstance;
+}
+
+/**
+ * Auth instance getter - use this for all auth operations.
+ *
+ * This is a Proxy that lazily initializes the auth instance on first property access.
+ * This ensures Cloudflare context is available when reading secrets.
+ */
+export const auth = new Proxy({} as ReturnType<typeof createAuth>, {
+  get(_target, prop) {
+    return getAuth()[prop as keyof ReturnType<typeof createAuth>];
+  },
 });
+
+/**
+ * Export createAuth for use cases that need fresh auth per request
+ * (e.g., Next.js auth route handler)
+ */
+export { createAuth };

@@ -14,7 +14,7 @@ import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.
 import { useRouter } from 'next/navigation';
 import { describe, expect, it, vi } from 'vitest';
 
-import { StripeSubscriptionStatuses, UIBillingIntervals } from '@/api/core/enums';
+import { BillingIntervals, StripeSubscriptionStatuses, UIBillingIntervals } from '@/api/core/enums';
 import {
   createActiveSubscription,
   createCancelingSubscription,
@@ -153,19 +153,25 @@ describe('pricingContent', () => {
   describe('product filtering', () => {
     it('shows only monthly products', () => {
       const monthlyProduct = createMockProduct({
+        id: 'prod_monthly',
         name: 'Monthly Pro',
         prices: [
           createMockPrice({
+            id: 'price_monthly',
+            productId: 'prod_monthly',
             interval: UIBillingIntervals.MONTH,
           }),
         ],
       });
 
       const yearlyProduct = createMockProduct({
+        id: 'prod_yearly',
         name: 'Yearly Pro',
         prices: [
           createMockPrice({
-            interval: UIBillingIntervals.YEAR,
+            id: 'price_yearly',
+            productId: 'prod_yearly',
+            interval: BillingIntervals.YEAR,
           }),
         ],
       });
@@ -187,10 +193,13 @@ describe('pricingContent', () => {
 
     it('filters out products with no monthly prices', () => {
       const productWithOnlyYearly = createMockProduct({
+        id: 'prod_yearly_only',
         name: 'Yearly Only',
         prices: [
           createMockPrice({
-            interval: UIBillingIntervals.YEAR,
+            id: 'price_yearly_only',
+            productId: 'prod_yearly_only',
+            interval: BillingIntervals.YEAR,
           }),
         ],
       });
@@ -211,9 +220,12 @@ describe('pricingContent', () => {
 
     it('shows message when no monthly products available', () => {
       const yearlyProduct = createMockProduct({
+        id: 'prod_yearly_only',
         prices: [
           createMockPrice({
-            interval: UIBillingIntervals.YEAR,
+            id: 'price_yearly_only',
+            productId: 'prod_yearly_only',
+            interval: BillingIntervals.YEAR,
           }),
         ],
       });
