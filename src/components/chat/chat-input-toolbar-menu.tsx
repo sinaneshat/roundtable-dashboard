@@ -187,6 +187,9 @@ export const ChatInputToolbarMenu = memo(({
                 size={ComponentSizes.ICON}
                 disabled={disabled}
                 onClick={() => onWebSearchToggle?.(!enableWebSearch)}
+                aria-label={enableWebSearch ? t('chat.toolbar.tooltips.webSearchEnabled') : t('chat.toolbar.tooltips.webSearch')}
+                aria-pressed={enableWebSearch}
+                data-testid="web-search-toggle"
                 className={cn(
                   'size-9 transition-colors hover:bg-white/15',
                   enableWebSearch

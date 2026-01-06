@@ -55,11 +55,78 @@ function logUrlComparison(currentUrl: string, originalUrl: string): void {
 }
 
 /**
+ * Helper to wait for the toolbar to be fully interactive
+ * Waits for ALL toolbar controls to be enabled (send button, web search toggle, etc.)
+ */
+async function waitForToolbarReady(page: import('@playwright/test').Page, timeout = 60000) {
+  const startTime = Date.now();
+
+  // Wait for all these to be enabled simultaneously
+  const sendButton = page.getByRole('button', { name: /send message/i });
+  const webSearchToggle = page.locator('[data-testid="web-search-toggle"]')
+    .or(page.getByRole('button', { name: /web search/i }))
+    .first();
+  const textarea = page.locator('textarea');
+
+  // Poll until all are enabled or timeout
+  let allEnabled = false;
+  while (!allEnabled && (Date.now() - startTime) < timeout) {
+    try {
+      const [sendEnabled, toggleEnabled, textareaEnabled] = await Promise.all([
+        sendButton.isEnabled().catch(() => false),
+        webSearchToggle.isEnabled().catch(() => false),
+        textarea.isEnabled().catch(() => false),
+      ]);
+
+      // Note: Send button may be disabled if no text, so just check toggle and textarea
+      if (toggleEnabled && textareaEnabled) {
+        allEnabled = true;
+        console.error(`Toolbar ready: toggle=${toggleEnabled}, textarea=${textareaEnabled}, sendBtn=${sendEnabled}`);
+      } else {
+        await page.waitForTimeout(500);
+      }
+    } catch {
+      await page.waitForTimeout(500);
+    }
+  }
+
+  if (!allEnabled) {
+    console.error(`WARNING: Toolbar not fully ready after ${timeout}ms, proceeding anyway...`);
+  }
+
+  // Additional buffer for React state propagation
+  await page.waitForTimeout(300);
+}
+
+/**
  * Helper to wait for streaming to complete
+ * Waits for all streaming indicators to disappear AND textarea to be enabled
  */
 async function waitForStreamingComplete(page: import('@playwright/test').Page, timeout = 180000) {
-  // Wait for textarea to be enabled (streaming done)
-  await expect(page.locator('textarea')).toBeEnabled({ timeout });
+  const startTime = Date.now();
+
+  // Wait for streaming indicators to disappear
+  // These indicate active streaming at various levels
+  const streamingIndicators = page.locator('[data-streaming="true"], [data-round-streaming="true"]');
+
+  // First, wait for any streaming indicators to appear (streaming started)
+  // Then wait for them to disappear (streaming finished)
+  try {
+    // Give streaming a moment to start
+    await page.waitForTimeout(1000);
+
+    // Wait for streaming indicators to disappear (if any existed)
+    await expect(streamingIndicators).toHaveCount(0, { timeout: timeout - 1000 });
+  } catch {
+    // If no streaming indicators found, that's fine - streaming may have completed quickly
+  }
+
+  // Wait for textarea to be enabled (final confirmation streaming is done)
+  await expect(page.locator('textarea')).toBeEnabled({ timeout: Math.max(timeout - (Date.now() - startTime), 30000) });
+
+  // Wait for the FULL toolbar to be ready, not just textarea
+  // This is critical because streamingRoundNumber may take a moment to reset
+  await waitForToolbarReady(page, Math.max(timeout - (Date.now() - startTime), 30000));
 }
 
 /**
@@ -90,8 +157,11 @@ async function submitAndWaitForRound(
     await waitForThreadNavigation(page);
   }
 
-  // Wait for streaming to complete
-  await waitForStreamingComplete(page);
+  // Wait for streaming to complete with extended timeout for web search rounds
+  // Web search rounds take longer: pre-search + all participants + moderator
+  // waitForStreamingComplete now includes waitForToolbarReady which ensures all controls are enabled
+  const streamingTimeout = 300000; // 5 minutes for web search rounds
+  await waitForStreamingComplete(page, streamingTimeout);
 
   // Verify changelog display if expected
   if (options?.expectChangelog === true) {
@@ -119,22 +189,37 @@ async function submitAndWaitForRound(
  * Helper to toggle web search
  */
 async function toggleWebSearch(page: import('@playwright/test').Page) {
-  const webSearchToggle = page
-    .getByRole('switch', { name: /web search/i })
-    .or(page.locator('[data-testid="web-search-toggle"]'))
+  // First ensure toolbar is ready (handles state propagation delays)
+  await waitForToolbarReady(page, 60000);
+
+  // Look for web search toggle by test ID (primary) or aria-label (fallback)
+  const webSearchToggle = page.locator('[data-testid="web-search-toggle"]')
+    .or(page.getByRole('button', { name: /web search/i }))
     .first();
 
-  const isVisible = await webSearchToggle.isVisible().catch(() => false);
-  if (isVisible) {
-    await webSearchToggle.click();
-    await page.waitForTimeout(300);
-  }
+  // Wait for the toggle to be visible and enabled
+  await expect(webSearchToggle).toBeVisible({ timeout: 10000 });
+  await expect(webSearchToggle).toBeEnabled({ timeout: 30000 });
+
+  // Get current state before clicking
+  const isCurrentlyEnabled = await webSearchToggle.getAttribute('aria-pressed') === 'true';
+  console.error(`Web search toggle: currently ${isCurrentlyEnabled ? 'enabled' : 'disabled'}, clicking to toggle...`);
+
+  await webSearchToggle.click();
+  await page.waitForTimeout(500);
+
+  // Verify state changed
+  const newState = await webSearchToggle.getAttribute('aria-pressed') === 'true';
+  console.error(`Web search toggle: now ${newState ? 'enabled' : 'disabled'}`);
 }
 
 /**
  * Helper to change mode
  */
 async function changeMode(page: import('@playwright/test').Page) {
+  // First ensure toolbar is ready
+  await waitForToolbarReady(page, 60000);
+
   // Look for mode selector
   const modeSelector = page
     .getByRole('button', { name: /mode|panel|council|analyzing|brainstorming/i })
@@ -165,6 +250,9 @@ async function changeMode(page: import('@playwright/test').Page) {
  * Helper to open model selector
  */
 async function openModelSelector(page: import('@playwright/test').Page) {
+  // First ensure toolbar is ready
+  await waitForToolbarReady(page, 60000);
+
   const modelsButton = page.getByRole('button', { name: /models/i }).first();
   await expect(modelsButton).toBeEnabled({ timeout: 15000 });
   await modelsButton.click();

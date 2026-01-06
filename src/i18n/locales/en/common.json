@@ -1418,7 +1418,9 @@
     "upgradeNow": "Upgrade Now",
     "alert": {
       "defaultDescription": "You have 1 free roundtable with 3 AI models. Upgrade to unlock all.",
+      "incompleteThreadDescription": "You have an existing conversation. Continue it or upgrade for unlimited threads.",
       "postRoundDescription": "You've experienced the magic! Upgrade to Pro to keep the conversation going.",
+      "continueThread": "Continue",
       "upgradeToPro": "Upgrade to Pro"
     },
     "scheduledChange": "Plan Change Scheduled",
