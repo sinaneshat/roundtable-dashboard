@@ -309,17 +309,24 @@ export function useStreamingTrigger({
         return;
       }
 
-      // Defensive timing guard
+      // ✅ FIX: Remove blocking timing guard - animation check is sufficient protection
+      // The 50ms timing guard was blocking indefinitely because:
+      // 1. Pre-search completes → completedAt set
+      // 2. Effect runs within <50ms → returns early
+      // 3. Animation completes → effect runs again, still <50ms → returns early
+      // 4. No more state changes → effect never triggers participant!
+      //
+      // The animation check (lines 306-311) already provides protection against
+      // too-rapid processing. Additionally, the duplicate round check (lines 328-332)
+      // and the isTriggeringRef check (lines 334-337) prevent redundant startRound calls.
+      //
+      // Log timing for debugging but don't block:
       if (currentRoundPreSearch.status === MessageStatuses.COMPLETE && currentRoundPreSearch.completedAt) {
         const completedTime = currentRoundPreSearch.completedAt instanceof Date
           ? currentRoundPreSearch.completedAt.getTime()
           : new Date(currentRoundPreSearch.completedAt).getTime();
         const timeSinceComplete = Date.now() - completedTime;
-
-        if (timeSinceComplete < 50) {
-          rlog.trigger('block-presearch-timing', `round=${currentRound} timeSinceComplete=${timeSinceComplete}ms`);
-          return;
-        }
+        rlog.trigger('presearch-timing', `round=${currentRound} timeSinceComplete=${timeSinceComplete}ms`);
       }
     }
 

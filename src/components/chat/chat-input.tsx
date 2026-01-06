@@ -14,7 +14,7 @@ import { Icons } from '@/components/icons';
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import { Button } from '@/components/ui/button';
 import { STRING_LIMITS } from '@/constants';
-import { useUsageStatsQuery } from '@/hooks/queries';
+import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import type { PendingAttachment } from '@/hooks/utils';
 import {
   useAutoResizeTextarea,
@@ -86,8 +86,11 @@ export const ChatInput = memo(({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isStreaming = status !== AiSdkStatuses.READY;
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
+  const { data: threadsData } = useThreadsQuery();
   const messages = useChatStore(state => state.messages);
+  const thread = useChatStore(state => state.thread);
   const hasLocalMessages = messages.length > 0;
+  const isOnOverviewScreen = !thread;
 
   const showUpgradePrompt = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
@@ -122,13 +125,24 @@ export const ChatInput = memo(({
   // For UI display: use local messages OR API flag (API is source of truth)
   const hasCompletedRound = freeRoundUsedFromApi || hasLocalMessages;
 
+  // Check if free user has existing threads (blocks new thread creation from overview)
+  const hasExistingThread = useMemo(() => {
+    if (!threadsData?.pages?.[0]?.success) {
+      return false;
+    }
+    const threads = threadsData.pages[0].data?.items ?? [];
+    return threads.length > 0;
+  }, [threadsData]);
+
   // Free users who have completed their round are blocked from further input
   // Uses API flag as source of truth (survives thread deletion)
   const isFreeRoundExhausted = showUpgradePrompt && freeRoundUsedFromApi;
-  const isInputDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted;
-  const isMicDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted;
+  // Free users with existing thread must continue it (can't create new from overview)
+  const isFreeUserWithExistingThread = showUpgradePrompt && hasExistingThread && isOnOverviewScreen;
+  const isInputDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted || isFreeUserWithExistingThread;
+  const isMicDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted || isFreeUserWithExistingThread;
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
-  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || isFreeRoundExhausted;
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || isFreeRoundExhausted || isFreeUserWithExistingThread;
   const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
 
   const handleFilesSelected = useCallback((files: File[]) => {
