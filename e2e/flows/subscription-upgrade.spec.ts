@@ -1,6 +1,44 @@
 import type { Page } from '@playwright/test';
 
+import type {
+  Product,
+  Subscription,
+  SyncAfterCheckoutPayload,
+} from '@/api/routes/billing/schema';
+
 import { expect, test } from '../fixtures';
+
+type ApiSuccessResponse<T> = {
+  success: true;
+  data: T;
+  meta?: {
+    requestId?: string;
+    timestamp?: string;
+    version?: string;
+  };
+};
+
+type ProductListPayload = {
+  items: Product[];
+  count: number;
+};
+
+type SubscriptionListPayload = {
+  items: Subscription[];
+  count: number;
+};
+
+type CreditBalancePayload = {
+  balance: number;
+  planType: string;
+  monthlyCredits?: number;
+  nextRefillAt?: string;
+};
+
+type CheckoutPayload = {
+  sessionId: string;
+  url: string;
+};
 
 /**
  * Subscription Upgrade Flow E2E Tests
@@ -19,7 +57,7 @@ import { expect, test } from '../fixtures';
 /**
  * Helper: Get subscriptions via API
  */
-async function getUserSubscriptions(page: Page) {
+async function getUserSubscriptions(page: Page): Promise<ApiSuccessResponse<SubscriptionListPayload>> {
   const response = await page.request.get('/api/v1/billing/subscriptions');
   expect(response.ok()).toBe(true);
   return response.json();
@@ -28,7 +66,7 @@ async function getUserSubscriptions(page: Page) {
 /**
  * Helper: Get products via API
  */
-async function getProducts(page: Page) {
+async function getProducts(page: Page): Promise<ApiSuccessResponse<ProductListPayload>> {
   const response = await page.request.get('/api/v1/billing/products');
   expect(response.ok()).toBe(true);
   return response.json();
@@ -37,7 +75,7 @@ async function getProducts(page: Page) {
 /**
  * Helper: Get credit balance via API
  */
-async function getUserCreditBalance(page: Page) {
+async function getUserCreditBalance(page: Page): Promise<ApiSuccessResponse<CreditBalancePayload>> {
   const response = await page.request.get('/api/v1/credits/balance');
   expect(response.ok()).toBe(true);
   return response.json();
@@ -46,7 +84,7 @@ async function getUserCreditBalance(page: Page) {
 /**
  * Helper: Create checkout session via API
  */
-async function createCheckoutSession(page: Page, priceId: string) {
+async function createCheckoutSession(page: Page, priceId: string): Promise<ApiSuccessResponse<CheckoutPayload>> {
   const response = await page.request.post('/api/v1/billing/checkout', {
     data: { priceId },
   });
@@ -57,7 +95,7 @@ async function createCheckoutSession(page: Page, priceId: string) {
 /**
  * Helper: Sync subscription data after checkout via API
  */
-async function syncAfterCheckout(page: Page) {
+async function syncAfterCheckout(page: Page): Promise<ApiSuccessResponse<SyncAfterCheckoutPayload>> {
   const response = await page.request.post('/api/v1/billing/sync-after-checkout');
   expect(response.ok()).toBe(true);
   return response.json();
@@ -107,7 +145,7 @@ test.describe('Subscription Upgrade Flow - UI Journey', () => {
     expect(products.length).toBeGreaterThan(0);
 
     // Find first product with active prices
-    const productWithPrices = products.find((p: any) => p.prices && p.prices.length > 0);
+    const productWithPrices = products.find(p => p.prices && p.prices.length > 0);
     expect(productWithPrices).toBeDefined();
 
     const priceId = productWithPrices.prices[0].id;
@@ -130,7 +168,7 @@ test.describe('Subscription Upgrade Flow - UI Journey', () => {
 
     // If user already has active subscription, checkout should fail
     const hasActiveSubscription = subscriptions.some(
-      (sub: any) => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+      sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
     );
 
     if (hasActiveSubscription) {
@@ -213,7 +251,7 @@ test.describe('Subscription Management - Plan Changes', () => {
 
     const subscriptions = subsData.data?.items || [];
     const activeSubscription = subscriptions.find(
-      (sub: any) => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+      sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
     );
 
     if (activeSubscription) {
@@ -231,7 +269,7 @@ test.describe('Subscription Management - Plan Changes', () => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
     const activeSubscription = subscriptions.find(
-      (sub: any) => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+      sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -244,8 +282,8 @@ test.describe('Subscription Management - Plan Changes', () => {
 
     // Find a different price than current
     const currentPriceId = activeSubscription.priceId;
-    const allPrices = products.flatMap((p: any) => p.prices || []);
-    const differentPrice = allPrices.find((price: any) => price.id !== currentPriceId);
+    const allPrices = products.flatMap(p => p.prices || []);
+    const differentPrice = allPrices.find(price => price.id !== currentPriceId);
 
     if (!differentPrice) {
       // No other prices available
@@ -282,7 +320,7 @@ test.describe('Subscription Management - Plan Changes', () => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
     const activeSubscription = subscriptions.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (activeSubscription) {
@@ -302,7 +340,7 @@ test.describe('Subscription Cancellation Flow', () => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
     const activeSubscription = subscriptions.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -331,7 +369,7 @@ test.describe('Subscription Cancellation Flow', () => {
   test('step 11: verify canceled subscription retains access until period end', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
-    const canceledSubscription = subscriptions.find((sub: any) => sub.cancelAtPeriodEnd === true);
+    const canceledSubscription = subscriptions.find(sub => sub.cancelAtPeriodEnd === true);
 
     if (canceledSubscription) {
       // User should still have access
@@ -349,7 +387,7 @@ test.describe('Subscription Cancellation Flow', () => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
     const activeSubscription = subscriptions.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -432,7 +470,7 @@ test.describe('Subscription Edge Cases and Error Handling', () => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
     const activeSubscription = subscriptions.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -455,7 +493,7 @@ test.describe('Subscription Edge Cases and Error Handling', () => {
   test('edge case: cancel already canceled subscription', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
-    const canceledSubscription = subscriptions.find((sub: any) => sub.status === 'canceled');
+    const canceledSubscription = subscriptions.find(sub => sub.status === 'canceled');
 
     if (!canceledSubscription) {
       test.skip();
@@ -488,7 +526,7 @@ test.describe('Subscription Edge Cases and Error Handling', () => {
   test('edge case: switch subscription with invalid price', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
-    const activeSubscription = subscriptions.find((sub: any) => sub.status === 'active');
+    const activeSubscription = subscriptions.find(sub => sub.status === 'active');
 
     if (!activeSubscription) {
       test.skip();
@@ -529,7 +567,7 @@ test.describe('Subscription UI State and Navigation', () => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
     const hasActiveSubscription = subscriptions.some(
-      (sub: any) => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+      sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
     );
 
     if (hasActiveSubscription) {
@@ -570,7 +608,7 @@ test.describe('Subscription and Credits Integration', () => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
     const activeProSubscription = subscriptions.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeProSubscription) {
@@ -592,7 +630,7 @@ test.describe('Subscription and Credits Integration', () => {
   test('step 19: verify credit refill date aligns with subscription period', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
-    const activeSubscription = subscriptions.find((sub: any) => sub.status === 'active');
+    const activeSubscription = subscriptions.find(sub => sub.status === 'active');
 
     if (!activeSubscription) {
       test.skip();
@@ -617,7 +655,7 @@ test.describe('Subscription and Credits Integration', () => {
     const subsData = await getUserSubscriptions(page);
     const subscriptions = subsData.data?.items || [];
     const canceledButActiveSub = subscriptions.find(
-      (sub: any) => sub.status === 'active' && sub.cancelAtPeriodEnd === true,
+      sub => sub.status === 'active' && sub.cancelAtPeriodEnd === true,
     );
 
     if (!canceledButActiveSub) {

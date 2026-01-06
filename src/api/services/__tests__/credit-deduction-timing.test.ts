@@ -153,10 +153,10 @@ describe('credits Deducted Only on Stream Completion', () => {
       const actualCreditsUsed = Math.ceil(actualTokensUsed / CREDIT_CONFIG.TOKENS_PER_CREDIT);
 
       // Step 1: Stream completes successfully
-      const streamCompleted = true;
+      const _streamCompleted = true;
 
       // Step 2: onFinish callback fires
-      const onFinishCalled = streamCompleted;
+      const onFinishCalled = _streamCompleted;
       expect(onFinishCalled).toBe(true);
 
       // Step 3: Deduct actual credits (happens in onFinish)
@@ -174,7 +174,7 @@ describe('credits Deducted Only on Stream Completion', () => {
       const reservedCredits = 150;
 
       // Stream fails during streaming
-      const streamCompleted = false;
+      const _streamCompleted = false;
       const streamFailed = true;
 
       // onFinish never called - no deduction
@@ -311,7 +311,7 @@ describe('partial Stream Deducts Proportional Credits', () => {
     it('applies model multiplier to actual usage, not estimation', () => {
       const actualInputTokens = 500;
       const actualOutputTokens = 1000;
-      const modelId = 'test/flagship-model';
+      const _modelId = 'test/flagship-model';
       const flagshipMultiplier = CREDIT_CONFIG.TIER_MULTIPLIERS.flagship;
 
       const baseCredits = calculateBaseCredits(actualInputTokens, actualOutputTokens);
@@ -328,8 +328,8 @@ describe('partial Stream Deducts Proportional Credits', () => {
     });
 
     it('different models deduct different amounts for same tokens', () => {
-      const inputTokens = 1000;
-      const outputTokens = 2000;
+      const _inputTokens = 1000;
+      const _outputTokens = 2000;
       const totalTokens = 3000;
       const baseCredits = Math.ceil(totalTokens / CREDIT_CONFIG.TOKENS_PER_CREDIT);
 
@@ -365,8 +365,8 @@ describe('stream Error Releases Reservation Without Deduction', () => {
       const reservedAmount = 150;
 
       // Stream fails during generation
-      const streamFailed = true;
-      const errorOccurred = streamFailed;
+      const _streamFailed = true;
+      const errorOccurred = _streamFailed;
 
       // onError callback fires - releases reservation
       const balanceAfterError = userBalance; // No deduction
@@ -433,9 +433,9 @@ describe('stream Error Releases Reservation Without Deduction', () => {
 
   describe('release Transaction Recording', () => {
     it('records release transaction with positive amount', () => {
-      const reservedAmount = 150;
+      const _reservedAmount = 150;
       const releaseType = CreditTransactionTypes.RELEASE;
-      const releaseAmount = reservedAmount; // Positive amount
+      const releaseAmount = _reservedAmount; // Positive amount
 
       expect(releaseType).toBe('release');
       expect(releaseAmount).toBeGreaterThan(0); // Positive for release
@@ -443,7 +443,7 @@ describe('stream Error Releases Reservation Without Deduction', () => {
 
     it('includes error context in release description', () => {
       const reservedAmount = 150;
-      const errorMessage = 'Model timeout';
+      const _errorMessage = 'Model timeout';
       const releaseDescription = `Released ${reservedAmount} reserved credits (cancelled/error)`;
 
       expect(releaseDescription).toContain('Released');
@@ -555,8 +555,8 @@ describe('token Counting Accuracy', () => {
     });
 
     it('maintains precision with large multipliers', () => {
-      const inputTokens = 10000;
-      const outputTokens = 20000;
+      const _inputTokens = 10000;
+      const _outputTokens = 20000;
       const totalTokens = 30000;
       const baseCredits = Math.ceil(totalTokens / CREDIT_CONFIG.TOKENS_PER_CREDIT);
       const ultimateMultiplier = CREDIT_CONFIG.TIER_MULTIPLIERS.ultimate;
@@ -733,7 +733,7 @@ describe('concurrent Stream Credit Handling', () => {
 
   describe('concurrent Reservation Scenarios', () => {
     it('prevents double-reservation for same stream', () => {
-      const userBalance = 1000;
+      const _userBalance = 1000;
       const reservationAmount = 150;
       let reservedCredits = 0;
       let version = 1;
@@ -817,14 +817,14 @@ describe('concurrent Stream Credit Handling', () => {
       const initialBalance = 500;
       const deduction1 = 400;
       const deduction2 = 300;
-      const version = 1;
+      const _version = 1;
 
       // First deduction succeeds
       const hasEnough1 = initialBalance >= deduction1;
       expect(hasEnough1).toBe(true);
 
       const balanceAfterFirst = initialBalance - deduction1;
-      const versionAfterFirst = version + 1;
+      const _versionAfterFirst = _version + 1;
 
       expect(balanceAfterFirst).toBe(100);
 
@@ -978,8 +978,8 @@ describe('free User Round Completion Triggers Zero-Out', () => {
     });
 
     it('clears both balance and reserved credits', () => {
-      const balance = 4500;
-      const reservedCredits = 100;
+      const _balance = 4500;
+      const _reservedCredits = 100;
 
       // Zero out both
       const balanceAfterZeroOut = 0;
@@ -1000,11 +1000,11 @@ describe('free User Round Completion Triggers Zero-Out', () => {
   describe('paid User Exemption', () => {
     it('does NOT zero out paid user credits', () => {
       const paidUserBalance = 98000;
-      const planType = 'paid';
+      const _planType = 'paid';
       const roundComplete = true;
 
       // Paid users are exempt from zero-out
-      const shouldZeroOut = planType === 'free' && roundComplete;
+      const shouldZeroOut = _planType === 'free' && roundComplete;
       expect(shouldZeroOut).toBe(false);
 
       const balanceAfterCheck = shouldZeroOut ? 0 : paidUserBalance;
@@ -1013,7 +1013,7 @@ describe('free User Round Completion Triggers Zero-Out', () => {
 
     it('allows paid users to continue after round completion', () => {
       const paidUserBalance = 95000;
-      const planType = 'paid';
+      const _planType = 'paid';
       const roundsCompleted = 5;
 
       const balanceStillAvailable = paidUserBalance > 0;
@@ -1040,7 +1040,7 @@ describe('edge Cases and Complex Scenarios', () => {
     });
 
     it('handles reservation less than actual usage', () => {
-      const reservedAmount = 50;
+      const _reservedAmount = 50;
       const actualUsage = 75;
 
       // Under-estimated - still deducts actual amount

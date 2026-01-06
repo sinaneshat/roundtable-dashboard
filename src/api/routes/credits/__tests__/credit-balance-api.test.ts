@@ -11,9 +11,23 @@ import { PlanTypes } from '@/api/core/enums';
 import * as creditService from '@/api/services/credit.service';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
-let mockDbInsertReturning: any;
-let mockDbSelect: any;
-let mockDbUpdate: any;
+let mockDbInsertReturning: MockUserCreditData[] | [];
+let mockDbSelect: MockUserCreditData[] | [];
+let mockDbUpdate: MockUserCreditData[] | [];
+
+type MockUserCreditData = {
+  id: string;
+  userId: string;
+  balance: number;
+  reservedCredits: number;
+  planType: string;
+  monthlyCredits: number;
+  lastRefillAt: Date | null;
+  nextRefillAt: Date | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 function createMockDb() {
   return {
@@ -56,20 +70,6 @@ vi.mock('@/db', async () => {
     getDbAsync: vi.fn(async () => createMockDb()),
   };
 });
-
-type MockUserCreditData = {
-  id: string;
-  userId: string;
-  balance: number;
-  reservedCredits: number;
-  planType: string;
-  monthlyCredits: number;
-  lastRefillAt: Date | null;
-  nextRefillAt: Date | null;
-  version: number;
-  createdAt: Date;
-  updatedAt: Date;
-};
 
 function createMockCreditRecord(overrides?: Partial<MockUserCreditData>): MockUserCreditData {
   return {
@@ -301,7 +301,7 @@ describe('gET /credits/balance - Credit Balance Endpoint', () => {
 describe('credit Reservation and Release Flow', () => {
   describe('reserveCredits operations', () => {
     it('reserves credits successfully when sufficient balance', () => {
-      const userId = 'user_reserve_1';
+      const _userId = 'user_reserve_1';
       const estimatedCredits = 1_000;
       const balance = 5_000;
       const currentReserved = 0;
@@ -326,7 +326,7 @@ describe('credit Reservation and Release Flow', () => {
     });
 
     it('prevents reservation exceeding available balance', async () => {
-      const userId = 'user_insufficient_reserve';
+      const _userId = 'user_insufficient_reserve';
       const balance = 1_000;
       const reserved = 500;
       const available = balance - reserved;
@@ -553,11 +553,7 @@ describe('invalid/Missing User ID Handling', () => {
       mockDbSelect = [];
       mockDbInsertReturning = [];
 
-      try {
-        await creditService.getUserCreditBalance(userId);
-      } catch (error: any) {
-        expect(error).toBeDefined();
-      }
+      await expect(creditService.getUserCreditBalance(userId)).rejects.toBeDefined();
     });
 
     it('creates credit record for valid new user', async () => {

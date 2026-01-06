@@ -178,7 +178,7 @@ describe('multi-Participant Round Completion', () => {
       store.getState().setCurrentParticipantIndex(1);
 
       // User changes config mid-round (should not affect current round)
-      const p3 = { id: 'p3', modelId: 'gemini-pro', role: null, priority: 2, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const _p3 = { id: 'p3', modelId: 'gemini-pro', role: null, priority: 2, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
       store.getState().setSelectedParticipants([
         { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
         { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },

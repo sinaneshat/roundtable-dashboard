@@ -10,6 +10,7 @@
  * - Subscription banner display
  */
 
+import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { useRouter } from 'next/navigation';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -42,7 +43,7 @@ vi.mock('@/hooks/utils', async (importOriginal) => {
 });
 
 describe('pricingContent', () => {
-  const mockRouter = {
+  const mockRouter: Pick<AppRouterInstance, 'push' | 'replace' | 'refresh'> = {
     push: vi.fn(),
     replace: vi.fn(),
     refresh: vi.fn(),
@@ -50,7 +51,7 @@ describe('pricingContent', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useRouter).mockReturnValue(mockRouter as any);
+    vi.mocked(useRouter).mockReturnValue(mockRouter as AppRouterInstance);
   });
 
   describe('loading state', () => {
@@ -595,7 +596,7 @@ describe('pricingContent', () => {
           {
             id: 'price_invalid',
             productId: 'prod_test',
-            unitAmount: null as any,
+            unitAmount: null,
             currency: 'usd',
             interval: UIBillingIntervals.MONTH,
             trialPeriodDays: null,

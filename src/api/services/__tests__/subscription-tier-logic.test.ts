@@ -469,10 +469,12 @@ describe('grace Period Handling (Subscription Cancellation)', () => {
 
     // When period expires, user should be downgraded to Free
     // (In real implementation, this is handled by billing service)
-    if (hasExpired) {
-      const expectedTier = SubscriptionTiers.FREE;
-      expect(expectedTier).toBe(SubscriptionTiers.FREE);
-    }
+    const expectedTier = SubscriptionTiers.FREE;
+
+    // Always verify the expected tier is FREE regardless of hasExpired
+    expect(expectedTier).toBe(SubscriptionTiers.FREE);
+    // Verify that period has expired as expected
+    expect(hasExpired).toBe(true);
   });
 
   it('grace period calculation is based on currentPeriodEnd', () => {

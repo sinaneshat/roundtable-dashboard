@@ -24,10 +24,53 @@ import { ensureUserCreditRecord, getUserCreditBalance } from '@/api/services/cre
 import { ensureUserUsageRecord } from '@/api/services/usage-tracking.service';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
+type MockCreditRecord = {
+  id: string;
+  userId: string;
+  balance: number;
+  reservedCredits: number;
+  planType: PlanType;
+  monthlyCredits: number;
+  nextRefillAt: Date | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type MockUsageRecord = {
+  id: string;
+  userId: string;
+  subscriptionTier: string;
+  isAnnual: boolean;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  threadsCreated: number;
+  messagesCreated: number;
+  customRolesCreated: number;
+  analysisGenerated: number;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type MockTransaction = {
+  id: string;
+  userId: string;
+  type: string;
+  action: string;
+  amount: number;
+  balanceAfter: number;
+  description?: string;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+  creditsUsed?: number | null;
+};
+
 // Mock database operations
-let mockCreditRecords: Map<string, any>;
-let mockUsageRecords: Map<string, any>;
-let mockTransactions: any[];
+let mockCreditRecords: Map<string, MockCreditRecord>;
+let mockUsageRecords: Map<string, MockUsageRecord>;
+let mockTransactions: MockTransaction[];
 let lastInsertType: 'credit' | 'usage' | 'transaction' | null = null;
 
 vi.mock('@/db', async () => {
@@ -38,7 +81,7 @@ vi.mock('@/db', async () => {
     getDbAsync: vi.fn(() => {
       return {
         insert: vi.fn(() => {
-          const valuesHandler = (data: any) => {
+          const valuesHandler = (data: Partial<MockCreditRecord | MockUsageRecord | MockTransaction>) => {
             // Determine type based on data structure
             const isCredit = 'balance' in data && 'planType' in data;
             const isUsage = 'subscriptionTier' in data && 'threadsCreated' in data;
@@ -95,7 +138,7 @@ vi.mock('@/db', async () => {
           // Simplified select logic - use lastInsertType as primary hint
           return {
             from: vi.fn(() => ({
-              where: vi.fn((condition: any) => {
+              where: vi.fn((_condition: unknown) => {
                 let selectType: 'credit' | 'usage' = 'credit';
 
                 if (lastInsertType === 'usage') {
@@ -143,35 +186,6 @@ vi.mock('@/db', async () => {
   };
 });
 
-type MockCreditRecord = {
-  id: string;
-  userId: string;
-  balance: number;
-  reservedCredits: number;
-  planType: PlanType;
-  monthlyCredits: number;
-  nextRefillAt: Date | null;
-  version: number;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-type MockUsageRecord = {
-  id: string;
-  userId: string;
-  subscriptionTier: string;
-  isAnnual: boolean;
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  threadsCreated: number;
-  messagesCreated: number;
-  customRolesCreated: number;
-  analysisGenerated: number;
-  version: number;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
 beforeEach(() => {
   vi.clearAllMocks();
   mockCreditRecords = new Map();
@@ -184,7 +198,6 @@ describe('auth Flow Credit Integration', () => {
   describe('new User Signup Credit Allocation', () => {
     it('allocates signup credits to new user on first access', async () => {
       const userId = 'user-new-signup-001';
-      const now = new Date();
 
       // Simulate new user - no existing records (maps are empty from beforeEach)
 
@@ -571,7 +584,7 @@ describe('auth Flow Credit Integration', () => {
     it('validates credit balance constraints', async () => {
       const userId = 'user-constraint-001';
 
-      const invalidRecord: MockCreditRecord = {
+      const _invalidRecord: MockCreditRecord = {
         id: 'credit-invalid-001',
         userId,
         balance: -100, // Negative balance violates constraint
@@ -747,14 +760,7 @@ describe('auth Flow Credit Integration', () => {
   });
 
   describe('complete Auth Flow Integration', () => {
-    // TODO: This test requires complex mocking of sequential DB calls
-    // The individual components are well-tested above (credit allocation, usage tracking, transactions)
-    // Real integration is verified by the test suite as a whole
-    it.skip('initializes all required records for new user', async () => {
-      // Skipped due to mock complexity - sequential ensureUserCreditRecord + ensureUserUsageRecord
-      // causes select() disambiguation issues between credit/usage tables
-      // Individual functions are thoroughly tested separately
-    });
+    it.todo('initializes all required records for new user');
 
     it('provides correct initial state for new free user', async () => {
       const userId = 'user-initial-state-001';

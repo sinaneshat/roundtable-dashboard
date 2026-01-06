@@ -5,11 +5,9 @@ import { CreditActions, CreditTransactionTypes, PlanTypes } from '@/api/core/enu
 import * as creditService from '@/api/services/credit.service';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
-let mockDbInsertReturning: any;
-let mockDbSelect: any;
-let mockDbUpdate: any;
-let mockInsertedRecords: any[];
-let mockTransactionRecords: any[];
+let mockDbInsertReturning: unknown[] = [];
+let mockDbSelect: unknown[] = [];
+let mockDbUpdate: unknown[] = [];
 
 function createMockDb() {
   return {
@@ -67,8 +65,6 @@ beforeEach(() => {
   mockUserCreditData.reservedCredits = 0;
   mockUserCreditData.planType = PlanTypes.FREE;
   mockUserCreditData.monthlyCredits = 0;
-  mockInsertedRecords = [];
-  mockTransactionRecords = [];
   mockDbInsertReturning = [];
   mockDbSelect = [];
   mockDbUpdate = [];
@@ -398,7 +394,7 @@ describe('credit Service', () => {
       });
 
       it('updates balance even if already at 0', () => {
-        const previousBalance = 0;
+        const _previousBalance = 0;
         const newBalance = 0;
         expect(newBalance).toBe(0);
       });
@@ -420,13 +416,9 @@ describe('credit Service', () => {
 
       it('early return for paid users prevents any changes', () => {
         const planType = PlanTypes.PAID;
-        if (planType !== PlanTypes.FREE) {
-          const wasUpdated = false;
-          expect(wasUpdated).toBe(false);
-        } else {
-          const wasUpdated = true;
-          expect(wasUpdated).toBe(true);
-        }
+        const wasUpdated = planType === PlanTypes.FREE;
+
+        expect(wasUpdated).toBe(false);
       });
     });
 
@@ -1475,7 +1467,7 @@ describe('credit Service', () => {
     it('prevents balance from going negative through validation', () => {
       const balance = 100;
       const deduction = 150;
-      const wouldBeNegative = (balance - deduction) < 0;
+      const wouldBeNegative = balance - deduction < 0;
 
       expect(wouldBeNegative).toBe(true);
     });
@@ -1484,8 +1476,8 @@ describe('credit Service', () => {
       const validBalance = 0;
       expect(validBalance).toBeGreaterThanOrEqual(0);
 
-      const invalidBalance = -100;
-      expect(invalidBalance).toBeLessThan(0);
+      const _invalidBalance = -100;
+      expect(_invalidBalance).toBeLessThan(0);
     });
 
     it('blocks operations when balance would go negative', () => {

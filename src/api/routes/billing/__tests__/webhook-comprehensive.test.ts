@@ -273,7 +273,7 @@ describe('stripe Webhook Event Processing', () => {
 
     it('ensures final state reflects latest Stripe data', () => {
       // Even if events arrive out of order, final sync fetches current state
-      const webhookEvents = [
+      const _webhookEvents = [
         { created: 2000, payload: { status: 'active' } },
         { created: 1000, payload: { status: 'incomplete' } }, // Older event arrives later
       ];
@@ -702,7 +702,7 @@ describe('stripe Webhook Event Processing', () => {
     });
 
     it('does not grant credits for free tier', () => {
-      const subscriptionTier = 'free';
+      const _subscriptionTier = 'free';
       const monthlyCredits = 0;
 
       expect(monthlyCredits).toBe(0);

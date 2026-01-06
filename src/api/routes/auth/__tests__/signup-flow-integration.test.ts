@@ -421,10 +421,9 @@ describe('signup Flow Integration', () => {
       const hasCompletedRound = true;
       const errorMessage = 'Your free conversation round has been used. Subscribe to Pro to continue chatting.';
 
-      if (hasCompletedRound) {
-        expect(errorMessage).toContain('free conversation round');
-        expect(errorMessage).toContain('Subscribe to Pro');
-      }
+      expect(hasCompletedRound).toBe(true);
+      expect(errorMessage).toContain('free conversation round');
+      expect(errorMessage).toContain('Subscribe to Pro');
     });
 
     it('throws error when credits insufficient for any user', () => {

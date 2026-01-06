@@ -1086,7 +1086,7 @@ describe('grace Period Handling (Subscription Cancellation)', () => {
     const userId = 'grace_2';
     createProUser(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const _balance = mockState.userCreditBalances.get(userId)!;
 
     // User in grace period can still use credits
     expect(checkHasCredits(userId, 50_000)).toBe(true);

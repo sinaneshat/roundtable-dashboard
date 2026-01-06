@@ -10,6 +10,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { useRouter } from 'next/navigation';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -59,7 +60,7 @@ function createMockQueryClient() {
 }
 
 describe('pricingScreen', () => {
-  const mockRouter = {
+  const mockRouter: Pick<AppRouterInstance, 'push' | 'replace' | 'refresh'> = {
     push: vi.fn(),
     replace: vi.fn(),
     refresh: vi.fn(),
@@ -67,7 +68,7 @@ describe('pricingScreen', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useRouter).mockReturnValue(mockRouter as any);
+    vi.mocked(useRouter).mockReturnValue(mockRouter as AppRouterInstance);
   });
 
   describe('product loading', () => {

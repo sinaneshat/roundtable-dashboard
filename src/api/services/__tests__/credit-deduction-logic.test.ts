@@ -1484,7 +1484,7 @@ describe('complex Multi-Step Scenarios', () => {
     });
 
     it('handles timeout during streaming', () => {
-      const balance = 5000;
+      const _balance = 5000;
       let reserved = 100;
 
       // Timeout occurs - release full reservation

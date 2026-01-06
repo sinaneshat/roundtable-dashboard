@@ -11,9 +11,33 @@ import type { SubscriptionTier } from '@/api/core/enums';
 import { SubscriptionTiers } from '@/api/core/enums';
 import { TIER_QUOTAS } from '@/api/services/product-logic.service';
 
-// Mock database for testing
-let mockUsageRecords: Map<string, any>;
-let mockHistoryRecords: any[];
+type MockUsageRecord = {
+  userId: string;
+  subscriptionTier: SubscriptionTier;
+  threadsCreated: number;
+  messagesCreated: number;
+  customRolesCreated: number;
+  analysisGenerated: number;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  version: number;
+};
+
+type MockHistoryRecord = {
+  userId: string;
+  periodStart: Date;
+  periodEnd: Date;
+  threadsCreated: number;
+  messagesCreated: number;
+  customRolesCreated: number;
+  analysisGenerated: number;
+  subscriptionTier: SubscriptionTier;
+  isAnnual: boolean;
+  createdAt: Date;
+};
+
+let mockUsageRecords: Map<string, MockUsageRecord>;
+let mockHistoryRecords: MockHistoryRecord[];
 
 vi.mock('@/db', async () => {
   const actual = await vi.importActual('@/db');
@@ -28,7 +52,7 @@ vi.mock('@/db', async () => {
               const record = mockUsageRecords.get(userId);
               return record ? [record] : [];
             }),
-            $withCache: vi.fn((config) => {
+            $withCache: vi.fn((_config) => {
               const userId = Array.from(mockUsageRecords.keys())[0];
               const record = mockUsageRecords.get(userId);
               return record ? [record] : [];
@@ -680,16 +704,18 @@ describe('quota Calculation and Tracking', () => {
       const threadsCreated = 1;
       const limit = TIER_QUOTAS[tier].threadsPerMonth;
 
-      if (threadsCreated >= limit) {
-        const errorMessage = `Thread limit reached. You can create ${limit} thread(s) per month on the Free tier.`;
-        expect(errorMessage).toContain('limit reached');
-      }
+      const errorMessage = `Thread limit reached. You can create ${limit} thread(s) per month on the Free tier.`;
+      const isAtLimit = threadsCreated >= limit;
+
+      // Verify limit is reached and error message is correct
+      expect(isAtLimit).toBe(true);
+      expect(errorMessage).toContain('limit reached');
     });
   });
 
   describe('quota Reset Period Calculation', () => {
     it('monthly reset occurs on first day of month', () => {
-      const lastReset = new Date('2024-03-01T00:00:00Z');
+      const _lastReset = new Date('2024-03-01T00:00:00Z');
       const nextReset = new Date('2024-04-01T00:00:00Z');
 
       expect(nextReset.getDate()).toBe(1);

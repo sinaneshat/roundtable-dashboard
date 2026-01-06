@@ -684,8 +684,10 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         store.getState().setNextParticipantToTrigger({ index: -1, participantId: 'p1' });
 
         const state = store.getState();
-        expect(state.nextParticipantToTrigger?.index).toBe(-1);
-        expect(state.nextParticipantToTrigger?.index! < 0).toBe(true); // Would fail bounds check
+        const triggerIndex = state.nextParticipantToTrigger?.index;
+        expect(triggerIndex).toBe(-1);
+        expect(triggerIndex).toBeDefined();
+        expect(triggerIndex! < 0).toBe(true); // Would fail bounds check
       });
 
       it('should handle empty participants array', () => {
@@ -695,7 +697,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         const state = store.getState();
         expect(state.selectedParticipants).toHaveLength(0);
         // Index 0 is out of bounds when participants is empty
-        expect(state.nextParticipantToTrigger?.index! >= state.selectedParticipants.length).toBe(true);
+        const triggerIndex = state.nextParticipantToTrigger?.index;
+        expect(triggerIndex).toBeDefined();
+        expect(triggerIndex! >= state.selectedParticipants.length).toBe(true);
       });
 
       it('should handle missing participantId (null check)', () => {

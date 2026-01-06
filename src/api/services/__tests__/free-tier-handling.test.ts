@@ -595,7 +595,7 @@ describe('tier Transition Logic', () => {
       const userId = 'upgrade_user_2';
       createFreeUser(userId, { balance: 1500 });
 
-      const balanceBefore = mockState.userCreditBalances.get(userId)!.balance;
+      const _balanceBefore = mockState.userCreditBalances.get(userId)!.balance;
 
       const updated = mockState.userCreditBalances.get(userId)!;
       updated.balance += CREDIT_CONFIG.PLANS.paid.monthlyCredits;
