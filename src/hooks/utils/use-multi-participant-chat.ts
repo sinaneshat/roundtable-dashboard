@@ -145,11 +145,15 @@ type UseMultiParticipantChatReturn = {
   startRound: (participantsOverride?: ChatParticipant[], messagesOverride?: UIMessage[]) => void;
   /**
    * Continue a round from a specific participant index (used for incomplete round resumption)
-   * @param fromIndex - The participant index to continue from
+   * @param fromIndexOrTarget - The participant index or object with index + participantId for validation
    * @param participantsOverride - Optional fresh participants
    * @param messagesOverride - Optional fresh messages (used to avoid stale closure)
    */
-  continueFromParticipant: (fromIndex: number, participantsOverride?: ChatParticipant[], messagesOverride?: UIMessage[]) => void;
+  continueFromParticipant: (
+    fromIndexOrTarget: number | { index: number; participantId: string },
+    participantsOverride?: ChatParticipant[],
+    messagesOverride?: UIMessage[],
+  ) => void;
   /** Whether participants are currently streaming responses */
   isStreaming: boolean;
   /**
@@ -887,6 +891,15 @@ export function useMultiParticipantChat(
       }
       triggeredNextForRef.current.add(triggerKey);
 
+      // ✅ CRITICAL FIX: Reset AI SDK state before triggering next participant
+      // When an error occurs, AI SDK status becomes 'error' and won't accept new sendMessage calls.
+      // Calling setMessages forces the SDK back to 'ready' state, allowing the next participant to send.
+      // Use flushSync to ensure the state reset is committed BEFORE triggering next participant.
+      // eslint-disable-next-line react-dom/no-flush-sync -- Required for AI SDK state reset
+      flushSync(() => {
+        setMessages(structuredClone(messagesRef.current));
+      });
+
       // Trigger next participant immediately (no delay needed)
       triggerNextParticipantWithRefs();
       callbackRefs.onError.current?.(error instanceof Error ? error : new Error(errorMessage));
@@ -1032,6 +1045,13 @@ export function useMultiParticipantChat(
           return;
         }
         triggeredNextForRef.current.add(triggerKey);
+
+        // ✅ CRITICAL FIX: Reset AI SDK state before triggering next participant
+        // Same fix as in onError - ensures SDK is in 'ready' state to accept sendMessage
+        // eslint-disable-next-line react-dom/no-flush-sync -- Required for AI SDK state reset
+        flushSync(() => {
+          setMessages(structuredClone(messagesRef.current));
+        });
 
         // Trigger next participant immediately
         triggerNextParticipantWithRefs();
@@ -1354,6 +1374,12 @@ export function useMultiParticipantChat(
             console.error(`[flow] SKIP phantom r${finalRoundNumber} (current:r${currentRoundRef.current})`);
             return;
           }
+          // ✅ CRITICAL FIX: Reset AI SDK state before triggering next participant
+          // Same fix as in onError - ensures SDK is in 'ready' state to accept sendMessage
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for AI SDK state reset
+          flushSync(() => {
+            setMessages(structuredClone(messagesRef.current));
+          });
           triggerNextParticipantWithRefs();
           return;
         }
@@ -1718,14 +1744,18 @@ export function useMultiParticipantChat(
    * Used for incomplete round resumption when user navigates away during streaming
    * and returns later to find some participants have responded but not all
    *
-   * @param fromIndex - The participant index to continue from (0-based)
+   * @param fromIndexOrTarget - The participant index (0-based) or object with index and participantId for validation
    * @param participantsOverride - Optional fresh participants to use
+   * @param messagesOverride - Optional fresh messages (used to avoid stale closure)
    */
   const continueFromParticipant = useCallback((
-    fromIndex: number,
+    fromIndexOrTarget: number | { index: number; participantId: string },
     participantsOverride?: ChatParticipant[],
     messagesOverride?: UIMessage[],
   ) => {
+    // ✅ TYPE-SAFE: Extract index and optional participantId for validation
+    const fromIndex = typeof fromIndexOrTarget === 'number' ? fromIndexOrTarget : fromIndexOrTarget.index;
+    const expectedParticipantId = typeof fromIndexOrTarget === 'object' ? fromIndexOrTarget.participantId : undefined;
     // ✅ STALE CLOSURE FIX: Accept messagesOverride to avoid stale closure
     // When passed from trigger, these messages are guaranteed to be persisted (from PATCH response)
     const freshMessages = messagesOverride || initialMessages;
@@ -1789,6 +1819,22 @@ export function useMultiParticipantChat(
     if (fromIndex < 0 || fromIndex >= enabled.length) {
       isTriggeringRef.current = false;
       return;
+    }
+
+    // ✅ CONFIG CHANGE VALIDATION: Verify participant at index matches expected ID
+    // This prevents triggering wrong participant if config changed between when
+    // nextParticipantToTrigger was set and when continueFromParticipant is called
+    if (expectedParticipantId) {
+      const actualParticipant = enabled[fromIndex];
+      if (actualParticipant && actualParticipant.id !== expectedParticipantId) {
+        console.error(
+          `[continueFromParticipant] Participant mismatch at index ${fromIndex}: `
+          + `expected ${expectedParticipantId}, got ${actualParticipant.id}. `
+          + `Config may have changed. Skipping to prevent wrong participant from streaming.`,
+        );
+        isTriggeringRef.current = false;
+        return;
+      }
     }
 
     // ✅ STALE CLOSURE FIX: Use freshMessages (messagesOverride or initialMessages)

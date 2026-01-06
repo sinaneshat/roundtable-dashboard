@@ -296,8 +296,46 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
       .filter((id): id is string => id !== null),
   );
 
-  // Round is complete when ALL enabled participants have responded
-  return respondedParticipantIds.size >= enabledParticipants.length;
+  // All participants must have responded
+  const allParticipantsResponded = respondedParticipantIds.size >= enabledParticipants.length;
+
+  if (!allParticipantsResponded) {
+    return false;
+  }
+
+  // For multi-participant threads (2+), the moderator must also complete
+  // Moderator provides the round summary - round isn't complete until this finishes
+  // Single-participant threads don't have a moderator, so they complete after participant response
+  if (enabledParticipants.length >= 2) {
+    // Moderator message ID format: {threadId}_r{roundNumber}_moderator
+    const moderatorMessageId = `${thread.id}_r0_moderator`;
+    const moderatorMessage = await db.query.chatMessage.findFirst({
+      where: eq(tables.chatMessage.id, moderatorMessageId),
+    });
+
+    // Moderator message must exist AND have non-empty content (parts array with text)
+    // Empty parts = moderator created but not streamed yet
+    if (!moderatorMessage) {
+      return false;
+    }
+
+    const hasModeContent = Array.isArray(moderatorMessage.parts)
+      && moderatorMessage.parts.length > 0
+      && moderatorMessage.parts.some((part: unknown) => {
+        if (typeof part === 'object' && part !== null && 'type' in part && 'text' in part) {
+          const textPart = part as { type: string; text: string };
+          return textPart.type === 'text' && textPart.text.trim().length > 0;
+        }
+        return false;
+      });
+
+    if (!hasModeContent) {
+      return false; // Moderator message exists but hasn't streamed content yet
+    }
+  }
+
+  // Round is complete when ALL enabled participants AND moderator (if applicable) have finished
+  return true;
 }
 
 export async function zeroOutFreeUserCredits(userId: string): Promise<void> {

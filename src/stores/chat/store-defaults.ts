@@ -356,6 +356,8 @@ export const COMPLETE_RESET_STATE = {
  */
 export const THREAD_RESET_STATE = {
   // UI state - includes streaming state properties
+  // ✅ FIX: Include showInitialUI to reset form visibility after thread unmount
+  showInitialUI: UI_DEFAULTS.showInitialUI,
   waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
   isStreaming: THREAD_DEFAULTS.isStreaming,
   // Flags state

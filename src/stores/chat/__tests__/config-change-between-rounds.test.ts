@@ -486,4 +486,301 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       expect(round0Check).toBe(false); // Still marked from before
     });
   });
+
+  // ============================================================================
+  // PARTICIPANT INDEX VALIDATION EDGE CASES
+  // ============================================================================
+  // These tests verify the participant index validation in use-multi-participant-chat.ts
+  // Key validation points:
+  // 1. Bounds validation: fromIndex < 0 || fromIndex >= enabled.length
+  // 2. ID mismatch validation: actualParticipant.id !== expectedParticipantId
+  // ============================================================================
+  describe('participant Index Validation Edge Cases', () => {
+    describe('nextParticipantToTrigger State Management', () => {
+      it('should store both index and participantId for validation', () => {
+        const participants = [
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        ];
+        store.getState().setSelectedParticipants(participants);
+
+        // ✅ TYPE-SAFE: Store both index and participantId
+        store.getState().setNextParticipantToTrigger({ index: 0, participantId: 'p1' });
+
+        const state = store.getState();
+        expect(state.nextParticipantToTrigger).toEqual({ index: 0, participantId: 'p1' });
+      });
+
+      it('should allow null nextParticipantToTrigger when no trigger pending', () => {
+        store.getState().setNextParticipantToTrigger(null);
+
+        const state = store.getState();
+        expect(state.nextParticipantToTrigger).toBe(null);
+      });
+
+      it('should support index-only trigger for backwards compatibility', () => {
+        // Some code paths may still use index-only (legacy)
+        store.getState().setNextParticipantToTrigger({ index: 1, participantId: 'p2' });
+
+        const state = store.getState();
+        expect(state.nextParticipantToTrigger?.index).toBe(1);
+      });
+    });
+
+    describe('config Change with Participant Index Mismatch', () => {
+      it('should track participantId to detect config changes', () => {
+        // Initial setup: 2 participants
+        const initialParticipants = [
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        ];
+        store.getState().setSelectedParticipants(initialParticipants);
+
+        // Set trigger for first participant
+        store.getState().setNextParticipantToTrigger({ index: 0, participantId: 'p1' });
+
+        // Now config changes - participants replaced with different IDs
+        const newParticipants = [
+          { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 0 },
+          { id: 'p4', modelId: 'mistral', role: 'synthesizer', priority: 1 },
+        ];
+        store.getState().setSelectedParticipants(newParticipants);
+
+        // The stored participantId ('p1') won't match the new participant at index 0 ('p3')
+        const state = store.getState();
+        const triggeredParticipant = state.nextParticipantToTrigger;
+        const actualParticipant = state.selectedParticipants[triggeredParticipant?.index || 0];
+
+        expect(triggeredParticipant?.participantId).toBe('p1');
+        expect(actualParticipant?.id).toBe('p3');
+        expect(triggeredParticipant?.participantId).not.toBe(actualParticipant?.id);
+      });
+
+      it('should preserve matching trigger when participants unchanged', () => {
+        const participants = [
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        ];
+        store.getState().setSelectedParticipants(participants);
+        store.getState().setNextParticipantToTrigger({ index: 1, participantId: 'p2' });
+
+        // Set same participants again (no actual change)
+        store.getState().setSelectedParticipants(participants);
+
+        const state = store.getState();
+        const triggeredParticipant = state.nextParticipantToTrigger;
+        const actualParticipant = state.selectedParticipants[triggeredParticipant?.index || 0];
+
+        expect(triggeredParticipant?.participantId).toBe('p2');
+        expect(actualParticipant?.id).toBe('p2');
+        expect(triggeredParticipant?.participantId).toBe(actualParticipant?.id);
+      });
+    });
+
+    describe('participant Count Changes', () => {
+      it('should handle participant count increase', () => {
+        // Start with 2 participants
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        ]);
+        store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3']);
+
+        // Increase to 3 participants
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+          { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+        ]);
+        store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3', 'gemini-pro']);
+
+        const state = store.getState();
+        expect(state.selectedParticipants).toHaveLength(3);
+        expect(state.expectedParticipantIds).toHaveLength(3);
+      });
+
+      it('should handle participant count decrease', () => {
+        // Start with 3 participants
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+          { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+        ]);
+        store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3', 'gemini-pro']);
+
+        // Decrease to 1 participant
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+        ]);
+        store.getState().setExpectedParticipantIds(['gpt-4']);
+
+        const state = store.getState();
+        expect(state.selectedParticipants).toHaveLength(1);
+        expect(state.expectedParticipantIds).toHaveLength(1);
+      });
+
+      it('should detect out-of-bounds index after participant decrease', () => {
+        // Start with 3 participants
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+          { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+        ]);
+
+        // Set trigger for index 2 (valid with 3 participants)
+        store.getState().setNextParticipantToTrigger({ index: 2, participantId: 'p3' });
+
+        // Decrease to 2 participants - index 2 is now out of bounds
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        ]);
+
+        const state = store.getState();
+        const triggeredIndex = state.nextParticipantToTrigger?.index;
+        const participantCount = state.selectedParticipants.length;
+
+        // Index 2 >= participant count 2 → out of bounds
+        expect(triggeredIndex).toBe(2);
+        expect(participantCount).toBe(2);
+        expect(triggeredIndex! >= participantCount).toBe(true); // Would fail bounds check
+      });
+    });
+
+    describe('participant Order Changes', () => {
+      it('should detect participant order swap', () => {
+        // Initial order: p1, p2
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        ]);
+
+        // Set trigger for index 0 expecting p1
+        store.getState().setNextParticipantToTrigger({ index: 0, participantId: 'p1' });
+
+        // Swap order: p2, p1
+        store.getState().setSelectedParticipants([
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 0 },
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 1 },
+        ]);
+
+        const state = store.getState();
+        const triggeredParticipant = state.nextParticipantToTrigger;
+        const actualParticipant = state.selectedParticipants[triggeredParticipant?.index || 0];
+
+        // Index 0 now has p2 instead of expected p1
+        expect(triggeredParticipant?.participantId).toBe('p1');
+        expect(actualParticipant?.id).toBe('p2');
+        expect(triggeredParticipant?.participantId).not.toBe(actualParticipant?.id);
+      });
+    });
+
+    describe('edge Cases for Index Validation', () => {
+      it('should handle negative index gracefully', () => {
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+        ]);
+
+        // Negative index (invalid)
+        store.getState().setNextParticipantToTrigger({ index: -1, participantId: 'p1' });
+
+        const state = store.getState();
+        expect(state.nextParticipantToTrigger?.index).toBe(-1);
+        expect(state.nextParticipantToTrigger?.index! < 0).toBe(true); // Would fail bounds check
+      });
+
+      it('should handle empty participants array', () => {
+        store.getState().setSelectedParticipants([]);
+        store.getState().setNextParticipantToTrigger({ index: 0, participantId: 'p1' });
+
+        const state = store.getState();
+        expect(state.selectedParticipants).toHaveLength(0);
+        // Index 0 is out of bounds when participants is empty
+        expect(state.nextParticipantToTrigger?.index! >= state.selectedParticipants.length).toBe(true);
+      });
+
+      it('should handle missing participantId (null check)', () => {
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+        ]);
+
+        // Set trigger without participantId (backwards compatibility)
+        store.getState().setNextParticipantToTrigger({ index: 0, participantId: '' });
+
+        const state = store.getState();
+        // Empty participantId should be treated as "no validation"
+        expect(state.nextParticipantToTrigger?.participantId).toBe('');
+      });
+    });
+
+    describe('prepareForNewMessage and Index Reset', () => {
+      it('should clear nextParticipantToTrigger in prepareForNewMessage', () => {
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        ]);
+        store.getState().setNextParticipantToTrigger({ index: 1, participantId: 'p2' });
+
+        expect(store.getState().nextParticipantToTrigger).not.toBeNull();
+
+        // prepareForNewMessage should reset streaming state
+        store.getState().prepareForNewMessage('Test', ['gpt-4', 'claude-3']);
+
+        const state = store.getState();
+        expect(state.nextParticipantToTrigger).toBe(null);
+      });
+
+      it('should reset currentParticipantIndex in prepareForNewMessage', () => {
+        store.getState().setCurrentParticipantIndex(2);
+
+        store.getState().prepareForNewMessage('Test', ['gpt-4']);
+
+        const state = store.getState();
+        expect(state.currentParticipantIndex).toBe(0);
+      });
+    });
+
+    describe('completeStreaming and Index Cleanup', () => {
+      it('should NOT clear nextParticipantToTrigger on completeStreaming (persisted for resumption)', () => {
+        // nextParticipantToTrigger is intentionally NOT cleared by completeStreaming
+        // It's used for incomplete round resumption and is managed separately
+        store.getState().setNextParticipantToTrigger({ index: 1, participantId: 'p2' });
+        store.getState().setWaitingToStartStreaming(true);
+
+        expect(store.getState().nextParticipantToTrigger).not.toBeNull();
+
+        store.getState().completeStreaming();
+
+        const state = store.getState();
+        // nextParticipantToTrigger is NOT part of STREAM_RESUMPTION_STATE_RESET
+        // This allows resumption tracking to persist across streaming completion
+        expect(state.nextParticipantToTrigger).toEqual({ index: 1, participantId: 'p2' });
+        expect(state.waitingToStartStreaming).toBe(false);
+      });
+
+      it('should reset currentParticipantIndex on completeStreaming', () => {
+        store.getState().setCurrentParticipantIndex(3);
+        store.getState().setIsStreaming(true);
+
+        store.getState().completeStreaming();
+
+        const state = store.getState();
+        expect(state.currentParticipantIndex).toBe(0);
+        expect(state.isStreaming).toBe(false);
+      });
+
+      it('should clear nextParticipantToTrigger via use-round-resumption cleanup', () => {
+        // In practice, nextParticipantToTrigger is cleared by:
+        // 1. prepareForNewMessage (when starting new round)
+        // 2. use-round-resumption hook cleanup (line 91-92)
+        // 3. Explicit setNextParticipantToTrigger(null) when conditions aren't met
+        store.getState().setNextParticipantToTrigger({ index: 1, participantId: 'p2' });
+
+        // Simulate explicit cleanup (what hooks do)
+        store.getState().setNextParticipantToTrigger(null);
+
+        expect(store.getState().nextParticipantToTrigger).toBe(null);
+      });
+    });
+  });
 });

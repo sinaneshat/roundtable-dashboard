@@ -43,7 +43,7 @@ export {
   getStatusPriority,
   ModeratorTimeouts,
 } from './store-constants';
-export type { ChatStore } from './store-schemas';
+export type { ChatStore, NextParticipantToTrigger } from './store-schemas';
 export type { ParticipantCompletionStatus, ParticipantDebugInfo } from './utils/participant-completion-gate';
 export {
   areAllParticipantsCompleteForRound,

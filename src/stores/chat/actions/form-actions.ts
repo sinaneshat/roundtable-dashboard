@@ -196,7 +196,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       actions.prepareForNewMessage(prompt, getParticipantModelIds(participants), attachmentIds);
       actions.setStreamingRoundNumber(0);
       actions.setWaitingToStartStreaming(true);
-      actions.setNextParticipantToTrigger(0);
+      // ✅ TYPE-SAFE: Include participant ID for validation against config changes
+      const firstParticipant = participantsWithDates[0];
+      if (firstParticipant) {
+        actions.setNextParticipantToTrigger({ index: 0, participantId: firstParticipant.id });
+      }
     } catch (error) {
       console.error('[handleCreateThread] Error creating thread:', error);
       showApiErrorToast('Error creating thread', error);
@@ -297,7 +301,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       return [...currentMessages, optimisticMessage];
     });
     actions.setStreamingRoundNumber(nextRoundNumber);
-    actions.setExpectedParticipantIds(getParticipantModelIds(freshParticipants));
+    // ✅ FIX: Use optimistic participants when config changed, otherwise use fresh
+    // This ensures expectedParticipantIds matches what will actually stream
+    const effectiveParticipants = hasParticipantChanges ? optimisticParticipants : freshParticipants;
+    actions.setExpectedParticipantIds(getParticipantModelIds(effectiveParticipants));
 
     // Optimistically update participants in store if changes exist
     if (hasParticipantChanges) {
@@ -328,7 +335,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
     // NOW set waitingToStartStreaming - trigger will see correct round from optimistic message
     actions.setWaitingToStartStreaming(true);
-    actions.setNextParticipantToTrigger(0);
+    // ✅ TYPE-SAFE: Include participant ID for validation against config changes
+    const firstParticipant = freshParticipants[0];
+    if (firstParticipant) {
+      actions.setNextParticipantToTrigger({ index: 0, participantId: firstParticipant.id });
+    }
 
     // Clear input immediately for fast UI feedback
     actions.setInputValue('');
@@ -412,7 +423,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       actions.setWaitingToStartStreaming(false);
       actions.setStreamingRoundNumber(null);
       actions.setNextParticipantToTrigger(null);
+      // ✅ FIX: Clear BOTH changelog flags on error to prevent deadlock
+      // If either flag remains set, streaming will be blocked forever
       actions.setConfigChangeRoundNumber(null);
+      actions.setIsWaitingForChangelog(false);
 
       showApiErrorToast('Error updating thread', error);
     }

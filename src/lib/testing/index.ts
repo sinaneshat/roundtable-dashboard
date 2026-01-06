@@ -21,6 +21,16 @@ export {
 } from './api-mocks';
 
 // ============================================================================
+// Billing & Pricing Test Factories
+// ============================================================================
+export * from './billing-test-factories';
+
+// ============================================================================
+// Subscription Test Mocks
+// ============================================================================
+export * from './subscription-mocks';
+
+// ============================================================================
 // Chat Store Testing Utilities
 // ============================================================================
 export { createStoreWrapper, createTestChatStore, getStoreState, resetStoreToDefaults } from './chat-store-helpers';

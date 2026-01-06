@@ -442,10 +442,21 @@ export const ModeratorResumptionStateSchema = z.object({
 
 export type ModeratorResumptionState = z.infer<typeof ModeratorResumptionStateSchema>;
 
+/**
+ * ✅ TYPE-SAFE: Next participant to trigger includes ID for validation
+ * Prevents stale index from triggering wrong participant after config changes
+ */
+export const NextParticipantToTriggerSchema = z.object({
+  index: z.number().int().nonnegative(),
+  participantId: z.string().min(1),
+});
+
+export type NextParticipantToTrigger = z.infer<typeof NextParticipantToTriggerSchema>;
+
 export const StreamResumptionSliceStateSchema = z.object({
   streamResumptionState: StreamResumptionStateEntitySchema.nullable(),
   resumptionAttempts: z.custom<Set<string>>(),
-  nextParticipantToTrigger: z.number().nullable(),
+  nextParticipantToTrigger: NextParticipantToTriggerSchema.nullable(),
   streamResumptionPrefilled: z.boolean(),
   prefilledForThreadId: z.string().nullable(),
   currentResumptionPhase: RoundPhaseSchema.nullable(),
@@ -464,7 +475,7 @@ export const StreamResumptionPrefillUpdateSchema = z.object({
   resumptionRoundNumber: z.number().nullable(),
   preSearchResumption: PreSearchResumptionStateSchema.nullable().optional(),
   moderatorResumption: ModeratorResumptionStateSchema.nullable().optional(),
-  nextParticipantToTrigger: z.number().nullable().optional(),
+  nextParticipantToTrigger: NextParticipantToTriggerSchema.nullable().optional(),
   waitingToStartStreaming: z.boolean().optional(),
   isModeratorStreaming: z.boolean().optional(),
 });

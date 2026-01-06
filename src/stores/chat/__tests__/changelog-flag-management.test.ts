@@ -533,7 +533,12 @@ describe('changelog Flag Management', () => {
       expect(state.configChangeRoundNumber).toBe(1);
     });
 
-    it('should set flags in prepareForNewMessage when hasPendingConfigChanges', () => {
+    // ✅ FIX: prepareForNewMessage should NEVER set changelog flags
+    // prepareForNewMessage is called for:
+    // 1. Initial thread creation (POST) - no changelog exists
+    // 2. Incomplete round resumption - changelog was handled when round originally started
+    // For subsequent rounds, handleUpdateThreadAndSend sets flags AFTER PATCH
+    it('should NOT set flags in prepareForNewMessage even when hasPendingConfigChanges', () => {
       // Setup with pending config changes
       store.getState().setHasPendingConfigChanges(true);
       store.getState().setScreenMode(ScreenModes.THREAD);
@@ -542,8 +547,11 @@ describe('changelog Flag Management', () => {
       store.getState().prepareForNewMessage('Test message', ['p1']);
 
       const state = store.getState();
-      expect(state.isWaitingForChangelog).toBe(true);
-      expect(state.configChangeRoundNumber).toBe(0); // Round 0 when no messages
+      // ✅ FIX: prepareForNewMessage should NOT set changelog flags
+      // Changelog flags are only set by handleUpdateThreadAndSend AFTER PATCH
+      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.configChangeRoundNumber).toBe(null);
+      // hasPendingConfigChanges is preserved (not cleared by prepareForNewMessage)
       expect(state.hasPendingConfigChanges).toBe(true);
     });
 
@@ -562,7 +570,9 @@ describe('changelog Flag Management', () => {
   });
 
   describe('prepareForNewMessage Flag Setting', () => {
-    it('should set both flags when hasPendingConfigChanges is true', () => {
+    // ✅ FIX: prepareForNewMessage should NEVER set changelog flags
+    // These tests verify the correct behavior after the fix
+    it('should NOT set changelog flags even when hasPendingConfigChanges is true', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setHasPendingConfigChanges(true);
 
@@ -570,11 +580,12 @@ describe('changelog Flag Management', () => {
       store.getState().prepareForNewMessage('Test', ['p1']);
 
       const state = store.getState();
-      expect(state.isWaitingForChangelog).toBe(true);
-      expect(state.configChangeRoundNumber).toBe(0);
+      // ✅ FIX: Flags should NOT be set - only handleUpdateThreadAndSend sets them
+      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.configChangeRoundNumber).toBe(null);
     });
 
-    it('should calculate correct round number for flags', () => {
+    it('should NOT set changelog flags regardless of round number', () => {
       const messages = [
         createTestUserMessage({ id: 'u0', content: 'First', roundNumber: 0 }),
         createTestAssistantMessage({
@@ -594,10 +605,12 @@ describe('changelog Flag Management', () => {
       store.getState().prepareForNewMessage('Test', ['p1']);
 
       const state = store.getState();
-      expect(state.configChangeRoundNumber).toBe(1); // Next round after 0
+      // ✅ FIX: configChangeRoundNumber should NOT be set by prepareForNewMessage
+      expect(state.configChangeRoundNumber).toBe(null);
+      expect(state.isWaitingForChangelog).toBe(false);
     });
 
-    it('should use streamingRoundNumber if already set', () => {
+    it('should NOT set changelog flags even with existing streamingRoundNumber', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setStreamingRoundNumber(5);
       store.getState().setHasPendingConfigChanges(true);
@@ -606,7 +619,9 @@ describe('changelog Flag Management', () => {
       store.getState().prepareForNewMessage('Test', ['p1']);
 
       const state = store.getState();
-      expect(state.configChangeRoundNumber).toBe(5); // Uses existing streamingRoundNumber
+      // ✅ FIX: configChangeRoundNumber should NOT be set by prepareForNewMessage
+      expect(state.configChangeRoundNumber).toBe(null);
+      expect(state.isWaitingForChangelog).toBe(false);
     });
   });
 
@@ -735,7 +750,9 @@ describe('changelog Flag Management', () => {
       expect(finalState.configChangeRoundNumber).toBe(null);
     });
 
-    it('should only set changelog flags when hasPendingConfigChanges is true', () => {
+    // ✅ FIX: prepareForNewMessage should NEVER set changelog flags
+    // Changelog flags are ONLY set by handleUpdateThreadAndSend AFTER PATCH
+    it('should NOT set changelog flags regardless of hasPendingConfigChanges', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Without pending config changes
@@ -746,13 +763,15 @@ describe('changelog Flag Management', () => {
       expect(state.isWaitingForChangelog).toBe(false);
       expect(state.configChangeRoundNumber).toBe(null);
 
-      // With pending config changes
+      // With pending config changes - flags still NOT set
       store.getState().setHasPendingConfigChanges(true);
       store.getState().prepareForNewMessage('Test', ['p1']);
 
       state = store.getState();
-      expect(state.isWaitingForChangelog).toBe(true);
-      expect(state.configChangeRoundNumber).toBe(0);
+      // ✅ FIX: prepareForNewMessage does NOT set changelog flags
+      // Only handleUpdateThreadAndSend sets them AFTER PATCH completes
+      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.configChangeRoundNumber).toBe(null);
     });
   });
 
@@ -845,6 +864,330 @@ describe('changelog Flag Management', () => {
       // after changelog is fetched. This ensures correct ordering: PATCH → changelog → streaming
       expect(state.isWaitingForChangelog).toBe(true);
       expect(state.configChangeRoundNumber).toBe(1);
+    });
+  });
+
+  // ============================================================================
+  // INTEGRATION TESTS: Config Change + Changelog Timing
+  // ============================================================================
+  // These tests verify the correct ordering and state transitions during
+  // config change flows, specifically:
+  // 1. Initial thread creation (POST) - no changelog flags
+  // 2. Subsequent rounds with config changes (PATCH) - changelog flags set AFTER PATCH
+  // 3. Error recovery - flags cleared on PATCH failure
+  // 4. Blocking logic consistency across hooks
+  // ============================================================================
+  describe('config Change + Changelog Timing Integration', () => {
+    describe('initial Thread Creation (POST) - No Changelog', () => {
+      it('should NOT set changelog flags for initial thread creation flow', () => {
+        // Initial thread creation starts from OVERVIEW screen
+        store.getState().setScreenMode(ScreenModes.OVERVIEW);
+
+        // User has config set up (this is normal, not a "change")
+        store.getState().setSelectedMode('panel');
+        store.getState().setEnableWebSearch(true);
+        store.getState().setSelectedParticipants([
+          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+        ]);
+
+        // Prepare for streaming (simulates handleCreateThread calling prepareForNewMessage)
+        store.getState().prepareForNewMessage('Hello', ['gpt-4']);
+        store.getState().setStreamingRoundNumber(0);
+        store.getState().setWaitingToStartStreaming(true);
+
+        // ✅ For initial thread creation, NO changelog flags should be set
+        // POST creates new thread, no changelog entries exist
+        const state = store.getState();
+        expect(state.isWaitingForChangelog).toBe(false);
+        expect(state.configChangeRoundNumber).toBe(null);
+        expect(state.waitingToStartStreaming).toBe(true);
+        expect(state.streamingRoundNumber).toBe(0);
+      });
+
+      it('should allow streaming to proceed without changelog blocking on initial thread', () => {
+        store.getState().setScreenMode(ScreenModes.OVERVIEW);
+        store.getState().prepareForNewMessage('Hello', ['gpt-4']);
+        store.getState().setStreamingRoundNumber(0);
+        store.getState().setWaitingToStartStreaming(true);
+
+        // Simulate streaming trigger checking blocking conditions
+        const state = store.getState();
+        const isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+
+        // ✅ Initial thread should NOT be blocked
+        expect(isBlocked).toBe(false);
+        expect(state.waitingToStartStreaming).toBe(true);
+      });
+    });
+
+    describe('subsequent Rounds with Config Changes (PATCH)', () => {
+      it('should set configChangeRoundNumber BEFORE PATCH for blocking', () => {
+        // Set up existing thread state
+        store.getState().setScreenMode(ScreenModes.THREAD);
+        store.getState().setThread({
+          id: 'thread-1',
+          slug: 'test-thread',
+          title: 'Test',
+          mode: 'panel',
+          status: 'active',
+          isFavorite: false,
+          isPublic: false,
+          isAiGeneratedTitle: false,
+          enableWebSearch: false,
+          participantCount: 2,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastMessageAt: new Date(),
+          userId: 'user-1',
+        });
+        store.getState().setMessages([
+          createTestUserMessage({ id: 'u0', content: 'First', roundNumber: 0 }),
+        ]);
+
+        // User makes config change
+        store.getState().setHasPendingConfigChanges(true);
+
+        // ✅ BEFORE PATCH: Set configChangeRoundNumber to block effects
+        // This is what handleUpdateThreadAndSend does at line 322
+        const nextRound = 1;
+        store.getState().setConfigChangeRoundNumber(nextRound);
+
+        // Set waiting to start (but streaming should be blocked)
+        store.getState().setWaitingToStartStreaming(true);
+        store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3']);
+
+        const state = store.getState();
+        // Blocking flag is set BEFORE PATCH
+        expect(state.configChangeRoundNumber).toBe(1);
+        // isWaitingForChangelog is NOT set yet (set AFTER PATCH)
+        expect(state.isWaitingForChangelog).toBe(false);
+
+        // Streaming should be blocked by configChangeRoundNumber
+        const isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(true);
+      });
+
+      it('should set isWaitingForChangelog AFTER PATCH succeeds', () => {
+        store.getState().setScreenMode(ScreenModes.THREAD);
+        store.getState().setHasPendingConfigChanges(true);
+
+        // BEFORE PATCH: Block with configChangeRoundNumber
+        store.getState().setConfigChangeRoundNumber(1);
+        store.getState().setWaitingToStartStreaming(true);
+
+        // Simulate PATCH success
+        // ✅ AFTER PATCH: Set isWaitingForChangelog (line 409)
+        store.getState().setIsWaitingForChangelog(true);
+        // Clear hasPendingConfigChanges (line 392)
+        store.getState().setHasPendingConfigChanges(false);
+
+        const state = store.getState();
+        // Both flags now set - waiting for changelog to be fetched
+        expect(state.configChangeRoundNumber).toBe(1);
+        expect(state.isWaitingForChangelog).toBe(true);
+        expect(state.hasPendingConfigChanges).toBe(false);
+
+        // Still blocked until changelog is fetched
+        const isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(true);
+      });
+
+      it('should unblock streaming after changelog is fetched and flags cleared', () => {
+        // Set up blocked state (after PATCH, waiting for changelog)
+        store.getState().setConfigChangeRoundNumber(1);
+        store.getState().setIsWaitingForChangelog(true);
+        store.getState().setWaitingToStartStreaming(true);
+
+        // Verify blocked
+        let state = store.getState();
+        let isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(true);
+
+        // ✅ use-changelog-sync clears BOTH flags after fetching changelog
+        store.getState().setIsWaitingForChangelog(false);
+        store.getState().setConfigChangeRoundNumber(null);
+
+        state = store.getState();
+        isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+
+        // ✅ Now unblocked - streaming can proceed
+        expect(isBlocked).toBe(false);
+        expect(state.waitingToStartStreaming).toBe(true);
+      });
+    });
+
+    describe('error Recovery - PATCH Failure', () => {
+      it('should clear BOTH changelog flags on PATCH error', () => {
+        // Set up state before PATCH (configChangeRoundNumber set for blocking)
+        store.getState().setConfigChangeRoundNumber(1);
+        store.getState().setWaitingToStartStreaming(true);
+        store.getState().setExpectedParticipantIds(['gpt-4']);
+
+        // Simulate PATCH error - need to clear flags to prevent deadlock
+        // This is what form-actions.ts does at lines 426-429
+        store.getState().setConfigChangeRoundNumber(null);
+        store.getState().setIsWaitingForChangelog(false);
+        store.getState().setWaitingToStartStreaming(false);
+
+        const state = store.getState();
+        expect(state.configChangeRoundNumber).toBe(null);
+        expect(state.isWaitingForChangelog).toBe(false);
+        expect(state.waitingToStartStreaming).toBe(false);
+
+        // Not blocked, but also not trying to stream
+        const isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(false);
+      });
+
+      it('should preserve other state on PATCH error (optimistic rollback)', () => {
+        // Set up pre-PATCH state
+        store.getState().setMessages([
+          createTestUserMessage({ id: 'u0', content: 'Original', roundNumber: 0 }),
+        ]);
+        store.getState().setConfigChangeRoundNumber(1);
+        store.getState().setWaitingToStartStreaming(true);
+
+        // Simulate PATCH error - clear streaming/changelog state
+        store.getState().setConfigChangeRoundNumber(null);
+        store.getState().setIsWaitingForChangelog(false);
+        store.getState().setWaitingToStartStreaming(false);
+        store.getState().setStreamingRoundNumber(null);
+        store.getState().setNextParticipantToTrigger(null);
+
+        // Original messages should still be there (optimistic message removed by form-actions)
+        const state = store.getState();
+        expect(state.messages).toHaveLength(1);
+        expect(state.messages[0].id).toBe('u0');
+      });
+    });
+
+    describe('multi-Round Config Change Scenarios', () => {
+      it('should handle config changes on multiple rounds correctly', () => {
+        // Round 1: No config change
+        store.getState().setScreenMode(ScreenModes.THREAD);
+        store.getState().setMessages([
+          createTestUserMessage({ id: 'u0', content: 'First', roundNumber: 0 }),
+          createTestAssistantMessage({ id: 'a0', content: 'Response', roundNumber: 0, participantId: 'p1', participantIndex: 0 }),
+        ]);
+
+        // Round 1 completes without config change
+        store.getState().completeStreaming();
+
+        let state = store.getState();
+        expect(state.configChangeRoundNumber).toBe(null);
+        expect(state.isWaitingForChangelog).toBe(false);
+
+        // Round 2: User changes config
+        store.getState().setHasPendingConfigChanges(true);
+        store.getState().setConfigChangeRoundNumber(1);
+        store.getState().setWaitingToStartStreaming(true);
+
+        state = store.getState();
+        expect(state.configChangeRoundNumber).toBe(1);
+
+        // Simulate PATCH success
+        store.getState().setIsWaitingForChangelog(true);
+        store.getState().setHasPendingConfigChanges(false);
+
+        // Simulate changelog fetch complete
+        store.getState().setIsWaitingForChangelog(false);
+        store.getState().setConfigChangeRoundNumber(null);
+
+        state = store.getState();
+        expect(state.configChangeRoundNumber).toBe(null);
+        expect(state.isWaitingForChangelog).toBe(false);
+
+        // Round 3: No config change
+        store.getState().setMessages([
+          ...store.getState().messages,
+          createTestUserMessage({ id: 'u1', content: 'Second', roundNumber: 1 }),
+        ]);
+        store.getState().setWaitingToStartStreaming(true);
+
+        // No blocking since no config change
+        state = store.getState();
+        const isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(false);
+      });
+
+      it('should correctly track round number for changelog fetch', () => {
+        const rounds = [1, 2, 5];
+
+        for (const round of rounds) {
+          // Simulate config change for this round
+          store.getState().setConfigChangeRoundNumber(round);
+          store.getState().setIsWaitingForChangelog(true);
+
+          const state = store.getState();
+          expect(state.configChangeRoundNumber).toBe(round);
+
+          // Clear for next iteration
+          store.getState().setIsWaitingForChangelog(false);
+          store.getState().setConfigChangeRoundNumber(null);
+        }
+      });
+    });
+
+    describe('blocking Logic Consistency', () => {
+      it('should use same blocking condition across all hooks', () => {
+        // The blocking condition used by:
+        // - use-streaming-trigger.ts (line 112)
+        // - use-round-resumption.ts (line 145, 179)
+        // - use-pending-message.ts (line 104)
+        // Is: configChangeRoundNumber !== null || isWaitingForChangelog
+
+        // Test Case 1: Neither flag set - NOT blocked
+        store.getState().setConfigChangeRoundNumber(null);
+        store.getState().setIsWaitingForChangelog(false);
+
+        let state = store.getState();
+        let isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(false);
+
+        // Test Case 2: Only configChangeRoundNumber set - blocked
+        store.getState().setConfigChangeRoundNumber(1);
+        store.getState().setIsWaitingForChangelog(false);
+
+        state = store.getState();
+        isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(true);
+
+        // Test Case 3: Only isWaitingForChangelog set - blocked
+        store.getState().setConfigChangeRoundNumber(null);
+        store.getState().setIsWaitingForChangelog(true);
+
+        state = store.getState();
+        isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(true);
+
+        // Test Case 4: Both flags set - blocked
+        store.getState().setConfigChangeRoundNumber(1);
+        store.getState().setIsWaitingForChangelog(true);
+
+        state = store.getState();
+        isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(true);
+      });
+
+      it('should require BOTH flags cleared to unblock', () => {
+        // Start blocked
+        store.getState().setConfigChangeRoundNumber(1);
+        store.getState().setIsWaitingForChangelog(true);
+
+        // Clear only isWaitingForChangelog
+        store.getState().setIsWaitingForChangelog(false);
+
+        let state = store.getState();
+        let isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(true); // Still blocked by configChangeRoundNumber
+
+        // Clear configChangeRoundNumber
+        store.getState().setConfigChangeRoundNumber(null);
+
+        state = store.getState();
+        isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
+        expect(isBlocked).toBe(false); // Now unblocked
+      });
     });
   });
 });

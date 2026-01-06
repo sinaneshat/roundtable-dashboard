@@ -19,10 +19,13 @@ import { createError } from '@/api/common/error-handling';
 import { getErrorMessage, getErrorName } from '@/api/common/error-types';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/api/core';
-import { MessagePartTypes, MessageRoles, PollingStatuses } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, PlanTypes, PollingStatuses } from '@/api/core/enums';
 import {
+  checkFreeUserHasCompletedRound,
   deductCreditsForAction,
   enforceCredits,
+  getUserCreditBalance,
+  zeroOutFreeUserCredits,
 } from '@/api/services/credit.service';
 import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
 import { extractModeratorModelName } from '@/api/services/models-config.service';
@@ -446,6 +449,19 @@ function generateCouncilModerator(
         // ✅ RESUMABLE STREAMS: Clear thread active stream now that moderator is complete
         // This marks the round as fully complete (participants + moderator done)
         await clearThreadActiveStream(threadId, env);
+
+        // =========================================================================
+        // ✅ FREE USER SINGLE-ROUND: Zero out credits after moderator completes
+        // For multi-participant threads, the round is only complete after moderator finishes.
+        // This is the final step - now we can lock out free users from further usage.
+        // =========================================================================
+        const creditBalance = await getUserCreditBalance(userId);
+        if (creditBalance.planType === PlanTypes.FREE) {
+          const roundComplete = await checkFreeUserHasCompletedRound(userId);
+          if (roundComplete) {
+            await zeroOutFreeUserCredits(userId);
+          }
+        }
 
         // Track analytics
         const finishData = {

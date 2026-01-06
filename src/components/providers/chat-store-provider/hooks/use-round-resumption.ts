@@ -147,7 +147,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
     // Generate unique key for this resumption attempt
     const threadId = storeThread?.id || 'unknown';
-    const resumptionKey = `${threadId}-r${getCurrentRoundNumber(storeMessages)}-p${nextParticipantToTrigger}`;
+    const resumptionKey = `${threadId}-r${getCurrentRoundNumber(storeMessages)}-p${nextParticipantToTrigger.index}`;
 
     // Prevent duplicate triggers for the same resumption
     if (resumptionTriggeredRef.current === resumptionKey) {
@@ -206,13 +206,14 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
         // Generate resumption key and check for duplicates
         const threadId = latestThread?.id || 'unknown';
-        const retryResumptionKey = `${threadId}-r${currentRound}-p${latestNextParticipant}`;
+        const retryResumptionKey = `${threadId}-r${currentRound}-p${latestNextParticipant.index}`;
         if (resumptionTriggeredRef.current === retryResumptionKey) {
           return;
         }
 
         // Mark as triggered and execute
         resumptionTriggeredRef.current = retryResumptionKey;
+        // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes
         chat.continueFromParticipant(latestNextParticipant, latestParticipants);
       }, 100); // Small delay for AI SDK hydration to complete
       return;
@@ -230,9 +231,10 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
     // ✅ Mark as triggered before calling to prevent race condition double-triggers
     resumptionTriggeredRef.current = resumptionKey;
-    rlog.trigger('resume', `p${nextParticipantToTrigger} key=${resumptionKey}`);
+    rlog.trigger('resume', `p${nextParticipantToTrigger.index} key=${resumptionKey}`);
 
     // Resume from specific participant
+    // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes
     chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants);
 
     // Cleanup

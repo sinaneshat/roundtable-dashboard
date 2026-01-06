@@ -705,13 +705,16 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
 
   handleResumedStreamComplete: (_roundNumber, participantIndex) => {
     const state = get();
-    const participantCount = state.participants.length;
+    const { participants } = state;
     const nextIndex = participantIndex + 1;
-    const hasMoreParticipants = nextIndex < participantCount;
+    const hasMoreParticipants = nextIndex < participants.length;
+    const nextParticipant = hasMoreParticipants ? participants[nextIndex] : null;
 
     set({
       streamResumptionState: null,
-      nextParticipantToTrigger: hasMoreParticipants ? nextIndex : null,
+      nextParticipantToTrigger: nextParticipant
+        ? { index: nextIndex, participantId: nextParticipant.id }
+        : null,
       waitingToStartStreaming: hasMoreParticipants,
     }, false, 'streamResumption/handleResumedStreamComplete');
   },
@@ -724,8 +727,8 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     }, false, 'streamResumption/handleStreamResumptionFailure');
   },
 
-  setNextParticipantToTrigger: (index: number | null) =>
-    set({ nextParticipantToTrigger: index }, false, 'streamResumption/setNextParticipantToTrigger'),
+  setNextParticipantToTrigger: (value) =>
+    set({ nextParticipantToTrigger: value }, false, 'streamResumption/setNextParticipantToTrigger'),
 
   markResumptionAttempted: (roundNumber, participantIndex) => {
     const key = `${roundNumber}_${participantIndex}`;
@@ -801,13 +804,26 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
         stateUpdate.waitingToStartStreaming = true;
         break;
 
-      case RoundPhases.PARTICIPANTS:
+      case RoundPhases.PARTICIPANTS: {
         // Participants phase needs resumption
-        stateUpdate.nextParticipantToTrigger = serverState.participants.nextParticipantToTrigger;
+        // Convert server's index-only value to include participant ID for validation
+        const serverNextIndex = serverState.participants.nextParticipantToTrigger;
+        if (serverNextIndex !== null) {
+          const currentParticipants = get().participants;
+          const participant = currentParticipants[serverNextIndex];
+          if (participant) {
+            stateUpdate.nextParticipantToTrigger = {
+              index: serverNextIndex,
+              participantId: participant.id,
+            };
+          }
+          // If participant not found at index, leave null - config may have changed
+        }
         // If there's a next participant to trigger, set waitingToStartStreaming
         // This enables the provider effect to trigger the continuation
-        stateUpdate.waitingToStartStreaming = serverState.participants.nextParticipantToTrigger !== null;
+        stateUpdate.waitingToStartStreaming = stateUpdate.nextParticipantToTrigger !== undefined;
         break;
+      }
 
       case RoundPhases.MODERATOR:
         if (serverState.moderator) {
@@ -878,7 +894,7 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
         set({
           pendingAnimations: new Set<number>(),
           animationResolvers: new Map<number, () => void>(),
-        }, false, 'animation/waitForAllAnimations-timeout');
+        }, false, 'animation/waitForAllAnimationsTimeout');
         resolve();
       }, ANIMATION_TIMEOUT_MS);
     });
@@ -1126,13 +1142,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       draft.nextParticipantToTrigger = null;
 
       draft.isModeratorStreaming = false;
-      // ✅ INCREMENTAL CHANGELOG: Only wait for changelog if there are pending config changes
-      // Store the round number for incremental fetch via useThreadRoundChangelogQuery
-      const effectiveRoundNumber = draft.streamingRoundNumber ?? nextRoundNumber;
-      if (draft.hasPendingConfigChanges) {
-        draft.isWaitingForChangelog = true;
-        draft.configChangeRoundNumber = effectiveRoundNumber;
-      }
+      // ⚠️ NOTE: Do NOT set changelog flags here!
+      // prepareForNewMessage is called for:
+      // 1. Initial thread creation (via handleCreateThread) - POST doesn't create changelog
+      // 2. Incomplete round resumption - changelog was handled when round originally started
+      // For subsequent rounds, handleUpdateThreadAndSend sets changelog flags AFTER PATCH
       draft.pendingMessage = message;
       draft.pendingAttachmentIds = attachmentIds && attachmentIds.length > 0 ? attachmentIds : null;
       draft.pendingFileParts = fileParts.length > 0 ? fileParts : null;

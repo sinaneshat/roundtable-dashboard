@@ -359,10 +359,13 @@ export type HandleResumedStreamComplete = (roundNumber: number, participantIndex
 export type HandleStreamResumptionFailure = (error: Error) => void;
 
 /**
- * Set the next participant index to trigger for incomplete round resumption
+ * Set the next participant to trigger for incomplete round resumption
+ * Includes participant ID for validation against config changes
  * Used when detecting incomplete rounds on page load
  */
-export type SetNextParticipantToTrigger = (index: number | null) => void;
+export type SetNextParticipantToTrigger = (
+  value: { index: number; participantId: string } | null
+) => void;
 
 /**
  * Mark a resumption attempt as started (prevents duplicates)

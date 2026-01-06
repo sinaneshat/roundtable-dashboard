@@ -223,6 +223,13 @@ import {
   detailedHealthRoute,
   healthRoute,
 } from './routes/system/route';
+// Test routes (development/test only)
+import {
+  setUserCredits,
+} from './routes/test/handler';
+import {
+  setUserCreditsRoute,
+} from './routes/test/route';
 // Upload routes (R2 file uploads - secure ticket-based pattern)
 import {
   abortMultipartUploadHandler,
@@ -417,6 +424,11 @@ app.use('/billing/subscriptions', csrfProtection, requireSession);
 app.use('/billing/subscriptions/:id', csrfProtection, requireSession);
 app.use('/billing/subscriptions/:id/switch', csrfProtection, requireSession);
 app.use('/billing/subscriptions/:id/cancel', csrfProtection, requireSession);
+
+// Test endpoints (development/test only)
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/test/*', csrfProtection, requireSession);
+}
 
 // Protected chat endpoints (ChatGPT pattern with smart access control)
 // POST /chat/threads - create thread (requires auth + CSRF)
@@ -622,6 +634,11 @@ const appRoutes = app
   .openapi(getCreditBalanceRoute, getCreditBalanceHandler) // Get credit balance and plan info
   .openapi(getCreditTransactionsRoute, getCreditTransactionsHandler) // Get credit transaction history
   .openapi(estimateCreditCostRoute, estimateCreditCostHandler) // Estimate credit cost for action
+
+  // ============================================================================
+  // Test Routes - Development/test only utilities (protected)
+  // ============================================================================
+  .openapi(setUserCreditsRoute, setUserCredits) // Set user credits (test only)
 
   // ============================================================================
   // Models Routes - Simplified OpenRouter models endpoint (public)

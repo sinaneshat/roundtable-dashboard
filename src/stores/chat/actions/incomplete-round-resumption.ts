@@ -740,7 +740,11 @@ export function useIncompleteRoundResumption(
     // to trigger the round resumption flow instead of relying solely on pendingMessage effect
     // This ensures participants start even if pendingMessage effect has timing issues
     actions.setStreamingRoundNumber(orphanedRoundNumber);
-    actions.setNextParticipantToTrigger(0);
+    // ✅ TYPE-SAFE: Include participant ID for validation against config changes
+    const firstParticipant = enabledParticipants[0];
+    if (firstParticipant) {
+      actions.setNextParticipantToTrigger({ index: 0, participantId: firstParticipant.id });
+    }
     actions.setWaitingToStartStreaming(true);
 
     // ✅ FIX: Mark as attempted AFTER setting all state, so if something fails we can retry
@@ -923,7 +927,11 @@ export function useIncompleteRoundResumption(
     // Set up store state for resumption
     // The provider's effect watching nextParticipantToTrigger will trigger the participant
     actions.setStreamingRoundNumber(currentRoundNumber);
-    actions.setNextParticipantToTrigger(effectiveNextParticipant);
+    // ✅ TYPE-SAFE: Include participant ID for validation against config changes
+    const targetParticipant = enabledParticipants[effectiveNextParticipant];
+    if (targetParticipant) {
+      actions.setNextParticipantToTrigger({ index: effectiveNextParticipant, participantId: targetParticipant.id });
+    }
     actions.setCurrentParticipantIndex(effectiveNextParticipant);
 
     // Set waiting flag so provider knows to start streaming
@@ -1083,7 +1091,11 @@ export function useIncompleteRoundResumption(
       if ((preSearchComplete || prefilledComplete) && resumptionRoundNumber !== null) {
         rlog.trigger('PRESRCH-DONE', `r${resumptionRoundNumber} trigger p0`);
         actions.setStreamingRoundNumber(resumptionRoundNumber);
-        actions.setNextParticipantToTrigger(0);
+        // ✅ TYPE-SAFE: Include participant ID for validation against config changes
+        const firstParticipant = enabledParticipants[0];
+        if (firstParticipant) {
+          actions.setNextParticipantToTrigger({ index: 0, participantId: firstParticipant.id });
+        }
         actions.setWaitingToStartStreaming(true);
       }
     }
@@ -1094,6 +1106,7 @@ export function useIncompleteRoundResumption(
     resumptionRoundNumber,
     preSearches,
     preSearchResumption, // ✅ Include prefilled state in dependencies
+    enabledParticipants, // ✅ Required for participant ID lookup
     actions,
   ]);
 
@@ -1201,7 +1214,11 @@ export function useIncompleteRoundResumption(
         ? participantCompletionCheck.completedCount
         : 0;
       actions.setStreamingRoundNumber(resumptionRoundNumber);
-      actions.setNextParticipantToTrigger(nextIdx);
+      // ✅ TYPE-SAFE: Include participant ID for validation against config changes
+      const nextParticipant = enabledParticipants[nextIdx];
+      if (nextParticipant) {
+        actions.setNextParticipantToTrigger({ index: nextIdx, participantId: nextParticipant.id });
+      }
       actions.setWaitingToStartStreaming(true);
       return;
     }

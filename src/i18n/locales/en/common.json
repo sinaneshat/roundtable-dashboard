@@ -1438,7 +1438,8 @@
     },
     "quotaAlert": {
       "message": "You've run out of credits. Upgrade to Pro to continue chatting.",
-      "action": "Upgrade"
+      "action": "Upgrade",
+      "paidUserMessage": "You've run out of credits for this billing period."
     },
     "viewDetails": "View usage details",
     "managePlan": "Manage Plan",

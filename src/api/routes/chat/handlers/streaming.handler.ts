@@ -40,6 +40,7 @@ import {
   UIMessageRoles,
 } from '@/api/core/enums';
 import {
+  checkFreeUserHasCompletedRound,
   finalizeCredits,
   getUserCreditBalance,
   releaseReservation,
@@ -1018,13 +1019,21 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           });
 
           // =========================================================================
-          // ✅ FREE USER SINGLE-ROUND: Zero out credits after first AI response
-          // Free users get exactly ONE round - exhaust their credits after completion
+          // ✅ FREE USER SINGLE-ROUND: Zero out credits after round is COMPLETE
+          // Free users get exactly ONE round - exhaust credits only after ALL
+          // participants have responded AND moderator has completed (for 2+ participants).
+          // For single-participant threads, zero out after participant completes (no moderator).
+          // For multi-participant threads, moderator.handler.ts handles zeroing after it completes.
           // =========================================================================
           const creditBalance = await getUserCreditBalance(user.id);
-          if (creditBalance.planType === PlanTypes.FREE) {
-            await zeroOutFreeUserCredits(user.id);
+          if (creditBalance.planType === PlanTypes.FREE && participants.length < 2) {
+            // Single-participant thread: no moderator, so round completes after participant
+            const roundComplete = await checkFreeUserHasCompletedRound(user.id);
+            if (roundComplete) {
+              await zeroOutFreeUserCredits(user.id);
+            }
           }
+          // Multi-participant threads: moderator.handler.ts calls zeroOutFreeUserCredits after completion
 
           // =========================================================================
           // ✅ POSTHOG LLM TRACKING: Track generation with official best practices

@@ -17,17 +17,15 @@ import {
 
 /**
  * Hook to fetch all products with pricing plans
- * Public endpoint - no authentication required
- *
- * SSG/ISR: Data prefetched on server, cached on client
- * Uses STALE_TIMES.products for consistency with server prefetch
+ * Protected route - requires authentication
+ * Products are static catalog data, cached infinitely
  */
 export function useProductsQuery() {
   return useQuery({
     queryKey: queryKeys.products.list(),
     queryFn: () => getProductsService(),
-    staleTime: STALE_TIMES.products, // 24 hours - matches server prefetch
-    gcTime: Infinity, // Keep in cache forever
+    staleTime: Infinity, // Static catalog - never stale, matches server prefetch
+    gcTime: Infinity,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
