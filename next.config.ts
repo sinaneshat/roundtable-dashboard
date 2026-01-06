@@ -44,8 +44,9 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // cacheComponents disabled - incompatible with Next.js 16 + opennextjs-cloudflare
-  // Re-enable when @opennextjs/cloudflare fully supports Next.js 16
+  // cacheComponents disabled - opennextjs-cloudflare v1.14.7 not fully compatible
+  // Causes Math.random() / Suspense boundary issues with client components
+  // Using traditional ISR with export const revalidate instead
   // cacheComponents: true,
 
   serverExternalPackages: [
