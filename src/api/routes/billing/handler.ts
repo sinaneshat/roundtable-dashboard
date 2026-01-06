@@ -6,9 +6,8 @@ import { z } from 'zod';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError } from '@/api/common/error-handling';
 import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from '@/api/core';
-import type { BillingInterval } from '@/api/core/enums';
-import { BillingIntervals, BillingIntervalSchema, PurchaseTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
-import { getUserCreditBalance, grantCardConnectionCredits, grantCredits } from '@/api/services/credit.service';
+import { PurchaseTypes, StripeSubscriptionStatuses } from '@/api/core/enums';
+import { getUserCreditBalance } from '@/api/services/credit.service';
 import { stripeService } from '@/api/services/stripe.service';
 import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
 import type { ApiEnv } from '@/api/types';
@@ -32,15 +31,6 @@ import type {
   syncAfterCheckoutRoute,
   syncCreditsAfterCheckoutRoute,
 } from './route';
-/**
- * Process Webhook Event (Theo's Simplified Pattern)
- *
- * Philosophy:
- * - Don't trust webhook payloads (can be stale or incomplete)
- * - Extract customerId only
- * - Call single sync function that fetches fresh data from Stripe API
- * - No event-specific logic needed
- */
 import {
   CancelSubscriptionRequestSchema,
   CheckoutRequestSchema,
@@ -48,13 +38,6 @@ import {
   SwitchSubscriptionRequestSchema,
 } from './schema';
 
-// ============================================================================
-// Internal Helper Functions (Following 3-file pattern: handler, route, schema)
-// ============================================================================
-
-/**
- * Subscription Validation Utilities
- */
 function validateSubscriptionOwnership(
   subscription: { userId: string },
   user: { id: string },
@@ -62,28 +45,6 @@ function validateSubscriptionOwnership(
   return subscription.userId === user.id;
 }
 
-/**
- * Annual Savings Calculator
- * Calculates percentage saved when paying annually vs monthly
- */
-function calculateAnnualSavings(prices: Array<{ interval: BillingInterval; unitAmount: number }>): number | undefined {
-  const monthlyPrice = prices.find(p => p.interval === BillingIntervals.MONTH);
-  const yearlyPrice = prices.find(p => p.interval === BillingIntervals.YEAR);
-
-  if (!monthlyPrice || !yearlyPrice || !monthlyPrice.unitAmount || !yearlyPrice.unitAmount) {
-    return undefined;
-  }
-
-  const monthlyYearlyCost = monthlyPrice.unitAmount * 12;
-  const yearlyCost = yearlyPrice.unitAmount;
-  const savings = ((monthlyYearlyCost - yearlyCost) / monthlyYearlyCost) * 100;
-  return Math.round(savings);
-}
-
-/**
- * Serialize subscription dates to ISO strings for JSON response
- * ✅ DATE SERIALIZATION: Schema expects string fields for dates
- */
 function serializeSubscriptionDates<T extends {
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
@@ -101,10 +62,6 @@ function serializeSubscriptionDates<T extends {
   };
 }
 
-/**
- * Fetch refreshed subscription with nested price data
- * Used after subscription updates to get the latest state
- */
 async function fetchRefreshedSubscription(
   db: Awaited<ReturnType<typeof getDbAsync>>,
   subscriptionId: string,
@@ -127,10 +84,6 @@ async function fetchRefreshedSubscription(
 
   return subscription;
 }
-
-// ============================================================================
-// Product Handlers
-// ============================================================================
 
 export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv> = createHandler(
   {
@@ -166,13 +119,8 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
           tag: STATIC_CACHE_TAGS.ACTIVE_PRICES,
         });
 
-      // Filter to only show credit-based products
-      const creditProductIds: Set<string> = new Set([
-        CREDIT_CONFIG.PLANS.free.stripeProductId,
-        CREDIT_CONFIG.PLANS.paid.stripeProductId,
-        CREDIT_CONFIG.CUSTOM_CREDITS.stripeProductId,
-      ]);
-      const filteredProducts = dbProducts.filter(p => creditProductIds.has(p.id));
+      // Filter to only show Pro plan product
+      const filteredProducts = dbProducts.filter(p => p.id === CREDIT_CONFIG.PLANS.paid.stripeProductId);
 
       // Step 3: Join products with their prices and sort - minimal transformation
       const products = filteredProducts
@@ -181,21 +129,9 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
             .filter(price => price.productId === product.id)
             .sort((a, b) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0));
 
-          const annualSavingsPercent = calculateAnnualSavings(
-            productPrices.map((p) => {
-              // ✅ TYPE-SAFE: Use Zod validation instead of force cast
-              const parsedInterval = BillingIntervalSchema.safeParse(p.interval);
-              return {
-                interval: parsedInterval.success ? parsedInterval.data : BillingIntervals.MONTH,
-                unitAmount: p.unitAmount ?? 0,
-              };
-            }),
-          );
-
           return {
             ...product,
             prices: productPrices,
-            annualSavingsPercent,
           };
         })
         .sort((a, b) => {
@@ -262,22 +198,10 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
 
       const productPrices = dbPrices.sort((a, b) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0));
 
-      const annualSavingsPercent = calculateAnnualSavings(
-        productPrices.map((p) => {
-          // ✅ TYPE-SAFE: Use Zod validation instead of force cast
-          const parsedInterval = BillingIntervalSchema.safeParse(p.interval);
-          return {
-            interval: parsedInterval.success ? parsedInterval.data : BillingIntervals.MONTH,
-            unitAmount: p.unitAmount ?? 0,
-          };
-        }),
-      );
-
       return Responses.ok(c, {
         product: {
           ...dbProduct,
           prices: productPrices,
-          annualSavingsPercent,
         },
       });
     } catch (error) {
@@ -297,16 +221,15 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
  * Create Checkout Session
  *
  * Following Theo's "Stay Sane with Stripe" pattern:
- * - Creates Stripe Checkout session for subscription or credit purchase
- * - Subscriptions redirect to /chat/billing/subscription-success
- * - Credit packs redirect to /chat/billing/credits-success
+ * - Creates Stripe Checkout session for Pro subscription ($59/month, 100K credits)
+ * - Redirects to /chat/billing/subscription-success
  * - Success page auto-triggers eager sync from Stripe API
  * - This prevents race condition where UI loads before webhooks arrive
  *
  * Flow:
- * 1. User clicks "Subscribe" or "Buy Credits" → This endpoint creates checkout session
+ * 1. User clicks "Subscribe" → Creates checkout session
  * 2. User completes payment on Stripe
- * 3. Stripe redirects to appropriate success URL based on purchase type
+ * 3. Stripe redirects to subscription success URL
  * 4. Success page calls sync endpoint to fetch fresh data from Stripe API
  * 5. User sees updated status immediately
  */
@@ -321,43 +244,28 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
     const body = c.validated.body;
 
     try {
-      // Check if this is a credit pack purchase (one-time) FIRST
-      // Credit packs bypass subscription checks - users can always buy more credits
-      const isCreditPackPurchase = body.priceId in CREDIT_CONFIG.CUSTOM_CREDITS.packages;
-
       // Theo's Pattern: "ENABLE 'Limit customers to one subscription'"
-      // Only check for subscription purchases - credit packs are always allowed
-      if (!isCreditPackPurchase) {
-        const existingSubscriptions = await batch.db.query.stripeSubscription.findMany({
-          where: eq(tables.stripeSubscription.userId, user.id),
-        });
+      // Check if user already has an active subscription
+      const existingSubscriptions = await batch.db.query.stripeSubscription.findMany({
+        where: eq(tables.stripeSubscription.userId, user.id),
+      });
 
-        const activeSubscription = existingSubscriptions.find(sub =>
-          (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING || sub.status === StripeSubscriptionStatuses.PAST_DUE)
-          && !sub.cancelAtPeriodEnd,
+      const activeSubscription = existingSubscriptions.find(sub =>
+        (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING || sub.status === StripeSubscriptionStatuses.PAST_DUE)
+        && !sub.cancelAtPeriodEnd,
+      );
+
+      if (activeSubscription) {
+        throw createError.badRequest(
+          'You already have an active subscription. Please cancel or modify your existing subscription instead of creating a new one.',
+          ErrorContextBuilders.validation('subscription'),
         );
-
-        if (activeSubscription) {
-          throw createError.badRequest(
-            'You already have an active subscription. Please cancel or modify your existing subscription instead of creating a new one.',
-            ErrorContextBuilders.validation('subscription'),
-          );
-        }
       }
 
       // Get or create Stripe customer (using batch.db for consistency)
       const stripeCustomer = await batch.db.query.stripeCustomer.findFirst({
         where: eq(tables.stripeCustomer.userId, user.id),
       });
-
-      // ✅ CREDIT PACK RESTRICTION: Require connected card for credit purchases
-      // Users must first connect their card via Free plan before buying credit packs
-      if (isCreditPackPurchase && !stripeCustomer) {
-        throw createError.badRequest(
-          'Please connect your card first by selecting the Free plan. Once connected, you can purchase additional credit packs.',
-          ErrorContextBuilders.validation('payment'),
-        );
-      }
 
       let customerId: string;
 
@@ -384,17 +292,11 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
 
         customerId = insertedCustomer.id;
       } else {
-        // Intentionally empty
         customerId = stripeCustomer.id;
       }
 
       const appUrl = c.env.NEXT_PUBLIC_APP_URL;
-      // Theo's pattern: Do NOT use CHECKOUT_SESSION_ID (ignore it)
-      // Success page will eagerly sync fresh data from Stripe API
-      // ✅ THEO'S PATTERN: Route to separate success pages based on purchase type
-      const defaultSuccessUrl = isCreditPackPurchase
-        ? `${appUrl}/chat/billing/credits-success` // Credit purchases → simplified credits flow
-        : `${appUrl}/chat/billing/subscription-success`; // Subscriptions → full subscription flow
+      const defaultSuccessUrl = `${appUrl}/chat/billing/subscription-success`;
       const successUrl = body.successUrl || defaultSuccessUrl;
       const cancelUrl = body.cancelUrl || `${appUrl}/chat/pricing`;
 
@@ -571,14 +473,11 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
 /**
  * Sync Stripe Subscription Data After Checkout
  *
- * Theo's "Stay Sane with Stripe" pattern - SUBSCRIPTION ONLY:
- * - Called immediately after user returns from Stripe Checkout for SUBSCRIPTIONS
+ * Theo's "Stay Sane with Stripe" pattern:
+ * - Called immediately after user returns from Stripe Checkout
  * - Prevents race condition where user sees page before webhooks arrive
  * - Fetches fresh data from Stripe API (not webhook payload)
  * - Returns synced subscription state
- *
- * NOTE: Credit pack purchases use separate syncCreditsAfterCheckoutHandler
- * to maintain strict separation per Theo's guidance.
  */
 export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRoute, ApiEnv> = createHandler(
   {
@@ -619,14 +518,13 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
         });
       }
 
-      // Capture previous tier BEFORE sync (for comparison UI)
+      // Capture previous tier BEFORE sync
       const previousUsage = await db.query.userChatUsage.findFirst({
         where: eq(tables.userChatUsage.userId, user.id),
       });
       const previousTier = previousUsage?.subscriptionTier || 'free';
 
-      // ✅ SUBSCRIPTION SYNC ONLY (Theo's pattern)
-      // Eagerly sync data from Stripe API (Theo's pattern)
+      // Eagerly sync data from Stripe API
       const syncedState = await syncStripeDataFromStripe(customerId);
 
       // Get new tier AFTER sync
@@ -635,17 +533,7 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
       });
       const newTier = newUsage?.subscriptionTier || 'free';
 
-      // ✅ FREE PLAN CARD CONNECTION CREDITS
-      // Grant card connection credits when user connects card to Free plan
-      // Uses grantCardConnectionCredits which:
-      // - Checks if user already received card connection credits (idempotent)
-      // - Records transaction with 'card_connection' action for tracking
-      // - This enables needsCardConnection() to detect users who haven't connected card yet
-      if (syncedState.status !== 'none' && newTier === SubscriptionTiers.FREE) {
-        await grantCardConnectionCredits(user.id);
-      }
-
-      // Get credit balance (after potential card connection credit grant)
+      // Get credit balance
       const balance = await getUserCreditBalance(user.id);
 
       return Responses.ok(c, {
@@ -1184,33 +1072,26 @@ async function trackRevenueFromWebhook(
           ? subscriptionData
           : (isObject(subscriptionData) && 'id' in subscriptionData ? String(subscriptionData.id) : undefined);
 
-        const isSubscription = subscriptionId !== undefined;
+        if (!subscriptionId) {
+          return;
+        }
+
         const isFirstInvoice = invoice.billing_reason === 'subscription_create';
 
-        if (isSubscription) {
-          if (isFirstInvoice) {
-            await revenueTracking.subscriptionStarted({
-              revenue: invoice.amount_paid,
-              currency: invoice.currency.toUpperCase(),
-              product: invoice.lines?.data[0]?.description ?? undefined,
-              subscription_id: subscriptionId,
-              invoice_id: invoice.id,
-            }, { userId });
-          } else {
-            await revenueTracking.subscriptionRenewed({
-              revenue: invoice.amount_paid,
-              currency: invoice.currency.toUpperCase(),
-              product: invoice.lines?.data[0]?.description ?? undefined,
-              subscription_id: subscriptionId,
-              invoice_id: invoice.id,
-            }, { userId });
-          }
-        } else {
-          // One-time purchase (credit pack)
-          await revenueTracking.creditsPurchased({
+        if (isFirstInvoice) {
+          await revenueTracking.subscriptionStarted({
             revenue: invoice.amount_paid,
             currency: invoice.currency.toUpperCase(),
-            product: invoice.lines?.data[0]?.description ?? 'Credit Pack',
+            product: invoice.lines?.data[0]?.description ?? undefined,
+            subscription_id: subscriptionId,
+            invoice_id: invoice.id,
+          }, { userId });
+        } else {
+          await revenueTracking.subscriptionRenewed({
+            revenue: invoice.amount_paid,
+            currency: invoice.currency.toUpperCase(),
+            product: invoice.lines?.data[0]?.description ?? undefined,
+            subscription_id: subscriptionId,
             invoice_id: invoice.id,
           }, { userId });
         }
@@ -1258,11 +1139,21 @@ async function trackRevenueFromWebhook(
         if (isObject(previousAttributes) && 'items' in previousAttributes) {
           const currentAmount = subscription.items?.data[0]?.price?.unit_amount ?? 0;
           const previousItems = previousAttributes.items;
-          const previousAmount = isObject(previousItems)
-            && Array.isArray((previousItems as { data?: unknown[] }).data)
-            && isObject((previousItems as { data: unknown[] }).data[0])
-            ? ((previousItems as { data: Array<{ price?: { unit_amount?: number } }> }).data[0]?.price?.unit_amount ?? 0)
-            : 0;
+
+          let previousAmount = 0;
+          if (
+            isObject(previousItems)
+            && 'data' in previousItems
+            && Array.isArray(previousItems.data)
+            && previousItems.data.length > 0
+            && isObject(previousItems.data[0])
+            && 'price' in previousItems.data[0]
+            && isObject(previousItems.data[0].price)
+            && 'unit_amount' in previousItems.data[0].price
+            && typeof previousItems.data[0].price.unit_amount === 'number'
+          ) {
+            previousAmount = previousItems.data[0].price.unit_amount;
+          }
 
           if (currentAmount > previousAmount) {
             await revenueTracking.subscriptionUpgraded({
@@ -1359,20 +1250,12 @@ async function processWebhookEvent(
 }
 
 // ============================================================================
-// Credits Sync Handler (Theo's Separation Pattern)
+// Credits Sync Handler
 // ============================================================================
 
 /**
  * Sync Credits After Checkout Handler
- *
- * Separate, simpler handler for one-time credit purchases.
- * Following Theo's "Stay Sane with Stripe" pattern - don't mix subscription
- * and one-time purchase logic.
- *
- * Flow:
- * 1. Find recent credit pack purchase for customer
- * 2. Grant credits
- * 3. Return simple response with credits info
+ * Returns current credit balance from subscription grants.
  */
 export const syncCreditsAfterCheckoutHandler: RouteHandler<typeof syncCreditsAfterCheckoutRoute, ApiEnv> = createHandler(
   {
@@ -1383,95 +1266,13 @@ export const syncCreditsAfterCheckoutHandler: RouteHandler<typeof syncCreditsAft
     const { user } = c.auth();
 
     try {
-      const db = await getDbAsync();
-      const stripe = stripeService.getClient();
-
-      // Get customer ID
-      const customerResults = await db
-        .select()
-        .from(tables.stripeCustomer)
-        .where(eq(tables.stripeCustomer.userId, user.id))
-        .limit(1);
-
-      const customerId = customerResults[0]?.id;
-
-      if (!customerId) {
-        // No customer - return with no purchase
-        const balance = await getUserCreditBalance(user.id);
-        return Responses.ok(c, {
-          synced: false,
-          creditPurchase: null,
-          creditsBalance: balance.available,
-        });
-      }
-
-      // Look for recent credit purchases (last 10 minutes)
-      const tenMinutesAgo = Math.floor(Date.now() / 1000) - 600;
-      const checkoutSessions = await stripe.checkout.sessions.list({
-        customer: customerId,
-        limit: 5,
-        expand: ['data.line_items'],
-      });
-
-      // Find recent completed payment session (one-time purchase)
-      const recentCreditPurchase = checkoutSessions.data.find((session) => {
-        if (session.mode !== 'payment')
-          return false;
-        if (session.payment_status !== 'paid')
-          return false;
-        if (session.created < tenMinutesAgo)
-          return false;
-
-        const lineItem = session.line_items?.data[0];
-        const priceId = lineItem?.price?.id;
-        if (!priceId)
-          return false;
-
-        return priceId in CREDIT_CONFIG.CUSTOM_CREDITS.packages;
-      });
-
-      if (!recentCreditPurchase) {
-        // No recent credit purchase found
-        const balance = await getUserCreditBalance(user.id);
-        return Responses.ok(c, {
-          synced: true,
-          creditPurchase: null,
-          creditsBalance: balance.available,
-        });
-      }
-
-      // Found credit purchase - grant credits
-      const lineItem = recentCreditPurchase.line_items?.data[0];
-      const priceId = lineItem?.price?.id;
-
-      const creditPackages = CREDIT_CONFIG.CUSTOM_CREDITS.packages;
-      const creditsToGrant = priceId && Object.hasOwn(creditPackages, priceId)
-        ? creditPackages[priceId as keyof typeof creditPackages]
-        : 0;
-
-      if (creditsToGrant > 0) {
-        await grantCredits(
-          user.id,
-          creditsToGrant,
-          'purchase',
-          `Credit pack purchase: ${creditsToGrant.toLocaleString()} credits`,
-        );
-      }
-
-      // Get updated balance
       const balance = await getUserCreditBalance(user.id);
-
       return Responses.ok(c, {
         synced: true,
-        creditPurchase: {
-          creditsGranted: creditsToGrant,
-          amountPaid: recentCreditPurchase.amount_total ?? 0,
-          currency: recentCreditPurchase.currency ?? 'usd',
-        },
+        creditPurchase: null,
         creditsBalance: balance.available,
       });
     } catch {
-      // Return graceful error response
       const balance = await getUserCreditBalance(user.id).catch(() => ({ available: 0 }));
       return Responses.ok(c, {
         synced: false,

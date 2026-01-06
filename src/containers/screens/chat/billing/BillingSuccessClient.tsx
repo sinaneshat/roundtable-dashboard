@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { SubscriptionTier } from '@/api/core/enums';
-import { PlanTypes, PurchaseTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
+import { PlanTypes, PurchaseTypes, StatusVariants, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import type { Subscription } from '@/api/routes/billing/schema';
 import { getMaxModelsForTier, getMonthlyCreditsForTier } from '@/api/services/product-logic.service';
 import { PlanOverviewCard, StatusPage, StatusPageActions } from '@/components/billing';
@@ -98,7 +97,7 @@ export function BillingSuccessClient() {
   if (isLoadingData) {
     return (
       <StatusPage
-        variant="loading"
+        variant={StatusVariants.LOADING}
         title={t('billing.success.processingSubscription')}
         description={t('billing.success.confirmingPayment')}
       />
@@ -108,7 +107,7 @@ export function BillingSuccessClient() {
   if (syncMutation.isError) {
     return (
       <StatusPage
-        variant="error"
+        variant={StatusVariants.ERROR}
         title={t('billing.failure.syncFailed')}
         description={t('billing.failure.syncFailedDescription')}
         actions={(
@@ -121,11 +120,10 @@ export function BillingSuccessClient() {
     );
   }
 
-  // No purchase was made - user visited page directly without checkout
   if (syncResult?.data?.purchaseType === PurchaseTypes.NONE) {
     return (
       <StatusPage
-        variant="error"
+        variant={StatusVariants.ERROR}
         title={t('billing.failure.noPurchaseFound')}
         description={t('billing.failure.noPurchaseFoundDescription')}
         actions={(
@@ -139,7 +137,7 @@ export function BillingSuccessClient() {
   }
 
   const isPaidPlan = (syncedTier !== undefined && syncedTier !== SubscriptionTiers.FREE) || (syncedTier === undefined && usageStats?.data?.plan?.type === PlanTypes.PAID);
-  const currentTier: SubscriptionTier = isPaidPlan ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
+  const currentTier = isPaidPlan ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
   const tierName = isPaidPlan ? t('subscription.tiers.pro.name') : t('subscription.tiers.free.name');
   const maxModels = getMaxModelsForTier(currentTier);
   const creditsBalance = syncedCreditsBalance ?? usageStats?.data?.credits?.available ?? 0;
@@ -147,16 +145,12 @@ export function BillingSuccessClient() {
 
   const formatCredits = (credits: number) => credits.toLocaleString();
 
-  const successTitle = isPaidPlan
-    ? t('billing.success.title')
-    : t('billing.success.cardConnected.title');
-  const successDescription = isPaidPlan
-    ? t('billing.success.description')
-    : t('billing.success.cardConnected.description');
+  const successTitle = t('billing.success.title');
+  const successDescription = t('billing.success.description');
 
   return (
     <StatusPage
-      variant="success"
+      variant={StatusVariants.SUCCESS}
       title={successTitle}
       description={successDescription}
       actions={(
@@ -173,8 +167,8 @@ export function BillingSuccessClient() {
           tierName={tierName}
           description={isPaidPlan
             ? t('billing.success.planLimits.paidDescription')
-            : t('billing.success.planLimits.freeDescription')}
-          status={isPaidPlan ? displaySubscription.status : t('billing.success.connected')}
+            : t('billing.success.planLimits.defaultDescription')}
+          status={displaySubscription.status}
           stats={[
             { label: t('billing.success.planLimits.models'), value: maxModels },
             { label: t('billing.success.planLimits.credits'), value: formatCredits(creditsBalance) },

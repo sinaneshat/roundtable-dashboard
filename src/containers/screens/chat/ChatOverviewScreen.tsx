@@ -2,16 +2,25 @@
 
 import type { ChatStatus } from 'ai';
 import { motion } from 'motion/react';
-import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { ChatModeSchema, MessageStatuses, ScreenModes, SubscriptionTiers, UploadStatuses } from '@/api/core/enums';
+import {
+  ChatModeSchema,
+  ErrorBoundaryContexts,
+  MessageStatuses,
+  SubscriptionTiers,
+  UploadStatuses,
+} from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
+import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
+import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
+import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
+import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import {
@@ -19,8 +28,8 @@ import {
   useChatStoreApi,
   useModelPreferencesStore,
 } from '@/components/providers';
-import { QuickStartSkeleton } from '@/components/ui/skeleton';
-import { BRAND } from '@/constants';
+import { LogoGlow } from '@/components/ui/logo-glow';
+import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
   useBoolean,
@@ -47,29 +56,6 @@ import {
 } from '@/stores/chat';
 
 import { ChatView } from './ChatView';
-
-// Lazy-loaded components - only loaded when needed
-const ModelSelectionModal = dynamic(
-  () => import('@/components/chat/model-selection-modal').then(m => m.ModelSelectionModal),
-  { ssr: false },
-);
-const ConversationModeModal = dynamic(
-  () => import('@/components/chat/conversation-mode-modal').then(m => m.ConversationModeModal),
-  { ssr: false },
-);
-// Toolbar (442 lines) - deferred until chat input visible
-const ChatInputToolbarMenu = dynamic(
-  () => import('@/components/chat/chat-input-toolbar-menu').then(m => m.ChatInputToolbarMenu),
-  { ssr: false },
-);
-// ChatQuickStart - Heavy component with framer-motion animations, load after hydration
-const ChatQuickStart = dynamic(
-  () => import('@/components/chat/chat-quick-start').then(m => ({ default: m.ChatQuickStart })),
-  {
-    ssr: false,
-    loading: () => <QuickStartSkeleton count={3} />,
-  },
-);
 
 export default function ChatOverviewScreen() {
   const t = useTranslations();
@@ -118,14 +104,12 @@ export default function ChatOverviewScreen() {
     })),
   );
 
-  const { showInitialUI, isCreatingThread, createdThreadId, waitingToStartStreaming, streamingRoundNumber, pendingMessage } = useChatStore(
+  const { showInitialUI, isCreatingThread, createdThreadId, waitingToStartStreaming } = useChatStore(
     useShallow(s => ({
       showInitialUI: s.showInitialUI,
       isCreatingThread: s.isCreatingThread,
       createdThreadId: s.createdThreadId,
       waitingToStartStreaming: s.waitingToStartStreaming,
-      streamingRoundNumber: s.streamingRoundNumber,
-      pendingMessage: s.pendingMessage,
     })),
   );
 
@@ -143,7 +127,6 @@ export default function ChatOverviewScreen() {
     removeParticipant,
     updateParticipant,
     setEnableWebSearch,
-    setHasPendingConfigChanges,
     resetToOverview,
   } = useChatStore(
     useShallow(s => ({
@@ -160,7 +143,6 @@ export default function ChatOverviewScreen() {
       removeParticipant: s.removeParticipant,
       updateParticipant: s.updateParticipant,
       setEnableWebSearch: s.setEnableWebSearch,
-      setHasPendingConfigChanges: s.setHasPendingConfigChanges,
       resetToOverview: s.resetToOverview,
     })),
   );
@@ -191,15 +173,9 @@ export default function ChatOverviewScreen() {
     [modelsData?.data?.items],
   );
 
-  const customRoles = useMemo(
-    () => customRolesData?.pages?.flatMap((page) => {
-      if (!page || typeof page !== 'object' || !('success' in page) || !page.success) {
-        return [];
-      }
-      return page.data?.items || [];
-    }) ?? [],
-    [customRolesData?.pages],
-  );
+  const customRoles = customRolesData?.pages?.flatMap(page =>
+    (page?.success && page.data?.items) ? page.data.items : [],
+  ) ?? [];
 
   const userTierConfig = modelsData?.data?.user_tier_config || {
     tier: SubscriptionTiers.FREE,
@@ -208,7 +184,6 @@ export default function ChatOverviewScreen() {
     can_upgrade: true,
   };
 
-  // ✅ ZUSTAND v5: Batch modelOrder selectors with useShallow
   const { modelOrder, setModelOrder } = useChatStore(
     useShallow(s => ({
       modelOrder: s.modelOrder,
@@ -230,9 +205,7 @@ export default function ChatOverviewScreen() {
     }
 
     if (persistedModelIds.length > 0) {
-      // ✅ PERF FIX: Use Set for O(1) lookup instead of O(n) .includes()
-      const accessibleSet = new Set(accessibleModelIds);
-      const validIds = persistedModelIds.filter(id => accessibleSet.has(id));
+      const validIds = persistedModelIds.filter(id => accessibleModelIds.includes(id));
       if (validIds.length > 0) {
         return validIds.map((modelId, index) => ({
           id: modelId,
@@ -338,10 +311,8 @@ export default function ChatOverviewScreen() {
       if (persistedModelOrder.length > 0) {
         const availableIds = new Set(allEnabledModels.map(m => m.id));
         const validPersistedOrder = persistedModelOrder.filter(id => availableIds.has(id));
-        // ✅ PERF FIX: Use Set for O(1) lookup instead of O(n) .includes()
-        const validPersistedOrderSet = new Set(validPersistedOrder);
         const newModelIds = allEnabledModels
-          .filter(m => !validPersistedOrderSet.has(m.id))
+          .filter(m => !validPersistedOrder.includes(m.id))
           .map(m => m.id);
         fullOrder = [...validPersistedOrder, ...newModelIds];
       } else {
@@ -446,14 +417,8 @@ export default function ChatOverviewScreen() {
     ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING,
   );
 
-  // ✅ ARCHITECTURE: Overview screen ALWAYS uses OVERVIEW mode
-  // - Pre-search orchestrator only runs in THREAD mode (actual /chat/[slug] page)
-  // - useStreamingTrigger only works in OVERVIEW mode
-  // - Config changes are handled by formActions.handleWebSearchToggle (which sets hasPendingConfigChanges when thread exists)
-  // - DO NOT transition to THREAD mode here - it enables orchestrators that shouldn't run during initial creation
-
   useScreenInitialization({
-    mode: ScreenModes.OVERVIEW,
+    mode: 'overview',
     thread: shouldInitializeThread ? currentThread : null,
     participants: shouldInitializeThread ? contextParticipants : [],
     chatMode: selectedMode,
@@ -465,9 +430,8 @@ export default function ChatOverviewScreen() {
     ),
   });
 
-  // ✅ FIX: Add streamingRoundNumber check to prevent submit during entire round
-  const isRoundInProgress = streamingRoundNumber !== null;
-  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || Boolean(pendingMessage) || formActions.isSubmitting || isRoundInProgress;
+  const pendingMessage = useChatStore(s => s.pendingMessage);
+  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting || isModelsLoading;
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
 
   const lastResetPathRef = useRef<string | null>(null);
@@ -535,6 +499,7 @@ export default function ChatOverviewScreen() {
           await formActions.handleUpdateThreadAndSend(existingThreadId, attachmentIds, attachmentInfos);
           chatAttachments.clearAttachments();
         } catch (error) {
+          console.error('[ChatOverview] Error sending message:', error);
           showApiErrorToast('Error sending message', error);
         }
       } else {
@@ -560,6 +525,7 @@ export default function ChatOverviewScreen() {
           hasSentInitialPromptRef.current = true;
           chatAttachments.clearAttachments();
         } catch (error) {
+          console.error('[ChatOverview] Error creating thread:', error);
           showApiErrorToast('Error creating thread', error);
         }
       }
@@ -625,16 +591,9 @@ export default function ChatOverviewScreen() {
   }, [setSelectedParticipants, setModelOrder, setPersistedModelOrder, setPersistedModelIds]);
 
   const handleWebSearchToggle = useCallback((enabled: boolean) => {
-    // ✅ CRITICAL: Set hasPendingConfigChanges FIRST to prevent race condition
-    // If initializeThread is called between setEnableWebSearch and setHasPendingConfigChanges,
-    // it would see hasPendingConfigChanges=false and reset enableWebSearch to thread value.
-    // By setting the flag first, initializeThread will preserve the user's change.
-    if (currentThread || createdThreadId) {
-      setHasPendingConfigChanges(true);
-    }
     setEnableWebSearch(enabled);
     setPersistedWebSearch(enabled);
-  }, [setEnableWebSearch, setPersistedWebSearch, currentThread, createdThreadId, setHasPendingConfigChanges]);
+  }, [setEnableWebSearch, setPersistedWebSearch]);
 
   const handlePresetSelect = useCallback((preset: ModelPreset) => {
     const result = filterPresetParticipants(
@@ -675,7 +634,6 @@ export default function ChatOverviewScreen() {
       attachmentCount={chatAttachments.attachments.length}
       enableAttachments={!isInitialUIInputBlocked}
       disabled={isInitialUIInputBlocked}
-      isModelsLoading={isModelsLoading}
     />
   ), [
     selectedParticipants,
@@ -688,12 +646,7 @@ export default function ChatOverviewScreen() {
     handleAttachmentClick,
     chatAttachments.attachments.length,
     isInitialUIInputBlocked,
-    isModelsLoading,
   ]);
-
-  // Show spinner only from submit click until first stream chunk arrives (web search or participant)
-  // After first stream chunk, button is disabled (not loading) until round finishes
-  const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming;
 
   const sharedChatInputProps = useMemo(() => {
     const status: ChatStatus = isInitialUIInputBlocked ? 'submitted' : 'ready';
@@ -712,9 +665,8 @@ export default function ChatOverviewScreen() {
       enableAttachments: !isInitialUIInputBlocked,
       attachmentClickRef,
       toolbar: chatInputToolbar,
-      isSubmitting: showSubmitSpinner,
+      isSubmitting: formActions.isSubmitting,
       isUploading: chatAttachments.isUploading,
-      isModelsLoading,
     };
   }, [
     inputValue,
@@ -729,16 +681,15 @@ export default function ChatOverviewScreen() {
     chatAttachments.removeAttachment,
     attachmentClickRef,
     chatInputToolbar,
-    showSubmitSpinner,
+    formActions.isSubmitting,
     chatAttachments.isUploading,
-    isModelsLoading,
   ]);
 
   const showChatView = !showInitialUI && (currentThread || createdThreadId);
 
   return (
     <>
-      <UnifiedErrorBoundary context="chat">
+      <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div className="flex flex-col relative flex-1">
           {showInitialUI && (
             <>
@@ -760,22 +711,10 @@ export default function ChatOverviewScreen() {
                         exit={{ scale: 0.5, opacity: 0, y: -50 }}
                         transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
                       >
-                        {/* Pulsing glow behind logo */}
-                        <motion.div
-                          className="absolute inset-0 rounded-full bg-primary/20 blur-xl will-change-[transform,opacity]"
-                          animate={{
-                            scale: [1, 1.15, 1],
-                            opacity: [0.3, 0.5, 0.3],
-                          }}
-                          transition={{
-                            duration: 4,
-                            repeat: Infinity,
-                            ease: 'easeInOut',
-                          }}
-                        />
+                        <LogoGlow />
                         {/* Logo with slow rotation and breathing */}
                         <motion.div
-                          className="relative w-full h-full will-change-transform"
+                          className="relative w-full h-full"
                           animate={{
                             rotate: 360,
                             scale: [1, 1.03, 1],
@@ -792,6 +731,7 @@ export default function ChatOverviewScreen() {
                               ease: 'easeInOut',
                             },
                           }}
+                          style={{ willChange: 'transform' }}
                         >
                           <Image
                             src={BRAND.logos.main}

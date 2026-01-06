@@ -397,7 +397,6 @@ CREATE TABLE `user_credit_balance` (
 	`monthly_credits` integer DEFAULT 0 NOT NULL,
 	`last_refill_at` integer,
 	`next_refill_at` integer,
-	`pay_as_you_go_enabled` integer DEFAULT false NOT NULL,
 	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,

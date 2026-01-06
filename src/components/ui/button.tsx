@@ -1,9 +1,10 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { forwardRef } from 'react';
 
-import { Slot } from "@/lib/ui/slot"
+import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 
+import type { ComponentVariant, ComponentSize } from "@/api/core/enums"
 import { Icons } from "@/components/icons"
 import { cn } from "@/lib/ui/cn"
 
@@ -17,11 +18,11 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
-          "border bg-background shadow-xs hover:bg-white/[0.07] hover:text-accent-foreground dark:bg-input/30 dark:border-input",
+          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-white/15",
         secondary:
           "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
         ghost:
-          "hover:bg-white/[0.07] hover:text-accent-foreground",
+          "hover:bg-white/10 hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         white:
           "bg-white text-black shadow-xs hover:bg-white/90",
@@ -30,8 +31,8 @@ const buttonVariants = cva(
         warning:
           "bg-amber-600 text-white shadow-xs hover:bg-amber-600/90 focus-visible:ring-amber-600/20 dark:focus-visible:ring-amber-600/40",
         glass:
-          "bg-white/5 backdrop-blur-md border border-white/10 shadow-xs hover:bg-white/[0.07]",
-      },
+          "bg-white/5 backdrop-blur-md border border-white/10 shadow-xs hover:bg-white/10",
+      } satisfies Record<ComponentVariant, string>,
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
         sm: "h-8 gap-1.5 px-3 has-[>svg]:px-2.5",
@@ -39,7 +40,7 @@ const buttonVariants = cva(
         lg: "h-11 px-6 has-[>svg]:px-4",
         xl: "h-12 px-8 has-[>svg]:px-5",
         icon: "size-9",
-      },
+      } satisfies Record<ComponentSize, string>,
     },
     defaultVariants: {
       variant: "default",
@@ -48,10 +49,7 @@ const buttonVariants = cva(
   }
 )
 
-type ButtonBaseProps = ComponentProps<"button">;
-type ButtonVariantProps = VariantProps<typeof buttonVariants>;
-
-interface ButtonProps extends ButtonBaseProps, ButtonVariantProps {
+interface ButtonProps extends ComponentProps<"button">, VariantProps<typeof buttonVariants> {
   asChild?: boolean
   loading?: boolean
   loadingText?: string
@@ -73,25 +71,13 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     disabled,
     ...props
   }, ref) => {
-    const isDisabled = disabled || loading
-    const buttonChildren = loading && loadingText ? loadingText : children
+    const Comp = asChild ? Slot : "button"
 
-    // When asChild, pass children directly so Slot can merge props onto the single child
-    if (asChild) {
-      return (
-        <Slot
-          ref={ref}
-          data-slot="button"
-          className={cn(buttonVariants({ variant, size, className }))}
-          {...props}
-        >
-          {children}
-        </Slot>
-      )
-    }
+    const isDisabled = disabled || loading
+    const buttonChildren: ReactNode = loading && loadingText ? loadingText : children
 
     return (
-      <button
+      <Comp
         ref={ref}
         data-slot="button"
         className={cn(buttonVariants({ variant, size, className }))}
@@ -101,18 +87,18 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {loading ? (
-          <>
-            <Icons.loader className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
+          <span className="inline-flex items-center gap-2">
+            <Icons.loader className="h-4 w-4 animate-spin" aria-hidden="true" />
             {buttonChildren}
-          </>
+          </span>
         ) : (
-          <>
-            {startIcon && <span className="inline-flex shrink-0" aria-hidden="true">{startIcon}</span>}
+          <span className="inline-flex items-center gap-2">
+            {startIcon && <span className="inline-flex items-center shrink-0" aria-hidden="true">{startIcon}</span>}
             {buttonChildren}
-            {endIcon && <span className="inline-flex shrink-0" aria-hidden="true">{endIcon}</span>}
-          </>
+            {endIcon && <span className="inline-flex items-center shrink-0" aria-hidden="true">{endIcon}</span>}
+          </span>
         )}
-      </button>
+      </Comp>
     )
   }
 )

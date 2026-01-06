@@ -1,9 +1,10 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { memo, useCallback, useEffect } from 'react';
+import { memo, useCallback } from 'react';
 
 import type { ChatMode } from '@/api/core/enums';
+import { AvatarSizes, ComponentSizes, ComponentVariants } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import { Icons } from '@/components/icons';
@@ -15,7 +16,13 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from '@/components/ui/drawer';
-import { useBoolean, useMediaQuery } from '@/hooks/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useIsMounted, useMediaQuery } from '@/hooks/utils';
 import { getChatModeById } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
@@ -46,7 +53,6 @@ type ChatInputToolbarMenuProps = {
 
   // State
   disabled?: boolean;
-  isModelsLoading?: boolean;
 };
 
 export const ChatInputToolbarMenu = memo(({
@@ -64,155 +70,159 @@ export const ChatInputToolbarMenu = memo(({
   onToggleSpeech,
   isSpeechSupported = false,
   disabled = false,
-  isModelsLoading = false,
 }: ChatInputToolbarMenuProps) => {
   const t = useTranslations();
+  const isMounted = useIsMounted();
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const mounted = useBoolean(false);
 
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
-  const hasNoModelsSelected = selectedParticipants.length === 0 && !isModelsLoading;
+  const hasNoModelsSelected = selectedParticipants.length === 0;
 
   // Handle file input click
   const handleAttachClick = useCallback(() => {
     onAttachmentClick?.();
   }, [onAttachmentClick]);
 
-  useEffect(() => {
-    mounted.onTrue();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- onTrue is stable, mounted object changes on each render
-  }, []);
-
-  if (!mounted.value) {
+  if (!isMounted) {
     return (
-      <button
+      <Button
         type="button"
+        variant={ComponentVariants.GLASS}
+        size={ComponentSizes.ICON}
         disabled={disabled}
-        className={cn(
-          'flex items-center justify-center size-8 rounded-full',
-          'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
-          'transition-colors disabled:opacity-50',
-        )}
+        className="size-8"
       >
         <Icons.moreHorizontal className="size-4" />
-      </button>
+      </Button>
     );
   }
 
-  // After mount, show desktop version
-  // Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop
   if (isDesktop) {
     return (
-      <div className="flex items-center gap-2">
-        {/* Models button */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled || isModelsLoading}
-          onClick={onOpenModelModal}
-          title={t('chat.toolbar.tooltips.models')}
-          className={cn(
-            'h-9 rounded-2xl gap-1.5 text-xs px-3',
-            hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/20',
-          )}
-        >
-          {isModelsLoading
-            ? (
-                <>
-                  <Icons.loader className="size-3.5 animate-spin" />
-                  <span>{t('chat.models.models')}</span>
-                </>
-              )
-            : (
-                <>
-                  {hasNoModelsSelected && <Icons.alertCircle className="size-3.5" />}
-                  <span>{t('chat.models.models')}</span>
-                  {!hasNoModelsSelected && (
-                    <AvatarGroup
-                      participants={selectedParticipants}
-                      allModels={allModels}
-                      size="sm"
-                      maxVisible={3}
-                    />
+      <TooltipProvider delayDuration={800}>
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={ComponentVariants.OUTLINE}
+                size={ComponentSizes.SM}
+                disabled={disabled}
+                onClick={onOpenModelModal}
+                className={cn(
+                  'h-9 rounded-2xl gap-1.5 text-xs px-3 hover:bg-white/15',
+                  hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/20',
+                )}
+              >
+                {hasNoModelsSelected && <Icons.alertCircle className="size-3.5" />}
+                <span>{t('chat.models.models')}</span>
+                {!hasNoModelsSelected && (
+                  <AvatarGroup
+                    participants={selectedParticipants}
+                    allModels={allModels}
+                    size={AvatarSizes.SM}
+                    maxVisible={5}
+                    showCount={false}
+                    showOverflow
+                  />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p className="text-xs">{t('chat.toolbar.tooltips.models')}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={ComponentVariants.OUTLINE}
+                size={ComponentSizes.SM}
+                disabled={disabled}
+                onClick={onOpenModeModal}
+                className="h-9 rounded-2xl gap-1.5 text-xs px-3 hover:bg-white/15"
+              >
+                {ModeIcon && <ModeIcon className="size-4" />}
+                <span>{currentMode?.label || t('chat.modes.mode')}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p className="text-xs">{t('chat.toolbar.tooltips.mode')}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          {onAttachmentClick && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={ComponentVariants.OUTLINE}
+                  size={ComponentSizes.ICON}
+                  disabled={disabled || !enableAttachments}
+                  onClick={handleAttachClick}
+                  className={cn(
+                    'size-9 hover:bg-white/15',
+                    attachmentCount > 0 && 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20',
                   )}
-                </>
-              )}
-        </Button>
-
-        {/* Mode button */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={onOpenModeModal}
-          title={t('chat.toolbar.tooltips.mode')}
-          className="h-9 rounded-2xl gap-1.5 text-xs px-3"
-        >
-          {ModeIcon && <ModeIcon className="size-4" />}
-          <span>{currentMode?.label || t('chat.modes.mode')}</span>
-        </Button>
-
-        {/* Attach button - always visible when handler provided, disabled when blocked */}
-        {onAttachmentClick && (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            disabled={disabled || !enableAttachments}
-            onClick={handleAttachClick}
-            title={enableAttachments
-              ? t('chat.toolbar.tooltips.attach')
-              : t('chat.toolbar.tooltips.attachDisabled')}
-            className={cn(
-              'size-9',
-              attachmentCount > 0 && 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20',
-            )}
-          >
-            <Icons.paperclip className="size-4" />
-          </Button>
-        )}
-
-        {/* Web search toggle */}
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          disabled={disabled}
-          onClick={() => onWebSearchToggle?.(!enableWebSearch)}
-          title={enableWebSearch
-            ? t('chat.toolbar.tooltips.webSearchEnabled')
-            : t('chat.toolbar.tooltips.webSearch')}
-          className={cn(
-            'size-9 transition-colors',
-            enableWebSearch
-              ? 'border-blue-500/40 bg-blue-500/20 text-blue-300 hover:bg-blue-500/25'
-              : 'text-muted-foreground hover:text-foreground',
+                >
+                  <Icons.paperclip className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">
+                  {enableAttachments
+                    ? t('chat.toolbar.tooltips.attach')
+                    : t('chat.toolbar.tooltips.attachDisabled')}
+                </p>
+              </TooltipContent>
+            </Tooltip>
           )}
-        >
-          <Icons.globe className="size-4" />
-        </Button>
-      </div>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={ComponentVariants.OUTLINE}
+                size={ComponentSizes.ICON}
+                disabled={disabled}
+                onClick={() => onWebSearchToggle?.(!enableWebSearch)}
+                className={cn(
+                  'size-9 transition-colors hover:bg-white/15',
+                  enableWebSearch
+                    ? 'border-blue-500/40 bg-blue-500/20 text-blue-300 hover:bg-blue-500/25'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Icons.globe className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p className="text-xs">
+                {enableWebSearch
+                  ? t('chat.toolbar.tooltips.webSearchEnabled')
+                  : t('chat.toolbar.tooltips.webSearch')}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
     );
   }
 
-  // Mobile version (default during SSR and for mobile devices)
   return (
     <Drawer>
       <DrawerTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant={ComponentVariants.GLASS}
+          size={ComponentSizes.ICON}
           disabled={disabled}
-          className={cn(
-            'flex items-center justify-center size-8 rounded-full',
-            'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
-            'transition-colors disabled:opacity-50',
-          )}
+          className="size-8"
         >
           <Icons.moreHorizontal className="size-4" />
-        </button>
+        </Button>
       </DrawerTrigger>
       <DrawerContent glass>
         <DrawerHeader className="pb-4">
@@ -221,15 +231,13 @@ export const ChatInputToolbarMenu = memo(({
           </DrawerTitle>
         </DrawerHeader>
 
-        <div className="px-5 pb-20 space-y-3" style={{ paddingBottom: '20px' }}>
-          {/* AI Models */}
+        <div className="px-5 pb-5 space-y-3">
           <button
             type="button"
             onClick={onOpenModelModal}
-            disabled={isModelsLoading}
             className={cn(
               'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
-              isModelsLoading && 'opacity-50 cursor-not-allowed',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               hasNoModelsSelected
                 ? 'bg-destructive/10 border border-destructive/30 hover:bg-destructive/15'
                 : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
@@ -240,11 +248,9 @@ export const ChatInputToolbarMenu = memo(({
               hasNoModelsSelected ? 'bg-destructive/20' : 'bg-cyan-500/10',
             )}
             >
-              {isModelsLoading
-                ? <Icons.loader className="size-5 text-cyan-400 animate-spin" />
-                : hasNoModelsSelected
-                  ? <Icons.alertCircle className="size-5 text-destructive" />
-                  : <Icons.sparkles className="size-5 text-cyan-400" />}
+              {hasNoModelsSelected
+                ? <Icons.alertCircle className="size-5 text-destructive" />
+                : <Icons.sparkles className="size-5 text-cyan-400" />}
             </div>
             <div className="flex flex-col flex-1 min-w-0 text-left">
               <span className={cn(
@@ -259,28 +265,27 @@ export const ChatInputToolbarMenu = memo(({
                 hasNoModelsSelected ? 'text-destructive/70' : 'text-muted-foreground',
               )}
               >
-                {isModelsLoading
-                  ? t('chat.models.loading')
-                  : hasNoModelsSelected
-                    ? t('chat.models.minimumRequired.description', { count: 1 })
-                    : `${selectedParticipants.length} ${t('chat.toolbar.selected')}`}
+                {hasNoModelsSelected
+                  ? t('chat.models.minimumRequired.description', { count: 1 })
+                  : `${selectedParticipants.length} ${t('chat.toolbar.selected')}`}
               </span>
             </div>
-            {!isModelsLoading && !hasNoModelsSelected && (
+            {!hasNoModelsSelected && (
               <AvatarGroup
                 participants={selectedParticipants}
                 allModels={allModels}
-                size="sm"
+                size={AvatarSizes.SM}
                 maxVisible={3}
+                showCount={false}
+                showOverflow
               />
             )}
           </button>
 
-          {/* Conversation Mode */}
           <button
             type="button"
             onClick={onOpenModeModal}
-            className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/[0.07] active:bg-black/20 transition-colors"
+            className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/[0.07] active:bg-black/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <div className="flex items-center justify-center size-10 rounded-full bg-purple-500/10">
               {ModeIcon && <ModeIcon className="size-5 text-purple-400" />}
@@ -295,12 +300,12 @@ export const ChatInputToolbarMenu = memo(({
             </div>
           </button>
 
-          {/* Web Search Toggle */}
           <button
             type="button"
             onClick={() => onWebSearchToggle?.(!enableWebSearch)}
             className={cn(
               'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               enableWebSearch
                 ? 'bg-blue-500/20 hover:bg-blue-500/25 active:bg-blue-500/30'
                 : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
@@ -329,7 +334,6 @@ export const ChatInputToolbarMenu = memo(({
             )}
           </button>
 
-          {/* Attach Files - Mobile drawer option - always visible, disabled when blocked */}
           {onAttachmentClick && (
             <button
               type="button"
@@ -337,6 +341,7 @@ export const ChatInputToolbarMenu = memo(({
               disabled={!enableAttachments}
               className={cn(
                 'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 !enableAttachments && 'opacity-50 cursor-not-allowed',
                 attachmentCount > 0
                   ? 'bg-amber-500/20 hover:bg-amber-500/25 active:bg-amber-500/30'
@@ -364,7 +369,6 @@ export const ChatInputToolbarMenu = memo(({
             </button>
           )}
 
-          {/* Voice Input - Mobile only */}
           {onToggleSpeech && (
             <button
               type="button"
@@ -372,6 +376,7 @@ export const ChatInputToolbarMenu = memo(({
               disabled={!isSpeechSupported}
               className={cn(
                 'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 !isSpeechSupported && 'opacity-50 cursor-not-allowed',
                 isListening
                   ? 'bg-red-500/20 hover:bg-red-500/25 active:bg-red-500/30'

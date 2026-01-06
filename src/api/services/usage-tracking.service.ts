@@ -24,14 +24,14 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { StripeSubscriptionStatus, SubscriptionTier, UsageStatus } from '@/api/core/enums';
-import { BillingIntervals, CreditActions, PlanTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
+import { BillingIntervals, PlanTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
 import type { UserChatUsage } from '@/db/validation';
 
 import type { UsageStatsPayload } from '../routes/usage/schema';
-import { getUserCreditBalance, upgradeToPaidPlan } from './credit.service';
+import { checkFreeUserHasCompletedRound, getUserCreditBalance, upgradeToPaidPlan } from './credit.service';
 import { getTierFromProductId, TIER_QUOTAS } from './product-logic.service';
 
 /**
@@ -270,12 +270,10 @@ async function rolloverBillingPeriod(
       // No active subscription = downgrade to free
       shouldDowngradeToFree = !activeSubscription;
     } else {
-    // Intentionally empty
       // No Stripe customer = free tier user
       shouldDowngradeToFree = true;
     }
   } else {
-    // Intentionally empty
     // User not found (shouldn't happen) - default to free tier for safety
     shouldDowngradeToFree = true;
   }
@@ -357,27 +355,28 @@ async function rolloverBillingPeriod(
     // ✅ ATOMIC: Archive history + Downgrade to free tier in single batch (Cloudflare D1)
     // Using reusable batch helper from @/api/common/batch-operations
     await executeBatch(db, [historyInsert, freeUpdate]);
-  } else if (!hasPendingTierChange) {
-    // Active subscription exists but period expired
-    // This shouldn't normally happen (Stripe sync should handle it)
-    // Reset usage but keep current tier
-    const resetUpdate = db.update(tables.userChatUsage)
-      .set({
-        currentPeriodStart: periodStart,
-        currentPeriodEnd: periodEnd,
-        threadsCreated: 0,
-        messagesCreated: 0,
-        customRolesCreated: 0,
-        analysisGenerated: 0,
-        version: sql`${tables.userChatUsage.version} + 1`,
-        updatedAt: now,
-      })
-      .where(eq(tables.userChatUsage.userId, userId));
-
-    // ✅ ATOMIC: Archive history + Reset usage in single batch (Cloudflare D1)
-    // Using reusable batch helper from @/api/common/batch-operations
-    await executeBatch(db, [historyInsert, resetUpdate]);
+    return;
   }
+
+  // Active subscription exists but period expired
+  // This shouldn't normally happen (Stripe sync should handle it)
+  // Reset usage but keep current tier
+  const resetUpdate = db.update(tables.userChatUsage)
+    .set({
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      threadsCreated: 0,
+      messagesCreated: 0,
+      customRolesCreated: 0,
+      analysisGenerated: 0,
+      version: sql`${tables.userChatUsage.version} + 1`,
+      updatedAt: now,
+    })
+    .where(eq(tables.userChatUsage.userId, userId));
+
+  // ✅ ATOMIC: Archive history + Reset usage in single batch (Cloudflare D1)
+  // Using reusable batch helper from @/api/common/batch-operations
+  await executeBatch(db, [historyInsert, resetUpdate]);
 }
 
 /**
@@ -415,13 +414,8 @@ async function getCreditStatsForUsage(userId: string) {
 
 /**
  * Get plan stats for usage response
- * ✅ Includes hasPaymentMethod to indicate if user has connected a card
  * ✅ Uses userChatUsage.subscriptionTier as source of truth (honors grace period)
  * ✅ Includes pendingTierChange info for UI to show grace period message
- *
- * hasPaymentMethod is TRUE if:
- * 1. User has an active subscription (paid users always have a card)
- * 2. User has a card_connection transaction (free users who connected card)
  */
 async function getPlanStatsForUsage(userId: string) {
   const db = await getDbAsync();
@@ -466,39 +460,29 @@ async function getPlanStatsForUsage(userId: string) {
       }
     : null;
 
+  // Check if free user has used their one-time free round
+  // Always false for paid users, permanent flag for free users
+  const freeRoundUsed = isPaidTier ? false : await checkFreeUserHasCompletedRound(userId);
+
   // User on paid tier (including during grace period)
   if (isPaidTier) {
     return {
       type: 'paid' as const,
       name: 'Pro',
       monthlyCredits: creditBalance.monthlyCredits,
-      hasPaymentMethod: true,
       hasActiveSubscription,
+      freeRoundUsed: false, // Always false for paid users
       nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
       pendingChange,
     };
   }
 
-  // For free users, check if they've connected a card via card_connection transaction
-  const cardConnectionTx = await db
-    .select()
-    .from(tables.creditTransaction)
-    .where(
-      and(
-        eq(tables.creditTransaction.userId, userId),
-        eq(tables.creditTransaction.action, CreditActions.CARD_CONNECTION),
-      ),
-    )
-    .limit(1);
-
-  const hasPaymentMethod = cardConnectionTx.length > 0;
-
   return {
     type: PlanTypes.FREE,
     name: 'Free',
     monthlyCredits: creditBalance.monthlyCredits,
-    hasPaymentMethod,
     hasActiveSubscription: false,
+    freeRoundUsed, // True if free user has completed their round
     nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
     pendingChange: null,
   };
@@ -667,11 +651,11 @@ export async function syncUserQuotaFromSubscription(
     // Execute atomically with batch (Cloudflare D1) or sequentially (local SQLite)
     // Using reusable batch helper from @/api/common/batch-operations
     await executeBatch(db, [historyArchive, usageUpdate]);
-  } else {
-    // Intentionally empty
-    // No period reset, just update usage
-    await usageUpdate;
+    return;
   }
+
+  // No period reset, just update usage
+  await usageUpdate;
 
   // Grant credits when user upgrades from free tier to a paid tier
   // This ensures credits are topped up immediately on subscription upgrade

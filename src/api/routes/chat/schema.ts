@@ -165,6 +165,21 @@ export const ChatThreadChangelogFlexibleSchema = chatThreadChangelogSelectSchema
 
 export type ChatThreadChangelogFlexible = z.infer<typeof ChatThreadChangelogFlexibleSchema>;
 
+export const ChatThreadFlexibleSchema = ChatThreadSchema.extend({
+  createdAt: z.union([z.string(), z.date()]),
+  updatedAt: z.union([z.string(), z.date()]),
+  lastMessageAt: z.union([z.string(), z.date()]).nullable(),
+}).openapi('ChatThreadFlexible');
+
+export type ChatThreadFlexible = z.infer<typeof ChatThreadFlexibleSchema>;
+
+export const ChatParticipantFlexibleSchema = ChatParticipantSchema.extend({
+  createdAt: z.union([z.string(), z.date()]),
+  updatedAt: z.union([z.string(), z.date()]),
+}).openapi('ChatParticipantFlexible');
+
+export type ChatParticipantFlexible = z.infer<typeof ChatParticipantFlexibleSchema>;
+
 export const ConfigurationChangesGroupSchema = z.object({
   timestamp: z.union([z.date(), z.string()]),
   changes: z.array(ChatThreadChangelogFlexibleSchema),
@@ -989,13 +1004,6 @@ export const ConsensusStatusSchema = z.enum(CONSENSUS_STATUSES).openapi({
 
 export type ConsensusStatus = z.infer<typeof ConsensusStatusSchema>;
 
-export const ConsensusStatuses = {
-  CLEAR_CONSENSUS: 'clear_consensus' as const,
-  CONDITIONAL_CONSENSUS: 'conditional_consensus' as const,
-  MULTIPLE_VIABLE_VIEWS: 'multiple_viable_views' as const,
-  NO_CONSENSUS: 'no_consensus' as const,
-} as const;
-
 export const LIMITATION_IMPORTANCE_LEVELS = [
   'critical',
   'secondary',
@@ -1008,12 +1016,6 @@ export const LimitationImportanceSchema = z.enum(LIMITATION_IMPORTANCE_LEVELS).o
 });
 
 export type LimitationImportance = z.infer<typeof LimitationImportanceSchema>;
-
-export const LimitationImportances = {
-  CRITICAL: 'critical' as const,
-  SECONDARY: 'secondary' as const,
-  OUT_OF_SCOPE: 'out_of_scope' as const,
-} as const;
 
 export const CouncilModeratorSectionsSchema = z.object({
   // Required sections
@@ -1123,22 +1125,6 @@ export const ModeratorStyleConstraintSchema = z.enum(MODERATOR_STYLE_CONSTRAINTS
 });
 
 export type ModeratorStyleConstraint = z.infer<typeof ModeratorStyleConstraintSchema>;
-
-export const ModeratorStyleConstraints = {
-  PRECISE_RESTRAINED_NON_PERFORMATIVE: 'precise_restrained_non_performative' as const,
-  NO_EMOTIONAL_LANGUAGE: 'no_emotional_language' as const,
-  NO_INTERNAL_SYSTEM_REFERENCES: 'no_internal_system_references' as const,
-  NO_CONVERSATION_NARRATION: 'no_conversation_narration' as const,
-  TREAT_CROSS_MODEL_CHALLENGES_AS_STRUCTURAL_TENSIONS: 'treat_cross_model_challenges_as_structural_tensions' as const,
-  OMIT_EMPTY_SECTIONS: 'omit_empty_sections' as const,
-} as const;
-
-export function createCacheResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
-  return z.object({
-    success: z.boolean(),
-    data: dataSchema,
-  });
-}
 
 export const ChatThreadCacheSchema = z.object({
   id: z.string(),

@@ -3,45 +3,46 @@
 import { motion } from 'motion/react';
 import { memo } from 'react';
 
-import { cn } from '@/lib/ui/cn';
-
 export type TextShimmerProps = {
   children: string;
   className?: string;
 };
+
+const SHIMMER_ANIMATION = {
+  INITIAL_OPACITY: 0.5,
+  PEAK_OPACITY: 1,
+  OPACITY_SEQUENCE: [0.5, 1, 0.5] as [number, number, number],
+  DURATION: 0.5,
+  DELAY_PER_CHAR: 0.05,
+  REPEAT_DELAY: 2,
+  NON_BREAKING_SPACE: '\u00A0',
+} as const;
 
 function TextShimmerComponent({
   children,
   className,
 }: TextShimmerProps) {
   return (
-    <div className={cn('font-sans font-bold [--shadow-color:var(--color-neutral-500)] dark:[--shadow-color:var(--color-neutral-100)]', className)}>
+    <div className={className}>
       {children.split('').map((char, i) => (
         <motion.span
-          // Index required for unique keys when characters repeat (e.g., "hello" has duplicate 'l')
           // eslint-disable-next-line react/no-array-index-key
           key={`shimmer-char-${i}`}
           className="inline-block"
-          initial={{ scale: 1, opacity: 0.5 }}
+          initial={{ opacity: SHIMMER_ANIMATION.INITIAL_OPACITY }}
           animate={{
-            scale: [1, 1.1, 1],
-            textShadow: [
-              '0 0 0 var(--shadow-color)',
-              '0 0 1px var(--shadow-color)',
-              '0 0 0 var(--shadow-color)',
-            ],
-            opacity: [0.5, 1, 0.5],
+            opacity: SHIMMER_ANIMATION.OPACITY_SEQUENCE,
           }}
           transition={{
-            duration: 0.5,
+            duration: SHIMMER_ANIMATION.DURATION,
             repeat: Infinity,
             repeatType: 'loop',
-            delay: i * 0.05,
+            delay: i * SHIMMER_ANIMATION.DELAY_PER_CHAR,
             ease: 'easeInOut',
-            repeatDelay: 2,
+            repeatDelay: SHIMMER_ANIMATION.REPEAT_DELAY,
           }}
         >
-          {char === ' ' ? '\u00A0' : char}
+          {char === ' ' ? SHIMMER_ANIMATION.NON_BREAKING_SPACE : char}
         </motion.span>
       ))}
     </div>

@@ -5,7 +5,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { MessageStatus } from '@/api/core/enums';
-import { FinishReasons, isCompletionFinishReason, MessagePartTypes, MessageRoles, MessageStatuses, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, UIMessageRoles } from '@/api/core/enums';
+import { FinishReasons, isCompletionFinishReason, MessagePartTypes, MessageRoles, MessageStatuses, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { MessageAttachment } from '@/components/chat/message-attachment-preview';
@@ -1001,7 +1001,7 @@ export const ChatMessageList = memo(
           requiredTierName = undefined; // No tier badge for moderator
         } else {
           const avatarProps = getAvatarPropsFromModelId(
-            message.role === UIMessageRoles.SYSTEM ? MessageRoles.ASSISTANT : message.role,
+            MessageRoles.ASSISTANT,
             participantInfo.modelId,
             userInfo.image,
             userInfo.name,
@@ -1179,16 +1179,6 @@ export const ChatMessageList = memo(
                       key={`pre-search-${roundNumber}`}
                       threadId={_threadId!}
                       preSearch={preSearch}
-                      isLatest={roundNumber === (() => {
-                        const lastGroup = messageGroups[messageGroups.length - 1];
-                        if (!lastGroup)
-                          return 0;
-                        return lastGroup.type === 'user-group'
-                          ? getRoundNumber(lastGroup.messages[0]?.message.metadata) ?? 0
-                          : lastGroup.type === 'assistant-group'
-                            ? getRoundNumber(lastGroup.messages[0]?.message.metadata) ?? 0
-                            : 0;
-                      })()}
                       streamingRoundNumber={_streamingRoundNumber}
                       demoOpen={demoPreSearchOpen}
                       demoShowContent={demoPreSearchOpen ? preSearch.searchData !== undefined : undefined}

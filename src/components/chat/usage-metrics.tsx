@@ -32,10 +32,9 @@ export function UsageMetrics() {
   const creditsStatus = credits?.status ?? UsageStatuses.DEFAULT;
   const isLowCredits = creditsStatus === UsageStatuses.CRITICAL || creditsStatus === UsageStatuses.WARNING;
   const isPaidPlan = plan?.type === PlanTypes.PAID;
-  const hasPaymentMethod = plan?.hasPaymentMethod ?? false;
   const pendingChange = plan?.pendingChange;
 
-  const totalCredits = isPaidPlan ? (plan?.monthlyCredits || 1_000_000) : 10_000;
+  const totalCredits = isPaidPlan ? (plan?.monthlyCredits || CREDIT_CONFIG.PLANS.paid.monthlyCredits) : CREDIT_CONFIG.SIGNUP_CREDITS;
   const usedPercentage = Math.min(100, Math.round(((totalCredits - credits.available) / totalCredits) * 100));
 
   return (
@@ -45,15 +44,15 @@ export function UsageMetrics() {
           variant={isPaidPlan ? 'default' : 'outline'}
           className={cn(
             'text-[10px] px-1.5 py-0.5 h-4 font-semibold',
-            !isPaidPlan && !hasPaymentMethod && 'border-amber-500/40 text-amber-600 bg-amber-500/10',
+            !isPaidPlan && 'border-green-500/40 text-green-600 bg-green-500/10',
           )}
         >
           {plan?.name || 'Free'}
         </Badge>
-        {!hasPaymentMethod && !isPaidPlan && (
-          <div className="flex items-center gap-1 text-[9px] text-amber-600">
-            <Icons.creditCard className="size-2.5" />
-            <span className="font-medium">{t('usage.addCard')}</span>
+        {!isPaidPlan && (
+          <div className="flex items-center gap-1 text-[9px] text-green-600">
+            <Icons.sparkles className="size-2.5" />
+            <span className="font-medium">1 Free</span>
           </div>
         )}
       </div>
@@ -103,42 +102,18 @@ export function UsageMetrics() {
 
       {!isPaidPlan && (
         <div className="space-y-2">
-          {!hasPaymentMethod && (
-            <div className="flex items-start gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-              <Icons.gift className="size-3.5 text-emerald-500 shrink-0 mt-0.5" />
-              <p className="text-[10px] leading-tight text-emerald-600 dark:text-emerald-400">
-                {t('usage.cardAlert.sidebarMessage', {
-                  credits: CREDIT_CONFIG.PLANS.free.cardConnectionCredits.toLocaleString(),
-                })}
-              </p>
-            </div>
-          )}
-
           <Link
             href="/chat/pricing"
             prefetch
             className={cn(
               'w-full flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-medium',
               'backdrop-blur-sm transition-all duration-200',
-              hasPaymentMethod
-                ? 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20 text-foreground'
-                : 'bg-emerald-500/20 hover:bg-emerald-500/25 active:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30',
-              isLowCredits && hasPaymentMethod && 'bg-amber-500/20 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30',
+              'bg-white/5 hover:bg-white/[0.07] active:bg-black/20 text-foreground',
+              isLowCredits && 'bg-amber-500/20 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30',
             )}
           >
-            {hasPaymentMethod
-              ? (
-                  <>
-                    <Icons.arrowUpCircle className="size-3" />
-                    {t('usage.upgradeNow')}
-                  </>
-                )
-              : (
-                  <>
-                    <Icons.creditCard className="size-3" />
-                    {t('usage.connectCard')}
-                  </>
-                )}
+            <Icons.arrowUpCircle className="size-3" />
+            {t('usage.upgradeNow')}
           </Link>
         </div>
       )}

@@ -10,7 +10,7 @@
  * - useFeedbackActions: Round feedback management
  *
  * INTERNAL (not exported):
- * - useModeratorOrchestrator, usePreSearchOrchestrator
+ * - useModeratorOrchestrator, getPreSearchOrchestrator
  * These are used internally by useScreenInitialization and other composed hooks
  *
  * STORE SUBSCRIPTIONS (automatic):

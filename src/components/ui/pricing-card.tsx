@@ -15,7 +15,7 @@ interface PricingCardProps {
   price: {
     amount: number;
     currency: string;
-    interval?: 'month' | 'year' | null; // Optional for one-time purchases
+    interval?: 'month' | null;
     trialDays?: number | null;
   };
   features?: string[] | null;
@@ -29,12 +29,8 @@ interface PricingCardProps {
   onManageBilling?: () => void;
   className?: string;
   delay?: number;
-  annualSavingsPercent?: number;
   hasOtherSubscription?: boolean;
-  isFreeProduct?: boolean; // For $0 subscription (add payment method)
-  isOneTime?: boolean; // For one-time credit purchases
-  creditsAmount?: number; // Credits for one-time packages
-  disabled?: boolean; // Disable the card (e.g., when user hasn't connected card)
+  disabled?: boolean;
 }
 
 export function PricingCard({
@@ -52,11 +48,7 @@ export function PricingCard({
   onManageBilling,
   className,
   delay = 0,
-  annualSavingsPercent,
   hasOtherSubscription = false,
-  isFreeProduct = false,
-  isOneTime = false,
-  creditsAmount,
   disabled = false,
 }: PricingCardProps) {
   const t = useTranslations('pricing.card');
@@ -70,16 +62,9 @@ export function PricingCard({
     }
   };
 
-  // Determine button text and loading state based on state
   const getButtonText = () => {
     if (isCurrentPlan) {
       return t('cancelSubscription');
-    }
-    if (isOneTime) {
-      return t('purchase');
-    }
-    if (isFreeProduct) {
-      return t('connectCard');
     }
     if (hasOtherSubscription) {
       return t('switchPlan');
@@ -140,12 +125,7 @@ export function PricingCard({
           inactiveZone={0.01}
         />
 
-        <div className={cn(
-          "relative flex h-full flex-col overflow-hidden rounded-xl border bg-background/50 backdrop-blur-sm p-6 dark:shadow-[0px_0px_27px_0px_#2D2D2D]",
-          isFreeProduct
-            ? "border-green-500/30 bg-green-500/5"
-            : "border-white/20 dark:border-white/10"
-        )}>
+        <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-white/20 dark:border-white/10 bg-background/50 backdrop-blur-sm p-6 dark:shadow-[0px_0px_27px_0px_#2D2D2D]">
 
           {/* Card Content */}
           <div className="relative flex flex-1 flex-col gap-6">
@@ -174,47 +154,19 @@ export function PricingCard({
               className="space-y-2"
             >
               <div className="flex items-baseline gap-1">
-                {isFreeProduct ? (
-                  <span className="text-4xl font-bold tracking-tight">
-                    {t('free')}
+                <span className="text-4xl font-bold tracking-tight">
+                  {price.currency.toUpperCase()}
+                  {' '}
+                  {(price.amount / 100).toFixed(2)}
+                </span>
+                {price.interval && (
+                  <span className="text-sm text-muted-foreground">
+                    /
+                    {price.interval}
                   </span>
-                ) : (
-                  <>
-                    <span className="text-4xl font-bold tracking-tight">
-                      {price.currency.toUpperCase()}
-                      {' '}
-                      {(price.amount / 100).toFixed(2)}
-                    </span>
-                    {price.interval && (
-                      <span className="text-sm text-muted-foreground">
-                        /
-                        {price.interval}
-                      </span>
-                    )}
-                    {isOneTime && (
-                      <span className="text-sm text-muted-foreground">
-                        {t('oneTime')}
-                      </span>
-                    )}
-                  </>
                 )}
               </div>
 
-              {/* Credits Amount for one-time packages */}
-              {creditsAmount && creditsAmount > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: delay + 0.25, duration: 0.3 }}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
-                >
-                  {creditsAmount.toLocaleString()}
-                  {' '}
-                  {t('credits')}
-                </motion.div>
-              )}
-
-              {/* Trial Period Badge */}
               {price.trialDays && price.trialDays > 0 && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -238,31 +190,6 @@ export function PricingCard({
                   {price.trialDays}
                   {' '}
                   {t('daysFreeTrial')}
-                </motion.div>
-              )}
-
-              {/* Annual Savings Badge */}
-              {annualSavingsPercent && annualSavingsPercent > 0 && price.interval === 'year' && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: delay + 0.3, duration: 0.3 }}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
-                >
-                  <svg
-                    className="size-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  {t('saveAnnually', { percent: annualSavingsPercent })}
                 </motion.div>
               )}
             </motion.div>
@@ -352,8 +279,7 @@ export function PricingCard({
                   'w-full text-center text-sm font-medium transition-all duration-200',
                   isMostPopular && !isCurrentPlan && 'bg-primary text-primary-foreground',
                   isCurrentPlan && 'bg-destructive/10 text-destructive hover:bg-destructive/20',
-                  isFreeProduct && !isCurrentPlan && 'bg-green-600 text-white hover:bg-green-700',
-                  !isMostPopular && !isCurrentPlan && !isFreeProduct && 'bg-background text-foreground',
+                  !isMostPopular && !isCurrentPlan && 'bg-background text-foreground',
                 )}
                 onClick={handleAction}
                 disabled={isActionButtonLoading || disabled}

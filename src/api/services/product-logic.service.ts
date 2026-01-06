@@ -1,60 +1,23 @@
 /**
- * Product Logic Service - SINGLE SOURCE OF TRUTH
+ * Product Logic Service
  *
- * ✅ THE ONLY PLACE for all product business logic:
- * - Subscription tiers and tier names
- * - Model pricing and access rules
- * - Per-tier limits (models, tokens, quotas)
- * - Model selection logic
- * - Pricing calculations and display
- *
- * ⚠️ DO NOT create duplicate logic elsewhere
- * ⚠️ DO NOT re-export from this file
- * ⚠️ Import directly from this service when needed
- *
- * ============================================================================
- * TYPE-SAFE TIER ARCHITECTURE
- * ============================================================================
- *
- * All tier-specific values are defined in TIER_CONFIG below.
- * This single object is typed as Record<SubscriptionTier, TierConfiguration>.
- *
- * ✅ COMPILE-TIME SAFETY: If you add/remove a tier in billing.ts:
- * - TypeScript will IMMEDIATELY error on TIER_CONFIG
- * - You MUST add the new tier's configuration to fix the error
- * - All derived exports (names, limits, quotas) auto-update
- *
- * This prevents the bug where tiers existed in the enum but were missing
- * from individual Record<SubscriptionTier, ...> objects.
- * ============================================================================
+ * Single source of truth for subscription tiers, model pricing, access rules, limits, quotas, and pricing calculations.
+ * All tier-specific values defined in TIER_CONFIG with compile-time type safety.
  */
 
 import { z as zOpenAPI } from '@hono/zod-openapi';
 
-import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
-import { ChatModes, SUBSCRIPTION_TIERS, SubscriptionTiers } from '@/api/core/enums';
+import type { ChatMode, ModelPricingTier, PlanType, SubscriptionTier } from '@/api/core/enums';
+import {
+  ChatModes,
+  getModelTierMultiplier,
+  MODEL_TIER_THRESHOLDS,
+  SUBSCRIPTION_TIERS,
+  SubscriptionTiers,
+} from '@/api/core/enums';
 import { TITLE_GENERATION_PROMPT } from '@/api/services/prompts.service';
-import type { CreditPlanType } from '@/lib/config/credit-config';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
-// ============================================================================
-// MODEL TYPE FOR PRICING LOGIC
-// ============================================================================
-
-/**
- * Minimal model type for pricing/tier calculations
- *
- * PATTERN: Define only the fields this service needs for its logic
- * AVOIDS: Circular dependency with routes/models/schema.ts
- *
- * This type is intentionally minimal - it only includes fields used by
- * the pricing, tier access, and flagship scoring functions in this service.
- * Full model types are defined in src/api/routes/models/schema.ts
- *
- * ✅ TYPE COMPATIBILITY: All fields are optional except those actually used
- * by the pricing functions. This allows HardcodedModel and other model types
- * to be passed directly without type casting.
- */
 export type ModelForPricing = {
   id: string;
   pricing: {
@@ -75,71 +38,39 @@ export type ModelForPricing = {
     tools: boolean;
   };
 };
-
-// ============================================================================
-// UNIFIED TIER CONFIGURATION - SINGLE SOURCE OF TRUTH
-// ============================================================================
-//
-// ⚠️ ALL tier-specific values MUST be defined here
-// ✅ TypeScript enforces: If you add a tier to SUBSCRIPTION_TIERS,
-//    you MUST add its configuration here or compilation fails
-// ============================================================================
-
-/**
- * Configuration shape for each subscription tier
- * All tier-specific values in one place for type safety
- */
 export type TierConfiguration = {
-  /** Human-readable display name */
   name: string;
-  /** Max output tokens per AI response */
   maxOutputTokens: number;
-  /** Max model pricing threshold ($/M tokens) - null = unlimited */
   maxModelPricing: number | null;
-  /** Max concurrent models in conversation */
   maxModels: number;
-  /** Monthly quotas */
   quotas: {
     threadsPerMonth: number;
     messagesPerMonth: number;
     customRolesPerMonth: number;
     analysisPerMonth: number;
   };
-  /** Upgrade message shown to users on this tier */
   upgradeMessage: string;
-  /** Maps to CREDIT_CONFIG plan key */
-  creditPlanKey: 'free' | 'paid';
+  monthlyCredits: number;
 };
-
-/**
- * ✅ UNIFIED TIER CONFIG - THE SINGLE SOURCE OF TRUTH
- *
- * All tier-specific values are defined here. If you add/remove a tier
- * from SUBSCRIPTION_TIERS in billing.ts, TypeScript will error here
- * until you add/remove the corresponding configuration.
- *
- * This prevents inconsistencies where a tier exists in the enum but
- * is missing from individual Record<SubscriptionTier, ...> objects.
- */
 export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
   free: {
     name: 'Free',
     maxOutputTokens: 512,
-    maxModelPricing: 0.10, // Up to $0.10/M tokens - budget models only
+    maxModelPricing: 0.10,
     maxModels: 3,
     quotas: {
-      threadsPerMonth: 5,
+      threadsPerMonth: 1,
       messagesPerMonth: 100,
       customRolesPerMonth: 0,
       analysisPerMonth: 10,
     },
     upgradeMessage: 'Upgrade to Pro for unlimited access to all models',
-    creditPlanKey: 'free',
+    monthlyCredits: 0,
   },
   pro: {
     name: 'Pro',
     maxOutputTokens: 4096,
-    maxModelPricing: null, // Unlimited - full access to all models
+    maxModelPricing: null,
     maxModels: 12,
     quotas: {
       threadsPerMonth: 500,
@@ -148,20 +79,10 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
       analysisPerMonth: 1000,
     },
     upgradeMessage: 'You have access to all models',
-    creditPlanKey: 'paid',
+    monthlyCredits: CREDIT_CONFIG.PLANS.paid.monthlyCredits,
   },
 } as const;
 
-// ============================================================================
-// DERIVED EXPORTS - Auto-generated from TIER_CONFIG
-// ============================================================================
-// ✅ DYNAMIC GENERATION: Uses Object.fromEntries to auto-derive from TIER_CONFIG
-// ============================================================================
-
-/**
- * Helper to derive a tier record from TIER_CONFIG
- * Ensures all derived exports are type-safe and auto-update
- */
 function deriveTierRecord<T>(
   extractor: (config: TierConfiguration) => T,
 ): Record<SubscriptionTier, T> {
@@ -276,21 +197,146 @@ export function estimateStreamingCredits(
 }
 
 /**
- * Calculate actual credits used for an AI response
+ * Calculate actual credits used for an AI response (base credits without model multiplier)
  *
  * @param inputTokens Actual input tokens used
  * @param outputTokens Actual output tokens generated
- * @returns Credits to deduct
+ * @returns Base credits to deduct (before multiplier)
  */
-export function calculateActualCredits(inputTokens: number, outputTokens: number): number {
+export function calculateBaseCredits(inputTokens: number, outputTokens: number): number {
   return tokensToCredits(inputTokens + outputTokens);
 }
 
 /**
- * Get plan configuration by plan type
+ * Get plan configuration by plan type (paid only - free has no plan config)
  */
-export function getPlanConfig(planType: CreditPlanType) {
+export function getPlanConfig(planType: Exclude<PlanType, 'free'>) {
   return CREDIT_CONFIG.PLANS[planType];
+}
+
+// ============================================================================
+// MODEL PRICING TIER FUNCTIONS
+// ============================================================================
+
+/**
+ * Get the pricing tier for a model based on its input price per million tokens
+ *
+ * Uses the model's pricing.prompt (input price per token) to determine tier.
+ * Tiers are designed to ensure profitability at $59/month subscription:
+ * - Budget (1x): ≤$0.10/M - cheapest models
+ * - Standard (3x): $0.10-$0.50/M - mid-range
+ * - Pro (25x): $0.50-$3/M - premium models
+ * - Flagship (75x): $3-$10/M - top-tier
+ * - Ultimate (200x): >$10/M - most expensive
+ */
+export function getModelPricingTier(model: ModelForPricing): ModelPricingTier {
+  const inputPricePerMillion = costPerMillion(model.pricing.prompt);
+
+  for (const tier of Object.keys(MODEL_TIER_THRESHOLDS) as ModelPricingTier[]) {
+    const { min, max } = MODEL_TIER_THRESHOLDS[tier];
+    if (inputPricePerMillion >= min && inputPricePerMillion < max) {
+      return tier;
+    }
+  }
+
+  return CREDIT_CONFIG.DEFAULT_MODEL_TIER;
+}
+
+/**
+ * Get pricing tier from model ID using the models-config
+ *
+ * @param modelId Model ID (e.g., 'openai/gpt-4o')
+ * @param getModel Function to get model by ID (avoids circular deps)
+ * @returns Model pricing tier
+ */
+export function getModelPricingTierById(
+  modelId: string,
+  getModel: (id: string) => ModelForPricing | undefined,
+): ModelPricingTier {
+  const model = getModel(modelId);
+  if (!model) {
+    return CREDIT_CONFIG.DEFAULT_MODEL_TIER;
+  }
+  return getModelPricingTier(model);
+}
+
+/**
+ * Get the credit multiplier for a model based on its pricing tier
+ *
+ * @param model Model to get multiplier for
+ * @returns Credit multiplier (1x for budget, up to 200x for ultimate)
+ */
+export function getModelCreditMultiplier(model: ModelForPricing): number {
+  const tier = getModelPricingTier(model);
+  return getModelTierMultiplier(tier);
+}
+
+/**
+ * Get credit multiplier from model ID
+ *
+ * @param modelId Model ID (e.g., 'openai/gpt-4o')
+ * @param getModel Function to get model by ID (avoids circular deps)
+ * @returns Credit multiplier
+ */
+export function getModelCreditMultiplierById(
+  modelId: string,
+  getModel: (id: string) => ModelForPricing | undefined,
+): number {
+  const tier = getModelPricingTierById(modelId, getModel);
+  return getModelTierMultiplier(tier);
+}
+
+/**
+ * Calculate actual credits used for an AI response WITH model-weighted pricing
+ *
+ * This is the MAIN function for credit calculation. It applies the model's
+ * pricing tier multiplier to ensure expensive models cost more credits.
+ *
+ * @param inputTokens Actual input tokens used
+ * @param outputTokens Actual output tokens generated
+ * @param modelId Model ID used for the response
+ * @param getModel Function to get model by ID (avoids circular deps)
+ * @returns Weighted credits to deduct
+ *
+ * @example
+ * // Budget model (1x): 1000 tokens = 1 credit
+ * calculateWeightedCredits(500, 500, 'openai/gpt-4o-mini', getModelById)
+ *
+ * // Pro model (25x): 1000 tokens = 25 credits
+ * calculateWeightedCredits(500, 500, 'anthropic/claude-sonnet-4.5', getModelById)
+ *
+ * // Ultimate model (200x): 1000 tokens = 200 credits
+ * calculateWeightedCredits(500, 500, 'openai/o1', getModelById)
+ */
+export function calculateWeightedCredits(
+  inputTokens: number,
+  outputTokens: number,
+  modelId: string,
+  getModel: (id: string) => ModelForPricing | undefined,
+): number {
+  const baseCredits = calculateBaseCredits(inputTokens, outputTokens);
+  const multiplier = getModelCreditMultiplierById(modelId, getModel);
+  return Math.ceil(baseCredits * multiplier);
+}
+
+/**
+ * Estimate weighted credits for reservation (before actual usage known)
+ *
+ * @param participantCount Number of AI participants
+ * @param modelId Model ID to be used
+ * @param getModel Function to get model by ID
+ * @param estimatedInputTokens Estimated input tokens
+ * @returns Estimated weighted credits to reserve
+ */
+export function estimateWeightedCredits(
+  participantCount: number,
+  modelId: string,
+  getModel: (id: string) => ModelForPricing | undefined,
+  estimatedInputTokens: number = CREDIT_CONFIG.DEFAULT_ESTIMATED_INPUT_TOKENS,
+): number {
+  const baseEstimate = estimateStreamingCredits(participantCount, estimatedInputTokens);
+  const multiplier = getModelCreditMultiplierById(modelId, getModel);
+  return Math.ceil(baseEstimate * multiplier);
 }
 
 // ============================================================================
@@ -373,24 +419,22 @@ export function getMaxModelsForTier(tier: SubscriptionTier): number {
 
 /**
  * Get the monthly credits included with a given tier
- * Uses TIER_CONFIG to map tiers to CREDIT_CONFIG plan keys
  * @derived from TIER_CONFIG
  */
 export function getMonthlyCreditsForTier(tier: SubscriptionTier): number {
-  const planKey = TIER_CONFIG[tier].creditPlanKey;
-  return CREDIT_CONFIG.PLANS[planKey].monthlyCredits;
+  return TIER_CONFIG[tier].monthlyCredits;
 }
 
 /**
  * Get the subscription tier from a product ID
  *
- * ✅ TWO-TIER SYSTEM: Free and Pro only
+ * ✅ TWO-TIER SYSTEM: Free (no subscription) and Pro (paid subscription)
  *
  * Common Stripe product ID patterns:
  * - prod_pro_annual → pro
  * - prod-pro-tier → pro (hyphen delimiter)
  * - prod_QxRpbPJ8pro → pro (random suffix)
- * - prod_unknown → free (default)
+ * - prod_unknown → free (default - no subscription)
  *
  * Pattern matching:
  * 1. Case-insensitive: handles prod_PRO, prod_Pro, etc.
@@ -399,9 +443,6 @@ export function getMonthlyCreditsForTier(tier: SubscriptionTier): number {
 export function getTierFromProductId(productId: string): SubscriptionTier {
   // ✅ DIRECT PRODUCT ID MATCHING - Check actual Stripe product IDs first
   // This is the most reliable way to determine tier from product ID
-  if (productId === CREDIT_CONFIG.PLANS.free.stripeProductId) {
-    return SubscriptionTiers.FREE;
-  }
   if (productId === CREDIT_CONFIG.PLANS.paid.stripeProductId) {
     return SubscriptionTiers.PRO; // 'paid' plan in CREDIT_CONFIG maps to 'pro' tier
   }
@@ -433,7 +474,7 @@ export function getTierFromProductId(productId: string): SubscriptionTier {
     return SubscriptionTiers.PRO;
   }
 
-  // Default to free tier for unknown or invalid product IDs
+  // Default to free tier for unknown or invalid product IDs (no subscription)
   return SubscriptionTiers.FREE;
 }
 
@@ -708,10 +749,8 @@ export function getFlagshipScore(model: ModelForPricing): number {
     score += 20; // Mid-tier pricing ($1-$5/M tokens)
   } else if (inputPrice > 100) {
     score += 15; // Ultra-premium (>$100/M tokens)
-  } else {
-    // Intentionally empty
-    score += 0; // Budget/free tier
   }
+  // Budget/free tier: score += 0 (no-op)
 
   // ═══════════════════════════════════════════════════════════════
   // CONTEXT WINDOW (30 points) - Large context = flagship capability
@@ -722,10 +761,8 @@ export function getFlagshipScore(model: ModelForPricing): number {
     score += 25; // Large (128K-200K) = flagship tier
   } else if (model.context_length >= 64000) {
     score += 15; // Medium-large (64K-128K)
-  } else {
-    // Intentionally empty
-    score += 0; // Small context
   }
+  // Small context: score += 0 (no-op)
 
   // ═══════════════════════════════════════════════════════════════
   // RECENCY (20 points) - Recent models = actively maintained
@@ -737,11 +774,9 @@ export function getFlagshipScore(model: ModelForPricing): number {
     } else if (ageInDays < 365) {
       score += 15; // Last year = recent
     } else {
-      // Intentionally empty
       score += 5; // Older = less likely flagship
     }
   } else {
-    // Intentionally empty
     score += 10; // No timestamp = neutral
   }
 

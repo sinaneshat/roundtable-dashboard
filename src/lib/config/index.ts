@@ -17,7 +17,6 @@ export {
 } from './chat-modes';
 
 // Credit configuration
-export type { CreditPlanType } from './credit-config';
 export { CREDIT_CONFIG, PLAN_NAMES } from './credit-config';
 
 // Model presets configuration

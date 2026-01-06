@@ -1,11 +1,3 @@
-/**
- * Static Open Graph Image for Pricing Page
- * Uses Next.js ImageResponse API with server-side translations
- * Shows generic tier names from actual subscription tiers (no fake pricing)
- *
- * Note: This file uses Next.js Metadata API which requires named exports.
- * The react-refresh warning is disabled as this is not a React component file.
- */
 /* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
 import { getTranslations } from 'next-intl/server';
@@ -24,19 +16,15 @@ export const size = {
 };
 export const contentType = 'image/png';
 export const alt = `Pricing - ${BRAND.fullName}`;
-
-// Force dynamic to prevent build-time prerendering (fonts loaded at runtime)
 export const dynamic = 'force-dynamic';
 
 export default async function Image() {
-  // Load translations, fonts, and logo in parallel
   const [t, fonts, logoBase64] = await Promise.all([
     getTranslations(),
     getOGFonts(),
     getLogoBase64().catch(() => ''),
   ]);
 
-  // Actual subscription tiers: Free (10K credits) and Pro ($100/month, 1M credits)
   const tiers = [
     { name: t('subscription.tiers.free.name'), desc: t('subscription.tiers.free.description') },
     { name: t('subscription.tiers.pro.name'), desc: t('subscription.tiers.pro.description') },
@@ -84,7 +72,6 @@ export default async function Image() {
           }}
         />
 
-        {/* Brand Logo */}
         <div
           style={{
             display: 'flex',
@@ -113,7 +100,6 @@ export default async function Image() {
           </div>
         </div>
 
-        {/* Main Title */}
         <div
           style={{
             fontSize: 64,
@@ -127,7 +113,6 @@ export default async function Image() {
           {t('pricing.page.title')}
         </div>
 
-        {/* Subtitle */}
         <div
           style={{
             fontSize: 28,
@@ -142,7 +127,6 @@ export default async function Image() {
           {t('pricing.page.description')}
         </div>
 
-        {/* Real Subscription Tiers */}
         <div
           style={{
             display: 'flex',
@@ -178,7 +162,6 @@ export default async function Image() {
           ))}
         </div>
 
-        {/* Footer */}
         <div
           style={{
             position: 'absolute',

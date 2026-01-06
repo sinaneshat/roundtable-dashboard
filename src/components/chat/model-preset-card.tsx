@@ -1,7 +1,5 @@
 'use client';
 
-import Link from 'next/link';
-import { useTranslations } from 'next-intl';
 import { memo, useMemo } from 'react';
 
 import type { SubscriptionTier } from '@/api/core/enums';
@@ -9,7 +7,6 @@ import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { ModelAvatarWithRole } from '@/components/chat/model-avatar-with-role';
 import { Icons } from '@/components/icons';
-import { Button } from '@/components/ui/button';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
 import { canAccessPreset } from '@/lib/config/model-presets';
 import { cn } from '@/lib/ui/cn';
@@ -39,7 +36,6 @@ export const ModelPresetCard = memo(({
   isUserPreset = false,
   onDelete,
 }: ModelPresetCardProps) => {
-  const t = useTranslations('chat.models');
   const isLocked = !canAccessPreset(preset, userTier);
 
   const compatibleModelCount = useMemo(() => {
@@ -51,49 +47,37 @@ export const ModelPresetCard = memo(({
 
   const isFullyDisabled = compatibleModelCount === 0;
 
-  const handleClick = (e: React.MouseEvent) => {
-    if (isLocked) {
+  const handleClick = () => {
+    if (isLocked || isFullyDisabled)
       return;
-    }
-    if (isFullyDisabled) {
-      e.preventDefault();
-      return;
-    }
-    e.preventDefault();
     onSelect({ preset });
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      if (!isLocked && !isFullyDisabled) {
-        onSelect({ preset });
-      }
-    }
-  };
-
-  const sharedProps = {
-    'role': 'button' as const,
-    'tabIndex': isFullyDisabled ? -1 : 0,
-    'onClick': handleClick,
-    'onKeyDown': handleKeyDown,
-    'aria-disabled': isFullyDisabled,
-    'aria-pressed': isSelected,
-    'className': cn(
-      'group relative flex flex-col p-4 rounded-2xl text-left w-full',
-      'bg-card border transition-colors',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-      !isSelected && 'border-border/50',
-      !isLocked && !isFullyDisabled && !isSelected && 'hover:bg-white/[0.07] hover:border-border cursor-pointer',
-      isSelected && !isLocked && 'bg-white/10 border-white/20 cursor-pointer',
-      isLocked && 'opacity-70 cursor-pointer hover:opacity-80',
-      isFullyDisabled && 'opacity-50 cursor-not-allowed',
-      className,
-    ),
-  };
-
-  const CardContent = (
-    <>
+  return (
+    <div
+      role="button"
+      tabIndex={isFullyDisabled ? -1 : 0}
+      onClick={handleClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
+      aria-disabled={isFullyDisabled}
+      aria-pressed={isSelected}
+      className={cn(
+        'group relative flex flex-col p-4 rounded-2xl text-left w-full',
+        'bg-card border transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        !isSelected && 'border-border/50',
+        !isLocked && !isFullyDisabled && !isSelected && 'hover:bg-white/[0.07] hover:border-border cursor-pointer',
+        isSelected && !isLocked && 'bg-white/10 border-white/20 cursor-pointer',
+        isLocked && 'opacity-50 cursor-not-allowed',
+        isFullyDisabled && 'opacity-50 cursor-not-allowed',
+        className,
+      )}
+    >
       <div className="flex items-start justify-between gap-2 mb-3">
         <h3 className="text-base font-semibold text-foreground leading-tight">
           {preset.name}
@@ -108,7 +92,7 @@ export const ModelPresetCard = memo(({
                 onCustomize({ preset });
               }}
               className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-white/[0.07] transition-all"
-              aria-label={t('customizePreset')}
+              aria-label="Customize preset"
             >
               <Icons.slidersHorizontal className="size-4 text-muted-foreground" />
             </button>
@@ -122,7 +106,7 @@ export const ModelPresetCard = memo(({
                 onDelete();
               }}
               className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all"
-              aria-label={t('deletePreset')}
+              aria-label="Delete preset"
             >
               <Icons.trash className="size-4 text-destructive" />
             </button>
@@ -150,7 +134,7 @@ export const ModelPresetCard = memo(({
               key={modelRole.modelId}
               model={model}
               role={modelRole.role}
-              size="sm"
+              size="base"
             />
           );
         })}
@@ -159,38 +143,8 @@ export const ModelPresetCard = memo(({
       <p className="text-xs text-muted-foreground leading-relaxed">
         {preset.description}
       </p>
-
-      {isLocked && (
-        <div className="mt-3">
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="w-full h-7 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-          >
-            <Link href="/chat/pricing">
-              {t('upgradeToTier', { tier: SUBSCRIPTION_TIER_NAMES[preset.requiredTier] })}
-            </Link>
-          </Button>
-        </div>
-      )}
-    </>
+    </div>
   );
-
-  return isLocked
-    ? (
-        <Link href="/chat/pricing" {...sharedProps}>
-          {CardContent}
-        </Link>
-      )
-    : (
-        <div {...sharedProps}>
-          {CardContent}
-        </div>
-      );
 });
 
 ModelPresetCard.displayName = 'ModelPresetCard';

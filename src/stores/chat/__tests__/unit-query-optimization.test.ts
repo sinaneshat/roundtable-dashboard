@@ -1,15 +1,5 @@
 /**
  * Query and Mutation Optimization Unit Tests
- *
- * Tests TanStack Query optimization patterns:
- * 1. Query key stability and deduplication
- * 2. Cache validation efficiency
- * 3. Optimistic update performance
- * 4. Invalidation scope precision
- * 5. Prefetch cache population
- *
- * Focus: UNIT tests for query/mutation optimization utilities
- * NOT integration tests - those are in separate files
  */
 
 import { describe, expect, it } from 'vitest';
@@ -25,10 +15,6 @@ import {
   validateThreadsListPages,
   validateUsageStatsCache,
 } from '../actions/types';
-
-// ============================================================================
-// TEST SUITE: Query Key Stability
-// ============================================================================
 
 describe('query Key Stability', () => {
   describe('queryKeys.threads.detail()', () => {
@@ -57,7 +43,6 @@ describe('query Key Stability', () => {
       const key1 = queryKeys.threads.detail(threadId);
       const key2 = queryKeys.threads.detail(threadId);
 
-      // Array equality check - should have same values
       expect(key1).toEqual(key2);
       expect(JSON.stringify(key1)).toBe(JSON.stringify(key2));
     });
@@ -144,15 +129,10 @@ describe('query Key Stability', () => {
   });
 });
 
-// ============================================================================
-// TEST SUITE: Query Deduplication
-// ============================================================================
-
 describe('query Deduplication', () => {
   it('should deduplicate identical thread detail queries', () => {
     const threadId = 'thread-123';
 
-    // Simulate multiple components requesting same data
     const keys = [
       queryKeys.threads.detail(threadId),
       queryKeys.threads.detail(threadId),
@@ -161,7 +141,6 @@ describe('query Deduplication', () => {
 
     const uniqueKeys = new Set(keys.map(k => JSON.stringify(k)));
 
-    // All keys should serialize to same string (single query)
     expect(uniqueKeys.size).toBe(1);
   });
 
@@ -192,25 +171,18 @@ describe('query Deduplication', () => {
   it('should deduplicate hierarchical invalidation keys', () => {
     const threadId = 'thread-123';
 
-    // Same invalidation pattern called multiple times
     const patterns = [
       invalidationPatterns.threadDetail(threadId),
       invalidationPatterns.threadDetail(threadId),
       invalidationPatterns.threadDetail(threadId),
     ];
 
-    // Flatten and deduplicate
     const allKeys = patterns.flat();
     const uniqueKeys = new Set(allKeys.map(k => JSON.stringify(k)));
 
-    // Should deduplicate to unique keys only
     expect(uniqueKeys.size).toBeLessThanOrEqual(allKeys.length);
   });
 });
-
-// ============================================================================
-// TEST SUITE: Cache Validation - Object Creation Efficiency
-// ============================================================================
 
 describe('cache Validation - Object Creation Efficiency', () => {
   describe('validateInfiniteQueryCache', () => {
@@ -232,7 +204,6 @@ describe('cache Validation - Object Creation Efficiency', () => {
       const result = validateInfiniteQueryCache(invalidData);
 
       expect(result).toBeNull();
-      // Original data should not be mutated
       expect(invalidData).toEqual({ invalid: 'structure' });
     });
 
@@ -274,7 +245,6 @@ describe('cache Validation - Object Creation Efficiency', () => {
       const result = validateInfiniteQueryCache(validData);
 
       expect(result).not.toBeNull();
-      // Validation should parse but not deeply clone unnecessarily
       expect(result?.pages).toBeDefined();
     });
   });
@@ -389,13 +359,15 @@ describe('cache Validation - Object Creation Efficiency', () => {
           credits: {
             balance: 1000,
             available: 800,
+            status: 'default',
           },
           plan: {
             type: 'pro',
             name: 'Pro Plan',
             monthlyCredits: 10000,
-            hasPaymentMethod: true,
+            hasActiveSubscription: true,
             nextRefillAt: new Date().toISOString(),
+            pendingChange: null,
           },
         },
       };
@@ -431,15 +403,10 @@ describe('cache Validation - Object Creation Efficiency', () => {
 
       const result = validateChangelogListCache(invalidData);
 
-      // Validation should fail for incomplete data
       expect(result).toBeNull();
     });
   });
 });
-
-// ============================================================================
-// TEST SUITE: Optimistic Update Patterns
-// ============================================================================
 
 describe('optimistic Update Patterns', () => {
   describe('thread Update Optimistic Pattern', () => {
@@ -459,15 +426,14 @@ describe('optimistic Update Patterns', () => {
         title: 'Updated Title',
       };
 
-      // Simulate optimistic update
       const optimisticThread = {
         ...previousThread,
         ...optimisticUpdate,
       };
 
       expect(optimisticThread.title).toBe('Updated Title');
-      expect(optimisticThread.slug).toBe('original-slug'); // Unchanged
-      expect(optimisticThread.id).toBe('thread-1'); // Unchanged
+      expect(optimisticThread.slug).toBe('original-slug');
+      expect(optimisticThread.id).toBe('thread-1');
     });
 
     it('should validate optimistic update without mutation', () => {
@@ -477,14 +443,12 @@ describe('optimistic Update Patterns', () => {
         isFavorite: false,
       });
 
-      // Optimistic update pattern
       const optimisticThread = {
         ...mockThread,
         title: 'Updated Title',
         isFavorite: true,
       };
 
-      // Verify structure is preserved
       expect(optimisticThread.id).toBe('thread-1');
       expect(optimisticThread.title).toBe('Updated Title');
       expect(optimisticThread.isFavorite).toBe(true);
@@ -548,12 +512,7 @@ describe('optimistic Update Patterns', () => {
   });
 });
 
-// ============================================================================
-// TEST SUITE: Invalidation Scope Precision
-// ============================================================================
-
 describe('invalidation Scope Precision', () => {
-  // Helper to compare query keys (arrays) by value
   const containsKey = (patterns: readonly unknown[], key: readonly unknown[]) => {
     return patterns.some(p => JSON.stringify(p) === JSON.stringify(key));
   };
@@ -581,7 +540,6 @@ describe('invalidation Scope Precision', () => {
       const threadId = 'thread-123';
       const patterns = invalidationPatterns.threadDetail(threadId);
 
-      // Should only invalidate 3 specific patterns
       expect(patterns).toHaveLength(3);
     });
   });
@@ -597,7 +555,6 @@ describe('invalidation Scope Precision', () => {
     it('should NOT invalidate specific thread details', () => {
       const patterns = invalidationPatterns.threads;
 
-      // Should not include any detail keys
       const hasDetailKey = patterns.some(key =>
         Array.isArray(key) && key.includes('detail'),
       );
@@ -619,7 +576,6 @@ describe('invalidation Scope Precision', () => {
     it('should handle tier changes affecting model access', () => {
       const patterns = invalidationPatterns.subscriptions;
 
-      // Models invalidation is critical when tier changes
       expect(containsKey(patterns, queryKeys.models.all)).toBe(true);
     });
   });
@@ -638,15 +594,10 @@ describe('invalidation Scope Precision', () => {
       const threadId = 'thread-123';
       const patterns = invalidationPatterns.afterThreadMessage(threadId);
 
-      // Usage stats invalidation is critical for credit tracking
       expect(containsKey(patterns, queryKeys.usage.stats())).toBe(true);
     });
   });
 });
-
-// ============================================================================
-// TEST SUITE: Stale Time Configuration
-// ============================================================================
 
 describe('stale Time Configuration', () => {
   it('should use Infinity for static data (changelog, moderators, pre-search)', () => {
@@ -655,28 +606,24 @@ describe('stale Time Configuration', () => {
     expect(STALE_TIMES.preSearch).toBe(Infinity);
   });
 
-  it('should use Infinity for models (HTTP cache + manual invalidation)', () => {
+  it('should use Infinity for models', () => {
     expect(STALE_TIMES.models).toBe(Infinity);
   });
 
   it('should use short times for real-time data', () => {
-    expect(STALE_TIMES.threadMessages).toBe(5 * 1000); // 5 seconds
-    expect(STALE_TIMES.threadDetail).toBe(10 * 1000); // 10 seconds
+    expect(STALE_TIMES.threadMessages).toBe(5 * 1000);
+    expect(STALE_TIMES.threadDetail).toBe(10 * 1000);
   });
 
   it('should use longer times for infrequent changes', () => {
-    expect(STALE_TIMES.products).toBe(24 * 3600 * 1000); // 24 hours
-    expect(STALE_TIMES.publicThreadDetail).toBe(24 * 3600 * 1000); // 24 hours
+    expect(STALE_TIMES.products).toBe(24 * 3600 * 1000);
+    expect(STALE_TIMES.publicThreadDetail).toBe(24 * 3600 * 1000);
   });
 
   it('should balance freshness vs performance for subscriptions', () => {
-    expect(STALE_TIMES.subscriptions).toBe(2 * 60 * 1000); // 2 minutes
+    expect(STALE_TIMES.subscriptions).toBe(2 * 60 * 1000);
   });
 });
-
-// ============================================================================
-// TEST SUITE: Prefetch Cache Population
-// ============================================================================
 
 describe('prefetch Cache Population', () => {
   it('should pre-populate thread detail with consistent structure', () => {
@@ -698,7 +645,6 @@ describe('prefetch Cache Population', () => {
       },
     };
 
-    // Validate prefetch data matches expected structure
     const result = validateThreadDetailPayloadCache({
       success: true,
       data: threadData,
@@ -726,25 +672,16 @@ describe('prefetch Cache Population', () => {
       ],
     };
 
-    // Should match expected structure for cache
     expect(preSearchData.items).toHaveLength(1);
     expect(preSearchData.items[0].query).toBe('test query');
   });
 
   it('should prevent server fetch when cache is populated', () => {
-    // This is tested by verifying staleTime: Infinity prevents refetch
     expect(STALE_TIMES.preSearch).toBe(Infinity);
     expect(STALE_TIMES.threadChangelog).toBe(Infinity);
     expect(STALE_TIMES.threadModerators).toBe(Infinity);
-
-    // With staleTime: Infinity, TanStack Query will NOT refetch
-    // if data exists in cache (regardless of age)
   });
 });
-
-// ============================================================================
-// TEST SUITE: Mutation onSuccess Optimistic Update Correctness
-// ============================================================================
 
 describe('mutation onSuccess Optimistic Updates', () => {
   it('should correctly merge server response with optimistic update', () => {
@@ -768,10 +705,9 @@ describe('mutation onSuccess Optimistic Updates', () => {
       mode: 'council',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      version: 2, // Server-generated field
+      version: 2,
     };
 
-    // Merge server response (overwrites optimistic)
     const finalData = {
       ...optimisticUpdate,
       ...serverResponse,
@@ -788,13 +724,11 @@ describe('mutation onSuccess Optimistic Updates', () => {
       isFavorite: false,
     };
 
-    // Simulate optimistic update
     let currentState = {
       ...previousState,
-      isFavorite: true, // Optimistic change
+      isFavorite: true,
     };
 
-    // Error occurred - rollback
     currentState = previousState;
 
     expect(currentState.isFavorite).toBe(false);
@@ -821,7 +755,6 @@ describe('mutation onSuccess Optimistic Updates', () => {
       ...optimisticUpdate,
     };
 
-    // All required fields should be preserved
     expect(updated.id).toBe('thread-123');
     expect(updated.title).toBe('Original Title');
     expect(updated.userId).toBe('user-1');
@@ -829,12 +762,7 @@ describe('mutation onSuccess Optimistic Updates', () => {
   });
 });
 
-// ============================================================================
-// TEST SUITE: Query Invalidation Timing
-// ============================================================================
-
 describe('query Invalidation Timing', () => {
-  // Helper to compare query keys (arrays) by value
   const containsKey = (patterns: readonly unknown[], key: readonly unknown[]) => {
     return patterns.some(p => JSON.stringify(p) === JSON.stringify(key));
   };
@@ -842,39 +770,27 @@ describe('query Invalidation Timing', () => {
   it('should use immediate invalidation for critical data (usage stats)', () => {
     const patterns = invalidationPatterns.afterThreadMessage('thread-123');
 
-    // Usage stats should be invalidated immediately after message
     expect(containsKey(patterns, queryKeys.usage.stats())).toBe(true);
   });
 
   it('should invalidate changelog incrementally (not on every update)', () => {
-    // From chat-mutations.ts comment:
-    // "Changelog invalidation REMOVED - was premature (before backend creates entries)"
-    // Changelog is fetched AFTER streaming via useThreadRoundChangelogQuery
-
     const threadUpdatePattern = invalidationPatterns.threadDetail('thread-123');
 
-    // Changelog IS invalidated on thread detail operations
     expect(containsKey(threadUpdatePattern, queryKeys.threads.changelog('thread-123'))).toBe(true);
   });
 
   it('should NOT invalidate models on every thread operation', () => {
     const threadPatterns = invalidationPatterns.threads;
 
-    // Models should NOT be invalidated on thread operations
     expect(containsKey(threadPatterns, queryKeys.models.all)).toBe(false);
   });
 
   it('should invalidate models on subscription changes (tier affects access)', () => {
     const subscriptionPatterns = invalidationPatterns.subscriptions;
 
-    // Models MUST be invalidated when subscription changes
     expect(containsKey(subscriptionPatterns, queryKeys.models.all)).toBe(true);
   });
 });
-
-// ============================================================================
-// TEST SUITE: Cache Key Hierarchical Structure
-// ============================================================================
 
 describe('cache Key Hierarchical Structure', () => {
   it('should support hierarchical invalidation with threads.all', () => {
@@ -882,7 +798,6 @@ describe('cache Key Hierarchical Structure', () => {
     const listKey = queryKeys.threads.lists();
     const detailKey = queryKeys.threads.detail('thread-123');
 
-    // Base key should be a prefix for hierarchical keys
     expect(baseKey).toStrictEqual(['threads']);
     expect(listKey[0]).toBe('threads');
     expect(detailKey[0]).toBe('threads');

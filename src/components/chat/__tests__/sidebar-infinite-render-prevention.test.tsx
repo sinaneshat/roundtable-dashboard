@@ -19,17 +19,17 @@ import { describe, expect, it } from 'vitest';
 
 describe('sidebar Infinite Render Prevention - Source Code Verification', () => {
   describe('react 19 compose-refs regression prevention', () => {
-    it('should not use asChild on DropdownMenuTrigger in ChatList', () => {
+    it('should use SidebarMenuAction with asChild pattern in ChatList', () => {
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // Should NOT have DropdownMenuTrigger with asChild
-      const hasAsChildOnDropdown = /DropdownMenuTrigger\s+asChild/.test(content);
-      expect(hasAsChildOnDropdown).toBe(false);
+      // New pattern: DropdownMenuTrigger asChild with SidebarMenuAction
+      // SidebarMenuAction provides the showOnHover behavior and styling
+      const usesSidebarMenuAction = /SidebarMenuAction/.test(content);
+      expect(usesSidebarMenuAction).toBe(true);
 
-      // Should have DropdownMenuTrigger with className (our fix)
-      const hasClassNameOnDropdown = /DropdownMenuTrigger[^>]*className=/.test(content);
-      expect(hasClassNameOnDropdown).toBe(true);
+      // Should use Link component for navigation instead of router.push
+      expect(content).toMatch(/Link\s+href=/);
     });
 
     it('should not use asChild on DropdownMenuTrigger in NavUser', () => {
@@ -45,29 +45,28 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       expect(hasClassNameOnDropdown).toBe(true);
     });
 
-    it('should not use asChild on DropdownMenuTrigger in ChatThreadActions', () => {
+    it('should use asChild on DropdownMenuTrigger with Button in ChatThreadActions', () => {
       const actionsPath = resolve(__dirname, '../chat-thread-actions.tsx');
       const content = readFileSync(actionsPath, 'utf-8');
 
-      // Should NOT have DropdownMenuTrigger with asChild
+      // New pattern: DropdownMenuTrigger with asChild + Button component
       const hasAsChildOnDropdown = /DropdownMenuTrigger\s+asChild/.test(content);
-      expect(hasAsChildOnDropdown).toBe(false);
+      expect(hasAsChildOnDropdown).toBe(true);
 
-      // Should have DropdownMenuTrigger with className (our fix)
-      const hasClassNameOnDropdown = /DropdownMenuTrigger[^>]*className=/.test(content);
-      expect(hasClassNameOnDropdown).toBe(true);
+      // Should have Button inside trigger
+      expect(content).toMatch(/Button/);
     });
 
-    it('should not use TooltipTrigger asChild in ChatThreadActions', () => {
+    it('should use TooltipTrigger with asChild pattern in ChatThreadActions', () => {
       const actionsPath = resolve(__dirname, '../chat-thread-actions.tsx');
       const content = readFileSync(actionsPath, 'utf-8');
 
-      // Should NOT have TooltipTrigger with asChild
+      // New pattern: TooltipTrigger with asChild
       const hasAsChildOnTooltip = /TooltipTrigger\s+asChild/.test(content);
-      expect(hasAsChildOnTooltip).toBe(false);
+      expect(hasAsChildOnTooltip).toBe(true);
 
-      // Should use native title attribute instead
-      expect(content).toMatch(/title=\{.*t\(/);
+      // Should have TooltipProvider wrapping the tooltips
+      expect(content).toMatch(/TooltipProvider/);
     });
 
     it('should not use TooltipTrigger asChild in SocialShareButton', () => {
@@ -82,30 +81,13 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       expect(content).toMatch(/title=\{/);
     });
 
-    it('should have comment explaining the fix in ChatList', () => {
+    it('should import SidebarMenuAction in ChatList for menu triggers', () => {
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // Should have comment about the fix
-      const hasExplanation = content.includes('compose-refs') || content.includes('React 19');
-      expect(hasExplanation).toBe(true);
-    });
-
-    it('should have comment explaining the fix in NavUser', () => {
-      const navUserPath = resolve(__dirname, '../nav-user.tsx');
-      const content = readFileSync(navUserPath, 'utf-8');
-
-      // Should have comment about the fix
-      const hasExplanation = content.includes('compose-refs') || content.includes('React 19');
-      expect(hasExplanation).toBe(true);
-    });
-
-    it('should not import SidebarMenuAction in ChatList (no longer needed)', () => {
-      const chatListPath = resolve(__dirname, '../chat-list.tsx');
-      const content = readFileSync(chatListPath, 'utf-8');
-
+      // New pattern: SidebarMenuAction is used with showOnHover prop
       const importsSidebarMenuAction = /import\s+\{[^}]*SidebarMenuAction[^}]*\}\s+from\s+['"]@\/components\/ui\/sidebar['"]/.test(content);
-      expect(importsSidebarMenuAction).toBe(false);
+      expect(importsSidebarMenuAction).toBe(true);
     });
 
     it('should not import SidebarMenuButton in NavUser (styles applied directly)', () => {
@@ -118,33 +100,34 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
     });
   });
 
-  describe('callback stability with useRef pattern', () => {
-    it('should use slugRef pattern in ChatItem for stable callbacks', () => {
+  describe('navigation and prefetch stability', () => {
+    it('should use Link component for navigation in ChatItem', () => {
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // Should have slugRef pattern
-      expect(content).toMatch(/slugRef[^\n\r=\u2028\u2029]*=.*useRef/);
-      expect(content).toMatch(/slugRef\.current/);
+      // New pattern: Use Next.js Link component for navigation
+      // This provides automatic prefetching and stable navigation
+      expect(content).toMatch(/Link\s+href=/);
+      expect(content).toMatch(/href=\{chatUrl\}/);
     });
 
-    it('should have stable handleClick callback (not dependent on slug)', () => {
+    it('should use prefetch prop on Link for hover prefetching', () => {
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // The handleClick callback should use slugRef.current, not direct slug
-      // This ensures the callback identity doesn't change when slug updates
-      expect(content).toMatch(/handleClick[^\n\r=\u2028\u2029]*=.*useCallback/);
-      expect(content).toMatch(/router\.push.*slugRef\.current/);
+      // The Link should have prefetch prop for controlled prefetching
+      expect(content).toMatch(/prefetch=/);
+      // Should track shouldPrefetch state
+      expect(content).toMatch(/shouldPrefetch/);
     });
 
-    it('should have stable handleMouseEnter callback for prefetching', () => {
+    it('should have handleMouseEnter callback for prefetch trigger', () => {
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // The handleMouseEnter callback should use slugRef.current
+      // Should have handleMouseEnter that sets shouldPrefetch
       expect(content).toMatch(/handleMouseEnter[^\n\r=\u2028\u2029]*=.*useCallback/);
-      expect(content).toMatch(/router\.prefetch.*slugRef\.current/);
+      expect(content).toMatch(/setShouldPrefetch/);
     });
   });
 
@@ -230,15 +213,13 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       expect(content).toMatch(/rounded-full/); // Border radius
     });
 
-    it('should preserve SidebarMenuAction visual styles in ChatList trigger', () => {
+    it('should use SidebarMenuAction with showOnHover in ChatList', () => {
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // Key styles that should be present from SidebarMenuAction
-      expect(content).toMatch(/absolute.*end-2/); // Positioning
-      expect(content).toMatch(/md:opacity-0/); // Hidden by default on desktop
-      expect(content).toMatch(/group-hover\/menu-item:opacity-100/); // Show on hover behavior
-      expect(content).toMatch(/size-6/); // Size
+      // New pattern: SidebarMenuAction component with showOnHover prop
+      // This provides the positioning, opacity, and hover behavior
+      expect(content).toMatch(/SidebarMenuAction\s+showOnHover/);
     });
   });
 });

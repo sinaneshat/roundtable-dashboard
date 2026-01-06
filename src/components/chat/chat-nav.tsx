@@ -1,19 +1,18 @@
 'use client';
-import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
-import type { SubscriptionTier } from '@/api/core/enums';
-import { PlanTypes, SubscriptionTiers } from '@/api/core/enums';
+import { SidebarCollapsibles, SidebarVariants } from '@/api/core/enums';
 import type { ChatSidebarItem } from '@/api/routes/chat/schema';
-import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { ChatList } from '@/components/chat/chat-list';
 import {
   ChatSidebarPaginationSkeleton,
-  ChatSidebarSkeleton,
+  SidebarThreadSkeletons,
 } from '@/components/chat/chat-sidebar-skeleton';
+import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
 import { Icons } from '@/components/icons';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -31,18 +30,11 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { BRAND } from '@/constants';
-import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
-import { useIsMounted } from '@/hooks/utils';
+import { BRAND } from '@/constants/brand';
+import { useThreadsQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';
 import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
-
-// Dynamic import - only loaded when user opens search (Cmd+K)
-const CommandSearch = dynamic(
-  () => import('@/components/chat/command-search').then(m => m.CommandSearch),
-  { ssr: false },
-);
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   /** Server-side session for hydration - prevents mismatch */
@@ -56,33 +48,17 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isFavoritesCollapsed, setIsFavoritesCollapsed] = useState(false);
   const [isChatsCollapsed, setIsChatsCollapsed] = useState(false);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const sidebarContentRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
   const handleNavigationReset = useNavigationReset();
-  const isMounted = useIsMounted();
-  const {
-    data: threadsData,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading: queryLoading,
-    isError,
-    error,
-  } = useThreadsQuery();
-  // Always show loading on server to prevent hydration mismatch
-  const isLoading = !isMounted || queryLoading;
-  const { data: usageData } = useUsageStatsQuery();
-  const subscriptionTier: SubscriptionTier = usageData?.data?.plan?.type === PlanTypes.PAID ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
-  const isPaidUser = usageData?.data?.plan?.type === PlanTypes.PAID;
+  const { data: threadsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error } = useThreadsQuery();
+
   const chats: ChatSidebarItem[] = useMemo(() => {
     if (!threadsData?.pages)
       return [];
-    const threads = threadsData.pages.flatMap((page) => {
-      if (page.success && page.data?.items) {
-        return page.data.items;
-      }
-      return [];
-    });
+    const threads = threadsData.pages.flatMap(page =>
+      page.success && page.data?.items ? page.data.items : [],
+    );
     return threads.map(thread => ({
       id: thread.id,
       title: thread.title,
@@ -110,55 +86,57 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
-
   const handleNavLinkClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     handleNavigationReset();
     router.push('/chat');
+
     if (isMobile) {
       setOpenMobile(false);
     }
   }, [handleNavigationReset, router, isMobile, setOpenMobile]);
 
-  const favorites = useMemo(() =>
-    chats.filter(chat => chat.isFavorite), [chats]);
-  const nonFavoriteChats = useMemo(() =>
-    chats.filter(chat => !chat.isFavorite), [chats]);
+  const favorites = useMemo(() => chats.filter(chat => chat.isFavorite), [chats]);
+  const nonFavoriteChats = useMemo(() => chats.filter(chat => !chat.isFavorite), [chats]);
 
-  // IntersectionObserver for infinite scroll pagination
-  useEffect(() => {
-    if (!hasNextPage || isFetchingNextPage)
+  const handleScroll = useCallback(() => {
+    if (!sidebarContentRef.current || !hasNextPage || isFetchingNextPage)
       return;
-    const sentinel = loadMoreRef.current;
-    if (!sentinel)
-      return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          fetchNextPage();
-        }
-      },
-      { threshold: 0.1 },
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
+    const { scrollTop, scrollHeight, clientHeight } = sidebarContentRef.current;
+    const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+    if (scrollPercentage > 0.8) {
+      fetchNextPage();
+    }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  useEffect(() => {
+    const viewport = sidebarContentRef.current;
+    if (!viewport)
+      return;
+    viewport.addEventListener('scroll', handleScroll);
+    return () => viewport.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
+  const prevPathnameRef = useRef(pathname);
+  useEffect(() => {
+    if (isMobile && pathname !== prevPathnameRef.current) {
+      setOpenMobile(false);
+    }
+    prevPathnameRef.current = pathname;
+  }, [pathname, isMobile, setOpenMobile]);
+
   return (
     <>
       <TooltipProvider>
-        <Sidebar collapsible="icon" variant="floating" {...props}>
+        <Sidebar collapsible={SidebarCollapsibles.ICON} variant={SidebarVariants.FLOATING} {...props}>
           <SidebarHeader>
-            {/* Logo + Toggle Row - Expanded */}
             <div className="flex h-9 mb-2 items-center justify-between group-data-[collapsible=icon]:hidden">
               <Link
                 href="/chat"
                 onClick={handleNavLinkClick}
                 className="flex h-9 items-center rounded-md ps-3 pe-2 hover:opacity-80 transition-opacity"
               >
-                {/* eslint-disable-next-line next/no-img-element */}
-                <img
+                <Image
                   src={BRAND.logos.main}
                   alt={`${BRAND.name} Logo`}
                   className="size-6 object-contain shrink-0"
@@ -169,16 +147,13 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
               <SidebarTrigger className="size-9 shrink-0" />
             </div>
 
-            {/* Collapsed Header - Logo/Toggle swap on hover */}
             <div className="hidden h-10 mb-2 group-data-[collapsible=icon]:flex items-center justify-center relative">
-              {/* Logo - visible by default, hidden on sidebar hover */}
               <Link
                 href="/chat"
                 onClick={handleNavLinkClick}
                 className="flex size-10 items-center justify-center group-hover:opacity-0 group-hover:pointer-events-none transition-opacity duration-150"
               >
-                {/* eslint-disable-next-line next/no-img-element */}
-                <img
+                <Image
                   src={BRAND.logos.main}
                   alt={`${BRAND.name} Logo`}
                   className="size-6 object-contain shrink-0"
@@ -186,7 +161,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                   height={24}
                 />
               </Link>
-              {/* Toggle - hidden by default, visible on sidebar hover */}
               <SidebarTrigger
                 className="size-10 absolute opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                 iconClassName="size-4"
@@ -194,16 +168,17 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
             </div>
 
             <SidebarMenu className="gap-1">
-
-              {/* Action Buttons - Expanded */}
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-                <SidebarMenuButton isActive={pathname === '/chat'} onClick={handleNavLinkClick}>
-                  <Icons.plus className="size-4 shrink-0" />
-                  <span
-                    className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap max-w-48"
-                  >
-                    {t('navigation.newChat')}
-                  </span>
+                <SidebarMenuButton asChild isActive={pathname === '/chat'}>
+                  <Link href="/chat" onClick={handleNavLinkClick}>
+                    <Icons.plus className="size-4 shrink-0" />
+                    <span
+                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                      style={{ maxWidth: '12rem' }}
+                    >
+                      {t('navigation.newChat')}
+                    </span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -218,21 +193,19 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                 >
                   <Icons.search className="size-4 shrink-0" />
                   <span
-                    className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap max-w-48"
+                    className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                    style={{ maxWidth: '12rem' }}
                   >
                     {t('navigation.searchChats')}
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Icon Buttons - Collapsed */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
-                <SidebarMenuButton
-                  tooltip={t('navigation.newChat')}
-                  isActive={pathname === '/chat'}
-                  onClick={handleNavLinkClick}
-                >
-                  <Icons.plus />
+                <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
+                  <Link href="/chat" onClick={handleNavLinkClick}>
+                    <Icons.plus />
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -249,13 +222,11 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                   <Icons.search />
                 </SidebarMenuButton>
               </SidebarMenuItem>
-
             </SidebarMenu>
           </SidebarHeader>
           <SidebarContent className="p-0 w-full min-w-0">
-            <ScrollArea className="w-full h-full">
-              <div className="flex flex-col w-full">
-                {/* Favorites Section */}
+            <ScrollArea ref={sidebarContentRef} className="w-full h-full">
+              <div className="flex flex-col w-full px-0.5">
                 {!isLoading && !isError && favorites.length > 0 && (
                   <SidebarGroup className="group/favorites pt-4 group-data-[collapsible=icon]:hidden">
                     <SidebarGroupLabel
@@ -273,27 +244,22 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                       />
                     </SidebarGroupLabel>
                     {!isFavoritesCollapsed && (
-                      <ChatList
-                        chats={favorites}
-                        isMobile={isMobile}
-                        onNavigate={() => {
-                          if (isMobile) {
-                            setOpenMobile(false);
-                          }
-                        }}
-                      />
+                      <ChatList chats={favorites} />
                     )}
                   </SidebarGroup>
                 )}
 
-                {/* Loading State */}
                 {isLoading && (
-                  <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-                    <ChatSidebarSkeleton count={15} showFavorites={false} />
+                  <SidebarGroup className="pt-4 group-data-[collapsible=icon]:hidden">
+                    <SidebarGroupLabel className="px-4">
+                      <span className="text-sm font-medium truncate">
+                        {t('navigation.chats')}
+                      </span>
+                    </SidebarGroupLabel>
+                    <SidebarThreadSkeletons count={10} animated />
                   </SidebarGroup>
                 )}
 
-                {/* Error State */}
                 {isError && (
                   <SidebarGroup className="group-data-[collapsible=icon]:hidden">
                     <div className="py-6 text-center">
@@ -307,22 +273,25 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                   </SidebarGroup>
                 )}
 
-                {/* Empty State - shadcn pattern */}
                 {!isLoading && !isError && chats.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-12 group-data-[collapsible=icon]:hidden">
-                    <div className="flex size-12 items-center justify-center rounded-xl bg-muted/60 mb-3">
-                      <Icons.messageSquare className="size-5 text-muted-foreground" />
+                  <SidebarGroup className="pt-4 group-data-[collapsible=icon]:hidden">
+                    <SidebarGroupLabel className="px-4">
+                      <span className="text-sm font-medium truncate">
+                        {t('navigation.chats')}
+                      </span>
+                    </SidebarGroupLabel>
+                    <div className="px-4 pb-3 pt-2">
+                      <p className="text-xs text-muted-foreground">
+                        {t('chat.emptyStateSubtext')}
+                        ,
+                        <br />
+                        {t('chat.emptyStateTitle')}
+                      </p>
                     </div>
-                    <p className="text-sm font-medium text-foreground/90 mb-0.5">
-                      {t('chat.noChatsYet')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('chat.emptyStateHint')}
-                    </p>
-                  </div>
+                    <SidebarThreadSkeletons count={7} />
+                  </SidebarGroup>
                 )}
 
-                {/* Main Chat List */}
                 {!isLoading && !isError && nonFavoriteChats.length > 0 && (
                   <SidebarGroup className="group/chats pt-4 group-data-[collapsible=icon]:hidden">
                     <SidebarGroupLabel
@@ -330,7 +299,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                       onClick={() => setIsChatsCollapsed(!isChatsCollapsed)}
                     >
                       <span className="text-sm font-medium truncate">
-                        {t('navigation.chat')}
+                        {t('navigation.chats')}
                       </span>
                       <Icons.chevronRight className={cn(
                         'size-3 shrink-0 transition-all duration-200',
@@ -341,20 +310,10 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                     </SidebarGroupLabel>
                     {!isChatsCollapsed && (
                       <>
-                        <ChatList
-                          chats={nonFavoriteChats}
-                          isMobile={isMobile}
-                          onNavigate={() => {
-                            if (isMobile) {
-                              setOpenMobile(false);
-                            }
-                          }}
-                        />
+                        <ChatList chats={nonFavoriteChats} />
                         {isFetchingNextPage && (
                           <ChatSidebarPaginationSkeleton count={20} />
                         )}
-                        {/* Sentinel for infinite scroll */}
-                        {hasNextPage && <div ref={loadMoreRef} className="h-1" />}
                       </>
                     )}
                   </SidebarGroup>
@@ -363,36 +322,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
             </ScrollArea>
           </SidebarContent>
           <SidebarFooter className="gap-2">
-            {/* Plan CTA */}
-            <Link
-              href="/chat/pricing"
-              className="group/upgrade group-data-[collapsible=icon]:hidden flex items-center gap-3 rounded-xl bg-accent px-3 py-2.5 transition-colors duration-200 hover:bg-accent/80"
-            >
-              <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full', isPaidUser ? 'bg-success text-success-foreground' : 'bg-primary text-primary-foreground')}>
-                <Icons.sparkles className="size-4" />
-              </div>
-              <div className="flex flex-1 flex-col min-w-0">
-                <span className="text-sm font-medium text-foreground truncate">
-                  {isPaidUser ? `${SUBSCRIPTION_TIER_NAMES[subscriptionTier]} Plan` : t('navigation.upgrade')}
-                </span>
-                <span className="text-xs text-muted-foreground truncate">
-                  {isPaidUser ? t('navigation.managePlan') : t('navigation.upgradeDescription')}
-                </span>
-              </div>
-            </Link>
-            {/* Collapsed icon */}
-            <SidebarMenu className="hidden group-data-[collapsible=icon]:flex">
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip={isPaidUser ? `${SUBSCRIPTION_TIER_NAMES[subscriptionTier]} Plan` : t('navigation.upgrade')}
-                  isActive={pathname?.startsWith('/chat/pricing')}
-                  onClick={() => router.push('/chat/pricing')}
-                >
-                  <Icons.sparkles className={isPaidUser ? 'text-success' : ''} />
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-            {/* User Nav */}
             <SidebarMenu>
               <SidebarMenuItem>
                 <NavUser initialSession={initialSession} />
@@ -408,4 +337,5 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     </>
   );
 }
+
 export const AppSidebar = React.memo(AppSidebarComponent);

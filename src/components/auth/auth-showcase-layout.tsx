@@ -1,27 +1,13 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 
 import { Logo } from '@/components/logo';
 import { Card } from '@/components/ui/card';
 import { RadialGlow } from '@/components/ui/radial-glow';
-import { ThreadMessagesSkeleton } from '@/components/ui/skeleton';
-import { BRAND } from '@/constants';
+import { BRAND } from '@/constants/brand';
 
-// Client-only, deferred loading - LiveChatDemo is 350+ lines with ThreadTimeline
-// Only shown on desktop (lg:), so mobile users never load this
-const LiveChatDemo = dynamic(
-  () => import('./live-chat-demo').then(mod => mod.LiveChatDemo),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex flex-col h-full px-4 sm:px-6 pt-6 pb-6">
-        <ThreadMessagesSkeleton participantCount={3} usecase="demo" />
-      </div>
-    ),
-  },
-);
+import { LiveChatDemo } from './live-chat-demo';
 
 type AuthShowcaseLayoutProps = {
   children: React.ReactNode;
@@ -56,11 +42,8 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
             <div className="flex flex-col gap-3 text-left">
               <div className="space-y-1">
                 <span className="text-xs font-normal tracking-[0.2em] uppercase text-muted-foreground/50">
-                  Welcome to
+                  {t('auth.layout.welcomeTo', { brand: BRAND.displayName })}
                 </span>
-                <h1 className="text-4xl sm:text-5xl font-[family-name:var(--font-display)] font-bold tracking-[-0.02em]">
-                  {BRAND.displayName}
-                </h1>
               </div>
               <p className="text-sm text-muted-foreground/80 font-light leading-relaxed max-w-[280px]">
                 {t('auth.layout.subtitle')}
@@ -72,7 +55,7 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
         </div>
       </div>
 
-      <div className="relative hidden lg:flex lg:flex-col p-4 max-h-svh">
+      <div className="relative hidden lg:flex lg:flex-col p-6 max-h-svh">
         <Card className="flex-1 min-h-0 overflow-hidden py-0 bg-card backdrop-blur-sm border-border/50">
           <LiveChatDemo />
         </Card>

@@ -11,6 +11,7 @@ import { ChatInputAttachments } from '@/components/chat/chat-input-attachments-l
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization-lazy';
 import { Icons } from '@/components/icons';
+import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import { Button } from '@/components/ui/button';
 import { STRING_LIMITS } from '@/constants';
 import { useUsageStatsQuery } from '@/hooks/queries';
@@ -84,34 +85,50 @@ export const ChatInput = memo(({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isStreaming = status !== AiSdkStatuses.READY;
-
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
+  const messages = useChatStore(state => state.messages);
+  const hasLocalMessages = messages.length > 0;
 
-  const needsCardConnection = useMemo(() => {
+  const showUpgradePrompt = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
       return false;
     }
     const { plan } = statsData.data;
-    return plan?.type !== PlanTypes.PAID && !plan?.hasPaymentMethod;
+    return plan?.type !== PlanTypes.PAID;
   }, [statsData]);
 
+  const freeRoundUsedFromApi = useMemo(() => {
+    if (!statsData?.success || !statsData.data) {
+      return false;
+    }
+    return statsData.data.plan?.freeRoundUsed ?? false;
+  }, [statsData]);
+
+  // User is out of credits - this blocks input (PAID users only)
+  // Free users are blocked by freeRoundUsed flag, not credit balance
   const isQuotaExceeded = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
       return false;
     }
 
-    const { plan, credits } = statsData.data;
-    if (plan?.type !== PlanTypes.PAID && !plan?.hasPaymentMethod) {
+    const { credits, plan } = statsData.data;
+    // Free users blocked by freeRoundUsed, not credits
+    if (plan?.type !== PlanTypes.PAID) {
       return false;
     }
-
     return credits.available <= 0;
   }, [statsData]);
 
-  const isInputDisabled = disabled || isQuotaExceeded;
-  const isMicDisabled = disabled || isQuotaExceeded;
+  // For UI display: use local messages OR API flag (API is source of truth)
+  const hasCompletedRound = freeRoundUsedFromApi || hasLocalMessages;
+
+  // Free users who have completed their round are blocked from further input
+  // Uses API flag as source of truth (survives thread deletion)
+  const isFreeRoundExhausted = showUpgradePrompt && freeRoundUsedFromApi;
+  const isInputDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted;
+  const isMicDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted;
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
-  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || needsCardConnection || isUploading || isOverLimit || isSubmitting || isLoadingStats;
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || isFreeRoundExhausted;
   const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
 
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -246,9 +263,9 @@ export const ChatInput = memo(({
           'bg-card',
           'shadow-lg',
           'transition-all duration-200',
-          isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && !needsCardConnection && 'cursor-not-allowed',
-          (isOverLimit || showNoModelsError || isQuotaExceeded) && 'border-destructive',
-          needsCardConnection && !isOverLimit && !showNoModelsError && 'border-amber-500/50',
+          isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && 'cursor-not-allowed',
+          (isOverLimit || showNoModelsError || (isQuotaExceeded && !showUpgradePrompt)) && 'border-destructive',
+          showUpgradePrompt && !isOverLimit && !showNoModelsError && (hasCompletedRound ? 'border-amber-500/30' : 'border-green-500/30'),
           className,
         )}
         {...(enableAttachments ? dragHandlers : {})}
@@ -257,7 +274,7 @@ export const ChatInput = memo(({
 
         <div className="flex flex-col overflow-hidden h-full">
           {showCreditAlert && <QuotaAlertExtension />}
-          {needsCardConnection && <CardConnectionAlert />}
+          {showUpgradePrompt && <CardConnectionAlert />}
           {showNoModelsError && (
             <div
               className={cn(
@@ -348,7 +365,6 @@ export const ChatInput = memo(({
                   {toolbar}
                 </div>
 
-                {/* Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop */}
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   {enableSpeech && isSpeechSupported && (
                     <Button

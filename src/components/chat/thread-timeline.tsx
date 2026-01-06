@@ -81,19 +81,16 @@ type ThreadTimelineProps = {
   // Skip all entrance animations (for demo that has already completed)
   skipEntranceAnimations?: boolean;
 
-  // ✅ BUG FIX: Set of round numbers that have complete summaries
-  // Used to prevent showing pending cards for rounds that already completed
+  // Set of round numbers that have complete summaries
   completedRoundNumbers?: Set<number>;
 
-  // ✅ MODERATOR FLAG: Indicates moderator is streaming (for input blocking)
-  // Moderator message now renders via normal message flow
+  // Indicates moderator is streaming (for input blocking)
   isModeratorStreaming?: boolean;
 
   // Demo mode - forces all models to be accessible (hides tier badges)
   demoMode?: boolean;
 
-  // ✅ RACE CONDITION FIX: Getter to read streaming state directly from store
-  // Bypasses React batching to get latest value immediately
+  // Getter to read streaming state directly from store
   getIsStreamingFromStore?: () => boolean;
 };
 
@@ -125,12 +122,8 @@ export function ThreadTimeline({
   demoMode = false,
   getIsStreamingFromStore,
 }: ThreadTimelineProps) {
-  // ✅ SCROLL FIX: Track active streaming for virtualizer and measurement
-  // This prevents scroll jumps and viewport shifts during content generation
   const isActivelyStreaming = isStreaming || isModeratorStreaming;
 
-  // TanStack Virtual hook - official pattern
-  // ✅ SCROLL FIX: Pass isStreaming to allow growth but prevent shrinking
   const {
     virtualItems,
     totalSize,
@@ -138,57 +131,42 @@ export function ThreadTimeline({
     measureElement,
   } = useVirtualizedTimeline({
     timelineItems,
-    estimateSize: 200, // Realistic estimate for chat messages
-    overscan: 5, // Official docs recommend 5
-    paddingEnd: 200, // Space for sticky chat input
+    estimateSize: 200,
+    overscan: 5,
+    paddingEnd: 200,
     isDataReady,
-    isStreaming: isActivelyStreaming, // Allows container growth, prevents shrinking during streaming
-    getIsStreamingFromStore, // ✅ RACE CONDITION FIX: Bypasses React batching
+    isStreaming: isActivelyStreaming,
+    getIsStreamingFromStore,
   });
 
-  // ✅ SCROLL FIX: Keep measureElement ENABLED during streaming
-  // The shouldAdjustScrollPositionOnItemSizeChange callback in useVirtualizedTimeline
-  // already prevents scroll jumps by returning false during streaming.
-  // Disabling measurement was too aggressive - it prevented the container from
-  // knowing the true content height, causing users to be unable to scroll to see
-  // new streaming content. Now we measure properly, but prevent scroll adjustments.
   const stableMeasureElement = measureElement;
 
-  // ✅ ANIMATION: Track items already animated to prevent re-animation on scroll
-  // Items that existed on initial load should NOT animate (skipInitialAnimation)
   const animatedItemsRef = useRef<Set<string>>(new Set());
   const isInitialLoadRef = useRef(true);
 
-  // Mark initial items as "already animated" on first render
   if (isInitialLoadRef.current && virtualItems.length > 0) {
     isInitialLoadRef.current = false;
-    // Skip animation for items present on initial load
     virtualItems.forEach((vi) => {
       animatedItemsRef.current.add(String(vi.key));
     });
   }
 
-  // Helper to check if item should animate
   const shouldAnimate = (itemKey: React.Key): boolean => {
-    // Skip all animations when explicitly requested (e.g., demo already completed)
     if (skipEntranceAnimations) {
       return false;
     }
     const key = String(itemKey);
     if (animatedItemsRef.current.has(key)) {
-      return false; // Already animated
+      return false;
     }
-    // Mark as animated and return true (should animate)
     animatedItemsRef.current.add(key);
     return true;
   };
 
   return (
-    // Container with data attribute for scroll margin measurement
     <div
       data-virtualized-timeline
       style={{
-        // Official pattern: height = getTotalSize()
         height: `${totalSize}px`,
         width: '100%',
         position: 'relative',
@@ -200,12 +178,6 @@ export function ThreadTimeline({
           return null;
 
         return (
-          // Official TanStack Virtual pattern:
-          // - key={virtualItem.key}
-          // - data-index={virtualItem.index}
-          // - ref={measureElement} for dynamic height tracking
-          // - position: absolute, top: 0, left: 0
-          // - transform: translateY(item.start - scrollMargin)
           <div
             key={virtualItem.key}
             data-index={virtualItem.index}
@@ -215,7 +187,6 @@ export function ThreadTimeline({
               top: 0,
               left: 0,
               width: '100%',
-              // Official pattern: translateY(item.start - scrollMargin)
               transform: `translateY(${virtualItem.start - scrollMargin}px)`,
             }}
           >
@@ -246,7 +217,6 @@ export function ThreadTimeline({
                     <PreSearchCard
                       threadId={threadId}
                       preSearch={item.data}
-                      isLatest={virtualItem.index === timelineItems.length - 1}
                       streamingRoundNumber={streamingRoundNumber}
                       demoOpen={demoPreSearchOpen}
                       demoShowContent={demoPreSearchOpen ? item.data.searchData !== undefined : undefined}
@@ -301,7 +271,6 @@ export function ThreadTimeline({
                       return parseResult.success && messageHasError(parseResult.data);
                     });
 
-                    // ✅ TYPE-SAFE: Use extractTextFromMessage instead of type cast
                     const moderatorText = extractTextFromMessage(moderatorMessage);
 
                     return (

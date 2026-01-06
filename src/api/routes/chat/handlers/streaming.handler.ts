@@ -22,6 +22,7 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { executeBatch } from '@/api/common/batch-operations';
 import {
   createError,
+  normalizeError,
   structureAIProviderError,
 } from '@/api/common/error-handling';
 import {
@@ -35,12 +36,15 @@ import {
   FinishReasons,
   MessageRoles,
   ParticipantStreamStatuses,
+  PlanTypes,
   UIMessageRoles,
 } from '@/api/core/enums';
 import {
   finalizeCredits,
+  getUserCreditBalance,
   releaseReservation,
   reserveCredits,
+  zeroOutFreeUserCredits,
 } from '@/api/services/credit.service';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import {
@@ -61,7 +65,13 @@ import {
   trackLLMError,
   trackLLMGeneration,
 } from '@/api/services/posthog-llm-tracking.service';
-import { AI_RETRY_CONFIG, AI_TIMEOUT_CONFIG, estimateStreamingCredits, getSafeMaxOutputTokens } from '@/api/services/product-logic.service';
+import {
+  AI_RETRY_CONFIG,
+  AI_TIMEOUT_CONFIG,
+  estimateWeightedCredits,
+  getModelCreditMultiplierById,
+  getSafeMaxOutputTokens,
+} from '@/api/services/product-logic.service';
 import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
 import {
@@ -778,8 +788,22 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // ✅ CREDIT RESERVATION: Reserve credits BEFORE streaming begins
       // Pre-reserve estimated credits to prevent overdraft during streaming
       // Actual credits are finalized in onFinish after token count is known
+      // Uses highest-cost model among participants for conservative estimation
       // =========================================================================
-      const estimatedCredits = estimateStreamingCredits(participants.length);
+      const firstParticipant = participants[0];
+      if (!firstParticipant) {
+        throw createError.badRequest('No participants configured for thread');
+      }
+      const highestMultiplierModel = participants.reduce((max, p) => {
+        const multiplier = getModelCreditMultiplierById(p.modelId, getModelById);
+        const maxMultiplier = getModelCreditMultiplierById(max.modelId, getModelById);
+        return multiplier > maxMultiplier ? p : max;
+      }, firstParticipant);
+      const estimatedCredits = estimateWeightedCredits(
+        participants.length,
+        highestMultiplierModel.modelId,
+        getModelById,
+      );
       await reserveCredits(user.id, streamMessageId, estimatedCredits);
 
       // =========================================================================
@@ -992,6 +1016,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             messageId,
             modelId: participant.modelId,
           });
+
+          // =========================================================================
+          // ✅ FREE USER SINGLE-ROUND: Zero out credits after first AI response
+          // Free users get exactly ONE round - exhaust their credits after completion
+          // =========================================================================
+          const creditBalance = await getUserCreditBalance(user.id);
+          if (creditBalance.planType === PlanTypes.FREE) {
+            await zeroOutFreeUserCredits(user.id);
+          }
 
           // =========================================================================
           // ✅ POSTHOG LLM TRACKING: Track generation with official best practices
@@ -1371,7 +1404,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             try {
               await trackLLMError(
                 trackingContext,
-                error as Error,
+                normalizeError(error),
                 llmTraceId,
                 'streaming',
               );

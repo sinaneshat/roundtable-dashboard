@@ -4,23 +4,19 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
-import type { FeedbackType } from '@/api/core/enums';
+import { ComponentSizes, ComponentVariants, ErrorBoundaryContexts } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { BRAND } from '@/constants';
+import { BRAND } from '@/constants/brand';
 import { usePublicThreadQuery } from '@/hooks/queries';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
-import { chatMessagesToUIMessages, transformPreSearches } from '@/lib/utils';
+import { chatMessagesToUIMessages, transformChatParticipants, transformPreSearches } from '@/lib/utils';
 
-type PublicChatThreadScreenProps = {
-  slug: string;
-};
-
-export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenProps) {
+export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const t = useTranslations();
   const tPublic = useTranslations('chat.public');
 
@@ -30,32 +26,20 @@ export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenP
 
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
   const changelog = useMemo(() => threadResponse?.changelog || [], [threadResponse]);
-  const rawFeedback = useMemo(() => threadResponse?.feedback || [], [threadResponse]);
   const user = useMemo(() => threadResponse?.user, [threadResponse]);
   const rawParticipants = useMemo(() => threadResponse?.participants || [], [threadResponse]);
 
   const messages = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
 
-  const participants = useMemo(() => rawParticipants.map(p => ({
-    ...p,
-    createdAt: new Date(p.createdAt),
-    updatedAt: new Date(p.updatedAt),
-  })), [rawParticipants]);
+  const participants = useMemo(
+    () => transformChatParticipants(rawParticipants),
+    [rawParticipants],
+  );
 
   const preSearches: StoredPreSearch[] = useMemo(
     () => transformPreSearches(threadResponse?.preSearches || []),
     [threadResponse],
   );
-
-  const feedbackByRound = useMemo(() => {
-    const map = new Map<number, FeedbackType>();
-    for (const fb of rawFeedback || []) {
-      if (fb.feedbackType) {
-        map.set(fb.roundNumber, fb.feedbackType);
-      }
-    }
-    return map;
-  }, [rawFeedback]);
 
   const timeline: TimelineItem[] = useThreadTimeline({
     messages,
@@ -94,10 +78,8 @@ export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenP
               {t('chat.public.threadNotFoundDescription')}
             </p>
           </div>
-          <Button variant="default" asChild>
-            <Link href="/">
-              {t('actions.goHome')}
-            </Link>
+          <Button asChild variant={ComponentVariants.DEFAULT}>
+            <Link href="/">{t('actions.goHome')}</Link>
           </Button>
         </div>
       </div>
@@ -117,21 +99,17 @@ export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenP
               {tPublic('privateChatDescription')}
             </p>
           </div>
-          <Button variant="default" asChild>
-            <Link href="/">
-              {tPublic('goHome')}
-            </Link>
+          <Button asChild variant={ComponentVariants.DEFAULT}>
+            <Link href="/">{tPublic('goHome')}</Link>
           </Button>
         </div>
       </div>
     );
   }
 
-  const signUpUrl = `/auth/sign-up?utm_source=public_chat&utm_medium=cta&utm_campaign=thread_${thread.slug}&utm_content=inline`;
-
   return (
     <div className="flex flex-col min-h-dvh relative">
-      <UnifiedErrorBoundary context="chat">
+      <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div
           id="public-chat-scroll-container"
           className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 pt-16 sm:pt-20 pb-24 sm:pb-32"
@@ -160,7 +138,6 @@ export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenP
                     participants={participants}
                     threadId={thread.id}
                     threadTitle={thread.title}
-                    feedbackByRound={feedbackByRound}
                     isReadOnly={true}
                     preSearches={preSearches}
                     isDataReady={isStoreReady}
@@ -185,20 +162,20 @@ export default function PublicChatThreadScreen({ slug }: PublicChatThreadScreenP
                       </div>
                       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 sm:pt-4">
                         <Button
-                          size="lg"
-                          className="gap-2 w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                           asChild
+                          size={ComponentSizes.LG}
+                          className="gap-2 w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                         >
-                          <Link href={signUpUrl}>
+                          <Link href="/auth/login?utm_source=public_chat&utm_medium=cta&utm_campaign=try_roundtable">
                             {tPublic('tryRoundtable')}
                             <Icons.arrowRight className="w-4 h-4" />
                           </Link>
                         </Button>
                         <Button
-                          variant="outline"
-                          size="lg"
-                          className="w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                           asChild
+                          variant={ComponentVariants.OUTLINE}
+                          size={ComponentSizes.LG}
+                          className="w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                         >
                           <Link href="/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more">
                             {tPublic('learnMore')}

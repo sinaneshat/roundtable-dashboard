@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
+import { StatusVariants } from '@/api/core/enums';
 import { StatusPage, StatusPageActions } from '@/components/billing';
 import { Icons } from '@/components/icons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,7 +98,7 @@ export function CreditsSuccessClient() {
   if (syncMutation.isPending) {
     return (
       <StatusPage
-        variant="loading"
+        variant={StatusVariants.LOADING}
         title={t('billing.success.processingCredits')}
         description={t('billing.success.confirmingPayment')}
       />
@@ -107,7 +108,7 @@ export function CreditsSuccessClient() {
   if (syncMutation.isError) {
     return (
       <StatusPage
-        variant="error"
+        variant={StatusVariants.ERROR}
         title={t('billing.failure.syncFailed')}
         description={t('billing.failure.syncFailedDescription')}
         actions={(
@@ -120,11 +121,10 @@ export function CreditsSuccessClient() {
     );
   }
 
-  // No credit purchase found - redirect to pricing
   if (!creditPurchase) {
     return (
       <StatusPage
-        variant="error"
+        variant={StatusVariants.ERROR}
         title={t('billing.failure.noPurchaseFound')}
         description={t('billing.failure.noPurchaseFoundDescription')}
         actions={(
@@ -139,7 +139,7 @@ export function CreditsSuccessClient() {
 
   return (
     <StatusPage
-      variant="success"
+      variant={StatusVariants.SUCCESS}
       title={t('billing.success.credits.title')}
       description={t('billing.success.credits.description')}
       actions={(

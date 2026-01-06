@@ -30,7 +30,7 @@ import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers';
 
 import { useIncompleteRoundResumption } from './incomplete-round-resumption';
-import { usePreSearchOrchestrator } from './pre-search-orchestrator';
+import { getPreSearchOrchestrator } from './pre-search-orchestrator';
 
 export type UseScreenInitializationOptions = {
   /** Screen mode: 'overview', 'thread', or 'public' */
@@ -174,7 +174,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // pre-search data to disappear after refresh when web search was later disabled
   // ✅ PERF FIX: Only fetch in THREAD mode - overview doesn't need pre-searches for new threads
   const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD && Boolean(thread?.id) && enableOrchestrator;
-  usePreSearchOrchestrator({
+  getPreSearchOrchestrator({
     threadId: thread?.id || '',
     enabled: preSearchOrchestratorEnabled,
   });

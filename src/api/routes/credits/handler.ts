@@ -1,8 +1,8 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
-import type { CreditTransactionTypes, UsageStatus } from '@/api/core/enums';
-import { CreditActions, PlanTypes, UsageStatuses } from '@/api/core/enums';
+import type { UsageStatus } from '@/api/core/enums';
+import { CreditActions, PlanTypes, UsageStatuses } from '@/api/core/enums/billing';
 import {
   canAffordCredits,
   getUserCreditBalance,
@@ -22,13 +22,6 @@ import type {
 } from './route';
 import { CreditEstimateRequestSchema, CreditTransactionsQuerySchema } from './schema';
 
-// ============================================================================
-// Credit Balance Handler
-// ============================================================================
-
-/**
- * Get current credit balance and plan information
- */
 export const getCreditBalanceHandler: RouteHandler<
   typeof getCreditBalanceRoute,
   ApiEnv
@@ -42,19 +35,16 @@ export const getCreditBalanceHandler: RouteHandler<
 
     const creditBalance = await getUserCreditBalance(user.id);
 
-    // Calculate available credits (reserved is already computed in CreditBalanceInfo)
     const available = creditBalance.available;
 
-    // Calculate percentage used from monthly/signup allocation
     const totalAllocation = creditBalance.planType === PlanTypes.PAID
       ? creditBalance.monthlyCredits
-      : CREDIT_CONFIG.PLANS.free.signupCredits;
+      : CREDIT_CONFIG.SIGNUP_CREDITS;
 
     const percentage = totalAllocation > 0
       ? Math.round(((totalAllocation - creditBalance.balance) / totalAllocation) * 100)
       : 0;
 
-    // Determine status based on remaining credits
     let status: UsageStatus = UsageStatuses.DEFAULT;
     if (available <= 0) {
       status = UsageStatuses.CRITICAL;
@@ -72,19 +62,11 @@ export const getCreditBalanceHandler: RouteHandler<
         type: creditBalance.planType,
         monthlyCredits: creditBalance.monthlyCredits,
         nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
-        payAsYouGoEnabled: creditBalance.payAsYouGoEnabled,
       },
     });
   },
 );
 
-// ============================================================================
-// Credit Transactions Handler
-// ============================================================================
-
-/**
- * Get credit transaction history with pagination
- */
 export const getCreditTransactionsHandler: RouteHandler<
   typeof getCreditTransactionsRoute,
   ApiEnv
@@ -104,7 +86,7 @@ export const getCreditTransactionsHandler: RouteHandler<
 
     const { transactions, total } = await getUserTransactionHistory(
       user.id,
-      { limit, offset, type: query.type as typeof CreditTransactionTypes.DEDUCTION | typeof CreditTransactionTypes.CREDIT_GRANT | undefined },
+      { limit, offset, type: query.type },
     );
 
     return Responses.ok(c, {
@@ -130,13 +112,6 @@ export const getCreditTransactionsHandler: RouteHandler<
   },
 );
 
-// ============================================================================
-// Credit Estimate Handler
-// ============================================================================
-
-/**
- * Estimate credit cost for a given action
- */
 export const estimateCreditCostHandler: RouteHandler<
   typeof estimateCreditCostRoute,
   ApiEnv
@@ -155,7 +130,6 @@ export const estimateCreditCostHandler: RouteHandler<
     switch (body.action) {
       case CreditActions.AI_RESPONSE:
       case CreditActions.USER_MESSAGE: {
-        // Streaming estimation
         const participantCount = body.params?.participantCount ?? 1;
         const inputTokens = body.params?.estimatedInputTokens;
         estimatedCredits = estimateStreamingCredits(participantCount, inputTokens);
@@ -174,15 +148,12 @@ export const estimateCreditCostHandler: RouteHandler<
         estimatedCredits = tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.analysisGeneration);
         break;
       default:
-        // Default minimum
         estimatedCredits = 1;
     }
 
-    // Get current balance
     const creditBalance = await getUserCreditBalance(user.id);
     const currentBalance = creditBalance.available;
 
-    // Check affordability
     const canAfford = await canAffordCredits(user.id, estimatedCredits);
 
     return Responses.ok(c, {

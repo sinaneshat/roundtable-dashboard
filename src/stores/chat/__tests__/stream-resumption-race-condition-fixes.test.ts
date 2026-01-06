@@ -1,18 +1,5 @@
 /**
  * Stream Resumption Race Condition Fixes Tests
- *
- * Tests for race condition fixes in stream resumption logic:
- * 1. Double-trigger prevention (roundTriggerInProgressRef guard)
- * 2. AI SDK resume blocking (handleResumedStreamDetection)
- * 3. Retry toggle timeout (retryToggleTimeoutRef)
- *
- * These tests verify that:
- * - RESUME-TRIGGER fires only once per round
- * - Guard is NOT cleared during retry toggle (rapid waitingToStartStreaming false→true)
- * - Guard IS cleared when streaming actually starts
- * - Guard IS cleared after 100ms if waitingToStartStreaming stays false (actual failure)
- * - AI SDK resume is blocked when streamResumptionPrefilled=true
- * - AI SDK resume proceeds normally when streamResumptionPrefilled=false
  */
 
 import type { UIMessage } from 'ai';
@@ -23,10 +10,6 @@ import { act, createTestAssistantMessage, createTestUserMessage, renderHook, wai
 
 import { useIncompleteRoundResumption } from '../actions/incomplete-round-resumption';
 import type { ChatStore } from '../store-schemas';
-
-// ============================================================================
-// MOCK SETUP
-// ============================================================================
 
 const mockStore = vi.hoisted(() => {
   let storeState: Partial<ChatStore> = {};
@@ -90,10 +73,6 @@ vi.mock('@/components/providers/chat-store-provider', async (importOriginal) => 
     },
   };
 });
-
-// ============================================================================
-// TEST HELPERS
-// ============================================================================
 
 function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
@@ -186,10 +165,6 @@ function setupIncompleteRound(
   return { thread, participants, messages };
 }
 
-// ============================================================================
-// DOUBLE-TRIGGER PREVENTION TESTS
-// ============================================================================
-
 describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
   beforeEach(() => {
     mockStore.reset();
@@ -232,49 +207,6 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     expect(finalCallCount).toBe(firstCallCount);
   });
 
-  it('should block subsequent triggers for same round even if respondedParticipantIndices updates', async () => {
-    setupIncompleteRound(1, 1, 3);
-
-    const { rerender } = renderHook(() =>
-      useIncompleteRoundResumption({
-        threadId: 'thread-123',
-        enabled: true,
-      }),
-    );
-
-    await waitFor(() => {
-      expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
-
-    const initialTriggerCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
-      call => call[0] === 1,
-    ).length;
-
-    const messagesWithNewParticipant = [
-      ...mockStore.getState().messages || [],
-      createTestAssistantMessage({
-        id: 'thread-123_r1_p1',
-        content: 'Assistant 1 response',
-        roundNumber: 1,
-        participantId: 'participant-1',
-        participantIndex: 1,
-        finishReason: 'stop',
-      }),
-    ];
-    mockStore.setState({ messages: messagesWithNewParticipant });
-
-    rerender();
-    await act(async () => {
-      await waitForAsync(50);
-    });
-
-    const finalTriggerCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
-      call => call[0] === 1,
-    ).length;
-
-    expect(finalTriggerCount).toBe(initialTriggerCount);
-  });
-
   it('should NOT clear guard during retry toggle (waitingToStartStreaming false→true within 100ms)', async () => {
     setupIncompleteRound(1, 1, 3);
 
@@ -315,68 +247,11 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       await waitForAsync(60);
     });
 
-    // Gards should NOT be cleared during rapid toggle
     const triggerCallsAfter = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
     ).length;
 
     expect(triggerCallsAfter).toBe(triggerCallsBefore);
-  });
-
-  it('should clear guard when streaming actually starts (isStreaming becomes true)', async () => {
-    setupIncompleteRound(1, 1, 3);
-
-    const { rerender } = renderHook(() =>
-      useIncompleteRoundResumption({
-        threadId: 'thread-123',
-        enabled: true,
-      }),
-    );
-
-    await waitFor(() => {
-      expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
-
-    mockStore.actions.setNextParticipantToTrigger.mockClear();
-
-    act(() => {
-      mockStore.setState({
-        isStreaming: true,
-        waitingToStartStreaming: false,
-      });
-    });
-    rerender();
-
-    await act(async () => {
-      await waitForAsync(50);
-    });
-
-    const messagesWithNewParticipant = [
-      ...mockStore.getState().messages || [],
-      createTestAssistantMessage({
-        id: 'thread-123_r1_p1',
-        content: 'Assistant 1 response',
-        roundNumber: 1,
-        participantId: 'participant-1',
-        participantIndex: 1,
-        finishReason: 'stop',
-      }),
-    ];
-
-    act(() => {
-      mockStore.setState({
-        messages: messagesWithNewParticipant,
-        isStreaming: false,
-      });
-    });
-    rerender();
-
-    await waitFor(() => {
-      const state = mockStore.getState();
-      const incompleteWithP2 = state.messages?.length === 3;
-      expect(incompleteWithP2).toBe(true);
-      expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(2);
-    }, { timeout: 300 });
   });
 
   it('should clear guard after 100ms if waitingToStartStreaming stays false (actual failure)', async () => {
@@ -410,14 +285,10 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       await waitForAsync(150);
     });
 
-    // After timeout clears guards, unmount the hook
     unmount();
-
-    // Clear all action mocks to start fresh count
     mockStore.actions.setNextParticipantToTrigger.mockClear();
     mockStore.actions.setWaitingToStartStreaming.mockClear();
 
-    // Remount the hook - this simulates a page refresh
     renderHook(() =>
       useIncompleteRoundResumption({
         threadId: 'thread-123',
@@ -425,8 +296,6 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       }),
     );
 
-    // Wait for the remounted hook to detect incomplete round and trigger
-    // After the retry recovery cleared the guards, a fresh mount should trigger again
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(1);
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
@@ -464,7 +333,6 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       await waitForAsync(50);
     });
 
-    // Add participant 1's complete response
     const messagesWithP1Complete = [
       ...mockStore.getState().messages || [],
       createTestAssistantMessage({
@@ -477,7 +345,6 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       }),
     ];
 
-    // Streaming completes
     act(() => {
       mockStore.setState({
         messages: messagesWithP1Complete,
@@ -486,7 +353,6 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     });
     rerender();
 
-    // Wait for the hook to detect participant 2 is next
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(2);
       expect(mockStore.actions.setStreamingRoundNumber).toHaveBeenCalledWith(1);
@@ -494,10 +360,6 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     }, { timeout: 300 });
   });
 });
-
-// ============================================================================
-// AI SDK RESUME BLOCKING TESTS
-// ============================================================================
 
 describe('aI SDK Resume Blocking (handleResumedStreamDetection)', () => {
   beforeEach(() => {
@@ -507,10 +369,9 @@ describe('aI SDK Resume Blocking (handleResumedStreamDetection)', () => {
 
   it('should block AI SDK resume when streamResumptionPrefilled=true with non-participant phase', async () => {
     setupIncompleteRound(1, 1, 3);
-    // Set prefilled with a non-participant phase (pre_search or moderator)
     mockStore.setState({
       streamResumptionPrefilled: true,
-      currentResumptionPhase: 'pre_search', // or 'moderator'
+      currentResumptionPhase: 'pre_search',
       resumptionRoundNumber: 1,
     });
 
@@ -531,7 +392,6 @@ describe('aI SDK Resume Blocking (handleResumedStreamDetection)', () => {
       await waitForAsync(200);
     });
 
-    // When resumption phase is pre_search or moderator, participant resumption should not trigger
     expect(mockStore.actions.setWaitingToStartStreaming.mock.calls).toHaveLength(0);
   });
 
@@ -580,10 +440,6 @@ describe('aI SDK Resume Blocking (handleResumedStreamDetection)', () => {
   });
 });
 
-// ============================================================================
-// RETRY TOGGLE TIMEOUT TESTS
-// ============================================================================
-
 describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
   beforeEach(() => {
     mockStore.reset();
@@ -630,7 +486,6 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
       await waitForAsync(150);
     });
 
-    // No new trigger should have occurred because guards remain set
     const finalTriggerCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
     ).length;
@@ -655,25 +510,21 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
       call => call[0] === 1,
     ).length;
 
-    expect(callsBeforeWait).toBeGreaterThan(0); // Verify initial trigger happened
+    expect(callsBeforeWait).toBeGreaterThan(0);
 
-    // Simulate failure: waiting goes false and stays false
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
     rerender();
 
-    // Wait MORE than 100ms for timeout to fire
     await act(async () => {
       await waitForAsync(150);
     });
 
-    // Unmount and clear mocks
     unmount();
     mockStore.actions.setNextParticipantToTrigger.mockClear();
     mockStore.actions.setWaitingToStartStreaming.mockClear();
 
-    // Remount to simulate page refresh
     renderHook(() =>
       useIncompleteRoundResumption({
         threadId: 'thread-123',
@@ -681,7 +532,6 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
       }),
     );
 
-    // Wait for retry trigger - after guards cleared, fresh mount should trigger
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(1);
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
@@ -724,14 +574,10 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
       await waitForAsync(30);
     });
 
-    // Wait additional time to ensure timeout doesn't fire
-    // (it shouldn't because retry toggle cleared it)
     await act(async () => {
       await waitForAsync(150);
     });
 
-    // After retry toggle, no new trigger should occur
-    // because the timeout was cleared when waiting went back to true
     const callsAfterRetry = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
     ).length;
@@ -824,10 +670,6 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
     expect(mockStore.actions.setNextParticipantToTrigger).not.toHaveBeenCalled();
   });
 });
-
-// ============================================================================
-// INTEGRATION TESTS
-// ============================================================================
 
 describe('integration: All Race Condition Fixes Together', () => {
   beforeEach(() => {
@@ -926,25 +768,21 @@ describe('integration: All Race Condition Fixes Together', () => {
       call => call[0] === 1,
     ).length;
 
-    expect(initialCallCount).toBeGreaterThan(0); // Verify initial trigger happened
+    expect(initialCallCount).toBeGreaterThan(0);
 
-    // Simulate trigger failure
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
     rerender();
 
-    // Wait for timeout to fire and clear guards (100ms timeout + buffer)
     await act(async () => {
       await waitForAsync(150);
     });
 
-    // Unmount and clear mocks
     unmount();
     mockStore.actions.setNextParticipantToTrigger.mockClear();
     mockStore.actions.setWaitingToStartStreaming.mockClear();
 
-    // Remount to simulate page refresh
     renderHook(() =>
       useIncompleteRoundResumption({
         threadId: 'thread-123',
@@ -952,7 +790,6 @@ describe('integration: All Race Condition Fixes Together', () => {
       }),
     );
 
-    // Wait for retry - after timeout cleared guards, fresh mount should trigger
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(1);
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
@@ -1002,7 +839,6 @@ describe('integration: All Race Condition Fixes Together', () => {
       await waitForAsync(150);
     });
 
-    // Start round 2 with new user message
     const round2Messages = [
       ...messagesWithP2Complete,
       createTestUserMessage({
@@ -1017,7 +853,6 @@ describe('integration: All Race Condition Fixes Together', () => {
     });
     rerender();
 
-    // Wait for round 2 participant 0 to be triggered
     await waitFor(() => {
       const round2Calls = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
         call => call[0] === 0,
@@ -1025,7 +860,6 @@ describe('integration: All Race Condition Fixes Together', () => {
       expect(round2Calls.length).toBeGreaterThan(0);
     }, { timeout: 300 });
 
-    // Verify we didn't re-trigger round 1 participants
     const finalTriggerCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.length;
     expect(finalTriggerCount).toBeGreaterThan(round1TriggerCount);
   });

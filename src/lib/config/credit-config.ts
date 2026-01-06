@@ -1,102 +1,66 @@
-/**
- * Credit Configuration - Shared Between Frontend and Backend
- *
- * Defines all credit-related constants, plan configurations, and pricing.
- * All actions are priced in tokens, then converted to credits.
- */
+import type { ModelPricingTier, PlanType } from '@/api/core/enums/billing';
+import {
+  MODEL_TIER_CREDIT_MULTIPLIERS,
+  ModelPricingTiers,
+  PlanTypes,
+} from '@/api/core/enums/billing';
 
 export const CREDIT_CONFIG = {
-  /**
-   * Conversion ratio: 1 credit = X tokens
-   * Using 1000 for human-readable credit amounts
-   * e.g., 5000 tokens = 5 credits
-   */
+  // Base conversion: 1 credit = 1,000 tokens (before multiplier)
   TOKENS_PER_CREDIT: 1000,
 
-  /**
-   * Plan configurations
-   * Stripe IDs reference products in test mode
-   */
+  // Free tier signup bonus (one-time grant)
+  SIGNUP_CREDITS: 5_000,
+
+  // Plan configurations
   PLANS: {
-    free: {
-      signupCredits: 0, // NO credits on signup - must connect card first
-      cardConnectionCredits: 10_000, // Credits given when user connects card to free plan
-      monthlyCredits: 0, // No monthly renewal
-      priceInCents: 0,
-      payAsYouGoEnabled: false, // NO auto-charge - users must purchase credit packs
-      stripeProductId: 'prod_Tf8tvljsdhgeaH',
-      stripePriceId: 'price_1Shoc852vWNZ3v8wtrMKFJxe',
+    [PlanTypes.PAID]: {
+      signupCredits: 0,
+      // 100K base credits/month - with multipliers this ensures profitability:
+      // - Budget models (1x): 100K credits = 100M tokens @ ~$25 cost
+      // - Standard models (3x): 33K effective = 33M tokens @ ~$28 cost
+      // - Pro models (25x): 4K effective = 4M tokens @ ~$27 cost
+      // - Flagship models (75x): 1.3K effective = 1.3M tokens @ ~$25 cost
+      // - Ultimate models (200x): 500 effective = 500K tokens @ ~$25 cost
+      // All scenarios yield ~$25-30 cost on $59 revenue = ~50% margin
+      monthlyCredits: 100_000,
+      priceInCents: 5900,
+      stripeProductId: 'prod_TMletnsnfqVCHe',
+      stripePriceId: 'price_1SQ27952vWNZ3v8wLHORFzZw',
     },
-    paid: {
-      signupCredits: 0, // No signup bonus (subscription provides credits)
-      monthlyCredits: 1_000_000, // 1M credits/month
-      priceInCents: 10000, // $100/month
-      annualPriceInCents: 100000, // $1000/year (~17% savings)
-      payAsYouGoEnabled: true, // Can buy extra credits
-      stripeProductId: 'prod_Tf8t3FTCKcpVDq',
-      stripePriceId: 'price_1Shoc952vWNZ3v8wCuBiKKIA', // Monthly
-      stripeAnnualPriceId: 'price_1ShqYV52vWNZ3v8wB8G9Cy0X', // Annual
-    },
-  },
+  } satisfies Record<Exclude<PlanType, 'free'>, {
+    signupCredits: number;
+    monthlyCredits: number;
+    priceInCents: number;
+    stripeProductId: string;
+    stripePriceId: string;
+  }>,
 
-  /**
-   * Custom credits product for one-time purchases
-   * Users can buy preset amounts or custom quantities
-   */
-  CUSTOM_CREDITS: {
-    stripeProductId: 'prod_Tf8ttpjBZtWGbe',
-    // Preset credit packages (priceId -> credits)
-    packages: {
-      price_1Shoc952vWNZ3v8wGVhL81lr: 1_000, // $1 = 1K credits
-      price_1ShocZ52vWNZ3v8wJ2XEoviR: 10_000, // $10 = 10K credits
-      price_1ShocZ52vWNZ3v8waD6wRNGa: 50_000, // $50 = 50K credits
-      price_1Shoca52vWNZ3v8wO9HKh4Kq: 100_000, // $100 = 100K credits
-      price_1Shocb52vWNZ3v8w1vlOjP9y: 500_000, // $500 = 500K credits
-    },
-    // Conversion: $1 = 1,000 credits
-    creditsPerDollar: 1000,
-  },
-
-  /**
-   * Action costs in tokens (will be converted to credits)
-   * These are flat costs for non-AI actions
-   */
+  // Fixed action costs (in tokens, will be converted to credits with multiplier)
   ACTION_COSTS: {
-    threadCreation: 100, // Creating a new thread
-    webSearchQuery: 500, // Per web search query
-    fileReading: 100, // Per file processed
-    analysisGeneration: 2000, // Moderator analysis per round
-    customRoleCreation: 50, // Creating a custom role template
+    threadCreation: 100, // ~0.1 credits at 1x
+    webSearchQuery: 500, // ~0.5 credits at 1x (web search uses tokens)
+    fileReading: 100, // ~0.1 credits at 1x (file analysis uses tokens)
+    analysisGeneration: 2000, // ~2 credits at 1x
+    customRoleCreation: 50, // ~0.05 credits at 1x
   },
 
-  /**
-   * Reservation multiplier for pre-authorizing credits before streaming
-   * Reserve 150% of estimated cost to prevent overdraft
-   */
-  RESERVATION_MULTIPLIER: 1.5,
+  // Reservation system config
+  RESERVATION_MULTIPLIER: 1.5, // Reserve 50% extra for safety
+  MIN_CREDITS_FOR_STREAMING: 10, // Minimum credits required to start streaming
 
-  /**
-   * Minimum credits required to start a streaming operation
-   * Prevents starting operations that will immediately fail
-   */
-  MIN_CREDITS_FOR_STREAMING: 10,
-
-  /**
-   * Default estimated tokens per AI response (for pre-reservation)
-   * Conservative estimate to prevent overdraft
-   */
+  // Estimation defaults (in tokens)
   DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE: 2000,
+  DEFAULT_ESTIMATED_INPUT_TOKENS: 500,
+
+  // Model tier multipliers (re-exported from enums for convenience)
+  TIER_MULTIPLIERS: MODEL_TIER_CREDIT_MULTIPLIERS,
+
+  // Default tier for unknown models (safe default - not cheapest)
+  DEFAULT_MODEL_TIER: ModelPricingTiers.STANDARD as ModelPricingTier,
 } as const;
 
-/**
- * Plan type for credit-based billing
- */
-export type CreditPlanType = keyof typeof CREDIT_CONFIG.PLANS;
-
-/**
- * Human-readable plan names
- */
-export const PLAN_NAMES: Record<CreditPlanType, string> = {
-  free: 'Free',
-  paid: 'Pro',
+export const PLAN_NAMES: Record<PlanType, string> = {
+  [PlanTypes.FREE]: 'Free',
+  [PlanTypes.PAID]: 'Pro',
 } as const;

@@ -1,7 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
 import { PurchaseTypeSchema } from '@/api/core/enums';
-// ✅ IMPORT FIX: Import directly from source files instead of barrel
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
 import {
@@ -38,10 +37,6 @@ const ProductSchema = stripeProductSelectSchema
     prices: z.array(PriceSchema).optional().openapi({
       description: 'Available prices for this product',
     }),
-    annualSavingsPercent: z.number().int().nonnegative().optional().openapi({
-      description: 'Percentage saved when choosing annual over monthly billing (backend-computed)',
-      example: 20,
-    }),
   })
   .openapi('Product');
 
@@ -75,11 +70,11 @@ export const CheckoutRequestSchema = z.object({
     example: 'price_1ABC123',
   }),
   successUrl: CoreSchemas.url().optional().openapi({
-    description: 'URL to redirect to after successful checkout. Subscriptions default to /chat/billing/subscription-success, credits default to /chat/billing/credits-success. Do NOT include session_id parameter - success page will eagerly sync fresh data from Stripe API.',
-    example: 'https://app.example.com/chat/billing/subscription-success',
+    description: 'Redirect URL after successful checkout (defaults to /chat)',
+    example: 'https://app.example.com/chat',
   }),
   cancelUrl: CoreSchemas.url().optional().openapi({
-    description: 'URL to redirect to if checkout is canceled (defaults to /chat/pricing)',
+    description: 'Redirect URL if checkout is canceled (defaults to /chat/pricing)',
     example: 'https://app.example.com/chat/pricing',
   }),
 }).openapi('CheckoutRequest');
@@ -277,9 +272,6 @@ const TierChangeSchema = z.object({
   }),
 }).openapi('TierChange');
 
-/**
- * Credit purchase info for one-time credit pack purchases
- */
 export const CreditPurchaseInfoSchema = z.object({
   creditsGranted: z.number().openapi({
     description: 'Number of credits granted from purchase',
@@ -308,7 +300,7 @@ export const SyncAfterCheckoutPayloadSchema = z.object({
     description: 'Synced subscription state (for subscription purchases)',
   }),
   creditPurchase: CreditPurchaseInfoSchema.nullable().openapi({
-    description: 'Credit purchase info (for one-time credit purchases)',
+    description: 'Credit purchase info (null for subscription-only purchases)',
   }),
   tierChange: TierChangeSchema.openapi({
     description: 'Tier change information for comparison UI',
@@ -337,10 +329,6 @@ export const WebhookHeadersSchema = z.object({
     description: 'Stripe webhook signature for verification',
   }),
 });
-
-// ============================================================================
-// Credits-Only Sync Schema (Theo's separation pattern)
-// ============================================================================
 
 export const SyncCreditsAfterCheckoutPayloadSchema = z.object({
   synced: z.boolean().openapi({

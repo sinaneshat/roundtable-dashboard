@@ -7,11 +7,6 @@ import { createApiResponseSchema } from '@/api/core/schemas';
 // Usage Statistics API Schemas
 // ============================================================================
 
-/**
- * ✅ CREDITS-ONLY: Simplified usage stats - only shows credits
- * Users don't need to know about threads/messages/analysis quotas
- * They just need to see their credit balance
- */
 export const UsageStatsPayloadSchema = z.object({
   credits: z.object({
     balance: z.number().openapi({
@@ -42,16 +37,16 @@ export const UsageStatsPayloadSchema = z.object({
       description: 'Monthly credit allocation (0 for free, 1M for paid)',
       example: 0,
     }),
-    hasPaymentMethod: z.boolean().openapi({
-      description: 'Whether user has connected a payment method',
-      example: false,
-    }),
     hasActiveSubscription: z.boolean().openapi({
       description: 'Whether user has an active paid subscription',
       example: false,
     }),
+    freeRoundUsed: z.boolean().openapi({
+      description: 'Whether free user has used their one-time free round (always false for paid users)',
+      example: false,
+    }),
     nextRefillAt: z.string().datetime().nullable().openapi({
-      description: 'Next monthly refill date (null for free plan)',
+      description: 'Next monthly refill date (null for free tier - no renewals)',
       example: null,
     }),
     pendingChange: z.object({
@@ -80,10 +75,4 @@ export const UsageStatsResponseSchema = createApiResponseSchema(
 // Type Exports
 // ============================================================================
 
-/**
- * Type exports for backend services and frontend consumers
- * Note: Date objects are automatically serialized to ISO strings by Hono/JSON.stringify
- */
 export type UsageStatsPayload = z.infer<typeof UsageStatsPayloadSchema>;
-
-// UsageStatus type is exported from @/api/core/enums (single source of truth)

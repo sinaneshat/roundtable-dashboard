@@ -1,16 +1,15 @@
 'use client';
 import { motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
 import { useCallback, useMemo } from 'react';
 
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
-import { ChatModes, PlanTypes, SubscriptionTiers } from '@/api/core/enums';
-import {
-  MIN_MODELS_REQUIRED,
-} from '@/api/services/product-logic.service';
+import { AvatarSizes, ChatModes, PlanTypes, SubscriptionTiers } from '@/api/core/enums';
+import type { EnhancedModelResponse } from '@/api/routes/models/schema';
+import { MIN_MODELS_REQUIRED } from '@/api/services/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
-import { Icons } from '@/components/icons';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
+import { getChatModeLabel } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
@@ -19,9 +18,8 @@ type QuickStartSuggestion = {
   prompt: string;
   mode: ChatMode;
   participants: ParticipantConfig[];
-  /** Participant count for skeleton loading when models not yet available */
-  participantCount?: number;
 };
+
 type ChatQuickStartProps = {
   onSuggestionClick: (
     prompt: string,
@@ -30,26 +28,61 @@ type ChatQuickStartProps = {
   ) => void;
   className?: string;
 };
+function QuickStartSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn('w-full relative z-20', className)}>
+      <div className="flex flex-col">
+        {[0, 1, 2].map(index => (
+          <div
+            key={index}
+            className={cn(
+              'w-full px-4 py-3',
+              index !== 2 && 'border-b border-white/[0.06]',
+            )}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
+              <Skeleton className="h-5 w-3/4 bg-white/10" />
+              <div className="flex items-center gap-2 shrink-0">
+                <Skeleton className="h-6 w-16 rounded-2xl bg-white/10" />
+                <div className="flex -space-x-2">
+                  {[0, 1, 2].map(i => (
+                    <Skeleton key={i} className="size-6 rounded-full bg-white/10" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ChatQuickStart({
   onSuggestionClick,
   className,
 }: ChatQuickStartProps) {
-  const t = useTranslations('chat.modes.modal');
-  const { data: usageData } = useUsageStatsQuery();
-  const userTier: SubscriptionTier = usageData?.data?.plan?.type === PlanTypes.PAID ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
-  const { data: modelsResponse, isPending: isModelsLoading } = useModelsQuery();
+  const { data: usageData, isLoading: isUsageLoading } = useUsageStatsQuery();
+  const { data: modelsResponse, isLoading: isModelsLoading } = useModelsQuery();
 
-  const allModels = useMemo(() => {
-    const models = modelsResponse?.success ? modelsResponse.data.items : [];
-    return models;
+  const isLoading = isModelsLoading || isUsageLoading;
+
+  const userTier: SubscriptionTier = usageData?.data?.plan?.type === PlanTypes.PAID
+    ? SubscriptionTiers.PRO
+    : SubscriptionTiers.FREE;
+
+  const allModels: EnhancedModelResponse[] = useMemo(() => {
+    if (!modelsResponse?.success)
+      return [];
+    return modelsResponse.data.items;
   }, [modelsResponse]);
 
   const accessibleModels = useMemo(() => {
-    const accessible = allModels.filter(
+    return allModels.filter(
       model => model.is_accessible_to_user === true,
     );
-    return accessible;
   }, [allModels]);
+
   const modelsByProvider = useMemo(() => {
     const grouped = new Map<string, typeof accessibleModels>();
     for (const model of accessibleModels) {
@@ -61,6 +94,7 @@ export function ChatQuickStart({
     }
     return grouped;
   }, [accessibleModels]);
+
   const selectUniqueProviderModels = useCallback(
     (count: number): string[] => {
       const selectedModels: string[] = [];
@@ -86,20 +120,19 @@ export function ChatQuickStart({
     },
     [modelsByProvider],
   );
+
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
     const availableModelIds = accessibleModels
       .map(m => m.id)
       .filter(id => id && id.length > 0);
 
-    // Helper to get unique models, ensuring we always return models even if not from unique providers
-    const getModelsForTier = (idealCount: number): string[] => {
-      if (availableModelIds.length === 0)
-        return [];
+    if (availableModelIds.length === 0) {
+      return [];
+    }
 
-      // Try to get unique provider models first
+    const getModelsForTier = (idealCount: number): string[] => {
       const uniqueProviderModels = selectUniqueProviderModels(idealCount);
 
-      // If we have enough, return them
       if (
         uniqueProviderModels.length
         >= Math.min(idealCount, availableModelIds.length)
@@ -107,7 +140,6 @@ export function ChatQuickStart({
         return uniqueProviderModels;
       }
 
-      // Otherwise, fill with any available models ensuring uniqueness
       const models = [...uniqueProviderModels];
       const used = new Set(models);
 
@@ -128,10 +160,11 @@ export function ChatQuickStart({
 
     const freeTierSuggestions: QuickStartSuggestion[] = (() => {
       const models = freeModels;
+      if (models.length === 0) {
+        return [];
+      }
 
       const buildParticipants = (roles: string[]) => {
-        if (models.length === 0)
-          return [];
         const participants = roles
           .slice(0, models.length)
           .map((role, idx) => {
@@ -161,7 +194,6 @@ export function ChatQuickStart({
             'Security Realist',
             'Legal Scholar',
           ]),
-          participantCount: 3,
         },
         {
           title:
@@ -174,7 +206,6 @@ export function ChatQuickStart({
             'Bioethicist',
             'Ecologist',
           ]),
-          participantCount: 3,
         },
         {
           title: 'Is meritocracy a myth that justifies inequality?',
@@ -186,7 +217,6 @@ export function ChatQuickStart({
             'Economist',
             'Historian',
           ]),
-          participantCount: 3,
         },
       ];
 
@@ -195,10 +225,10 @@ export function ChatQuickStart({
 
     const proTierSuggestions: QuickStartSuggestion[] = (() => {
       const models = proModels;
+      if (models.length === 0)
+        return [];
 
       const buildParticipants = (roles: string[]) => {
-        if (models.length === 0)
-          return [];
         return roles
           .slice(0, models.length)
           .map((role, idx) => {
@@ -228,7 +258,6 @@ export function ChatQuickStart({
             'Disability Rights Advocate',
             'Medical Ethicist',
           ]),
-          participantCount: 4,
         },
         {
           title:
@@ -242,7 +271,6 @@ export function ChatQuickStart({
             'Ethics Philosopher',
             'Systems Architect',
           ]),
-          participantCount: 4,
         },
         {
           title: 'Is infinite economic growth possible on a finite planet?',
@@ -255,64 +283,24 @@ export function ChatQuickStart({
             'Systems Thinker',
             'Resource Analyst',
           ]),
-          participantCount: 4,
         },
       ];
     })();
 
-    return userTier === SubscriptionTiers.FREE
+    const tierSuggestions: QuickStartSuggestion[] = userTier === SubscriptionTiers.FREE
       ? freeTierSuggestions
       : proTierSuggestions;
+
+    return tierSuggestions;
   }, [userTier, accessibleModels, selectUniqueProviderModels]);
-  const getModeConfig = (mode: ChatMode) => {
-    switch (mode) {
-      case ChatModes.DEBATING:
-        return {
-          icon: Icons.users,
-          label: t('debating.title'),
-          color: 'text-white/80',
-          bgColor: 'bg-white/10',
-          borderColor: 'border-white/20',
-        };
-      case ChatModes.ANALYZING:
-        return {
-          icon: Icons.messageSquare,
-          label: t('analyzing.title'),
-          color: 'text-white/80',
-          bgColor: 'bg-white/10',
-          borderColor: 'border-white/20',
-        };
-      case ChatModes.BRAINSTORMING:
-        return {
-          icon: Icons.messageSquare,
-          label: t('brainstorming.title'),
-          color: 'text-white/80',
-          bgColor: 'bg-white/10',
-          borderColor: 'border-white/20',
-        };
-      case ChatModes.SOLVING:
-        return {
-          icon: Icons.messageSquare,
-          label: t('problemSolving.title'),
-          color: 'text-white/80',
-          bgColor: 'bg-white/10',
-          borderColor: 'border-white/20',
-        };
-      default:
-        return {
-          icon: Icons.messageSquare,
-          label: t('brainstorming.title'),
-          color: 'text-white/80',
-          bgColor: 'bg-white/10',
-          borderColor: 'border-white/20',
-        };
-    }
-  };
+
+  if (isLoading) {
+    return <QuickStartSkeleton className={className} />;
+  }
   return (
     <div className={cn('w-full relative z-20', className)}>
       <div className="flex flex-col">
         {suggestions.map((suggestion, index) => {
-          const modeConfig = getModeConfig(suggestion.mode);
           const isLast = index === suggestions.length - 1;
           return (
             <motion.button
@@ -329,52 +317,37 @@ export function ChatQuickStart({
                 delay: index * 0.1,
                 ease: [0.25, 0.46, 0.45, 0.94],
               }}
-              onClick={() => {
-                if (isModelsLoading)
-                  return;
+              onClick={() =>
                 onSuggestionClick(
                   suggestion.prompt,
                   suggestion.mode,
                   suggestion.participants,
-                );
-              }}
+                )}
               className={cn(
-                'group/suggestion w-full text-left px-4 py-3 rounded-2xl focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
+                'group/suggestion w-full text-left px-4 py-3 rounded-2xl cursor-pointer focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
+                'hover:bg-white/[0.07]',
+                'active:bg-black/20',
                 'transition-all duration-200 ease-out',
                 !isLast && 'border-b border-white/[0.02]',
-                isModelsLoading
-                  ? 'cursor-default opacity-80'
-                  : 'cursor-pointer hover:bg-white/[0.07] active:bg-black/20',
               )}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
-                {/* Left: Question */}
                 <h3 className="text-sm sm:text-[15px] font-normal text-white leading-snug flex-1 min-w-0">
                   {suggestion.title}
                 </h3>
-
-                {/* Right: Mode and avatars */}
                 <div className="flex items-center gap-2 shrink-0">
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.02]">
-                    <span
-                      className={cn(
-                        'text-[11px] font-medium whitespace-nowrap',
-                        modeConfig.color,
-                      )}
-                    >
-                      {modeConfig.label}
+                    <span className="text-[11px] font-medium whitespace-nowrap text-white/80">
+                      {getChatModeLabel(suggestion.mode)}
                     </span>
                   </div>
-
-                  {/* Overlapping Avatars */}
                   <AvatarGroup
                     participants={suggestion.participants}
                     allModels={allModels}
                     maxVisible={4}
-                    size="sm"
-                    isLoading={isModelsLoading}
-                    skeletonCount={suggestion.participantCount ?? 3}
+                    size={AvatarSizes.SM}
                     showCount={false}
+                    showOverflow
                   />
                 </div>
               </div>

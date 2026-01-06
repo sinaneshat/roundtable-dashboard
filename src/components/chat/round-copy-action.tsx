@@ -5,15 +5,15 @@ import { useTranslations } from 'next-intl';
 import { memo, useCallback, useState } from 'react';
 
 import { MessageRoles } from '@/api/core/enums';
+import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { Action } from '@/components/ai-elements/actions';
 import { Icons } from '@/components/icons';
-import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
-import { getAssistantMetadata, isTextPart } from '@/lib/utils';
+import { copyToClipboard, getAssistantMetadata, isTextPart } from '@/lib/utils';
 
 type RoundCopyActionProps = {
   messages: UIMessage[];
-  participants: ChatParticipantWithSettings[];
+  participants: ChatParticipant[];
   roundNumber: number;
   threadTitle?: string;
   moderatorText?: string;
@@ -22,8 +22,8 @@ type RoundCopyActionProps = {
 
 function getParticipantFromMessage(
   message: UIMessage,
-  participants: ChatParticipantWithSettings[],
-): ChatParticipantWithSettings | undefined {
+  participants: ChatParticipant[],
+): ChatParticipant | undefined {
   const metadata = getAssistantMetadata(message.metadata);
   if (metadata?.participantId) {
     return participants.find(p => p.id === metadata.participantId);
@@ -31,32 +31,25 @@ function getParticipantFromMessage(
   return undefined;
 }
 
-function getParticipantDisplayName(participant?: ChatParticipantWithSettings): string {
+function getParticipantDisplayName(participant?: ChatParticipant): string {
   if (!participant)
     return 'Assistant';
   if (participant.role)
     return participant.role;
   const modelName = participant.modelId.split('/').pop() || participant.modelId;
-  return modelName
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  return modelName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
 function getMessageTextContent(message: UIMessage): string {
   if (!message.parts || message.parts.length === 0) {
     return '';
   }
-
-  return message.parts
-    .filter(isTextPart)
-    .map(part => part.text)
-    .join('\n\n');
+  return message.parts.filter(isTextPart).map(part => part.text).join('\n\n');
 }
 
 function formatRoundAsMarkdown(
   messages: UIMessage[],
-  participants: ChatParticipantWithSettings[],
+  participants: ChatParticipant[],
   roundNumber: number,
   threadTitle?: string,
   moderatorText?: string,
@@ -114,15 +107,6 @@ function formatRoundAsMarkdown(
   return lines.join('\n');
 }
 
-async function copyToClipboard(content: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(content);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function RoundCopyActionComponent({
   messages,
   participants,
@@ -154,7 +138,7 @@ function RoundCopyActionComponent({
       onClick={handleCopy}
       className={className}
     >
-      {copied ? <Icons.check className="size-3" /> : <Icons.copy className="size-3" />}
+      {copied ? <Icons.check className="size-5" /> : <Icons.squareStack className="size-5" />}
     </Action>
   );
 }

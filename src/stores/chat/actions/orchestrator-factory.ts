@@ -12,7 +12,7 @@
  * PERFORMANCE: Shallow comparison, optimized merging
  *
  * @example
- * const usePreSearchOrchestrator = createOrchestrator({
+ * const getPreSearchOrchestrator = createOrchestrator({
  *   queryHook: useThreadPreSearchesQuery,
  *   storeSelector: s => s.preSearches,
  *   storeSetter: s => s.setPreSearches,
@@ -175,7 +175,7 @@ export type OrchestratorReturn = {
  *
  * @example
  * // Create pre-search orchestrator
- * const usePreSearchOrchestrator = createOrchestrator({
+ * const getPreSearchOrchestrator = createOrchestrator({
  *   queryHook: useThreadPreSearchesQuery,
  *   storeSelector: s => s.preSearches,
  *   storeSetter: s => s.setPreSearches,
@@ -188,7 +188,7 @@ export type OrchestratorReturn = {
  * });
  *
  * // Use in component
- * const { isLoading } = usePreSearchOrchestrator({
+ * const { isLoading } = getPreSearchOrchestrator({
  *   threadId: 'thread-123',
  *   enabled: true
  * });

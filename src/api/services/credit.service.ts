@@ -1,17 +1,8 @@
 /**
- * Credit Service - Core credit management operations
+ * Credit Service
  *
- * Handles all credit-related operations:
- * - Balance tracking and queries
- * - Credit reservation for streaming (pre-authorization)
- * - Credit deduction after actual usage
- * - Credit grants (signup bonus, monthly refill, purchases)
- * - Transaction ledger for audit trail
- *
- * Architecture:
- * - Uses optimistic locking (version column) for concurrent updates
- * - Pre-reservation system prevents overdraft during streaming
- * - Immutable transaction ledger for audit and debugging
+ * Balance tracking, reservations, deductions, grants, transaction ledger.
+ * Optimistic locking prevents concurrent update conflicts.
  */
 
 import { and, desc, eq, sql } from 'drizzle-orm';
@@ -22,20 +13,17 @@ import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { CreditAction, CreditTransactionType } from '@/api/core/enums';
 import { CreditActionSchema, CreditTransactionTypes, DatabaseOperations, ErrorContextTypes, getGrantTransactionType, parsePlanType, PlanTypes, PlanTypeSchema, StripeSubscriptionStatuses } from '@/api/core/enums';
+import { getModelById } from '@/api/services/models-config.service';
 import {
-  calculateActualCredits,
+  calculateWeightedCredits,
   getActionCreditCost,
+  getModelPricingTierById,
   getPlanConfig,
 } from '@/api/services/product-logic.service';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import { CreditCacheTags, SubscriptionCacheTags } from '@/db/cache/cache-tags';
 import type { CreditTransactionMetadata, UserCreditBalance } from '@/db/validation';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
-
-// ============================================================================
-// TYPES (Zod Schemas - Single Source of Truth)
-// ============================================================================
 
 export const CreditBalanceInfoSchema = z.object({
   balance: z.number(),
@@ -44,7 +32,6 @@ export const CreditBalanceInfoSchema = z.object({
   planType: PlanTypeSchema,
   monthlyCredits: z.number(),
   nextRefillAt: z.date().nullable(),
-  payAsYouGoEnabled: z.boolean(),
 });
 
 export type CreditBalanceInfo = z.infer<typeof CreditBalanceInfoSchema>;
@@ -55,7 +42,7 @@ export const TokenUsageSchema = z.object({
   action: CreditActionSchema,
   threadId: z.string().optional(),
   messageId: z.string().optional(),
-  modelId: z.string().optional(),
+  modelId: z.string(), // Required for model-weighted credit calculation
 });
 
 export type TokenUsage = z.infer<typeof TokenUsageSchema>;
@@ -71,21 +58,13 @@ export const CreditDeductionSchema = z.object({
 
 export type CreditDeduction = z.infer<typeof CreditDeductionSchema>;
 
-// ============================================================================
-// BALANCE OPERATIONS
-// ============================================================================
-
 /**
- * Get or create user credit balance record
- * Creates a new record with signup credits for new users
- *
- * Uses SELECT-first + INSERT OR IGNORE pattern to handle race conditions atomically.
- * This is more reliable than SELECT-then-INSERT which can fail under concurrent requests.
+ * Get or create user credit balance record with signup credits for new users.
+ * SELECT-first + INSERT OR IGNORE pattern handles race conditions atomically.
  */
 export async function ensureUserCreditRecord(userId: string): Promise<UserCreditBalance> {
   const db = await getDbAsync();
 
-  // First check if record exists (fast path for existing users)
   const existingResults = await db
     .select()
     .from(tables.userCreditBalance)
@@ -96,37 +75,30 @@ export async function ensureUserCreditRecord(userId: string): Promise<UserCredit
     return existingResults[0];
   }
 
-  // Record doesn't exist - attempt to create with INSERT OR IGNORE
   const now = new Date();
-  const planConfig = getPlanConfig('free');
+  const signupCredits = CREDIT_CONFIG.SIGNUP_CREDITS;
   let wasInserted = false;
 
   try {
-    // INSERT OR IGNORE - succeeds silently if record already exists (race condition)
     const insertResult = await db
       .insert(tables.userCreditBalance)
       .values({
         id: ulid(),
         userId,
-        balance: planConfig.signupCredits,
+        balance: signupCredits,
         reservedCredits: 0,
         planType: PlanTypes.FREE,
-        monthlyCredits: planConfig.monthlyCredits,
-        payAsYouGoEnabled: planConfig.payAsYouGoEnabled,
+        monthlyCredits: 0,
         createdAt: now,
         updatedAt: now,
       })
       .onConflictDoNothing({ target: tables.userCreditBalance.userId })
       .returning();
 
-    // If returning has data, we inserted a new record
     wasInserted = insertResult.length > 0;
   } catch (insertError) {
-    // Log but don't fail - could be FK violation or other issue
     console.error('[ensureUserCreditRecord] Insert failed, checking if record exists:', insertError);
   }
-
-  // Fetch the record (either newly created or existing from race condition)
   const finalResults = await db
     .select()
     .from(tables.userCreditBalance)
@@ -136,41 +108,31 @@ export async function ensureUserCreditRecord(userId: string): Promise<UserCredit
   const record = finalResults[0];
 
   if (record) {
-    // Record signup bonus transaction only if we actually inserted a new record
-    if (wasInserted && planConfig.signupCredits > 0) {
+    if (wasInserted && signupCredits > 0) {
       try {
         await recordTransaction({
           userId,
           type: CreditTransactionTypes.CREDIT_GRANT,
-          amount: planConfig.signupCredits,
-          balanceAfter: planConfig.signupCredits,
+          amount: signupCredits,
+          balanceAfter: signupCredits,
           action: 'signup_bonus',
-          description: 'Free plan signup credits',
+          description: 'Signup bonus credits - one free round',
         });
       } catch (txError) {
-        // Transaction recording failure shouldn't break user flow
         console.error('[ensureUserCreditRecord] Failed to record signup transaction:', txError);
       }
     }
     return record;
   }
 
-  // Record doesn't exist after insert attempt - user doesn't exist (FK violation)
   const context: ErrorContext = {
     errorType: ErrorContextTypes.DATABASE,
     operation: DatabaseOperations.INSERT,
     table: 'user_credit_balance',
     userId,
   };
-  throw createError.internal(
-    `Failed to create credit record: User may not exist or database error occurred`,
-    context,
-  );
+  throw createError.internal('Failed to create credit record: User may not exist or database error occurred', context);
 }
-
-/**
- * Get user's credit balance info
- */
 export async function getUserCreditBalance(userId: string): Promise<CreditBalanceInfo> {
   const record = await ensureUserCreditRecord(userId);
 
@@ -178,118 +140,43 @@ export async function getUserCreditBalance(userId: string): Promise<CreditBalanc
     balance: record.balance,
     reserved: record.reservedCredits,
     available: Math.max(0, record.balance - record.reservedCredits),
-    // TYPE-SAFE: Use parsePlanType instead of type casting
     planType: parsePlanType(record.planType),
     monthlyCredits: record.monthlyCredits,
     nextRefillAt: record.nextRefillAt,
-    payAsYouGoEnabled: record.payAsYouGoEnabled,
   };
 }
 
-/**
- * Check if user can afford a credit amount
- */
 export async function canAffordCredits(userId: string, requiredCredits: number): Promise<boolean> {
   const balance = await getUserCreditBalance(userId);
   return balance.available >= requiredCredits;
 }
-
-/**
- * Check if user needs to connect payment method to receive free credits
- * Returns true if user has zero balance AND no active subscription AND never connected a card
- *
- * ✅ FIX: Check for active subscriptions directly from Stripe tables
- * The planType field in userCreditBalance may be out of sync with actual subscription status
- */
-export async function needsCardConnection(userId: string): Promise<boolean> {
-  const balance = await getUserCreditBalance(userId);
-  const db = await getDbAsync();
-
-  // Users with positive balance don't need card connection
-  if (balance.balance > 0) {
-    return false;
-  }
-
-  // ✅ FIX: Check for active subscription directly from Stripe tables
-  // Users with active subscriptions already have a card connected
-  const customerResults = await db
-    .select()
-    .from(tables.stripeCustomer)
-    .where(eq(tables.stripeCustomer.userId, userId))
-    .limit(1);
-
-  const customer = customerResults[0];
-  if (customer) {
-    // ✅ CACHING: Active subscription check with 2-minute TTL
-    const subscriptionResults = await db
-      .select()
-      .from(tables.stripeSubscription)
-      .where(
-        and(
-          eq(tables.stripeSubscription.customerId, customer.id),
-          eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
-        ),
-      )
-      .limit(1)
-      .$withCache({
-        config: { ex: 120 }, // 2 minutes - consistent with SubscriptionCacheTags
-        tag: SubscriptionCacheTags.active(userId),
-      });
-
-    // Has active subscription = has card = doesn't need card connection
-    if (subscriptionResults.length > 0) {
-      return false;
-    }
-  }
-
-  // Check if user has ever received card connection credits
-  // ✅ CACHING: Card connection is immutable (one-time event), cache for 1 hour
-  const cardConnectionTx = await db
-    .select()
-    .from(tables.creditTransaction)
-    .where(
-      and(
-        eq(tables.creditTransaction.userId, userId),
-        eq(tables.creditTransaction.action, 'card_connection'),
-      ),
-    )
-    .limit(1)
-    .$withCache({
-      config: { ex: 3600 }, // 1 hour - card connection is immutable
-      tag: CreditCacheTags.cardConnection(userId),
-    });
-
-  // No card connection transaction = needs to connect card
-  return cardConnectionTx.length === 0;
-}
-
-/**
- * Enforce credit availability - throws if insufficient
- *
- * Provides specific error messages for:
- * 1. New users who need to connect payment method to receive free credits
- * 2. Users who have exhausted their credits and need to purchase more
- *
- * ✅ FIX: Auto-provision credits for users with active subscriptions
- * If user has active subscription but credits are out of sync, provision them automatically
- */
 export async function enforceCredits(userId: string, requiredCredits: number): Promise<void> {
   let balance = await getUserCreditBalance(userId);
 
+  if (balance.planType === PlanTypes.FREE) {
+    const hasCompletedRound = await checkFreeUserHasCompletedRound(userId);
+    if (hasCompletedRound) {
+      const context: ErrorContext = {
+        errorType: ErrorContextTypes.RESOURCE,
+        resource: 'credits',
+        userId,
+      };
+      throw createError.badRequest(
+        'Your free conversation round has been used. Subscribe to Pro to continue chatting.',
+        context,
+      );
+    }
+  }
+
   if (balance.available < requiredCredits) {
-    // ✅ FIX: Check if user has active subscription but credits weren't synced
-    // This can happen if webhook failed or subscription was created out of band
     const hasActiveSubscription = await checkHasActiveSubscription(userId);
 
-    if (hasActiveSubscription && balance.planType !== 'paid') {
-      // User has subscription but credits weren't synced - provision them now
+    if (hasActiveSubscription && balance.planType !== PlanTypes.PAID) {
       await provisionPaidUserCredits(userId);
-      // Re-check balance after provisioning
       balance = await getUserCreditBalance(userId);
 
-      // If still insufficient, they've genuinely exhausted credits
       if (balance.available >= requiredCredits) {
-        return; // Credits provisioned successfully
+        return;
       }
     }
 
@@ -299,30 +186,13 @@ export async function enforceCredits(userId: string, requiredCredits: number): P
       userId,
     };
 
-    // Check if this is a new user who needs to connect their card
-    const needsCard = await needsCardConnection(userId);
-
-    if (needsCard) {
-      throw createError.badRequest(
-        'Connect a payment method to receive your free 10,000 credits and start chatting. '
-        + 'No charges until you exceed your free credits.',
-        context,
-      );
-    }
-
-    // User has connected card but exhausted credits
     throw createError.badRequest(
       `Insufficient credits. Required: ${requiredCredits}, Available: ${balance.available}. `
-      + `${balance.planType === PlanTypes.FREE ? 'Upgrade to Pro or ' : ''}Purchase additional credits to continue.`,
+      + `${balance.planType === PlanTypes.FREE ? 'Subscribe to Pro or ' : ''}Purchase additional credits to continue.`,
       context,
     );
   }
 }
-
-/**
- * Check if user has an active Stripe subscription
- * Source of truth for subscription status (not cached planType)
- */
 async function checkHasActiveSubscription(userId: string): Promise<boolean> {
   const db = await getDbAsync();
 
@@ -350,13 +220,127 @@ async function checkHasActiveSubscription(userId: string): Promise<boolean> {
   return subscriptionResults.length > 0;
 }
 
+const FREE_ROUND_COMPLETE_ACTION = 'free_round_complete' as const;
+
 /**
- * Provision credits for a paid user whose credits weren't synced
- * This is a recovery mechanism for when webhooks fail
+ * Check if a free user has already created a thread.
+ * Free users are limited to ONE thread total.
  */
+export async function checkFreeUserHasCreatedThread(userId: string): Promise<boolean> {
+  const db = await getDbAsync();
+
+  const existingThread = await db
+    .select()
+    .from(tables.chatThread)
+    .where(eq(tables.chatThread.userId, userId))
+    .limit(1);
+
+  return existingThread.length > 0;
+}
+
+/**
+ * Check if a free user has completed their one free round.
+ * A round is complete when ALL enabled participants have responded in round 0.
+ * This is the security gate to prevent free users from getting unlimited usage.
+ */
+export async function checkFreeUserHasCompletedRound(userId: string): Promise<boolean> {
+  const db = await getDbAsync();
+
+  // Fast path: Check for explicit "free_round_complete" transaction marker
+  const freeRoundTransaction = await db
+    .select()
+    .from(tables.creditTransaction)
+    .where(
+      and(
+        eq(tables.creditTransaction.userId, userId),
+        eq(tables.creditTransaction.action, FREE_ROUND_COMPLETE_ACTION),
+      ),
+    )
+    .limit(1);
+
+  if (freeRoundTransaction.length > 0) {
+    return true;
+  }
+
+  // Get the user's thread (free users can only have one)
+  const thread = await db.query.chatThread.findFirst({
+    where: eq(tables.chatThread.userId, userId),
+  });
+
+  if (!thread) {
+    return false; // No thread = no round completed
+  }
+
+  // Get enabled participants for this thread
+  const enabledParticipants = await db.query.chatParticipant.findMany({
+    where: and(
+      eq(tables.chatParticipant.threadId, thread.id),
+      eq(tables.chatParticipant.isEnabled, true),
+    ),
+  });
+
+  if (enabledParticipants.length === 0) {
+    return false; // No participants = no round can be completed
+  }
+
+  // Get assistant messages in round 0 (first round, 0-based)
+  const round0AssistantMessages = await db
+    .select()
+    .from(tables.chatMessage)
+    .where(
+      and(
+        eq(tables.chatMessage.threadId, thread.id),
+        eq(tables.chatMessage.role, 'assistant'),
+        eq(tables.chatMessage.roundNumber, 0),
+      ),
+    );
+
+  // Count unique participants that have responded in round 0
+  const respondedParticipantIds = new Set(
+    round0AssistantMessages
+      .map(m => m.participantId)
+      .filter((id): id is string => id !== null),
+  );
+
+  // Round is complete when ALL enabled participants have responded
+  return respondedParticipantIds.size >= enabledParticipants.length;
+}
+
+export async function zeroOutFreeUserCredits(userId: string): Promise<void> {
+  const db = await getDbAsync();
+
+  const record = await ensureUserCreditRecord(userId);
+
+  if (record.planType !== PlanTypes.FREE) {
+    return;
+  }
+
+  const previousBalance = record.balance;
+
+  await db
+    .update(tables.userCreditBalance)
+    .set({
+      balance: 0,
+      reservedCredits: 0,
+      updatedAt: new Date(),
+    })
+    .where(eq(tables.userCreditBalance.userId, userId));
+
+  if (previousBalance > 0) {
+    await recordTransaction({
+      userId,
+      type: CreditTransactionTypes.DEDUCTION,
+      action: FREE_ROUND_COMPLETE_ACTION,
+      amount: -previousBalance,
+      balanceAfter: 0,
+      description: 'Free round completed - credits exhausted',
+    });
+  }
+}
+
 async function provisionPaidUserCredits(userId: string): Promise<void> {
   const db = await getDbAsync();
-  const planConfig = getPlanConfig('paid');
+  const planConfig = getPlanConfig(PlanTypes.PAID);
   const now = new Date();
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
@@ -367,14 +351,12 @@ async function provisionPaidUserCredits(userId: string): Promise<void> {
       planType: PlanTypes.PAID,
       balance: planConfig.monthlyCredits,
       monthlyCredits: planConfig.monthlyCredits,
-      payAsYouGoEnabled: planConfig.payAsYouGoEnabled,
       lastRefillAt: now,
       nextRefillAt: nextRefill,
       updatedAt: now,
     })
     .where(eq(tables.userCreditBalance.userId, userId));
 
-  // Record the sync transaction
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.MONTHLY_REFILL,
@@ -385,18 +367,6 @@ async function provisionPaidUserCredits(userId: string): Promise<void> {
   });
 }
 
-// ============================================================================
-// RESERVATION SYSTEM (For Streaming)
-// ============================================================================
-
-/**
- * Reserve credits before streaming operation
- * Prevents overdraft by locking credits during streaming
- *
- * @param userId User ID
- * @param streamId Unique identifier for this stream (for tracking)
- * @param estimatedCredits Credits to reserve
- */
 export async function reserveCredits(
   userId: string,
   streamId: string,
@@ -404,12 +374,10 @@ export async function reserveCredits(
 ): Promise<void> {
   const db = await getDbAsync();
 
-  // Ensure user has enough available credits
   await enforceCredits(userId, estimatedCredits);
 
   const record = await ensureUserCreditRecord(userId);
 
-  // Atomic update with optimistic locking
   const result = await db
     .update(tables.userCreditBalance)
     .set({
@@ -426,11 +394,9 @@ export async function reserveCredits(
     .returning();
 
   if (!result[0]) {
-    // Retry on version conflict
     return reserveCredits(userId, streamId, estimatedCredits);
   }
 
-  // Record reservation transaction
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.RESERVATION,
@@ -441,14 +407,6 @@ export async function reserveCredits(
   });
 }
 
-/**
- * Finalize credits after streaming completes
- * Releases reservation and deducts actual usage
- *
- * @param userId User ID
- * @param streamId Stream identifier (must match reservation)
- * @param actualUsage Actual token usage from AI response
- */
 export async function finalizeCredits(
   userId: string,
   streamId: string,
@@ -458,23 +416,29 @@ export async function finalizeCredits(
 
   const record = await ensureUserCreditRecord(userId);
 
-  // Calculate actual credits used
-  const actualCredits = calculateActualCredits(actualUsage.inputTokens, actualUsage.outputTokens);
+  // Calculate weighted credits based on model pricing tier
+  const weightedCredits = calculateWeightedCredits(
+    actualUsage.inputTokens,
+    actualUsage.outputTokens,
+    actualUsage.modelId,
+    getModelById,
+  );
 
-  // Get estimated reservation (we need to release it)
-  // For simplicity, we'll just deduct actual and assume reservation matches
-  // In production, you might store reservation amount per streamId
+  // Get pricing tier and model info for transaction logging
+  const pricingTier = getModelPricingTierById(actualUsage.modelId, getModelById);
+  const totalTokens = actualUsage.inputTokens + actualUsage.outputTokens;
+  const model = getModelById(actualUsage.modelId);
+  // Store pricing as micro-dollars per million tokens (e.g., $1.50/M = 1500000)
+  const inputPricingMicro = model ? Math.round(Number.parseFloat(model.pricing.prompt) * 1_000_000 * 1_000_000) : undefined;
+  const outputPricingMicro = model ? Math.round(Number.parseFloat(model.pricing.completion) * 1_000_000 * 1_000_000) : undefined;
 
-  // Atomic update: release reservation and deduct actual
   const result = await db
     .update(tables.userCreditBalance)
     .set({
-      // Deduct actual credits from balance
-      balance: sql`${tables.userCreditBalance.balance} - ${actualCredits}`,
-      // Release reservation (subtract estimated, but we use actual for safety)
+      balance: sql`${tables.userCreditBalance.balance} - ${weightedCredits}`,
       reservedCredits: sql`CASE
-        WHEN ${tables.userCreditBalance.reservedCredits} >= ${actualCredits}
-        THEN ${tables.userCreditBalance.reservedCredits} - ${actualCredits}
+        WHEN ${tables.userCreditBalance.reservedCredits} >= ${weightedCredits}
+        THEN ${tables.userCreditBalance.reservedCredits} - ${weightedCredits}
         ELSE 0
       END`,
       version: sql`${tables.userCreditBalance.version} + 1`,
@@ -489,36 +453,29 @@ export async function finalizeCredits(
     .returning();
 
   if (!result[0]) {
-    // Retry on version conflict
     return finalizeCredits(userId, streamId, actualUsage);
   }
 
-  // Record deduction transaction with full details
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.DEDUCTION,
-    amount: -actualCredits,
+    amount: -weightedCredits,
     balanceAfter: result[0].balance,
     inputTokens: actualUsage.inputTokens,
     outputTokens: actualUsage.outputTokens,
-    totalTokens: actualUsage.inputTokens + actualUsage.outputTokens,
-    creditsUsed: actualCredits,
+    totalTokens,
+    creditsUsed: weightedCredits,
     threadId: actualUsage.threadId,
     messageId: actualUsage.messageId,
     streamId,
     action: actualUsage.action,
     modelId: actualUsage.modelId,
-    description: `AI response: ${actualUsage.inputTokens} in + ${actualUsage.outputTokens} out = ${actualCredits} credits`,
+    modelPricingInputPerMillion: inputPricingMicro,
+    modelPricingOutputPerMillion: outputPricingMicro,
+    description: `AI response (${pricingTier}): ${totalTokens} tokens = ${weightedCredits} credits`,
   });
 }
 
-/**
- * Release reservation without deduction (on error or cancellation)
- *
- * @param userId User ID
- * @param streamId Stream identifier
- * @param reservedAmount Amount that was reserved (optional, will release all if not provided)
- */
 export async function releaseReservation(
   userId: string,
   streamId: string,
@@ -528,8 +485,6 @@ export async function releaseReservation(
 
   const record = await ensureUserCreditRecord(userId);
 
-  // If no amount specified, we can't reliably release
-  // In production, store reservation amounts per streamId
   if (reservedAmount === undefined) {
     return;
   }
@@ -554,11 +509,9 @@ export async function releaseReservation(
     .returning();
 
   if (!result[0]) {
-    // Retry on version conflict
     return releaseReservation(userId, streamId, reservedAmount);
   }
 
-  // Record release transaction
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.RELEASE,
@@ -569,22 +522,12 @@ export async function releaseReservation(
   });
 }
 
-// ============================================================================
-// CREDIT MANAGEMENT (Grants, Deductions, Refills)
-// ============================================================================
+type GrantType = 'credit_grant' | 'monthly_refill' | 'purchase';
 
-/**
- * Grant credits to a user
- *
- * @param userId User ID
- * @param amount Credits to grant
- * @param type Transaction type (credit_grant, monthly_refill, purchase)
- * @param description Human-readable description
- */
 export async function grantCredits(
   userId: string,
   amount: number,
-  type: 'credit_grant' | 'monthly_refill' | 'purchase',
+  type: GrantType,
   description?: string,
 ): Promise<void> {
   const db = await getDbAsync();
@@ -607,12 +550,9 @@ export async function grantCredits(
     .returning();
 
   if (!result[0]) {
-    // Retry on version conflict
     return grantCredits(userId, amount, type, description);
   }
 
-  // Record grant transaction
-  // TYPE-SAFE: Use getGrantTransactionType instead of runtime string manipulation + casting
   await recordTransaction({
     userId,
     type: getGrantTransactionType(type),
@@ -623,80 +563,14 @@ export async function grantCredits(
   });
 }
 
-/**
- * Grant credits for connecting a payment method (free tier users only)
- *
- * Called when a user on free plan successfully attaches a payment method.
- * This is a one-time bonus - subsequent card changes don't grant more credits.
- *
- * @param userId User ID
- * @returns true if credits were granted, false if already received
- */
-export async function grantCardConnectionCredits(userId: string): Promise<boolean> {
-  const db = await getDbAsync();
+const ACTION_COST_TO_CREDIT_ACTION_MAP: Record<keyof typeof CREDIT_CONFIG.ACTION_COSTS, CreditAction> = {
+  threadCreation: 'thread_creation',
+  webSearchQuery: 'web_search',
+  fileReading: 'file_reading',
+  analysisGeneration: 'analysis_generation',
+  customRoleCreation: 'thread_creation',
+} as const;
 
-  // Check if user already received card connection credits
-  const existingTx = await db
-    .select()
-    .from(tables.creditTransaction)
-    .where(
-      and(
-        eq(tables.creditTransaction.userId, userId),
-        eq(tables.creditTransaction.action, 'card_connection'),
-      ),
-    )
-    .limit(1);
-
-  if (existingTx.length > 0) {
-    return false; // Already received card connection credits
-  }
-
-  // Access free plan config directly (only free plan has cardConnectionCredits)
-  const creditsToGrant = CREDIT_CONFIG.PLANS.free.cardConnectionCredits;
-
-  if (creditsToGrant <= 0) {
-    return false; // No credits configured for card connection
-  }
-
-  const record = await ensureUserCreditRecord(userId);
-
-  const result = await db
-    .update(tables.userCreditBalance)
-    .set({
-      balance: sql`${tables.userCreditBalance.balance} + ${creditsToGrant}`,
-      version: sql`${tables.userCreditBalance.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(tables.userCreditBalance.userId, userId),
-        eq(tables.userCreditBalance.version, record.version),
-      ),
-    )
-    .returning();
-
-  if (!result[0]) {
-    // Retry on version conflict
-    return grantCardConnectionCredits(userId);
-  }
-
-  // Record card connection transaction
-  await recordTransaction({
-    userId,
-    type: CreditTransactionTypes.CREDIT_GRANT,
-    amount: creditsToGrant,
-    balanceAfter: result[0].balance,
-    action: 'card_connection',
-    description: `Free tier bonus: ${creditsToGrant.toLocaleString()} credits for connecting payment method`,
-  });
-
-  return true;
-}
-
-/**
- * Deduct credits for a specific action (non-streaming)
- * Use for flat-cost actions like thread creation, web search, etc.
- */
 export async function deductCreditsForAction(
   userId: string,
   action: keyof typeof CREDIT_CONFIG.ACTION_COSTS,
@@ -704,7 +578,6 @@ export async function deductCreditsForAction(
 ): Promise<void> {
   const credits = getActionCreditCost(action);
 
-  // Ensure user can afford
   await enforceCredits(userId, credits);
 
   const db = await getDbAsync();
@@ -726,20 +599,9 @@ export async function deductCreditsForAction(
     .returning();
 
   if (!result[0]) {
-    // Retry on version conflict
     return deductCreditsForAction(userId, action, context);
   }
 
-  // Map action to credit action enum
-  const actionMap: Record<keyof typeof CREDIT_CONFIG.ACTION_COSTS, CreditAction> = {
-    threadCreation: 'thread_creation',
-    webSearchQuery: 'web_search',
-    fileReading: 'file_reading',
-    analysisGeneration: 'analysis_generation',
-    customRoleCreation: 'thread_creation',
-  };
-
-  // Record deduction transaction
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.DEDUCTION,
@@ -747,31 +609,26 @@ export async function deductCreditsForAction(
     balanceAfter: result[0].balance,
     creditsUsed: credits,
     threadId: context?.threadId,
-    action: actionMap[action],
+    action: ACTION_COST_TO_CREDIT_ACTION_MAP[action],
     description: context?.description || `${String(action)}: ${credits} credits`,
   });
 }
 
-/**
- * Process monthly credit refill for paid users
- */
 export async function processMonthlyRefill(userId: string): Promise<void> {
   const db = await getDbAsync();
 
   const record = await ensureUserCreditRecord(userId);
 
-  // Only process for paid users
   if (record.planType !== PlanTypes.PAID) {
     return;
   }
 
-  // Check if refill is due
   const now = new Date();
   if (record.nextRefillAt && record.nextRefillAt > now) {
-    return; // Not due yet
+    return;
   }
 
-  const planConfig = getPlanConfig('paid');
+  const planConfig = getPlanConfig(PlanTypes.PAID);
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
 
@@ -793,11 +650,9 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
     .returning();
 
   if (!result[0]) {
-    // Retry on version conflict
     return processMonthlyRefill(userId);
   }
 
-  // Record refill transaction
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.MONTHLY_REFILL,
@@ -808,14 +663,11 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
   });
 }
 
-/**
- * Upgrade user to paid plan
- */
 export async function upgradeToPaidPlan(userId: string): Promise<void> {
   const db = await getDbAsync();
 
   const record = await ensureUserCreditRecord(userId);
-  const planConfig = getPlanConfig('paid');
+  const planConfig = getPlanConfig(PlanTypes.PAID);
   const now = new Date();
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
@@ -826,7 +678,6 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
       planType: 'paid',
       balance: sql`${tables.userCreditBalance.balance} + ${planConfig.monthlyCredits}`,
       monthlyCredits: planConfig.monthlyCredits,
-      payAsYouGoEnabled: planConfig.payAsYouGoEnabled,
       lastRefillAt: now,
       nextRefillAt: nextRefill,
       version: sql`${tables.userCreditBalance.version} + 1`,
@@ -844,7 +695,6 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     return upgradeToPaidPlan(userId);
   }
 
-  // Record upgrade transaction
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.CREDIT_GRANT,
@@ -854,10 +704,6 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     description: `Upgraded to Pro plan: ${planConfig.monthlyCredits} credits`,
   });
 }
-
-// ============================================================================
-// TRANSACTION LEDGER
-// ============================================================================
 
 type TransactionRecord = {
   userId: string;
@@ -873,13 +719,13 @@ type TransactionRecord = {
   streamId?: string;
   action?: CreditAction;
   modelId?: string;
+  // Model pricing at time of transaction (micro-dollars per million tokens)
+  modelPricingInputPerMillion?: number;
+  modelPricingOutputPerMillion?: number;
   description?: string;
   metadata?: CreditTransactionMetadata;
 };
 
-/**
- * Record a transaction in the ledger
- */
 async function recordTransaction(record: TransactionRecord): Promise<void> {
   const db = await getDbAsync();
 
@@ -898,15 +744,14 @@ async function recordTransaction(record: TransactionRecord): Promise<void> {
     streamId: record.streamId,
     action: record.action,
     modelId: record.modelId,
+    modelPricingInputPerMillion: record.modelPricingInputPerMillion,
+    modelPricingOutputPerMillion: record.modelPricingOutputPerMillion,
     description: record.description,
     metadata: record.metadata,
     createdAt: new Date(),
   });
 }
 
-/**
- * Get user's transaction history
- */
 export async function getUserTransactionHistory(
   userId: string,
   options: { limit?: number; offset?: number; type?: CreditTransactionType } = {},
@@ -929,7 +774,6 @@ export async function getUserTransactionHistory(
     .limit(limit)
     .offset(offset);
 
-  // Get total count using raw SQL
   const countResult = await db
     .select()
     .from(tables.creditTransaction)

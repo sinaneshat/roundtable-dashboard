@@ -10,17 +10,22 @@ import { z } from '@hono/zod-openapi';
 // CARD VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const CARD_VARIANTS = ['default', 'glass', 'glass-subtle', 'glass-strong'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_CARD_VARIANT: CardVariant = 'default';
 
+// 3️⃣ ZOD SCHEMA
 export const CardVariantSchema = z.enum(CARD_VARIANTS).openapi({
   description: 'Card component visual variant',
   example: 'default',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type CardVariant = z.infer<typeof CardVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const CardVariants = {
   DEFAULT: 'default' as const,
   GLASS: 'glass' as const,
@@ -32,17 +37,22 @@ export const CardVariants = {
 // COMPONENT VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const COMPONENT_VARIANTS = ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link', 'white', 'success', 'warning', 'glass'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_COMPONENT_VARIANT: ComponentVariant = 'default';
 
+// 3️⃣ ZOD SCHEMA
 export const ComponentVariantSchema = z.enum(COMPONENT_VARIANTS).openapi({
   description: 'UI component visual variant',
   example: 'default',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type ComponentVariant = z.infer<typeof ComponentVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const ComponentVariants = {
   DEFAULT: 'default' as const,
   DESTRUCTIVE: 'destructive' as const,
@@ -60,17 +70,22 @@ export const ComponentVariants = {
 // COMPONENT SIZE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const COMPONENT_SIZES = ['sm', 'md', 'lg', 'xl', 'icon', 'default'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_COMPONENT_SIZE: ComponentSize = 'default';
 
+// 3️⃣ ZOD SCHEMA
 export const ComponentSizeSchema = z.enum(COMPONENT_SIZES).openapi({
   description: 'UI component size',
   example: 'default',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type ComponentSize = z.infer<typeof ComponentSizeSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const ComponentSizes = {
   SM: 'sm' as const,
   MD: 'md' as const,
@@ -84,17 +99,22 @@ export const ComponentSizes = {
 // TEXT ALIGNMENT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const TEXT_ALIGNMENTS = ['left', 'center', 'right', 'justify'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_TEXT_ALIGNMENT: TextAlignment = 'left';
 
+// 3️⃣ ZOD SCHEMA
 export const TextAlignmentSchema = z.enum(TEXT_ALIGNMENTS).openapi({
   description: 'Text alignment direction',
   example: 'left',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type TextAlignment = z.infer<typeof TextAlignmentSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const TextAlignments = {
   LEFT: 'left' as const,
   CENTER: 'center' as const,
@@ -106,17 +126,22 @@ export const TextAlignments = {
 // TOAST VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const TOAST_VARIANTS = ['default', 'destructive', 'success', 'warning', 'info', 'loading'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_TOAST_VARIANT: ToastVariant = 'default';
 
+// 3️⃣ ZOD SCHEMA
 export const ToastVariantSchema = z.enum(TOAST_VARIANTS).openapi({
   description: 'Toast notification variant',
   example: 'default',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type ToastVariant = z.infer<typeof ToastVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const ToastVariants = {
   DEFAULT: 'default' as const,
   DESTRUCTIVE: 'destructive' as const,
@@ -130,17 +155,22 @@ export const ToastVariants = {
 // REASONING STATE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const REASONING_STATES = ['idle', 'thinking', 'complete'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_REASONING_STATE: ReasoningState = 'idle';
 
+// 3️⃣ ZOD SCHEMA
 export const ReasoningStateSchema = z.enum(REASONING_STATES).openapi({
   description: 'Reasoning animation state',
   example: 'thinking',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type ReasoningState = z.infer<typeof ReasoningStateSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const ReasoningStates = {
   IDLE: 'idle' as const,
   THINKING: 'thinking' as const,
@@ -151,17 +181,22 @@ export const ReasoningStates = {
 // STATUS VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const STATUS_VARIANTS = ['loading', 'success', 'error'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_STATUS_VARIANT: StatusVariant = 'loading';
 
+// 3️⃣ ZOD SCHEMA
 export const StatusVariantSchema = z.enum(STATUS_VARIANTS).openapi({
   description: 'Status page variant',
   example: 'loading',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type StatusVariant = z.infer<typeof StatusVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const StatusVariants = {
   LOADING: 'loading' as const,
   SUCCESS: 'success' as const,
@@ -172,17 +207,22 @@ export const StatusVariants = {
 // NETWORK ERROR TYPE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const NETWORK_ERROR_TYPES = ['offline', 'timeout', 'connection'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_NETWORK_ERROR_TYPE: NetworkErrorType = 'offline';
 
+// 3️⃣ ZOD SCHEMA
 export const NetworkErrorTypeSchema = z.enum(NETWORK_ERROR_TYPES).openapi({
   description: 'Network error type',
   example: 'offline',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type NetworkErrorType = z.infer<typeof NetworkErrorTypeSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const NetworkErrorTypes = {
   OFFLINE: 'offline' as const,
   TIMEOUT: 'timeout' as const,
@@ -193,17 +233,22 @@ export const NetworkErrorTypes = {
 // ERROR SEVERITY
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const ERROR_SEVERITIES = ['failed', 'warning', 'info'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_ERROR_SEVERITY: ErrorSeverity = 'failed';
 
+// 3️⃣ ZOD SCHEMA
 export const ErrorSeveritySchema = z.enum(ERROR_SEVERITIES).openapi({
   description: 'Error severity level',
   example: 'failed',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type ErrorSeverity = z.infer<typeof ErrorSeveritySchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const ErrorSeverities = {
   FAILED: 'failed' as const,
   WARNING: 'warning' as const,
@@ -211,20 +256,25 @@ export const ErrorSeverities = {
 } as const;
 
 // ============================================================================
-// IMAGE STATE (for SmartImage component)
+// IMAGE STATE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const IMAGE_STATES = ['loading', 'loaded', 'error'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_IMAGE_STATE: ImageState = 'loading';
 
+// 3️⃣ ZOD SCHEMA
 export const ImageStateSchema = z.enum(IMAGE_STATES).openapi({
   description: 'Image loading state',
   example: 'loading',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type ImageState = z.infer<typeof ImageStateSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const ImageStates = {
   LOADING: 'loading' as const,
   LOADED: 'loaded' as const,
@@ -232,20 +282,25 @@ export const ImageStates = {
 } as const;
 
 // ============================================================================
-// MARKDOWN PRESET (for Markdown component)
+// MARKDOWN PRESET
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const MARKDOWN_PRESETS = ['default', 'compact', 'web-content'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_MARKDOWN_PRESET: MarkdownPreset = 'default';
 
+// 3️⃣ ZOD SCHEMA
 export const MarkdownPresetSchema = z.enum(MARKDOWN_PRESETS).openapi({
   description: 'Markdown rendering preset',
   example: 'default',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type MarkdownPreset = z.infer<typeof MarkdownPresetSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const MarkdownPresets = {
   DEFAULT: 'default' as const,
   COMPACT: 'compact' as const,
@@ -256,17 +311,22 @@ export const MarkdownPresets = {
 // CONFIRMATION DIALOG VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const CONFIRMATION_DIALOG_VARIANTS = ['default', 'destructive', 'warning'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_CONFIRMATION_DIALOG_VARIANT: ConfirmationDialogVariant = 'default';
 
+// 3️⃣ ZOD SCHEMA
 export const ConfirmationDialogVariantSchema = z.enum(CONFIRMATION_DIALOG_VARIANTS).openapi({
   description: 'Confirmation dialog visual variant',
   example: 'destructive',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type ConfirmationDialogVariant = z.infer<typeof ConfirmationDialogVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const ConfirmationDialogVariants = {
   DEFAULT: 'default' as const,
   DESTRUCTIVE: 'destructive' as const,
@@ -274,20 +334,25 @@ export const ConfirmationDialogVariants = {
 } as const;
 
 // ============================================================================
-// ERROR BOUNDARY CONTEXT (for Error Boundary components)
+// ERROR BOUNDARY CONTEXT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const ERROR_BOUNDARY_CONTEXTS = ['chat', 'message-list', 'configuration', 'pre-search', 'general'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_ERROR_BOUNDARY_CONTEXT: ErrorBoundaryContext = 'general';
 
+// 3️⃣ ZOD SCHEMA
 export const ErrorBoundaryContextSchema = z.enum(ERROR_BOUNDARY_CONTEXTS).openapi({
   description: 'Error boundary context',
   example: 'chat',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type ErrorBoundaryContext = z.infer<typeof ErrorBoundaryContextSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const ErrorBoundaryContexts = {
   CHAT: 'chat' as const,
   MESSAGE_LIST: 'message-list' as const,
@@ -297,20 +362,25 @@ export const ErrorBoundaryContexts = {
 } as const;
 
 // ============================================================================
-// ICON TYPE (for attachment preview)
+// ICON TYPE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const ICON_TYPES = ['image', 'code', 'text', 'file'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_ICON_TYPE: IconType = 'file';
 
+// 3️⃣ ZOD SCHEMA
 export const IconTypeSchema = z.enum(ICON_TYPES).openapi({
   description: 'Attachment icon type',
   example: 'image',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type IconType = z.infer<typeof IconTypeSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const IconTypes = {
   IMAGE: 'image' as const,
   CODE: 'code' as const,
@@ -322,17 +392,22 @@ export const IconTypes = {
 // BORDER GRADIENT DIRECTION
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const BORDER_GRADIENT_DIRECTIONS = ['TOP', 'LEFT', 'BOTTOM', 'RIGHT'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_BORDER_GRADIENT_DIRECTION: BorderGradientDirection = 'TOP';
 
+// 3️⃣ ZOD SCHEMA
 export const BorderGradientDirectionSchema = z.enum(BORDER_GRADIENT_DIRECTIONS).openapi({
   description: 'Border gradient animation direction',
   example: 'TOP',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type BorderGradientDirection = z.infer<typeof BorderGradientDirectionSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const BorderGradientDirections = {
   TOP: 'TOP' as const,
   LEFT: 'LEFT' as const,
@@ -344,17 +419,22 @@ export const BorderGradientDirections = {
 // LOGO SIZE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const LOGO_SIZES = ['sm', 'md', 'lg'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_LOGO_SIZE: LogoSize = 'sm';
 
+// 3️⃣ ZOD SCHEMA
 export const LogoSizeSchema = z.enum(LOGO_SIZES).openapi({
   description: 'Logo component size variant',
   example: 'md',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type LogoSize = z.infer<typeof LogoSizeSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const LogoSizes = {
   SM: 'sm' as const,
   MD: 'md' as const,
@@ -386,17 +466,22 @@ export const LogoSizeMetadata: Record<LogoSize, { width: number; height: number;
 // LOGO VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const LOGO_VARIANTS = ['icon', 'full'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_LOGO_VARIANT: LogoVariant = 'icon';
 
+// 3️⃣ ZOD SCHEMA
 export const LogoVariantSchema = z.enum(LOGO_VARIANTS).openapi({
   description: 'Logo display variant (icon only or full logo)',
   example: 'icon',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type LogoVariant = z.infer<typeof LogoVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const LogoVariants = {
   ICON: 'icon' as const,
   FULL: 'full' as const,
@@ -406,17 +491,22 @@ export const LogoVariants = {
 // LOADING STATE VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const LOADING_STATE_VARIANTS = ['inline', 'centered', 'card'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_LOADING_STATE_VARIANT: LoadingStateVariant = 'centered';
 
+// 3️⃣ ZOD SCHEMA
 export const LoadingStateVariantSchema = z.enum(LOADING_STATE_VARIANTS).openapi({
   description: 'Loading state display variant',
   example: 'centered',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type LoadingStateVariant = z.infer<typeof LoadingStateVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const LoadingStateVariants = {
   INLINE: 'inline' as const,
   CENTERED: 'centered' as const,
@@ -427,17 +517,22 @@ export const LoadingStateVariants = {
 // ERROR STATE VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const ERROR_STATE_VARIANTS = ['alert', 'card', 'network', 'boundary'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_ERROR_STATE_VARIANT: ErrorStateVariant = 'card';
 
+// 3️⃣ ZOD SCHEMA
 export const ErrorStateVariantSchema = z.enum(ERROR_STATE_VARIANTS).openapi({
   description: 'Error state display variant',
   example: 'card',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type ErrorStateVariant = z.infer<typeof ErrorStateVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const ErrorStateVariants = {
   ALERT: 'alert' as const,
   CARD: 'card' as const,
@@ -449,17 +544,22 @@ export const ErrorStateVariants = {
 // EMPTY STATE VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const EMPTY_STATE_VARIANTS = ['general', 'custom'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_EMPTY_STATE_VARIANT: EmptyStateVariant = 'general';
 
+// 3️⃣ ZOD SCHEMA
 export const EmptyStateVariantSchema = z.enum(EMPTY_STATE_VARIANTS).openapi({
   description: 'Empty state display variant',
   example: 'general',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type EmptyStateVariant = z.infer<typeof EmptyStateVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const EmptyStateVariants = {
   GENERAL: 'general' as const,
   CUSTOM: 'custom' as const,
@@ -469,17 +569,22 @@ export const EmptyStateVariants = {
 // SUCCESS STATE VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const SUCCESS_STATE_VARIANTS = ['alert', 'card'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_SUCCESS_STATE_VARIANT: SuccessStateVariant = 'alert';
 
+// 3️⃣ ZOD SCHEMA
 export const SuccessStateVariantSchema = z.enum(SUCCESS_STATE_VARIANTS).openapi({
   description: 'Success state display variant',
   example: 'alert',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type SuccessStateVariant = z.infer<typeof SuccessStateVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const SuccessStateVariants = {
   ALERT: 'alert' as const,
   CARD: 'card' as const,
@@ -489,17 +594,22 @@ export const SuccessStateVariants = {
 // GLOWING EFFECT VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const GLOWING_EFFECT_VARIANTS = ['default', 'white'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_GLOWING_EFFECT_VARIANT: GlowingEffectVariant = 'default';
 
+// 3️⃣ ZOD SCHEMA
 export const GlowingEffectVariantSchema = z.enum(GLOWING_EFFECT_VARIANTS).openapi({
   description: 'Glowing effect color variant',
   example: 'default',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type GlowingEffectVariant = z.infer<typeof GlowingEffectVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const GlowingEffectVariants = {
   DEFAULT: 'default' as const,
   WHITE: 'white' as const,
@@ -509,17 +619,22 @@ export const GlowingEffectVariants = {
 // CITATION SEGMENT TYPE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const CITATION_SEGMENT_TYPES = ['text', 'citation'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_CITATION_SEGMENT_TYPE: CitationSegmentType = 'text';
 
+// 3️⃣ ZOD SCHEMA
 export const CitationSegmentTypeSchema = z.enum(CITATION_SEGMENT_TYPES).openapi({
   description: 'Citation segment type',
   example: 'text',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type CitationSegmentType = z.infer<typeof CitationSegmentTypeSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const CitationSegmentTypes = {
   TEXT: 'text' as const,
   CITATION: 'citation' as const,
@@ -529,17 +644,22 @@ export const CitationSegmentTypes = {
 // SPACING VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const SPACING_VARIANTS = ['tight', 'default', 'loose'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_SPACING_VARIANT: SpacingVariant = 'default';
 
+// 3️⃣ ZOD SCHEMA
 export const SpacingVariantSchema = z.enum(SPACING_VARIANTS).openapi({
   description: 'Spacing variant for layout components',
   example: 'default',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type SpacingVariant = z.infer<typeof SpacingVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const SpacingVariants = {
   TIGHT: 'tight' as const,
   DEFAULT: 'default' as const,
@@ -550,17 +670,22 @@ export const SpacingVariants = {
 // EMPTY STATE STYLE
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const EMPTY_STATE_STYLES = ['default', 'dashed', 'gradient'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_EMPTY_STATE_STYLE: EmptyStateStyle = 'default';
 
+// 3️⃣ ZOD SCHEMA
 export const EmptyStateStyleSchema = z.enum(EMPTY_STATE_STYLES).openapi({
   description: 'Empty state card styling',
   example: 'default',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type EmptyStateStyle = z.infer<typeof EmptyStateStyleSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const EmptyStateStyles = {
   DEFAULT: 'default' as const,
   DASHED: 'dashed' as const,
@@ -571,17 +696,22 @@ export const EmptyStateStyles = {
 // SCROLL BUTTON VARIANT
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT
 export const SCROLL_BUTTON_VARIANTS = ['floating', 'header', 'input'] as const;
 
+// 2️⃣ DEFAULT VALUE
 export const DEFAULT_SCROLL_BUTTON_VARIANT: ScrollButtonVariant = 'floating';
 
+// 3️⃣ ZOD SCHEMA
 export const ScrollButtonVariantSchema = z.enum(SCROLL_BUTTON_VARIANTS).openapi({
   description: 'Scroll button placement variant',
   example: 'floating',
 });
 
+// 4️⃣ TYPESCRIPT TYPE
 export type ScrollButtonVariant = z.infer<typeof ScrollButtonVariantSchema>;
 
+// 5️⃣ CONSTANT OBJECT
 export const ScrollButtonVariants = {
   FLOATING: 'floating' as const,
   HEADER: 'header' as const,
@@ -592,19 +722,25 @@ export const ScrollButtonVariants = {
 // AVATAR SIZE
 // ============================================================================
 
-export const AVATAR_SIZES = ['sm', 'md'] as const;
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const AVATAR_SIZES = ['sm', 'base', 'md'] as const;
 
+// 2️⃣ DEFAULT VALUE (if applicable)
 export const DEFAULT_AVATAR_SIZE: AvatarSize = 'sm';
 
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const AvatarSizeSchema = z.enum(AVATAR_SIZES).openapi({
   description: 'Avatar component size',
   example: 'sm',
 });
 
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type AvatarSize = z.infer<typeof AvatarSizeSchema>;
 
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const AvatarSizes = {
   SM: 'sm' as const,
+  BASE: 'base' as const,
   MD: 'md' as const,
 } as const;
 
@@ -614,6 +750,12 @@ export const AvatarSizeMetadata: Record<AvatarSize, { container: string; text: s
     text: 'text-[10px]',
     overlapOffset: -8,
     gapSize: 8,
+  },
+  [AvatarSizes.BASE]: {
+    container: 'size-8',
+    text: 'text-[11px]',
+    overlapOffset: -10,
+    gapSize: 10,
   },
   [AvatarSizes.MD]: {
     container: 'size-10',
@@ -670,6 +812,7 @@ export const MARKDOWN_PRESET_LABELS: Record<MarkdownPreset, string> = {
 
 export const AVATAR_SIZE_LABELS: Record<AvatarSize, string> = {
   [AvatarSizes.SM]: 'Small',
+  [AvatarSizes.BASE]: 'Base',
   [AvatarSizes.MD]: 'Medium',
 } as const;
 
@@ -1230,28 +1373,27 @@ export function isValidScrollAlign(value: unknown): value is ScrollAlign {
 // API KEYS MODAL TAB
 // ============================================================================
 
-// 1. ARRAY CONSTANT
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const API_KEYS_MODAL_TABS = ['list', 'create'] as const;
 
-// 2. ZOD SCHEMA
+// 2️⃣ DEFAULT VALUE (if applicable)
+export const DEFAULT_API_KEYS_MODAL_TAB: ApiKeysModalTab = 'list';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const ApiKeysModalTabSchema = z.enum(API_KEYS_MODAL_TABS).openapi({
   description: 'API keys modal tab selection',
   example: 'list',
 });
 
-// 3. TYPESCRIPT TYPE
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type ApiKeysModalTab = z.infer<typeof ApiKeysModalTabSchema>;
 
-// 4. DEFAULT VALUE
-export const DEFAULT_API_KEYS_MODAL_TAB: ApiKeysModalTab = 'list';
-
-// 5. CONSTANT OBJECT
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const ApiKeysModalTabs = {
   LIST: 'list' as const,
   CREATE: 'create' as const,
 } as const;
 
-// 6. VALIDATION HELPER
 export function isValidApiKeysModalTab(value: unknown): value is ApiKeysModalTab {
   return typeof value === 'string' && API_KEYS_MODAL_TABS.includes(value as ApiKeysModalTab);
 }
@@ -1260,28 +1402,27 @@ export function isValidApiKeysModalTab(value: unknown): value is ApiKeysModalTab
 // SKELETON USECASE
 // ============================================================================
 
-// 1. ARRAY CONSTANT
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const SKELETON_USECASES = ['chat', 'demo'] as const;
 
-// 2. ZOD SCHEMA
+// 2️⃣ DEFAULT VALUE (if applicable)
+export const DEFAULT_SKELETON_USECASE: SkeletonUsecase = 'chat';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const SkeletonUsecaseSchema = z.enum(SKELETON_USECASES).openapi({
   description: 'Skeleton component usecase variant',
   example: 'chat',
 });
 
-// 3. TYPESCRIPT TYPE
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type SkeletonUsecase = z.infer<typeof SkeletonUsecaseSchema>;
 
-// 4. DEFAULT VALUE
-export const DEFAULT_SKELETON_USECASE: SkeletonUsecase = 'chat';
-
-// 5. CONSTANT OBJECT
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const SkeletonUsecases = {
   CHAT: 'chat' as const,
   DEMO: 'demo' as const,
 } as const;
 
-// 6. VALIDATION HELPER
 export function isValidSkeletonUsecase(value: unknown): value is SkeletonUsecase {
   return typeof value === 'string' && SKELETON_USECASES.includes(value as SkeletonUsecase);
 }

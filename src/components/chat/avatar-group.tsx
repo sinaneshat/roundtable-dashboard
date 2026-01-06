@@ -1,82 +1,35 @@
 import type { AvatarSize } from '@/api/core/enums';
-import { AvatarSizeMetadata, DEFAULT_AVATAR_SIZE } from '@/api/core/enums';
+import { AvatarSizeMetadata, AvatarSizes } from '@/api/core/enums';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Skeleton } from '@/components/ui/skeleton';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ModelReference, ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils';
 
 type AvatarGroupProps = {
   participants: ParticipantConfig[];
-  allModels: Array<{ id: string; name: string; provider: string }>;
+  allModels: ModelReference[];
   maxVisible?: number;
   size?: AvatarSize;
   className?: string;
-  /** Whether to show the total count badge (default: true) */
   showCount?: boolean;
-  /** Whether to overlap avatars (default: true) */
   overlap?: boolean;
-  /** Show skeleton loading state for avatars */
-  isLoading?: boolean;
-  /** Number of skeleton avatars to show when loading */
-  skeletonCount?: number;
+  showOverflow?: boolean;
 };
 
 export function AvatarGroup({
   participants,
   allModels,
   maxVisible = 3,
-  size = DEFAULT_AVATAR_SIZE,
+  size = AvatarSizes.SM,
   className,
   showCount = true,
   overlap = true,
-  isLoading = false,
-  skeletonCount = 3,
+  showOverflow = false,
 }: AvatarGroupProps) {
   const sizeMetadata = AvatarSizeMetadata[size];
-
-  // Show circular skeleton avatars while loading
-  if (isLoading) {
-    return (
-      <div className={cn('flex items-center', className)}>
-        {Array.from({ length: skeletonCount }).map((_, index) => (
-          <div
-            // eslint-disable-next-line react/no-array-index-key -- Static skeleton placeholders with no stable IDs
-            key={`skeleton-${index}`}
-            className="relative"
-            style={{
-              zIndex: overlap ? index + 1 : undefined,
-              marginLeft: index === 0 ? '0px' : overlap ? `${sizeMetadata.overlapOffset}px` : `${sizeMetadata.gapSize}px`,
-            }}
-          >
-            <Skeleton
-              className={cn(
-                sizeMetadata.container,
-                'rounded-full aspect-square',
-                overlap && 'border-2 border-card',
-              )}
-              aria-label="Loading avatar"
-            />
-          </div>
-        ))}
-        {showCount && (
-          <Skeleton
-            className={cn(
-              sizeMetadata.container,
-              'rounded-full aspect-square',
-              sizeMetadata.gapSize === 8 ? 'ml-2' : 'ml-3',
-            )}
-            aria-label="Loading count"
-          />
-        )}
-      </div>
-    );
-  }
-
-  // Store guarantees participants are sorted by priority - just slice
   const visibleParticipants = participants.slice(0, maxVisible);
-
   const totalCount = participants.length;
+  const hasOverflow = totalCount > maxVisible;
 
   return (
     <div className={cn('flex items-center', className)}>
@@ -85,13 +38,15 @@ export function AvatarGroup({
         if (!model)
           return null;
 
+        const marginLeft = index === 0 ? '0px' : overlap ? `${sizeMetadata.overlapOffset}px` : `${sizeMetadata.gapSize}px`;
+
         return (
           <div
             key={participant.id}
             className="relative"
             style={{
               zIndex: overlap ? index + 1 : undefined,
-              marginLeft: index === 0 ? '0px' : overlap ? `${sizeMetadata.overlapOffset}px` : `${sizeMetadata.gapSize}px`,
+              marginLeft,
             }}
           >
             <Avatar
@@ -113,7 +68,25 @@ export function AvatarGroup({
           </div>
         );
       })}
-      {/* Total count badge */}
+      {showOverflow && hasOverflow && (
+        <div
+          className="relative"
+          style={{
+            zIndex: overlap ? visibleParticipants.length + 1 : undefined,
+            marginLeft: overlap ? `${sizeMetadata.overlapOffset}px` : `${sizeMetadata.gapSize}px`,
+          }}
+        >
+          <div
+            className={cn(
+              sizeMetadata.container,
+              'flex items-center justify-center rounded-full bg-card text-muted-foreground',
+              overlap && 'border-2 border-card',
+            )}
+          >
+            <span className={cn(sizeMetadata.text, 'font-medium leading-none -translate-y-[2px]')}>…</span>
+          </div>
+        </div>
+      )}
       {showCount && (
         <div
           className={cn(

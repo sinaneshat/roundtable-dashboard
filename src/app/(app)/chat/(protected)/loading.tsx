@@ -1,33 +1,18 @@
 import Image from 'next/image';
 
-import { RadialGlow } from '@/components/ui/radial-glow';
+import { LogoGlow } from '@/components/ui/logo-glow';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BRAND } from '@/constants';
+import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 
 export default function ChatOverviewLoading() {
   return (
     <div className="flex flex-col relative flex-1 min-h-dvh">
-      <div
-        className="fixed inset-0 pointer-events-none overflow-hidden"
-        style={{ zIndex: 0 }}
-      >
-        <div
-          className="absolute"
-          style={{
-            top: '-100px',
-            left: '63%',
-            transform: 'translateX(-50%)',
-          }}
-        >
-          <RadialGlow size={500} offsetY={0} duration={18} animate />
-        </div>
-      </div>
-
       <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-8">
         <div className="w-full">
           <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
             <div className="relative h-20 w-20 sm:h-24 sm:w-24">
+              <LogoGlow />
               <Image
                 src={BRAND.logos.main}
                 alt={BRAND.name}

@@ -1,49 +1,34 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { MessageStatuses } from '@/api/core/enums';
-import type { StoredPreSearch } from '@/api/routes/chat/schema';
-import {
-  ChainOfThought,
-  ChainOfThoughtContent,
-  ChainOfThoughtHeader,
-} from '@/components/ai-elements/chain-of-thought';
+import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Icons } from '@/components/icons';
 import { useChatStore } from '@/components/providers';
-import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FadeIn } from '@/components/ui/motion';
 import { queryKeys } from '@/lib/data/query-keys';
 import { cn } from '@/lib/ui/cn';
 import { AnimationIndices } from '@/stores/chat';
 
-// Lazy-loaded - only rendered when pre-search streaming is active (~637 lines)
-const PreSearchStream = dynamic(
-  () => import('./pre-search-stream').then(m => m.PreSearchStream),
-  { ssr: false },
-);
-
-// Infer PreSearchDataPayload from StoredPreSearch
-type PreSearchDataPayload = NonNullable<StoredPreSearch['searchData']>;
+import { PreSearchStream } from './pre-search-stream';
 
 type PreSearchCardProps = {
   threadId: string;
   preSearch: StoredPreSearch;
-  isLatest?: boolean;
   className?: string;
   streamingRoundNumber?: number | null;
-  demoOpen?: boolean; // Demo mode controlled accordion state
-  demoShowContent?: boolean; // Demo mode controlled content visibility
+  demoOpen?: boolean;
+  demoShowContent?: boolean;
 };
 
 export function PreSearchCard({
   threadId,
   preSearch,
-  isLatest = false,
   className,
   streamingRoundNumber,
   demoOpen,
@@ -66,10 +51,7 @@ export function PreSearchCard({
   const [manualControl, setManualControl] = useState<{ round: number; open: boolean } | null>(null);
 
   const isManualControlValid = useMemo(() => {
-    if (!manualControl)
-      return false;
-    // If streaming a newer round, manual control is no longer valid
-    if (streamingRoundNumber != null && streamingRoundNumber > manualControl.round) {
+    if (!manualControl || (streamingRoundNumber != null && streamingRoundNumber > manualControl.round)) {
       return false;
     }
     return true;
@@ -111,17 +93,28 @@ export function PreSearchCard({
   }, [preSearch.roundNumber, updatePreSearchStatus]);
 
   const handleStreamComplete = useCallback((completedData?: PreSearchDataPayload) => {
-    if (completedData) {
-      updatePreSearchData(preSearch.roundNumber, completedData);
-      updatePreSearchStatus(preSearch.roundNumber, MessageStatuses.COMPLETE);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.preSearches(threadId),
-      });
-    }
+    if (!completedData)
+      return;
+
+    updatePreSearchData(preSearch.roundNumber, completedData);
+    updatePreSearchStatus(preSearch.roundNumber, MessageStatuses.COMPLETE);
+
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.threads.preSearches(threadId),
+    });
   }, [threadId, preSearch.roundNumber, updatePreSearchData, updatePreSearchStatus, queryClient]);
 
   const isStreamingOrPending = preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING;
   const hasError = preSearch.status === MessageStatuses.FAILED;
+
+  const totalSources = useMemo(() => {
+    if (!preSearch.searchData?.results)
+      return 0;
+    return preSearch.searchData.results.reduce(
+      (sum, r) => sum + (r.results?.length || 0),
+      0,
+    );
+  }, [preSearch.searchData]);
 
   const handleOpenChange = useCallback((open: boolean) => {
     if (isStreamingOrPending)
@@ -136,45 +129,53 @@ export function PreSearchCard({
       return true;
     if (isManualControlValid && manualControl)
       return manualControl.open;
-    return isLatest;
-  }, [demoOpen, isStreamingOrPending, isManualControlValid, manualControl, isLatest]);
+    return false;
+  }, [demoOpen, isStreamingOrPending, isManualControlValid, manualControl]);
 
   return (
-    <div className={cn('w-full mb-4', className)}>
-      <ChainOfThought
-        open={isOpen}
-        onOpenChange={handleOpenChange}
-        disabled={isStreamingOrPending}
-        className={cn(isStreamingOrPending && 'cursor-default')}
-      >
-        <div className="relative">
-          <ChainOfThoughtHeader>
-            <div className="flex items-center gap-2 w-full min-w-0">
-              <Icons.zap className="size-4 text-blue-500 flex-shrink-0" />
-              <span className="text-sm font-medium whitespace-nowrap">
-                {t('chat.preSearch.title')}
-              </span>
-              {isStreamingOrPending && (
-                <Badge
-                  variant="outline"
-                  className="text-[10px] sm:text-xs h-5 px-1.5 sm:px-2 flex-shrink-0 bg-blue-500/10 text-blue-500 border-blue-500/20"
-                >
-                  {t('chat.preSearch.searching')}
-                </Badge>
-              )}
-              {hasError && (
-                <Badge
-                  variant="outline"
-                  className="text-[10px] sm:text-xs h-5 px-1.5 sm:px-2 flex-shrink-0 bg-red-500/10 text-red-500 border-red-500/20"
-                >
-                  {t('chat.preSearch.error')}
-                </Badge>
-              )}
-            </div>
-          </ChainOfThoughtHeader>
+    <div className={cn('w-full mb-14', className)}>
+      <div className="flex items-center gap-3 mb-6">
+        <div className="size-8 flex items-center justify-center rounded-full bg-blue-500/20 shrink-0">
+          <Icons.globe className="size-4 text-blue-300" />
         </div>
 
-        <ChainOfThoughtContent>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-xl font-semibold text-muted-foreground">
+            {t('chat.preSearch.title')}
+          </span>
+
+          {isStreamingOrPending && (
+            <span className="size-1.5 rounded-full bg-primary/60 animate-pulse shrink-0" />
+          )}
+
+          {hasError && (
+            <span className="size-1.5 rounded-full bg-destructive/80 shrink-0" />
+          )}
+        </div>
+      </div>
+
+      <Collapsible open={isOpen} onOpenChange={handleOpenChange} disabled={isStreamingOrPending}>
+        <CollapsibleTrigger
+          className={cn(
+            'flex items-center gap-1.5 text-muted-foreground text-sm cursor-pointer',
+            'hover:text-foreground transition-colors',
+            isStreamingOrPending && 'cursor-default pointer-events-none',
+          )}
+        >
+          <Icons.chevronRight
+            className={cn(
+              'size-3.5 shrink-0 transition-transform duration-200',
+              isOpen && 'rotate-90',
+            )}
+          />
+          <span className="font-medium">
+            {isStreamingOrPending
+              ? t('chat.preSearch.searching')
+              : t('chat.preSearch.searchedSources', { count: totalSources })}
+          </span>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent className="mt-3">
           {(demoShowContent === undefined || demoShowContent) && (
             <FadeIn duration={0.25}>
               <div className="space-y-4">
@@ -186,6 +187,7 @@ export function PreSearchCard({
                     onStreamComplete={handleStreamComplete}
                   />
                 )}
+
                 {hasError && preSearch.errorMessage && (
                   <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
                     <span className="size-1.5 rounded-full bg-destructive/80" />
@@ -195,8 +197,8 @@ export function PreSearchCard({
               </div>
             </FadeIn>
           )}
-        </ChainOfThoughtContent>
-      </ChainOfThought>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }

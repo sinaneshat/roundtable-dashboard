@@ -8,8 +8,8 @@
     "highContrast": "HighContrast",
     "largeText": "LargeText",
     "mobileSidebar": {
-      "title": "Sidebar",
-      "description": "Displays the mobile sidebar."
+      "title": "Navigation",
+      "description": "Main navigation menu"
     },
     "morePages": "More pages",
     "nextPage": "Go to next page",
@@ -37,6 +37,7 @@
     "next": "Next",
     "previous": "Previous",
     "retry": "Retry",
+    "save": "Save",
     "scrollToBottom": "Scroll to bottom",
     "select": "Select",
     "tryAgain": "Try Again",
@@ -203,7 +204,7 @@
       "termsNotice": "By confirming, you agree to the cancellation terms. You can reactivate your subscription at any time before it expires.",
       "timeline": {
         "accessUntil": "You'll retain full access to all premium features until {date}",
-        "downgrade": "After your subscription ends, your account will automatically downgrade to the free tier",
+        "downgrade": "After your subscription ends, your account will return to the Free plan",
         "immediate": "No further charges will be made to your account",
         "title": "Cancellation Timeline:"
       },
@@ -213,14 +214,8 @@
     },
     "currentPlan": "Current Plan",
     "interval": {
-      "annual": "Annual",
       "credits": "Credits",
       "monthly": "Monthly"
-    },
-    "credits": {
-      "connectCardRequired": "Connect a card to purchase credits",
-      "connectCardDescription": "Select the Free or Pro plan first to connect your payment method, then you can purchase additional credit packs.",
-      "viewPlans": "View Plans"
     },
     "manageBilling": "Manage Billing",
     "noPlansForInterval": "No plans available for this billing period",
@@ -231,7 +226,7 @@
     "renewsOn": "Renews On",
     "status": {
       "canceled": "Canceled",
-      "canceledTooltip": "Your subscription will be canceled on {date}. You'll retain full access to all premium features until then, after which your account will automatically downgrade to the free tier.",
+      "canceledTooltip": "Your subscription will be canceled on {date}. You'll retain full access to all premium features until then, after which your account will return to the Free plan.",
       "endOfPeriod": "the end of your billing period"
     },
     "success": {
@@ -245,10 +240,6 @@
       "startChat": "Start Your Roundtable",
       "title": "Payment Successful!",
       "viewPricing": "View Pricing Plans",
-      "cardConnected": {
-        "title": "Card Connected!",
-        "description": "You've received 10,000 free credits to get started"
-      },
       "planLimits": {
         "concurrentModels": "Concurrent Models",
         "monthlyCredits": "Monthly Credits",
@@ -260,11 +251,10 @@
         "status": "Status",
         "activeUntilLabel": "Active until",
         "paidDescription": "Your subscription includes the following features",
-        "freeDescription": "Your free plan includes the following features",
+        "defaultDescription": "You have access to the following features",
         "models": "AI Models",
-        "credits": "Credits Balance",
         "monthly": "Monthly Refresh",
-        "bonus": "Free Bonus",
+        "bonus": "Bonus",
         "oneTime": "One-time"
       },
       "credits": {
@@ -351,7 +341,6 @@
     "models": {
       "aiModels": "AI Models",
       "models": "Models",
-      "loading": "Loading...",
       "searchModels": "Search AI models...",
       "noModelsFound": "No models found.",
       "selectedModels": "Selected Models",
@@ -376,7 +365,8 @@
       "mostPopular": "Most Popular",
       "topModels": "Top AI Models",
       "model": "model",
-      "upgradeToUnlock": "Upgrade to unlock these models",
+      "upgradeToUnlock": "Upgrade to unlock all models",
+      "unlockAllModels": "Unlock All Pro Models",
       "upgradeToTier": "Upgrade to {tier}",
       "minimumRequired": {
         "title": "Model Required",
@@ -439,9 +429,7 @@
       },
       "buildCustom": {
         "title": "Build Custom"
-      },
-      "customizePreset": "Customize preset",
-      "deletePreset": "Delete preset"
+      }
     },
     "roles": {
       "addRole": "Add Role",
@@ -522,8 +510,6 @@
       "loadingPreview": "Loading preview...",
       "previewUnavailable": "Preview unavailable",
       "defaultFileType": "File",
-      "uploading": "Uploading...",
-      "uploadFailed": "Upload failed",
       "dropHere": "Drop files here",
       "dropDescription": "Upload files to include in your message"
     },
@@ -543,6 +529,7 @@
       "retry": "Retry",
       "source": "source",
       "sources": "sources",
+      "searchedSources": "Searched {count} sources",
       "searchDepth": {
         "basic": "basic",
         "advanced": "advanced"
@@ -792,7 +779,6 @@
       "authenticationSolution": "There's an issue with the API authentication. Please contact support.",
       "unknownTitle": "Unexpected Error",
       "unknownSolution": "An unexpected error occurred. Try again, and contact support if the issue persists.",
-      "unexpectedError": "An unexpected error occurred",
       "defaultDescription": "The AI model encountered an error while processing your request.",
       "retryAction": "Retry",
       "nonRetryableHint": "This error cannot be automatically retried. Please try a different approach.",
@@ -858,8 +844,6 @@
       "threadPlaceholder": "Continue the conversation...",
       "voiceInput": "Voice input",
       "stopRecording": "Stop recording",
-      "recording": "Recording...",
-      "clickMicToStop": "Click mic to stop",
       "listeningPlaceholder": "Listening... speak now",
       "label": "Message input",
       "streamingLabel": "Message input (disabled while AI responds)",
@@ -871,7 +855,6 @@
       "removeAttachment": "Remove attachment",
       "attachmentUploadFailed": "Upload failed",
       "noModelsSelected": "Select at least 1 model to send a message",
-      "loadingModels": "Loading models...",
       "messageTooLong": "Message too long. Please shorten to send.",
       "send": "Send message",
       "submitting": "Sending..."
@@ -933,6 +916,8 @@
     "noChatsYet": "No chats yet",
     "noChatsDescription": "Start a new conversation to begin collaborating with AI participants",
     "emptyStateHint": "Start a conversation",
+    "emptyStateTitle": "Start your first conversation",
+    "emptyStateSubtext": "Your chats will appear here",
     "status": {
       "streaming": "AI is thinking...",
       "navigating": "Navigating to conversation..."
@@ -990,10 +975,10 @@
       "gatheringThoughts": "Thinking...",
       "waitingForWebResults": "Searching...",
       "moderatorObserving": "Observing...",
-      "waitingToCouncilModerate": "Waiting...",
-      "waitingToSynthesize": "Waiting...",
+      "waitingToSynthesize": "Synthesizing...",
       "emptyResponse": "No visible response from {model}",
-      "reasoningOnlyResponse": "{model} used reasoning but produced no text output"
+      "reasoningOnlyResponse": "{model} used reasoning but produced no text output",
+      "tierRequired": "{tier} required"
     },
     "streamingTimeout": "Streaming Timeout",
     "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
@@ -1014,20 +999,20 @@
       "dislike": "This round was not helpful"
     },
     "roundActions": {
+      "copySummary": "Copy summary",
       "copyRound": "Copy round",
       "copySuccess": "Round copied",
       "copySuccessDescription": "Round copied to clipboard as markdown",
       "copyError": "Copy failed",
       "copyErrorDescription": "Failed to copy round to clipboard",
-      "export": {
-        "roundTitle": "Round {roundNumber}",
-        "exportedOn": "Exported on {date}",
-        "user": "User",
-        "assistant": "Assistant",
-        "moderator": "Moderator",
-        "model": "Model: {modelId}",
-        "generatedBy": "Generated by Roundtable"
-      }
+      "share": "Share thread"
+    },
+    "messageActions": {
+      "copy": "Copy response",
+      "copySuccess": "Response copied",
+      "copySuccessDescription": "Response copied to clipboard",
+      "copyError": "Copy failed",
+      "copyErrorDescription": "Failed to copy response to clipboard"
     },
     "quota": {
       "messageQuotaExceeded": "Message Quota Reached",
@@ -1037,7 +1022,7 @@
       "limitReached": "Usage limit reached",
       "threadLimitReached": "Thread limit reached ({current}/{limit})",
       "messageLimitReached": "Message limit reached ({current}/{limit})",
-      "councilModeratorLimitReached": "Council moderator limit reached ({current}/{limit})",
+      "summaryLimitReached": "Summary limit reached ({current}/{limit})",
       "resetsOn": "Quota resets on {date}."
     },
     "credits": {
@@ -1056,16 +1041,11 @@
   "common": {
     "error": "An error occurred",
     "loading": "Loading...",
-    "maintenance": "Maintenance",
     "none": "None",
     "or": "Or",
     "logo": "Logo",
     "more": "More",
     "statusLabel": "Status: {status}"
-  },
-  "errors": {
-    "streamFailed": "Stream failed",
-    "unknownError": "An unknown error occurred"
   },
   "forms": {
     "loading": "Loading",
@@ -1214,6 +1194,7 @@
   },
   "navigation": {
     "chat": "Chat",
+    "chats": "Chats",
     "dashboard": "Dashboard",
     "debates": "Debates",
     "features": "Features",
@@ -1237,66 +1218,39 @@
       "description": "The page you were looking for could not be found. Please check the URL or try navigating back to the homepage.",
       "goHome": "Go to Homepage",
       "title": "Oops, page not found!"
-    },
-    "offline": {
-      "title": "You're Offline",
-      "description": "It looks like you've lost your internet connection. Please check your network and try again.",
-      "statusMessage": "Some features may not work properly while you're offline. Don't worry - your data is safe and will sync when you reconnect.",
-      "tryAgain": "Try Again",
-      "goHome": "Go Home",
-      "troubleshootingTitle": "Troubleshooting tips:",
-      "tips": {
-        "wifi": "Check if your Wi-Fi or mobile data is turned on",
-        "airplane": "Try turning airplane mode off",
-        "router": "Restart your router if on Wi-Fi",
-        "cached": "Some cached content may still be available"
-      }
     }
   },
   "plans": {
     "errorDescription": "There was an error loading subscription plans. Please try again.",
-    "noCreditsPackages": "No credit packages available",
     "pricing": {
       "free": {
-        "description": "Connect your card to get started",
+        "description": "Try with 1 free roundtable",
         "features": {
-          "aiModels": "Up to 5 AI models",
+          "aiModels": "3 AI models for 1 free round",
           "basicSupport": "Basic support",
-          "cardCredits": "Connect card to get 10K free credits",
-          "usageBased": "Pay-as-you-go after free credits"
+          "freeRound": "1 free roundtable conversation",
+          "upgradeRequired": "Upgrade to Pro for unlimited"
         },
         "name": "Free"
       },
-      "paid": {
+      "pro": {
         "description": "Full access with monthly credits",
         "features": {
           "aiModels": "Unlimited AI models",
           "prioritySupport": "Priority support",
-          "monthlyCredits": "1,000,000 credits/month",
+          "monthlyCredits": "100,000 credits/month",
           "autoRenewal": "Automatic credit renewal"
         },
         "name": "Pro"
-      },
-      "custom": {
-        "description": "Buy credits as needed",
-        "features": {
-          "flexibleCredits": "Purchase any amount",
-          "neverExpires": "Credits never expire",
-          "bulkDiscounts": "Volume discounts available"
-        },
-        "name": "Custom Credits"
       }
     }
   },
   "pricing": {
     "card": {
-      "annual": "Annual Plan",
       "cancelSubscription": "Cancel Subscription",
-      "connectCard": "Connect Card",
       "credits": "credits",
       "currentPlan": "Current Plan",
       "daysFreeTrial": "days free trial",
-      "free": "Free",
       "getStarted": "Get Started",
       "manageBilling": "Manage Billing",
       "monthly": "Monthly Plan",
@@ -1304,16 +1258,14 @@
       "oneTime": "one-time",
       "processing": "Processing...",
       "purchase": "Purchase",
-      "saveAnnually": "Save {percent}% annually",
       "subscribe": "Subscribe",
       "switchPlan": "Switch to This Plan",
       "upgradePlan": "Upgrade plan",
-      "upgradeDescription": "More access to the best models",
+      "upgradeDescription": "Unlock all AI models & features",
       "upgradeToPro": "Upgrade to Pro"
     },
-    "free": {
+    "default": {
       "alwaysActive": "Always Active",
-      "luxuryTier": "Premium Gift - Included Free",
       "activatedByDefault": "Activated by default for you"
     },
     "page": {
@@ -1322,21 +1274,9 @@
     }
   },
   "pwa": {
-    "dismiss": "Dismiss",
-    "gotIt": "Got it",
-    "install": "Install",
-    "installDescription": "Install for quick access and offline support",
-    "installTitle": "Install {app}",
-    "iosInstallDescription": "Follow these steps to add to your home screen",
-    "iosInstallTitle": "Install {app}",
-    "iosStep1": "Tap the",
-    "iosStep1Suffix": "share button below",
-    "iosStep2": "Scroll and tap",
-    "iosStep2Suffix": "Add to Home Screen",
-    "iosStep3": "Tap Add to confirm",
+    "dismiss": "Dismiss update notification",
     "later": "Later",
     "newVersionAvailable": "Update available",
-    "notNow": "Not now",
     "updateDescription": "A new version is ready. Update now for the latest features and improvements.",
     "updateNow": "Update"
   },
@@ -1426,19 +1366,11 @@
     "tiers": {
       "free": {
         "name": "Free",
-        "description": "Basic access to free AI models with limited features"
-      },
-      "starter": {
-        "name": "Starter",
-        "description": "Budget-friendly models with better performance and increased limits"
+        "description": "1 free roundtable to get started"
       },
       "pro": {
         "name": "Pro",
-        "description": "Professional-grade models with excellent quality and advanced features"
-      },
-      "power": {
-        "name": "Power",
-        "description": "Flagship models with maximum capabilities and unlimited access"
+        "description": "1M monthly credits with unlimited AI models and priority support"
       }
     }
   },
@@ -1467,8 +1399,6 @@
   },
   "usage": {
     "active": "Active",
-    "addCard": "Add card",
-    "connectCard": "Connect Card",
     "credits": "Credits",
     "creditsAvailable": "credits available",
     "daysLeft": "days left",
@@ -1476,17 +1406,17 @@
     "messages": "Messages",
     "messagesRemaining": "messages remaining",
     "summary": "Summary",
-    "councilModeratorRemaining": "council moderations remaining",
+    "summaryRemaining": "summaries remaining",
     "plan": "Plan",
     "planUsage": "Credits",
     "threads": "Threads",
     "threadsRemaining": "threads remaining",
     "upgrade": "Upgrade",
     "upgradeNow": "Upgrade Now",
-    "cardAlert": {
-      "description": "Connect your card to get {credits} free credits and start chatting!",
-      "connectCard": "Connect Card",
-      "sidebarMessage": "Get {credits} free credits when you connect your card!"
+    "alert": {
+      "defaultDescription": "You have 1 free roundtable with 3 AI models. Upgrade to unlock all.",
+      "postRoundDescription": "You've experienced the magic! Upgrade to Pro to keep the conversation going.",
+      "upgradeToPro": "Upgrade to Pro"
     },
     "scheduledChange": "Plan Change Scheduled",
     "changingTo": "Switching to",
@@ -1504,10 +1434,14 @@
       "critical": "Limit reached",
       "nearLimit": "Getting close to limit"
     },
+    "quotaAlert": {
+      "message": "You've run out of credits. Upgrade to Pro to continue chatting.",
+      "action": "Upgrade"
+    },
     "viewDetails": "View usage details",
     "managePlan": "Manage Plan",
     "available": "available",
-    "councilModerator": "Council Moderator"
+    "moderator": "Analyses"
   },
   "user": {
     "defaultName": "User"
@@ -1577,11 +1511,5 @@
       "failed": "Search failed",
       "cached": "From cache"
     }
-  },
-  "version": {
-    "newVersionAvailable": "New Version Available",
-    "versionLabel": "Version:",
-    "updateDescription": "A new version of the app is available. Update now to get the latest features and improvements.",
-    "updateNow": "Update Now"
   }
 }

@@ -1,11 +1,14 @@
 'use client';
 import { motion } from 'motion/react';
-import dynamic from 'next/dynamic';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import type { KeyboardEvent } from 'react';
 import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ChatSidebarItem } from '@/api/routes/chat/schema';
+import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
+import { ChatThreadMenuItems } from '@/components/chat/chat-thread-menu-items';
+import { ShareDialog } from '@/components/chat/share-dialog';
 import { Icons } from '@/components/icons';
 import {
   AlertDialog,
@@ -20,41 +23,18 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StaggerItem } from '@/components/ui/motion';
 import {
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { TypewriterTitle } from '@/components/ui/typewriter-title';
 import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations';
 import { useCurrentPathname } from '@/hooks/utils';
 
-// Lazy-loaded - only shown when user starts editing a chat name
-const ChatRenameForm = dynamic(
-  () => import('@/components/chat/chat-rename-form').then(m => ({ default: m.ChatRenameForm })),
-  { ssr: false },
-);
-
-// Lazy-loaded - only shown when user clicks delete
-const ChatDeleteDialog = dynamic(
-  () => import('@/components/chat/chat-delete-dialog').then(m => m.ChatDeleteDialog),
-  { ssr: false },
-);
-
-// Lazy-loaded - ShareDialog contains heavy next-share library (~200KB)
-const ShareDialog = dynamic(
-  () => import('@/components/chat/share-dialog').then(m => m.ShareDialog),
-  { ssr: false },
-);
-
-/**
- * Check if a chat is active by comparing pathname against both current slug and previousSlug
- */
 function isChatActive(chat: ChatSidebarItem, pathname: string): boolean {
   const currentSlugUrl = `/chat/${chat.slug}`;
   const previousSlugUrl = chat.previousSlug ? `/chat/${chat.previousSlug}` : null;
@@ -63,22 +43,17 @@ function isChatActive(chat: ChatSidebarItem, pathname: string): boolean {
 
 type ChatListProps = {
   chats: ChatSidebarItem[];
-  isMobile?: boolean;
-  onNavigate?: () => void;
   disableAnimations?: boolean;
 };
 
 type ChatItemProps = {
   chat: ChatSidebarItem;
   isActive: boolean;
-  isMobile: boolean;
-  onNavigate?: () => void;
   onDeleteClick: (chat: ChatSidebarItem) => void;
   onPinClick: (chat: ChatSidebarItem) => void;
   onRenameClick: (chat: ChatSidebarItem) => void;
   onShareClick: (chat: ChatSidebarItem) => void;
   isEditing: boolean;
-  isRenamePending: boolean;
   onRenameSubmit: (chat: ChatSidebarItem, newTitle: string) => void;
   onRenameCancel: () => void;
   disableAnimation?: boolean;
@@ -87,97 +62,106 @@ type ChatItemProps = {
 function ChatItem({
   chat,
   isActive,
-  isMobile,
-  onNavigate,
   onDeleteClick,
   onPinClick,
   onRenameClick,
   onShareClick,
   isEditing,
-  isRenamePending,
   onRenameSubmit,
   onRenameCancel,
   disableAnimation,
 }: ChatItemProps) {
   const t = useTranslations();
-  const router = useRouter();
-  // Store slug in ref to avoid callback recreation on slug changes
-  // This prevents re-renders when slug updates (e.g., AI title generation)
-  const slugRef = useRef(chat.slug);
-  slugRef.current = chat.slug;
+  const chatUrl = `/chat/${chat.slug}`;
+  const [shouldPrefetch, setShouldPrefetch] = useState(false);
+  const [editValue, setEditValue] = useState(chat.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const handleMouseEnter = useCallback(() => setShouldPrefetch(true), []);
 
-  const handleRenameSubmit = useCallback((title: string) => {
-    onRenameSubmit(chat, title);
-  }, [chat, onRenameSubmit]);
-
-  // Prefetch on hover - uses ref to avoid callback recreation
-  const handleMouseEnter = useCallback(() => {
-    router.prefetch(`/chat/${slugRef.current}`);
-  }, [router]);
-
-  // Navigate on click - uses ref for stable callback across slug changes
-  // Avoids React 19 + Radix asChild compose-refs infinite loop
-  const handleClick = useCallback(() => {
-    router.push(`/chat/${slugRef.current}`);
-    if (isMobile && onNavigate) {
-      onNavigate();
+  useLayoutEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
     }
-  }, [router, isMobile, onNavigate]);
+  }, [isEditing]);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const trimmed = editValue.trim();
+      if (trimmed && trimmed !== chat.title) {
+        onRenameSubmit(chat, trimmed);
+      } else {
+        onRenameCancel();
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onRenameCancel();
+    }
+  }, [editValue, chat, onRenameSubmit, onRenameCancel]);
+
+  const handleBlur = useCallback(() => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== chat.title) {
+      onRenameSubmit(chat, trimmed);
+    } else {
+      onRenameCancel();
+    }
+  }, [editValue, chat, onRenameSubmit, onRenameCancel]);
 
   const content = (
     <SidebarMenuItem>
       {isEditing
         ? (
-            <ChatRenameForm
-              initialTitle={chat.title}
-              onSubmit={handleRenameSubmit}
-              onCancel={onRenameCancel}
-              isPending={isRenamePending}
-              isMobile={isMobile}
-            />
+            <div className="flex h-9 w-full min-w-0 items-center gap-2.5 rounded-full bg-accent px-4 py-2 text-sm transition-all duration-200 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring">
+              <input
+                ref={inputRef}
+                type="text"
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleBlur}
+                className="w-full min-w-0 bg-transparent text-sm outline-none border-0 p-0 truncate caret-foreground placeholder:text-muted-foreground"
+                style={{ maxWidth: '13rem' }}
+                aria-label={t('chat.renameConversation')}
+              />
+            </div>
           )
         : (
             <SidebarMenuButton
+              asChild
               isActive={isActive}
-              onClick={handleClick}
-              onMouseEnter={handleMouseEnter}
             >
-              <TypewriterTitle
-                title={chat.title}
-                className="max-w-52"
-              />
+              <Link
+                href={chatUrl}
+                prefetch={shouldPrefetch ? null : false}
+                onMouseEnter={handleMouseEnter}
+              >
+                <div
+                  className="truncate overflow-hidden text-ellipsis whitespace-nowrap"
+                  style={{ maxWidth: '13rem' }}
+                >
+                  {chat.title}
+                </div>
+              </Link>
             </SidebarMenuButton>
           )}
       {!isEditing && (
         <DropdownMenu>
-          {/* Remove asChild to avoid React 19 + Radix compose-refs infinite loop */}
-          <DropdownMenuTrigger
-            className="absolute end-2 flex size-6 items-center justify-center p-0 outline-hidden cursor-pointer text-sidebar-foreground/60 ring-sidebar-ring hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring transition-all duration-150 ease-out [&>svg]:size-4 [&>svg]:shrink-0 after:absolute after:-inset-2 md:after:hidden peer-data-[size=default]/menu-button:top-1.5 group-data-[collapsible=icon]:hidden group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0"
-          >
-            <Icons.moreHorizontal className="size-4" />
-            <span className="sr-only">{t('actions.more')}</span>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuAction showOnHover>
+              <Icons.moreHorizontal className="size-4" />
+              <span className="sr-only">{t('actions.more')}</span>
+            </SidebarMenuAction>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start">
-            <DropdownMenuItem onClick={() => onRenameClick(chat)}>
-              <Icons.pencil className="size-4" />
-              {t('chat.rename')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onPinClick(chat)}>
-              <Icons.pin className="size-4" />
-              {chat.isFavorite ? t('chat.unpin') : t('chat.pin')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onShareClick(chat)}>
-              <Icons.share className="size-4" />
-              {t('chat.share')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => onDeleteClick(chat)}
-            >
-              <Icons.trash className="size-4" />
-              {t('chat.delete')}
-            </DropdownMenuItem>
+            <ChatThreadMenuItems
+              onRename={() => onRenameClick(chat)}
+              onPin={() => onPinClick(chat)}
+              onShare={() => onShareClick(chat)}
+              onDelete={() => onDeleteClick(chat)}
+              isFavorite={!!chat.isFavorite}
+            />
           </DropdownMenuContent>
         </DropdownMenu>
       )}
@@ -190,10 +174,9 @@ function ChatItem({
 
   return <StaggerItem>{content}</StaggerItem>;
 }
+
 export function ChatList({
   chats,
-  isMobile = false,
-  onNavigate,
   disableAnimations = false,
 }: ChatListProps) {
   const t = useTranslations();
@@ -328,17 +311,14 @@ export function ChatList({
                   const isActive = isChatActive(chat, pathname);
                   return (
                     <ChatItem
-                      key={chat.id}
+                      key={editingChatId === chat.id ? `${chat.id}-editing` : chat.id}
                       chat={chat}
                       isActive={isActive}
-                      isMobile={isMobile}
-                      onNavigate={onNavigate}
                       onDeleteClick={handleDeleteClick}
                       onPinClick={handlePinClick}
                       onRenameClick={handleRenameClick}
                       onShareClick={handleShareClick}
                       isEditing={editingChatId === chat.id}
-                      isRenamePending={updateThreadMutation.isPending}
                       onRenameSubmit={handleRenameSubmit}
                       onRenameCancel={handleRenameCancel}
                       disableAnimation={false}
@@ -354,17 +334,14 @@ export function ChatList({
                 const isActive = isChatActive(chat, pathname);
                 return (
                   <ChatItem
-                    key={chat.id}
+                    key={editingChatId === chat.id ? `${chat.id}-editing` : chat.id}
                     chat={chat}
                     isActive={isActive}
-                    isMobile={isMobile}
-                    onNavigate={onNavigate}
                     onDeleteClick={handleDeleteClick}
                     onPinClick={handlePinClick}
                     onRenameClick={handleRenameClick}
                     onShareClick={handleShareClick}
                     isEditing={editingChatId === chat.id}
-                    isRenamePending={updateThreadMutation.isPending}
                     onRenameSubmit={handleRenameSubmit}
                     onRenameCancel={handleRenameCancel}
                     disableAnimation={true}

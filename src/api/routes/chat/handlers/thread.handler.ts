@@ -22,10 +22,12 @@ import {
   ThreadSlugParamSchema,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import { ChangelogChangeTypes, ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, SubscriptionTiers, ThreadStatusSchema } from '@/api/core/enums';
+import { ChangelogChangeTypes, ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, PlanTypes, SubscriptionTiers, ThreadStatusSchema } from '@/api/core/enums';
 import {
+  checkFreeUserHasCreatedThread,
   deductCreditsForAction,
   enforceCredits,
+  getUserCreditBalance,
 } from '@/api/services/credit.service';
 import { getModelById } from '@/api/services/models-config.service';
 import { trackThreadCreated } from '@/api/services/posthog-llm-tracking.service';
@@ -126,6 +128,24 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
   },
   async (c, batch) => {
     const { user } = c.auth();
+
+    // ✅ FREE USER THREAD LIMIT: Free users can only create ONE thread total
+    // This check runs BEFORE credit enforcement to provide a clearer error message
+    const creditBalance = await getUserCreditBalance(user.id);
+    if (creditBalance.planType === PlanTypes.FREE) {
+      const hasExistingThread = await checkFreeUserHasCreatedThread(user.id);
+      if (hasExistingThread) {
+        throw createError.badRequest(
+          'Free users can only create one thread. Subscribe to Pro for unlimited threads.',
+          {
+            errorType: 'resource',
+            resource: 'thread',
+            userId: user.id,
+          },
+        );
+      }
+    }
+
     // ✅ CREDITS: Check if user has enough credits for thread creation + initial message
     // This is the PRIMARY gating mechanism - if user passes this check, they have credits
     // and should be able to create threads. Credits are the real limiting factor.

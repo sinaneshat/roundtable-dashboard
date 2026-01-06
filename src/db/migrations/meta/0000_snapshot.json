@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ac6e0d13-b6ce-4ea7-925d-55c259578126",
+  "id": "110430ec-c66e-4b58-9c95-4e22ce66c103",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -2813,14 +2813,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "pay_as_you_go_enabled": {
-          "name": "pay_as_you_go_enabled",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
         },
         "version": {
           "name": "version",

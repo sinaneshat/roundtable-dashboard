@@ -62,6 +62,7 @@ import {
   Lightbulb,
   Loader2,
   Lock,
+  LockOpen,
   LogOut,
   Mail,
   Menu,
@@ -85,6 +86,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Square,
+  SquareStack,
   StopCircle,
   Swords,
   Target,
@@ -104,11 +106,9 @@ import {
   Zap,
 } from 'lucide-react';
 
-// Re-export the icon type for prop typing
 export type Icon = LucideIcon;
 export type IconProps = LucideProps;
 
-// Centralized icon map - single source of truth
 export const Icons = {
   // Alerts & Status
   alertCircle: AlertCircle,
@@ -135,6 +135,7 @@ export const Icons = {
   download: Download,
   externalLink: ExternalLink,
   lock: Lock,
+  lockOpen: LockOpen,
   logOut: LogOut,
   minus: Minus,
   pencil: Pencil,
@@ -184,6 +185,7 @@ export const Icons = {
   slidersHorizontal: SlidersHorizontal,
   sparkles: Sparkles,
   square: Square,
+  squareStack: SquareStack,
   stopCircle: StopCircle,
   zap: Zap,
 
@@ -220,5 +222,4 @@ export const Icons = {
   database: Database,
 } as const;
 
-// Type for icon keys (useful for dynamic icon selection)
 export type IconName = keyof typeof Icons;

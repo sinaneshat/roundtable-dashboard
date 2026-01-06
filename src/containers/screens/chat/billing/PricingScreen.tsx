@@ -16,16 +16,10 @@ import {
   useProductsQuery,
   useSubscriptionsQuery,
   useSwitchSubscriptionMutation,
-  useUsageStatsQuery,
 } from '@/hooks';
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
 
-/**
- * Pricing Screen - Client component for billing management
- * Products prefetched in layout.tsx via HydrationBoundary pattern
- */
 export default function PricingScreen() {
   const router = useRouter();
   const t = useTranslations();
@@ -35,19 +29,12 @@ export default function PricingScreen() {
 
   const { data: productsData, isLoading: isLoadingProducts, error: productsError } = useProductsQuery();
   const { data: subscriptionsData } = useSubscriptionsQuery();
-  const { data: usageStatsData } = useUsageStatsQuery();
-
-  // Check if user has a card connected (has payment method or subscription)
-  const hasCardConnected = usageStatsData?.success
-    ? usageStatsData.data?.plan?.hasPaymentMethod ?? false
-    : false;
 
   const createCheckoutMutation = useCreateCheckoutSessionMutation();
   const cancelMutation = useCancelSubscriptionMutation();
   const switchMutation = useSwitchSubscriptionMutation();
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
 
-  // Products hydrated from server via HydrationBoundary in layout.tsx
   const products = productsData?.success ? productsData.data?.items ?? [] : [];
   const subscriptions: Subscription[] = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
 
@@ -58,10 +45,7 @@ export default function PricingScreen() {
   const handleSubscribe = async (priceId: string) => {
     setProcessingPriceId(priceId);
     try {
-      // ✅ CREDIT PURCHASES: One-time credit packs always go through checkout, not subscription switch
-      const isOneTimeCreditPurchase = priceId in CREDIT_CONFIG.CUSTOM_CREDITS.packages;
-
-      if (activeSubscription && !isOneTimeCreditPurchase) {
+      if (activeSubscription) {
         // Subscription switch (upgrade/downgrade between plans)
         const result = await switchMutation.mutateAsync({
           param: { id: activeSubscription.id },
@@ -86,7 +70,7 @@ export default function PricingScreen() {
           }
         }
       } else {
-        // New subscription OR one-time credit purchase - both go through checkout
+        // New subscription checkout
         const result = await createCheckoutMutation.mutateAsync({
           json: { priceId },
         });
@@ -154,7 +138,6 @@ export default function PricingScreen() {
         onCancel={handleCancel}
         onManageBilling={handleManageBilling}
         showSubscriptionBanner={false}
-        hasCardConnected={hasCardConnected}
       />
     </ChatPage>
   );

@@ -1,16 +1,12 @@
 import { z } from '@hono/zod-openapi';
 
-import { CREDIT_ACTIONS, PLAN_TYPES, UsageStatusSchema } from '@/api/core/enums';
+import { CREDIT_ACTIONS, CREDIT_TRANSACTION_TYPES, PLAN_TYPES, UsageStatusSchema } from '@/api/core/enums';
 import { createApiResponseSchema, PaginationQuerySchema } from '@/api/core/schemas';
 
 // ============================================================================
 // Credit Balance API Schemas
 // ============================================================================
 
-/**
- * Credit balance payload schema
- * Returns current credit balance and plan information
- */
 export const CreditBalancePayloadSchema = z.object({
   balance: z.number().openapi({
     description: 'Current available credit balance',
@@ -38,16 +34,12 @@ export const CreditBalancePayloadSchema = z.object({
       example: 'free',
     }),
     monthlyCredits: z.number().openapi({
-      description: 'Monthly credit allocation (0 for free plan)',
+      description: 'Monthly credit allocation (0 for free tier - one-time signup credits only)',
       example: 0,
     }),
     nextRefillAt: z.string().datetime().nullable().openapi({
-      description: 'Next monthly refill date (null for free plan)',
+      description: 'Next monthly refill date (null for free tier - no renewals)',
       example: null,
-    }),
-    payAsYouGoEnabled: z.boolean().openapi({
-      description: 'Whether pay-as-you-go is enabled',
-      example: false,
     }),
   }).openapi({
     description: 'Plan information',
@@ -62,9 +54,6 @@ export const CreditBalanceResponseSchema = createApiResponseSchema(
 // Credit Transaction API Schemas
 // ============================================================================
 
-/**
- * Single credit transaction schema
- */
 export const CreditTransactionSchema = z.object({
   id: z.string().openapi({
     description: 'Transaction ID',
@@ -108,9 +97,6 @@ export const CreditTransactionSchema = z.object({
   }),
 }).openapi('CreditTransaction');
 
-/**
- * Credit transactions list payload
- */
 export const CreditTransactionsPayloadSchema = z.object({
   items: z.array(CreditTransactionSchema).openapi({
     description: 'List of credit transactions',
@@ -139,11 +125,8 @@ export const CreditTransactionsResponseSchema = createApiResponseSchema(
   CreditTransactionsPayloadSchema,
 ).openapi('CreditTransactionsResponse');
 
-/**
- * Query params for transactions list
- */
 export const CreditTransactionsQuerySchema = PaginationQuerySchema.extend({
-  type: z.string().optional().openapi({
+  type: z.enum(CREDIT_TRANSACTION_TYPES).optional().openapi({
     description: 'Filter by transaction type',
     example: 'deduction',
   }),
@@ -157,9 +140,6 @@ export const CreditTransactionsQuerySchema = PaginationQuerySchema.extend({
 // Credit Estimate API Schemas
 // ============================================================================
 
-/**
- * Credit estimate request schema
- */
 export const CreditEstimateRequestSchema = z.object({
   action: z.enum(CREDIT_ACTIONS).openapi({
     description: 'Action to estimate cost for',
@@ -183,9 +163,6 @@ export const CreditEstimateRequestSchema = z.object({
   }),
 }).openapi('CreditEstimateRequest');
 
-/**
- * Credit estimate response schema
- */
 export const CreditEstimatePayloadSchema = z.object({
   estimatedCredits: z.number().openapi({
     description: 'Estimated credit cost',

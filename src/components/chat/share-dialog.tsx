@@ -33,7 +33,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BRAND } from '@/constants';
@@ -223,34 +222,36 @@ export function ShareDialog({
           <DialogDescription>{t('shareThreadDescription')}</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh]">
-          <div className="flex flex-col gap-4">
-            <div className="space-y-3">
-              <div className="text-sm font-medium">
-                {t('shareDialog.copyLinkLabel')}
+        <div className="flex flex-col gap-4">
+          {/* Share Link Section */}
+          <div className="space-y-3">
+            <div className="text-sm font-medium">
+              {t('shareDialog.copyLinkLabel')}
+            </div>
+            {/* Mobile: stack vertically, Desktop: horizontal */}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1">
+                <Input
+                  readOnly
+                  value={shareUrl}
+                  className="h-11 sm:h-10 w-full pr-11 sm:pr-9 font-mono text-sm bg-muted/50"
+                  onClick={e => e.currentTarget.select()}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleCopy(shareUrl, 'link')}
+                  className={cn(
+                    'absolute right-0 top-0 flex h-11 sm:h-10 w-11 sm:w-9 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground',
+                    copySuccess === 'link' && 'text-green-500 hover:text-green-500',
+                  )}
+                >
+                  {copySuccess === 'link' ? <Icons.check className="size-5 sm:size-4" /> : <Icons.copy className="size-5 sm:size-4" />}
+                </button>
               </div>
               <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    readOnly
-                    value={shareUrl}
-                    className="h-10 w-full pr-9 font-mono text-sm bg-muted/50"
-                    onClick={e => e.currentTarget.select()}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(shareUrl, 'link')}
-                    className={cn(
-                      'absolute right-0 top-0 flex h-10 w-9 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground',
-                      copySuccess === 'link' && 'text-green-500 hover:text-green-500',
-                    )}
-                  >
-                    {copySuccess === 'link' ? <Icons.check className="size-4" /> : <Icons.copy className="size-4" />}
-                  </button>
-                </div>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" startIcon={<Icons.share />}>
+                    <Button variant="outline" className="h-11 sm:h-10 flex-1 sm:flex-none" startIcon={<Icons.share className="size-4" />}>
                       {t('shareDialog.shareOn')}
                     </Button>
                   </PopoverTrigger>
@@ -259,7 +260,7 @@ export function ShareDialog({
                       {SOCIAL_PLATFORMS.map(({ id, name, Component }) => (
                         <Component key={id} url={shareUrl} title={shareTitle} blankTarget>
                           <div
-                            className="focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-center gap-2 rounded-xl px-2 py-2 text-sm outline-none transition-colors [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+                            className="focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-center gap-2 rounded-xl px-2 py-2.5 text-sm outline-none transition-colors [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
                           >
                             {SOCIAL_ICONS[id]}
                             <span>{name}</span>
@@ -269,71 +270,73 @@ export function ShareDialog({
                     </div>
                   </PopoverContent>
                 </Popover>
-                <Button variant="outline" size="icon" onClick={() => window.open(shareUrl, '_blank')}>
-                  <Icons.externalLink className="size-4" />
+                <Button variant="outline" size="icon" className="size-11 sm:size-10 shrink-0" onClick={() => window.open(shareUrl, '_blank')}>
+                  <Icons.externalLink className="size-5 sm:size-4" />
                 </Button>
               </div>
             </div>
-
-            <div className="-mx-3 px-3 py-3 overflow-visible">
-              <CometCard>
-                <div className="rounded-2xl bg-zinc-900 p-1">
-                  <SmartImage
-                    src={ogImageUrl}
-                    alt="Thread preview"
-                    aspectRatio="1200/630"
-                    unoptimized
-                    containerClassName="rounded-xl overflow-hidden"
-                  />
-                </div>
-              </CometCard>
-            </div>
-
-            <Accordion type="single" collapsible className="w-full rounded-xl border border-border">
-              <AccordionItem value="embed" className="border-0">
-                <AccordionTrigger className="px-4 hover:no-underline">
-                  <div className="flex items-center gap-3">
-                    <Icons.code className="size-4 text-muted-foreground" />
-                    <div className="flex flex-col items-start gap-1">
-                      <span className="text-sm font-medium">{t('shareDialog.embedOptionsLabel')}</span>
-                      <span className="text-xs font-normal text-muted-foreground">
-                        {t('shareDialog.embedOptionsDescription')}
-                      </span>
-                    </div>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="px-4 pb-4">
-                  <Tabs defaultValue="html" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="html">{t('shareDialog.embedFormat.html')}</TabsTrigger>
-                      <TabsTrigger value="markdown">{t('shareDialog.embedFormat.markdown')}</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="html" className="mt-4">
-                      <CodeSnippet
-                        code={embedHtml}
-                        onCopy={() => handleCopy(embedHtml, 'html')}
-                        copied={copySuccess === 'html'}
-                      />
-                    </TabsContent>
-                    <TabsContent value="markdown" className="mt-4">
-                      <CodeSnippet
-                        code={embedMarkdown}
-                        onCopy={() => handleCopy(embedMarkdown, 'markdown')}
-                        copied={copySuccess === 'markdown'}
-                      />
-                    </TabsContent>
-                  </Tabs>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
           </div>
-        </ScrollArea>
 
-        <DialogFooter>
+          {/* Preview Card - contained to prevent overflow */}
+          <div className="py-2">
+            <CometCard className="overflow-hidden">
+              <div className="rounded-2xl bg-zinc-900 p-1">
+                <SmartImage
+                  src={ogImageUrl}
+                  alt="Thread preview"
+                  aspectRatio="1200/630"
+                  unoptimized
+                  containerClassName="rounded-xl overflow-hidden"
+                />
+              </div>
+            </CometCard>
+          </div>
+
+          {/* Embed Options Accordion */}
+          <Accordion type="single" collapsible className="w-full rounded-xl border border-border">
+            <AccordionItem value="embed" className="border-0">
+              <AccordionTrigger className="px-4 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <Icons.code className="size-4 text-muted-foreground" />
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-sm font-medium">{t('shareDialog.embedOptionsLabel')}</span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {t('shareDialog.embedOptionsDescription')}
+                    </span>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+                <Tabs defaultValue="html" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="html">{t('shareDialog.embedFormat.html')}</TabsTrigger>
+                    <TabsTrigger value="markdown">{t('shareDialog.embedFormat.markdown')}</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="html" className="mt-4">
+                    <CodeSnippet
+                      code={embedHtml}
+                      onCopy={() => handleCopy(embedHtml, 'html')}
+                      copied={copySuccess === 'html'}
+                    />
+                  </TabsContent>
+                  <TabsContent value="markdown" className="mt-4">
+                    <CodeSnippet
+                      code={embedMarkdown}
+                      onCopy={() => handleCopy(embedMarkdown, 'markdown')}
+                      copied={copySuccess === 'markdown'}
+                    />
+                  </TabsContent>
+                </Tabs>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
+
+        <DialogFooter className="mt-2">
           <Button
             onClick={handleMakePrivate}
-            className="w-full sm:w-auto bg-amber-600 text-white hover:bg-amber-700"
-            startIcon={<Icons.lock />}
+            className="w-full sm:w-auto h-11 sm:h-10 bg-amber-600 text-white hover:bg-amber-700"
+            startIcon={<Icons.lock className="size-4" />}
           >
             {t('makePrivate')}
           </Button>

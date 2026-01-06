@@ -188,15 +188,18 @@ export function ModelSelectionModal({
         // Model is toggled on - update participant directly
         onRoleChange(selectedModelForRole, roleName, customRoleId);
       } else {
-        // Model is not toggled on - store in pendingRoles
-        setPendingRoles(prev => ({
-          ...prev,
-          [selectedModelForRole]: { role: roleName, customRoleId },
-        }));
+        // Model is not toggled on - auto-select it and apply role
+        // First toggle the model ON
+        onToggle(selectedModelForRole);
+        // Then apply the role after toggle completes (needs setTimeout for state update)
+        const modelId = selectedModelForRole;
+        setTimeout(() => {
+          onRoleChange(modelId, roleName, customRoleId);
+        }, 0);
       }
       handleBackToModelList();
     }
-  }, [selectedModelForRole, orderedModels, onRoleChange, handleBackToModelList]);
+  }, [selectedModelForRole, orderedModels, onRoleChange, onToggle, handleBackToModelList]);
 
   const handleCustomRoleCreate = useCallback(async (roleName: string) => {
     const trimmedRole = roleName.trim();

@@ -2,69 +2,63 @@ import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 
-// Initialize OpenNext Cloudflare for development - must be called before any other code
-// Only runs if CLOUDFLARE_API_TOKEN is set (to avoid OAuth login prompts when empty)
-// Set token in .env to enable full Cloudflare bindings (AI, Browser, etc.)
-if (process.env.NODE_ENV === 'development' && process.env.CLOUDFLARE_API_TOKEN) {
+const isDev = process.env.NODE_ENV === 'development';
+const isProd = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'prod';
+
+if (isDev && process.env.CLOUDFLARE_API_TOKEN) {
   initOpenNextCloudflareForDev();
 }
 
-const isDev = process.env.NODE_ENV === 'development';
-
 const nextConfig: NextConfig = {
-  // Required for OpenNext deployment
   output: 'standalone',
 
-  // Compiler optimizations
   compiler: {
-    // Remove console in production
-    removeConsole: process.env.NEXT_PUBLIC_WEBAPP_ENV === 'prod',
+    removeConsole: isProd,
   },
 
-  // Production optimizations
   poweredByHeader: false,
-  productionBrowserSourceMaps: true, // Temporarily enabled to debug Lo error
-
-  // Stable experimental features (production-ready since Next.js 13.5+)
+  productionBrowserSourceMaps: !isProd,
   experimental: {
-    // Optimize package imports for better tree-shaking
-    // Battle-tested since 13.5, widely used in production
-    // Reduces module loading by 15-70% depending on library
     optimizePackageImports: [
-      'lucide-react',
-      'recharts',
-      'date-fns',
-      '@radix-ui/react-icons',
       'motion',
+      '@radix-ui/react-icons',
+      'cmdk',
+      'vaul',
+      'react-day-picker',
+      'react-hook-form',
+      '@hookform/resolvers',
+      '@tanstack/react-query',
+      '@tanstack/react-virtual',
+      'zustand',
+      'immer',
       'ai',
       '@ai-sdk/react',
+      'chroma-js',
+      'clsx',
+      'class-variance-authority',
+      'tailwind-merge',
+      'fuse.js',
+      'posthog-js',
+      'react-markdown',
+      'shiki',
     ],
-
-    // View Transitions API integration (Baseline 2025)
-    // Browser support: Chrome 111+, Safari 18+, Firefox 144+
-    // Enables smooth page transitions during client-side navigation
-    // https://developer.chrome.com/docs/web-platform/view-transitions
-    viewTransition: true,
   },
 
-  reactStrictMode: true,
-  // External packages for Server Components bundling
-  // Required for React Email to work in edge runtime and Cloudflare Workers
-  // @see https://github.com/resend/react-email/issues/977
+  cacheComponents: false,
+
   serverExternalPackages: [
     '@react-email/components',
     '@react-email/html',
     '@react-email/render',
     'react-email',
+    'jose',
   ],
 
-  // Block service worker in development to prevent caching issues
   async rewrites() {
     if (isDev) {
       return {
         beforeFiles: [
           {
-            // Block sw.js requests in dev - return 404 via non-existent path
             source: '/sw.js',
             destination: '/_dev-sw-blocked',
           },
@@ -76,81 +70,38 @@ const nextConfig: NextConfig = {
     return { beforeFiles: [], afterFiles: [], fallback: [] };
   },
 
-  // Cache optimization headers
   async headers() {
     return [
       {
-        // Static assets cache optimization
         source: '/_next/static/:path*',
         headers: isDev
           ? [
-              {
-                key: 'Cache-Control',
-                value: 'no-cache, no-store, must-revalidate', // No cache in dev
-              },
-              {
-                key: 'Pragma',
-                value: 'no-cache',
-              },
-              {
-                key: 'Expires',
-                value: '0',
-              },
+              { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+              { key: 'Pragma', value: 'no-cache' },
+              { key: 'Expires', value: '0' },
             ]
           : [
-              {
-                key: 'Cache-Control',
-                value: 'public, max-age=31536000, immutable', // 1 year in prod
-              },
-              {
-                key: 'X-Cache-Type',
-                value: 'static-asset',
-              },
+              { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+              { key: 'X-Cache-Type', value: 'static-asset' },
             ],
       },
       {
-        // Image optimization
         source: '/_next/image',
         headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=86400, s-maxage=604800', // 1 day browser, 1 week edge
-          },
-          {
-            key: 'X-Cache-Type',
-            value: 'optimized-image',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'no-referrer-when-downgrade',
-          },
-          {
-            key: 'Cross-Origin-Resource-Policy',
-            value: 'cross-origin',
-          },
+          { key: 'Cache-Control', value: 'public, max-age=86400, s-maxage=604800' },
+          { key: 'X-Cache-Type', value: 'optimized-image' },
+          { key: 'Referrer-Policy', value: 'no-referrer-when-downgrade' },
+          { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
         ],
       },
       {
-        // Public assets
         source: '/favicon.ico',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=604800', // 1 week
-          },
-        ],
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=604800' }],
       },
       {
-        // Public assets folder (manifest.webmanifest served by Next.js)
         source: '/(robots.txt|sitemap.xml)',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=86400', // 1 day
-          },
-        ],
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=86400' }],
       },
-      // Block service worker caching in development
       ...(isDev
         ? [
             {
@@ -164,27 +115,14 @@ const nextConfig: NextConfig = {
           ]
         : []),
       {
-        // API routes - no cache by default (handled by middleware)
         source: '/api/:path*',
-        headers: [
-          {
-            key: 'X-API-Cache',
-            value: 'controlled-by-middleware',
-          },
-        ],
+        headers: [{ key: 'X-API-Cache', value: 'controlled-by-middleware' }],
       },
       {
-        // Public chat embed pages - allow iframe embedding
         source: '/public/chat/:path*/embed',
         headers: [
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin',
-          },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
             value: [
@@ -204,21 +142,11 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Default security headers for all routes
         source: '/:path*',
         headers: [
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin',
-          },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
             value: [
@@ -237,19 +165,14 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Note: API routes (/api/*) CSP is handled by Hono middleware, not Next.js
-      // This is because Hono responses bypass Next.js header processing in Cloudflare Workers
-      // See: src/api/index.ts for API-specific CSP configuration
     ];
   },
 
-  // Optimize images
   images: {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     remotePatterns: [
-      // Dynamic hostname based on environment
       ...(process.env.NEXT_PUBLIC_APP_URL
         ? [{
             protocol: new URL(process.env.NEXT_PUBLIC_APP_URL).protocol.slice(0, -1) as 'http' | 'https',
@@ -262,47 +185,23 @@ const nextConfig: NextConfig = {
             port: '3000',
           }]
       ),
-      {
-        protocol: 'https',
-        hostname: 'lh3.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'lh4.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'lh5.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'lh6.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'www.google.com',
-        pathname: '/s2/favicons**',
-      },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+      { protocol: 'https', hostname: 'lh4.googleusercontent.com' },
+      { protocol: 'https', hostname: 'lh5.googleusercontent.com' },
+      { protocol: 'https', hostname: 'lh6.googleusercontent.com' },
+      { protocol: 'https', hostname: 'googleusercontent.com' },
+      { protocol: 'https', hostname: 'www.google.com', pathname: '/s2/favicons**' },
     ],
   },
 
-  // DEBUG: Webpack config to identify minified error 'Lo'
-  // Disables minification and uses named modules for readable stack traces
   webpack: (config, { isServer }) => {
-    if (!isServer && process.env.DEBUG_MINIFY === 'true') {
-      // Disable minification to see actual function names
+    if (!isServer && !isProd && process.env.DEBUG_MINIFY === 'true') {
       config.optimization.minimize = false;
-      // Use named modules instead of numeric IDs
       config.optimization.moduleIds = 'named';
       config.optimization.chunkIds = 'named';
     }
     return config;
   },
-
 };
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');

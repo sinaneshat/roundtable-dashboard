@@ -19,14 +19,13 @@ import {
 describe('product-logic.service', () => {
   describe('getTierFromProductId', () => {
     describe('direct product ID matching', () => {
-      it('returns "free" for the Free plan product ID', () => {
-        const freeProductId = CREDIT_CONFIG.PLANS.free.stripeProductId;
-        expect(getTierFromProductId(freeProductId)).toBe(SubscriptionTiers.FREE);
-      });
-
       it('returns "pro" for the Paid plan product ID', () => {
         const paidProductId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
         expect(getTierFromProductId(paidProductId)).toBe(SubscriptionTiers.PRO);
+      });
+
+      it('returns "free" for unknown product IDs (users without subscription)', () => {
+        expect(getTierFromProductId('unknown_product_123')).toBe(SubscriptionTiers.FREE);
       });
     });
 
@@ -68,11 +67,10 @@ describe('product-logic.service', () => {
   describe('getMonthlyCreditsForTier', () => {
     it('returns 0 for free tier (no monthly credits)', () => {
       expect(getMonthlyCreditsForTier(SubscriptionTiers.FREE)).toBe(0);
-      expect(getMonthlyCreditsForTier(SubscriptionTiers.FREE)).toBe(CREDIT_CONFIG.PLANS.free.monthlyCredits);
     });
 
-    it('returns 1,000,000 for pro tier', () => {
-      expect(getMonthlyCreditsForTier(SubscriptionTiers.PRO)).toBe(1_000_000);
+    it('returns 100,000 for pro tier', () => {
+      expect(getMonthlyCreditsForTier(SubscriptionTiers.PRO)).toBe(100_000);
       expect(getMonthlyCreditsForTier(SubscriptionTiers.PRO)).toBe(CREDIT_CONFIG.PLANS.paid.monthlyCredits);
     });
   });
@@ -85,41 +83,32 @@ describe('product-logic.service', () => {
   });
 
   describe('plan comparison integration', () => {
-    it('correctly compares Free vs Pro plan differences', () => {
-      const freeProductId = CREDIT_CONFIG.PLANS.free.stripeProductId;
+    it('compares Free vs Pro plan differences', () => {
+      const freeTier = SubscriptionTiers.FREE;
       const proProductId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
-
-      const freeTier = getTierFromProductId(freeProductId);
       const proTier = getTierFromProductId(proProductId);
 
-      expect(freeTier).toBe(SubscriptionTiers.FREE);
       expect(proTier).toBe(SubscriptionTiers.PRO);
 
-      // Models comparison
       const freeModels = getMaxModelsForTier(freeTier);
       const proModels = getMaxModelsForTier(proTier);
       expect(proModels).toBeGreaterThan(freeModels);
       expect(freeModels).toBe(3);
       expect(proModels).toBe(12);
 
-      // Monthly credits comparison
       const freeCredits = getMonthlyCreditsForTier(freeTier);
       const proCredits = getMonthlyCreditsForTier(proTier);
       expect(proCredits).toBeGreaterThan(freeCredits);
       expect(freeCredits).toBe(0);
-      expect(proCredits).toBe(1_000_000);
+      expect(proCredits).toBe(100_000);
 
-      // Tier names
       expect(SUBSCRIPTION_TIER_NAMES[freeTier]).toBe('Free');
       expect(SUBSCRIPTION_TIER_NAMES[proTier]).toBe('Pro');
     });
 
     it('provides consistent data for subscription change display', () => {
-      // Simulates the SubscriptionChangedClient data flow
-      const oldProductId = CREDIT_CONFIG.PLANS.free.stripeProductId;
+      const oldTier = SubscriptionTiers.FREE;
       const newProductId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
-
-      const oldTier = getTierFromProductId(oldProductId);
       const newTier = getTierFromProductId(newProductId);
 
       const comparison = {
@@ -148,16 +137,13 @@ describe('product-logic.service', () => {
         tier: SubscriptionTiers.PRO,
         name: 'Pro',
         maxModels: 12,
-        monthlyCredits: 1_000_000,
+        monthlyCredits: 100_000,
       });
     });
   });
 
-  describe('tIER_CONFIG - Single Source of Truth', () => {
+  describe('tIER_CONFIG', () => {
     it('has configuration for every tier in SUBSCRIPTION_TIERS', () => {
-      // This test ensures TIER_CONFIG covers all tiers
-      // If you add a tier to SUBSCRIPTION_TIERS but not TIER_CONFIG,
-      // TypeScript will error AND this test will fail
       for (const tier of SUBSCRIPTION_TIERS) {
         expect(TIER_CONFIG[tier]).toBeDefined();
         expect(TIER_CONFIG[tier].name).toBeTruthy();
@@ -165,12 +151,11 @@ describe('product-logic.service', () => {
         expect(TIER_CONFIG[tier].maxModels).toBeGreaterThan(0);
         expect(TIER_CONFIG[tier].quotas).toBeDefined();
         expect(TIER_CONFIG[tier].upgradeMessage).toBeTruthy();
-        expect(TIER_CONFIG[tier].creditPlanKey).toMatch(/^(free|paid)$/);
+        expect(TIER_CONFIG[tier].monthlyCredits).toBeGreaterThanOrEqual(0);
       }
     });
 
     it('derived exports match TIER_CONFIG values', () => {
-      // Verify that all derived exports are in sync with TIER_CONFIG
       for (const tier of SUBSCRIPTION_TIERS) {
         expect(SUBSCRIPTION_TIER_NAMES[tier]).toBe(TIER_CONFIG[tier].name);
         expect(MAX_OUTPUT_TOKENS_BY_TIER[tier]).toBe(TIER_CONFIG[tier].maxOutputTokens);
@@ -186,15 +171,13 @@ describe('product-logic.service', () => {
       }
     });
 
-    it('has exactly 2 tiers (free and pro)', () => {
-      // This test documents the current tier structure
-      // Update this test if you intentionally add/remove tiers
+    it('has exactly 2 tiers', () => {
       expect(SUBSCRIPTION_TIERS).toHaveLength(2);
       expect(SUBSCRIPTION_TIERS).toContain(SubscriptionTiers.FREE);
       expect(SUBSCRIPTION_TIERS).toContain(SubscriptionTiers.PRO);
     });
 
-    it('pro tier has unlimited model access (null pricing)', () => {
+    it('pro tier has unlimited model access', () => {
       expect(TIER_CONFIG.pro.maxModelPricing).toBeNull();
       expect(MAX_MODEL_PRICING_BY_TIER.pro).toBeNull();
     });

@@ -6,6 +6,52 @@ import {
   SidebarMenuItem,
   SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
+import { cn } from '@/lib/ui/cn';
+
+const SKELETON_WIDTHS = ['70%', '55%', '85%', '45%', '65%', '78%', '52%', '62%', '48%', '73%', '58%', '80%', '42%', '67%', '54%'];
+
+/**
+ * Decorative thread skeleton rows with fading effect
+ * Used for empty states and loading states in the sidebar
+ */
+export function SidebarThreadSkeletons({
+  count = 7,
+  animated = false,
+  className,
+}: {
+  count?: number;
+  animated?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-3 px-2 pointer-events-none select-none',
+        className,
+      )}
+      aria-hidden="true"
+    >
+      {Array.from({ length: count }, (_, i) => {
+        const widthIndex = i % SKELETON_WIDTHS.length;
+        const opacity = i < 4 ? 1 : i < 5 ? 0.7 : i < 6 ? 0.5 : 0.3;
+
+        return (
+          <div
+            key={`thread-skeleton-${i}`}
+            className={cn(
+              'h-5 rounded-full bg-muted/40',
+              animated && 'animate-pulse',
+            )}
+            style={{
+              width: SKELETON_WIDTHS[widthIndex],
+              opacity,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 export function ChatSidebarSkeleton({
   count = 15,
