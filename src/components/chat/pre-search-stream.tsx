@@ -15,6 +15,7 @@ import { ChatStoreContext, useChatStore } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
+import { PreSearchSkeleton } from '@/components/ui/skeleton';
 import { useBoolean } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 import { executePreSearchStreamService, getThreadPreSearchesService } from '@/services/api';
@@ -528,8 +529,11 @@ function PreSearchStreamComponent({
 
   if (isPendingWithNoData || isAutoRetrying.value) {
     return (
-      <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-        <TextShimmer>{isAutoRetrying.value ? t('autoRetryingSearch') : t('pendingSearch')}</TextShimmer>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <TextShimmer>{isAutoRetrying.value ? t('autoRetryingSearch') : t('pendingSearch')}</TextShimmer>
+        </div>
+        <PreSearchSkeleton queryCount={2} resultsPerQuery={2} />
       </div>
     );
   }

@@ -344,6 +344,56 @@ function AuthFormSkeleton({ className, ...props }: ComponentProps<"div">) {
   )
 }
 
+type PreSearchSkeletonBaseProps = ComponentProps<"div">;
+
+interface PreSearchSkeletonProps extends PreSearchSkeletonBaseProps {
+  queryCount?: number;
+  resultsPerQuery?: number;
+}
+
+function PreSearchSkeleton({
+  queryCount = 2,
+  resultsPerQuery = 3,
+  className,
+  ...props
+}: PreSearchSkeletonProps) {
+  return (
+    <div className={cn("space-y-4", className)} {...props}>
+      {Array.from({ length: queryCount }, (_, queryIndex) => (
+        <div key={queryIndex} className="space-y-2">
+          <div className="flex items-start gap-2">
+            <Skeleton className="size-4 rounded mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0 space-y-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-4 w-12 rounded-md" />
+              </div>
+              <Skeleton className="h-3 w-64" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+          </div>
+
+          <div className="pl-6 space-y-2">
+            {Array.from({ length: resultsPerQuery }, (_, resultIndex) => (
+              <div key={resultIndex} className="flex items-start gap-2 py-1.5">
+                <Skeleton className="size-4 rounded flex-shrink-0" />
+                <div className="flex-1 min-w-0 space-y-1">
+                  <Skeleton className="h-3.5 w-3/4" />
+                  <Skeleton className="h-3 w-40" />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {queryIndex < queryCount - 1 && (
+            <Skeleton className="h-px w-full !mt-4" />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export {
   Skeleton,
   CardSkeleton,
@@ -360,5 +410,6 @@ export {
   PresetCardSkeleton,
   QuickStartSkeleton,
   AuthFormSkeleton,
+  PreSearchSkeleton,
 }
 
