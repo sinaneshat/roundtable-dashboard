@@ -12,7 +12,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { RoundPhase } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
-import { useChatStore } from '@/components/providers';
+import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getModeratorMetadata, getParticipantIndex, getParticipantModelIds, getRoundNumber, hasError as checkHasError, rlog } from '@/lib/utils';
 
 import {

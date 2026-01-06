@@ -26,7 +26,7 @@ import {
   ScreenModeSchema,
   TextPartStates,
 } from '@/api/core/enums';
-import { useChatStore, useChatStoreApi } from '@/components/providers';
+import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { getAssistantMetadata, getCurrentRoundNumber, getModeratorMetadata, getRoundNumber } from '@/lib/utils';
 
 import {

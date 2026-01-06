@@ -26,7 +26,8 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { useChatStore, useModelPreferencesStore } from '@/components/providers';
+import { useChatStore } from '@/components/providers/chat-store-provider/context';
+import { useModelPreferencesStore } from '@/components/providers/preferences-store-provider/context';
 import { queryKeys } from '@/lib/data/query-keys';
 
 /**

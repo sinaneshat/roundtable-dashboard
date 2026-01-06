@@ -20,30 +20,17 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: !isProd,
   experimental: {
     optimizePackageImports: [
-      'motion',
+      'lucide-react',
+      'recharts',
+      'date-fns',
       '@radix-ui/react-icons',
-      'cmdk',
-      'vaul',
-      'react-day-picker',
-      'react-hook-form',
-      '@hookform/resolvers',
-      '@tanstack/react-query',
-      '@tanstack/react-virtual',
-      'zustand',
-      'immer',
+      'motion',
       'ai',
       '@ai-sdk/react',
-      'chroma-js',
-      'clsx',
-      'class-variance-authority',
-      'tailwind-merge',
-      'fuse.js',
-      'posthog-js',
-      'react-markdown',
-      'shiki',
     ],
   },
 
+  reactStrictMode: true,
   // cacheComponents disabled - opennextjs-cloudflare v1.14.7 not fully compatible
   // Causes Math.random() / Suspense boundary issues with client components
   // Using traditional ISR with export const revalidate instead

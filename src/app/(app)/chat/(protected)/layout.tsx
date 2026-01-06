@@ -36,7 +36,7 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
   const queryClient = getQueryClient();
 
   // Require auth (redirects to sign-in if not authenticated)
-  await requireAuth();
+  const session = await requireAuth();
 
   // Prefetch critical navigation data
   // Wrapped in try-catch to prevent Server Component failures in OpenNext preview
@@ -81,7 +81,7 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <ChatLayoutShell>
+      <ChatLayoutShell session={session}>
         {children}
       </ChatLayoutShell>
     </HydrationBoundary>

@@ -25,7 +25,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useShallow } from 'zustand/react/shallow';
 
 import { ScreenModes } from '@/api/core/enums';
-import { useChatStore, useChatStoreApi } from '@/components/providers';
+import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { useThreadSlugStatusQuery } from '@/hooks/queries';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';

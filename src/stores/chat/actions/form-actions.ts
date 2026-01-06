@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { ChatMode } from '@/api/core/enums';
 import { MessageRoles } from '@/api/core/enums';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
-import { useChatStore, useChatStoreApi } from '@/components/providers';
+import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import {
   useCreateThreadMutation,
   useUpdateThreadMutation,

@@ -17,7 +17,7 @@ import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode } from '@/api/core/enums';
-import { useChatStore } from '@/components/providers';
+import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { useMemoizedReturn } from '@/lib/utils';
 

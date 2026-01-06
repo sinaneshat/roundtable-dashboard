@@ -16,7 +16,7 @@
 import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { useChatStore } from '@/components/providers';
+import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import { getEnabledSortedParticipants, useMemoizedReturn } from '@/lib/utils';
 
 import type { UseConfigChangeHandlersReturn } from '../hooks';

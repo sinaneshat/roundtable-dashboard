@@ -6,7 +6,7 @@
 
 import type { ApiResponse } from '@/api/core';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
-import { useChatStore } from '@/components/providers';
+import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import { useThreadPreSearchesQuery } from '@/hooks/queries';
 import { transformPreSearches } from '@/lib/utils';
 
