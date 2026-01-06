@@ -19,7 +19,6 @@ import { createError } from '@/api/common/error-handling';
 import { getErrorMessage, getErrorName } from '@/api/common/error-types';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/api/core';
-import type { ChatMode } from '@/api/core/enums';
 import { MessagePartTypes, MessageRoles, PollingStatuses } from '@/api/core/enums';
 import {
   deductCreditsForAction,
@@ -825,7 +824,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     return generateCouncilModerator(
       {
         roundNumber: roundNum,
-        mode: thread.mode as ChatMode,
+        mode: thread.mode,
         userQuestion,
         participantResponses,
         env: c.env,

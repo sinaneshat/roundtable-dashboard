@@ -16,9 +16,9 @@ import {
   TIER_QUOTAS,
 } from '../product-logic.service';
 
-describe('product-logic.service', () => {
+describe('product Logic Service', () => {
   describe('getTierFromProductId', () => {
-    describe('direct product ID matching', () => {
+    describe('direct Product ID Matching', () => {
       it('returns "pro" for the Paid plan product ID', () => {
         const paidProductId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
         expect(getTierFromProductId(paidProductId)).toBe(SubscriptionTiers.PRO);
@@ -29,7 +29,7 @@ describe('product-logic.service', () => {
       });
     });
 
-    describe('pattern-based fallback matching', () => {
+    describe('pattern-Based Fallback Matching', () => {
       it('returns "pro" for product IDs with "pro" pattern', () => {
         expect(getTierFromProductId('prod_pro_monthly')).toBe(SubscriptionTiers.PRO);
         expect(getTierFromProductId('my_pro')).toBe(SubscriptionTiers.PRO);
@@ -75,14 +75,14 @@ describe('product-logic.service', () => {
     });
   });
 
-  describe('subscription tier names', () => {
+  describe('subscription Tier Names', () => {
     it('has correct names for all tiers', () => {
       expect(SUBSCRIPTION_TIER_NAMES.free).toBe('Free');
       expect(SUBSCRIPTION_TIER_NAMES.pro).toBe('Pro');
     });
   });
 
-  describe('plan comparison integration', () => {
+  describe('plan Comparison Integration', () => {
     it('compares Free vs Pro plan differences', () => {
       const freeTier = SubscriptionTiers.FREE;
       const proProductId = CREDIT_CONFIG.PLANS.paid.stripeProductId;

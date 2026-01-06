@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
-import { PurchaseTypeSchema } from '@/api/core/enums';
+import { PurchaseTypeSchema, StripeSubscriptionStatusSchema } from '@/api/core/enums';
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
 import {
@@ -243,7 +243,7 @@ export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
 // ============================================================================
 
 export const SyncedSubscriptionStateSchema = z.object({
-  status: z.string().openapi({
+  status: StripeSubscriptionStatusSchema.openapi({
     description: 'Subscription status',
     example: 'active',
   }),

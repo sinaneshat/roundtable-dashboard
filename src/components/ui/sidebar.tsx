@@ -1,71 +1,71 @@
-"use client"
+'use client';
 
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useState } from 'react';
 
-import { Slot } from "@/lib/ui/slot";
-import { cva, type VariantProps } from "class-variance-authority";
-import { useTranslations } from "next-intl";
+import { Slot } from '@/lib/ui/slot';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { useTranslations } from 'next-intl';
 
 import type { SidebarCollapsible, SidebarMenuButtonSize, SidebarSide, SidebarState, SidebarVariant } from '@/api/core/enums';
 import { ComponentSizes, ComponentVariants, KeyboardKeys, SidebarCollapsibles, SidebarMenuButtonSizes, SidebarSides, SidebarStates, SidebarVariants } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from '@/components/ui/sheet';
 import {
   TooltipContent,
   TooltipProvider,
-} from "@/components/ui/tooltip";
-import { useIsMobile } from "@/hooks/utils";
-import { cn } from "@/lib/ui/cn";
-import { Skeleton } from "./skeleton";
+} from '@/components/ui/tooltip';
+import { useIsMobile } from '@/hooks/utils';
+import { cn } from '@/lib/ui/cn';
+import { Skeleton } from './skeleton';
 
-const SIDEBAR_COOKIE_NAME = "sidebar_state"
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "20rem"
-const SIDEBAR_WIDTH_MOBILE = "20rem"
-const SIDEBAR_WIDTH_ICON = "4rem"
-const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+const SIDEBAR_COOKIE_NAME = 'sidebar_state';
+const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+const SIDEBAR_WIDTH = '20rem';
+const SIDEBAR_WIDTH_MOBILE = '20rem';
+const SIDEBAR_WIDTH_ICON = '4rem';
+const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
 type SidebarContextProps = {
-  state: SidebarState
-  open: boolean
-  setOpen: (open: boolean) => void
-  openMobile: boolean
-  setOpenMobile: (open: boolean) => void
-  isMobile: boolean
-  toggleSidebar: () => void
-}
+  state: SidebarState;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  openMobile: boolean;
+  setOpenMobile: (open: boolean) => void;
+  isMobile: boolean;
+  toggleSidebar: () => void;
+};
 
-const SidebarContext = createContext<SidebarContextProps | null>(null)
+const SidebarContext = createContext<SidebarContextProps | null>(null);
 
 function useSidebar() {
-  const context = useContext(SidebarContext)
+  const context = useContext(SidebarContext);
   if (!context) {
-    throw new Error("useSidebar must be used within a SidebarProvider.")
+    throw new Error('useSidebar must be used within a SidebarProvider.');
   }
 
-  return context
+  return context;
 }
 
 function useSidebarOptional() {
-  return useContext(SidebarContext)
+  return useContext(SidebarContext);
 }
 
-interface SidebarProviderProps extends ComponentProps<"div"> {
-  defaultOpen?: boolean
-  open?: boolean
-  onOpenChange?: (open: boolean) => void
-  children: ReactNode
+interface SidebarProviderProps extends ComponentProps<'div'> {
+  defaultOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  children: ReactNode;
 }
 
 function SidebarProvider({
@@ -77,51 +77,46 @@ function SidebarProvider({
   children,
   ...props
 }: SidebarProviderProps) {
-  const isMobile = useIsMobile()
-  const [openMobile, setOpenMobile] = useState(false)
+  const isMobile = useIsMobile();
+  const [openMobile, setOpenMobile] = useState(false);
 
-  // This is the internal state of the sidebar.
-  // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = useState(defaultOpen)
-  const open = openProp ?? _open
+  const [_open, _setOpen] = useState(defaultOpen);
+  const open = openProp ?? _open;
   const setOpen = useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
-      const openState = typeof value === "function" ? value(open) : value
+      const openState = typeof value === 'function' ? value(open) : value;
       if (setOpenProp) {
-        setOpenProp(openState)
-      } else {
-        _setOpen(openState)
+        setOpenProp(openState);
+      }
+      else {
+        _setOpen(openState);
       }
 
-      // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
     },
-    [setOpenProp, open]
-  )
+    [setOpenProp, open],
+  );
 
-  // Helper to toggle the sidebar.
   const toggleSidebar = useCallback(() => {
-    return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open)
-  }, [isMobile, setOpen, setOpenMobile])
+    return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
+  }, [isMobile, setOpen, setOpenMobile]);
 
-  // ✅ REACT 19: useEffectEvent for keyboard shortcut
-  // Automatically captures latest toggleSidebar without re-mounting listener
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (
-      event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
-      (event.metaKey || event.ctrlKey)
+      event.key === SIDEBAR_KEYBOARD_SHORTCUT
+      && (event.metaKey || event.ctrlKey)
     ) {
-      event.preventDefault()
-      toggleSidebar()
+      event.preventDefault();
+      toggleSidebar();
     }
-  })
+  });
 
   useEffect(() => {
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [onKeyDown])
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onKeyDown]);
 
-  const state = open ? SidebarStates.EXPANDED : SidebarStates.COLLAPSED
+  const state = open ? SidebarStates.EXPANDED : SidebarStates.COLLAPSED;
 
   const contextValue = useMemo<SidebarContextProps>(
     () => ({
@@ -133,8 +128,8 @@ function SidebarProvider({
       setOpenMobile,
       toggleSidebar,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
-  )
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+  );
 
   return (
     <SidebarContext.Provider value={contextValue}>
@@ -143,14 +138,14 @@ function SidebarProvider({
           data-slot="sidebar-wrapper"
           style={
             {
-              "--sidebar-width": SIDEBAR_WIDTH,
-              "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+              '--sidebar-width': SIDEBAR_WIDTH,
+              '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
               ...style,
             } as CSSProperties
           }
           className={cn(
-            "group/sidebar-wrapper flex min-h-svh w-full",
-            className
+            'group/sidebar-wrapper flex min-h-svh w-full',
+            className,
           )}
           {...props}
         >
@@ -158,14 +153,14 @@ function SidebarProvider({
         </div>
       </TooltipProvider>
     </SidebarContext.Provider>
-  )
+  );
 }
 
-interface SidebarProps extends ComponentProps<"div"> {
-  side?: SidebarSide
-  variant?: SidebarVariant
-  collapsible?: SidebarCollapsible
-  children?: ReactNode
+interface SidebarProps extends ComponentProps<'div'> {
+  side?: SidebarSide;
+  variant?: SidebarVariant;
+  collapsible?: SidebarCollapsible;
+  children?: ReactNode;
 }
 
 function Sidebar({
@@ -533,14 +528,14 @@ const sidebarMenuButtonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'hover:bg-white/[0.07]',
-        outline:
+        [ComponentVariants.DEFAULT]: 'hover:bg-white/[0.07]',
+        [ComponentVariants.OUTLINE]:
           'bg-card shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-white/[0.07] hover:shadow-[0_0_0_1px_var(--border)]',
       },
       size: {
-        default: 'h-9 text-sm group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem]',
-        sm: 'h-8 text-xs group-data-[collapsible=icon]:!w-8 group-data-[collapsible=icon]:!h-8 group-data-[collapsible=icon]:!min-w-[2rem] group-data-[collapsible=icon]:!max-w-[2rem] group-data-[collapsible=icon]:!min-h-[2rem] group-data-[collapsible=icon]:!max-h-[2rem]',
-        lg: 'h-11 text-sm group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem]',
+        [ComponentSizes.DEFAULT]: 'h-9 text-sm group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem]',
+        [ComponentSizes.SM]: 'h-8 text-xs group-data-[collapsible=icon]:!w-8 group-data-[collapsible=icon]:!h-8 group-data-[collapsible=icon]:!min-w-[2rem] group-data-[collapsible=icon]:!max-w-[2rem] group-data-[collapsible=icon]:!min-h-[2rem] group-data-[collapsible=icon]:!max-h-[2rem]',
+        [ComponentSizes.LG]: 'h-11 text-sm group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem]',
       },
     },
     defaultVariants: {

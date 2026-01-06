@@ -3,14 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { CreditActions, CreditTransactionTypes, PlanTypes } from '@/api/core/enums';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
-/**
- * Free User Abuse Prevention Tests
- *
- * Security tests ensuring free users cannot bypass limits:
- * - ONE thread total (not per month, TOTAL)
- * - ONE round of conversation (all participants respond once)
- * - No loopholes via concurrent requests, refresh, or multiple tabs
- */
 describe('free User Abuse Prevention', () => {
   describe('single Thread Limit Enforcement', () => {
     it('free users limited to exactly ONE thread', () => {

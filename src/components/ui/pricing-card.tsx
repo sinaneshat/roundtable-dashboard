@@ -9,13 +9,15 @@ import { cn } from '@/lib/ui/cn';
 import { GlowingEffect } from './glowing-effect';
 import { HoverBorderGradient } from './hover-border-gradient';
 
+import type { UIBillingInterval } from '@/api/core/enums';
+
 interface PricingCardProps {
   name: string;
   description?: string | null;
   price: {
     amount: number;
     currency: string;
-    interval?: 'month' | null;
+    interval?: UIBillingInterval | null;
     trialDays?: number | null;
   };
   features?: string[] | null;
@@ -85,7 +87,6 @@ export function PricingCard({
       }}
       className={cn('relative h-full', className)}
     >
-      {/* Most Popular Badge - Outside card container for proper z-index */}
       {isMostPopular && (
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
@@ -99,7 +100,6 @@ export function PricingCard({
         </motion.div>
       )}
 
-      {/* Current Plan Badge - Outside card container for proper z-index */}
       {isCurrentPlan && (
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
@@ -126,10 +126,7 @@ export function PricingCard({
         />
 
         <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-white/20 dark:border-white/10 bg-background/50 backdrop-blur-sm p-6 dark:shadow-[0px_0px_27px_0px_#2D2D2D]">
-
-          {/* Card Content */}
           <div className="relative flex flex-1 flex-col gap-6">
-            {/* Header */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -146,7 +143,6 @@ export function PricingCard({
               )}
             </motion.div>
 
-            {/* Pricing */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -194,7 +190,6 @@ export function PricingCard({
               )}
             </motion.div>
 
-            {/* Features */}
             {features && features.length > 0 && (
               <motion.ul
                 initial="hidden"
@@ -236,14 +231,12 @@ export function PricingCard({
               </motion.ul>
             )}
 
-            {/* CTA Buttons */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: delay + 0.4, duration: 0.4 }}
               className="space-y-3"
             >
-              {/* Manage Billing Button - shown above cancel for active subscriptions */}
               {isCurrentPlan && onManageBilling && (
                 <HoverBorderGradient
                   as="button"
@@ -268,7 +261,6 @@ export function PricingCard({
                 </HoverBorderGradient>
               )}
 
-              {/* Primary Action Button (Subscribe/Switch/Cancel) */}
               <HoverBorderGradient
                 as="button"
                 containerClassName={cn(

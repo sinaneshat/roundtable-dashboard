@@ -1,19 +1,5 @@
 'use client';
 
-/**
- * Thread Timeline Component
- *
- * Virtualized timeline using TanStack Virtual - following official docs exactly.
- * Uses useWindowVirtualizer for window-level scrolling.
- *
- * Official TanStack Virtual pattern:
- * - Container with position: relative and height: getTotalSize()
- * - Items with position: absolute, top: 0, left: 0
- * - Transform: translateY(item.start - scrollMargin)
- * - data-index attribute for measurement
- * - ref={measureElement} for dynamic sizing
- */
-
 import { useRef } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
@@ -35,9 +21,9 @@ import { RoundCopyAction } from './round-copy-action';
 import { RoundFeedback } from './round-feedback';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
-// Stable constants to prevent render loops
 const EMPTY_FEEDBACK_MAP = new Map<number, FeedbackType>();
 const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];
+const EMPTY_COMPLETED_ROUNDS = new Set<number>();
 
 type ThreadTimelineProps = {
   timelineItems: TimelineItem[];
@@ -49,53 +35,25 @@ type ThreadTimelineProps = {
   threadId: string;
   threadTitle?: string;
 
-  // Streaming state
   isStreaming?: boolean;
   currentParticipantIndex?: number;
   currentStreamingParticipant?: ChatParticipantWithSettings | null;
   streamingRoundNumber?: number | null;
-
-  // Feedback handlers
   feedbackByRound?: Map<number, FeedbackType>;
   pendingFeedback?: { roundNumber: number; type: FeedbackType } | null;
   getFeedbackHandler?: (roundNumber: number) => (type: FeedbackType | null) => void;
-
-  // Error retry
   onRetry?: () => void;
-
-  // View mode
   isReadOnly?: boolean;
-
-  // Pre-search state
   preSearches?: StoredPreSearch[];
-
-  // Demo mode
   demoPreSearchOpen?: boolean;
-
-  // Data readiness
   isDataReady?: boolean;
-
-  // Message content scrolling (demo mode)
   maxContentHeight?: number;
-
-  // Skip all entrance animations (for demo that has already completed)
   skipEntranceAnimations?: boolean;
-
-  // Set of round numbers that have complete summaries
   completedRoundNumbers?: Set<number>;
-
-  // Indicates moderator is streaming (for input blocking)
   isModeratorStreaming?: boolean;
-
-  // Demo mode - forces all models to be accessible (hides tier badges)
   demoMode?: boolean;
-
-  // Getter to read streaming state directly from store
   getIsStreamingFromStore?: () => boolean;
 };
-
-// Stable empty set to prevent render loops
-const EMPTY_COMPLETED_ROUNDS = new Set<number>();
 
 export function ThreadTimeline({
   timelineItems,

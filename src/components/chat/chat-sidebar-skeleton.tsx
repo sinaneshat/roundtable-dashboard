@@ -1,4 +1,5 @@
 'use client';
+
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -9,11 +10,6 @@ import {
 import { cn } from '@/lib/ui/cn';
 
 const SKELETON_WIDTHS = ['70%', '55%', '85%', '45%', '65%', '78%', '52%', '62%', '48%', '73%', '58%', '80%', '42%', '67%', '54%'];
-
-/**
- * Decorative thread skeleton rows with fading effect
- * Used for empty states and loading states in the sidebar
- */
 export function SidebarThreadSkeletons({
   count = 7,
   animated = false,
@@ -92,6 +88,7 @@ export function ChatSidebarSkeleton({
     </>
   );
 }
+
 export function ChatSidebarPaginationSkeleton({ count = 20 }: { count?: number }) {
   return (
     <div className="px-2 my-2">

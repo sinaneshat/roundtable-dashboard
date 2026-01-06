@@ -1,28 +1,5 @@
 /**
- * Generic Orchestrator Factory
- *
- * Creates type-safe orchestrator hooks for syncing server data to Zustand store.
- * Eliminates code duplication between different orchestrators (pre-search, etc.)
- *
- * PATTERN: Factory function with generics for reusable orchestration logic
- * USAGE: Create specialized orchestrators by providing configuration
- *
- * DRY: Single implementation for all orchestrators
- * TYPE-SAFE: Full generic constraints and inference
- * PERFORMANCE: Shallow comparison, optimized merging
- *
- * @example
- * const getPreSearchOrchestrator = createOrchestrator({
- *   queryHook: useThreadPreSearchesQuery,
- *   storeSelector: s => s.preSearches,
- *   storeSetter: s => s.setPreSearches,
- *   extractItems: response => response?.data?.items || [],
- *   transformItems: transformPreSearches,
- *   getItemKey: item => item.roundNumber,
- *   getItemPriority: item => getStatusPriority(item.status),
- *   compareKeys: ['roundNumber', 'status', 'id', 'searchData'],
- *   deduplicationHook: usePreSearchDeduplication,
- * });
+ * Generic orchestrator factory for syncing server data to Zustand store
  */
 
 'use client';
@@ -33,171 +10,46 @@ import { useEffect, useMemo, useRef } from 'react';
 import { hasStateChanged, mergeServerClientState } from '@/lib/utils';
 import type { ChatStore } from '@/stores/chat';
 
-/**
- * Configuration for creating an orchestrator hook
- *
- * @template TRaw - Raw item type from server (before transformation)
- * @template TItem - Transformed item type stored in state
- * @template TKey - Key type for deduplication (string or number)
- * @template TResponse - API response type containing items
- * @template TQueryArgs - Additional arguments for query hook
- * @template TDeduplicationOptions - Type-safe deduplication options (replaces Record<string, unknown>)
- */
 export type OrchestratorConfig<
   TRaw,
   TItem,
   TKey extends string | number,
-  TResponse = unknown,
+  TResponse,
   TQueryArgs extends readonly unknown[] = readonly [],
   TDeduplicationOptions = undefined,
 > = {
-  /**
-   * TanStack Query hook that fetches data from server
-   * @example useThreadModeratorsQuery
-   */
   queryHook: (threadId: string, enabled: boolean, ...args: TQueryArgs) => UseQueryResult<TResponse>;
-
-  /**
-   * Zustand store hook for accessing store state
-   * @example useChatStore
-   * ✅ DEPENDENCY INJECTION: Passed as parameter to avoid circular dependencies and enable testing
-   */
   useStoreHook: <T>(selector: (store: ChatStore) => T) => T;
-
-  /**
-   * Zustand store selector to get current items from store
-   * @example s => s.moderators
-   */
   storeSelector: (store: ChatStore) => TItem[];
-
-  /**
-   * Zustand store setter to update items in store
-   * @example s => s.setModerators
-   */
   storeSetter: (store: ChatStore) => (items: TItem[]) => void;
-
-  /**
-   * Extract items array from query response
-   * @example response => response?.data?.items || []
-   */
   extractItems: (response: TResponse | undefined) => TRaw[];
-
-  /**
-   * Transform raw server items to store format (e.g., date transformation)
-   * @example transformModerators
-   */
   transformItems: (items: TRaw[]) => TItem[];
-
-  /**
-   * Extract unique key from item for deduplication
-   * @example item => item.roundNumber
-   */
   getItemKey: (item: TItem) => TKey;
-
-  /**
-   * Calculate priority for item (higher priority wins in merge)
-   * @example item => getStatusPriority(item.status)
-   */
   getItemPriority: (item: TItem) => number;
-
-  /**
-   * Properties to compare for change detection
-   * @example ['roundNumber', 'status', 'id', 'searchData']
-   */
   compareKeys: (keyof TItem)[];
-
-  /**
-   * Optional deduplication hook for additional processing
-   * TYPE-SAFE: Uses generic TDeduplicationOptions instead of Record<string, unknown>
-   * @example usePreSearchDeduplication
-   */
-  deduplicationHook?: (
-    items: TItem[],
-    options?: TDeduplicationOptions,
-  ) => TItem[];
-
-  /**
-   * Optional options to pass to deduplication hook
-   * ✅ TYPE-SAFE: Uses generic TDeduplicationOptions instead of Record<string, unknown>
-   * @example { regeneratingRoundNumber }
-   */
+  deduplicationHook?: (items: TItem[], options?: TDeduplicationOptions) => TItem[];
   deduplicationOptions?: TDeduplicationOptions;
 };
 
-/**
- * Options passed to orchestrator hook instance
- * @template TQueryArgs - Additional query arguments type
- * @template TDeduplicationOptions - Type-safe deduplication options (replaces Record<string, unknown>)
- */
 export type OrchestratorOptions<
   TQueryArgs extends readonly unknown[] = readonly [],
   TDeduplicationOptions = undefined,
 > = {
-  /** Thread ID to fetch data for */
   threadId: string;
-  /** Whether orchestrator is enabled (controls query and sync) */
   enabled?: boolean;
-  /** Additional query arguments */
   queryArgs?: TQueryArgs;
-  /**
-   * Optional options to pass to deduplication hook at runtime
-   * ✅ TYPE-SAFE: Uses generic TDeduplicationOptions instead of Record<string, unknown>
-   */
   deduplicationOptions?: TDeduplicationOptions;
 };
 
-/**
- * Return type of orchestrator hook
- */
 export type OrchestratorReturn = {
-  /** Whether items are loading from server */
   isLoading: boolean;
 };
 
-/**
- * Creates a type-safe orchestrator hook for server/store synchronization
- *
- * Handles common orchestration patterns:
- * 1. Query server data via TanStack Query hook
- * 2. Transform raw data to store format
- * 3. Deduplicate items (optional)
- * 4. Merge server data with optimistic client updates by priority
- * 5. Sync merged data to store when changes detected
- *
- * @template TRaw - Raw item type from server
- * @template TItem - Transformed item type in store
- * @template TKey - Key type for deduplication
- * @template TResponse - API response type
- * @template TQueryArgs - Additional query arguments
- *
- * @param config - Orchestrator configuration
- * @returns Hook function for orchestrating data sync
- *
- * @example
- * // Create pre-search orchestrator
- * const getPreSearchOrchestrator = createOrchestrator({
- *   queryHook: useThreadPreSearchesQuery,
- *   storeSelector: s => s.preSearches,
- *   storeSetter: s => s.setPreSearches,
- *   extractItems: response => response?.data?.items || [],
- *   transformItems: transformPreSearches,
- *   getItemKey: item => item.roundNumber,
- *   getItemPriority: item => getStatusPriority(item.status),
- *   compareKeys: ['roundNumber', 'status', 'id', 'searchData'],
- *   deduplicationHook: usePreSearchDeduplication,
- * });
- *
- * // Use in component
- * const { isLoading } = getPreSearchOrchestrator({
- *   threadId: 'thread-123',
- *   enabled: true
- * });
- */
 export function createOrchestrator<
   TRaw,
   TItem,
   TKey extends string | number,
-  TResponse = unknown,
+  TResponse,
   TQueryArgs extends readonly unknown[] = readonly [],
   TDeduplicationOptions = undefined,
 >(
@@ -217,56 +69,36 @@ export function createOrchestrator<
     deduplicationOptions,
   } = config;
 
-  /**
-   * Generated orchestrator hook
-   *
-   * Syncs server data to store following established patterns:
-   * - Query → Transform → Deduplicate → Merge → Sync
-   * - Disabled when enabled=false to prevent stale data sync
-   * - Shallow comparison for efficient change detection
-   */
   return function useOrchestrator(
     options: OrchestratorOptions<TQueryArgs, TDeduplicationOptions>,
   ): OrchestratorReturn {
-    // ✅ TYPE SAFETY: Extract queryArgs with proper generic type inference
-    // TypeScript infers TQueryArgs correctly from readonly unknown[] default
     const { threadId, enabled = true, deduplicationOptions: runtimeDeduplicationOptions } = options;
     const queryArgs = (options.queryArgs ?? []) as TQueryArgs;
 
-    // Merge config and runtime deduplication options (runtime takes precedence)
-    // ✅ MEMOIZE: Prevent useMemo dependency from changing on every render
-    // ✅ TYPE-SAFE: Properly merge options, handling undefined case
     const mergedDeduplicationOptions = useMemo(
       (): TDeduplicationOptions | undefined => {
         if (deduplicationOptions === undefined && runtimeDeduplicationOptions === undefined) {
           return undefined;
         }
-        // Merge objects when at least one is defined
         return { ...deduplicationOptions, ...runtimeDeduplicationOptions } as TDeduplicationOptions;
       },
       [runtimeDeduplicationOptions],
     );
 
-    // Get store state and actions using injected hook
-    // ✅ DEPENDENCY INJECTION: useStoreHook passed as config parameter
-    // This avoids circular dependencies and enables testing
     const currentItems = useStoreHook<TItem[]>(storeSelector);
     const setItems = useStoreHook<(items: TItem[]) => void>(storeSetter);
 
-    // Query server data
     const { data: response, isLoading } = queryHook(
       threadId,
       enabled,
       ...(queryArgs as never),
     );
 
-    // Extract and transform items from response
     const rawItems = useMemo((): TItem[] => {
       const extracted = extractItems(response);
       return transformItems(extracted);
     }, [response]);
 
-    // Apply optional deduplication
     const processedItems = useMemo(() => {
       if (deduplicationHook) {
         return deduplicationHook(rawItems, mergedDeduplicationOptions);
@@ -274,18 +106,13 @@ export function createOrchestrator<
       return rawItems;
     }, [rawItems, mergedDeduplicationOptions]);
 
-    // Track previous state for change detection
     const prevItemsRef = useRef<TItem[]>([]);
 
-    // Sync server items to store when they change
     useEffect(() => {
-      // ✅ CRITICAL: Don't sync when disabled
-      // When disabled, query doesn't fetch, so syncing would use stale data
       if (!enabled) {
         return;
       }
 
-      // ✅ SHARED UTILITY: Merge server/client state by priority
       const { mergedItems } = mergeServerClientState(
         processedItems,
         currentItems,
@@ -293,7 +120,6 @@ export function createOrchestrator<
         getItemPriority,
       );
 
-      // ✅ PERFORMANCE: Shallow comparison instead of JSON.stringify
       const itemsChanged = hasStateChanged(
         prevItemsRef.current,
         mergedItems,
@@ -304,9 +130,6 @@ export function createOrchestrator<
         prevItemsRef.current = mergedItems;
         setItems(mergedItems);
       }
-      // Deps intentionally exclude factory config functions (getItemKey, getItemPriority, compareKeys)
-      // which are stable references from createOrchestrator config, and setItems which is stable
-      // from Zustand store. Including them would cause ESLint false positive without benefit.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, processedItems, currentItems]);
 

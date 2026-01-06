@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { PlanType, StripeSubscriptionStatus } from '@/api/core/enums';
-import { CreditTransactionTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
+import { CreditActions, CreditTransactionTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 type MockUserCreditBalance = {
@@ -195,10 +195,10 @@ function simulateProcessMonthlyRefill(userId: string): void {
   mockState.creditTransactions.push({
     id: `tx_${Date.now()}`,
     userId,
-    type: 'MONTHLY_REFILL',
+    type: CreditTransactionTypes.MONTHLY_REFILL,
     amount: planConfig.monthlyCredits,
     balanceAfter: balance.balance,
-    action: 'monthly_renewal',
+    action: CreditActions.MONTHLY_RENEWAL,
     description: `Monthly refill: ${planConfig.monthlyCredits} credits`,
     createdAt: now,
   });
@@ -329,10 +329,6 @@ describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
   });
 });
 
-// ============================================================================
-// TESTS: PLAN DOWNGRADE (Pro → Free)
-// ============================================================================
-
 describe('subscription-Credit Sync: Plan Downgrade (Pro → Free)', () => {
   it('keeps remaining credits when downgrading from pro to free', () => {
     const userId = 'user_5';
@@ -414,10 +410,6 @@ describe('subscription-Credit Sync: Plan Downgrade (Pro → Free)', () => {
     expect(balance.balance).toBe(balanceBefore); // No change
   });
 });
-
-// ============================================================================
-// TESTS: PLAN CANCELLATION
-// ============================================================================
 
 describe('subscription-Credit Sync: Plan Cancellation', () => {
   it('canceled subscription keeps credits until period end', () => {
@@ -523,10 +515,6 @@ describe('subscription-Credit Sync: Plan Cancellation', () => {
   });
 });
 
-// ============================================================================
-// TESTS: MONTHLY REFILL (Pro Users)
-// ============================================================================
-
 describe('subscription-Credit Sync: Monthly Refill', () => {
   it('pro users get 100K credits on billing cycle renewal', () => {
     const userId = 'user_11';
@@ -613,10 +601,6 @@ describe('subscription-Credit Sync: Monthly Refill', () => {
     expect(balance.nextRefillAt!.getMonth()).toBe(expectedNextRefill.getMonth());
   });
 });
-
-// ============================================================================
-// TESTS: SUBSCRIPTION SYNC RECOVERY
-// ============================================================================
 
 describe('subscription-Credit Sync: Sync Recovery', () => {
   it('provisionPaidUserCredits provisions 100K credits when webhook fails', () => {
@@ -777,10 +761,6 @@ describe('subscription-Credit Sync: Sync Recovery', () => {
   });
 });
 
-// ============================================================================
-// TESTS: CREDIT ENFORCEMENT
-// ============================================================================
-
 describe('subscription-Credit Sync: Credit Enforcement', () => {
   it('enforceCredits blocks users with insufficient credits', () => {
     const userId = 'user_21';
@@ -846,10 +826,6 @@ describe('subscription-Credit Sync: Credit Enforcement', () => {
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
   });
 });
-
-// ============================================================================
-// TESTS: EDGE CASES
-// ============================================================================
 
 describe('subscription-Credit Sync: Edge Cases', () => {
   it('user with active subscription but planType still "free" (desync)', () => {
@@ -963,10 +939,6 @@ describe('subscription-Credit Sync: Edge Cases', () => {
     expect(simulateCheckHasActiveSubscription(userId)).toBe(true);
   });
 });
-
-// ============================================================================
-// CONFIGURATION VALIDATION TESTS
-// ============================================================================
 
 describe('credit Configuration Validation', () => {
   it('has 5,000 signup credits', () => {

@@ -1,18 +1,3 @@
-/**
- * Centralized Icon Library (shadcn pattern)
- *
- * All icons should be imported from this file, not directly from lucide-react.
- * This makes future icon library swaps trivial (one-file change).
- *
- * Usage:
- *   import { Icons } from '@/components/icons'
- *   <Icons.search className="size-4" />
- *
- * For icon prop types:
- *   import { Icons, type Icon } from '@/components/icons'
- *   type Props = { icon: Icon }
- */
-
 import type { LucideIcon, LucideProps } from 'lucide-react';
 import {
   AlertCircle,

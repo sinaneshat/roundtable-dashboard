@@ -46,8 +46,6 @@ import { ModelPresetCard } from './model-preset-card';
 import { PresetNameForm } from './preset-name-form';
 import { RoleColorBadge } from './role-color-badge';
 
-// ✅ TYPE INFERENCE: Infer from TanStack Query hook instead of direct RPC response
-// This ensures type safety chain from query -> component without coupling to API schema
 type CustomRolesInfiniteQuery = ReturnType<typeof useCustomRolesQuery>;
 type CustomRolesQueryData = NonNullable<CustomRolesInfiniteQuery['data']>;
 type CustomRolesPage = CustomRolesQueryData['pages'][number];
@@ -237,7 +235,6 @@ export function ModelSelectionModal({
       await deleteRoleMutation.mutateAsync({ param: { id: roleId } });
       toastManager.success(t('roleDeleted'), t('roleDeletedMessage', { name: roleName }));
     } catch (error) {
-      console.error('[ModelSelectionModal] Failed to delete custom role:', error);
       const errorMessage = getApiErrorMessage(error, t('failedToDeleteRole'));
       toastManager.error(t('failedToDeleteRole'), errorMessage);
     }

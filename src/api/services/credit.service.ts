@@ -12,7 +12,18 @@ import { z } from 'zod';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { CreditAction, CreditTransactionType } from '@/api/core/enums';
-import { CreditActionSchema, CreditTransactionTypes, DatabaseOperations, ErrorContextTypes, getGrantTransactionType, parsePlanType, PlanTypes, PlanTypeSchema, StripeSubscriptionStatuses } from '@/api/core/enums';
+import {
+  CreditActions,
+  CreditActionSchema,
+  CreditTransactionTypes,
+  DatabaseOperations,
+  ErrorContextTypes,
+  getGrantTransactionType,
+  parsePlanType,
+  PlanTypes,
+  PlanTypeSchema,
+  StripeSubscriptionStatuses,
+} from '@/api/core/enums';
 import { getModelById } from '@/api/services/models-config.service';
 import {
   calculateWeightedCredits,
@@ -22,7 +33,7 @@ import {
 } from '@/api/services/product-logic.service';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import type { CreditTransactionMetadata, UserCreditBalance } from '@/db/validation';
+import type { UserCreditBalance } from '@/db/validation';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 export const CreditBalanceInfoSchema = z.object({
@@ -53,15 +64,10 @@ export const CreditDeductionSchema = z.object({
   threadId: z.string().optional(),
   messageId: z.string().optional(),
   description: z.string().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type CreditDeduction = z.infer<typeof CreditDeductionSchema>;
 
-/**
- * Get or create user credit balance record with signup credits for new users.
- * SELECT-first + INSERT OR IGNORE pattern handles race conditions atomically.
- */
 export async function ensureUserCreditRecord(userId: string): Promise<UserCreditBalance> {
   const db = await getDbAsync();
 
@@ -115,7 +121,7 @@ export async function ensureUserCreditRecord(userId: string): Promise<UserCredit
           type: CreditTransactionTypes.CREDIT_GRANT,
           amount: signupCredits,
           balanceAfter: signupCredits,
-          action: 'signup_bonus',
+          action: CreditActions.SIGNUP_BONUS,
           description: 'Signup bonus credits - one free round',
         });
       } catch (txError) {
@@ -220,12 +226,6 @@ async function checkHasActiveSubscription(userId: string): Promise<boolean> {
   return subscriptionResults.length > 0;
 }
 
-const FREE_ROUND_COMPLETE_ACTION = 'free_round_complete' as const;
-
-/**
- * Check if a free user has already created a thread.
- * Free users are limited to ONE thread total.
- */
 export async function checkFreeUserHasCreatedThread(userId: string): Promise<boolean> {
   const db = await getDbAsync();
 
@@ -238,22 +238,16 @@ export async function checkFreeUserHasCreatedThread(userId: string): Promise<boo
   return existingThread.length > 0;
 }
 
-/**
- * Check if a free user has completed their one free round.
- * A round is complete when ALL enabled participants have responded in round 0.
- * This is the security gate to prevent free users from getting unlimited usage.
- */
 export async function checkFreeUserHasCompletedRound(userId: string): Promise<boolean> {
   const db = await getDbAsync();
 
-  // Fast path: Check for explicit "free_round_complete" transaction marker
   const freeRoundTransaction = await db
     .select()
     .from(tables.creditTransaction)
     .where(
       and(
         eq(tables.creditTransaction.userId, userId),
-        eq(tables.creditTransaction.action, FREE_ROUND_COMPLETE_ACTION),
+        eq(tables.creditTransaction.action, CreditActions.FREE_ROUND_COMPLETE),
       ),
     )
     .limit(1);
@@ -330,7 +324,7 @@ export async function zeroOutFreeUserCredits(userId: string): Promise<void> {
     await recordTransaction({
       userId,
       type: CreditTransactionTypes.DEDUCTION,
-      action: FREE_ROUND_COMPLETE_ACTION,
+      action: CreditActions.FREE_ROUND_COMPLETE,
       amount: -previousBalance,
       balanceAfter: 0,
       description: 'Free round completed - credits exhausted',
@@ -360,7 +354,7 @@ async function provisionPaidUserCredits(userId: string): Promise<void> {
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.MONTHLY_REFILL,
-    action: 'monthly_renewal',
+    action: CreditActions.MONTHLY_RENEWAL,
     amount: planConfig.monthlyCredits,
     balanceAfter: planConfig.monthlyCredits,
     description: 'Credits provisioned (subscription sync recovery)',
@@ -428,7 +422,6 @@ export async function finalizeCredits(
   const pricingTier = getModelPricingTierById(actualUsage.modelId, getModelById);
   const totalTokens = actualUsage.inputTokens + actualUsage.outputTokens;
   const model = getModelById(actualUsage.modelId);
-  // Store pricing as micro-dollars per million tokens (e.g., $1.50/M = 1500000)
   const inputPricingMicro = model ? Math.round(Number.parseFloat(model.pricing.prompt) * 1_000_000 * 1_000_000) : undefined;
   const outputPricingMicro = model ? Math.round(Number.parseFloat(model.pricing.completion) * 1_000_000 * 1_000_000) : undefined;
 
@@ -522,12 +515,10 @@ export async function releaseReservation(
   });
 }
 
-type GrantType = 'credit_grant' | 'monthly_refill' | 'purchase';
-
 export async function grantCredits(
   userId: string,
   amount: number,
-  type: GrantType,
+  type: 'credit_grant' | 'monthly_refill' | 'purchase',
   description?: string,
 ): Promise<void> {
   const db = await getDbAsync();
@@ -553,22 +544,28 @@ export async function grantCredits(
     return grantCredits(userId, amount, type, description);
   }
 
+  const actionMap: Record<'credit_grant' | 'monthly_refill' | 'purchase', CreditAction> = {
+    credit_grant: CreditActions.SIGNUP_BONUS,
+    monthly_refill: CreditActions.MONTHLY_RENEWAL,
+    purchase: CreditActions.CREDIT_PURCHASE,
+  };
+
   await recordTransaction({
     userId,
     type: getGrantTransactionType(type),
     amount,
     balanceAfter: result[0].balance,
-    action: type === 'monthly_refill' ? 'monthly_renewal' : type === 'purchase' ? 'credit_purchase' : 'signup_bonus',
+    action: actionMap[type],
     description: description || `Granted ${amount} credits`,
   });
 }
 
 const ACTION_COST_TO_CREDIT_ACTION_MAP: Record<keyof typeof CREDIT_CONFIG.ACTION_COSTS, CreditAction> = {
-  threadCreation: 'thread_creation',
-  webSearchQuery: 'web_search',
-  fileReading: 'file_reading',
-  analysisGeneration: 'analysis_generation',
-  customRoleCreation: 'thread_creation',
+  threadCreation: CreditActions.THREAD_CREATION,
+  webSearchQuery: CreditActions.WEB_SEARCH,
+  fileReading: CreditActions.FILE_READING,
+  analysisGeneration: CreditActions.ANALYSIS_GENERATION,
+  customRoleCreation: CreditActions.THREAD_CREATION,
 } as const;
 
 export async function deductCreditsForAction(
@@ -658,7 +655,7 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
     type: CreditTransactionTypes.MONTHLY_REFILL,
     amount: planConfig.monthlyCredits,
     balanceAfter: result[0].balance,
-    action: 'monthly_renewal',
+    action: CreditActions.MONTHLY_RENEWAL,
     description: `Monthly refill: ${planConfig.monthlyCredits} credits`,
   });
 }
@@ -675,7 +672,7 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
   const result = await db
     .update(tables.userCreditBalance)
     .set({
-      planType: 'paid',
+      planType: PlanTypes.PAID,
       balance: sql`${tables.userCreditBalance.balance} + ${planConfig.monthlyCredits}`,
       monthlyCredits: planConfig.monthlyCredits,
       lastRefillAt: now,
@@ -700,12 +697,12 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     type: CreditTransactionTypes.CREDIT_GRANT,
     amount: planConfig.monthlyCredits,
     balanceAfter: result[0].balance,
-    action: 'monthly_renewal',
+    action: CreditActions.MONTHLY_RENEWAL,
     description: `Upgraded to Pro plan: ${planConfig.monthlyCredits} credits`,
   });
 }
 
-type TransactionRecord = {
+async function recordTransaction(record: {
   userId: string;
   type: CreditTransactionType;
   amount: number;
@@ -719,14 +716,10 @@ type TransactionRecord = {
   streamId?: string;
   action?: CreditAction;
   modelId?: string;
-  // Model pricing at time of transaction (micro-dollars per million tokens)
   modelPricingInputPerMillion?: number;
   modelPricingOutputPerMillion?: number;
   description?: string;
-  metadata?: CreditTransactionMetadata;
-};
-
-async function recordTransaction(record: TransactionRecord): Promise<void> {
+}): Promise<void> {
   const db = await getDbAsync();
 
   await db.insert(tables.creditTransaction).values({
@@ -747,7 +740,6 @@ async function recordTransaction(record: TransactionRecord): Promise<void> {
     modelPricingInputPerMillion: record.modelPricingInputPerMillion,
     modelPricingOutputPerMillion: record.modelPricingOutputPerMillion,
     description: record.description,
-    metadata: record.metadata,
     createdAt: new Date(),
   });
 }

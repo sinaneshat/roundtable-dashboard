@@ -24,7 +24,13 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { StripeSubscriptionStatus, SubscriptionTier, UsageStatus } from '@/api/core/enums';
-import { BillingIntervals, PlanTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
+import {
+  BillingIntervals,
+  PlanTypes,
+  StripeSubscriptionStatuses,
+  SubscriptionTiers,
+  UsageStatuses,
+} from '@/api/core/enums';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
@@ -34,58 +40,36 @@ import type { UsageStatsPayload } from '../routes/usage/schema';
 import { checkFreeUserHasCompletedRound, getUserCreditBalance, upgradeToPaidPlan } from './credit.service';
 import { getTierFromProductId, TIER_QUOTAS } from './product-logic.service';
 
-/**
- * Get tier quotas from code (SINGLE SOURCE OF TRUTH)
- * ✅ CODE-DRIVEN: All limits come from TIER_QUOTAS constant
- */
 function getTierQuotas(tier: SubscriptionTier) {
   return TIER_QUOTAS[tier];
 }
 
-/**
- * Get user's subscription tier
- * ✅ CACHING ENABLED: Uses same caching pattern as ensureUserUsageRecord (5-minute TTL)
- * ✅ DRY: Single source of truth for tier lookup with caching
- *
- * @param userId - User ID to look up tier for
- * @returns User's subscription tier (defaults to 'free' if not found)
- */
 export async function getUserTier(userId: string): Promise<SubscriptionTier> {
   const db = await getDbAsync();
 
-  // ✅ CACHING ENABLED: 5-minute TTL for user tier data
-  // Same pattern as ensureUserUsageRecord for consistency
   const usageResults = await db
     .select()
     .from(tables.userChatUsage)
     .where(eq(tables.userChatUsage.userId, userId))
     .limit(1)
     .$withCache({
-      config: { ex: 300 }, // 5 minutes
+      config: { ex: 300 },
       tag: UserCacheTags.tier(userId),
     });
 
   return usageResults[0]?.subscriptionTier || SubscriptionTiers.FREE;
 }
 
-/**
- * Get or create user usage record
- * Ensures a user has a usage tracking record for the current billing period
- */
 export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsage> {
   const db = await getDbAsync();
 
-  // Check if user has existing usage record
-  // ✅ CACHING ENABLED: Query builder API with 1-minute TTL for near-real-time usage
-  // Cache automatically invalidates when usage counters are updated
-  // @see https://orm.drizzle.team/docs/cache
   const usageResults = await db
     .select()
     .from(tables.userChatUsage)
     .where(eq(tables.userChatUsage.userId, userId))
     .limit(1)
     .$withCache({
-      config: { ex: 60 }, // 1 minute TTL for near-real-time data
+      config: { ex: 60 },
       tag: UserCacheTags.usage(userId),
     });
 
@@ -93,10 +77,9 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
 
   const now = new Date();
 
-  // If no usage record exists, create one with free tier defaults from CODE
   if (!usage) {
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
-    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // Last day of current month
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
     try {
       const result = await db
@@ -119,7 +102,6 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
 
       usage = result[0];
 
-      // If insert succeeded but didn't return a record, query it again
       if (!usage) {
         const retryResults = await db
           .select()
@@ -130,7 +112,6 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
         usage = retryResults[0];
       }
     } catch (error) {
-      // If insert failed due to unique constraint (race condition), try to fetch the record
       const retryResults = await db
         .select()
         .from(tables.userChatUsage)
@@ -139,7 +120,6 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
 
       usage = retryResults[0];
 
-      // If still no record after retry, re-throw the original error
       if (!usage) {
         const context: ErrorContext = {
           errorType: 'database',
@@ -153,7 +133,6 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
     }
   }
 
-  // At this point, usage should be defined
   if (!usage) {
     const context: ErrorContext = {
       errorType: 'database',
@@ -164,12 +143,9 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
     throw createError.internal('Usage record unexpectedly undefined', context);
   }
 
-  // Check if billing period has expired
   if (usage.currentPeriodEnd < now) {
     await rolloverBillingPeriod(userId, usage);
 
-    // Fetch the updated usage record
-    // ✅ CACHING ENABLED: 1-minute TTL, automatically invalidated by rollover mutation
     const updatedUsageResults = await db
       .select()
       .from(tables.userChatUsage)
@@ -198,28 +174,10 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
   return usage;
 }
 
-/**
- * Rollover billing period
- * Archives current usage and resets counters for new period
- *
- * Following Theo's "Stay Sane with Stripe" pattern:
- * - If user has active subscription: Stripe webhooks handle period renewal
- * - If subscription ended: Downgrade to free tier and use calendar months
- * - Always archive old period before resetting
- *
- * Note: This function is primarily for handling expired subscriptions.
- * Active subscriptions get their periods updated via Stripe sync when invoice.paid fires.
- */
-async function rolloverBillingPeriod(
-  userId: string,
-  currentUsage: UserChatUsage,
-): Promise<void> {
+async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage): Promise<void> {
   const db = await getDbAsync();
   const now = new Date();
 
-  // Check if user has an active Stripe subscription
-  // If currentPeriodEnd has passed and no Stripe sync updated it, subscription has ended
-  // ✅ CACHING ENABLED: 5-minute TTL for user data (low mutation frequency)
   const userResults = await db
     .select()
     .from(tables.user)
@@ -231,12 +189,9 @@ async function rolloverBillingPeriod(
     });
 
   const user = userResults[0];
-
   let shouldDowngradeToFree = false;
 
   if (user) {
-    // Check if user has a Stripe customer record
-    // ✅ CACHING ENABLED: 5-minute TTL for customer data (rarely changes)
     const stripeCustomerResults = await db
       .select()
       .from(tables.stripeCustomer)
@@ -250,8 +205,6 @@ async function rolloverBillingPeriod(
     const stripeCustomer = stripeCustomerResults[0];
 
     if (stripeCustomer) {
-      // Check if they have an active subscription in our DB
-      // ✅ CACHING ENABLED: 2-minute TTL for subscription status (updated by webhooks)
       const activeSubscriptionResults = await db
         .select()
         .from(tables.stripeSubscription)
@@ -266,45 +219,33 @@ async function rolloverBillingPeriod(
         });
 
       const activeSubscription = activeSubscriptionResults[0];
-
-      // No active subscription = downgrade to free
       shouldDowngradeToFree = !activeSubscription;
     } else {
-      // No Stripe customer = free tier user
       shouldDowngradeToFree = true;
     }
   } else {
-    // User not found (shouldn't happen) - default to free tier for safety
     shouldDowngradeToFree = true;
   }
 
-  // Check if there's a pending tier change to apply
   const hasPendingTierChange = !!currentUsage.pendingTierChange;
-
-  // Calculate new period (calendar-based for free tier or expired subscriptions)
   const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  // Prepare history archive entry (COUNTERS ONLY, no limits)
-  // ✅ SINGLE SOURCE OF TRUTH: Limits calculated from subscriptionTier + TIER_QUOTAS in code
   const historyInsert = db.insert(tables.userChatUsageHistory).values({
     id: ulid(),
     userId,
     periodStart: currentUsage.currentPeriodStart,
     periodEnd: currentUsage.currentPeriodEnd,
-    // Usage counters (what actually happened)
     threadsCreated: currentUsage.threadsCreated,
     messagesCreated: currentUsage.messagesCreated,
     customRolesCreated: currentUsage.customRolesCreated,
     analysisGenerated: currentUsage.analysisGenerated,
-    // Tier identifier (look up limits from TIER_QUOTAS in code)
     subscriptionTier: currentUsage.subscriptionTier,
     isAnnual: currentUsage.isAnnual,
     createdAt: now,
   });
 
   if (hasPendingTierChange) {
-    // Apply scheduled downgrade from pending tier change
     const pendingTier = currentUsage.pendingTierChange!;
     const pendingIsAnnual = currentUsage.pendingTierIsAnnual || false;
 
@@ -318,7 +259,6 @@ async function rolloverBillingPeriod(
         messagesCreated: 0,
         customRolesCreated: 0,
         analysisGenerated: 0,
-        // Clear pending tier change fields
         pendingTierChange: null,
         pendingTierIsAnnual: null,
         version: sql`${tables.userChatUsage.version} + 1`,
@@ -326,14 +266,11 @@ async function rolloverBillingPeriod(
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
-    // ✅ ATOMIC: Archive history + Update usage in single batch (Cloudflare D1)
-    // Using reusable batch helper from @/api/common/batch-operations
     await executeBatch(db, [historyInsert, usageUpdate]);
-    return; // Exit after batch
+    return;
   }
 
   if (shouldDowngradeToFree && !hasPendingTierChange) {
-    // Downgrade to free tier
     const freeUpdate = db.update(tables.userChatUsage)
       .set({
         subscriptionTier: SubscriptionTiers.FREE,
@@ -344,7 +281,6 @@ async function rolloverBillingPeriod(
         messagesCreated: 0,
         customRolesCreated: 0,
         analysisGenerated: 0,
-        // Clear any pending tier change fields
         pendingTierChange: null,
         pendingTierIsAnnual: null,
         version: sql`${tables.userChatUsage.version} + 1`,
@@ -352,15 +288,10 @@ async function rolloverBillingPeriod(
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
-    // ✅ ATOMIC: Archive history + Downgrade to free tier in single batch (Cloudflare D1)
-    // Using reusable batch helper from @/api/common/batch-operations
     await executeBatch(db, [historyInsert, freeUpdate]);
     return;
   }
 
-  // Active subscription exists but period expired
-  // This shouldn't normally happen (Stripe sync should handle it)
-  // Reset usage but keep current tier
   const resetUpdate = db.update(tables.userChatUsage)
     .set({
       currentPeriodStart: periodStart,
@@ -374,15 +305,9 @@ async function rolloverBillingPeriod(
     })
     .where(eq(tables.userChatUsage.userId, userId));
 
-  // ✅ ATOMIC: Archive history + Reset usage in single batch (Cloudflare D1)
-  // Using reusable batch helper from @/api/common/batch-operations
   await executeBatch(db, [historyInsert, resetUpdate]);
 }
 
-/**
- * ✅ CREDITS-ONLY: Simplified usage stats
- * Users only need to see their credit balance, not detailed quotas
- */
 export async function getUserUsageStats(userId: string): Promise<UsageStatsPayload> {
   return {
     credits: await getCreditStatsForUsage(userId),
@@ -390,19 +315,14 @@ export async function getUserUsageStats(userId: string): Promise<UsageStatsPaylo
   };
 }
 
-/**
- * Get credit stats for usage response
- */
 async function getCreditStatsForUsage(userId: string) {
   const creditBalance = await getUserCreditBalance(userId);
-
-  // Determine credit status based on available credits
-  let creditStatus: UsageStatus = 'default';
+  let creditStatus: UsageStatus = UsageStatuses.DEFAULT;
 
   if (creditBalance.available <= 0) {
-    creditStatus = 'critical';
+    creditStatus = UsageStatuses.CRITICAL;
   } else if (creditBalance.available <= 1000) {
-    creditStatus = 'warning'; // Warning when under 1000 credits
+    creditStatus = UsageStatuses.WARNING;
   }
 
   return {

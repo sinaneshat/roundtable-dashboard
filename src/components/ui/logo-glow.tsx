@@ -25,8 +25,6 @@ export function LogoGlow({ className }: LogoGlowProps) {
   }, []);
 
   const shouldAnimate = !prefersReducedMotion;
-
-  // Color cycle array for smooth transitions (loops back to first color)
   const colorCycle = [...GLOW_COLORS, DEFAULT_GLOW_COLOR];
 
   return (

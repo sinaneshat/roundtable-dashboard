@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-describe('checkout Flow (Theo Pattern)', () => {
+import { PurchaseTypes } from '@/api/core/enums';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+
+describe('checkout Flow', () => {
   describe('customer Creation Order', () => {
     it('creates customer BEFORE checkout session', () => {
       const correctOrder = [
-        '1. Check if customer exists in database',
-        '2. If not, create Stripe customer with userId metadata',
-        '3. Store customerId <-> userId binding in database',
-        '4. Create checkout session with customerId',
+        'check_customer_exists',
+        'create_stripe_customer',
+        'store_customer_binding',
+        'create_checkout_session',
       ];
 
-      const checkoutIndex = correctOrder.findIndex(s => s.includes('checkout session'));
-      const customerIndex = correctOrder.findIndex(s => s.includes('create Stripe customer'));
+      const checkoutIndex = correctOrder.indexOf('create_checkout_session');
+      const customerIndex = correctOrder.indexOf('create_stripe_customer');
       expect(checkoutIndex).toBeGreaterThan(customerIndex);
     });
   });
@@ -54,14 +57,14 @@ describe('checkout Flow (Theo Pattern)', () => {
     });
 
     it('only supports subscription purchases', () => {
-      const purchaseTypes = ['subscription'];
-      expect(purchaseTypes).not.toContain('credits');
-      expect(purchaseTypes).toContain('subscription');
+      const supportedPurchases = [PurchaseTypes.SUBSCRIPTION];
+      expect(supportedPurchases).not.toContain('credits');
+      expect(supportedPurchases).toContain(PurchaseTypes.SUBSCRIPTION);
     });
 
     it('validates Pro plan pricing at $59/month', () => {
-      const proPlanPriceInCents = 5900;
-      const proPlanCredits = 100_000;
+      const proPlanPriceInCents = CREDIT_CONFIG.PLANS.paid.priceInCents;
+      const proPlanCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       expect(proPlanPriceInCents).toBe(5900);
       expect(proPlanCredits).toBe(100_000);
@@ -70,50 +73,41 @@ describe('checkout Flow (Theo Pattern)', () => {
 
   describe('subscription Limit', () => {
     it('enforces one subscription per customer', () => {
-      const constraint = {
-        setting: 'Limit customers to one subscription',
-        implementation: 'Check for active subscription before creating checkout',
-      };
+      const maxSubscriptionsPerCustomer = 1;
 
-      expect(constraint.setting).toContain('one subscription');
-      expect(constraint.implementation).toContain('Check for active subscription');
+      expect(maxSubscriptionsPerCustomer).toBe(1);
     });
 
     it('blocks checkout if user has active subscription', () => {
       const hasActiveSubscription = true;
-      const expectedError = 'You already have an active subscription';
+      const shouldBlockCheckout = hasActiveSubscription;
 
-      expect(hasActiveSubscription).toBe(true);
-      expect(expectedError).toContain('already have an active subscription');
+      expect(shouldBlockCheckout).toBe(true);
     });
   });
 });
 
 describe('checkout Anti-Patterns', () => {
-  it('avoids using CHECKOUT_SESSION_ID', () => {
-    const antiPattern = {
-      wrong: 'Use ?session_id={CHECKOUT_SESSION_ID} in success URL',
-      solution: 'Single syncStripeDataFromStripe function',
-    };
+  it('avoids using CHECKOUT_SESSION_ID in success URL', () => {
+    const successUrlPattern = '/chat/billing/subscription-success';
 
-    expect(antiPattern.solution).toContain('Single');
+    expect(successUrlPattern).not.toContain('{CHECKOUT_SESSION_ID}');
+    expect(successUrlPattern).not.toContain('session_id=');
   });
 
-  it('avoids trusting webhook payloads', () => {
-    const antiPattern = {
-      wrong: 'Extract subscription data from webhook payload',
-      solution: 'Extract only customerId, fetch fresh from Stripe API',
+  it('fetches fresh data from Stripe API instead of trusting webhook payload', () => {
+    const webhookStrategy = {
+      extractFromPayload: ['customerId'],
+      fetchFromStripeApi: ['subscription', 'customer', 'invoice'],
     };
 
-    expect(antiPattern.solution).toContain('fresh from Stripe API');
+    expect(webhookStrategy.extractFromPayload).toEqual(['customerId']);
+    expect(webhookStrategy.fetchFromStripeApi).toContain('subscription');
   });
 
-  it('avoids multiple sync functions', () => {
-    const antiPattern = {
-      wrong: 'syncSubscriptions(), syncInvoices(), syncPayments()',
-      solution: 'Single syncStripeDataFromStripe(customerId)',
-    };
+  it('uses single sync function for all Stripe data', () => {
+    const syncFunctionName = 'syncStripeDataFromStripe';
 
-    expect(antiPattern.solution).toContain('Single');
+    expect(syncFunctionName).toBe('syncStripeDataFromStripe');
   });
 });

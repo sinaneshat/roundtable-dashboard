@@ -35,15 +35,15 @@ beforeEach(() => {
   mockUserCreditData.monthlyCredits = 0;
 });
 
-describe('credit.service', () => {
-  describe('credit config', () => {
-    describe('signup credits', () => {
+describe('credit Service', () => {
+  describe('credit Config', () => {
+    describe('signup Credits', () => {
       it('has 5,000 signup credits', () => {
         expect(CREDIT_CONFIG.SIGNUP_CREDITS).toBe(5_000);
       });
     });
 
-    describe('paid plan configuration', () => {
+    describe('paid Plan Configuration', () => {
       it('has 100,000 monthly credits', () => {
         expect(CREDIT_CONFIG.PLANS.paid.monthlyCredits).toBe(100_000);
       });
@@ -58,7 +58,7 @@ describe('credit.service', () => {
       });
     });
 
-    describe('action costs', () => {
+    describe('action Costs', () => {
       it('has all required action costs defined', () => {
         expect(CREDIT_CONFIG.ACTION_COSTS.threadCreation).toBeDefined();
         expect(CREDIT_CONFIG.ACTION_COSTS.webSearchQuery).toBeDefined();
@@ -76,7 +76,7 @@ describe('credit.service', () => {
     });
   });
 
-  describe('enforceCredits error messages', () => {
+  describe('enforceCredits Error Messages', () => {
     function getEnforceCreditsError(
       available: number,
       required: number,
@@ -86,8 +86,9 @@ describe('credit.service', () => {
         return null;
       }
 
-      return `Insufficient credits. Required: ${required}, Available: ${available}. `
-        + `${planType === PlanTypes.FREE ? 'Upgrade to Pro or ' : ''}Purchase additional credits to continue.`;
+      const baseMessage = `Insufficient credits. Required: ${required}, Available: ${available}. `;
+      const upgradePrompt = planType === PlanTypes.FREE ? 'Upgrade to Pro or ' : '';
+      return `${baseMessage}${upgradePrompt}Purchase additional credits to continue.`;
     }
 
     it('returns null when user has sufficient credits', () => {
@@ -112,7 +113,7 @@ describe('credit.service', () => {
     });
   });
 
-  describe('credit calculation utilities', () => {
+  describe('credit Calculation Utilities', () => {
     it('tokens per credit is 1000', () => {
       expect(CREDIT_CONFIG.TOKENS_PER_CREDIT).toBe(1000);
     });
@@ -169,7 +170,7 @@ describe('credit.service', () => {
     });
   });
 
-  describe('edge cases that could cause thread creation failures', () => {
+  describe('edge Cases That Could Cause Thread Creation Failures', () => {
     it('new user gets signup credits', () => {
       const signupCredits = CREDIT_CONFIG.SIGNUP_CREDITS;
       expect(signupCredits).toBe(5_000);
@@ -197,8 +198,8 @@ describe('credit.service', () => {
     });
   });
 
-  describe('free user security gates', () => {
-    describe('checkFreeUserHasCreatedThread (ONE thread limit)', () => {
+  describe('free User Security Gates', () => {
+    describe('checkFreeUserHasCreatedThread (ONE Thread Limit)', () => {
       it('returns false for new user with no threads', () => {
         const existingThreads: string[] = [];
         const hasThread = existingThreads.length > 0;
@@ -239,7 +240,7 @@ describe('credit.service', () => {
       });
     });
 
-    describe('checkFreeUserHasCompletedRound (ALL participants must respond)', () => {
+    describe('checkFreeUserHasCompletedRound (ALL Participants Must Respond)', () => {
       it('checks transaction history for free_round_complete action (fast path)', () => {
         const expectedAction = 'free_round_complete';
         expect(expectedAction).toBe('free_round_complete');
@@ -324,7 +325,7 @@ describe('credit.service', () => {
       });
     });
 
-    describe('enforceCredits free user flow', () => {
+    describe('enforceCredits Free User Flow', () => {
       it('checks round completion before credit balance', () => {
         const checkOrder = [
           'checkFreeUserHasCompletedRound',
@@ -349,8 +350,8 @@ describe('credit.service', () => {
     });
   });
 
-  describe('free user abuse prevention scenarios', () => {
-    describe('refresh abuse prevention', () => {
+  describe('free User Abuse Prevention Scenarios', () => {
+    describe('refresh Abuse Prevention', () => {
       it('empty thread still counts as created', () => {
         const thread = { id: 'thread_123', messageCount: 0 };
         const hasThread = !!thread.id;
@@ -367,7 +368,7 @@ describe('credit.service', () => {
       });
     });
 
-    describe('credit deduction security', () => {
+    describe('credit Deduction Security', () => {
       it('credits only deducted on stream completion (finalizeCredits)', () => {
         const deductionMoment = 'onFinish';
         expect(deductionMoment).toBe('onFinish');
@@ -387,7 +388,7 @@ describe('credit.service', () => {
       });
     });
 
-    describe('model pricing tier application', () => {
+    describe('model Pricing Tier Application', () => {
       it('budget tier has 1x multiplier', () => {
         const budgetMultiplier = 1;
         expect(budgetMultiplier).toBe(1);
@@ -406,7 +407,7 @@ describe('credit.service', () => {
       });
     });
 
-    describe('concurrent request handling', () => {
+    describe('concurrent Request Handling', () => {
       it('uses optimistic locking with version column', () => {
         const lockingStrategy = 'optimistic';
         const versionColumn = 'version';
@@ -420,7 +421,7 @@ describe('credit.service', () => {
       });
     });
 
-    describe('downgrade mid-stream handling', () => {
+    describe('downgrade Mid-Stream Handling', () => {
       it('stream fails if credits depleted during streaming', () => {
         const reservedCredits = 100;
         const actualCredits = 150;
@@ -437,7 +438,7 @@ describe('credit.service', () => {
       });
     });
 
-    describe('free user complete lifecycle', () => {
+    describe('free User Complete Lifecycle', () => {
       it('new user gets 5000 signup credits', () => {
         expect(CREDIT_CONFIG.SIGNUP_CREDITS).toBe(5_000);
       });

@@ -69,6 +69,8 @@ export {
 
 // Billing and subscription enums
 export {
+  ACTIVE_SUBSCRIPTION_STATUSES,
+  type ActiveSubscriptionStatus,
   assertNeverTier,
   BILLING_ERROR_TYPES,
   BILLING_INTERVALS,
@@ -115,6 +117,7 @@ export {
   type InvoiceStatus,
   InvoiceStatuses,
   InvoiceStatusSchema,
+  isActiveSubscriptionStatus,
   isBillingErrorType,
   isCreditTransactionType,
   isModelPricingTier,

@@ -79,7 +79,6 @@ export const ChatInputToolbarMenu = memo(({
   const ModeIcon = currentMode?.icon;
   const hasNoModelsSelected = selectedParticipants.length === 0;
 
-  // Handle file input click
   const handleAttachClick = useCallback(() => {
     onAttachmentClick?.();
   }, [onAttachmentClick]);

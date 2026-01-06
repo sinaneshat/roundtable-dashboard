@@ -39,14 +39,13 @@ export default function PricingScreen() {
   const subscriptions: Subscription[] = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
 
   const activeSubscription = subscriptions.find(
-    (sub: Subscription) => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
+    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
 
   const handleSubscribe = async (priceId: string) => {
     setProcessingPriceId(priceId);
     try {
       if (activeSubscription) {
-        // Subscription switch (upgrade/downgrade between plans)
         const result = await switchMutation.mutateAsync({
           param: { id: activeSubscription.id },
           json: { newPriceId: priceId },
@@ -56,7 +55,11 @@ export default function PricingScreen() {
           const changeDetails = result.data?.changeDetails;
 
           if (changeDetails) {
-            const changeType = changeDetails.isUpgrade ? SubscriptionChangeTypes.UPGRADE : changeDetails.isDowngrade ? SubscriptionChangeTypes.DOWNGRADE : SubscriptionChangeTypes.CHANGE;
+            const changeType = changeDetails.isUpgrade
+              ? SubscriptionChangeTypes.UPGRADE
+              : changeDetails.isDowngrade
+                ? SubscriptionChangeTypes.DOWNGRADE
+                : SubscriptionChangeTypes.CHANGE;
 
             const params = new URLSearchParams({
               changeType,
@@ -70,7 +73,6 @@ export default function PricingScreen() {
           }
         }
       } else {
-        // New subscription checkout
         const result = await createCheckoutMutation.mutateAsync({
           json: { priceId },
         });

@@ -89,9 +89,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     setIsRenameDialogOpen(true);
   };
 
-  // ==========================================================================
-  // PUBLIC MODE: Copy link button only (for public thread view page)
-  // ==========================================================================
   if (isPublicMode) {
     return (
       <TooltipProvider>
@@ -107,7 +104,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     );
   }
 
-  // Desktop: Share button (icon + text) + kebab menu
   if (isDesktop) {
     return (
       <TooltipProvider>
@@ -160,7 +156,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
             onOpenChange={setIsShareDialogOpen}
             slug={slug}
             threadTitle={thread.title}
-            threadMode={thread.mode}
             isPublic={displayIsPublic}
             isLoading={togglePublicMutation.isPending}
             onMakePublic={handleMakePublic}
@@ -178,7 +173,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     );
   }
 
-  // Mobile: Three-dot menu with all actions (includes Share)
   return (
     <TooltipProvider>
       <div className="flex items-center gap-2">
@@ -217,7 +211,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
           onOpenChange={setIsShareDialogOpen}
           slug={slug}
           threadTitle={thread.title}
-          threadMode={thread.mode}
           isPublic={displayIsPublic}
           isLoading={togglePublicMutation.isPending}
           onMakePublic={handleMakePublic}

@@ -2,7 +2,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
 import type { UsageStatus } from '@/api/core/enums';
-import { CreditActions, PlanTypes, UsageStatuses } from '@/api/core/enums/billing';
+import { CreditActions, PlanTypes, UsageStatuses } from '@/api/core/enums';
 import {
   canAffordCredits,
   getUserCreditBalance,

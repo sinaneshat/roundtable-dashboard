@@ -1,13 +1,5 @@
 /**
- * Pre-Search Orchestrator Hook
- *
- * Syncs server pre-search data to store and manages pre-search lifecycle.
- *
- * ORCHESTRATION FLOW:
- * 1. Fetches pre-searches from server via useThreadPreSearchesQuery
- * 2. Syncs pre-searches to store via setPreSearches
- * 3. Streaming pre-search updates trigger query invalidation
- * 4. Hook refetches and re-syncs to store automatically
+ * Pre-search orchestrator hook
  */
 
 'use client';
@@ -46,8 +38,6 @@ const preSearchOrchestrator = createOrchestrator<
   compareKeys: [...PRE_SEARCH_COMPARE_KEYS],
 });
 
-export function getPreSearchOrchestrator(
-  options: OrchestratorOptions,
-): OrchestratorReturn {
+export function getPreSearchOrchestrator(options: OrchestratorOptions): OrchestratorReturn {
   return preSearchOrchestrator(options);
 }

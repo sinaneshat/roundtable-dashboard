@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 
-export type ActionsProps = HTMLAttributes<HTMLDivElement>;
+type ActionsProps = HTMLAttributes<HTMLDivElement>;
 
 export function Actions({ children, className, ...props }: ActionsProps) {
   return (
@@ -25,7 +25,7 @@ export function Actions({ children, className, ...props }: ActionsProps) {
   );
 }
 
-export type ActionProps = ComponentProps<typeof Button> & {
+type ActionProps = ComponentProps<typeof Button> & {
   tooltip?: string;
   label?: string;
 };

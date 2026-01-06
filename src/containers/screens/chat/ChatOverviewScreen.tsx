@@ -616,7 +616,7 @@ export default function ChatOverviewScreen() {
     setSelectedMode(preset.mode);
     setPersistedMode(preset.mode);
 
-    const searchEnabled = preset.searchEnabled === 'conditional' ? true : preset.searchEnabled;
+    const searchEnabled = preset.searchEnabled === 'conditional' || preset.searchEnabled;
     setEnableWebSearch(searchEnabled);
     setPersistedWebSearch(searchEnabled);
   }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch, t]);
@@ -657,7 +657,7 @@ export default function ChatOverviewScreen() {
       status,
       placeholder: t('chat.input.placeholder'),
       participants: selectedParticipants,
-      quotaCheckType: 'threads' as const,
+      quotaCheckType: 'threads',
       onRemoveParticipant: isInitialUIInputBlocked ? undefined : removeParticipant,
       attachments: chatAttachments.attachments,
       onAddAttachments: chatAttachments.addFiles,

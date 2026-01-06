@@ -689,7 +689,7 @@ describe('telemetry Correlation with Streams', () => {
       const endTime = startTime + simulatedDuration;
       const durationMs = endTime - startTime;
 
-      expect(durationMs).toBe(1500);
+      expect(durationMs).toBeCloseTo(1500, 5);
       expect(durationMs).toBeGreaterThan(0);
     });
 

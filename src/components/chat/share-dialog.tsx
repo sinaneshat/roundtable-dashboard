@@ -44,7 +44,6 @@ type ShareDialogProps = {
   onOpenChange: (open: boolean) => void;
   slug: string;
   threadTitle: string;
-  threadMode?: string;
   isPublic: boolean;
   isLoading: boolean;
   onMakePublic: () => void;

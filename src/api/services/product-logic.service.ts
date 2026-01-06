@@ -151,65 +151,33 @@ export const TIER_QUOTAS: Record<
 // CREDIT UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Convert tokens to credits
- * Rounds up to ensure we always charge enough
- */
 export function tokensToCredits(tokens: number): number {
   return Math.ceil(tokens / CREDIT_CONFIG.TOKENS_PER_CREDIT);
 }
 
-/**
- * Convert credits to tokens
- */
 export function creditsToTokens(credits: number): number {
   return credits * CREDIT_CONFIG.TOKENS_PER_CREDIT;
 }
 
-/**
- * Calculate credits for a given action
- */
 export function getActionCreditCost(action: keyof typeof CREDIT_CONFIG.ACTION_COSTS): number {
   const tokens = CREDIT_CONFIG.ACTION_COSTS[action];
   return tokensToCredits(tokens);
 }
 
-/**
- * Estimate credits needed for AI streaming
- * Used for pre-reservation before actual token count is known
- *
- * @param participantCount Number of AI participants that will respond
- * @param estimatedInputTokens Estimated input tokens (context + message)
- * @returns Estimated credits to reserve
- */
 export function estimateStreamingCredits(
   participantCount: number,
   estimatedInputTokens: number = 500,
 ): number {
-  // Estimate: input tokens + (estimated output per participant * participant count)
   const estimatedOutputTokens = CREDIT_CONFIG.DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE * participantCount;
   const totalTokens = estimatedInputTokens + estimatedOutputTokens;
-
-  // Apply reservation multiplier for safety margin
   const reservedTokens = Math.ceil(totalTokens * CREDIT_CONFIG.RESERVATION_MULTIPLIER);
-
   return tokensToCredits(reservedTokens);
 }
 
-/**
- * Calculate actual credits used for an AI response (base credits without model multiplier)
- *
- * @param inputTokens Actual input tokens used
- * @param outputTokens Actual output tokens generated
- * @returns Base credits to deduct (before multiplier)
- */
 export function calculateBaseCredits(inputTokens: number, outputTokens: number): number {
   return tokensToCredits(inputTokens + outputTokens);
 }
 
-/**
- * Get plan configuration by plan type (paid only - free has no plan config)
- */
 export function getPlanConfig(planType: Exclude<PlanType, 'free'>) {
   return CREDIT_CONFIG.PLANS[planType];
 }
@@ -218,17 +186,6 @@ export function getPlanConfig(planType: Exclude<PlanType, 'free'>) {
 // MODEL PRICING TIER FUNCTIONS
 // ============================================================================
 
-/**
- * Get the pricing tier for a model based on its input price per million tokens
- *
- * Uses the model's pricing.prompt (input price per token) to determine tier.
- * Tiers are designed to ensure profitability at $59/month subscription:
- * - Budget (1x): ≤$0.10/M - cheapest models
- * - Standard (3x): $0.10-$0.50/M - mid-range
- * - Pro (25x): $0.50-$3/M - premium models
- * - Flagship (75x): $3-$10/M - top-tier
- * - Ultimate (200x): >$10/M - most expensive
- */
 export function getModelPricingTier(model: ModelForPricing): ModelPricingTier {
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
 
@@ -242,13 +199,6 @@ export function getModelPricingTier(model: ModelForPricing): ModelPricingTier {
   return CREDIT_CONFIG.DEFAULT_MODEL_TIER;
 }
 
-/**
- * Get pricing tier from model ID using the models-config
- *
- * @param modelId Model ID (e.g., 'openai/gpt-4o')
- * @param getModel Function to get model by ID (avoids circular deps)
- * @returns Model pricing tier
- */
 export function getModelPricingTierById(
   modelId: string,
   getModel: (id: string) => ModelForPricing | undefined,
@@ -260,24 +210,11 @@ export function getModelPricingTierById(
   return getModelPricingTier(model);
 }
 
-/**
- * Get the credit multiplier for a model based on its pricing tier
- *
- * @param model Model to get multiplier for
- * @returns Credit multiplier (1x for budget, up to 200x for ultimate)
- */
 export function getModelCreditMultiplier(model: ModelForPricing): number {
   const tier = getModelPricingTier(model);
   return getModelTierMultiplier(tier);
 }
 
-/**
- * Get credit multiplier from model ID
- *
- * @param modelId Model ID (e.g., 'openai/gpt-4o')
- * @param getModel Function to get model by ID (avoids circular deps)
- * @returns Credit multiplier
- */
 export function getModelCreditMultiplierById(
   modelId: string,
   getModel: (id: string) => ModelForPricing | undefined,
@@ -286,28 +223,6 @@ export function getModelCreditMultiplierById(
   return getModelTierMultiplier(tier);
 }
 
-/**
- * Calculate actual credits used for an AI response WITH model-weighted pricing
- *
- * This is the MAIN function for credit calculation. It applies the model's
- * pricing tier multiplier to ensure expensive models cost more credits.
- *
- * @param inputTokens Actual input tokens used
- * @param outputTokens Actual output tokens generated
- * @param modelId Model ID used for the response
- * @param getModel Function to get model by ID (avoids circular deps)
- * @returns Weighted credits to deduct
- *
- * @example
- * // Budget model (1x): 1000 tokens = 1 credit
- * calculateWeightedCredits(500, 500, 'openai/gpt-4o-mini', getModelById)
- *
- * // Pro model (25x): 1000 tokens = 25 credits
- * calculateWeightedCredits(500, 500, 'anthropic/claude-sonnet-4.5', getModelById)
- *
- * // Ultimate model (200x): 1000 tokens = 200 credits
- * calculateWeightedCredits(500, 500, 'openai/o1', getModelById)
- */
 export function calculateWeightedCredits(
   inputTokens: number,
   outputTokens: number,
@@ -319,15 +234,6 @@ export function calculateWeightedCredits(
   return Math.ceil(baseCredits * multiplier);
 }
 
-/**
- * Estimate weighted credits for reservation (before actual usage known)
- *
- * @param participantCount Number of AI participants
- * @param modelId Model ID to be used
- * @param getModel Function to get model by ID
- * @param estimatedInputTokens Estimated input tokens
- * @returns Estimated weighted credits to reserve
- */
 export function estimateWeightedCredits(
   participantCount: number,
   modelId: string,
@@ -343,138 +249,58 @@ export function estimateWeightedCredits(
 // TIER UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Get tier display name
- * @derived from TIER_CONFIG
- */
 export function getTierName(tier: SubscriptionTier): string {
   return TIER_CONFIG[tier].name;
 }
 
-/**
- * Get tiers in order (for tier comparisons)
- */
 export function getTiersInOrder(): SubscriptionTier[] {
   return [...SUBSCRIPTION_TIERS];
 }
 
-/**
- * Get the maximum output tokens for a given tier
- */
 export function getMaxOutputTokensForTier(tier: SubscriptionTier): number {
   return MAX_OUTPUT_TOKENS_BY_TIER[tier];
 }
 
-/**
- * Calculate safe max output tokens based on model's context length and tier limits
- *
- * This prevents the error: "maximum context length is X tokens, but you requested Y tokens"
- *
- * @param modelContextLength - The model's maximum context length (from OpenRouter API)
- * @param estimatedInputTokens - Estimated input tokens (system + messages)
- * @param tier - User's subscription tier
- * @returns Safe maxOutputTokens value that won't exceed model limits
- *
- * @example
- * // gpt-3.5-turbo has 16385 context length, user has 21 input tokens
- * getSafeMaxOutputTokens(16385, 21, 'pro')
- * // Returns: 14000 (safe buffer below 16385 - 21 = 16364)
- */
 export function getSafeMaxOutputTokens(
   modelContextLength: number,
   estimatedInputTokens: number,
   tier: SubscriptionTier,
 ): number {
-  // Get the tier's maximum allowed output tokens
   const tierMaxOutput = getMaxOutputTokensForTier(tier);
-
-  // Calculate available space in model's context window
-  // Leave 20% buffer for safety (token estimation can be off)
   const safetyBuffer = Math.floor(modelContextLength * 0.2);
-  const availableTokens
-    = modelContextLength - estimatedInputTokens - safetyBuffer;
-
-  // Use the minimum of:
-  // 1. Tier's max output tokens (subscription limit)
-  // 2. Available tokens in model's context window (model limit)
-  // 3. Ensure at least 512 tokens for meaningful responses
+  const availableTokens = modelContextLength - estimatedInputTokens - safetyBuffer;
   return Math.max(512, Math.min(tierMaxOutput, availableTokens));
 }
 
-/**
- * Get the maximum model pricing threshold for a given tier
- */
-export function getMaxModelPricingForTier(
-  tier: SubscriptionTier,
-): number | null {
+export function getMaxModelPricingForTier(tier: SubscriptionTier): number | null {
   return MAX_MODEL_PRICING_BY_TIER[tier];
 }
 
-/**
- * Get the maximum number of models allowed for a given tier
- */
 export function getMaxModelsForTier(tier: SubscriptionTier): number {
   return MAX_MODELS_BY_TIER[tier];
 }
 
-/**
- * Get the monthly credits included with a given tier
- * @derived from TIER_CONFIG
- */
 export function getMonthlyCreditsForTier(tier: SubscriptionTier): number {
   return TIER_CONFIG[tier].monthlyCredits;
 }
 
-/**
- * Get the subscription tier from a product ID
- *
- * ✅ TWO-TIER SYSTEM: Free (no subscription) and Pro (paid subscription)
- *
- * Common Stripe product ID patterns:
- * - prod_pro_annual → pro
- * - prod-pro-tier → pro (hyphen delimiter)
- * - prod_QxRpbPJ8pro → pro (random suffix)
- * - prod_unknown → free (default - no subscription)
- *
- * Pattern matching:
- * 1. Case-insensitive: handles prod_PRO, prod_Pro, etc.
- * 2. Avoid "prod_" and "prod-" prefixes: Use word boundaries
- */
 export function getTierFromProductId(productId: string): SubscriptionTier {
-  // ✅ DIRECT PRODUCT ID MATCHING - Check actual Stripe product IDs first
-  // This is the most reliable way to determine tier from product ID
   if (productId === CREDIT_CONFIG.PLANS.paid.stripeProductId) {
-    return SubscriptionTiers.PRO; // 'paid' plan in CREDIT_CONFIG maps to 'pro' tier
+    return SubscriptionTiers.PRO;
   }
 
-  // ✅ FALLBACK: Pattern matching for differently-named products
   const normalized = productId.toLowerCase();
 
-  // "pro" matching: Match with delimiters (_, -, or word boundaries)
-  // Avoid matching "pro" from "prod_", "prod-" prefix, or words like "product", "professional"
-  // Support patterns:
-  // - prod_pro_annual → _pro_
-  // - prod_pro → _pro (end)
-  // - prod-pro-tier → -pro-
-  // - prod-pro → -pro (end)
-  // - prod_QxRpbPJ8pro456 → [0-9]pro[0-9] - number before "pro", number/end after
-  //
-  // Regex pattern explanation:
-  // - (^|[^a-z]) - Start of string OR non-letter before "pro"
-  // - pro - The tier keyword
-  // - ($|[^a-z]) - End of string OR non-letter after "pro"
-  // This avoids matching "pro" inside words like "product" (which would have letter after "pro")
   if (
-    normalized.includes('_pro_') // Middle with underscore: prod_pro_annual
-    || normalized.endsWith('_pro') // End with underscore: prod_pro (NOT includes to avoid "_product_id")
-    || normalized.includes('-pro-') // Middle with hyphen: prod-pro-tier
-    || normalized.endsWith('-pro') // End with hyphen: prod-pro (NOT includes to avoid false matches)
-    || /(?:^|[^a-z])pro(?:$|[^a-z])/.test(normalized) // Word boundary match: avoids "product", "professional"
+    normalized.includes('_pro_')
+    || normalized.endsWith('_pro')
+    || normalized.includes('-pro-')
+    || normalized.endsWith('-pro')
+    || /(?:^|[^a-z])pro(?:$|[^a-z])/.test(normalized)
   ) {
     return SubscriptionTiers.PRO;
   }
 
-  // Default to free tier for unknown or invalid product IDs (no subscription)
   return SubscriptionTiers.FREE;
 }
 
@@ -482,12 +308,7 @@ export function getTierFromProductId(productId: string): SubscriptionTier {
 // PRICING CALCULATIONS
 // ============================================================================
 
-/**
- * Parse a price string or number into a number
- */
-export function parsePrice(
-  priceStr: string | number | null | undefined,
-): number {
+export function parsePrice(priceStr: string | number | null | undefined): number {
   if (priceStr === null || priceStr === undefined) {
     return 0;
   }
@@ -500,14 +321,8 @@ export function parsePrice(
   return match ? Number.parseFloat(match[1] || '0') : 0;
 }
 
-/**
- * Calculate cost per million tokens
- */
 export function costPerMillion(pricePerToken: string | number): number {
-  const perToken
-    = typeof pricePerToken === 'number'
-      ? pricePerToken
-      : Number.parseFloat(pricePerToken);
+  const perToken = typeof pricePerToken === 'number' ? pricePerToken : Number.parseFloat(pricePerToken);
   return perToken * 1_000_000;
 }
 
@@ -515,25 +330,13 @@ export function costPerMillion(pricePerToken: string | number): number {
 // MODEL ACCESS & PRICING LOGIC
 // ============================================================================
 
-/**
- * Check if a model is accessible to free tier users
- *
- * Free tier has access to models up to $0.30/M tokens (input pricing).
- * This is NOT the same as OpenRouter free tier (which we exclude).
- * These are paid models that are cheap enough for our free tier users.
- */
 export function isModelFree(model: ModelForPricing): boolean {
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
   const freeLimit = MAX_MODEL_PRICING_BY_TIER.free;
   return freeLimit !== null && inputPricePerMillion <= freeLimit;
 }
 
-/**
- * Get model cost category based on pricing
- */
-export function getModelCostCategory(
-  model: ModelForPricing,
-): 'free' | 'low' | 'medium' | 'high' {
+export function getModelCostCategory(model: ModelForPricing): 'free' | 'low' | 'medium' | 'high' {
   if (isModelFree(model))
     return 'free';
 
@@ -546,9 +349,6 @@ export function getModelCostCategory(
   return 'high';
 }
 
-/**
- * Get formatted pricing display for a model
- */
 export function getModelPricingDisplay(model: ModelForPricing): string {
   if (isModelFree(model))
     return 'Free';
@@ -559,73 +359,31 @@ export function getModelPricingDisplay(model: ModelForPricing): string {
   return `$${inputPrice.toFixed(2)}/$${outputPrice.toFixed(2)} per 1M tokens`;
 }
 
-/**
- * Get upgrade message for a specific tier
- * @derived from TIER_CONFIG - no switch statement needed
- */
 export function getTierUpgradeMessage(tier: SubscriptionTier): string {
   return TIER_CONFIG[tier].upgradeMessage;
 }
 
-/**
- * Get the required tier for a model based on pricing
- *
- * Determines minimum subscription tier needed to access a model.
- * Based on input pricing per million tokens.
- * Two-tier system: free (≤$0.10/M) or pro (unlimited)
- */
-export function getRequiredTierForModel(
-  model: ModelForPricing,
-): SubscriptionTier {
-  // Get input pricing per million tokens
+export function getRequiredTierForModel(model: ModelForPricing): SubscriptionTier {
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
-
-  // Check free tier threshold
   const freeLimit = MAX_MODEL_PRICING_BY_TIER[SubscriptionTiers.FREE];
   if (freeLimit !== null && inputPricePerMillion <= freeLimit) {
     return SubscriptionTiers.FREE;
   }
-
-  // All other models require pro tier (unlimited access)
   return SubscriptionTiers.PRO;
 }
 
-/**
- * Determine if a model is accessible based on user tier and model pricing
- */
-export function canAccessModelByPricing(
-  userTier: SubscriptionTier,
-  model: ModelForPricing,
-): boolean {
+export function canAccessModelByPricing(userTier: SubscriptionTier, model: ModelForPricing): boolean {
   const requiredTier = getRequiredTierForModel(model);
-
-  // Get the tier indices for comparison
   const userTierIndex = SUBSCRIPTION_TIERS.indexOf(userTier);
   const requiredTierIndex = SUBSCRIPTION_TIERS.indexOf(requiredTier);
-
-  // User can access if their tier is equal or higher than required
   return userTierIndex >= requiredTierIndex;
 }
 
-/**
- * Tier access info added to participants/models
- * Used for enriching data with user-specific access information
- */
 export type TierAccessInfo = {
   is_accessible_to_user: boolean;
   required_tier_name: string | null;
 };
 
-/**
- * Enrich a model or participant with tier access information
- * ✅ DRY: Single source of truth for tier access enrichment
- * ✅ REUSABLE: Use in handlers instead of duplicating logic
- *
- * @param modelId - Model ID to check access for
- * @param userTier - User's subscription tier
- * @param getModel - Function to get model by ID (avoid circular deps)
- * @returns Tier access info object
- */
 export function enrichWithTierAccess(
   modelId: string,
   userTier: SubscriptionTier,
@@ -649,19 +407,7 @@ export function enrichWithTierAccess(
   };
 }
 
-/**
- * Check if user tier meets or exceeds required tier
- * ✅ DRY: Single source of truth for tier comparison
- * ✅ REUSABLE: Use for presets, models, and any tier gating
- *
- * @param userTier - User's subscription tier
- * @param requiredTier - Required subscription tier
- * @returns True if user can access
- */
-export function canAccessByTier(
-  userTier: SubscriptionTier,
-  requiredTier: SubscriptionTier,
-): boolean {
+export function canAccessByTier(userTier: SubscriptionTier, requiredTier: SubscriptionTier): boolean {
   const userTierIndex = SUBSCRIPTION_TIERS.indexOf(userTier);
   const requiredTierIndex = SUBSCRIPTION_TIERS.indexOf(requiredTier);
   return userTierIndex >= requiredTierIndex;
@@ -671,49 +417,22 @@ export function canAccessByTier(
 // MODEL SELECTION LOGIC
 // ============================================================================
 
-/**
- * Get a selection of models appropriate for quick start suggestions based on user tier
- *
- * @param models All available models
- * @param tier User's subscription tier
- * @param count Maximum number of models to return
- * @returns Array of model IDs suitable for the given tier
- */
 export function getQuickStartModelsByTier(
   models: ModelForPricing[],
   tier: SubscriptionTier,
   count: number = 4,
 ): string[] {
-  // Filter models accessible to the user's tier
-  const accessibleModels = models.filter((model) => {
-    return canAccessModelByPricing(tier, model);
-  });
+  const accessibleModels = models.filter(model => canAccessModelByPricing(tier, model));
 
-  // If no models are accessible, return empty array
   if (accessibleModels.length === 0) {
     return [];
   }
 
-  // Sort by context window size (descending) to prioritize more capable models
-  const sortedModels = [...accessibleModels].sort((a, b) => {
-    return (b.context_length || 0) - (a.context_length || 0);
-  });
-
-  // Return the top N model IDs
+  const sortedModels = [...accessibleModels].sort((a, b) => (b.context_length || 0) - (a.context_length || 0));
   return sortedModels.slice(0, count).map(model => model.id);
 }
 
-/**
- * Get the default model for a given subscription tier
- *
- * @param models All available models
- * @param tier User's subscription tier
- * @returns Model ID of the default model for the tier
- */
-export function getDefaultModelForTier(
-  models: ModelForPricing[],
-  tier: SubscriptionTier,
-): string | undefined {
+export function getDefaultModelForTier(models: ModelForPricing[], tier: SubscriptionTier): string | undefined {
   const tierModels = getQuickStartModelsByTier(models, tier, 1);
   return tierModels.length > 0 ? tierModels[0] : undefined;
 }

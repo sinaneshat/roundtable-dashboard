@@ -1,12 +1,5 @@
 /**
  * Shared Types for Chat Store Actions
- *
- * **SINGLE SOURCE OF TRUTH**: Consolidates type definitions used across
- * multiple action files to prevent inline type definitions and duplication.
- *
- * Following backend-patterns.md: Zod-based schema validation and type safety.
- *
- * @module stores/chat/actions/types
  */
 
 import { z } from 'zod';
@@ -15,17 +8,6 @@ import { UsageStatusSchema } from '@/api/core/enums';
 import { ChatThreadCacheSchema } from '@/api/routes/chat/schema';
 import { chatThreadChangelogSelectSchema } from '@/db/validation/chat';
 
-// ============================================================================
-// API RESPONSE SCHEMAS
-// ============================================================================
-
-/**
- * Standard API response wrapper schema
- * Simplified cache response for cache validation
- *
- * ✅ TYPE-SAFE: Uses z.unknown() for flexible cache data validation
- * The actual data structure is validated by domain-specific schemas below
- */
 export const ApiResponseSchema = z.object({
   success: z.boolean(),
   data: z.unknown(),
@@ -33,24 +15,12 @@ export const ApiResponseSchema = z.object({
 
 export type ApiResponse = z.infer<typeof ApiResponseSchema>;
 
-// ============================================================================
-// USAGE STATS CACHE SCHEMAS
-// ============================================================================
-
-/**
- * Credits schema for cache validation
- * ✅ BACKEND-ALIGNED: Matches UsageStatsPayloadSchema.credits
- */
 const UsageCreditsSchema = z.object({
   balance: z.number(),
   available: z.number(),
   status: UsageStatusSchema.optional(),
 });
 
-/**
- * Plan schema for cache validation
- * ✅ BACKEND-ALIGNED: Matches UsageStatsPayloadSchema.plan
- */
 const UsagePlanSchema = z.object({
   type: z.string(),
   name: z.string(),
@@ -63,13 +33,6 @@ const UsagePlanSchema = z.object({
   }).nullable().optional(),
 });
 
-/**
- * Usage stats data structure schema
- * Validates optimistic cache updates for credit balance
- *
- * SINGLE SOURCE OF TRUTH for usage stats cache validation in mutations
- * ✅ BACKEND-ALIGNED: Matches UsageStatsPayloadSchema (credits + plan)
- */
 export const UsageStatsDataSchema = z.object({
   credits: UsageCreditsSchema,
   plan: UsagePlanSchema,
@@ -77,14 +40,6 @@ export const UsageStatsDataSchema = z.object({
 
 export type UsageStatsData = z.infer<typeof UsageStatsDataSchema>;
 
-/**
- * Helper function to safely parse usage stats cache data
- *
- * **USE THIS INSTEAD OF**: Manual parsing in each mutation
- *
- * @param data - Raw cache data from React Query
- * @returns Validated usage stats data or null if invalid
- */
 export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
   if (data === undefined || data === null) {
     return null;
@@ -102,10 +57,6 @@ export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
 
   return usageData.data;
 }
-
-// ============================================================================
-// THREAD CACHE VALIDATION HELPERS
-// ============================================================================
 
 const UserCacheSchema = z.object({
   id: z.string().optional(),
@@ -165,12 +116,6 @@ export const ThreadDetailPayloadCacheSchema = z.object({
 
 export type ThreadDetailPayloadCache = z.infer<typeof ThreadDetailPayloadCacheSchema>;
 
-/**
- * Helper function to safely parse thread detail data from cache
- *
- * @param data - Raw cache data from React Query
- * @returns Validated cache data or null if invalid
- */
 export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPayloadCache | null {
   if (data === undefined || data === null) {
     return null;
@@ -207,12 +152,6 @@ export const InfiniteQueryCacheSchema = z.object({
 
 export type InfiniteQueryCache = z.infer<typeof InfiniteQueryCacheSchema>;
 
-/**
- * Helper function to safely parse infinite query data from cache
- *
- * @param data - Raw cache data from React Query
- * @returns Validated infinite query data or null if invalid
- */
 export function validateInfiniteQueryCache(data: unknown): InfiniteQueryCache | null {
   if (data === undefined || data === null) {
     return null;

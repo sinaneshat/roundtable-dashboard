@@ -1403,6 +1403,8 @@
     "creditsAvailable": "credits available",
     "daysLeft": "days left",
     "errorLoading": "Unable to load usage data",
+    "freePlan": "Free",
+    "freeRound": "1 Free",
     "messages": "Messages",
     "messagesRemaining": "messages remaining",
     "summary": "Summary",

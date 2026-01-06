@@ -3,7 +3,7 @@
 import { motion } from 'motion/react';
 import { memo } from 'react';
 
-export type TextShimmerProps = {
+type TextShimmerProps = {
   children: string;
   className?: string;
 };
@@ -11,7 +11,7 @@ export type TextShimmerProps = {
 const SHIMMER_ANIMATION = {
   INITIAL_OPACITY: 0.5,
   PEAK_OPACITY: 1,
-  OPACITY_SEQUENCE: [0.5, 1, 0.5] as [number, number, number],
+  OPACITY_SEQUENCE: [0.5, 1, 0.5] as const,
   DURATION: 0.5,
   DELAY_PER_CHAR: 0.05,
   REPEAT_DELAY: 2,
@@ -31,7 +31,7 @@ function TextShimmerComponent({
           className="inline-block"
           initial={{ opacity: SHIMMER_ANIMATION.INITIAL_OPACITY }}
           animate={{
-            opacity: SHIMMER_ANIMATION.OPACITY_SEQUENCE,
+            opacity: [...SHIMMER_ANIMATION.OPACITY_SEQUENCE],
           }}
           transition={{
             duration: SHIMMER_ANIMATION.DURATION,

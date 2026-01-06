@@ -31,12 +31,12 @@ function getParticipantFromMessage(
   return undefined;
 }
 
-function getParticipantDisplayName(participant?: ChatParticipant): string {
+function getParticipantDisplayName(participant: ChatParticipant | undefined): string {
   if (!participant)
     return 'Assistant';
   if (participant.role)
     return participant.role;
-  const modelName = participant.modelId.split('/').pop() || participant.modelId;
+  const modelName = participant.modelId.split('/').pop() ?? participant.modelId;
   return modelName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 

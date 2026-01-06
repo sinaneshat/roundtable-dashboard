@@ -39,7 +39,7 @@ export function BillingSuccessClient() {
 
   const displaySubscription = useMemo((): Subscription | null => {
     return (
-      subscriptionData?.data?.items?.find((sub: Subscription) => sub.status === StripeSubscriptionStatuses.ACTIVE)
+      subscriptionData?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
       ?? subscriptionData?.data?.items?.[0]
       ?? null
     );

@@ -47,12 +47,12 @@ export function UsageMetrics() {
             !isPaidPlan && 'border-green-500/40 text-green-600 bg-green-500/10',
           )}
         >
-          {plan?.name || 'Free'}
+          {plan?.name || t('usage.freePlan')}
         </Badge>
         {!isPaidPlan && (
           <div className="flex items-center gap-1 text-[9px] text-green-600">
             <Icons.sparkles className="size-2.5" />
-            <span className="font-medium">1 Free</span>
+            <span className="font-medium">{t('usage.freeRound')}</span>
           </div>
         )}
       </div>

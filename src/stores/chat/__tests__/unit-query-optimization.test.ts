@@ -1,9 +1,6 @@
-/**
- * Query and Mutation Optimization Unit Tests
- */
-
 import { describe, expect, it } from 'vitest';
 
+import { ChatModes } from '@/api/core/enums';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { createBaseMockThread } from '@/lib/testing';
@@ -17,7 +14,7 @@ import {
 } from '../actions/types';
 
 describe('query Key Stability', () => {
-  describe('queryKeys.threads.detail()', () => {
+  describe('queryKeys.threads.detail', () => {
     it('should generate stable keys for same thread ID', () => {
       const threadId = 'thread-123';
 
@@ -48,7 +45,7 @@ describe('query Key Stability', () => {
     });
   });
 
-  describe('queryKeys.threads.lists()', () => {
+  describe('queryKeys.threads.lists', () => {
     it('should generate base list key without search param', () => {
       const key = queryKeys.threads.lists();
 
@@ -82,7 +79,7 @@ describe('query Key Stability', () => {
     });
   });
 
-  describe('queryKeys.threads.changelog()', () => {
+  describe('queryKeys.threads.changelog', () => {
     it('should generate stable changelog key for thread', () => {
       const threadId = 'thread-123';
 
@@ -94,7 +91,7 @@ describe('query Key Stability', () => {
     });
   });
 
-  describe('queryKeys.threads.roundChangelog()', () => {
+  describe('queryKeys.threads.roundChangelog', () => {
     it('should generate stable round-specific changelog key', () => {
       const threadId = 'thread-123';
       const roundNumber = 1;
@@ -116,7 +113,7 @@ describe('query Key Stability', () => {
     });
   });
 
-  describe('queryKeys.threads.preSearches()', () => {
+  describe('queryKeys.threads.preSearches', () => {
     it('should generate stable pre-search key', () => {
       const threadId = 'thread-123';
 
@@ -184,7 +181,7 @@ describe('query Deduplication', () => {
   });
 });
 
-describe('cache Validation - Object Creation Efficiency', () => {
+describe('cache Validation', () => {
   describe('validateInfiniteQueryCache', () => {
     it('should return null without creating objects for undefined', () => {
       const result = validateInfiniteQueryCache(undefined);
@@ -273,7 +270,7 @@ describe('cache Validation - Object Creation Efficiency', () => {
             title: 'Test Thread',
             slug: 'test-thread',
             userId: 'user-1',
-            mode: 'council',
+            mode: ChatModes.COUNCIL,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
@@ -323,7 +320,7 @@ describe('cache Validation - Object Creation Efficiency', () => {
                 title: 'Thread 1',
                 slug: 'thread-1',
                 userId: 'user-1',
-                mode: 'council',
+                mode: ChatModes.COUNCIL,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               },
@@ -416,7 +413,7 @@ describe('optimistic Update Patterns', () => {
         title: 'Original Title',
         slug: 'original-slug',
         userId: 'user-1',
-        mode: 'council',
+        mode: ChatModes.COUNCIL,
         isFavorite: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -468,7 +465,7 @@ describe('optimistic Update Patterns', () => {
                 title: 'Thread 1',
                 slug: 'thread-1',
                 userId: 'user-1',
-                mode: 'council',
+                mode: ChatModes.COUNCIL,
                 isFavorite: false,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
@@ -478,7 +475,7 @@ describe('optimistic Update Patterns', () => {
                 title: 'Thread 2',
                 slug: 'thread-2',
                 userId: 'user-1',
-                mode: 'council',
+                mode: ChatModes.COUNCIL,
                 isFavorite: false,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
@@ -487,8 +484,6 @@ describe('optimistic Update Patterns', () => {
           },
         },
       ];
-
-      // Optimistic update - toggle favorite on thread-1
       const updatedPages = pages.map((page) => {
         if (!page.success || !page.data?.items)
           return page;
@@ -600,7 +595,7 @@ describe('invalidation Scope Precision', () => {
 });
 
 describe('stale Time Configuration', () => {
-  it('should use Infinity for static data (changelog, moderators, pre-search)', () => {
+  it('should use Infinity for static data', () => {
     expect(STALE_TIMES.threadChangelog).toBe(Infinity);
     expect(STALE_TIMES.threadModerators).toBe(Infinity);
     expect(STALE_TIMES.preSearch).toBe(Infinity);
@@ -633,7 +628,7 @@ describe('prefetch Cache Population', () => {
         title: 'Test Thread',
         slug: 'test-thread',
         userId: 'user-1',
-        mode: 'council',
+        mode: ChatModes.COUNCIL,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -683,7 +678,7 @@ describe('prefetch Cache Population', () => {
   });
 });
 
-describe('mutation onSuccess Optimistic Updates', () => {
+describe('mutation OnSuccess Optimistic Updates', () => {
   it('should correctly merge server response with optimistic update', () => {
     const optimisticUpdate = {
       id: 'thread-123',
@@ -691,7 +686,7 @@ describe('mutation onSuccess Optimistic Updates', () => {
       isFavorite: true,
       slug: 'thread-123',
       userId: 'user-1',
-      mode: 'council',
+      mode: ChatModes.COUNCIL,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -702,7 +697,7 @@ describe('mutation onSuccess Optimistic Updates', () => {
       isFavorite: true,
       slug: 'thread-123',
       userId: 'user-1',
-      mode: 'council',
+      mode: ChatModes.COUNCIL,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       version: 2,
@@ -741,7 +736,7 @@ describe('mutation onSuccess Optimistic Updates', () => {
       title: 'Original Title',
       slug: 'thread-123',
       userId: 'user-1',
-      mode: 'council',
+      mode: ChatModes.COUNCIL,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -767,13 +762,13 @@ describe('query Invalidation Timing', () => {
     return patterns.some(p => JSON.stringify(p) === JSON.stringify(key));
   };
 
-  it('should use immediate invalidation for critical data (usage stats)', () => {
+  it('should use immediate invalidation for critical data', () => {
     const patterns = invalidationPatterns.afterThreadMessage('thread-123');
 
     expect(containsKey(patterns, queryKeys.usage.stats())).toBe(true);
   });
 
-  it('should invalidate changelog incrementally (not on every update)', () => {
+  it('should invalidate changelog incrementally', () => {
     const threadUpdatePattern = invalidationPatterns.threadDetail('thread-123');
 
     expect(containsKey(threadUpdatePattern, queryKeys.threads.changelog('thread-123'))).toBe(true);
@@ -785,7 +780,7 @@ describe('query Invalidation Timing', () => {
     expect(containsKey(threadPatterns, queryKeys.models.all)).toBe(false);
   });
 
-  it('should invalidate models on subscription changes (tier affects access)', () => {
+  it('should invalidate models on subscription changes', () => {
     const subscriptionPatterns = invalidationPatterns.subscriptions;
 
     expect(containsKey(subscriptionPatterns, queryKeys.models.all)).toBe(true);

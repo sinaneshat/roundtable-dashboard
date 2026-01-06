@@ -127,6 +127,19 @@ export const StripeSubscriptionStatuses = {
   PAUSED: 'paused' as const,
 } as const;
 
+// Active subscription status subset (billable states)
+export const ACTIVE_SUBSCRIPTION_STATUSES = [
+  StripeSubscriptionStatuses.ACTIVE,
+  StripeSubscriptionStatuses.TRIALING,
+  StripeSubscriptionStatuses.PAST_DUE,
+] as const;
+
+export type ActiveSubscriptionStatus = (typeof ACTIVE_SUBSCRIPTION_STATUSES)[number];
+
+export function isActiveSubscriptionStatus(status: StripeSubscriptionStatus): status is ActiveSubscriptionStatus {
+  return (ACTIVE_SUBSCRIPTION_STATUSES as readonly StripeSubscriptionStatus[]).includes(status);
+}
+
 // ============================================================================
 // SUBSCRIPTION TIER
 // ============================================================================

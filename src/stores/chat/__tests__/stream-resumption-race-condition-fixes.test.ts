@@ -1,10 +1,7 @@
-/**
- * Stream Resumption Race Condition Fixes Tests
- */
-
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ChatModes, ThreadStatuses } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { act, createTestAssistantMessage, createTestUserMessage, renderHook, waitFor, waitForAsync } from '@/lib/testing';
 
@@ -79,8 +76,8 @@ function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
     id: 'thread-123',
     userId: 'user-123',
     title: 'Test Thread',
-    mode: 'analyzing',
-    status: 'active',
+    mode: ChatModes.ANALYZING,
+    status: ThreadStatuses.ACTIVE,
     enableWebSearch: false,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -165,13 +162,13 @@ function setupIncompleteRound(
   return { thread, participants, messages };
 }
 
-describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
+describe('double Trigger Prevention', () => {
   beforeEach(() => {
     mockStore.reset();
     vi.clearAllMocks();
   });
 
-  it('should trigger RESUME-TRIGGER only once when incomplete round detected', async () => {
+  it('should trigger resume only once when incomplete round detected', async () => {
     setupIncompleteRound(1, 1, 3);
 
     const { result, rerender } = renderHook(() =>
@@ -207,7 +204,7 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     expect(finalCallCount).toBe(firstCallCount);
   });
 
-  it('should NOT clear guard during retry toggle (waitingToStartStreaming false→true within 100ms)', async () => {
+  it('should not clear guard during retry toggle within 100ms', async () => {
     setupIncompleteRound(1, 1, 3);
 
     const { rerender } = renderHook(() =>
@@ -221,14 +218,11 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
     }, { timeout: 200 });
 
-    // Track trigger calls - guards should prevent re-triggering during retry toggle
     const triggerCallsBefore = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
     ).length;
 
-    expect(triggerCallsBefore).toBeGreaterThan(0); // Verify initial trigger happened
-
-    // Simulate retry toggle: false → true within 100ms
+    expect(triggerCallsBefore).toBeGreaterThan(0);
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
@@ -254,7 +248,7 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     expect(triggerCallsAfter).toBe(triggerCallsBefore);
   });
 
-  it('should clear guard after 100ms if waitingToStartStreaming stays false (actual failure)', async () => {
+  it('should clear guard after 100ms if waitingToStartStreaming stays false', async () => {
     setupIncompleteRound(1, 1, 3);
 
     const { rerender, unmount } = renderHook(() =>
@@ -272,15 +266,12 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       call => call[0] === 1,
     ).length;
 
-    expect(callsBeforeFailure).toBeGreaterThan(0); // Verify initial trigger happened
-
-    // Simulate trigger failure: waiting goes false and STAYS false
+    expect(callsBeforeFailure).toBeGreaterThan(0);
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
     rerender();
 
-    // Wait for timeout to fire and clear guards (100ms timeout + buffer)
     await act(async () => {
       await waitForAsync(150);
     });
@@ -320,7 +311,6 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     mockStore.actions.setStreamingRoundNumber.mockClear();
     mockStore.actions.setCurrentParticipantIndex.mockClear();
 
-    // Simulate streaming starting
     act(() => {
       mockStore.setState({
         isStreaming: true,
@@ -361,7 +351,7 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
   });
 });
 
-describe('aI SDK Resume Blocking (handleResumedStreamDetection)', () => {
+describe('aI SDK Resume Blocking', () => {
   beforeEach(() => {
     mockStore.reset();
     vi.clearAllMocks();
@@ -440,13 +430,13 @@ describe('aI SDK Resume Blocking (handleResumedStreamDetection)', () => {
   });
 });
 
-describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
+describe('retry Toggle Timeout', () => {
   beforeEach(() => {
     mockStore.reset();
     vi.clearAllMocks();
   });
 
-  it('should not clear guards during rapid toggle (false→true within 100ms)', async () => {
+  it('should not clear guards during rapid toggle within 100ms', async () => {
     setupIncompleteRound(1, 1, 3);
 
     const { rerender } = renderHook(() =>
@@ -466,7 +456,6 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
 
     expect(initialTriggerCount).toBeGreaterThan(0);
 
-    // Simulate retry toggle: false → true within 100ms
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
@@ -481,7 +470,6 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
     });
     rerender();
 
-    // Wait to ensure guards are NOT cleared during retry toggle
     await act(async () => {
       await waitForAsync(150);
     });
@@ -492,7 +480,7 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
     expect(finalTriggerCount).toBe(initialTriggerCount);
   });
 
-  it('should clear guards when waitingToStartStreaming stays false for 100ms+', async () => {
+  it('should clear guards when waitingToStartStreaming stays false for over 100ms', async () => {
     setupIncompleteRound(1, 1, 3);
 
     const { rerender, unmount } = renderHook(() =>
@@ -671,13 +659,13 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
   });
 });
 
-describe('integration: All Race Condition Fixes Together', () => {
+describe('integration Tests', () => {
   beforeEach(() => {
     mockStore.reset();
     vi.clearAllMocks();
   });
 
-  it('should handle complete flow: trigger → retry toggle → streaming starts', async () => {
+  it('should handle complete flow from trigger to streaming', async () => {
     setupIncompleteRound(1, 1, 3);
 
     const { rerender } = renderHook(() =>
@@ -750,7 +738,7 @@ describe('integration: All Race Condition Fixes Together', () => {
     }, { timeout: 300 });
   });
 
-  it('should handle trigger failure → timeout → retry', async () => {
+  it('should handle trigger failure with timeout and retry', async () => {
     setupIncompleteRound(1, 1, 3);
 
     const { rerender, unmount } = renderHook(() =>

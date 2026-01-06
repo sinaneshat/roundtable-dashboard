@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError } from '@/api/common/error-handling';
 import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from '@/api/core';
-import { PurchaseTypes, StripeSubscriptionStatuses } from '@/api/core/enums';
+import { isActiveSubscriptionStatus, PurchaseTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { getUserCreditBalance } from '@/api/services/credit.service';
 import { stripeService } from '@/api/services/stripe.service';
 import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
@@ -250,9 +250,8 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
         where: eq(tables.stripeSubscription.userId, user.id),
       });
 
-      const activeSubscription = existingSubscriptions.find(sub =>
-        (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING || sub.status === StripeSubscriptionStatuses.PAST_DUE)
-        && !sub.cancelAtPeriodEnd,
+      const activeSubscription = existingSubscriptions.find(
+        sub => isActiveSubscriptionStatus(sub.status) && !sub.cancelAtPeriodEnd,
       );
 
       if (activeSubscription) {
@@ -509,8 +508,8 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
           subscription: null,
           creditPurchase: null,
           tierChange: {
-            previousTier: 'free',
-            newTier: 'free',
+            previousTier: SubscriptionTiers.FREE,
+            newTier: SubscriptionTiers.FREE,
             previousPriceId: null,
             newPriceId: null,
           },
@@ -522,7 +521,7 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
       const previousUsage = await db.query.userChatUsage.findFirst({
         where: eq(tables.userChatUsage.userId, user.id),
       });
-      const previousTier = previousUsage?.subscriptionTier || 'free';
+      const previousTier = previousUsage?.subscriptionTier || SubscriptionTiers.FREE;
 
       // Eagerly sync data from Stripe API
       const syncedState = await syncStripeDataFromStripe(customerId);
@@ -531,7 +530,7 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
       const newUsage = await db.query.userChatUsage.findFirst({
         where: eq(tables.userChatUsage.userId, user.id),
       });
-      const newTier = newUsage?.subscriptionTier || 'free';
+      const newTier = newUsage?.subscriptionTier || SubscriptionTiers.FREE;
 
       // Get credit balance
       const balance = await getUserCreditBalance(user.id);
@@ -563,8 +562,8 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
         subscription: null,
         creditPurchase: null,
         tierChange: {
-          previousTier: 'free',
-          newTier: 'free',
+          previousTier: SubscriptionTiers.FREE,
+          newTier: SubscriptionTiers.FREE,
           previousPriceId: null,
           newPriceId: null,
         },
@@ -683,11 +682,10 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
               price: newPriceId,
             },
           ],
-          proration_behavior: 'none', // No proration for downgrades
-          billing_cycle_anchor: 'unchanged', // Keep same billing date
+          proration_behavior: 'none',
+          billing_cycle_anchor: 'unchanged',
         });
       } else {
-        // Intentionally empty
         // SAME PRICE: Just update (e.g., switching between monthly/annual of same tier)
         await stripeService.updateSubscription(subscriptionId, {
           items: [
@@ -904,7 +902,6 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
       if (c.executionCtx) {
         c.executionCtx.waitUntil(processAsync());
       } else {
-        // Intentionally empty
         await processAsync();
       }
 

@@ -624,49 +624,26 @@ export const ChatMessageList = memo(
       return true;
     };
 
-    // ✅ SCROLL MANAGEMENT: Handled by useChatScroll in parent (ChatThreadScreen)
-    // Prevents dual scroll systems from conflicting when changelogs cause virtualization remeasurement
-
-    // ✅ DEDUPLICATION: Prevent duplicate message IDs and filter participant trigger messages
-    // Note: Component supports grouping multiple consecutive user messages for UI flexibility
-    // ✅ CRITICAL FIX: Also deduplicate assistant messages by (roundNumber, participantIndex/modelId)
-    // On page refresh with resumed streams, we may have:
-    // 1. DB message with deterministic ID: thread_r1_p0
-    // 2. AI SDK resumed message with temp ID: gen-abc123
-    // Both represent the same participant response and should be deduplicated
-    //
-    // ✅ BUG FIX: Special handling for moderator messages
-    // Moderator messages are identified by isModerator=true, not by participantIndex
-    // They should be deduplicated by (roundNumber, isModerator) key
+    // Deduplication: Prevent duplicate message IDs, filter participant triggers, deduplicate by (roundNumber, participantIndex/modelId)
     const deduplicatedMessages = useMemo(() => {
-      const seenMessageIds = new Set<string>(); // Track message IDs to prevent actual duplicates
-      // ✅ PERF FIX: Track position indices in Maps for O(1) replacement lookups
-      // Previously used findIndex() which caused O(n²) complexity
-      const assistantKeyToIdx = new Map<string, number>(); // dedupeKey -> result index
-      const moderatorRoundToIdx = new Map<number, number>(); // roundNumber -> result index
-      const userRoundToIdx = new Map<number, number>(); // roundNumber -> result index
+      const seenMessageIds = new Set<string>();
+      const assistantKeyToIdx = new Map<string, number>();
+      const moderatorRoundToIdx = new Map<number, number>();
+      const userRoundToIdx = new Map<number, number>();
       const result: UIMessage[] = [];
 
       for (const message of messages) {
-        // Skip if we've already processed this exact message ID (prevents duplicates)
         if (seenMessageIds.has(message.id)) {
           continue;
         }
 
-        // For user messages, filter out participant trigger messages and deduplicate by round
         if (message.role === MessageRoles.USER) {
           const userMeta = getUserMetadata(message.metadata);
-
-          // ✅ TYPE-SAFE: Check isParticipantTrigger using validated metadata schema
           const isParticipantTrigger = userMeta?.isParticipantTrigger === true;
 
-          // Skip participant trigger duplicates completely
           if (isParticipantTrigger) {
             continue;
           }
-
-          // ✅ BUG FIX: Deduplicate user messages by round (prevents optimistic + DB duplicates)
-          // ✅ PERF FIX: Use Map for O(1) lookup instead of O(n) findIndex
           const roundNum = userMeta?.roundNumber;
           if (roundNum !== undefined && roundNum !== null) {
             const existingIdx = userRoundToIdx.get(roundNum);
