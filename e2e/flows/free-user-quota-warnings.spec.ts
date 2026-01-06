@@ -99,7 +99,8 @@ async function isWarningVisible(page: Page): Promise<boolean> {
 
   for (const indicator of warningIndicators) {
     const visible = await indicator.first().isVisible({ timeout: 2000 }).catch(() => false);
-    if (visible) return true;
+    if (visible)
+      return true;
   }
 
   return false;
@@ -120,7 +121,8 @@ async function isCriticalVisible(page: Page): Promise<boolean> {
 
   for (const indicator of criticalIndicators) {
     const visible = await indicator.first().isVisible({ timeout: 2000 }).catch(() => false);
-    if (visible) return true;
+    if (visible)
+      return true;
   }
 
   return false;
@@ -139,7 +141,8 @@ async function isUpgradePromptVisible(page: Page): Promise<boolean> {
 
   for (const prompt of upgradePrompts) {
     const visible = await prompt.first().isVisible({ timeout: 2000 }).catch(() => false);
-    if (visible) return true;
+    if (visible)
+      return true;
   }
 
   return false;
@@ -559,12 +562,6 @@ test.describe('Free User Quota Warnings & Display', () => {
         .catch(() => null);
 
       if (upgradeMessage) {
-        // Message should mention benefits (unlimited, more credits, etc.)
-        const hasValueProp =
-          upgradeMessage.toLowerCase().includes('unlimited') ||
-          upgradeMessage.toLowerCase().includes('100,000') ||
-          upgradeMessage.toLowerCase().includes('more');
-
         // Should be clear and benefit-focused
         expect(upgradeMessage.length).toBeGreaterThan(10); // Not just "Upgrade"
       }
@@ -624,8 +621,6 @@ test.describe('Free User Quota Warnings & Display', () => {
       await waitForThreadNavigation(page, 60000);
       await waitForStreamingStart(page, 30000);
       await waitForAIResponse(page, 90000);
-
-      const threadUrl = page.url();
 
       // Now exhaust credits
       await setUserCredits(page, 0);

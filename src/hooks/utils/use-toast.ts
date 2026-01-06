@@ -97,15 +97,10 @@ export function reducer(state: State, action: Action): State {
     case ToastActionTypes.DISMISS_TOAST: {
       const { toastId } = action;
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
       if (toastId) {
         addToRemoveQueue(toastId);
       } else {
-        // Intentionally empty
-        state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id);
-        });
+        state.toasts.forEach(toast => addToRemoveQueue(toast.id));
       }
 
       return {

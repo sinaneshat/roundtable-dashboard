@@ -166,9 +166,6 @@ export {
   type SyncAfterCheckoutRequest,
   type SyncAfterCheckoutResponse,
   syncAfterCheckoutService,
-  type SyncCreditsAfterCheckoutRequest,
-  type SyncCreditsAfterCheckoutResponse,
-  syncCreditsAfterCheckoutService,
 } from './checkout';
 
 // ============================================================================

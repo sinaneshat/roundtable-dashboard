@@ -23,14 +23,14 @@ import { expect, test } from '@playwright/test';
 // Test Data
 // ============================================================================
 
-const generateUniqueEmail = (prefix: string = 'test') => {
+function generateUniqueEmail(prefix: string = 'test') {
   const timestamp = Date.now();
   const random = Math.floor(Math.random() * 1000);
   return `${prefix}-${timestamp}-${random}@roundtable.now`;
-};
+}
 
 const INVALID_DOMAIN_EMAIL = 'test@example.com';
-const WHITELISTED_DOMAIN = '@roundtable.now';
+const _WHITELISTED_DOMAIN = '@roundtable.now';
 
 // ============================================================================
 // Signup Page Initial Load

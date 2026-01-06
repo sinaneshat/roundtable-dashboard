@@ -55,6 +55,156 @@ export const UsageSchema = z.object({
 
 export type Usage = z.infer<typeof UsageSchema>;
 
+// ============================================================================
+// AI SDK v6 MESSAGE PARTS SCHEMAS - Type-safe message content structure
+// ============================================================================
+
+/**
+ * Text Part Schema
+ * Standard text content in messages
+ */
+export const DbTextPartSchema = z.object({
+  type: z.literal('text'),
+  text: z.string(),
+});
+
+export type DbTextPart = z.infer<typeof DbTextPartSchema>;
+
+/**
+ * Reasoning Part Schema
+ * Claude extended thinking / reasoning content
+ */
+export const DbReasoningPartSchema = z.object({
+  type: z.literal('reasoning'),
+  text: z.string(),
+});
+
+export type DbReasoningPart = z.infer<typeof DbReasoningPartSchema>;
+
+/**
+ * Tool Call Part Schema
+ * Function invocation by AI model
+ */
+export const DbToolCallPartSchema = z.object({
+  type: z.literal('tool-call'),
+  toolCallId: z.string(),
+  toolName: z.string(),
+  args: z.unknown(),
+});
+
+export type DbToolCallPart = z.infer<typeof DbToolCallPartSchema>;
+
+/**
+ * Tool Result Part Schema
+ * Execution result from tool call
+ */
+export const DbToolResultPartSchema = z.object({
+  type: z.literal('tool-result'),
+  toolCallId: z.string(),
+  toolName: z.string(),
+  result: z.unknown(),
+  isError: z.boolean().optional(),
+});
+
+export type DbToolResultPart = z.infer<typeof DbToolResultPartSchema>;
+
+/**
+ * File Part Schema
+ * Multi-modal file attachments (images, PDFs)
+ * Reference: AI SDK v6 FilePart
+ */
+export const DbFilePartSchema = z.object({
+  type: z.literal('file'),
+  url: z.string(),
+  mediaType: z.string(),
+  filename: z.string().optional(),
+});
+
+export type DbFilePart = z.infer<typeof DbFilePartSchema>;
+
+/**
+ * Step Start Part Schema
+ * AI SDK v6 streaming lifecycle marker
+ */
+export const DbStepStartPartSchema = z.object({
+  type: z.literal('step-start'),
+});
+
+export type DbStepStartPart = z.infer<typeof DbStepStartPartSchema>;
+
+/**
+ * Message Parts Schema - Union of all part types
+ * AI SDK v6 aligned structure for chat message content
+ */
+export const DbMessagePartSchema = z.discriminatedUnion('type', [
+  DbTextPartSchema,
+  DbReasoningPartSchema,
+  DbToolCallPartSchema,
+  DbToolResultPartSchema,
+  DbFilePartSchema,
+  DbStepStartPartSchema,
+]);
+
+export type DbMessagePart = z.infer<typeof DbMessagePartSchema>;
+
+/**
+ * Message Parts Array Schema
+ * Used by chatMessage.parts column
+ */
+export const DbMessagePartsSchema = z.array(DbMessagePartSchema);
+
+export type DbMessageParts = z.infer<typeof DbMessagePartsSchema>;
+
+// ============================================================================
+// TOOL CALLS SCHEMA - For separate toolCalls column
+// ============================================================================
+
+/**
+ * Tool Call Entry Schema
+ * Stored in chatMessage.toolCalls column
+ */
+export const DbToolCallEntrySchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  function: z.object({
+    name: z.string(),
+    arguments: z.string(),
+  }),
+});
+
+export type DbToolCallEntry = z.infer<typeof DbToolCallEntrySchema>;
+
+/**
+ * Tool Calls Array Schema
+ * Used by chatMessage.toolCalls column
+ */
+export const DbToolCallsSchema = z.array(DbToolCallEntrySchema);
+
+export type DbToolCalls = z.infer<typeof DbToolCallsSchema>;
+
+// ============================================================================
+// USER PRESET MODEL ROLES SCHEMA
+// ============================================================================
+
+/**
+ * Model Role Entry Schema
+ * Single model-role pair in user presets
+ */
+export const DbModelRoleEntrySchema = z.object({
+  modelId: z.string(),
+  role: z.string(),
+});
+
+export type DbModelRoleEntry = z.infer<typeof DbModelRoleEntrySchema>;
+
+/**
+ * Model Roles Array Schema
+ * Used by chatUserPreset.modelRoles column
+ */
+export const DbModelRolesSchema = z.array(DbModelRoleEntrySchema);
+
+export type DbModelRoles = z.infer<typeof DbModelRolesSchema>;
+
 /**
  * Citation Schema - RAG source references in AI responses
  *
@@ -228,6 +378,103 @@ export const DbPreSearchDataSchema = z.object({
 });
 
 export type DbPreSearchData = z.infer<typeof DbPreSearchDataSchema>;
+
+// ============================================================================
+// PRE-SEARCH TABLE SCHEMA - For chatPreSearch.searchData column
+// More comprehensive than DbPreSearchDataSchema (metadata message version)
+// ============================================================================
+
+/**
+ * Image schema for Tavily search results
+ */
+const DbSearchImageSchema = z.object({
+  url: z.string(),
+  description: z.string().optional(),
+  alt: z.string().optional(),
+});
+
+/**
+ * Result metadata schema for enriched search results
+ */
+const DbSearchResultMetadataSchema = z.object({
+  author: z.string().optional(),
+  readingTime: z.number().optional(),
+  wordCount: z.number().optional(),
+  description: z.string().optional(),
+  imageUrl: z.string().optional(),
+  faviconUrl: z.string().optional(),
+});
+
+/**
+ * Individual search result item schema (Tavily-enhanced)
+ */
+const DbSearchResultItemSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  content: z.string(),
+  excerpt: z.string().optional(),
+  fullContent: z.string().optional(),
+  rawContent: z.string().optional(),
+  score: z.number(),
+  publishedDate: z.string().nullable(),
+  domain: z.string().optional(),
+  contentType: z.string().optional(),
+  keyPoints: z.array(z.string()).optional(),
+  metadata: DbSearchResultMetadataSchema.optional(),
+  images: z.array(DbSearchImageSchema).optional(),
+});
+
+/**
+ * Auto-detected search parameters schema
+ */
+const DbAutoParametersSchema = z.object({
+  topic: z.string().optional(),
+  timeRange: z.string().optional(),
+  searchDepth: WebSearchDepthSchema.optional(),
+  reasoning: z.string().optional(),
+});
+
+/**
+ * Query result schema with all results for a single query
+ */
+const DbQueryResultSchema = z.object({
+  query: z.string(),
+  answer: z.string().nullable(),
+  results: z.array(DbSearchResultItemSchema),
+  responseTime: z.number(),
+  images: z.array(z.object({
+    url: z.string(),
+    description: z.string().optional(),
+  })).optional(),
+  autoParameters: DbAutoParametersSchema.optional(),
+});
+
+/**
+ * Query entry schema for the queries array
+ */
+const DbQueryEntrySchema = z.object({
+  query: z.string(),
+  rationale: z.string(),
+  searchDepth: WebSearchDepthSchema,
+  index: z.number(),
+  total: z.number(),
+});
+
+/**
+ * Complete pre-search table data schema
+ * Used by chatPreSearch.searchData column
+ */
+export const DbPreSearchTableDataSchema = z.object({
+  queries: z.array(DbQueryEntrySchema),
+  results: z.array(DbQueryResultSchema),
+  summary: z.string(),
+  successCount: z.number(),
+  failureCount: z.number(),
+  totalResults: z.number(),
+  totalTime: z.number(),
+});
+
+export type DbPreSearchTableData = z.infer<typeof DbPreSearchTableDataSchema>;
 
 /**
  * Pre-Search/System Message Metadata Schema

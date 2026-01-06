@@ -56,7 +56,7 @@ describe('pricingContentSkeleton', () => {
       const { container } = render(<PricingContentSkeleton />);
 
       const featureItems = container.querySelectorAll('.flex.items-start.gap-3');
-      expect(featureItems.length).toBe(4);
+      expect(featureItems).toHaveLength(4);
     });
 
     it('renders price skeleton', () => {

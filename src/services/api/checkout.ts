@@ -31,14 +31,6 @@ export type SyncAfterCheckoutResponse = InferResponseType<
   ApiClientType['billing']['sync-after-checkout']['$post']
 >;
 
-export type SyncCreditsAfterCheckoutRequest = InferRequestType<
-  ApiClientType['billing']['sync-credits-after-checkout']['$post']
->;
-
-export type SyncCreditsAfterCheckoutResponse = InferResponseType<
-  ApiClientType['billing']['sync-credits-after-checkout']['$post']
->;
-
 // ============================================================================
 // Service Functions
 // ============================================================================
@@ -71,17 +63,4 @@ export async function createCheckoutSessionService(data: CreateCheckoutSessionRe
 export async function syncAfterCheckoutService(data?: SyncAfterCheckoutRequest) {
   const client = await createApiClient();
   return parseResponse(client.billing['sync-after-checkout'].$post(data ?? {}));
-}
-
-/**
- * Sync credits after one-time credit pack purchase
- * Protected endpoint - requires authentication
- *
- * Theo's "Stay Sane with Stripe" pattern:
- * Separate endpoint for one-time purchases (simpler than subscriptions)
- * Eagerly syncs credit purchase data from Stripe API
- */
-export async function syncCreditsAfterCheckoutService(data?: SyncCreditsAfterCheckoutRequest) {
-  const client = await createApiClient();
-  return parseResponse(client.billing['sync-credits-after-checkout'].$post(data ?? {}));
 }

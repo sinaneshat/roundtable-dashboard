@@ -64,7 +64,7 @@ export function createMockSubscription(data?: MockSubscriptionData): Subscriptio
 export function createActiveSubscription(overrides?: MockSubscriptionData | string): Subscription {
   const data = typeof overrides === 'string' ? { priceId: overrides } : overrides;
   return createMockSubscription({
-    id: 'sub_active',
+    id: 'sub_active_test',
     status: StripeSubscriptionStatuses.ACTIVE,
     cancelAtPeriodEnd: false,
     ...data,
@@ -92,7 +92,8 @@ export function createPastDueSubscription(overrides?: MockSubscriptionData): Sub
   });
 }
 
-export function createTrialingSubscription(overrides?: MockSubscriptionData): Subscription {
+export function createTrialingSubscription(overrides?: MockSubscriptionData | string): Subscription {
+  const data = typeof overrides === 'string' ? { priceId: overrides } : overrides;
   const now = new Date();
   return createMockSubscription({
     id: 'sub_trialing',
@@ -100,7 +101,7 @@ export function createTrialingSubscription(overrides?: MockSubscriptionData): Su
     trialStart: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
     trialEnd: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
     cancelAtPeriodEnd: false,
-    ...overrides,
+    ...data,
   });
 }
 
@@ -110,6 +111,16 @@ export function createIncompleteSubscription(overrides?: MockSubscriptionData): 
     status: StripeSubscriptionStatuses.INCOMPLETE,
     cancelAtPeriodEnd: false,
     ...overrides,
+  });
+}
+
+export function createCancelingSubscription(overrides?: MockSubscriptionData | string): Subscription {
+  const data = typeof overrides === 'string' ? { priceId: overrides } : overrides;
+  return createMockSubscription({
+    id: 'sub_canceling',
+    status: StripeSubscriptionStatuses.ACTIVE,
+    cancelAtPeriodEnd: true,
+    ...data,
   });
 }
 

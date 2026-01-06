@@ -25,7 +25,7 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { MessageRoles } from '@/api/core/enums';
-import { createInvalidMetadata } from '@/lib/testing/typed-test-mocks';
+import { createInvalidMetadata } from '@/lib/testing';
 import { getUserMetadata } from '@/lib/utils';
 
 /**

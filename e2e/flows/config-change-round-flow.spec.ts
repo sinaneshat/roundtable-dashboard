@@ -12,11 +12,11 @@
  * Flow: Config Change → PATCH → Changelog → Pre-Search → Streaming
  */
 
-import { expect, test } from '@playwright/test';
+import { test } from '@playwright/test';
 
 test.describe('Config Change Round Flow', () => {
   test.describe('Changelog Display', () => {
-    test.skip('should display changelog accordion when config changes between rounds', async ({ page }) => {
+    test.skip('should display changelog accordion when config changes between rounds', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread
       // 2. Change participants
@@ -25,7 +25,7 @@ test.describe('Config Change Round Flow', () => {
       // 5. Verify changelog shows correct changes
     });
 
-    test.skip('should NOT display changelog accordion when no config changes', async ({ page }) => {
+    test.skip('should NOT display changelog accordion when no config changes', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread
       // 2. Submit message WITHOUT changing config
@@ -34,7 +34,7 @@ test.describe('Config Change Round Flow', () => {
   });
 
   test.describe('Web Search Toggle', () => {
-    test.skip('should show pre-search when web search enabled mid-conversation', async ({ page }) => {
+    test.skip('should show pre-search when web search enabled mid-conversation', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread (web search disabled)
       // 2. Enable web search
@@ -44,7 +44,7 @@ test.describe('Config Change Round Flow', () => {
       // 6. Verify participants stream after pre-search
     });
 
-    test.skip('should NOT show pre-search when web search disabled mid-conversation', async ({ page }) => {
+    test.skip('should NOT show pre-search when web search disabled mid-conversation', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread (web search enabled)
       // 2. Disable web search
@@ -56,7 +56,7 @@ test.describe('Config Change Round Flow', () => {
   });
 
   test.describe('Participant Changes', () => {
-    test.skip('should handle adding participant mid-conversation', async ({ page }) => {
+    test.skip('should handle adding participant mid-conversation', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread (2 participants)
       // 2. Add 3rd participant
@@ -65,7 +65,7 @@ test.describe('Config Change Round Flow', () => {
       // 5. Verify all 3 participants respond
     });
 
-    test.skip('should handle removing participant mid-conversation', async ({ page }) => {
+    test.skip('should handle removing participant mid-conversation', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread (3 participants)
       // 2. Remove 1 participant
@@ -74,7 +74,7 @@ test.describe('Config Change Round Flow', () => {
       // 5. Verify only 2 participants respond
     });
 
-    test.skip('should handle swapping participants mid-conversation', async ({ page }) => {
+    test.skip('should handle swapping participants mid-conversation', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread
       // 2. Remove all participants and add different ones
@@ -85,7 +85,7 @@ test.describe('Config Change Round Flow', () => {
   });
 
   test.describe('Mode Changes', () => {
-    test.skip('should handle mode change from panel to council', async ({ page }) => {
+    test.skip('should handle mode change from panel to council', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread (panel mode)
       // 2. Change to council mode
@@ -96,7 +96,7 @@ test.describe('Config Change Round Flow', () => {
   });
 
   test.describe('Error Recovery', () => {
-    test.skip('should recover from PATCH failure', async ({ page }) => {
+    test.skip('should recover from PATCH failure', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread
       // 2. Change config
@@ -107,7 +107,7 @@ test.describe('Config Change Round Flow', () => {
       // 7. Verify config changes are preserved
     });
 
-    test.skip('should recover from changelog fetch timeout', async ({ page }) => {
+    test.skip('should recover from changelog fetch timeout', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread
       // 2. Change config
@@ -118,7 +118,7 @@ test.describe('Config Change Round Flow', () => {
   });
 
   test.describe('Race Condition Prevention', () => {
-    test.skip('should prevent double submission during PATCH', async ({ page }) => {
+    test.skip('should prevent double submission during PATCH', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread
       // 2. Change config
@@ -127,7 +127,7 @@ test.describe('Config Change Round Flow', () => {
       // 5. Verify only one round of responses
     });
 
-    test.skip('should prevent config changes during active streaming', async ({ page }) => {
+    test.skip('should prevent config changes during active streaming', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread
       // 2. Submit message and start streaming
@@ -137,7 +137,7 @@ test.describe('Config Change Round Flow', () => {
   });
 
   test.describe('Incomplete Round Resumption', () => {
-    test.skip('should resume from correct participant after page refresh', async ({ page }) => {
+    test.skip('should resume from correct participant after page refresh', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread
       // 2. Submit message (starts 3-participant round)
@@ -147,7 +147,7 @@ test.describe('Config Change Round Flow', () => {
       // 6. Verify all participants eventually respond
     });
 
-    test.skip('should NOT resume if config changed since round started', async ({ page }) => {
+    test.skip('should NOT resume if config changed since round started', async ({ page: _page }) => {
       // TODO: Implement when auth flow is set up
       // 1. Navigate to existing thread
       // 2. Submit message
@@ -161,7 +161,7 @@ test.describe('Config Change Round Flow', () => {
 });
 
 test.describe('Multi-Round Config Flow', () => {
-  test.skip('should handle multiple config changes across rounds', async ({ page }) => {
+  test.skip('should handle multiple config changes across rounds', async ({ page: _page }) => {
     // TODO: Implement when auth flow is set up
     // Round 1: 2 participants, no web search
     // Round 2: Add participant → changelog shows addition
@@ -170,7 +170,7 @@ test.describe('Multi-Round Config Flow', () => {
     // Each round should show its own changelog
   });
 
-  test.skip('should preserve changelog history in conversation', async ({ page }) => {
+  test.skip('should preserve changelog history in conversation', async ({ page: _page }) => {
     // TODO: Implement when auth flow is set up
     // 1. Make multiple config changes across rounds
     // 2. Scroll up in conversation

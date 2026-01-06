@@ -39,8 +39,10 @@ export default function PricingScreen() {
   const subscriptions: Subscription[] = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
 
   const hasValidProductData = productsData?.success === true && !!productsData.data?.items;
-  const hasError = productsError !== undefined || (productsData !== undefined && productsData?.success === false);
-  const shouldShowLoading = isLoadingProducts || (productsData === undefined && !hasError);
+  const hasApiErrorWithMessage = productsData !== undefined && productsData.success === false && 'error' in productsData && productsData.error;
+  const hasFetchError = productsError !== undefined;
+  const shouldShowError = hasApiErrorWithMessage || hasFetchError;
+  const shouldShowLoading = isLoadingProducts || (!hasValidProductData && !shouldShowError);
 
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
@@ -136,7 +138,7 @@ export default function PricingScreen() {
         products={products}
         subscriptions={subscriptions}
         isLoading={shouldShowLoading}
-        error={hasError ? productsError : null}
+        error={shouldShowError ? productsError : null}
         processingPriceId={processingPriceId}
         cancelingSubscriptionId={cancelingSubscriptionId}
         isManagingBilling={isManagingBilling}

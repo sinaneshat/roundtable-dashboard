@@ -106,8 +106,8 @@ vi.mock('@/db', async () => {
                   selectType = 'credit';
                 }
 
-                const results =
-                  selectType === 'credit'
+                const results
+                  = selectType === 'credit'
                     ? Array.from(mockCreditRecords.values())
                     : Array.from(mockUsageRecords.values());
 
@@ -207,7 +207,7 @@ describe('auth Flow Credit Integration', () => {
 
       // Transaction should be recorded
       const signupTransaction = mockTransactions.find(
-        (tx) => tx.action === CreditActions.SIGNUP_BONUS && tx.userId === userId,
+        tx => tx.action === CreditActions.SIGNUP_BONUS && tx.userId === userId,
       );
 
       expect(signupTransaction).toBeDefined();
@@ -293,7 +293,7 @@ describe('auth Flow Credit Integration', () => {
       await ensureUserCreditRecord(oauthUserId);
 
       const signupTx = mockTransactions.find(
-        (tx) => tx.userId === oauthUserId && tx.action === CreditActions.SIGNUP_BONUS,
+        tx => tx.userId === oauthUserId && tx.action === CreditActions.SIGNUP_BONUS,
       );
 
       expect(signupTx).toBeDefined();
@@ -338,7 +338,7 @@ describe('auth Flow Credit Integration', () => {
 
       expect(result.balance).toBe(existingBalance);
       expect(result.balance).toBe(3500);
-      expect(mockTransactions.length).toBe(0); // No signup transaction for existing user
+      expect(mockTransactions).toHaveLength(0); // No signup transaction for existing user
     });
 
     it('preserves credit balance after session expiry', async () => {
@@ -547,7 +547,7 @@ describe('auth Flow Credit Integration', () => {
       await ensureUserCreditRecord(userId);
 
       const signupTransactions = mockTransactions.filter(
-        (tx) => tx.userId === userId && tx.action === CreditActions.SIGNUP_BONUS,
+        tx => tx.userId === userId && tx.action === CreditActions.SIGNUP_BONUS,
       );
 
       // Should only have one signup transaction even with multiple calls
@@ -634,7 +634,7 @@ describe('auth Flow Credit Integration', () => {
 
       expect(balance.balance).toBe(previousBalance);
       expect(balance.available).toBe(2500);
-      expect(mockTransactions.length).toBe(0); // No signup bonus for existing user
+      expect(mockTransactions).toHaveLength(0); // No signup bonus for existing user
     });
 
     it('restores usage history for existing user', async () => {
@@ -688,7 +688,7 @@ describe('auth Flow Credit Integration', () => {
       await ensureUserCreditRecord(userId);
 
       const signupBonus = mockTransactions.find(
-        (tx) => tx.userId === userId && tx.action === CreditActions.SIGNUP_BONUS,
+        tx => tx.userId === userId && tx.action === CreditActions.SIGNUP_BONUS,
       );
 
       expect(signupBonus).toBeUndefined();

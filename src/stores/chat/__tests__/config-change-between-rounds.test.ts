@@ -518,8 +518,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         expect(state.nextParticipantToTrigger).toBe(null);
       });
 
-      it('should support index-only trigger for backwards compatibility', () => {
-        // Some code paths may still use index-only (legacy)
+      it('should support object trigger with index and participantId', () => {
         store.getState().setNextParticipantToTrigger({ index: 1, participantId: 'p2' });
 
         const state = store.getState();
@@ -704,7 +703,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
           { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
         ]);
 
-        // Set trigger without participantId (backwards compatibility)
+        // Set trigger with empty participantId for no-validation case
         store.getState().setNextParticipantToTrigger({ index: 0, participantId: '' });
 
         const state = store.getState();

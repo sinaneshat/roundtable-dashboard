@@ -17,7 +17,7 @@ import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
 
-describe('Round Flow Race Conditions', () => {
+describe('round Flow Race Conditions', () => {
   let store: ChatStoreApi;
 
   beforeEach(() => {
@@ -25,7 +25,7 @@ describe('Round Flow Race Conditions', () => {
     vi.clearAllMocks();
   });
 
-  describe('Changelog vs Streaming Race', () => {
+  describe('changelog vs Streaming Race', () => {
     it('should block streaming even if waitingToStartStreaming is set before configChangeRoundNumber', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
 
@@ -70,7 +70,7 @@ describe('Round Flow Race Conditions', () => {
     });
   });
 
-  describe('Participant Index Race Conditions', () => {
+  describe('participant Index Race Conditions', () => {
     it('should handle rapid participant changes during streaming setup', () => {
       const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
       const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
@@ -115,7 +115,7 @@ describe('Round Flow Race Conditions', () => {
     });
   });
 
-  describe('Multiple Hook Trigger Race', () => {
+  describe('multiple Hook Trigger Race', () => {
     it('should not double-trigger when both useRoundResumption and useStreamingTrigger active', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setWaitingToStartStreaming(true);
@@ -152,7 +152,7 @@ describe('Round Flow Race Conditions', () => {
     });
   });
 
-  describe('Pre-Search Race Conditions', () => {
+  describe('pre-Search Race Conditions', () => {
     it('should handle pre-search completion before changelog completion', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setEnableWebSearch(true);
@@ -289,7 +289,7 @@ describe('Round Flow Race Conditions', () => {
     });
   });
 
-  describe('Screen Mode Transition Race Conditions', () => {
+  describe('screen Mode Transition Race Conditions', () => {
     it('should handle OVERVIEW to THREAD transition during streaming setup', () => {
       // Start in overview mode
       store.getState().setScreenMode(ScreenModes.OVERVIEW);
@@ -321,7 +321,7 @@ describe('Round Flow Race Conditions', () => {
     });
   });
 
-  describe('Regeneration Race Conditions', () => {
+  describe('regeneration Race Conditions', () => {
     it('should block changelog during regeneration with config changes', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setMessages([
@@ -394,7 +394,7 @@ describe('Round Flow Race Conditions', () => {
     });
   });
 
-  describe('Timeout Safety Race Conditions', () => {
+  describe('timeout Safety Race Conditions', () => {
     it('should handle changelog timeout clearing flags during active fetch', () => {
       store.getState().setConfigChangeRoundNumber(1);
       store.getState().setIsWaitingForChangelog(true);

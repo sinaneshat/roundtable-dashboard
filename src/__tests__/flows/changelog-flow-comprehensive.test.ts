@@ -26,9 +26,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChangelogTypes, ChatModes, MessageStatuses } from '@/api/core/enums';
 import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
 import { queryKeys } from '@/lib/data/query-keys';
-import {
-  createMockStoredPreSearch,
-} from '@/lib/testing/chat-test-factories';
+import { createMockStoredPreSearch } from '@/lib/testing';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 

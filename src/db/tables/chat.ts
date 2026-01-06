@@ -14,8 +14,12 @@ import type {
   DbChangelogData,
   DbCustomRoleMetadata,
   DbMessageMetadata,
+  DbMessageParts,
+  DbModelRoles,
   DbParticipantSettings,
+  DbPreSearchTableData,
   DbThreadMetadata,
+  DbToolCalls,
   DbUserPresetMetadata,
 } from '@/db/schemas/chat-metadata';
 
@@ -125,10 +129,8 @@ export const chatUserPreset = sqliteTable('chat_user_preset', {
     .notNull()
     .default(DEFAULT_CHAT_MODE),
   // Array of model-role pairs that define the preset configuration
-  modelRoles: text('model_roles', { mode: 'json' }).$type<Array<{
-    modelId: string;
-    role: string;
-  }>>().notNull(),
+  // ✅ TYPE-SAFE: Type inferred from Zod schema in chat-metadata.ts
+  modelRoles: text('model_roles', { mode: 'json' }).$type<DbModelRoles>().notNull(),
   // ✅ TYPE-SAFE: Strictly typed metadata for user presets
   metadata: text('metadata', { mode: 'json' }).$type<DbUserPresetMetadata>(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
@@ -265,33 +267,8 @@ export const chatMessage = sqliteTable('chat_message', {
   //
   // ✅ ZERO-DOWNTIME MIGRATION: TypeScript-only change, existing messages still valid
   // Existing messages without tool parts continue to work without modification
-  parts: text('parts', { mode: 'json' }).notNull().$type<Array<
-    | { type: 'text'; text: string }
-    | { type: 'reasoning'; text: string }
-    | {
-      type: 'tool-call';
-      toolCallId: string;
-      toolName: string;
-      args: unknown;
-    }
-    | {
-      type: 'tool-result';
-      toolCallId: string;
-      toolName: string;
-      result: unknown;
-      isError?: boolean;
-    }
-    // ✅ MULTI-MODAL: File attachments (images, PDFs) for AI model consumption
-    // Reference: AI SDK v6 FilePart - https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
-    | {
-      type: 'file';
-      url: string;
-      mediaType: string;
-      filename?: string;
-    }
-    // ✅ AI SDK v6 STREAMING: Step start marker for streaming lifecycle
-    | { type: 'step-start' }
-  >>(),
+  // ✅ TYPE-SAFE: Type inferred from Zod schema in chat-metadata.ts (DbMessageParts)
+  parts: text('parts', { mode: 'json' }).notNull().$type<DbMessageParts>(),
 
   // ✅ ROUND TRACKING: Event-based round number for reliable analysis placement
   // Round = User message + all participant responses
@@ -302,14 +279,8 @@ export const chatMessage = sqliteTable('chat_message', {
     .default(0), // ✅ 0-BASED: Default to round 0
 
   // ✅ TOOL SUPPORT: Store tool calls made by the model (separate from tool results in parts[])
-  toolCalls: text('tool_calls', { mode: 'json' }).$type<Array<{
-    id: string;
-    type: string;
-    function: {
-      name: string;
-      arguments: string;
-    };
-  }>>(),
+  // ✅ TYPE-SAFE: Type inferred from Zod schema in chat-metadata.ts (DbToolCalls)
+  toolCalls: text('tool_calls', { mode: 'json' }).$type<DbToolCalls>(),
 
   // ✅ TYPE-SAFE: Discriminated union by 'role' field - strictly validated metadata
   // Three message types: user, assistant/participant, pre-search/system
@@ -380,63 +351,8 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
   // Store the full search results as JSON
   // ✅ NULLABLE: Only populated once search completes successfully
   // ✅ TAVILY-ENHANCED: Includes images, auto-parameters, enhanced metadata
-  searchData: text('search_data', { mode: 'json' }).$type<{
-    queries: Array<{
-      query: string;
-      rationale: string;
-      searchDepth: import('@/api/core/enums').WebSearchDepth;
-      index: number;
-      total: number;
-    }>;
-    results: Array<{
-      query: string;
-      answer: string | null;
-      results: Array<{
-        title: string;
-        url: string;
-        content: string;
-        excerpt?: string;
-        fullContent?: string;
-        rawContent?: string;
-        score: number;
-        publishedDate: string | null;
-        domain?: string;
-        contentType?: string;
-        keyPoints?: string[];
-        metadata?: {
-          author?: string;
-          readingTime?: number;
-          wordCount?: number;
-          description?: string;
-          imageUrl?: string;
-          faviconUrl?: string;
-        };
-        images?: Array<{
-          url: string;
-          description?: string;
-          alt?: string;
-        }>;
-      }>;
-      responseTime: number;
-      // Tavily-style images array
-      images?: Array<{
-        url: string;
-        description?: string;
-      }>;
-      // Auto-detected parameters
-      autoParameters?: {
-        topic?: import('@/api/core/enums').WebSearchTopic;
-        timeRange?: import('@/api/core/enums').WebSearchTimeRange;
-        searchDepth?: import('@/api/core/enums').WebSearchDepth;
-        reasoning?: string;
-      };
-    }>;
-    summary: string; // Overall summary of why these queries were chosen
-    successCount: number;
-    failureCount: number;
-    totalResults: number;
-    totalTime: number;
-  }>(),
+  // ✅ TYPE-SAFE: Type inferred from Zod schema in chat-metadata.ts (DbPreSearchTableData)
+  searchData: text('search_data', { mode: 'json' }).$type<DbPreSearchTableData>(),
   // ✅ Error tracking for failed searches
   errorMessage: text('error_message'),
   // ✅ Completion timestamp (null until status = 'complete')

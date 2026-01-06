@@ -13,11 +13,13 @@
  * - Credit deduction per round
  */
 
-import { renderHook, waitFor } from '@/lib/testing';
 import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
+import { renderHook } from '@/lib/testing';
+
+import { useMultiParticipantChat } from '../use-multi-participant-chat';
 
 // Mock @ai-sdk/react before importing the hook
 vi.mock('@ai-sdk/react', () => ({
@@ -32,8 +34,6 @@ vi.mock('@ai-sdk/react', () => ({
     data: undefined,
   })),
 }));
-
-import { useMultiParticipantChat } from '../use-multi-participant-chat';
 
 describe('useMultiParticipantChat', () => {
   const mockThreadId = 'thread-123';
@@ -83,7 +83,7 @@ describe('useMultiParticipantChat', () => {
     ];
   });
 
-  describe('Round Initialization', () => {
+  describe('round Initialization', () => {
     it('should initialize with no messages', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -136,7 +136,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Round Start', () => {
+  describe('round Start', () => {
     it('should accept sendMessage to start round', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -173,7 +173,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Participant Turn-Taking', () => {
+  describe('participant Turn-Taking', () => {
     it('should expose continueFromParticipant function', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -244,7 +244,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Round Completion', () => {
+  describe('round Completion', () => {
     it('should detect round complete when all participants respond', async () => {
       const onComplete = vi.fn();
       const { result } = renderHook(() =>
@@ -325,7 +325,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Error Handling', () => {
+  describe('error Handling', () => {
     it('should call onError callback when error occurs', async () => {
       const onError = vi.fn();
       const testError = new Error('Test error');
@@ -368,7 +368,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Incomplete Round Resumption', () => {
+  describe('incomplete Round Resumption', () => {
     it('should support resumption via continueFromParticipant', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -421,7 +421,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Streaming State Management', () => {
+  describe('streaming State Management', () => {
     it('should track isStreaming state correctly', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -467,7 +467,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Animation Tracking', () => {
+  describe('animation Tracking', () => {
     it('should call clearAnimations callback when provided', async () => {
       const clearAnimations = vi.fn();
       const { result } = renderHook(() =>
@@ -507,7 +507,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('edge Cases', () => {
     it('should handle empty participants array', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -593,7 +593,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Messages State', () => {
+  describe('messages State', () => {
     it('should allow setting messages manually', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -651,7 +651,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Pre-Search Integration', () => {
+  describe('pre-Search Integration', () => {
     it('should handle pre-search start callback', async () => {
       const onPreSearchStart = vi.fn();
       const { result } = renderHook(() =>
@@ -730,7 +730,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('File Attachments', () => {
+  describe('file Attachments', () => {
     it('should handle pending attachment IDs', async () => {
       const pendingAttachmentIds = ['att-1', 'att-2'];
       const { result } = renderHook(() =>
@@ -776,7 +776,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Regenerate Round', () => {
+  describe('regenerate Round', () => {
     it('should handle round regeneration', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -792,7 +792,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('Chat Mode', () => {
+  describe('chat Mode', () => {
     it('should accept moderator mode', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({

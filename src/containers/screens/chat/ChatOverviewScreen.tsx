@@ -712,7 +712,6 @@ export default function ChatOverviewScreen() {
                         transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
                       >
                         <LogoGlow />
-                        {/* Logo with slow rotation and breathing */}
                         <motion.div
                           className="relative w-full h-full"
                           animate={{

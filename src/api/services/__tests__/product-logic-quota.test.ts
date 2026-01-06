@@ -7,8 +7,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { SubscriptionTiers } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/core/enums';
+import { SubscriptionTiers } from '@/api/core/enums';
 import {
   calculateBaseCredits,
   calculateWeightedCredits,
@@ -23,7 +23,6 @@ import {
   getMaxOutputTokensForTier,
   getModelCostCategory,
   getModelPricingDisplay,
-  getModelPricingTier,
   getMonthlyCreditsForTier,
   getPlanConfig,
   getRequiredTierForModel,
@@ -41,8 +40,8 @@ import {
 } from '@/api/services/product-logic.service';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
-describe('Product Logic - Quota and Tier Configuration', () => {
-  describe('TIER_CONFIG Structure', () => {
+describe('product Logic - Quota and Tier Configuration', () => {
+  describe('tIER_CONFIG Structure', () => {
     it('defines configuration for all tiers', () => {
       expect(TIER_CONFIG).toBeDefined();
       expect(TIER_CONFIG[SubscriptionTiers.FREE]).toBeDefined();
@@ -75,7 +74,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('TIER_QUOTAS Derivation', () => {
+  describe('tIER_QUOTAS Derivation', () => {
     it('derives quotas from TIER_CONFIG', () => {
       expect(TIER_QUOTAS[SubscriptionTiers.FREE]).toEqual(
         TIER_CONFIG[SubscriptionTiers.FREE].quotas,
@@ -93,7 +92,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Tier Output Token Limits', () => {
+  describe('tier Output Token Limits', () => {
     it('free tier has 512 max output tokens', () => {
       expect(MAX_OUTPUT_TOKENS_BY_TIER[SubscriptionTiers.FREE]).toBe(512);
     });
@@ -115,7 +114,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Tier Model Count Limits', () => {
+  describe('tier Model Count Limits', () => {
     it('free tier allows 3 models', () => {
       expect(MAX_MODELS_BY_TIER[SubscriptionTiers.FREE]).toBe(3);
     });
@@ -137,7 +136,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Monthly Credits by Tier', () => {
+  describe('monthly Credits by Tier', () => {
     it('free tier has 0 monthly credits (one-time signup bonus)', () => {
       expect(getMonthlyCreditsForTier(SubscriptionTiers.FREE)).toBe(0);
     });
@@ -152,8 +151,8 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Tier Names and Metadata', () => {
-    it('SUBSCRIPTION_TIER_NAMES maps all tiers', () => {
+  describe('tier Names and Metadata', () => {
+    it('sUBSCRIPTION_TIER_NAMES maps all tiers', () => {
       expect(SUBSCRIPTION_TIER_NAMES[SubscriptionTiers.FREE]).toBe('Free');
       expect(SUBSCRIPTION_TIER_NAMES[SubscriptionTiers.PRO]).toBe('Pro');
     });
@@ -169,7 +168,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Credit Calculation Utilities', () => {
+  describe('credit Calculation Utilities', () => {
     describe('tokensToCredits', () => {
       it('converts 1000 tokens to 1 credit', () => {
         expect(tokensToCredits(1000)).toBe(1);
@@ -238,7 +237,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Action Credit Costs', () => {
+  describe('action Credit Costs', () => {
     it('getActionCreditCost returns credit cost for actions', () => {
       const threadCost = getActionCreditCost('threadCreation');
       expect(threadCost).toBeGreaterThan(0);
@@ -269,7 +268,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Streaming Credit Estimation', () => {
+  describe('streaming Credit Estimation', () => {
     it('estimates credits for single participant', () => {
       const credits = estimateStreamingCredits(1);
       expect(credits).toBeGreaterThan(0);
@@ -302,7 +301,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Model Pricing and Tier Access', () => {
+  describe('model Pricing and Tier Access', () => {
     // Free tier max pricing is $0.10/1M tokens
     const mockFreeModel = {
       id: 'free-model',
@@ -427,7 +426,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Tier Access Logic', () => {
+  describe('tier Access Logic', () => {
     it('canAccessByTier allows same tier access', () => {
       expect(canAccessByTier(SubscriptionTiers.FREE, SubscriptionTiers.FREE)).toBe(true);
       expect(canAccessByTier(SubscriptionTiers.PRO, SubscriptionTiers.PRO)).toBe(true);
@@ -442,7 +441,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Safe Output Token Calculation', () => {
+  describe('safe Output Token Calculation', () => {
     it('respects tier max output tokens', () => {
       const modelContext = 128000;
       const estimatedInput = 1000;
@@ -486,7 +485,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Weighted Credit Calculations', () => {
+  describe('weighted Credit Calculations', () => {
     const mockModelLookup = (id: string) => {
       if (id === 'budget-model') {
         return {
@@ -541,7 +540,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Plan Configuration', () => {
+  describe('plan Configuration', () => {
     it('getPlanConfig returns paid plan configuration', () => {
       const config = getPlanConfig('paid');
 
@@ -559,7 +558,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Quota Edge Cases', () => {
+  describe('quota Edge Cases', () => {
     it('handles zero quotas', () => {
       const freeCustomRoles = TIER_QUOTAS[SubscriptionTiers.FREE].customRolesPerMonth;
       expect(freeCustomRoles).toBe(0);
@@ -582,7 +581,7 @@ describe('Product Logic - Quota and Tier Configuration', () => {
     });
   });
 
-  describe('Configuration Consistency', () => {
+  describe('configuration Consistency', () => {
     it('tier names match enum values', () => {
       const freeName = getTierName(SubscriptionTiers.FREE);
       const proName = getTierName(SubscriptionTiers.PRO);

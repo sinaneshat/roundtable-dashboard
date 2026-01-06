@@ -9,7 +9,6 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getProductService,
   getProductsService,
@@ -23,7 +22,21 @@ import {
 export function useProductsQuery() {
   return useQuery({
     queryKey: queryKeys.products.list(),
-    queryFn: () => getProductsService(),
+    queryFn: async () => {
+      const response = await getProductsService();
+
+      if (response.success && response.data) {
+        return {
+          ...response,
+          data: {
+            products: response.data.items,
+            count: response.data.count,
+          },
+        };
+      }
+
+      return response;
+    },
     staleTime: Infinity, // Static catalog - never stale, matches server prefetch
     gcTime: Infinity,
     refetchOnMount: false,
@@ -41,8 +54,8 @@ export function useProductsQuery() {
 export function useProductQuery(productId: string) {
   return useQuery({
     queryKey: queryKeys.products.detail(productId),
-    queryFn: () => getProductService({ param: { id: productId } }),
-    staleTime: STALE_TIMES.products, // 1 hour
+    queryFn: async () => getProductService({ param: { id: productId } }),
+    staleTime: 3600 * 1000, // 1 hour
     enabled: !!productId, // Only fetch when productId is available
     retry: false,
     throwOnError: false,

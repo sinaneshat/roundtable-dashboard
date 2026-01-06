@@ -25,7 +25,6 @@ import {
   createCanceledSubscription,
   createMockPrice,
   createMockSubscription,
-  createSubscriptionListResponse,
 } from '@/lib/testing';
 import type { GetSubscriptionsResponse } from '@/services/api';
 import * as apiServices from '@/services/api';
@@ -39,8 +38,8 @@ import {
 // Test Setup
 // ============================================================================
 
-const createTestQueryClient = () =>
-  new QueryClient({
+function createTestQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
         retry: false,
@@ -51,16 +50,17 @@ const createTestQueryClient = () =>
       },
     },
   });
+}
 
 type WrapperProps = {
   children: ReactNode;
 };
 
-const createWrapper = (queryClient: QueryClient) => {
+function createWrapper(queryClient: QueryClient) {
   return function Wrapper({ children }: WrapperProps) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };
-};
+}
 
 // ============================================================================
 // useSwitchSubscriptionMutation Tests
@@ -74,7 +74,7 @@ describe('useSwitchSubscriptionMutation', () => {
     vi.clearAllMocks();
   });
 
-  describe('Successful Subscription Switch', () => {
+  describe('successful Subscription Switch', () => {
     it('should switch subscription and update cache', async () => {
       const oldSubscription = createActiveSubscription({
         id: 'sub_old',
@@ -281,7 +281,7 @@ describe('useSwitchSubscriptionMutation', () => {
     });
   });
 
-  describe('Error Handling', () => {
+  describe('error Handling', () => {
     it('should handle API errors', async () => {
       const mockErrorResponse = {
         success: false as const,
@@ -366,7 +366,7 @@ describe('useSwitchSubscriptionMutation', () => {
     });
   });
 
-  describe('Cache Update Logic', () => {
+  describe('cache Update Logic', () => {
     it('should update subscription in list cache', async () => {
       const subscription1 = createActiveSubscription({ id: 'sub_1', priceId: 'price_old_1' });
       const subscription2 = createActiveSubscription({ id: 'sub_2', priceId: 'price_old_2' });
@@ -467,7 +467,7 @@ describe('useCancelSubscriptionMutation', () => {
     vi.clearAllMocks();
   });
 
-  describe('Successful Subscription Cancellation', () => {
+  describe('successful Subscription Cancellation', () => {
     it('should cancel subscription at period end (default)', async () => {
       const canceledSubscription = createCanceledSubscription({
         id: 'sub_cancel',
@@ -639,7 +639,7 @@ describe('useCancelSubscriptionMutation', () => {
     });
   });
 
-  describe('Error Handling', () => {
+  describe('error Handling', () => {
     it('should handle cancellation errors', async () => {
       const mockErrorResponse = {
         success: false as const,
@@ -724,7 +724,7 @@ describe('useCancelSubscriptionMutation', () => {
     });
   });
 
-  describe('Grace Period Handling', () => {
+  describe('grace Period Handling', () => {
     it('should handle cancellation during grace period', async () => {
       const now = new Date();
       const gracePeriodSubscription = createMockSubscription({

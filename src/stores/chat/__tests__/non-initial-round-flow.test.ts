@@ -13,13 +13,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MessageRoles, ScreenModes } from '@/api/core/enums';
+import { ScreenModes } from '@/api/core/enums';
 import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
 
-describe('Non-Initial Round Flow', () => {
+describe('non-Initial Round Flow', () => {
   let store: ChatStoreApi;
 
   beforeEach(() => {
@@ -97,7 +97,7 @@ describe('Non-Initial Round Flow', () => {
     store.getState().setHasPendingConfigChanges(false);
   }
 
-  describe('Changelog Blocking for Config Changes', () => {
+  describe('changelog Blocking for Config Changes', () => {
     it('should set configChangeRoundNumber BEFORE other state when config changes', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
 
@@ -150,7 +150,7 @@ describe('Non-Initial Round Flow', () => {
     });
   });
 
-  describe('Pre-Search + Changelog Blocking Interaction', () => {
+  describe('pre-Search + Changelog Blocking Interaction', () => {
     it('should block streaming when both pre-search pending AND changelog waiting', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setEnableWebSearch(true);
@@ -215,7 +215,7 @@ describe('Non-Initial Round Flow', () => {
     });
   });
 
-  describe('Participant Config Changes Between Rounds', () => {
+  describe('participant Config Changes Between Rounds', () => {
     it('should trigger changelog when participants change', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setParticipants([
@@ -283,7 +283,7 @@ describe('Non-Initial Round Flow', () => {
     });
   });
 
-  describe('Mode Changes Between Rounds', () => {
+  describe('mode Changes Between Rounds', () => {
     it('should trigger changelog when mode changes', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setThread({
@@ -321,7 +321,7 @@ describe('Non-Initial Round Flow', () => {
     });
   });
 
-  describe('Web Search Toggle Between Rounds', () => {
+  describe('web Search Toggle Between Rounds', () => {
     it('should trigger changelog when web search enabled mid-conversation', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setThread({
@@ -397,7 +397,7 @@ describe('Non-Initial Round Flow', () => {
     });
   });
 
-  describe('No Config Changes Between Rounds', () => {
+  describe('no Config Changes Between Rounds', () => {
     it('should NOT trigger changelog when no config changes', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setThread({
@@ -431,7 +431,7 @@ describe('Non-Initial Round Flow', () => {
     });
   });
 
-  describe('Error Recovery - PATCH Failure', () => {
+  describe('error Recovery - PATCH Failure', () => {
     it('should clear all changelog flags on PATCH failure', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
 
@@ -455,7 +455,7 @@ describe('Non-Initial Round Flow', () => {
     });
   });
 
-  describe('Multi-Round Flow Simulation', () => {
+  describe('multi-Round Flow Simulation', () => {
     it('should handle Round 0 → Round 1 (no changes) → Round 2 (with changes)', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
 

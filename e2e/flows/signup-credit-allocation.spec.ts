@@ -121,7 +121,7 @@ async function signInTestUser(
 /**
  * Get user credit balance via API
  */
-async function getUserCreditBalance(page: any) {
+async function getUserCreditBalance(page: Parameters<typeof test>[1]['page']) {
   const response = await page.request.get('/api/v1/credits/balance');
   expect(response.ok()).toBe(true);
   const data = await response.json();
@@ -139,17 +139,26 @@ async function getUserCreditBalance(page: any) {
   };
 }
 
+type CreditTransaction = {
+  id: string;
+  type: string;
+  action: string;
+  amount: number;
+  balanceAfter: number;
+  createdAt: string;
+};
+
 /**
  * Get credit transaction history
  */
-async function getCreditTransactions(page: any, limit: number = 50) {
+async function getCreditTransactions(page: Parameters<typeof test>[1]['page'], limit: number = 50) {
   const response = await page.request.get(`/api/v1/credits/transactions?limit=${limit}`);
   expect(response.ok()).toBe(true);
   const data = await response.json();
 
   return {
     success: data.success,
-    items: data.data.items,
+    items: data.data.items as CreditTransaction[],
   };
 }
 
@@ -199,11 +208,11 @@ test.describe('Signup → Credit Allocation Flow', () => {
     const transactions = await getCreditTransactions(page, 10);
     expect(transactions.success).toBe(true);
 
-    const signupTransaction = transactions.items.find((tx: any) => tx.action === 'signup_bonus');
+    const signupTransaction = transactions.items.find(tx => tx.action === 'signup_bonus');
     expect(signupTransaction).toBeDefined();
-    expect(signupTransaction.type).toBe('credit_grant');
-    expect(signupTransaction.amount).toBe(5000);
-    expect(signupTransaction.balanceAfter).toBe(5000);
+    expect(signupTransaction?.type).toBe('credit_grant');
+    expect(signupTransaction?.amount).toBe(5000);
+    expect(signupTransaction?.balanceAfter).toBe(5000);
   });
 
   test('signup credit allocation is idempotent (no duplicate credits on re-login)', async ({ page, baseURL }) => {
@@ -247,7 +256,7 @@ test.describe('Signup → Credit Allocation Flow', () => {
 
     // Verify only one signup transaction exists
     const transactions = await getCreditTransactions(page, 50);
-    const signupTransactions = transactions.items.filter((tx: any) => tx.action === 'signup_bonus');
+    const signupTransactions = transactions.items.filter(tx => tx.action === 'signup_bonus');
     expect(signupTransactions.length).toBe(1);
   });
 
@@ -469,14 +478,14 @@ test.describe('Signup Method Credit Allocation Consistency', () => {
     expect(creditBalance.data.balance).toBe(5000);
 
     const transactions = await getCreditTransactions(page);
-    const signupBonus = transactions.items.find((tx: any) => tx.action === 'signup_bonus');
+    const signupBonus = transactions.items.find(tx => tx.action === 'signup_bonus');
     expect(signupBonus).toBeDefined();
-    expect(signupBonus.amount).toBe(5000);
+    expect(signupBonus?.amount).toBe(5000);
   });
 
   // Note: OAuth signup credit allocation test would require actual OAuth flow
   // which needs real Google credentials. This is documented for manual testing.
-  test.skip('OAuth signup allocates same 5000 credits as email/password', async ({ page, baseURL }) => {
+  test.skip('OAuth signup allocates same 5000 credits as email/password', async ({ page: _page, baseURL: _baseURL }) => {
     // Manual test: Sign up via Google OAuth and verify:
     // 1. Credit balance is 5000
     // 2. Transaction history shows signup_bonus of 5000
@@ -648,11 +657,11 @@ test.describe('First Usage with Signup Credits', () => {
     const initialTx = await getCreditTransactions(page);
     expect(initialTx.items.length).toBeGreaterThan(0);
 
-    const signupTx = initialTx.items.find((tx: any) => tx.action === 'signup_bonus');
+    const signupTx = initialTx.items.find(tx => tx.action === 'signup_bonus');
     expect(signupTx).toBeDefined();
-    expect(signupTx.type).toBe('credit_grant');
-    expect(signupTx.amount).toBe(5000);
-    expect(signupTx.balanceAfter).toBe(5000);
+    expect(signupTx?.type).toBe('credit_grant');
+    expect(signupTx?.amount).toBe(5000);
+    expect(signupTx?.balanceAfter).toBe(5000);
 
     // Send a message to create more transactions
     await ensureModelsSelected(page);
@@ -668,10 +677,10 @@ test.describe('First Usage with Signup Credits', () => {
     expect(finalTx.items.length).toBeGreaterThan(initialTx.items.length);
 
     // Should have thread creation deduction
-    const threadCreationTx = finalTx.items.find((tx: any) => tx.action === 'thread_creation');
+    const threadCreationTx = finalTx.items.find(tx => tx.action === 'thread_creation');
     expect(threadCreationTx).toBeDefined();
-    expect(threadCreationTx.type).toBe('deduction');
-    expect(threadCreationTx.amount).toBeLessThan(0); // Negative for deduction
+    expect(threadCreationTx?.type).toBe('deduction');
+    expect(threadCreationTx?.amount).toBeLessThan(0); // Negative for deduction
 
     // All transactions should have valid structure
     for (const tx of finalTx.items) {
@@ -717,7 +726,7 @@ test.describe('Signup Credit Allocation Edge Cases', () => {
 
     // Verify only one signup transaction
     const transactions = await getCreditTransactions(page);
-    const signupTxs = transactions.items.filter((tx: any) => tx.action === 'signup_bonus');
+    const signupTxs = transactions.items.filter(tx => tx.action === 'signup_bonus');
     expect(signupTxs.length).toBe(1);
   });
 
@@ -798,10 +807,10 @@ test.describe('Credit Display Accuracy in UI', () => {
     if (hasDisplay) {
       const displayText = await creditDisplay.textContent();
       // Extract numeric value from display
-      const displayedNumber = displayText?.match(/\d{1,3}(,\d{3})*|\d+/)?.[0].replace(/,/g, '');
+      const displayedNumber = displayText?.match(/\d{1,3}(?:,\d{3})*/)?.[0].replace(/,/g, '');
 
       if (displayedNumber) {
-        expect(parseInt(displayedNumber, 10)).toBe(apiBalance);
+        expect(Number.parseInt(displayedNumber, 10)).toBe(apiBalance);
       }
     }
   });

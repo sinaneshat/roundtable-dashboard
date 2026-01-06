@@ -18,11 +18,7 @@ import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MessageStatuses, ScreenModes } from '@/api/core/enums';
-import {
-  createMockParticipant,
-  createMockStoredPreSearch,
-  createMockThread,
-} from '@/lib/testing/chat-test-factories';
+import { createMockParticipant, createMockStoredPreSearch, createMockThread } from '@/lib/testing';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 

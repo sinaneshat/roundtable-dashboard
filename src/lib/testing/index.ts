@@ -26,11 +26,6 @@ export {
 export * from './billing-test-factories';
 
 // ============================================================================
-// Subscription Test Mocks
-// ============================================================================
-export * from './subscription-mocks';
-
-// ============================================================================
 // Chat Store Testing Utilities
 // ============================================================================
 export { createStoreWrapper, createTestChatStore, getStoreState, resetStoreToDefaults } from './chat-store-helpers';
@@ -41,6 +36,10 @@ export { createStoreWrapper, createTestChatStore, getStoreState, resetStoreToDef
 export * from './chat-test-factories';
 export * from './helpers';
 export { render, renderHook } from './render';
+// ============================================================================
+// Subscription Test Mocks
+// ============================================================================
+export * from './subscription-mocks';
 export { testLocale, testTimeZone } from './test-messages';
 export * from './test-providers';
 // ============================================================================
@@ -48,3 +47,8 @@ export * from './test-providers';
 // ============================================================================
 export { act, screen, waitFor, within } from '@testing-library/react';
 export { default as userEvent } from '@testing-library/user-event';
+
+// ============================================================================
+// Typed Test Mocks (type-safe mock factories)
+// ============================================================================
+export * from './typed-test-mocks';

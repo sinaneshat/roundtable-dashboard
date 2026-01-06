@@ -25,7 +25,7 @@
  * @module api/services/resumable-stream-kv
  */
 
-import { ParticipantStreamStatuses, StreamStatuses } from '@/api/core/enums';
+import { type ParticipantStreamStatus, ParticipantStreamStatuses, StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
 import type { StreamState, ThreadActiveStream } from '@/api/types/streaming';
@@ -92,7 +92,7 @@ export async function setThreadActiveStream(
     // If same round, update participant status; if different round, create new
     const existing = await getThreadActiveStream(threadId, env);
 
-    let participantStatuses: Record<number, 'active' | 'completed' | 'failed'> = {};
+    let participantStatuses: Record<number, ParticipantStreamStatus> = {};
 
     if (existing && existing.roundNumber === roundNumber) {
       // Same round - preserve existing participant statuses

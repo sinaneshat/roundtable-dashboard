@@ -11,22 +11,21 @@
  * - src/stores/chat/actions/form-actions.ts
  */
 
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { StoreApi } from 'zustand';
 
-import { MessageRoles, MessageStatuses, RoundPhases, ScreenModes, TextPartStates } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses, ScreenModes, TextPartStates } from '@/api/core/enums';
 import type { ChatStore } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 
-import type { StoreApi } from 'zustand';
-
-describe('Non-Initial Round Changelog Blocking', () => {
+describe('non-Initial Round Changelog Blocking', () => {
   let store: StoreApi<ChatStore>;
 
   beforeEach(() => {
     store = createChatStore();
   });
 
-  describe('CRITICAL: Incomplete round resumption should check changelog flags', () => {
+  describe('cRITICAL: Incomplete round resumption should check changelog flags', () => {
     it('should NOT trigger resumption when configChangeRoundNumber is set', () => {
       // Setup: Round 2 with config change in progress
       const state = store.getState();
@@ -148,7 +147,7 @@ describe('Non-Initial Round Changelog Blocking', () => {
     });
   });
 
-  describe('Config change flow ordering', () => {
+  describe('config change flow ordering', () => {
     it('should set configChangeRoundNumber BEFORE addPreSearch', () => {
       // This tests the ordering in handleUpdateThreadAndSend
       // Line 321-323: setConfigChangeRoundNumber
@@ -225,7 +224,7 @@ describe('Non-Initial Round Changelog Blocking', () => {
     });
   });
 
-  describe('Race condition scenarios', () => {
+  describe('race condition scenarios', () => {
     it('should handle page refresh mid-config-change', () => {
       // Scenario:
       // 1. User changes config
@@ -283,7 +282,7 @@ describe('Non-Initial Round Changelog Blocking', () => {
     });
   });
 
-  describe('Streaming trigger consistency', () => {
+  describe('streaming trigger consistency', () => {
     it('use-streaming-trigger should bypass changelog for initial thread', () => {
       // Bug: use-streaming-trigger.ts blocks changelog even for initial thread
       // But use-pending-message.ts correctly bypasses it
@@ -324,14 +323,14 @@ describe('Non-Initial Round Changelog Blocking', () => {
   });
 });
 
-describe('Expected Participant IDs Tracking', () => {
+describe('expected Participant IDs Tracking', () => {
   let store: StoreApi<ChatStore>;
 
   beforeEach(() => {
     store = createChatStore();
   });
 
-  describe('CRITICAL: Enabled vs All participants mismatch', () => {
+  describe('cRITICAL: Enabled vs All participants mismatch', () => {
     it('should use getEnabledParticipantModelIds consistently', () => {
       // Bug: form-actions.ts uses getParticipantModelIds (ALL)
       // But use-pending-message.ts validates with getEnabledParticipantModelIds (ENABLED only)
@@ -388,7 +387,7 @@ describe('Expected Participant IDs Tracking', () => {
     });
   });
 
-  describe('CRITICAL: nextParticipantToTrigger not updated after PATCH', () => {
+  describe('cRITICAL: nextParticipantToTrigger not updated after PATCH', () => {
     it('should update participantId after PATCH response', () => {
       // Bug: form-actions.ts:341 sets nextParticipantToTrigger with CURRENT participant
       // But line 383 updates participants from PATCH but NOT nextParticipantToTrigger
@@ -433,7 +432,7 @@ describe('Expected Participant IDs Tracking', () => {
 
       const currentState = store.getState();
       const targetParticipant = currentState.participants.find(
-        p => p.id === currentState.nextParticipantToTrigger?.participantId
+        p => p.id === currentState.nextParticipantToTrigger?.participantId,
       );
 
       // Participant doesn't exist - trigger should be blocked
@@ -442,14 +441,14 @@ describe('Expected Participant IDs Tracking', () => {
   });
 });
 
-describe('Message Deduplication Edge Cases', () => {
+describe('message Deduplication Edge Cases', () => {
   let store: StoreApi<ChatStore>;
 
   beforeEach(() => {
     store = createChatStore();
   });
 
-  describe('User message deduplication in store', () => {
+  describe('user message deduplication in store', () => {
     it('should deduplicate user messages by roundNumber', () => {
       // Bug: Store only deduplicates assistant messages, not user messages
       const state = store.getState();
@@ -482,7 +481,7 @@ describe('Message Deduplication Edge Cases', () => {
 
       const finalState = store.getState();
       const round1UserMessages = finalState.messages.filter(
-        m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1
+        m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1,
       );
 
       // Bug: Store has BOTH messages
@@ -494,7 +493,7 @@ describe('Message Deduplication Edge Cases', () => {
     });
   });
 
-  describe('Assistant message deduplication timing', () => {
+  describe('assistant message deduplication timing', () => {
     it('should deduplicate during streaming, not only after', () => {
       // Bug: deduplicateMessages only called in completeStreaming
       const state = store.getState();
@@ -521,7 +520,7 @@ describe('Message Deduplication Edge Cases', () => {
 
       const midStreamState = store.getState();
       const round1P0Messages = midStreamState.messages.filter(
-        m => m.metadata?.roundNumber === 1 && m.metadata?.participantIndex === 0
+        m => m.metadata?.roundNumber === 1 && m.metadata?.participantIndex === 0,
       );
 
       // Bug: Both messages exist during streaming
@@ -532,7 +531,7 @@ describe('Message Deduplication Edge Cases', () => {
 
       const finalState = store.getState();
       const finalRound1P0Messages = finalState.messages.filter(
-        m => m.metadata?.roundNumber === 1 && m.metadata?.participantIndex === 0
+        m => m.metadata?.roundNumber === 1 && m.metadata?.participantIndex === 0,
       );
 
       // After explicit deduplication, only 1 should remain
@@ -541,7 +540,7 @@ describe('Message Deduplication Edge Cases', () => {
     });
   });
 
-  describe('Round ordering preservation', () => {
+  describe('round ordering preservation', () => {
     it('should maintain round order when replacing optimistic messages', () => {
       const state = store.getState();
 
@@ -578,7 +577,7 @@ describe('Message Deduplication Edge Cases', () => {
       const updatedMessages = messages.map(m =>
         m.id === 'optimistic-user-1'
           ? { ...m, id: 'thread_r1_user', metadata: { ...m.metadata, isOptimistic: undefined } }
-          : m
+          : m,
       );
       state.setMessages(updatedMessages);
 
@@ -590,21 +589,21 @@ describe('Message Deduplication Edge Cases', () => {
 
       // Round 2 user message should be after round 1 messages
       const round2UserIdx = finalState.messages.findIndex(
-        m => m.metadata?.roundNumber === 2 && m.role === MessageRoles.USER
+        m => m.metadata?.roundNumber === 2 && m.role === MessageRoles.USER,
       );
       expect(round2UserIdx).toBeGreaterThan(0);
     });
   });
 });
 
-describe('Round Resumption Edge Cases', () => {
+describe('round Resumption Edge Cases', () => {
   let store: StoreApi<ChatStore>;
 
   beforeEach(() => {
     store = createChatStore();
   });
 
-  describe('Participant config change detection', () => {
+  describe('participant config change detection', () => {
     it('should detect when participant ADDED mid-round', () => {
       // Bug: participantsChangedSinceRound only checks if responded models
       // are NOT in current enabled. Doesn't detect ADDED participants.
@@ -656,7 +655,7 @@ describe('Round Resumption Edge Cases', () => {
     });
   });
 
-  describe('Retry timeout for slow networks', () => {
+  describe('retry timeout for slow networks', () => {
     it('should use longer timeout for retry detection', () => {
       // Bug: 100ms timeout in incomplete-round-resumption.ts:1000-1016
       // is too short for slow networks
@@ -681,7 +680,7 @@ describe('Round Resumption Edge Cases', () => {
     });
   });
 
-  describe('Multiple incomplete rounds', () => {
+  describe('multiple incomplete rounds', () => {
     it('should handle multiple incomplete rounds', () => {
       // Bug: No handling for >1 incomplete round
 

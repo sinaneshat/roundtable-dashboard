@@ -233,9 +233,6 @@ export default function ChatThreadScreen({
     return allParticipantsComplete && !moderatorExists;
   }, [messages, participants]);
 
-  // ✅ BUG FIX: Add waitingToStartStreaming to prevent duplicate submissions
-  // Previously, users could submit again during the brief window between
-  // form submission and stream start, causing duplicate user messages
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || isAwaitingModerator || waitingToStartStreaming;
 
   const handlePromptSubmit = useCallback(

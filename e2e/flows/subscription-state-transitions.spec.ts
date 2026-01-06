@@ -16,6 +16,23 @@ import { expect, test } from '../fixtures';
  * Tests the complete subscription lifecycle and its impact on user capabilities.
  */
 
+type Subscription = {
+  id: string;
+  status: string;
+  cancelAtPeriodEnd: boolean;
+  priceId: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  trialStart?: string;
+  trialEnd?: string;
+};
+
+type Product = {
+  id: string;
+  name: string;
+  prices: Array<{ id: string; unitAmount: number }>;
+};
+
 /**
  * Helper: Get subscriptions via API
  */
@@ -105,8 +122,8 @@ test.describe('Plan Upgrade (Free → Paid)', () => {
     const productsData = await getProducts(page);
     expect(productsData.success).toBe(true);
 
-    const products = productsData.data?.items || [];
-    const proPlan = products.find((p: any) => p.id.includes('pro') || p.name.toLowerCase().includes('pro'));
+    const products = (productsData.data?.items || []) as Product[];
+    const proPlan = products.find(p => p.id.includes('pro') || p.name.toLowerCase().includes('pro'));
 
     if (!proPlan || !proPlan.prices || proPlan.prices.length === 0) {
       test.skip();
@@ -197,9 +214,9 @@ test.describe('Plan Upgrade (Free → Paid)', () => {
 test.describe('Plan Downgrade (Paid → Free)', () => {
   test('downgrade maintains access until period end', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const subscriptions = subsData.data?.items || [];
+    const subscriptions = (subsData.data?.items || []) as Subscription[];
     const activeSubscription = subscriptions.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -235,8 +252,8 @@ test.describe('Plan Downgrade (Paid → Free)', () => {
 
       // Cancel subscription
       const subsData = await getUserSubscriptions(page);
-      const activeSubscription = subsData.data?.items?.find(
-        (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+      const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+        sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
       );
 
       if (activeSubscription) {
@@ -251,8 +268,8 @@ test.describe('Plan Downgrade (Paid → Free)', () => {
 
   test('downgrade stops monthly refills', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const canceledSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.cancelAtPeriodEnd === true,
+    const canceledSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.cancelAtPeriodEnd === true,
     );
 
     if (canceledSubscription) {
@@ -283,8 +300,8 @@ test.describe('Plan Downgrade (Paid → Free)', () => {
 test.describe('Subscription Cancellation Flow', () => {
   test('cancel at period end retains pro access', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -311,8 +328,8 @@ test.describe('Subscription Cancellation Flow', () => {
 
   test('immediate cancellation removes pro access', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -342,8 +359,8 @@ test.describe('Subscription Cancellation Flow', () => {
 
   test('cancel already canceled subscription fails', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const canceledSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'canceled',
+    const canceledSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'canceled',
     );
 
     if (!canceledSubscription) {
@@ -370,8 +387,8 @@ test.describe('Subscription Cancellation Flow', () => {
     if (hasButton) {
       // UI should provide cancellation options
       const subsData = await getUserSubscriptions(page);
-      const hasActiveSubscription = subsData.data?.items?.some(
-        (sub: any) => sub.status === 'active',
+      const hasActiveSubscription = (subsData.data?.items as Subscription[] | undefined)?.some(
+        sub => sub.status === 'active',
       );
 
       expect(hasActiveSubscription).toBeDefined();
@@ -382,8 +399,8 @@ test.describe('Subscription Cancellation Flow', () => {
 test.describe('Subscription Plan Switching', () => {
   test('switch between pricing tiers (upgrade)', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -393,15 +410,15 @@ test.describe('Subscription Plan Switching', () => {
 
     // Get available products to find a higher tier
     const productsData = await getProducts(page);
-    const products = productsData.data?.items || [];
-    const allPrices = products.flatMap((p: any) => p.prices || []);
+    const products = (productsData.data?.items || []) as Product[];
+    const allPrices = products.flatMap(p => p.prices || []);
 
     const currentPriceId = activeSubscription.priceId;
-    const currentPrice = allPrices.find((p: any) => p.id === currentPriceId);
+    const currentPrice = allPrices.find(p => p.id === currentPriceId);
     const currentAmount = currentPrice?.unitAmount || 0;
 
     // Find a higher-priced plan (upgrade)
-    const higherPrice = allPrices.find((p: any) => (p.unitAmount || 0) > currentAmount);
+    const higherPrice = allPrices.find(p => (p.unitAmount || 0) > currentAmount);
 
     if (!higherPrice) {
       test.skip();
@@ -425,8 +442,8 @@ test.describe('Subscription Plan Switching', () => {
 
   test('switch between pricing tiers (downgrade)', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -436,15 +453,15 @@ test.describe('Subscription Plan Switching', () => {
 
     // Get available products to find a lower tier
     const productsData = await getProducts(page);
-    const products = productsData.data?.items || [];
-    const allPrices = products.flatMap((p: any) => p.prices || []);
+    const products = (productsData.data?.items || []) as Product[];
+    const allPrices = products.flatMap(p => p.prices || []);
 
     const currentPriceId = activeSubscription.priceId;
-    const currentPrice = allPrices.find((p: any) => p.id === currentPriceId);
+    const currentPrice = allPrices.find(p => p.id === currentPriceId);
     const currentAmount = currentPrice?.unitAmount || 0;
 
     // Find a lower-priced plan (downgrade)
-    const lowerPrice = allPrices.find((p: any) => (p.unitAmount || 0) < currentAmount && (p.unitAmount || 0) > 0);
+    const lowerPrice = allPrices.find(p => (p.unitAmount || 0) < currentAmount && (p.unitAmount || 0) > 0);
 
     if (!lowerPrice) {
       test.skip();
@@ -464,8 +481,8 @@ test.describe('Subscription Plan Switching', () => {
 
   test('prevent switching to same price', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -488,8 +505,8 @@ test.describe('Subscription Plan Switching', () => {
 
   test('switch updates subscription proration behavior', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active',
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active',
     );
 
     if (!activeSubscription) {
@@ -499,11 +516,11 @@ test.describe('Subscription Plan Switching', () => {
 
     // Get products
     const productsData = await getProducts(page);
-    const products = productsData.data?.items || [];
-    const allPrices = products.flatMap((p: any) => p.prices || []);
+    const products = (productsData.data?.items || []) as Product[];
+    const allPrices = products.flatMap(p => p.prices || []);
 
     const currentPriceId = activeSubscription.priceId;
-    const differentPrice = allPrices.find((p: any) => p.id !== currentPriceId);
+    const differentPrice = allPrices.find(p => p.id !== currentPriceId);
 
     if (!differentPrice) {
       test.skip();
@@ -526,8 +543,8 @@ test.describe('Subscription Plan Switching', () => {
 test.describe('Trial Period Behavior', () => {
   test('trial subscription shows correct status', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const trialingSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'trialing',
+    const trialingSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'trialing',
     );
 
     if (!trialingSubscription) {
@@ -547,8 +564,8 @@ test.describe('Trial Period Behavior', () => {
 
   test('trial period grants pro tier access', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const trialingSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'trialing',
+    const trialingSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'trialing',
     );
 
     if (!trialingSubscription) {
@@ -569,8 +586,8 @@ test.describe('Trial Period Behavior', () => {
     // Verifying that status transitions from 'trialing' to 'active' after trial_end
 
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active' && sub.trialEnd,
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active' && sub.trialEnd,
     );
 
     if (!activeSubscription) {
@@ -589,8 +606,8 @@ test.describe('Trial Period Behavior', () => {
 test.describe('Failed Payment Handling', () => {
   test('past_due subscription shows in UI', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const pastDueSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'past_due',
+    const pastDueSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'past_due',
     );
 
     if (!pastDueSubscription) {
@@ -616,8 +633,8 @@ test.describe('Failed Payment Handling', () => {
 
   test('incomplete subscription requires payment', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const incompleteSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'incomplete' || sub.status === 'incomplete_expired',
+    const incompleteSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'incomplete' || sub.status === 'incomplete_expired',
     );
 
     if (!incompleteSubscription) {
@@ -634,8 +651,8 @@ test.describe('Failed Payment Handling', () => {
 
   test('update payment method for failed subscription', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const pastDueSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'past_due',
+    const pastDueSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'past_due',
     );
 
     if (!pastDueSubscription) {
@@ -662,8 +679,8 @@ test.describe('Failed Payment Handling', () => {
 test.describe('Subscription Renewal and Credit Refill', () => {
   test('credit refill date aligns with subscription period', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active' && !sub.cancelAtPeriodEnd,
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -700,8 +717,8 @@ test.describe('Subscription Renewal and Credit Refill', () => {
 
   test('subscription renewal maintains pro access', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active',
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active',
     );
 
     if (!activeSubscription) {
@@ -748,8 +765,8 @@ test.describe('Subscription Renewal and Credit Refill', () => {
 test.describe('Subscription State Consistency', () => {
   test('subscription tier matches credit plan type', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active' || sub.status === 'trialing',
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active' || sub.status === 'trialing',
     );
 
     const balance = await getUserCreditBalance(page);
@@ -768,8 +785,8 @@ test.describe('Subscription State Consistency', () => {
 
   test('canceled at period end maintains tier until expiry', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const canceledButActive = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active' && sub.cancelAtPeriodEnd === true,
+    const canceledButActive = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active' && sub.cancelAtPeriodEnd === true,
     );
 
     if (!canceledButActive) {
@@ -795,8 +812,8 @@ test.describe('Subscription State Consistency', () => {
     const balance = await getUserCreditBalance(page);
 
     if (subsData.success && balance.success) {
-      const hasActiveSubscription = subsData.data?.items?.some(
-        (sub: any) => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+      const hasActiveSubscription = (subsData.data?.items as Subscription[] | undefined)?.some(
+        sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
       );
 
       if (hasActiveSubscription) {
@@ -834,8 +851,8 @@ test.describe('Subscription State Consistency', () => {
 test.describe('Edge Cases and Error Handling', () => {
   test('prevent duplicate active subscriptions', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
     );
 
     if (!activeSubscription) {
@@ -845,7 +862,7 @@ test.describe('Edge Cases and Error Handling', () => {
 
     // Try to create another checkout session
     const productsData = await getProducts(page);
-    const products = productsData.data?.items || [];
+    const products = (productsData.data?.items || []) as Product[];
     const priceId = products[0]?.prices?.[0]?.id;
 
     if (!priceId) {
@@ -876,8 +893,8 @@ test.describe('Edge Cases and Error Handling', () => {
 
   test('handle invalid price when switching plans', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const activeSubscription = subsData.data?.items?.find(
-      (sub: any) => sub.status === 'active',
+    const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      sub => sub.status === 'active',
     );
 
     if (!activeSubscription) {

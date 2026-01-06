@@ -184,7 +184,7 @@ test.describe('Pricing Checkout Flow - Stripe Redirect Behavior', () => {
     }
   });
 
-  test('clicking Subscribe redirects to Stripe checkout', async ({ authenticatedPage: page, context }) => {
+  test('clicking Subscribe redirects to Stripe checkout', async ({ authenticatedPage: page, context: _context }) => {
     const subscribeButton = page.getByRole('button', { name: /subscribe|get started/i }).first();
     const isVisible = await subscribeButton.isVisible({ timeout: 15000 }).catch(() => false);
 
@@ -630,11 +630,8 @@ test.describe('Pricing Checkout Flow - Browser Navigation Handling', () => {
   });
 
   test('navigating away cancels pending checkout request', async ({ authenticatedPage: page }) => {
-    let checkoutCompleted = false;
-
     await page.route('**/api/v1/billing/checkout', async (route) => {
       await page.waitForTimeout(5000);
-      checkoutCompleted = true;
       await route.continue();
     });
 

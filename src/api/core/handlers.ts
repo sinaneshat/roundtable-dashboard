@@ -7,7 +7,7 @@ import type { z } from 'zod';
 
 import { executeBatch, validateBatchSize } from '@/api/common/batch-operations';
 import { AppError } from '@/api/common/error-handling';
-import type { ErrorCode } from '@/api/core/enums';
+import { type ErrorCode, ErrorCodes } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import { auth } from '@/lib/auth/server';
@@ -36,58 +36,58 @@ export type AuthenticatedContext = {
 function appErrorToResponse(c: Context, error: AppError): Response {
   switch (error.code) {
     // Authentication & Authorization (401, 403)
-    case 'UNAUTHENTICATED':
-    case 'TOKEN_EXPIRED':
-    case 'TOKEN_INVALID':
+    case ErrorCodes.UNAUTHENTICATED:
+    case ErrorCodes.TOKEN_EXPIRED:
+    case ErrorCodes.TOKEN_INVALID:
       return Responses.authenticationError(c, error.message);
-    case 'UNAUTHORIZED':
-    case 'INSUFFICIENT_PERMISSIONS':
+    case ErrorCodes.UNAUTHORIZED:
+    case ErrorCodes.INSUFFICIENT_PERMISSIONS:
       return Responses.authorizationError(c, error.message);
 
     // Validation & Input (400)
-    case 'VALIDATION_ERROR':
-    case 'INVALID_INPUT':
-    case 'MISSING_REQUIRED_FIELD':
-    case 'INVALID_FORMAT':
-    case 'INVALID_ENUM_VALUE':
-    case 'BUSINESS_RULE_VIOLATION':
+    case ErrorCodes.VALIDATION_ERROR:
+    case ErrorCodes.INVALID_INPUT:
+    case ErrorCodes.MISSING_REQUIRED_FIELD:
+    case ErrorCodes.INVALID_FORMAT:
+    case ErrorCodes.INVALID_ENUM_VALUE:
+    case ErrorCodes.BUSINESS_RULE_VIOLATION:
       return Responses.badRequest(c, error.message, error.details);
 
     // Resource Management (404, 409, 410)
-    case 'RESOURCE_NOT_FOUND':
+    case ErrorCodes.RESOURCE_NOT_FOUND:
       return Responses.notFound(c, 'Resource');
-    case 'RESOURCE_CONFLICT':
-    case 'RESOURCE_ALREADY_EXISTS':
-    case 'RESOURCE_LOCKED':
+    case ErrorCodes.RESOURCE_CONFLICT:
+    case ErrorCodes.RESOURCE_ALREADY_EXISTS:
+    case ErrorCodes.RESOURCE_LOCKED:
       return Responses.conflict(c, error.message);
-    case 'RESOURCE_EXPIRED':
+    case ErrorCodes.RESOURCE_EXPIRED:
       return Responses.badRequest(c, error.message, error.details);
 
     // External Services (502)
-    case 'EXTERNAL_SERVICE_ERROR':
-    case 'EMAIL_SERVICE_ERROR':
-    case 'STORAGE_SERVICE_ERROR':
-    case 'NETWORK_ERROR':
-    case 'TIMEOUT_ERROR':
+    case ErrorCodes.EXTERNAL_SERVICE_ERROR:
+    case ErrorCodes.EMAIL_SERVICE_ERROR:
+    case ErrorCodes.STORAGE_SERVICE_ERROR:
+    case ErrorCodes.NETWORK_ERROR:
+    case ErrorCodes.TIMEOUT_ERROR:
       return Responses.externalServiceError(c, 'External Service', error.message);
 
     // Rate Limiting (429)
-    case 'RATE_LIMIT_EXCEEDED':
+    case ErrorCodes.RATE_LIMIT_EXCEEDED:
       return Responses.rateLimitExceeded(c, 0, 0);
 
     // Service Availability (503)
-    case 'SERVICE_UNAVAILABLE':
-    case 'MAINTENANCE_MODE':
+    case ErrorCodes.SERVICE_UNAVAILABLE:
+    case ErrorCodes.MAINTENANCE_MODE:
       return Responses.serviceUnavailable(c, error.message);
 
     // Database (500)
-    case 'DATABASE_ERROR':
-    case 'BATCH_FAILED':
-    case 'BATCH_SIZE_EXCEEDED':
+    case ErrorCodes.DATABASE_ERROR:
+    case ErrorCodes.BATCH_FAILED:
+    case ErrorCodes.BATCH_SIZE_EXCEEDED:
       return Responses.databaseError(c, 'batch', error.message);
 
     // System (500) - default fallback
-    case 'INTERNAL_SERVER_ERROR':
+    case ErrorCodes.INTERNAL_SERVER_ERROR:
     default:
       return Responses.internalServerError(c, error.message);
   }

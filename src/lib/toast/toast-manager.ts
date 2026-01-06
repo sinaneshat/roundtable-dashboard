@@ -1,4 +1,3 @@
-import type { ReactElement } from 'react';
 import React from 'react';
 
 import type { BaseToastVariant, ToastPosition, ToastVariant } from '@/api/core/enums';
@@ -8,14 +7,18 @@ import { ToastAction } from '@/components/ui/toast';
 import { toast as baseToast } from '@/hooks/utils';
 
 function createToastActionElement(label: string, onClick: () => void): ToastActionElement {
-  return React.createElement(
+  // ToastActionElement is the return type of React.createElement(ToastAction, ...)
+  // This is type-safe as ToastAction props match the expected shape
+  const element = React.createElement(
     ToastAction,
     {
       altText: label,
       onClick,
     },
     label,
-  ) as unknown as ReactElement<typeof ToastAction>;
+  );
+  // The element conforms to ToastActionElement which is ReactElement<typeof ToastAction>
+  return element as ToastActionElement;
 }
 
 // Global toast tracking and management

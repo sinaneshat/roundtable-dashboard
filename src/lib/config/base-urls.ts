@@ -74,24 +74,21 @@ export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
   },
 };
 
-/** Valid environment values for validation */
-const VALID_ENVS = [...WEBAPP_ENV_VALUES] as string[];
-
 /**
  * Get NEXT_PUBLIC_WEBAPP_ENV from Cloudflare context (sync, for Hono middleware)
  * Use this in Hono handlers where you have access to the context
  */
 export function getWebappEnvFromContext(c: Context<ApiEnv>): WebappEnv {
   // 1. Try Cloudflare runtime context (c.env)
-  const cfEnv = c.env?.NEXT_PUBLIC_WEBAPP_ENV as string | undefined;
-  if (cfEnv && VALID_ENVS.includes(cfEnv)) {
-    return cfEnv as WebappEnv;
+  const cfEnv = c.env?.NEXT_PUBLIC_WEBAPP_ENV;
+  if (typeof cfEnv === 'string' && isWebappEnv(cfEnv)) {
+    return cfEnv;
   }
 
   // 2. Fall back to process.env (for local dev without wrangler)
   const processEnv = process.env.NEXT_PUBLIC_WEBAPP_ENV;
-  if (processEnv && VALID_ENVS.includes(processEnv)) {
-    return processEnv as WebappEnv;
+  if (processEnv && isWebappEnv(processEnv)) {
+    return processEnv;
   }
 
   // 3. Fall back to NODE_ENV detection
@@ -145,9 +142,12 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
     try {
       const openNext = await import('@opennextjs/cloudflare');
       const { env } = openNext.getCloudflareContext();
-      const cfEnv = (env as unknown as Record<string, unknown>)?.NEXT_PUBLIC_WEBAPP_ENV as string | undefined;
-      if (cfEnv && VALID_ENVS.includes(cfEnv)) {
-        return cfEnv as WebappEnv;
+      // Type-safe extraction from Cloudflare context
+      if (env && typeof env === 'object' && 'NEXT_PUBLIC_WEBAPP_ENV' in env) {
+        const cfEnv = (env as { NEXT_PUBLIC_WEBAPP_ENV?: unknown }).NEXT_PUBLIC_WEBAPP_ENV;
+        if (typeof cfEnv === 'string' && isWebappEnv(cfEnv)) {
+          return cfEnv;
+        }
       }
     } catch {
       // getCloudflareContext not available
@@ -156,8 +156,8 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
 
   // 2. Check process.env (works in Next.js dev and build)
   const processEnv = process.env.NEXT_PUBLIC_WEBAPP_ENV;
-  if (processEnv && VALID_ENVS.includes(processEnv)) {
-    return processEnv as WebappEnv;
+  if (processEnv && isWebappEnv(processEnv)) {
+    return processEnv;
   }
 
   // 3. Server-side: use NODE_ENV
@@ -193,8 +193,8 @@ export function getWebappEnv(): WebappEnv {
   // 1. Check process.env (works in Next.js dev and build)
   // Note: In Cloudflare Workers, NEXT_PUBLIC_* vars are inlined at build time
   const processEnv = process.env.NEXT_PUBLIC_WEBAPP_ENV;
-  if (processEnv && VALID_ENVS.includes(processEnv)) {
-    return processEnv as WebappEnv;
+  if (processEnv && isWebappEnv(processEnv)) {
+    return processEnv;
   }
 
   // 2. Server-side: use NODE_ENV

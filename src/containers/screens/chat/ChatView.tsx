@@ -85,9 +85,6 @@ export function ChatView({
     attachmentClickRef.current?.();
   }, []);
 
-  // ✅ ZUSTAND v5 BEST PRACTICE: Batch all store subscriptions with useShallow
-  // Prevents cascading re-renders from 18 individual subscriptions
-  // Each individual useChatStore() creates a separate subscription that can trigger re-renders
   const {
     messages,
     isStreaming,
@@ -140,26 +137,18 @@ export function ChatView({
     })),
   );
 
-  // ✅ RACE CONDITION FIX: Get store API to read streaming state directly
-  // This bypasses React's batching to get the latest value immediately
-  // Used by virtualizer to prevent scroll jumps during moderator streaming transitions
   const storeApi = useChatStoreApi();
   const getIsStreamingFromStore = useCallback(() => {
     const state = storeApi.getState();
     return state.isStreaming || state.isModeratorStreaming;
   }, [storeApi]);
 
-  // ✅ SSR HYDRATION FIX: Use server-provided threadId first for query cache key matching.
-  // Server prefetches with thread.id, so we MUST use the same ID on first render.
-  // Store's thread?.id isn't available until after useEffect runs (store initialization).
   const effectiveThreadId = serverThreadId || thread?.id || createdThreadId || '';
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
 
-  // ✅ PERF FIX: Only fetch changelog in THREAD mode
-  // Overview screen doesn't need changelog for newly created threads
   const { data: changelogResponse } = useThreadChangelogQuery(
     effectiveThreadId,
     mode === ScreenModes.THREAD && Boolean(effectiveThreadId),
@@ -263,7 +252,6 @@ export function ChatView({
     preSearches,
   });
 
-  // ✅ ZUSTAND v5: Batch feedback selectors with useShallow
   const { feedbackByRound, pendingFeedback } = useChatStore(
     useShallow(s => ({
       feedbackByRound: s.feedbackByRound,
@@ -271,8 +259,6 @@ export function ChatView({
     })),
   );
 
-  // ✅ RENDER OPTIMIZATION: Memoize filtered feedback map to prevent new Map() on every render
-  // ThreadTimeline receives this as a prop - without memoization, creates new reference every render
   const filteredFeedbackByRound = useMemo(() => {
     const filtered = new Map<number, FeedbackType>();
     feedbackByRound.forEach((value, key) => {
@@ -361,8 +347,6 @@ export function ChatView({
     || moderatorResumption?.status === MessageStatuses.PENDING
   );
 
-  // ✅ FIX: Add streamingRoundNumber check to prevent submit during entire round
-  // This covers gaps between phases (e.g., after participants complete but before moderator starts)
   const isRoundInProgress = streamingRoundNumber !== null;
 
   const isInputBlocked = isStreaming
@@ -435,7 +419,6 @@ export function ChatView({
 
     let updatedParticipants;
     if (orderedModel.participant) {
-      // ✅ TYPE-SAFE: Capture participant in local const for type narrowing in filter callback
       const participantToRemove = orderedModel.participant;
       const filtered = selectedParticipants.filter(p => p.id !== participantToRemove.id);
       const sortedByVisualOrder = filtered.sort((a, b) => {

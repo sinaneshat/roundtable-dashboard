@@ -80,14 +80,24 @@ export function PricingContent({
   };
 
   const monthlyProducts = products
-    .filter(product => product.prices && product.prices.length > 0)
+    .filter((product) => {
+      if (!product.prices || product.prices.length === 0) {
+        return false;
+      }
+      return product.prices.some((price: Price) => {
+        return price.interval === 'month'
+          && price.unitAmount !== null
+          && price.unitAmount !== undefined;
+      });
+    })
     .map((product) => {
       const filteredPrices = product.prices!.filter((price: Price) => {
-        return price.interval === UIBillingIntervals.MONTH && price.unitAmount !== null && price.unitAmount !== undefined;
+        return price.interval === 'month'
+          && price.unitAmount !== null
+          && price.unitAmount !== undefined;
       });
       return { ...product, prices: filteredPrices };
-    })
-    .filter(product => product.prices.length > 0);
+    });
 
   if (isLoading) {
     return <PricingContentSkeleton />;

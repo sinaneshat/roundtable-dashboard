@@ -32,7 +32,7 @@ vi.mock('@/db', async (importOriginal) => {
   };
 });
 
-describe('Multi-Participant Round Completion - Credit Calculation', () => {
+describe('multi-Participant Round Completion - Credit Calculation', () => {
   let mockDb: {
     select: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
@@ -633,7 +633,7 @@ describe('Multi-Participant Round Completion - Credit Calculation', () => {
     });
   });
 
-  describe('Incomplete Round Handling', () => {
+  describe('incomplete Round Handling', () => {
     it('incomplete round with 1 of 3 participants does not zero credits', async () => {
       mockDb.query.chatThread.findFirst.mockResolvedValue({
         id: 'thread-inc',
@@ -779,7 +779,7 @@ describe('Multi-Participant Round Completion - Credit Calculation', () => {
     });
   });
 
-  describe('Free User Single-Round Limit', () => {
+  describe('free User Single-Round Limit', () => {
     it('free user can only complete round 0', async () => {
       mockDb.query.chatThread.findFirst.mockResolvedValue({
         id: 'thread-limit',
@@ -893,7 +893,7 @@ describe('Multi-Participant Round Completion - Credit Calculation', () => {
     });
   });
 
-  describe('Credit Zeroing Implementation', () => {
+  describe('credit Zeroing Implementation', () => {
     it('zeroOutFreeUserCredits sets balance and reserved to 0', async () => {
       const userCreditBalance = {
         id: 'balance-zero',
@@ -1003,7 +1003,7 @@ describe('Multi-Participant Round Completion - Credit Calculation', () => {
     });
   });
 
-  describe('Edge Cases and Error Scenarios', () => {
+  describe('edge Cases and Error Scenarios', () => {
     it('handles null participantId in messages (user messages)', async () => {
       mockDb.query.chatThread.findFirst.mockResolvedValue({
         id: 'thread-null',

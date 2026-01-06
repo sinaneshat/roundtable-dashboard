@@ -14,7 +14,7 @@
  * - Downgrade to free preserves remaining credits but stops monthly refills
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { PlanTypes, SubscriptionTiers } from '@/api/core/enums';
 import { TIER_CONFIG } from '@/api/services/product-logic.service';
@@ -184,7 +184,8 @@ function isFreeUser(userId: string): boolean {
 
 function checkThreadQuota(userId: string): boolean {
   const usage = mockState.userChatUsages.get(userId);
-  if (!usage) return false;
+  if (!usage)
+    return false;
 
   const limit = TIER_CONFIG[usage.subscriptionTier].quotas.threadsPerMonth;
   return usage.threadsCreated < limit;
@@ -192,7 +193,8 @@ function checkThreadQuota(userId: string): boolean {
 
 function checkMessageQuota(userId: string): boolean {
   const usage = mockState.userChatUsages.get(userId);
-  if (!usage) return false;
+  if (!usage)
+    return false;
 
   const limit = TIER_CONFIG[usage.subscriptionTier].quotas.messagesPerMonth;
   return usage.messagesCreated < limit;
@@ -200,7 +202,8 @@ function checkMessageQuota(userId: string): boolean {
 
 function checkCustomRoleQuota(userId: string): boolean {
   const usage = mockState.userChatUsages.get(userId);
-  if (!usage) return false;
+  if (!usage)
+    return false;
 
   const limit = TIER_CONFIG[usage.subscriptionTier].quotas.customRolesPerMonth;
   return usage.customRolesCreated < limit;
@@ -208,7 +211,8 @@ function checkCustomRoleQuota(userId: string): boolean {
 
 function checkAnalysisQuota(userId: string): boolean {
   const usage = mockState.userChatUsages.get(userId);
-  if (!usage) return false;
+  if (!usage)
+    return false;
 
   const limit = TIER_CONFIG[usage.subscriptionTier].quotas.analysisPerMonth;
   return usage.analysisGenerated < limit;
@@ -217,12 +221,14 @@ function checkAnalysisQuota(userId: string): boolean {
 function canAccessModel(userId: string, modelId: string): boolean {
   const usage = mockState.userChatUsages.get(userId);
   const model = mockState.models.get(modelId);
-  if (!usage || !model) return false;
+  if (!usage || !model)
+    return false;
 
   const tier = usage.subscriptionTier;
   const maxPricing = TIER_CONFIG[tier].maxModelPricing;
 
-  if (maxPricing === null) return true;
+  if (maxPricing === null)
+    return true;
 
   const inputPricePerMillion = Number.parseFloat(model.pricing.prompt) * 1_000_000;
   return inputPricePerMillion <= maxPricing;
@@ -230,21 +236,24 @@ function canAccessModel(userId: string, modelId: string): boolean {
 
 function getMaxOutputTokens(userId: string): number {
   const usage = mockState.userChatUsages.get(userId);
-  if (!usage) return 512;
+  if (!usage)
+    return 512;
 
   return TIER_CONFIG[usage.subscriptionTier].maxOutputTokens;
 }
 
 function canUpgradeToProFromCredits(userId: string): boolean {
   const balance = mockState.userCreditBalances.get(userId);
-  if (!balance) return false;
+  if (!balance)
+    return false;
 
   return balance.planType === PlanTypes.FREE && balance.balance >= 0;
 }
 
 function hasPendingDowngrade(userId: string): boolean {
   const usage = mockState.userChatUsages.get(userId);
-  if (!usage) return false;
+  if (!usage)
+    return false;
 
   return usage.pendingTierChange === SubscriptionTiers.FREE;
 }
@@ -253,7 +262,7 @@ function hasPendingDowngrade(userId: string): boolean {
 // TEST SUITES
 // ============================================================================
 
-describe('Free Tier Identification', () => {
+describe('free Tier Identification', () => {
   it('should identify free tier user by subscription tier', () => {
     const userId = 'free_user_1';
     createFreeUser(userId);
@@ -305,8 +314,8 @@ describe('Free Tier Identification', () => {
   });
 });
 
-describe('Free Tier Permissions', () => {
-  describe('Thread Creation', () => {
+describe('free Tier Permissions', () => {
+  describe('thread Creation', () => {
     it('should allow first thread creation for free user', () => {
       const userId = 'free_user_1';
       createFreeUser(userId);
@@ -332,7 +341,7 @@ describe('Free Tier Permissions', () => {
     });
   });
 
-  describe('Message Creation', () => {
+  describe('message Creation', () => {
     it('should allow messages within quota for free user', () => {
       const userId = 'free_user_3';
       createFreeUser(userId, { messagesCreated: 50 });
@@ -356,7 +365,7 @@ describe('Free Tier Permissions', () => {
     });
   });
 
-  describe('Custom Role Creation', () => {
+  describe('custom Role Creation', () => {
     it('should block custom role creation for free user', () => {
       const userId = 'free_user_5';
       createFreeUser(userId);
@@ -383,7 +392,7 @@ describe('Free Tier Permissions', () => {
     });
   });
 
-  describe('Analysis Generation', () => {
+  describe('analysis Generation', () => {
     it('should allow limited analysis for free user', () => {
       const userId = 'free_user_6';
       createFreeUser(userId, { analysisGenerated: 5 });
@@ -408,8 +417,8 @@ describe('Free Tier Permissions', () => {
   });
 });
 
-describe('Feature Access Control', () => {
-  describe('Model Access', () => {
+describe('feature Access Control', () => {
+  describe('model Access', () => {
     it('should allow access to free models for free users', () => {
       const userId = 'free_user_1';
       createFreeUser(userId);
@@ -448,7 +457,7 @@ describe('Feature Access Control', () => {
     });
   });
 
-  describe('Output Token Limits', () => {
+  describe('output Token Limits', () => {
     it('should limit output tokens to 512 for free users', () => {
       const userId = 'free_user_4';
       createFreeUser(userId);
@@ -472,7 +481,7 @@ describe('Feature Access Control', () => {
     });
   });
 
-  describe('Max Models Limit', () => {
+  describe('max Models Limit', () => {
     it('should limit models to 3 for free tier', () => {
       const config = TIER_CONFIG[SubscriptionTiers.FREE];
       expect(config.maxModels).toBe(3);
@@ -485,8 +494,8 @@ describe('Feature Access Control', () => {
   });
 });
 
-describe('Upgrade Eligibility Checks', () => {
-  describe('Credit-Based Eligibility', () => {
+describe('upgrade Eligibility Checks', () => {
+  describe('credit-Based Eligibility', () => {
     it('should be eligible for upgrade with remaining credits', () => {
       const userId = 'free_user_1';
       createFreeUser(userId, { balance: 3000 });
@@ -510,7 +519,7 @@ describe('Upgrade Eligibility Checks', () => {
     });
   });
 
-  describe('Quota-Based Eligibility', () => {
+  describe('quota-Based Eligibility', () => {
     it('should be eligible to upgrade when thread quota hit', () => {
       const userId = 'free_user_3';
       createFreeUser(userId, { threadsCreated: 1 });
@@ -536,7 +545,7 @@ describe('Upgrade Eligibility Checks', () => {
     });
   });
 
-  describe('Model Access Eligibility', () => {
+  describe('model Access Eligibility', () => {
     it('should be eligible to upgrade when premium model needed', () => {
       const userId = 'free_user_6';
       createFreeUser(userId);
@@ -548,8 +557,8 @@ describe('Upgrade Eligibility Checks', () => {
   });
 });
 
-describe('Tier Transition Logic', () => {
-  describe('Free to Pro Upgrade', () => {
+describe('tier Transition Logic', () => {
+  describe('free to Pro Upgrade', () => {
     it('should transition from free to pro correctly', () => {
       const userId = 'upgrade_user_1';
       createFreeUser(userId, { balance: 2000 });
@@ -630,7 +639,7 @@ describe('Tier Transition Logic', () => {
     });
   });
 
-  describe('Pro to Free Downgrade', () => {
+  describe('pro to Free Downgrade', () => {
     it('should schedule downgrade for period end', () => {
       const userId = 'downgrade_user_1';
       createProUser(userId);
@@ -688,7 +697,7 @@ describe('Tier Transition Logic', () => {
     });
   });
 
-  describe('Grace Period Handling', () => {
+  describe('grace Period Handling', () => {
     it('should maintain pro tier during grace period', () => {
       const userId = 'grace_user_1';
       createProUser(userId);
@@ -726,7 +735,7 @@ describe('Tier Transition Logic', () => {
     });
   });
 
-  describe('Period Reset Handling', () => {
+  describe('period Reset Handling', () => {
     it('should reset quotas on period rollover', () => {
       const userId = 'reset_user_1';
       createFreeUser(userId, {
@@ -761,7 +770,7 @@ describe('Tier Transition Logic', () => {
   });
 });
 
-describe('Tier Configuration Consistency', () => {
+describe('tier Configuration Consistency', () => {
   it('should have consistent tier values in config', () => {
     const freeConfig = TIER_CONFIG.free;
     const proConfig = TIER_CONFIG.pro;
@@ -802,7 +811,7 @@ describe('Tier Configuration Consistency', () => {
   });
 });
 
-describe('Edge Cases and Boundary Conditions', () => {
+describe('edge Cases and Boundary Conditions', () => {
   it('should handle user with exactly quota limit', () => {
     const userId = 'edge_user_1';
     createFreeUser(userId, { messagesCreated: 99 });

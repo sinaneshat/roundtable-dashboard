@@ -404,15 +404,11 @@ export async function syncStripeDataFromStripe(
 
   // Prepare invoice upsert operations
   const invoiceUpserts = invoices.data.map((invoice) => {
-    // ✅ TYPE GUARD: Extract subscription ID (can be string or Stripe.Subscription object or null)
-    // Access subscription from invoice properties (may not be in core type, but exists at runtime)
-    const subscription = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null }).subscription;
-    const subscriptionId = subscription
-      ? typeof subscription === 'string'
-        ? subscription
-        : isObject(subscription) && 'id' in subscription
-          ? String(subscription.id)
-          : null
+    // Extract subscription ID (Stripe.Invoice.subscription is string | Stripe.Subscription)
+    const subscriptionId = invoice.subscription
+      ? typeof invoice.subscription === 'string'
+        ? invoice.subscription
+        : invoice.subscription.id
       : null;
 
     const isPaid = invoice.status === InvoiceStatuses.PAID;

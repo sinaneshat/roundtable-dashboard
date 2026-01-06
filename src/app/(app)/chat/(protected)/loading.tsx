@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { LogoGlow } from '@/components/ui/logo-glow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
-import { cn } from '@/lib/ui/cn';
+import { cn } from '@/lib/ui';
 
 export default function ChatOverviewLoading() {
   return (

@@ -225,7 +225,7 @@ import {
 } from './routes/system/route';
 // Test routes (development/test only)
 import {
-  setUserCredits,
+  setUserCreditsHandler,
 } from './routes/test/handler';
 import {
   setUserCreditsRoute,
@@ -638,7 +638,7 @@ const appRoutes = app
   // ============================================================================
   // Test Routes - Development/test only utilities (protected)
   // ============================================================================
-  .openapi(setUserCreditsRoute, setUserCredits) // Set user credits (test only)
+  .openapi(setUserCreditsRoute, setUserCreditsHandler) // Set user credits (test only)
 
   // ============================================================================
   // Models Routes - Simplified OpenRouter models endpoint (public)

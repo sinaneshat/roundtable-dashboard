@@ -34,8 +34,8 @@ import { useSubscriptionQuery, useSubscriptionsQuery } from '../subscriptions';
 // Test Setup
 // ============================================================================
 
-const createTestQueryClient = () =>
-  new QueryClient({
+function createTestQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
         retry: false,
@@ -43,23 +43,24 @@ const createTestQueryClient = () =>
       },
     },
   });
+}
 
 type WrapperProps = {
   children: ReactNode;
 };
 
-const createWrapper = (queryClient: QueryClient) => {
+function createWrapper(queryClient: QueryClient) {
   return function Wrapper({ children }: WrapperProps) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };
-};
+}
 
 // Mock auth check hook - default to authenticated
 vi.mock('@/hooks/utils', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/hooks/utils')>();
   return {
     ...actual,
-    useAuthCheck: vi.fn(() => ({ isAuthenticated: true })),
+    useAuthCheck: vi.fn(() => ({ isAuthenticated: true, isPending: false, userId: 'test-user-id' })),
   };
 });
 
@@ -72,10 +73,6 @@ describe('useSubscriptionsQuery', () => {
 
   beforeEach(() => {
     queryClient = createTestQueryClient();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   it('should fetch and return multiple subscriptions', async () => {
@@ -156,10 +153,6 @@ describe('useSubscriptionQuery', () => {
 
   beforeEach(() => {
     queryClient = createTestQueryClient();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   it('should fetch and return specific subscription by ID', async () => {

@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 
 import {
@@ -37,7 +38,7 @@ test.describe('Multi-Participant Round Completion - Credit Exhaustion Logic', ()
   /**
    * Helper: Get current credit balance via API
    */
-  async function getCreditBalance(page: any): Promise<number> {
+  async function getCreditBalance(page: Page): Promise<number> {
     const response = await page.request.get('/api/v1/billing/balance');
     expect(response.ok()).toBe(true);
     const data = await response.json();
@@ -47,7 +48,7 @@ test.describe('Multi-Participant Round Completion - Credit Exhaustion Logic', ()
   /**
    * Helper: Check if round is marked complete via API
    */
-  async function checkRoundComplete(page: any, userId: string): Promise<boolean> {
+  async function checkRoundComplete(page: Page, _userId: string): Promise<boolean> {
     // Query the checkFreeUserHasCompletedRound state indirectly via balance check
     // If balance is 0 and plan is FREE, round must be complete
     const response = await page.request.get('/api/v1/billing/balance');
@@ -61,8 +62,8 @@ test.describe('Multi-Participant Round Completion - Credit Exhaustion Logic', ()
   /**
    * Helper: Submit message and wait for participant response
    */
-  async function submitAndWaitForParticipant(
-    page: any,
+  async function _submitAndWaitForParticipant(
+    page: Page,
     message: string,
     participantIndex: number,
     timeout = 120000,
@@ -90,7 +91,7 @@ test.describe('Multi-Participant Round Completion - Credit Exhaustion Logic', ()
   /**
    * Helper: Configure participants via UI before starting conversation
    */
-  async function configureParticipants(page: any, count: number): Promise<void> {
+  async function configureParticipants(page: Page, count: number): Promise<void> {
     // Click Models button to open participant selector
     const modelsButton = page.getByRole('button', { name: /^models/i }).first();
     await expect(modelsButton).toBeEnabled({ timeout: 15000 });
@@ -255,7 +256,6 @@ test.describe('Multi-Participant Round Completion - Credit Exhaustion Logic', ()
       await page.waitForTimeout(2000);
       const creditsAfterP0 = await getCreditBalance(page);
       expect(creditsAfterP0).toBeGreaterThan(0);
-      console.log(`✅ Credits after P0: ${creditsAfterP0} (should be > 0)`);
 
       // Wait for participant 1 response
       await page
@@ -266,7 +266,6 @@ test.describe('Multi-Participant Round Completion - Credit Exhaustion Logic', ()
       await page.waitForTimeout(2000);
       const creditsAfterP1 = await getCreditBalance(page);
       expect(creditsAfterP1).toBeGreaterThan(0);
-      console.log(`✅ Credits after P1: ${creditsAfterP1} (should be > 0)`);
 
       // Wait for participant 2 response (the LAST one)
       await page
@@ -280,7 +279,6 @@ test.describe('Multi-Participant Round Completion - Credit Exhaustion Logic', ()
       await page.waitForTimeout(2000);
       const creditsAfterP2 = await getCreditBalance(page);
       expect(creditsAfterP2).toBe(0);
-      console.log(`✅ Credits after P2: ${creditsAfterP2} (should be 0)`);
 
       // Verify round is marked complete
       const roundComplete = await checkRoundComplete(page, 'free_user_id');
@@ -388,9 +386,6 @@ test.describe('Multi-Participant Round Completion - Credit Exhaustion Logic', ()
       await page.waitForTimeout(2000);
       creditsHistory.push(await getCreditBalance(page));
       expect(creditsHistory[3]).toBe(0); // NOW credits should be zeroed
-
-      console.log('Credits history:', creditsHistory);
-      console.log('✅ Credits maintained through P0, P1, P2, then zeroed at P3');
     });
   });
 

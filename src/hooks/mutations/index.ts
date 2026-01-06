@@ -22,7 +22,6 @@ export {
 export {
   useCreateCheckoutSessionMutation,
   useSyncAfterCheckoutMutation,
-  useSyncCreditsAfterCheckoutMutation,
 } from './checkout';
 export {
   useCreateCustomerPortalSessionMutation,

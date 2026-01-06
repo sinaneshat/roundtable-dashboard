@@ -18,7 +18,7 @@
 
 import { and, eq, inArray } from 'drizzle-orm';
 
-import type { ProjectIndexStatus } from '@/api/core/enums';
+import { type ProjectIndexStatus, ProjectIndexStatuses } from '@/api/core/enums';
 import type { TypedLogger } from '@/api/types/logger';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -107,7 +107,7 @@ export async function markAttachmentsPending(
   await db
     .update(tables.projectAttachment)
     .set({
-      indexStatus: 'pending',
+      indexStatus: ProjectIndexStatuses.PENDING,
       updatedAt: new Date(),
     })
     .where(inArray(tables.projectAttachment.id, attachmentIds));
@@ -152,7 +152,7 @@ export async function getProjectIndexStatus(
     if (status in counts) {
       counts[status]++;
     }
-    if (att.indexStatus === 'indexed' && att.updatedAt) {
+    if (att.indexStatus === ProjectIndexStatuses.INDEXED && att.updatedAt) {
       if (!lastIndexedAt || att.updatedAt > lastIndexedAt) {
         lastIndexedAt = att.updatedAt;
       }
@@ -333,7 +333,7 @@ export async function syncIndexingStatus(
   const pendingAttachments = await db.query.projectAttachment.findMany({
     where: and(
       eq(tables.projectAttachment.projectId, projectId),
-      inArray(tables.projectAttachment.indexStatus, ['pending', 'indexing']),
+      inArray(tables.projectAttachment.indexStatus, [ProjectIndexStatuses.PENDING, ProjectIndexStatuses.INDEXING]),
     ),
     with: {
       upload: {
@@ -380,7 +380,7 @@ export async function syncIndexingStatus(
       if (found) {
         await updateIndexStatus({
           projectAttachmentId: att.id,
-          status: 'indexed',
+          status: ProjectIndexStatuses.INDEXED,
           db,
           logger,
         });

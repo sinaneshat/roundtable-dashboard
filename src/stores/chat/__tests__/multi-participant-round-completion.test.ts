@@ -9,15 +9,15 @@
  * 4. onComplete callback must fire only once per round
  */
 
+import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MessageRoles, ScreenModes } from '@/api/core/enums';
-import type { UIMessage } from 'ai';
+import { MessageRoles } from '@/api/core/enums';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
 
-describe('Multi-Participant Round Completion', () => {
+describe('multi-Participant Round Completion', () => {
   let store: ChatStoreApi;
 
   beforeEach(() => {
@@ -56,7 +56,7 @@ describe('Multi-Participant Round Completion', () => {
     };
   }
 
-  describe('Basic Multi-Participant Flow', () => {
+  describe('basic Multi-Participant Flow', () => {
     it('should track all participants in round', () => {
       const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
       const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
@@ -118,7 +118,7 @@ describe('Multi-Participant Round Completion', () => {
     });
   });
 
-  describe('Participant Index Validation', () => {
+  describe('participant Index Validation', () => {
     it('should validate participantIndex matches actual participant', () => {
       const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
       const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
@@ -159,7 +159,7 @@ describe('Multi-Participant Round Completion', () => {
     });
   });
 
-  describe('Config Changes Mid-Round', () => {
+  describe('config Changes Mid-Round', () => {
     it('should NOT affect current round when config changes mid-streaming', () => {
       const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
       const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
@@ -233,7 +233,7 @@ describe('Multi-Participant Round Completion', () => {
     });
   });
 
-  describe('Incomplete Round Handling', () => {
+  describe('incomplete Round Handling', () => {
     it('should track incomplete round for resumption', () => {
       const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
       const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
@@ -298,7 +298,7 @@ describe('Multi-Participant Round Completion', () => {
     });
   });
 
-  describe('Animation Tracking', () => {
+  describe('animation Tracking', () => {
     it('should track pending animations per participant', () => {
       // Use registerAnimation (correct API)
       store.getState().registerAnimation(0);
@@ -335,7 +335,7 @@ describe('Multi-Participant Round Completion', () => {
     });
   });
 
-  describe('Round Number Tracking', () => {
+  describe('round Number Tracking', () => {
     it('should increment round number correctly', () => {
       // Round 0
       store.getState().setStreamingRoundNumber(0);
@@ -369,7 +369,7 @@ describe('Multi-Participant Round Completion', () => {
     });
   });
 
-  describe('Moderator in Multi-Participant Round', () => {
+  describe('moderator in Multi-Participant Round', () => {
     it('should track moderator creation per round', () => {
       store.getState().markModeratorCreated(0);
 
@@ -394,7 +394,7 @@ describe('Multi-Participant Round Completion', () => {
     });
   });
 
-  describe('Pre-Search in Multi-Participant Round', () => {
+  describe('pre-Search in Multi-Participant Round', () => {
     it('should track pre-search trigger per round', () => {
       store.getState().markPreSearchTriggered(0);
 

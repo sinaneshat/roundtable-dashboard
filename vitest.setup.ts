@@ -108,7 +108,6 @@ vi.mock('@/lib/auth/client', () => ({
   signIn: vi.fn(),
 }));
 
-
 // Mock next/navigation - required for Next.js 13+ App Router
 vi.mock('next/navigation', () => ({
   useRouter: vi.fn(() => ({

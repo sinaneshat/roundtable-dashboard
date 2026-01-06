@@ -58,8 +58,7 @@ export function isValidErrorCode(code: string): code is ErrorCode {
 function hasStringProperty(obj: object, key: string): boolean {
   if (typeof obj !== 'object' || obj === null)
     return false;
-  const record = obj as Record<string, unknown>;
-  return key in record && typeof record[key] === 'string';
+  return key in obj && typeof (obj as { [K in typeof key]?: unknown })[key] === 'string';
 }
 
 function isNonNullObject(value: unknown): value is Record<string, unknown> {
@@ -74,9 +73,9 @@ function extractErrorDetails(context: unknown): ErrorDetails | undefined {
   const details: NonNullable<ErrorDetails> = {};
 
   if (hasStringProperty(context, 'errorType')) {
-    const contextRecord = context as Record<string, unknown>;
-    if (typeof contextRecord.errorType === 'string') {
-      details.errorType = contextRecord.errorType;
+    // context is already validated as Record<string, unknown> by isNonNullObject
+    if (typeof context.errorType === 'string') {
+      details.errorType = context.errorType;
     }
   }
 

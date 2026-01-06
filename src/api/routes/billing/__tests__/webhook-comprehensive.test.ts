@@ -11,8 +11,8 @@
  * Pattern: Extract customerId → Sync from Stripe API → Update database
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type Stripe from 'stripe';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 
@@ -136,12 +136,12 @@ function createMockInvoice(
   } as unknown as Stripe.Invoice;
 }
 
-describe('Stripe Webhook Event Processing', () => {
+describe('stripe Webhook Event Processing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('Signature Verification', () => {
+  describe('signature Verification', () => {
     it('validates webhook signature is present', () => {
       const mockHeaders = new Headers();
       // Missing stripe-signature header
@@ -175,7 +175,7 @@ describe('Stripe Webhook Event Processing', () => {
     });
   });
 
-  describe('Idempotency - Duplicate Event Handling', () => {
+  describe('idempotency - Duplicate Event Handling', () => {
     it('detects duplicate webhook events by event ID', () => {
       const eventId = 'evt_test_duplicate_123';
       const seenEvents = new Set<string>();
@@ -242,7 +242,7 @@ describe('Stripe Webhook Event Processing', () => {
     });
   });
 
-  describe('Out-of-Order Event Handling', () => {
+  describe('out-of-Order Event Handling', () => {
     it('handles events arriving in wrong chronological order', () => {
       const events = [
         { id: 'evt_1', created: 1000, type: 'customer.subscription.created' },
@@ -604,7 +604,7 @@ describe('Stripe Webhook Event Processing', () => {
     });
   });
 
-  describe('Webhook Processing Pattern (Theo)', () => {
+  describe('webhook Processing Pattern (Theo)', () => {
     it('always returns 200 OK to prevent retry storms', () => {
       // Even on processing errors, return 200 to Stripe
       const expectedStatusCode = 200;
@@ -654,7 +654,7 @@ describe('Stripe Webhook Event Processing', () => {
     });
   });
 
-  describe('Customer State Updates', () => {
+  describe('customer State Updates', () => {
     it('updates subscription tier correctly', () => {
       const subscriptionStates = [
         { status: 'active', tier: 'pro' },
@@ -692,7 +692,7 @@ describe('Stripe Webhook Event Processing', () => {
     });
   });
 
-  describe('Credit Balance Updates', () => {
+  describe('credit Balance Updates', () => {
     it('grants credits for new Pro subscription', () => {
       const subscriptionTier = 'pro';
       const monthlyCredits = 100_000;
@@ -724,7 +724,7 @@ describe('Stripe Webhook Event Processing', () => {
     });
   });
 
-  describe('Error Handling', () => {
+  describe('error Handling', () => {
     it('handles missing customer gracefully', () => {
       const customerId = null;
       const shouldProcess = customerId !== null;
@@ -760,7 +760,7 @@ describe('Stripe Webhook Event Processing', () => {
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('edge Cases', () => {
     it('handles subscription with no items', () => {
       const subscription = {
         id: 'sub_no_items',
@@ -811,7 +811,7 @@ describe('Stripe Webhook Event Processing', () => {
     });
   });
 
-  describe('Database Consistency', () => {
+  describe('database Consistency', () => {
     it('uses atomic operations for multi-table updates', () => {
       const batchOperations = [
         'update_customer',
@@ -846,7 +846,7 @@ describe('Stripe Webhook Event Processing', () => {
     });
   });
 
-  describe('Analytics Tracking', () => {
+  describe('analytics Tracking', () => {
     it('tracks subscription started event', () => {
       const analyticsEvent = {
         name: 'subscription_started',

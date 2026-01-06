@@ -7,8 +7,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SubscriptionTiers } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/core/enums';
+import { SubscriptionTiers } from '@/api/core/enums';
 import { TIER_QUOTAS } from '@/api/services/product-logic.service';
 
 // Mock database for testing
@@ -75,8 +75,8 @@ beforeEach(() => {
   mockHistoryRecords = [];
 });
 
-describe('Quota Calculation and Tracking', () => {
-  describe('TIER_QUOTAS Configuration', () => {
+describe('quota Calculation and Tracking', () => {
+  describe('tIER_QUOTAS Configuration', () => {
     it('defines quotas for all subscription tiers', () => {
       expect(TIER_QUOTAS).toBeDefined();
       expect(TIER_QUOTAS[SubscriptionTiers.FREE]).toBeDefined();
@@ -123,7 +123,7 @@ describe('Quota Calculation and Tracking', () => {
     });
   });
 
-  describe('Usage Calculation Accuracy', () => {
+  describe('usage Calculation Accuracy', () => {
     it('calculates available quota correctly (limit - used)', () => {
       const limit = 100;
       const used = 45;
@@ -167,8 +167,8 @@ describe('Quota Calculation and Tracking', () => {
     });
   });
 
-  describe('Quota Limit Enforcement', () => {
-    describe('Thread Creation Limits', () => {
+  describe('quota Limit Enforcement', () => {
+    describe('thread Creation Limits', () => {
       it('free user blocked at 1 thread', () => {
         const tier = SubscriptionTiers.FREE;
         const threadsCreated = 1;
@@ -207,7 +207,7 @@ describe('Quota Calculation and Tracking', () => {
       });
     });
 
-    describe('Message Limits', () => {
+    describe('message Limits', () => {
       it('free tier has 100 messages per month', () => {
         const freeLimit = TIER_QUOTAS[SubscriptionTiers.FREE].messagesPerMonth;
         expect(freeLimit).toBe(100);
@@ -235,7 +235,7 @@ describe('Quota Calculation and Tracking', () => {
       });
     });
 
-    describe('Custom Role Limits', () => {
+    describe('custom Role Limits', () => {
       it('free tier has no custom roles', () => {
         const freeLimit = TIER_QUOTAS[SubscriptionTiers.FREE].customRolesPerMonth;
         expect(freeLimit).toBe(0);
@@ -265,7 +265,7 @@ describe('Quota Calculation and Tracking', () => {
       });
     });
 
-    describe('Analysis Generation Limits', () => {
+    describe('analysis Generation Limits', () => {
       it('free tier allows 10 analyses per month', () => {
         const freeLimit = TIER_QUOTAS[SubscriptionTiers.FREE].analysisPerMonth;
         expect(freeLimit).toBe(10);
@@ -286,7 +286,7 @@ describe('Quota Calculation and Tracking', () => {
     });
   });
 
-  describe('Usage History Tracking', () => {
+  describe('usage History Tracking', () => {
     it('tracks cumulative usage counters', () => {
       const usageHistory = {
         threadsCreated: 5,
@@ -345,8 +345,8 @@ describe('Quota Calculation and Tracking', () => {
     });
   });
 
-  describe('Billing Period Calculations', () => {
-    describe('Period Start and End Dates', () => {
+  describe('billing Period Calculations', () => {
+    describe('period Start and End Dates', () => {
       it('calculates period start as first day of month', () => {
         const now = new Date('2024-03-15T10:30:00Z');
         const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -393,7 +393,7 @@ describe('Quota Calculation and Tracking', () => {
       });
     });
 
-    describe('Billing Period Rollover Detection', () => {
+    describe('billing Period Rollover Detection', () => {
       it('detects when current period has ended', () => {
         const now = new Date('2024-04-01T00:00:01Z');
         const currentPeriodEnd = new Date('2024-03-31T23:59:59Z');
@@ -427,7 +427,7 @@ describe('Quota Calculation and Tracking', () => {
       });
     });
 
-    describe('Period History Archival', () => {
+    describe('period History Archival', () => {
       it('creates history record with complete usage data', () => {
         const historyRecord = {
           userId: 'user_123',
@@ -477,8 +477,8 @@ describe('Quota Calculation and Tracking', () => {
     });
   });
 
-  describe('Tier-Based Quota Differences', () => {
-    describe('Quota Comparison Utilities', () => {
+  describe('tier-Based Quota Differences', () => {
+    describe('quota Comparison Utilities', () => {
       it('calculates quota ratio between tiers', () => {
         const freeThreads = TIER_QUOTAS[SubscriptionTiers.FREE].threadsPerMonth;
         const proThreads = TIER_QUOTAS[SubscriptionTiers.PRO].threadsPerMonth;
@@ -504,7 +504,7 @@ describe('Quota Calculation and Tracking', () => {
       });
     });
 
-    describe('Upgrade Impact Analysis', () => {
+    describe('upgrade Impact Analysis', () => {
       it('calculates quota increase on upgrade', () => {
         const oldQuota = TIER_QUOTAS[SubscriptionTiers.FREE].threadsPerMonth;
         const newQuota = TIER_QUOTAS[SubscriptionTiers.PRO].threadsPerMonth;
@@ -539,7 +539,7 @@ describe('Quota Calculation and Tracking', () => {
       });
     });
 
-    describe('Downgrade Scenarios', () => {
+    describe('downgrade Scenarios', () => {
       it('schedules downgrade for period end (grace period)', () => {
         const currentTier = SubscriptionTiers.PRO;
         const pendingTier = SubscriptionTiers.FREE;
@@ -576,7 +576,7 @@ describe('Quota Calculation and Tracking', () => {
     });
   });
 
-  describe('Edge Cases and Error Handling', () => {
+  describe('edge Cases and Error Handling', () => {
     it('handles zero quota limits gracefully', () => {
       const limit = 0;
       const used = 0;
@@ -627,7 +627,7 @@ describe('Quota Calculation and Tracking', () => {
     });
   });
 
-  describe('Integration: Complete Usage Lifecycle', () => {
+  describe('integration: Complete Usage Lifecycle', () => {
     it('new user starts with zero usage', () => {
       const newUserUsage = {
         threadsCreated: 0,
@@ -687,7 +687,7 @@ describe('Quota Calculation and Tracking', () => {
     });
   });
 
-  describe('Quota Reset Period Calculation', () => {
+  describe('quota Reset Period Calculation', () => {
     it('monthly reset occurs on first day of month', () => {
       const lastReset = new Date('2024-03-01T00:00:00Z');
       const nextReset = new Date('2024-04-01T00:00:00Z');

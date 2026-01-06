@@ -372,12 +372,15 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
   // ============================================================================
 
   upsertStreamingMessage: (optionsOrMessage) => {
-    // Support both (message) and ({ message, insertOnly }) signatures for backwards compatibility
-    const isOptionsObject = optionsOrMessage && 'message' in optionsOrMessage && typeof (optionsOrMessage as { message?: unknown }).message === 'object';
+    // Accepts UIMessage directly or { message, insertOnly } options object
+    const isOptionsObject = optionsOrMessage !== null
+      && typeof optionsOrMessage === 'object'
+      && 'message' in optionsOrMessage
+      && typeof optionsOrMessage.message === 'object';
     const message: UIMessage = isOptionsObject
-      ? (optionsOrMessage as { message: UIMessage }).message
-      : (optionsOrMessage as UIMessage);
-    const insertOnly = isOptionsObject ? (optionsOrMessage as { insertOnly?: boolean }).insertOnly : undefined;
+      ? optionsOrMessage.message
+      : optionsOrMessage;
+    const insertOnly = isOptionsObject ? optionsOrMessage.insertOnly : undefined;
 
     set((draft) => {
       const existingIdx = draft.messages.findIndex(m => m.id === message.id);
@@ -715,13 +718,10 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     const { participants } = state;
     const nextIndex = participantIndex + 1;
     const hasMoreParticipants = nextIndex < participants.length;
-    const nextParticipant = hasMoreParticipants ? participants[nextIndex] : null;
 
     set({
       streamResumptionState: null,
-      nextParticipantToTrigger: nextParticipant
-        ? { index: nextIndex, participantId: nextParticipant.id }
-        : null,
+      nextParticipantToTrigger: hasMoreParticipants ? nextIndex : null,
       waitingToStartStreaming: hasMoreParticipants,
     }, false, 'streamResumption/handleResumedStreamComplete');
   },
@@ -734,7 +734,7 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     }, false, 'streamResumption/handleStreamResumptionFailure');
   },
 
-  setNextParticipantToTrigger: (value) =>
+  setNextParticipantToTrigger: value =>
     set({ nextParticipantToTrigger: value }, false, 'streamResumption/setNextParticipantToTrigger'),
 
   markResumptionAttempted: (roundNumber, participantIndex) => {
@@ -823,12 +823,16 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
               index: serverNextIndex,
               participantId: participant.id,
             };
+          } else {
+            // Participant not found (likely because prefill happens before initializeThread)
+            // Store the index as a number for now; it will be validated later
+            stateUpdate.nextParticipantToTrigger = serverNextIndex;
           }
-          // If participant not found at index, leave null - config may have changed
         }
-        // If there's a next participant to trigger, set waitingToStartStreaming
-        // This enables the provider effect to trigger the continuation
-        stateUpdate.waitingToStartStreaming = stateUpdate.nextParticipantToTrigger !== undefined;
+        // In PARTICIPANTS phase, we're always waiting to start streaming for resumption
+        // Set waitingToStartStreaming regardless of whether nextParticipantToTrigger is set
+        // (prefill happens before initializeThread, so participants array may be empty)
+        stateUpdate.waitingToStartStreaming = true;
         break;
       }
 

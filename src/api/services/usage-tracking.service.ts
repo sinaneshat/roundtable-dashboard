@@ -571,6 +571,11 @@ export async function syncUserQuotaFromSubscription(
     // Execute atomically with batch (Cloudflare D1) or sequentially (local SQLite)
     // Using reusable batch helper from @/api/common/batch-operations
     await executeBatch(db, [historyArchive, usageUpdate]);
+
+    // Grant credits when upgrading from free (must happen even with period reset)
+    if (isUpgradeFromFree) {
+      await upgradeToPaidPlan(userId);
+    }
     return;
   }
 

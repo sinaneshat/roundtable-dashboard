@@ -241,6 +241,7 @@
       "title": "Payment Successful!",
       "viewPricing": "View Pricing Plans",
       "planLimits": {
+        "credits": "Credits",
         "concurrentModels": "Concurrent Models",
         "monthlyCredits": "Monthly Credits",
         "creditsAvailable": "Credits Available",

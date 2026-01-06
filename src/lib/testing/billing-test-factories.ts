@@ -15,12 +15,15 @@ import type { GetProductResponse, GetProductsResponse } from '@/services/api';
  * Creates a mock price for testing
  */
 export function createMockPrice(overrides?: Partial<Price>): Price {
+  const hasIntervalKey = overrides && 'interval' in overrides;
+  const defaultInterval = hasIntervalKey ? overrides.interval : UIBillingIntervals.MONTH;
+
   return {
     id: overrides?.id ?? 'price_test_123',
     productId: overrides?.productId ?? 'prod_test_123',
     unitAmount: overrides?.unitAmount ?? 999,
     currency: overrides?.currency ?? 'usd',
-    interval: overrides?.interval ?? UIBillingIntervals.MONTH,
+    interval: defaultInterval,
     trialPeriodDays: overrides?.trialPeriodDays ?? null,
     active: overrides?.active ?? true,
   };
@@ -31,6 +34,9 @@ export function createMockPrice(overrides?: Partial<Price>): Price {
  */
 export function createMockProduct(overrides?: Partial<Product>): Product {
   const productId = overrides?.id ?? 'prod_test_123';
+
+  const hasPricesKey = overrides && 'prices' in overrides;
+  const defaultPrices = hasPricesKey ? overrides.prices : [createMockPrice({ productId })];
 
   return {
     id: productId,
@@ -43,9 +49,7 @@ export function createMockProduct(overrides?: Partial<Product>): Product {
       'Priority support',
       'Advanced analytics',
     ],
-    prices: overrides?.prices ?? [
-      createMockPrice({ productId }),
-    ],
+    prices: defaultPrices,
   };
 }
 
@@ -135,7 +139,6 @@ export function createMockProductCatalog(): Product[] {
     createMockEnterpriseProduct(),
   ];
 }
-
 
 // ============================================================================
 // Product API Response Factories

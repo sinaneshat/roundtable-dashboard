@@ -11,6 +11,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 
+import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
@@ -25,10 +26,13 @@ import {
  * Stale time: 2 minutes (subscription data moderately fresh)
  */
 export function useSubscriptionsQuery() {
+  const { isAuthenticated } = useAuthCheck();
+
   return useQuery({
     queryKey: queryKeys.subscriptions.list(),
     queryFn: () => getSubscriptionsService(),
     staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
+    enabled: isAuthenticated,
     retry: false,
   });
 }
@@ -40,11 +44,13 @@ export function useSubscriptionsQuery() {
  * @param subscriptionId - Subscription ID
  */
 export function useSubscriptionQuery(subscriptionId: string) {
+  const { isAuthenticated } = useAuthCheck();
+
   return useQuery({
     queryKey: queryKeys.subscriptions.detail(subscriptionId),
     queryFn: () => getSubscriptionService({ param: { id: subscriptionId } }),
     staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
-    enabled: !!subscriptionId,
+    enabled: isAuthenticated && !!subscriptionId,
     retry: false,
   });
 }

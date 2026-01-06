@@ -22,8 +22,7 @@ import { useModelLookup } from '@/hooks/utils';
 import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
 import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
-import { extractColorFromImage, getCachedImageColor, hasColorCached } from '@/lib/ui';
-import { cn } from '@/lib/ui/cn';
+import { cn, extractColorFromImage, getCachedImageColor, hasColorCached } from '@/lib/ui';
 import { allParticipantsHaveVisibleContent, buildParticipantMessageMaps, getAvatarPropsFromModelId, getEnabledParticipants, getMessageMetadata, getMessageStatus, getModeratorMetadata, getParticipantMessageFromMaps, getRoleBadgeStyle, getRoundNumber, getUserMetadata, isModeratorMessage, isPreSearch as isPreSearchMessage, participantHasVisibleContent } from '@/lib/utils';
 
 const EMPTY_PARTICIPANTS: ChatParticipantWithSettings[] = [];

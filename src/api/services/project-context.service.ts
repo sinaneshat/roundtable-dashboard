@@ -20,7 +20,7 @@
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, PreSearchStatuses } from '@/api/core/enums';
 import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -282,7 +282,7 @@ export async function getProjectSearchContext(
   const preSearches = await db.query.chatPreSearch.findMany({
     where: and(
       inArray(tables.chatPreSearch.threadId, threadIds),
-      eq(tables.chatPreSearch.status, 'complete'),
+      eq(tables.chatPreSearch.status, PreSearchStatuses.COMPLETE),
     ),
     orderBy: [desc(tables.chatPreSearch.createdAt)],
     limit: maxSearchResults,

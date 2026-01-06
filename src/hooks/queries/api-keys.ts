@@ -17,10 +17,6 @@ import {
   listApiKeysService,
 } from '@/services/api';
 
-// ============================================================================
-// Query Hooks
-// ============================================================================
-
 /**
  * Query hook for fetching all API keys
  * Only fetches when explicitly enabled (e.g., when modal is open)

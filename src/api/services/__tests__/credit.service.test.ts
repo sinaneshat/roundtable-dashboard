@@ -11,29 +11,31 @@ let mockDbUpdate: any;
 let mockInsertedRecords: any[];
 let mockTransactionRecords: any[];
 
-const createMockDb = () => ({
-  insert: vi.fn(() => ({
-    values: vi.fn(() => ({
-      onConflictDoNothing: vi.fn(() => ({
-        returning: vi.fn(() => mockDbInsertReturning),
+function createMockDb() {
+  return {
+    insert: vi.fn(() => ({
+      values: vi.fn(() => ({
+        onConflictDoNothing: vi.fn(() => ({
+          returning: vi.fn(() => mockDbInsertReturning),
+        })),
       })),
     })),
-  })),
-  select: vi.fn(() => ({
-    from: vi.fn(() => ({
-      where: vi.fn(() => ({
-        limit: vi.fn(() => mockDbSelect),
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(() => mockDbSelect),
+        })),
       })),
     })),
-  })),
-  update: vi.fn(() => ({
-    set: vi.fn(() => ({
-      where: vi.fn(() => ({
-        returning: vi.fn(() => mockDbUpdate),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(() => ({
+          returning: vi.fn(() => mockDbUpdate),
+        })),
       })),
     })),
-  })),
-});
+  };
+}
 
 vi.mock('@/db', async () => {
   const actual = await vi.importActual('@/db');
@@ -1248,7 +1250,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Credit Reservation and Release Flow', () => {
+  describe('credit Reservation and Release Flow', () => {
     describe('reservation Edge Cases', () => {
       it('handles zero credit reservation gracefully', () => {
         const estimatedCredits = 0;
@@ -1345,7 +1347,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Credit Deduction with Model Tier Multipliers', () => {
+  describe('credit Deduction with Model Tier Multipliers', () => {
     it('calculates credits for budget tier models (1x multiplier)', () => {
       const inputTokens = 1_000;
       const outputTokens = 2_000;
@@ -1426,7 +1428,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Optimistic Locking and Concurrency', () => {
+  describe('optimistic Locking and Concurrency', () => {
     it('version increments on each credit update', () => {
       const initialVersion = 1;
       const updatedVersion = initialVersion + 1;
@@ -1469,7 +1471,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Negative Balance Prevention', () => {
+  describe('negative Balance Prevention', () => {
     it('prevents balance from going negative through validation', () => {
       const balance = 100;
       const deduction = 150;
@@ -1503,7 +1505,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Credit Overflow and Boundary Conditions', () => {
+  describe('credit Overflow and Boundary Conditions', () => {
     it('handles maximum safe integer credits', () => {
       const maxSafeCredits = Number.MAX_SAFE_INTEGER;
       const isValid = maxSafeCredits > 0 && Number.isInteger(maxSafeCredits);
@@ -1541,7 +1543,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Transaction History and Audit Trail', () => {
+  describe('transaction History and Audit Trail', () => {
     it('records positive amount for credit grants', () => {
       const grantAmount = 5_000;
       expect(grantAmount).toBeGreaterThan(0);
@@ -1635,7 +1637,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Monthly Refill and Credit Allocation', () => {
+  describe('monthly Refill and Credit Allocation', () => {
     it('grants monthly credits to paid users on schedule', () => {
       const now = new Date('2025-02-01');
       const nextRefillAt = new Date('2025-01-01'); // Past date
@@ -1718,7 +1720,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Tier-Based Credit Limits and Upgrade Flow', () => {
+  describe('tier-Based Credit Limits and Upgrade Flow', () => {
     it('free tier has 5000 signup credits only', () => {
       const signupCredits = CREDIT_CONFIG.SIGNUP_CREDITS;
       const monthlyCredits = 0;
@@ -1807,7 +1809,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Credit Deduction for Actions', () => {
+  describe('credit Deduction for Actions', () => {
     it('thread creation costs 100 credits', () => {
       const cost = CREDIT_CONFIG.ACTION_COSTS.threadCreation;
 
@@ -1877,7 +1879,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Credit Grant Operations', () => {
+  describe('credit Grant Operations', () => {
     it('signup bonus grants 5000 credits', () => {
       const signupBonus = CREDIT_CONFIG.SIGNUP_CREDITS;
 
@@ -1932,7 +1934,7 @@ describe('credit Service', () => {
     });
   });
 
-  describe('Edge Cases and Error Scenarios', () => {
+  describe('edge Cases and Error Scenarios', () => {
     it('handles zero credit balance gracefully', () => {
       const balance = 0;
       const reserved = 0;
@@ -2447,7 +2449,7 @@ describe('credit Service', () => {
         CreditTransactionTypes.RELEASE,
       ];
 
-      validTypes.forEach(type => {
+      validTypes.forEach((type) => {
         expect(type).toBeDefined();
         expect(typeof type).toBe('string');
       });

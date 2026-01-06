@@ -24,7 +24,6 @@ import {
   render,
   screen,
   userEvent,
-  waitFor,
 } from '@/lib/testing';
 
 import { PricingContent } from '../pricing-content';

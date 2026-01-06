@@ -15,37 +15,39 @@ let mockDbInsertReturning: any;
 let mockDbSelect: any;
 let mockDbUpdate: any;
 
-const createMockDb = () => ({
-  insert: vi.fn(() => ({
-    values: vi.fn(() => ({
-      onConflictDoNothing: vi.fn(() => ({
-        returning: vi.fn(() => mockDbInsertReturning),
+function createMockDb() {
+  return {
+    insert: vi.fn(() => ({
+      values: vi.fn(() => ({
+        onConflictDoNothing: vi.fn(() => ({
+          returning: vi.fn(() => mockDbInsertReturning),
+        })),
       })),
     })),
-  })),
-  select: vi.fn(() => ({
-    from: vi.fn(() => ({
-      where: vi.fn(() => ({
-        limit: vi.fn(() => mockDbSelect),
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(() => mockDbSelect),
+          orderBy: vi.fn(() => ({
+            limit: vi.fn(() => mockDbSelect),
+            offset: vi.fn(() => mockDbSelect),
+          })),
+        })),
         orderBy: vi.fn(() => ({
           limit: vi.fn(() => mockDbSelect),
           offset: vi.fn(() => mockDbSelect),
         })),
       })),
-      orderBy: vi.fn(() => ({
-        limit: vi.fn(() => mockDbSelect),
-        offset: vi.fn(() => mockDbSelect),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(() => ({
+          returning: vi.fn(() => mockDbUpdate),
+        })),
       })),
     })),
-  })),
-  update: vi.fn(() => ({
-    set: vi.fn(() => ({
-      where: vi.fn(() => ({
-        returning: vi.fn(() => mockDbUpdate),
-      })),
-    })),
-  })),
-});
+  };
+}
 
 vi.mock('@/db', async () => {
   const actual = await vi.importActual('@/db');
@@ -69,20 +71,22 @@ type MockUserCreditData = {
   updatedAt: Date;
 };
 
-const createMockCreditRecord = (overrides?: Partial<MockUserCreditData>): MockUserCreditData => ({
-  id: 'credit_record_123',
-  userId: 'user_test_123',
-  balance: 5_000,
-  reservedCredits: 0,
-  planType: PlanTypes.FREE,
-  monthlyCredits: 0,
-  lastRefillAt: null,
-  nextRefillAt: null,
-  version: 1,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
+function createMockCreditRecord(overrides?: Partial<MockUserCreditData>): MockUserCreditData {
+  return {
+    id: 'credit_record_123',
+    userId: 'user_test_123',
+    balance: 5_000,
+    reservedCredits: 0,
+    planType: PlanTypes.FREE,
+    monthlyCredits: 0,
+    lastRefillAt: null,
+    nextRefillAt: null,
+    version: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -91,7 +95,7 @@ beforeEach(() => {
   mockDbUpdate = [];
 });
 
-describe('GET /credits/balance - Credit Balance Endpoint', () => {
+describe('gET /credits/balance - Credit Balance Endpoint', () => {
   describe('successful balance retrieval', () => {
     it('returns correct balance info for free user with no reservations', async () => {
       const userId = 'user_balance_free_1';
@@ -294,7 +298,7 @@ describe('GET /credits/balance - Credit Balance Endpoint', () => {
   });
 });
 
-describe('Credit Reservation and Release Flow', () => {
+describe('credit Reservation and Release Flow', () => {
   describe('reserveCredits operations', () => {
     it('reserves credits successfully when sufficient balance', () => {
       const userId = 'user_reserve_1';
@@ -428,7 +432,7 @@ describe('Credit Reservation and Release Flow', () => {
   });
 });
 
-describe('Balance Update After Stream Completion', () => {
+describe('balance Update After Stream Completion', () => {
   describe('deduction on completion', () => {
     it('deducts exact credits used from balance', () => {
       const initialBalance = 5_000;
@@ -480,7 +484,7 @@ describe('Balance Update After Stream Completion', () => {
   });
 });
 
-describe('Concurrent Balance Requests Handling', () => {
+describe('concurrent Balance Requests Handling', () => {
   describe('optimistic locking prevents race conditions', () => {
     it('uses version column for concurrency control', () => {
       const lockingStrategy = 'optimistic';
@@ -534,7 +538,7 @@ describe('Concurrent Balance Requests Handling', () => {
   });
 });
 
-describe('Invalid/Missing User ID Handling', () => {
+describe('invalid/Missing User ID Handling', () => {
   describe('validation and error handling', () => {
     it('validates user ID is required', () => {
       const userId = '';
@@ -574,7 +578,7 @@ describe('Invalid/Missing User ID Handling', () => {
   });
 });
 
-describe('GET /credits/transactions - Credit History Endpoint', () => {
+describe('gET /credits/transactions - Credit History Endpoint', () => {
   describe('transaction retrieval with pagination', () => {
     it('returns paginated transaction history', () => {
       const limit = 20;
@@ -779,7 +783,7 @@ describe('canAffordCredits - Affordability Checks', () => {
   });
 });
 
-describe('Credit System Edge Cases', () => {
+describe('credit System Edge Cases', () => {
   describe('boundary conditions', () => {
     it('handles maximum safe integer credits', () => {
       const maxSafeCredits = Number.MAX_SAFE_INTEGER;
@@ -823,7 +827,7 @@ describe('Credit System Edge Cases', () => {
       const requests = [100, 200, 150, 300];
 
       let currentBalance = initialBalance;
-      const successful = requests.filter(amount => {
+      const successful = requests.filter((amount) => {
         if (currentBalance >= amount) {
           currentBalance -= amount;
           return true;

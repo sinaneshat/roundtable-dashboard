@@ -47,7 +47,7 @@ vi.mock('@/db', async (importOriginal) => {
   };
 });
 
-describe('Free User Round Completion Logic', () => {
+describe('free User Round Completion Logic', () => {
   let mockDb: {
     select: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
@@ -122,7 +122,7 @@ describe('Free User Round Completion Logic', () => {
     vi.clearAllMocks();
   });
 
-  describe('Round Completion Detection - Single Participant', () => {
+  describe('round Completion Detection - Single Participant', () => {
     it('should detect completion with 1 participant after response', async () => {
       setupSelectMock(
         [],
@@ -161,7 +161,7 @@ describe('Free User Round Completion Logic', () => {
     });
   });
 
-  describe('Round Completion Detection - Multiple Participants (2+)', () => {
+  describe('round Completion Detection - Multiple Participants (2+)', () => {
     describe('2 participants', () => {
       it('should NOT detect completion after 1st of 2 participants', async () => {
         setupSelectMock(
@@ -340,7 +340,7 @@ describe('Free User Round Completion Logic', () => {
     });
   });
 
-  describe('Disabled Participants', () => {
+  describe('disabled Participants', () => {
     it('should ignore disabled participants and detect completion', async () => {
       setupSelectMock(
         [],
@@ -407,7 +407,7 @@ describe('Free User Round Completion Logic', () => {
     });
   });
 
-  describe('Only Round 0 Counts', () => {
+  describe('only Round 0 Counts', () => {
     it('should NOT detect completion when messages only in round 1', async () => {
       setupSelectMock([], []);
 
@@ -446,7 +446,7 @@ describe('Free User Round Completion Logic', () => {
     });
   });
 
-  describe('FREE_ROUND_COMPLETE Transaction Marker', () => {
+  describe('fREE_ROUND_COMPLETE Transaction Marker', () => {
     it('should immediately return true when transaction exists', async () => {
       (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
         from: vi.fn().mockReturnValue({
@@ -492,7 +492,7 @@ describe('Free User Round Completion Logic', () => {
     });
   });
 
-  describe('Credit Zeroing (zeroOutFreeUserCredits)', () => {
+  describe('credit Zeroing (zeroOutFreeUserCredits)', () => {
     it('should zero balance and reserved credits', async () => {
       const userBalance = {
         id: 'balance-1',
@@ -638,7 +638,7 @@ describe('Free User Round Completion Logic', () => {
     });
   });
 
-  describe('Subsequent Operations Blocked (enforceCredits)', () => {
+  describe('subsequent Operations Blocked (enforceCredits)', () => {
     it('should block free users after round completion', async () => {
       (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
         from: vi.fn().mockReturnValue({
@@ -684,7 +684,7 @@ describe('Free User Round Completion Logic', () => {
     });
   });
 
-  describe('Race Condition Prevention', () => {
+  describe('race Condition Prevention', () => {
     it('should handle concurrent completion checks safely', async () => {
       (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
         from: vi.fn().mockReturnValue({
@@ -754,7 +754,7 @@ describe('Free User Round Completion Logic', () => {
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('edge Cases', () => {
     it('should handle no thread scenario', async () => {
       setupSelectMock([], []);
 
@@ -893,7 +893,7 @@ describe('Free User Round Completion Logic', () => {
     });
   });
 
-  describe('Integration Scenarios', () => {
+  describe('integration Scenarios', () => {
     it('should handle complete flow: 1 participant thread', async () => {
       setupSelectMock(
         [],

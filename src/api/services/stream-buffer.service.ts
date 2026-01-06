@@ -28,6 +28,7 @@ import type { TypedLogger } from '@/api/types/logger';
 import { LogHelpers } from '@/api/types/logger';
 import type { StreamBufferMetadata, StreamChunk } from '@/api/types/streaming';
 import {
+  isStreamChunk,
   parseSSEEventType,
   parseStreamBufferMetadata,
   STREAM_BUFFER_TTL_SECONDS,
@@ -446,8 +447,10 @@ export async function getStreamChunks(
       for (const result of batchResults) {
         if (result) {
           try {
-            const chunk = JSON.parse(result) as StreamChunk;
-            chunks.push(chunk);
+            const parsed = JSON.parse(result);
+            if (isStreamChunk(parsed)) {
+              chunks.push(parsed);
+            }
           } catch {
             // Skip malformed chunks
           }

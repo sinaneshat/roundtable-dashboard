@@ -14,6 +14,7 @@ export { useThreadMessagesQuery } from './chat/messages';
 export { useThreadPreSearchesQuery } from './chat/pre-search';
 export {
   usePublicThreadQuery,
+  usePublicThreadSlugsQuery,
   useThreadBySlugQuery,
   useThreadQuery,
   useThreadSlugStatusQuery,

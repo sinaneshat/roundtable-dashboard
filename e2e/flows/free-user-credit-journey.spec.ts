@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 
 import {
@@ -8,6 +9,56 @@ import {
   waitForStreamingStart,
   waitForThreadNavigation,
 } from '../helpers';
+
+type CreditBalanceResponse = {
+  success: boolean;
+  data: {
+    balance: number;
+    reserved: number;
+    available: number;
+    status: 'default' | 'warning' | 'critical';
+    percentage: number;
+    plan: {
+      type: 'free' | 'paid';
+      monthlyCredits: number;
+      nextRefillAt: string | null;
+    };
+  };
+};
+
+type Transaction = {
+  id: string;
+  type: 'deduction' | 'reservation' | 'credit_grant' | 'release';
+  action: string;
+  amount: number;
+  balanceAfter: number;
+  createdAt: string;
+  participantId?: string | null;
+  roundNumber?: number;
+  role?: string;
+};
+
+type ThreadMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  roundNumber: number;
+  participantId: string | null;
+  content: string;
+};
+
+type ThreadData = {
+  success: boolean;
+  data: {
+    id: string;
+    title: string;
+    createdAt: string;
+  };
+};
+
+type MessagesResponse = {
+  success: boolean;
+  data: ThreadMessage[];
+};
 
 /**
  * Free User Credit Journey E2E Tests
@@ -26,10 +77,10 @@ import {
 /**
  * Helper: Get user credit balance via API
  */
-async function getUserCreditBalance(page: any) {
+async function getUserCreditBalance(page: Page): Promise<CreditBalanceResponse> {
   const response = await page.request.get('/api/v1/credits/balance');
   expect(response.ok()).toBe(true);
-  const data = await response.json();
+  const data = (await response.json()) as CreditBalanceResponse;
 
   return {
     success: data.success,
@@ -48,14 +99,14 @@ async function getUserCreditBalance(page: any) {
  * Helper: Check if free user has completed their free round
  * by examining transaction history
  */
-async function checkFreeRoundCompleted(page: any): Promise<boolean> {
+async function checkFreeRoundCompleted(page: Page): Promise<boolean> {
   const response = await page.request.get('/api/v1/credits/transactions?limit=100');
   expect(response.ok()).toBe(true);
-  const data = await response.json();
+  const data = (await response.json()) as { data: { items: Transaction[] } };
 
   // Look for free round completion transaction
   const freeRoundTx = data.data.items.find(
-    (tx: any) => tx.action === 'free_round_complete',
+    (tx: Transaction) => tx.action === 'free_round_complete',
   );
 
   return !!freeRoundTx;
@@ -64,7 +115,7 @@ async function checkFreeRoundCompleted(page: any): Promise<boolean> {
 /**
  * Helper: Set user credits directly (test-only endpoint)
  */
-async function setUserCredits(page: any, credits: number) {
+async function setUserCredits(page: Page, credits: number): Promise<unknown> {
   const response = await page.request.post('/api/v1/test/set-credits', {
     data: { credits },
   });
@@ -75,22 +126,22 @@ async function setUserCredits(page: any, credits: number) {
 /**
  * Helper: Get thread data via API
  */
-async function getThreadData(page: any, threadId: string) {
+async function getThreadData(page: Page, threadId: string): Promise<ThreadData | null> {
   const response = await page.request.get(`/api/v1/chat/threads/${threadId}`);
   if (response.status() === 404) {
     return null;
   }
   expect(response.ok()).toBe(true);
-  return response.json();
+  return response.json() as Promise<ThreadData>;
 }
 
 /**
  * Helper: Get messages for a thread via API
  */
-async function getThreadMessages(page: any, threadId: string) {
+async function getThreadMessages(page: Page, threadId: string): Promise<MessagesResponse> {
   const response = await page.request.get(`/api/v1/chat/threads/${threadId}/messages`);
   expect(response.ok()).toBe(true);
-  return response.json();
+  return response.json() as Promise<MessagesResponse>;
 }
 
 /**
@@ -285,13 +336,13 @@ test.describe('Free User Credit Journey', () => {
 
     // Count unique participants that have responded in round 0
     const round0AssistantMessages = messages.data?.filter(
-      (msg: any) => msg.role === 'assistant' && msg.roundNumber === 0,
+      (msg: ThreadMessage) => msg.role === 'assistant' && msg.roundNumber === 0,
     ) || [];
 
     const respondedParticipantIds = new Set(
       round0AssistantMessages
-        .map((m: any) => m.participantId)
-        .filter((id: any) => id !== null),
+        .map((m: ThreadMessage) => m.participantId)
+        .filter((id: string | null) => id !== null),
     );
 
     // If round 0 is complete (all participants responded), credits should be zeroed
@@ -377,7 +428,7 @@ test.describe('Free User Credit Journey', () => {
     await page.waitForLoadState('networkidle');
 
     // Get credit state
-    const creditBalance = await getUserCreditBalance(page);
+    const _creditBalance = await getUserCreditBalance(page);
 
     // If user already has a thread, they should not be able to create another
     if (threadId) {
@@ -508,7 +559,7 @@ test.describe('Free User Edge Cases', () => {
     expect(finalThreadCount).toBe(1);
   });
 
-  test('refresh does not bypass thread limit', async ({ page, context }) => {
+  test('refresh does not bypass thread limit', async ({ page }) => {
     // Get thread count
     const threadsResponse = await page.request.get('/api/v1/chat/threads');
     const threadsData = await threadsResponse.json();
@@ -722,7 +773,7 @@ test.describe('Credit Usage Tracking Accuracy', () => {
     expect(transactions.length).toBeGreaterThan(0);
 
     // Find signup transaction
-    const signupTx = transactions.find((tx: any) => tx.action === 'signup_bonus');
+    const signupTx = transactions.find((tx: Transaction) => tx.action === 'signup_bonus');
 
     if (signupTx) {
       // Signup should grant 5000 credits

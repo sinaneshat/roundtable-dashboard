@@ -81,12 +81,13 @@ async function checkFreeRoundCompleted(page: Page): Promise<boolean> {
   const response = await page.request.get('/api/v1/credits/transactions?limit=100');
 
   if (!response.ok()) {
-    console.warn(`Failed to get transactions: ${response.status()}`);
     return false;
   }
 
   const data = await response.json();
-  return data.data.items.some((tx: any) => tx.action === 'free_round_complete');
+  return data.data.items.some(
+    (tx: { action: string }) => tx.action === 'free_round_complete',
+  );
 }
 
 /**
@@ -97,20 +98,11 @@ async function getThreadCount(page: Page): Promise<number> {
 
   // If endpoint doesn't exist or auth fails, return 0
   if (!response.ok()) {
-    console.warn(`Failed to get thread count: ${response.status()}`);
     return 0;
   }
 
   const data = await response.json();
   return data.data?.length || 0;
-}
-
-/**
- * Extract thread ID from URL
- */
-function getThreadIdFromUrl(url: string): string | null {
-  const match = url.match(/\/chat\/([\w-]+)/);
-  return match ? match[1] : null;
 }
 
 /**
@@ -127,7 +119,8 @@ async function isUpgradeCTAVisible(page: Page): Promise<boolean> {
 
   for (const selector of upgradeSelectors) {
     const visible = await selector.first().isVisible({ timeout: 2000 }).catch(() => false);
-    if (visible) return true;
+    if (visible)
+      return true;
   }
 
   return false;
@@ -448,7 +441,8 @@ test.describe('Free User Quota Enforcement - UI/UX Focus', () => {
       let foundBenefits = 0;
       for (const benefit of benefits) {
         const visible = await benefit.first().isVisible({ timeout: 3000 }).catch(() => false);
-        if (visible) foundBenefits++;
+        if (visible)
+          foundBenefits++;
       }
 
       // Should show at least one key benefit

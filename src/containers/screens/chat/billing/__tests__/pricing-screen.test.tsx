@@ -19,10 +19,8 @@ import {
   createMockProductCatalog,
   render,
   screen,
-  userEvent,
   waitFor,
 } from '@/lib/testing';
-import { toastManager } from '@/lib/toast';
 
 import PricingScreen from '../PricingScreen';
 
@@ -46,7 +44,7 @@ vi.mock('@/hooks/utils', async (importOriginal) => {
   };
 });
 
-const createMockQueryClient = () => {
+function createMockQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
@@ -58,7 +56,7 @@ const createMockQueryClient = () => {
       },
     },
   });
-};
+}
 
 describe('pricingScreen', () => {
   const mockRouter = {

@@ -14,10 +14,11 @@
  * - Default/fallback plan behavior
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import type { PlanType, SubscriptionTier } from '@/api/core/enums';
 import { PlanTypes, SubscriptionTiers } from '@/api/core/enums';
+import type { TierConfiguration } from '@/api/services/product-logic.service';
 import {
   canAccessByTier,
   canAccessModelByPricing,
@@ -27,7 +28,6 @@ import {
   getTierFromProductId,
   getTierName,
   TIER_CONFIG,
-  type TierConfiguration,
 } from '@/api/services/product-logic.service';
 import { CREDIT_CONFIG, PLAN_NAMES } from '@/lib/config/credit-config';
 
@@ -123,7 +123,7 @@ function createCanceledSubscription(productId: string, daysUntilEnd: number): Mo
 // PLAN TYPE DETERMINATION FROM STRIPE DATA
 // ============================================================================
 
-describe('Plan Type Determination from Stripe Product IDs', () => {
+describe('plan Type Determination from Stripe Product IDs', () => {
   it('should detect Pro tier from configured Stripe product ID', () => {
     const productId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
     const tier = getTierFromProductId(productId);
@@ -196,20 +196,20 @@ describe('Plan Type Determination from Stripe Product IDs', () => {
 // FEATURE ACCESS BY PLAN
 // ============================================================================
 
-describe('Thread Limits by Plan', () => {
-  it('Free tier allows 1 thread per month', () => {
+describe('thread Limits by Plan', () => {
+  it('free tier allows 1 thread per month', () => {
     const freeConfig = TIER_CONFIG.free;
 
     expect(freeConfig.quotas.threadsPerMonth).toBe(1);
   });
 
-  it('Pro tier allows 500 threads per month', () => {
+  it('pro tier allows 500 threads per month', () => {
     const proConfig = TIER_CONFIG.pro;
 
     expect(proConfig.quotas.threadsPerMonth).toBe(500);
   });
 
-  it('Pro tier has significantly higher thread limit than Free tier', () => {
+  it('pro tier has significantly higher thread limit than Free tier', () => {
     const freeLimit = TIER_CONFIG.free.quotas.threadsPerMonth;
     const proLimit = TIER_CONFIG.pro.quotas.threadsPerMonth;
 
@@ -217,8 +217,8 @@ describe('Thread Limits by Plan', () => {
   });
 });
 
-describe('Round Limits by Plan', () => {
-  it('Free tier allows 1 round (round 0 only)', () => {
+describe('round Limits by Plan', () => {
+  it('free tier allows 1 round (round 0 only)', () => {
     // Free tier: 1 thread, 1 round (round 0 only)
     // This is implicitly enforced by thread limit
     const freeConfig = TIER_CONFIG.free;
@@ -226,7 +226,7 @@ describe('Round Limits by Plan', () => {
     expect(freeConfig.quotas.threadsPerMonth).toBe(1);
   });
 
-  it('Pro tier allows unlimited rounds per thread', () => {
+  it('pro tier allows unlimited rounds per thread', () => {
     // Pro tier: 500 threads, effectively unlimited rounds
     const proConfig = TIER_CONFIG.pro;
 
@@ -234,20 +234,20 @@ describe('Round Limits by Plan', () => {
   });
 });
 
-describe('Message Limits by Plan', () => {
-  it('Free tier allows 100 messages per month', () => {
+describe('message Limits by Plan', () => {
+  it('free tier allows 100 messages per month', () => {
     const freeConfig = TIER_CONFIG.free;
 
     expect(freeConfig.quotas.messagesPerMonth).toBe(100);
   });
 
-  it('Pro tier allows 10000 messages per month', () => {
+  it('pro tier allows 10000 messages per month', () => {
     const proConfig = TIER_CONFIG.pro;
 
     expect(proConfig.quotas.messagesPerMonth).toBe(10_000);
   });
 
-  it('Pro tier has 100x more message quota than Free tier', () => {
+  it('pro tier has 100x more message quota than Free tier', () => {
     const freeLimit = TIER_CONFIG.free.quotas.messagesPerMonth;
     const proLimit = TIER_CONFIG.pro.quotas.messagesPerMonth;
 
@@ -255,20 +255,20 @@ describe('Message Limits by Plan', () => {
   });
 });
 
-describe('Custom Roles (Web Search) by Plan', () => {
-  it('Free tier has NO custom roles access', () => {
+describe('custom Roles (Web Search) by Plan', () => {
+  it('free tier has NO custom roles access', () => {
     const freeConfig = TIER_CONFIG.free;
 
     expect(freeConfig.quotas.customRolesPerMonth).toBe(0);
   });
 
-  it('Pro tier allows 25 custom roles per month', () => {
+  it('pro tier allows 25 custom roles per month', () => {
     const proConfig = TIER_CONFIG.pro;
 
     expect(proConfig.quotas.customRolesPerMonth).toBe(25);
   });
 
-  it('Web search is Pro-only feature', () => {
+  it('web search is Pro-only feature', () => {
     const freeHasWebSearch = TIER_CONFIG.free.quotas.customRolesPerMonth > 0;
     const proHasWebSearch = TIER_CONFIG.pro.quotas.customRolesPerMonth > 0;
 
@@ -277,20 +277,20 @@ describe('Custom Roles (Web Search) by Plan', () => {
   });
 });
 
-describe('Analysis Quota by Plan', () => {
-  it('Free tier allows 10 analyses per month', () => {
+describe('analysis Quota by Plan', () => {
+  it('free tier allows 10 analyses per month', () => {
     const freeConfig = TIER_CONFIG.free;
 
     expect(freeConfig.quotas.analysisPerMonth).toBe(10);
   });
 
-  it('Pro tier allows 1000 analyses per month', () => {
+  it('pro tier allows 1000 analyses per month', () => {
     const proConfig = TIER_CONFIG.pro;
 
     expect(proConfig.quotas.analysisPerMonth).toBe(1000);
   });
 
-  it('Pro tier has 100x more analysis quota than Free tier', () => {
+  it('pro tier has 100x more analysis quota than Free tier', () => {
     const freeLimit = TIER_CONFIG.free.quotas.analysisPerMonth;
     const proLimit = TIER_CONFIG.pro.quotas.analysisPerMonth;
 
@@ -298,20 +298,20 @@ describe('Analysis Quota by Plan', () => {
   });
 });
 
-describe('Output Token Limits by Plan', () => {
-  it('Free tier has 512 max output tokens', () => {
+describe('output Token Limits by Plan', () => {
+  it('free tier has 512 max output tokens', () => {
     const maxTokens = getMaxOutputTokensForTier(SubscriptionTiers.FREE);
 
     expect(maxTokens).toBe(512);
   });
 
-  it('Pro tier has 4096 max output tokens', () => {
+  it('pro tier has 4096 max output tokens', () => {
     const maxTokens = getMaxOutputTokensForTier(SubscriptionTiers.PRO);
 
     expect(maxTokens).toBe(4096);
   });
 
-  it('Pro tier has 8x more output tokens than Free tier', () => {
+  it('pro tier has 8x more output tokens than Free tier', () => {
     const freeTokens = getMaxOutputTokensForTier(SubscriptionTiers.FREE);
     const proTokens = getMaxOutputTokensForTier(SubscriptionTiers.PRO);
 
@@ -319,34 +319,34 @@ describe('Output Token Limits by Plan', () => {
   });
 });
 
-describe('Model Access by Plan', () => {
-  it('Free tier has $0.10 per 1M tokens pricing limit', () => {
+describe('model Access by Plan', () => {
+  it('free tier has $0.10 per 1M tokens pricing limit', () => {
     const freeConfig = TIER_CONFIG.free;
 
     expect(freeConfig.maxModelPricing).toBe(0.10);
   });
 
-  it('Pro tier has NO model pricing limit', () => {
+  it('pro tier has NO model pricing limit', () => {
     const proConfig = TIER_CONFIG.pro;
 
     expect(proConfig.maxModelPricing).toBeNull();
   });
 
-  it('Free tier can access budget models (<= $0.10/1M tokens)', () => {
+  it('free tier can access budget models (<= $0.10/1M tokens)', () => {
     const budgetModel = createMockModel(0.05, 0.10); // $0.05 input, $0.10 output per 1M tokens
     const canAccess = canAccessModelByPricing(SubscriptionTiers.FREE, budgetModel);
 
     expect(canAccess).toBe(true);
   });
 
-  it('Free tier CANNOT access premium models (> $0.10/1M tokens)', () => {
+  it('free tier CANNOT access premium models (> $0.10/1M tokens)', () => {
     const premiumModel = createMockModel(5.00, 15.00); // $5 input, $15 output per 1M tokens
     const canAccess = canAccessModelByPricing(SubscriptionTiers.FREE, premiumModel);
 
     expect(canAccess).toBe(false);
   });
 
-  it('Pro tier can access all models regardless of pricing', () => {
+  it('pro tier can access all models regardless of pricing', () => {
     const budgetModel = createMockModel(0.05, 0.10);
     const premiumModel = createMockModel(5.00, 15.00);
     const flagshipModel = createMockModel(30.00, 60.00);
@@ -357,20 +357,20 @@ describe('Model Access by Plan', () => {
   });
 });
 
-describe('Max Models Per Conversation by Plan', () => {
-  it('Free tier allows 3 models per conversation', () => {
+describe('max Models Per Conversation by Plan', () => {
+  it('free tier allows 3 models per conversation', () => {
     const maxModels = getMaxModelsForTier(SubscriptionTiers.FREE);
 
     expect(maxModels).toBe(3);
   });
 
-  it('Pro tier allows 12 models per conversation', () => {
+  it('pro tier allows 12 models per conversation', () => {
     const maxModels = getMaxModelsForTier(SubscriptionTiers.PRO);
 
     expect(maxModels).toBe(12);
   });
 
-  it('Pro tier has 4x more model slots than Free tier', () => {
+  it('pro tier has 4x more model slots than Free tier', () => {
     const freeModels = getMaxModelsForTier(SubscriptionTiers.FREE);
     const proModels = getMaxModelsForTier(SubscriptionTiers.PRO);
 
@@ -382,31 +382,31 @@ describe('Max Models Per Conversation by Plan', () => {
 // MONTHLY CREDIT ALLOCATION BY PLAN
 // ============================================================================
 
-describe('Monthly Credit Allocation by Plan', () => {
-  it('Free tier gets 0 monthly credits', () => {
+describe('monthly Credit Allocation by Plan', () => {
+  it('free tier gets 0 monthly credits', () => {
     const monthlyCredits = getMonthlyCreditsForTier(SubscriptionTiers.FREE);
 
     expect(monthlyCredits).toBe(0);
   });
 
-  it('Free tier gets 5000 signup credits (one-time)', () => {
+  it('free tier gets 5000 signup credits (one-time)', () => {
     expect(CREDIT_CONFIG.SIGNUP_CREDITS).toBe(5_000);
   });
 
-  it('Pro tier gets 100K monthly credits', () => {
+  it('pro tier gets 100K monthly credits', () => {
     const monthlyCredits = getMonthlyCreditsForTier(SubscriptionTiers.PRO);
 
     expect(monthlyCredits).toBe(100_000);
   });
 
-  it('Pro tier monthly credits match CREDIT_CONFIG', () => {
+  it('pro tier monthly credits match CREDIT_CONFIG', () => {
     const configCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
     const tierCredits = getMonthlyCreditsForTier(SubscriptionTiers.PRO);
 
     expect(tierCredits).toBe(configCredits);
   });
 
-  it('Pro tier monthly credits are consistent across configs', () => {
+  it('pro tier monthly credits are consistent across configs', () => {
     const tierConfigCredits = TIER_CONFIG.pro.monthlyCredits;
     const creditConfigCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
@@ -418,7 +418,7 @@ describe('Monthly Credit Allocation by Plan', () => {
 // GRACE PERIOD HANDLING
 // ============================================================================
 
-describe('Grace Period Handling (Subscription Cancellation)', () => {
+describe('grace Period Handling (Subscription Cancellation)', () => {
   it('canceled subscription maintains Pro tier until period end', () => {
     const subscription = createCanceledSubscription(
       CREDIT_CONFIG.PLANS.paid.stripeProductId,
@@ -495,7 +495,7 @@ describe('Grace Period Handling (Subscription Cancellation)', () => {
 // TRIAL PERIOD FEATURE ACCESS
 // ============================================================================
 
-describe('Trial Period Feature Access', () => {
+describe('trial Period Feature Access', () => {
   it('trialing subscription grants Pro tier access', () => {
     const subscription = createTrialSubscription(CREDIT_CONFIG.PLANS.paid.stripeProductId);
 
@@ -537,7 +537,7 @@ describe('Trial Period Feature Access', () => {
 // PLAN UPGRADE/DOWNGRADE EFFECT ON FEATURES
 // ============================================================================
 
-describe('Plan Upgrade Effects on Features', () => {
+describe('plan Upgrade Effects on Features', () => {
   it('upgrade from Free to Pro unlocks premium models', () => {
     const premiumModel = createMockModel(5.00, 15.00);
 
@@ -592,7 +592,7 @@ describe('Plan Upgrade Effects on Features', () => {
   });
 });
 
-describe('Plan Downgrade Effects on Features', () => {
+describe('plan Downgrade Effects on Features', () => {
   it('downgrade from Pro to Free restricts premium models', () => {
     const premiumModel = createMockModel(5.00, 15.00);
 
@@ -650,7 +650,7 @@ describe('Plan Downgrade Effects on Features', () => {
 // DEFAULT/FALLBACK PLAN BEHAVIOR
 // ============================================================================
 
-describe('Default/Fallback Plan Behavior', () => {
+describe('default/Fallback Plan Behavior', () => {
   it('default tier is Free', () => {
     const defaultTier: SubscriptionTier = SubscriptionTiers.FREE;
 
@@ -699,26 +699,26 @@ describe('Default/Fallback Plan Behavior', () => {
 // TIER ACCESS HIERARCHY
 // ============================================================================
 
-describe('Tier Access Hierarchy', () => {
-  it('Free tier can access Free tier features', () => {
+describe('tier Access Hierarchy', () => {
+  it('free tier can access Free tier features', () => {
     const canAccess = canAccessByTier(SubscriptionTiers.FREE, SubscriptionTiers.FREE);
 
     expect(canAccess).toBe(true);
   });
 
-  it('Free tier CANNOT access Pro tier features', () => {
+  it('free tier CANNOT access Pro tier features', () => {
     const canAccess = canAccessByTier(SubscriptionTiers.FREE, SubscriptionTiers.PRO);
 
     expect(canAccess).toBe(false);
   });
 
-  it('Pro tier can access Free tier features', () => {
+  it('pro tier can access Free tier features', () => {
     const canAccess = canAccessByTier(SubscriptionTiers.PRO, SubscriptionTiers.FREE);
 
     expect(canAccess).toBe(true);
   });
 
-  it('Pro tier can access Pro tier features', () => {
+  it('pro tier can access Pro tier features', () => {
     const canAccess = canAccessByTier(SubscriptionTiers.PRO, SubscriptionTiers.PRO);
 
     expect(canAccess).toBe(true);
@@ -729,7 +729,7 @@ describe('Tier Access Hierarchy', () => {
 // TIER CONFIGURATION CONSISTENCY
 // ============================================================================
 
-describe('Tier Configuration Consistency', () => {
+describe('tier Configuration Consistency', () => {
   it('tier names are consistent across configs', () => {
     expect(TIER_CONFIG.free.name).toBe('Free');
     expect(TIER_CONFIG.pro.name).toBe('Pro');
@@ -777,7 +777,7 @@ describe('Tier Configuration Consistency', () => {
     }
   });
 
-  it('Pro tier has higher limits than Free tier for all quotas', () => {
+  it('pro tier has higher limits than Free tier for all quotas', () => {
     const freeQuotas = TIER_CONFIG.free.quotas;
     const proQuotas = TIER_CONFIG.pro.quotas;
 
@@ -787,21 +787,21 @@ describe('Tier Configuration Consistency', () => {
     expect(proQuotas.analysisPerMonth).toBeGreaterThan(freeQuotas.analysisPerMonth);
   });
 
-  it('Pro tier has higher output token limit than Free tier', () => {
+  it('pro tier has higher output token limit than Free tier', () => {
     const freeTokens = TIER_CONFIG.free.maxOutputTokens;
     const proTokens = TIER_CONFIG.pro.maxOutputTokens;
 
     expect(proTokens).toBeGreaterThan(freeTokens);
   });
 
-  it('Pro tier has more model slots than Free tier', () => {
+  it('pro tier has more model slots than Free tier', () => {
     const freeModels = TIER_CONFIG.free.maxModels;
     const proModels = TIER_CONFIG.pro.maxModels;
 
     expect(proModels).toBeGreaterThan(freeModels);
   });
 
-  it('Free tier has model pricing limit, Pro tier does not', () => {
+  it('free tier has model pricing limit, Pro tier does not', () => {
     const freeLimit = TIER_CONFIG.free.maxModelPricing;
     const proLimit = TIER_CONFIG.pro.maxModelPricing;
 
@@ -815,7 +815,7 @@ describe('Tier Configuration Consistency', () => {
 // SUBSCRIPTION STATUS AND TIER MAPPING
 // ============================================================================
 
-describe('Subscription Status and Tier Mapping', () => {
+describe('subscription Status and Tier Mapping', () => {
   it('active Pro subscription has Pro tier', () => {
     const subscription = createActiveSubscription(CREDIT_CONFIG.PLANS.paid.stripeProductId);
 
@@ -851,14 +851,14 @@ describe('Subscription Status and Tier Mapping', () => {
 // PRICING AND BILLING CONSISTENCY
 // ============================================================================
 
-describe('Pricing and Billing Consistency', () => {
-  it('Pro plan price is $59/month', () => {
+describe('pricing and Billing Consistency', () => {
+  it('pro plan price is $59/month', () => {
     const priceInCents = CREDIT_CONFIG.PLANS.paid.priceInCents;
 
     expect(priceInCents).toBe(5900);
   });
 
-  it('Pro plan Stripe IDs are configured', () => {
+  it('pro plan Stripe IDs are configured', () => {
     const productId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
     const priceId = CREDIT_CONFIG.PLANS.paid.stripePriceId;
 

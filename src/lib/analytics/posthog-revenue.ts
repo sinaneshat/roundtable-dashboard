@@ -14,6 +14,8 @@
  * @see https://posthog.com/docs/revenue-analytics/events
  */
 
+import type { BillingInterval } from '@/api/core/enums';
+
 import { getDistinctIdFromCookie, getPostHogClient } from './posthog-server';
 
 type RevenueEventType
@@ -32,7 +34,7 @@ type RevenueEventProperties = {
   product?: string;
   subscription_id?: string;
   coupon?: string;
-  interval?: 'month' | 'year';
+  interval?: BillingInterval;
   price_id?: string;
   invoice_id?: string;
 };

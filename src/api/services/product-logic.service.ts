@@ -11,6 +11,7 @@ import type { ChatMode, ModelPricingTier, PlanType, SubscriptionTier } from '@/a
 import {
   ChatModes,
   getModelTierMultiplier,
+  MODEL_PRICING_TIERS,
   MODEL_TIER_THRESHOLDS,
   SUBSCRIPTION_TIERS,
   SubscriptionTiers,
@@ -189,7 +190,7 @@ export function getPlanConfig(planType: Exclude<PlanType, 'free'>) {
 export function getModelPricingTier(model: ModelForPricing): ModelPricingTier {
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
 
-  for (const tier of Object.keys(MODEL_TIER_THRESHOLDS) as ModelPricingTier[]) {
+  for (const tier of MODEL_PRICING_TIERS) {
     const { min, max } = MODEL_TIER_THRESHOLDS[tier];
     if (inputPricePerMillion >= min && inputPricePerMillion < max) {
       return tier;

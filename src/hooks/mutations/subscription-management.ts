@@ -43,43 +43,37 @@ export function useSwitchSubscriptionMutation() {
         queryClient.setQueryData<GetSubscriptionsResponse>(
           queryKeys.subscriptions.list(),
           (oldData) => {
-            if (!oldData || !oldData.success || !oldData.data?.items) {
+            if (!oldData || !oldData.data?.items) {
               return oldData;
             }
 
-            // Replace the updated subscription in the list
             const updatedItems = oldData.data.items.map((sub) =>
-              sub.id === updatedSubscription.id ? updatedSubscription : sub,
+              sub.id === updatedSubscription.id ? updatedSubscription : sub
             );
 
             return {
-              success: true,
+              ...oldData,
               data: {
                 items: updatedItems,
                 count: oldData.data.count,
               },
             };
-          },
+          }
         );
       }
 
-      // Invalidate all subscription queries except the list we just updated (prevents GC with gcTime: 0)
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.subscriptions.all,
-        predicate: (query) => {
-          const key = query.queryKey;
-          return !(key.length >= 2 && key[0] === 'subscriptions' && key[1] === 'list');
-        },
-      });
-
-      // Invalidate usage queries since quota limits are tied to subscription tier
+      // Invalidate related queries
       void queryClient.invalidateQueries({
         queryKey: queryKeys.usage.all,
       });
 
-      // Invalidate models query since model access is tier-based
       void queryClient.invalidateQueries({
         queryKey: queryKeys.models.all,
+      });
+
+      // Invalidate subscriptions all queries
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.subscriptions.all,
       });
     },
     retry: false,
@@ -109,45 +103,37 @@ export function useCancelSubscriptionMutation() {
         queryClient.setQueryData<GetSubscriptionsResponse>(
           queryKeys.subscriptions.list(),
           (oldData) => {
-            if (!oldData || !oldData.success || !oldData.data?.items) {
+            if (!oldData || !oldData.data?.items) {
               return oldData;
             }
 
-            // Replace the updated subscription in the list
             const updatedItems = oldData.data.items.map((sub) =>
-              sub.id === updatedSubscription.id ? updatedSubscription : sub,
+              sub.id === updatedSubscription.id ? updatedSubscription : sub
             );
 
             return {
-              success: true,
+              ...oldData,
               data: {
                 items: updatedItems,
                 count: oldData.data.count,
               },
             };
-          },
+          }
         );
       }
 
-      // Invalidate all subscription queries except the list we just updated (prevents GC with gcTime: 0)
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.subscriptions.all,
-        predicate: (query) => {
-          const key = query.queryKey;
-          return !(key.length >= 2 && key[0] === 'subscriptions' && key[1] === 'list');
-        },
-      });
-
-      // Invalidate usage queries since quota limits are tied to subscription tier
-      // When subscription is cancelled, user may revert to free tier limits
+      // Invalidate related queries
       void queryClient.invalidateQueries({
         queryKey: queryKeys.usage.all,
       });
 
-      // Invalidate models query since model access is tier-based
-      // When cancelled, user may lose access to premium models
       void queryClient.invalidateQueries({
         queryKey: queryKeys.models.all,
+      });
+
+      // Invalidate subscriptions all queries
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.subscriptions.all,
       });
     },
     retry: false,

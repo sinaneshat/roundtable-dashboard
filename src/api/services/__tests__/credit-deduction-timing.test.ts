@@ -21,9 +21,6 @@ import { describe, expect, it } from 'vitest';
 import { CreditActions, CreditTransactionTypes } from '@/api/core/enums';
 import {
   calculateBaseCredits,
-  calculateWeightedCredits,
-  getActionCreditCost,
-  getModelCreditMultiplierById,
   tokensToCredits,
 } from '@/api/services/product-logic.service';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
@@ -820,7 +817,7 @@ describe('concurrent Stream Credit Handling', () => {
       const initialBalance = 500;
       const deduction1 = 400;
       const deduction2 = 300;
-      let version = 1;
+      const version = 1;
 
       // First deduction succeeds
       const hasEnough1 = initialBalance >= deduction1;
@@ -949,9 +946,9 @@ describe('free User Round Completion Triggers Zero-Out', () => {
 
       const hasModeratorContent
         = moderatorMessageExists
-        && moderatorParts.some(
-          part => part.type === 'text' && part.text.trim().length > 0,
-        );
+          && moderatorParts.some(
+            part => part.type === 'text' && part.text.trim().length > 0,
+          );
 
       expect(hasModeratorContent).toBe(true);
     });
@@ -962,9 +959,9 @@ describe('free User Round Completion Triggers Zero-Out', () => {
 
       const hasModeratorContent
         = moderatorMessageExists
-        && moderatorParts.some(
-          part => part.type === 'text' && part.text.trim().length > 0,
-        );
+          && moderatorParts.some(
+            part => part.type === 'text' && part.text.trim().length > 0,
+          );
 
       expect(hasModeratorContent).toBe(false);
     });
