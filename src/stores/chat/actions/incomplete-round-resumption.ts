@@ -12,7 +12,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { RoundPhase } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
-import { useChatStore } from '@/components/providers/chat-store-provider/context';
+import { useChatStore } from '@/components/providers/chat-store-provider';
 import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getModeratorMetadata, getParticipantIndex, getParticipantModelIds, getRoundNumber, hasError as checkHasError, rlog } from '@/lib/utils';
 
 import {
@@ -80,6 +80,9 @@ export function useIncompleteRoundResumption(
     resumptionRoundNumber,
     streamResumptionPrefilled,
     isCreatingModerator,
+    // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
+    isWaitingForChangelog,
+    configChangeRoundNumber,
   } = useChatStore(useShallow(s => ({
     messages: s.messages,
     participants: s.participants,
@@ -98,6 +101,9 @@ export function useIncompleteRoundResumption(
     resumptionRoundNumber: s.resumptionRoundNumber,
     streamResumptionPrefilled: s.streamResumptionPrefilled,
     isCreatingModerator: s.isModeratorStreaming,
+    // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
+    isWaitingForChangelog: s.isWaitingForChangelog,
+    configChangeRoundNumber: s.configChangeRoundNumber,
   })));
 
   // Actions - batched with useShallow for stable reference
@@ -740,11 +746,8 @@ export function useIncompleteRoundResumption(
     // to trigger the round resumption flow instead of relying solely on pendingMessage effect
     // This ensures participants start even if pendingMessage effect has timing issues
     actions.setStreamingRoundNumber(orphanedRoundNumber);
-    // ✅ TYPE-SAFE: Include participant ID for validation against config changes
-    const firstParticipant = enabledParticipants[0];
-    if (firstParticipant) {
-      actions.setNextParticipantToTrigger({ index: 0, participantId: firstParticipant.id });
-    }
+    // Trigger first participant (index 0)
+    actions.setNextParticipantToTrigger(0);
     actions.setWaitingToStartStreaming(true);
 
     // ✅ FIX: Mark as attempted AFTER setting all state, so if something fails we can retry
@@ -789,6 +792,16 @@ export function useIncompleteRoundResumption(
     // ✅ OPTIMIZED: Wait for initial check to complete (no longer makes network call)
     // ✅ FIX: Using state instead of ref ensures effect re-runs after 100ms timeout
     if (!activeStreamCheckComplete) {
+      return;
+    }
+
+    // ✅ CHANGELOG BLOCKING FIX: Don't resume until changelog is fetched
+    // When config changes occur between rounds, configChangeRoundNumber is set BEFORE PATCH
+    // and isWaitingForChangelog is set AFTER PATCH. Both must be null/false for resumption.
+    // Without this check, resumption could trigger with stale config (before changelog fetched).
+    // ✅ FIX: Use != to check both null and undefined (for test compatibility)
+    if (configChangeRoundNumber != null || isWaitingForChangelog) {
+      rlog.resume('block-changelog', `configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
       return;
     }
 
@@ -927,11 +940,7 @@ export function useIncompleteRoundResumption(
     // Set up store state for resumption
     // The provider's effect watching nextParticipantToTrigger will trigger the participant
     actions.setStreamingRoundNumber(currentRoundNumber);
-    // ✅ TYPE-SAFE: Include participant ID for validation against config changes
-    const targetParticipant = enabledParticipants[effectiveNextParticipant];
-    if (targetParticipant) {
-      actions.setNextParticipantToTrigger({ index: effectiveNextParticipant, participantId: targetParticipant.id });
-    }
+    actions.setNextParticipantToTrigger(effectiveNextParticipant);
     actions.setCurrentParticipantIndex(effectiveNextParticipant);
 
     // Set waiting flag so provider knows to start streaming
@@ -961,6 +970,9 @@ export function useIncompleteRoundResumption(
     streamResumptionPrefilled,
     // ✅ FIX: Now using state instead of ref, so it's in deps and triggers re-runs
     activeStreamCheckComplete,
+    // ✅ CHANGELOG BLOCKING FIX: Include changelog flags so effect re-runs when cleared
+    configChangeRoundNumber,
+    isWaitingForChangelog,
     actions,
   ]);
 
@@ -1091,11 +1103,7 @@ export function useIncompleteRoundResumption(
       if ((preSearchComplete || prefilledComplete) && resumptionRoundNumber !== null) {
         rlog.trigger('PRESRCH-DONE', `r${resumptionRoundNumber} trigger p0`);
         actions.setStreamingRoundNumber(resumptionRoundNumber);
-        // ✅ TYPE-SAFE: Include participant ID for validation against config changes
-        const firstParticipant = enabledParticipants[0];
-        if (firstParticipant) {
-          actions.setNextParticipantToTrigger({ index: 0, participantId: firstParticipant.id });
-        }
+        actions.setNextParticipantToTrigger(0);
         actions.setWaitingToStartStreaming(true);
       }
     }
@@ -1106,7 +1114,6 @@ export function useIncompleteRoundResumption(
     resumptionRoundNumber,
     preSearches,
     preSearchResumption, // ✅ Include prefilled state in dependencies
-    enabledParticipants, // ✅ Required for participant ID lookup
     actions,
   ]);
 
@@ -1214,11 +1221,7 @@ export function useIncompleteRoundResumption(
         ? participantCompletionCheck.completedCount
         : 0;
       actions.setStreamingRoundNumber(resumptionRoundNumber);
-      // ✅ TYPE-SAFE: Include participant ID for validation against config changes
-      const nextParticipant = enabledParticipants[nextIdx];
-      if (nextParticipant) {
-        actions.setNextParticipantToTrigger({ index: nextIdx, participantId: nextParticipant.id });
-      }
+      actions.setNextParticipantToTrigger(nextIdx);
       actions.setWaitingToStartStreaming(true);
       return;
     }

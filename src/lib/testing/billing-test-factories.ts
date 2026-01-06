@@ -1,12 +1,15 @@
 /**
  * Billing & Pricing Test Factories
  *
- * Factory functions for creating mock billing data (products, prices, subscriptions)
+ * Factory functions for creating mock billing data (products, prices)
  * for use in component tests.
+ *
+ * NOTE: For subscription mocks, use the factories from subscription-mocks.ts
  */
 
-import { StripeSubscriptionStatuses, UIBillingIntervals } from '@/api/core/enums';
-import type { Price, Product, Subscription } from '@/api/routes/billing/schema';
+import { UIBillingIntervals } from '@/api/core/enums';
+import type { Price, Product } from '@/api/routes/billing/schema';
+import type { GetProductResponse, GetProductsResponse } from '@/services/api';
 
 /**
  * Creates a mock price for testing
@@ -43,28 +46,6 @@ export function createMockProduct(overrides?: Partial<Product>): Product {
     prices: overrides?.prices ?? [
       createMockPrice({ productId }),
     ],
-  };
-}
-
-/**
- * Creates a mock subscription for testing
- */
-export function createMockSubscription(overrides?: Partial<Subscription>): Subscription {
-  const priceId = overrides?.priceId ?? 'price_test_123';
-
-  return {
-    id: overrides?.id ?? 'sub_test_123',
-    status: overrides?.status ?? StripeSubscriptionStatuses.ACTIVE,
-    priceId,
-    cancelAtPeriodEnd: overrides?.cancelAtPeriodEnd ?? false,
-    currentPeriodStart: overrides?.currentPeriodStart ?? new Date().toISOString(),
-    currentPeriodEnd: overrides?.currentPeriodEnd ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-    canceledAt: overrides?.canceledAt ?? null,
-    trialStart: overrides?.trialStart ?? null,
-    trialEnd: overrides?.trialEnd ?? null,
-    price: overrides?.price ?? {
-      productId: 'prod_test_123',
-    },
   };
 }
 
@@ -155,56 +136,71 @@ export function createMockProductCatalog(): Product[] {
   ];
 }
 
+
+// ============================================================================
+// Product API Response Factories
+// ============================================================================
+
 /**
- * Creates an active subscription
+ * Creates a successful products list API response
  */
-export function createActiveSubscription(priceId: string): Subscription {
-  return createMockSubscription({
-    id: 'sub_active_test',
-    priceId,
-    status: StripeSubscriptionStatuses.ACTIVE,
-    cancelAtPeriodEnd: false,
-    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-  });
+export function createProductsListResponse(products: Product[]): GetProductsResponse {
+  return {
+    success: true,
+    data: {
+      items: products,
+      count: products.length,
+    },
+  };
 }
 
 /**
- * Creates a trialing subscription
+ * Creates a successful product detail API response
  */
-export function createTrialingSubscription(priceId: string): Subscription {
-  const now = Date.now();
-  return createMockSubscription({
-    id: 'sub_trial_test',
-    priceId,
-    status: StripeSubscriptionStatuses.TRIALING,
-    cancelAtPeriodEnd: false,
-    trialStart: new Date(now).toISOString(),
-    trialEnd: new Date(now + 14 * 24 * 60 * 60 * 1000).toISOString(),
-  });
+export function createProductDetailResponse(product: Product): GetProductResponse {
+  return {
+    success: true,
+    data: {
+      product,
+    },
+  };
 }
 
 /**
- * Creates a subscription marked for cancellation
+ * Creates an empty products list API response
  */
-export function createCancelingSubscription(priceId: string): Subscription {
-  return createMockSubscription({
-    id: 'sub_canceling_test',
-    priceId,
-    status: StripeSubscriptionStatuses.ACTIVE,
-    cancelAtPeriodEnd: true,
-    canceledAt: new Date().toISOString(),
-  });
+export function createEmptyProductsListResponse(): GetProductsResponse {
+  return {
+    success: true,
+    data: {
+      items: [],
+      count: 0,
+    },
+  };
 }
 
 /**
- * Creates a canceled subscription
+ * Creates a product error API response
  */
-export function createCanceledSubscription(priceId: string): Subscription {
-  return createMockSubscription({
-    id: 'sub_canceled_test',
-    priceId,
-    status: StripeSubscriptionStatuses.CANCELED,
-    cancelAtPeriodEnd: false,
-    canceledAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-  });
+export function createProductErrorResponse(message = 'Product not found'): GetProductResponse {
+  return {
+    success: false,
+    error: {
+      code: 'NOT_FOUND',
+      message,
+    },
+  };
+}
+
+/**
+ * Creates a products list error API response
+ */
+export function createProductsListErrorResponse(message = 'Failed to fetch products'): GetProductsResponse {
+  return {
+    success: false,
+    error: {
+      code: 'INTERNAL_SERVER_ERROR',
+      message,
+    },
+  };
 }

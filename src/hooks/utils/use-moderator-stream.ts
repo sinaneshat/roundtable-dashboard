@@ -218,6 +218,10 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
         setMessages(uiMessages);
       }
 
+      // ✅ INVALIDATE USAGE STATS: After moderator completes, free users have freeRoundUsed=true
+      // This ensures the submit button is disabled immediately after the round completes
+      await queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
+
       setState(prev => ({
         ...prev,
         isStreaming: false,

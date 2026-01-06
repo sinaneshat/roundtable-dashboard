@@ -306,7 +306,7 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
   // For multi-participant threads (2+), the moderator must also complete
   // Moderator provides the round summary - round isn't complete until this finishes
   // Single-participant threads don't have a moderator, so they complete after participant response
-  if (enabledParticipants.length >= 2) {
+  if (enabledParticipants.length >= 2 && db.query.chatMessage) {
     // Moderator message ID format: {threadId}_r{roundNumber}_moderator
     const moderatorMessageId = `${thread.id}_r0_moderator`;
     const moderatorMessage = await db.query.chatMessage.findFirst({

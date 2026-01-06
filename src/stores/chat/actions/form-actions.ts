@@ -16,7 +16,7 @@ import {
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
-import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
+import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 
 import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';
@@ -193,7 +193,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         }));
       }
 
-      actions.prepareForNewMessage(prompt, getParticipantModelIds(participants), attachmentIds);
+      actions.prepareForNewMessage(prompt, getEnabledParticipantModelIds(participants), attachmentIds);
       actions.setStreamingRoundNumber(0);
       actions.setWaitingToStartStreaming(true);
       // ✅ TYPE-SAFE: Include participant ID for validation against config changes
@@ -303,8 +303,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     actions.setStreamingRoundNumber(nextRoundNumber);
     // ✅ FIX: Use optimistic participants when config changed, otherwise use fresh
     // This ensures expectedParticipantIds matches what will actually stream
+    // ✅ FIX: Use getEnabledParticipantModelIds for consistency with use-pending-message.ts validation
     const effectiveParticipants = hasParticipantChanges ? optimisticParticipants : freshParticipants;
-    actions.setExpectedParticipantIds(getParticipantModelIds(effectiveParticipants));
+    actions.setExpectedParticipantIds(getEnabledParticipantModelIds(effectiveParticipants));
 
     // Optimistically update participants in store if changes exist
     if (hasParticipantChanges) {
@@ -380,10 +381,20 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       if (response?.data?.participants) {
         const participantsWithDates = transformChatParticipants(response.data.participants);
         actions.updateParticipants(participantsWithDates);
-        actions.setExpectedParticipantIds(getParticipantModelIds(participantsWithDates));
+        // ✅ FIX: Use getEnabledParticipantModelIds for consistency with use-pending-message.ts validation
+        actions.setExpectedParticipantIds(getEnabledParticipantModelIds(participantsWithDates));
 
         const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
         actions.setSelectedParticipants(syncedParticipantConfigs);
+
+        // ✅ FIX: Update nextParticipantToTrigger with new participant ID
+        // The trigger was set before PATCH with OLD participant ID (line 341)
+        // After PATCH updates participants, the ID may have changed
+        // This prevents validation failures when streaming trigger checks participant ID
+        const newFirstParticipant = participantsWithDates[0];
+        if (newFirstParticipant) {
+          actions.setNextParticipantToTrigger({ index: 0, participantId: newFirstParticipant.id });
+        }
       }
 
       // ✅ UNIFIED FIX: Clear hasPendingConfigChanges BEFORE setThread

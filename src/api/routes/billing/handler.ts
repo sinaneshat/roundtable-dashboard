@@ -319,6 +319,8 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
       if (error instanceof AppError) {
         throw error;
       }
+      // Log the actual Stripe error for debugging
+      console.error('[Checkout] Stripe error:', error instanceof Error ? error.message : String(error));
       throw createError.internal('Failed to create checkout session', ErrorContextBuilders.stripe('create_checkout_session'));
     }
   },

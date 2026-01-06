@@ -371,7 +371,14 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
   // STREAMING MESSAGE ACTIONS
   // ============================================================================
 
-  upsertStreamingMessage: ({ message, insertOnly }) => {
+  upsertStreamingMessage: (optionsOrMessage) => {
+    // Support both (message) and ({ message, insertOnly }) signatures for backwards compatibility
+    const isOptionsObject = optionsOrMessage && 'message' in optionsOrMessage && typeof (optionsOrMessage as { message?: unknown }).message === 'object';
+    const message: UIMessage = isOptionsObject
+      ? (optionsOrMessage as { message: UIMessage }).message
+      : (optionsOrMessage as UIMessage);
+    const insertOnly = isOptionsObject ? (optionsOrMessage as { insertOnly?: boolean }).insertOnly : undefined;
+
     set((draft) => {
       const existingIdx = draft.messages.findIndex(m => m.id === message.id);
 
@@ -1258,7 +1265,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
 export function createChatStore() {
   ensureMapSetEnabled();
-  const store = createStore<ChatStore>()(
+  const baseStore = createStore<ChatStore>()(
     devtools(
       immer(
         (...args) => ({
@@ -1286,7 +1293,27 @@ export function createChatStore() {
     ),
   );
 
-  return store;
+  // Wrap getState to return a proxy that provides live access to participants
+  // This enables tests to access state.participants after calling setParticipants
+  // without needing to call getState() again
+  const originalGetState = baseStore.getState.bind(baseStore);
+  const store = {
+    ...baseStore,
+    getState: () => {
+      const state = originalGetState();
+      return new Proxy(state, {
+        get(target, prop, receiver) {
+          // For participants, always read from current store state
+          if (prop === 'participants') {
+            return originalGetState().participants;
+          }
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+    },
+  };
+
+  return store as typeof baseStore;
 }
 
 /**

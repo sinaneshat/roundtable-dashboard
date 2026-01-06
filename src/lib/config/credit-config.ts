@@ -25,8 +25,8 @@ export const CREDIT_CONFIG = {
       // All scenarios yield ~$25-30 cost on $59 revenue = ~50% margin
       monthlyCredits: 100_000,
       priceInCents: 5900,
-      stripeProductId: 'prod_TMletnsnfqVCHe',
-      stripePriceId: 'price_1SQ27952vWNZ3v8wLHORFzZw',
+      stripeProductId: 'prod_Tf8t3FTCKcpVDq',
+      stripePriceId: 'price_1Smaap52vWNZ3v8w4wEjE10y',
     },
   } satisfies Record<Exclude<PlanType, 'free'>, {
     signupCredits: number;

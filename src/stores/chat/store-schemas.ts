@@ -443,13 +443,19 @@ export const ModeratorResumptionStateSchema = z.object({
 export type ModeratorResumptionState = z.infer<typeof ModeratorResumptionStateSchema>;
 
 /**
- * ✅ TYPE-SAFE: Next participant to trigger includes ID for validation
+ * ✅ TYPE-SAFE: Next participant to trigger - object with ID for validation,
+ * or just index when participants aren't loaded yet (during prefill before initializeThread)
  * Prevents stale index from triggering wrong participant after config changes
  */
-export const NextParticipantToTriggerSchema = z.object({
+export const NextParticipantToTriggerObjectSchema = z.object({
   index: z.number().int().nonnegative(),
   participantId: z.string().min(1),
 });
+
+export const NextParticipantToTriggerSchema = z.union([
+  NextParticipantToTriggerObjectSchema,
+  z.number().int().nonnegative(),
+]);
 
 export type NextParticipantToTrigger = z.infer<typeof NextParticipantToTriggerSchema>;
 

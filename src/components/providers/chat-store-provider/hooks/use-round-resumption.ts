@@ -31,6 +31,15 @@ type UseRoundResumptionParams = {
 };
 
 /**
+ * Extract index from nextParticipantToTrigger which can be either:
+ * - A number (when set before participants are loaded)
+ * - An object { index, participantId } (when participants are available)
+ */
+function getParticipantIndex(value: { index: number; participantId: string } | number): number {
+  return typeof value === 'number' ? value : value.index;
+}
+
+/**
  * Handles incomplete round resumption from specific participant
  */
 export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
@@ -147,7 +156,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
     // Generate unique key for this resumption attempt
     const threadId = storeThread?.id || 'unknown';
-    const resumptionKey = `${threadId}-r${getCurrentRoundNumber(storeMessages)}-p${nextParticipantToTrigger.index}`;
+    const resumptionKey = `${threadId}-r${getCurrentRoundNumber(storeMessages)}-p${getParticipantIndex(nextParticipantToTrigger)}`;
 
     // Prevent duplicate triggers for the same resumption
     if (resumptionTriggeredRef.current === resumptionKey) {
@@ -206,7 +215,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
         // Generate resumption key and check for duplicates
         const threadId = latestThread?.id || 'unknown';
-        const retryResumptionKey = `${threadId}-r${currentRound}-p${latestNextParticipant.index}`;
+        const retryResumptionKey = `${threadId}-r${currentRound}-p${getParticipantIndex(latestNextParticipant)}`;
         if (resumptionTriggeredRef.current === retryResumptionKey) {
           return;
         }
@@ -231,7 +240,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
     // ✅ Mark as triggered before calling to prevent race condition double-triggers
     resumptionTriggeredRef.current = resumptionKey;
-    rlog.trigger('resume', `p${nextParticipantToTrigger.index} key=${resumptionKey}`);
+    rlog.trigger('resume', `p${getParticipantIndex(nextParticipantToTrigger)} key=${resumptionKey}`);
 
     // Resume from specific participant
     // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes

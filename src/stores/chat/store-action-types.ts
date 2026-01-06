@@ -164,8 +164,12 @@ export type UpsertStreamingMessageOptions = {
  * - Maintains round order (inserts after messages from earlier rounds)
  *
  * This is the primary action for use-multi-participant-chat.ts to write directly to store.
+ *
+ * Accepts both:
+ * - Direct message: `upsertStreamingMessage(message)`
+ * - Options object: `upsertStreamingMessage({ message, insertOnly })`
  */
-export type UpsertStreamingMessage = (options: UpsertStreamingMessageOptions) => void;
+export type UpsertStreamingMessage = (optionsOrMessage: UpsertStreamingMessageOptions | UIMessage) => void;
 
 /**
  * Replace a temporary message ID with a deterministic ID
@@ -360,11 +364,11 @@ export type HandleStreamResumptionFailure = (error: Error) => void;
 
 /**
  * Set the next participant to trigger for incomplete round resumption
- * Includes participant ID for validation against config changes
+ * Accepts object with ID for validation, or just index when participants aren't loaded yet
  * Used when detecting incomplete rounds on page load
  */
 export type SetNextParticipantToTrigger = (
-  value: { index: number; participantId: string } | null
+  value: { index: number; participantId: string } | number | null,
 ) => void;
 
 /**

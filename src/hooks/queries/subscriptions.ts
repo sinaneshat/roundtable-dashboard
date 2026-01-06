@@ -11,7 +11,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
@@ -21,41 +20,31 @@ import {
 
 /**
  * Hook to fetch all user subscriptions
- * Protected endpoint - requires authentication
+ * Protected endpoint - requires authentication (handled by backend)
  *
  * Stale time: 2 minutes (subscription data moderately fresh)
- *
- * @param options - Optional query options
- * @param options.forceEnabled - Force enable query regardless of auth state
  */
-export function useSubscriptionsQuery(options?: { forceEnabled?: boolean }) {
-  const { isAuthenticated } = useAuthCheck();
-
+export function useSubscriptionsQuery() {
   return useQuery({
     queryKey: queryKeys.subscriptions.list(),
     queryFn: () => getSubscriptionsService(),
     staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
     retry: false,
-    enabled: options?.forceEnabled ?? isAuthenticated, // Only fetch when authenticated
-    throwOnError: false,
   });
 }
 
 /**
  * Hook to fetch a specific subscription by ID
- * Protected endpoint - requires authentication and ownership
+ * Protected endpoint - requires authentication and ownership (handled by backend)
  *
  * @param subscriptionId - Subscription ID
  */
 export function useSubscriptionQuery(subscriptionId: string) {
-  const { isAuthenticated } = useAuthCheck();
-
   return useQuery({
     queryKey: queryKeys.subscriptions.detail(subscriptionId),
     queryFn: () => getSubscriptionService({ param: { id: subscriptionId } }),
     staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
-    enabled: isAuthenticated && !!subscriptionId,
+    enabled: !!subscriptionId,
     retry: false,
-    throwOnError: false,
   });
 }

@@ -108,8 +108,11 @@ export function useStreamingTrigger({
     // ✅ CHANGELOG: Wait for changelog to be fetched before streaming when config changed
     // configChangeRoundNumber is set BEFORE PATCH (signals pending changes)
     // isWaitingForChangelog is set AFTER PATCH (triggers changelog fetch)
-    // Both must be null/false for streaming to proceed
-    if (configChangeRoundNumber !== null || isWaitingForChangelog) {
+    // ✅ FIX: Bypass for initial thread creation (round 0)
+    // handleCreateThread does NOT set configChangeRoundNumber - only handleUpdateThreadAndSend does
+    // So if configChangeRoundNumber is null AND we're on OVERVIEW screen = initial thread
+    const isInitialThreadCreation = currentScreenMode === ScreenModes.OVERVIEW && waitingToStart && configChangeRoundNumber === null;
+    if ((configChangeRoundNumber !== null || isWaitingForChangelog) && !isInitialThreadCreation) {
       rlog.trigger('block-changelog', `configChangeRoundNumber=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
       return;
     }

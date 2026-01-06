@@ -38,6 +38,10 @@ export default function PricingScreen() {
   const products = productsData?.success ? productsData.data?.items ?? [] : [];
   const subscriptions: Subscription[] = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
 
+  const hasValidProductData = productsData?.success === true && !!productsData.data?.items;
+  const hasError = productsError !== undefined || (productsData !== undefined && productsData?.success === false);
+  const shouldShowLoading = isLoadingProducts || (productsData === undefined && !hasError);
+
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
@@ -124,15 +128,15 @@ export default function PricingScreen() {
   return (
     <ChatPage>
       <ChatPageHeader
-        title={t('billing.products.title')}
-        description={t('billing.products.description')}
+        title={t('pricing.page.title')}
+        description={t('pricing.page.description')}
       />
 
       <PricingContent
         products={products}
         subscriptions={subscriptions}
-        isLoading={isLoadingProducts}
-        error={productsError}
+        isLoading={shouldShowLoading}
+        error={hasError ? productsError : null}
         processingPriceId={processingPriceId}
         cancelingSubscriptionId={cancelingSubscriptionId}
         isManagingBilling={isManagingBilling}

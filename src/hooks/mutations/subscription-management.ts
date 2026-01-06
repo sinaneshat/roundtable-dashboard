@@ -42,45 +42,44 @@ export function useSwitchSubscriptionMutation() {
 
         queryClient.setQueryData<GetSubscriptionsResponse>(
           queryKeys.subscriptions.list(),
-          (oldData: GetSubscriptionsResponse | undefined) => {
-            if (!oldData?.success || !oldData.data?.items) {
+          (oldData) => {
+            if (!oldData || !oldData.success || !oldData.data?.items) {
               return oldData;
             }
 
             // Replace the updated subscription in the list
-            const updatedSubscriptions = oldData.data.items.map((sub: typeof updatedSubscription) =>
+            const updatedItems = oldData.data.items.map((sub) =>
               sub.id === updatedSubscription.id ? updatedSubscription : sub,
             );
 
             return {
-              ...oldData,
+              success: true,
               data: {
-                ...oldData.data,
-                items: updatedSubscriptions,
+                items: updatedItems,
+                count: oldData.data.count,
               },
             };
           },
         );
       }
 
-      // Invalidate all subscription-related queries to ensure UI updates
+      // Invalidate all subscription queries except the list we just updated (prevents GC with gcTime: 0)
       void queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
-        refetchType: 'active',
+        predicate: (query) => {
+          const key = query.queryKey;
+          return !(key.length >= 2 && key[0] === 'subscriptions' && key[1] === 'list');
+        },
       });
 
       // Invalidate usage queries since quota limits are tied to subscription tier
-      // This ensures quota limits, stats, and remaining usage are immediately updated
       void queryClient.invalidateQueries({
         queryKey: queryKeys.usage.all,
-        refetchType: 'active',
       });
 
-      // ✅ FIX: Invalidate models query since model access is tier-based
-      // This ensures model availability updates immediately after subscription changes
+      // Invalidate models query since model access is tier-based
       void queryClient.invalidateQueries({
         queryKey: queryKeys.models.all,
-        refetchType: 'active',
       });
     },
     retry: false,
@@ -109,45 +108,46 @@ export function useCancelSubscriptionMutation() {
 
         queryClient.setQueryData<GetSubscriptionsResponse>(
           queryKeys.subscriptions.list(),
-          (oldData: GetSubscriptionsResponse | undefined) => {
-            if (!oldData?.success || !oldData.data?.items) {
+          (oldData) => {
+            if (!oldData || !oldData.success || !oldData.data?.items) {
               return oldData;
             }
 
             // Replace the updated subscription in the list
-            const updatedSubscriptions = oldData.data.items.map((sub: typeof updatedSubscription) =>
+            const updatedItems = oldData.data.items.map((sub) =>
               sub.id === updatedSubscription.id ? updatedSubscription : sub,
             );
 
             return {
-              ...oldData,
+              success: true,
               data: {
-                ...oldData.data,
-                items: updatedSubscriptions,
+                items: updatedItems,
+                count: oldData.data.count,
               },
             };
           },
         );
       }
 
-      // Invalidate all subscription-related queries to ensure UI updates
+      // Invalidate all subscription queries except the list we just updated (prevents GC with gcTime: 0)
       void queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
-        refetchType: 'active',
+        predicate: (query) => {
+          const key = query.queryKey;
+          return !(key.length >= 2 && key[0] === 'subscriptions' && key[1] === 'list');
+        },
       });
 
       // Invalidate usage queries since quota limits are tied to subscription tier
       // When subscription is cancelled, user may revert to free tier limits
       void queryClient.invalidateQueries({
         queryKey: queryKeys.usage.all,
-        refetchType: 'active',
       });
 
-      // ✅ FIX: Invalidate models query since model access is tier-based
+      // Invalidate models query since model access is tier-based
       // When cancelled, user may lose access to premium models
       void queryClient.invalidateQueries({
         queryKey: queryKeys.models.all,
-        refetchType: 'active',
       });
     },
     retry: false,

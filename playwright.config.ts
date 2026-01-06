@@ -85,8 +85,8 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
       },
-      // Match auth, smoke, and navigation tests at root level
-      testMatch: /.*\/(auth|auth-signup|smoke|navigation)\.spec\.ts$/,
+      // Match auth, smoke, and navigation tests at root level, plus signup-flow in flows/
+      testMatch: /.*\/(auth|auth-signup|smoke|navigation|signup-flow)\.spec\.ts$/,
     },
 
     // ====== PRO USER TESTS ======

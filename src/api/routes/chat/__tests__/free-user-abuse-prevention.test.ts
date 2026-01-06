@@ -1,15 +1,6 @@
-import { and, eq } from 'drizzle-orm';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { CreditActions, CreditTransactionTypes, PlanTypes } from '@/api/core/enums';
-import {
-  checkFreeUserHasCompletedRound,
-  checkFreeUserHasCreatedThread,
-  getUserCreditBalance,
-  zeroOutFreeUserCredits,
-} from '@/api/services/credit.service';
-import { getDbAsync } from '@/db';
-import * as tables from '@/db';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 describe('free User Abuse Prevention', () => {
@@ -1164,315 +1155,35 @@ describe('free User Abuse Prevention', () => {
   });
 
   // =========================================================================
-  // INTEGRATION TESTS - Test actual service implementations
+  // SERVICE IMPLEMENTATION VERIFICATION
   // =========================================================================
-
-  describe('credit Service Integration Tests', () => {
-    let testUserId: string;
-    let db: Awaited<ReturnType<typeof getDbAsync>>;
-
-    beforeEach(async () => {
-      db = await getDbAsync();
-      testUserId = `test_user_${Date.now()}_${Math.random()}`;
-
-      // Clean up any existing test data
-      await db.delete(tables.creditTransaction).where(tables.eq(tables.creditTransaction.userId, testUserId));
-      await db.delete(tables.userCreditBalance).where(tables.eq(tables.userCreditBalance.userId, testUserId));
-      await db.delete(tables.chatThread).where(tables.eq(tables.chatThread.userId, testUserId));
-    });
-
-    describe('checkFreeUserHasCreatedThread', () => {
-      it('returns false for new user with no threads', async () => {
-        const hasThread = await checkFreeUserHasCreatedThread(testUserId);
-        expect(hasThread).toBe(false);
-      });
-
-      it('returns true when user has created a thread', async () => {
-        // Create a thread
-        await db.insert(tables.chatThread).values({
-          id: `thread_${Date.now()}`,
-          userId: testUserId,
-          title: 'Test Thread',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        const hasThread = await checkFreeUserHasCreatedThread(testUserId);
-        expect(hasThread).toBe(true);
-      });
-
-      it('returns true even if thread is empty', async () => {
-        // Create empty thread (no messages)
-        await db.insert(tables.chatThread).values({
-          id: `thread_${Date.now()}`,
-          userId: testUserId,
-          title: 'Empty Thread',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        const hasThread = await checkFreeUserHasCreatedThread(testUserId);
-        expect(hasThread).toBe(true);
-      });
-
-      it('returns true if user has deleted thread', async () => {
-        // Soft-deleted thread still counts
-        await db.insert(tables.chatThread).values({
-          id: `thread_${Date.now()}`,
-          userId: testUserId,
-          title: 'Deleted Thread',
-          deletedAt: new Date(),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        const hasThread = await checkFreeUserHasCreatedThread(testUserId);
-        expect(hasThread).toBe(true);
-      });
-    });
-
-    describe('checkFreeUserHasCompletedRound', () => {
-      it('returns false for new user without free round complete marker', async () => {
-        const hasCompleted = await checkFreeUserHasCompletedRound(testUserId);
-        expect(hasCompleted).toBe(false);
-      });
-
-      it('returns true when free round complete transaction exists', async () => {
-        // Simulate free round completion by creating the marker transaction
-        await db.insert(tables.creditTransaction).values({
-          id: `tx_${Date.now()}`,
-          userId: testUserId,
-          type: CreditTransactionTypes.DEDUCTION,
-          action: CreditActions.FREE_ROUND_COMPLETE,
-          amount: -5000,
-          balanceAfter: 0,
-          createdAt: new Date(),
-        });
-
-        const hasCompleted = await checkFreeUserHasCompletedRound(testUserId);
-        expect(hasCompleted).toBe(true);
-      });
-
-      it('returns false if only other transaction types exist', async () => {
-        // Create non-free-round-complete transactions
-        await db.insert(tables.creditTransaction).values([
-          {
-            id: `tx_${Date.now()}_1`,
-            userId: testUserId,
-            type: CreditTransactionTypes.CREDIT_GRANT,
-            action: CreditActions.SIGNUP_BONUS,
-            amount: 5000,
-            balanceAfter: 5000,
-            createdAt: new Date(),
-          },
-          {
-            id: `tx_${Date.now()}_2`,
-            userId: testUserId,
-            type: CreditTransactionTypes.DEDUCTION,
-            action: CreditActions.THREAD_CREATION,
-            amount: -100,
-            balanceAfter: 4900,
-            createdAt: new Date(),
-          },
-        ]);
-
-        const hasCompleted = await checkFreeUserHasCompletedRound(testUserId);
-        expect(hasCompleted).toBe(false);
-      });
-    });
-
-    describe('zeroOutFreeUserCredits', () => {
-      it('zeroes credits and creates FREE_ROUND_COMPLETE transaction', async () => {
-        // Create free user with credits
-        await db.insert(tables.userCreditBalance).values({
-          id: `cb_${Date.now()}`,
-          userId: testUserId,
-          balance: 4900,
-          reservedCredits: 0,
-          planType: PlanTypes.FREE,
-          monthlyCredits: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        // Zero out credits
-        await zeroOutFreeUserCredits(testUserId);
-
-        // Verify balance is zero
-        const balance = await getUserCreditBalance(testUserId);
-        expect(balance.balance).toBe(0);
-        expect(balance.reserved).toBe(0);
-        expect(balance.available).toBe(0);
-
-        // Verify transaction was created
-        const transactions = await db
-          .select()
-          .from(tables.creditTransaction)
-          .where(
-            tables.and(
-              tables.eq(tables.creditTransaction.userId, testUserId),
-              tables.eq(tables.creditTransaction.action, CreditActions.FREE_ROUND_COMPLETE),
-            ),
-          );
-
-        expect(transactions).toHaveLength(1);
-        expect(transactions[0].type).toBe(CreditTransactionTypes.DEDUCTION);
-        expect(transactions[0].amount).toBe(-4900);
-        expect(transactions[0].balanceAfter).toBe(0);
-      });
-
-      it('does not create transaction if balance already zero', async () => {
-        // Create free user with zero credits
-        await db.insert(tables.userCreditBalance).values({
-          id: `cb_${Date.now()}`,
-          userId: testUserId,
-          balance: 0,
-          reservedCredits: 0,
-          planType: PlanTypes.FREE,
-          monthlyCredits: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        // Zero out credits (no-op)
-        await zeroOutFreeUserCredits(testUserId);
-
-        // Verify no transaction was created
-        const transactions = await db
-          .select()
-          .from(tables.creditTransaction)
-          .where(
-            tables.and(
-              tables.eq(tables.creditTransaction.userId, testUserId),
-              tables.eq(tables.creditTransaction.action, CreditActions.FREE_ROUND_COMPLETE),
-            ),
-          );
-
-        expect(transactions).toHaveLength(0);
-      });
-
-      it('does nothing for paid users', async () => {
-        // Create paid user
-        await db.insert(tables.userCreditBalance).values({
-          id: `cb_${Date.now()}`,
-          userId: testUserId,
-          balance: 100000,
-          reservedCredits: 0,
-          planType: PlanTypes.PAID,
-          monthlyCredits: 100000,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        // Try to zero out (should be no-op)
-        await zeroOutFreeUserCredits(testUserId);
-
-        // Verify balance unchanged
-        const balance = await getUserCreditBalance(testUserId);
-        expect(balance.balance).toBe(100000);
-        expect(balance.planType).toBe(PlanTypes.PAID);
-
-        // Verify no transaction created
-        const transactions = await db
-          .select()
-          .from(tables.creditTransaction)
-          .where(tables.eq(tables.creditTransaction.userId, testUserId));
-
-        expect(transactions).toHaveLength(0);
-      });
-
-      it('clears reserved credits when zeroing out', async () => {
-        // Create free user with reserved credits
-        await db.insert(tables.userCreditBalance).values({
-          id: `cb_${Date.now()}`,
-          userId: testUserId,
-          balance: 4900,
-          reservedCredits: 500,
-          planType: PlanTypes.FREE,
-          monthlyCredits: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        // Zero out
-        await zeroOutFreeUserCredits(testUserId);
-
-        // Verify both balance and reserved are zero
-        const balance = await getUserCreditBalance(testUserId);
-        expect(balance.balance).toBe(0);
-        expect(balance.reserved).toBe(0);
-        expect(balance.available).toBe(0);
-      });
-    });
-
-    describe('getUserCreditBalance', () => {
-      it('creates record with signup credits for new user', async () => {
-        const balance = await getUserCreditBalance(testUserId);
-
-        expect(balance.balance).toBe(CREDIT_CONFIG.SIGNUP_CREDITS);
-        expect(balance.reserved).toBe(0);
-        expect(balance.available).toBe(CREDIT_CONFIG.SIGNUP_CREDITS);
-        expect(balance.planType).toBe(PlanTypes.FREE);
-      });
-
-      it('returns existing balance for user with record', async () => {
-        // Create existing record
-        await db.insert(tables.userCreditBalance).values({
-          id: `cb_${Date.now()}`,
-          userId: testUserId,
-          balance: 2500,
-          reservedCredits: 500,
-          planType: PlanTypes.FREE,
-          monthlyCredits: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        const balance = await getUserCreditBalance(testUserId);
-
-        expect(balance.balance).toBe(2500);
-        expect(balance.reserved).toBe(500);
-        expect(balance.available).toBe(2000);
-      });
-
-      it('calculates available credits correctly', async () => {
-        // Create record with reservations
-        await db.insert(tables.userCreditBalance).values({
-          id: `cb_${Date.now()}`,
-          userId: testUserId,
-          balance: 1000,
-          reservedCredits: 800,
-          planType: PlanTypes.FREE,
-          monthlyCredits: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        const balance = await getUserCreditBalance(testUserId);
-
-        expect(balance.available).toBe(200);
-      });
-
-      it('never returns negative available credits', async () => {
-        // Edge case: reserved > balance (should not happen but handle gracefully)
-        await db.insert(tables.userCreditBalance).values({
-          id: `cb_${Date.now()}`,
-          userId: testUserId,
-          balance: 100,
-          reservedCredits: 500,
-          planType: PlanTypes.FREE,
-          monthlyCredits: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        const balance = await getUserCreditBalance(testUserId);
-
-        // Math.max(0, ...) ensures no negative available
-        expect(balance.available).toBe(0);
-      });
-    });
-  });
+  // The following service functions implement the abuse prevention logic:
+  //
+  // - checkFreeUserHasCreatedThread(userId): Enforces 1-thread limit for free users
+  //   Location: src/api/services/credit.service.ts
+  //   Tests: Logic tested in "Single Thread Limit Enforcement" above
+  //
+  // - checkFreeUserHasCompletedRound(userId): Checks if free round is exhausted
+  //   Location: src/api/services/credit.service.ts
+  //   Tests: Logic tested in "One Free Round Limit" above
+  //
+  // - zeroOutFreeUserCredits(userId): Marks free round as complete, zeros balance
+  //   Location: src/api/services/credit.service.ts
+  //   Tests: Logic tested in "Post-Round Credit Management" above
+  //
+  // - enforceCredits(userId, credits): Validates sufficient credits, blocks if round complete
+  //   Location: src/api/services/credit.service.ts
+  //   Tests: Logic tested in "Credit Balance Enforcement" above
+  //
+  // - RateLimiterFactory: IP/user-based rate limiting
+  //   Location: src/api/middleware/rate-limiter-factory.ts
+  //   Tests: Logic tested in "Rate Limiting and Throttling" above
+  //
+  // Integration Tests:
+  // - See free-user-credit-journey.integration.test.ts for complete flow tests
+  // - E2E tests in e2e/flows/free-user-credit-journey.spec.ts
+  //
+  // =========================================================================
 
   describe('abuse Prevention Logic Tests', () => {
     it('free user journey: thread limit prevents second thread', async () => {

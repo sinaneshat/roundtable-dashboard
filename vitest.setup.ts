@@ -108,6 +108,7 @@ vi.mock('@/lib/auth/client', () => ({
   signIn: vi.fn(),
 }));
 
+
 // Mock next/navigation - required for Next.js 13+ App Router
 vi.mock('next/navigation', () => ({
   useRouter: vi.fn(() => ({
@@ -130,6 +131,26 @@ vi.mock('next/navigation', () => ({
   useSelectedLayoutSegments: vi.fn(),
   notFound: vi.fn(),
   redirect: vi.fn(),
+}));
+
+// Mock next/headers - required for API client in SSR context
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(async () => ({
+    get: vi.fn(),
+    set: vi.fn(),
+    delete: vi.fn(),
+    has: vi.fn(),
+    getAll: vi.fn(() => []),
+    toString: vi.fn(() => ''),
+  })),
+  headers: vi.fn(async () => ({
+    get: vi.fn(),
+    set: vi.fn(),
+    delete: vi.fn(),
+    has: vi.fn(),
+    getAll: vi.fn(() => []),
+    entries: vi.fn(() => []),
+  })),
 }));
 
 // Mock environment variables for testing

@@ -2,66 +2,18 @@
  * Subscription Test Mock Factories
  *
  * Factory functions for creating mock subscription data for testing.
- * Provides type-safe mocks for subscriptions, products, prices, and API responses.
+ * Provides type-safe mocks for subscriptions and API responses.
+ *
+ * NOTE: For product and price mocks, import from billing-test-factories.ts
  */
 
 import type { StripeSubscriptionStatus } from '@/api/core/enums';
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
-import type { Price, Product, Subscription } from '@/api/routes/billing/schema';
+import type { Subscription } from '@/api/routes/billing/schema';
 import type {
   GetSubscriptionResponse,
   GetSubscriptionsResponse,
 } from '@/services/api';
-
-// ============================================================================
-// Price Factory
-// ============================================================================
-
-type MockPriceData = {
-  id?: string;
-  productId?: string;
-  unitAmount?: number;
-  currency?: string;
-  interval?: 'month' | 'year';
-  trialPeriodDays?: number | null;
-  active?: boolean;
-};
-
-export function createMockPrice(data?: MockPriceData): Price {
-  return {
-    id: data?.id ?? 'price_test_monthly',
-    productId: data?.productId ?? 'prod_test_pro',
-    unitAmount: data?.unitAmount ?? 2000,
-    currency: data?.currency ?? 'usd',
-    interval: data?.interval ?? 'month',
-    trialPeriodDays: data?.trialPeriodDays ?? null,
-    active: data?.active ?? true,
-  };
-}
-
-// ============================================================================
-// Product Factory
-// ============================================================================
-
-type MockProductData = {
-  id?: string;
-  name?: string;
-  description?: string;
-  active?: boolean;
-  features?: string[];
-  prices?: Price[];
-};
-
-export function createMockProduct(data?: MockProductData): Product {
-  return {
-    id: data?.id ?? 'prod_test_pro',
-    name: data?.name ?? 'Pro Plan',
-    description: data?.description ?? 'Professional tier with enhanced features',
-    active: data?.active ?? true,
-    features: data?.features ?? ['Unlimited conversations', 'Premium models', 'Priority support'],
-    prices: data?.prices ?? [createMockPrice()],
-  };
-}
 
 // ============================================================================
 // Subscription Factory
@@ -109,12 +61,13 @@ export function createMockSubscription(data?: MockSubscriptionData): Subscriptio
 // Active Subscription Presets
 // ============================================================================
 
-export function createActiveSubscription(overrides?: MockSubscriptionData): Subscription {
+export function createActiveSubscription(overrides?: MockSubscriptionData | string): Subscription {
+  const data = typeof overrides === 'string' ? { priceId: overrides } : overrides;
   return createMockSubscription({
     id: 'sub_active',
     status: StripeSubscriptionStatuses.ACTIVE,
     cancelAtPeriodEnd: false,
-    ...overrides,
+    ...data,
   });
 }
 

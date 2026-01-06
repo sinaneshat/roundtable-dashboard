@@ -904,23 +904,57 @@ async function searchDuckDuckGoFallback(
       signal: controller.signal,
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept':
-          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': country
           ? `${country.toLowerCase()},en;q=0.9`
-          : 'en-US,en;q=0.5',
+          : 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0',
       },
     });
 
     clearTimeout(timeoutId);
 
-    if (!response.ok)
+    if (!response.ok) {
+      console.error('[WebSearch] DuckDuckGo returned non-OK status:', response.status);
       return [];
+    }
 
     const html = await response.text();
-    return parseDuckDuckGoResults(html, maxResults);
-  } catch {
+
+    // ✅ DEBUG: Log if we got a captcha or error page
+    if (html.includes('g-recaptcha') || html.includes('captcha')) {
+      console.error('[WebSearch] DuckDuckGo returned captcha page - bot detection triggered');
+      return [];
+    }
+
+    if (html.includes('rate limit') || html.includes('too many requests')) {
+      console.error('[WebSearch] DuckDuckGo rate limit detected');
+      return [];
+    }
+
+    const results = parseDuckDuckGoResults(html, maxResults);
+
+    // ✅ DEBUG: Log when no results found despite successful response
+    if (results.length === 0) {
+      console.error('[WebSearch] DuckDuckGo returned HTML but no results parsed. Query:', query.substring(0, 50));
+      // Log a snippet of the HTML structure for debugging (first 500 chars)
+      const snippet = html.substring(0, 500).replace(/\s+/g, ' ');
+      console.error('[WebSearch] HTML snippet:', snippet);
+    }
+
+    return results;
+  } catch (error) {
+    console.error('[WebSearch] DuckDuckGo fetch error:', error instanceof Error ? error.message : String(error));
     return [];
   }
 }

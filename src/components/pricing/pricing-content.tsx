@@ -41,6 +41,7 @@ type ProductGridProps = {
   onSubscribe: (priceId: string) => void | Promise<void>;
   onCancel: (subscriptionId: string) => void | Promise<void>;
   onManageBilling: () => void;
+  showSubscriptionBanner: boolean;
 };
 
 export function PricingContent({
@@ -79,13 +80,14 @@ export function PricingContent({
   };
 
   const monthlyProducts = products
+    .filter(product => product.prices && product.prices.length > 0)
     .map((product) => {
-      const filteredPrices = product.prices?.filter((price: Price) => {
-        return price.interval === UIBillingIntervals.MONTH;
-      }) ?? [];
+      const filteredPrices = product.prices!.filter((price: Price) => {
+        return price.interval === UIBillingIntervals.MONTH && price.unitAmount !== null && price.unitAmount !== undefined;
+      });
       return { ...product, prices: filteredPrices };
     })
-    .filter(product => product.prices && product.prices.length > 0);
+    .filter(product => product.prices.length > 0);
 
   if (isLoading) {
     return <PricingContentSkeleton />;
@@ -95,10 +97,10 @@ export function PricingContent({
     return (
       <div className="flex items-center justify-center py-16">
         <div className="text-center space-y-3">
-          <p className="text-sm font-medium text-destructive">{t('common.error')}</p>
+          <p className="text-sm font-medium text-destructive">Error</p>
           <p className="text-xs text-muted-foreground">{t('plans.errorDescription')}</p>
           <Button variant="outline" size="sm" onClick={() => router.refresh()}>
-            {t('states.error.retry')}
+            Retry
           </Button>
         </div>
       </div>
@@ -154,6 +156,7 @@ export function PricingContent({
           onSubscribe={onSubscribe}
           onCancel={onCancel}
           onManageBilling={onManageBilling}
+          showSubscriptionBanner={showSubscriptionBanner || false}
         />
       </div>
     </div>
@@ -171,15 +174,15 @@ function ProductGrid({
   onSubscribe,
   onCancel,
   onManageBilling,
+  showSubscriptionBanner,
 }: ProductGridProps) {
-  const t = useTranslations();
   const isMounted = useIsMounted();
 
   if (products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
         <p className="text-sm text-muted-foreground">
-          {t('billing.noPlansForInterval')}
+          No plans available
         </p>
       </div>
     );
@@ -209,7 +212,7 @@ function ProductGrid({
                 trialDays: price.trialPeriodDays,
               }}
               features={product.features}
-              isCurrentPlan={hasSubscription}
+              isCurrentPlan={!showSubscriptionBanner && hasSubscription}
               isMostPopular={true}
               isProcessingSubscribe={processingPriceId === price.id}
               isProcessingCancel={subscription ? cancelingSubscriptionId === subscription.id : false}
