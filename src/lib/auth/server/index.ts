@@ -18,12 +18,18 @@ import { validateEmailDomain } from '../utils';
  * At that point, getCloudflareContext() should be available (inside a request).
  *
  * Priority:
- * 1. Cloudflare runtime env (getCloudflareContext) - production/preview
- * 2. process.env - local dev (.env files)
+ * 1. Build phase placeholder (Next.js build - secret not needed)
+ * 2. Cloudflare runtime env (getCloudflareContext) - production/preview
+ * 3. process.env - local dev (.env files)
  *
- * @throws Error if no secret is available (prevents insecure fallback)
+ * @throws Error if no secret is available at runtime (prevents insecure fallback)
  */
 function getAuthSecret(): string {
+  // 0. During Next.js build phase, return placeholder (secret only needed at runtime)
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return 'build-time-placeholder-not-used-at-runtime';
+  }
+
   // 1. Try Cloudflare runtime context (production/preview)
   try {
     const { env } = getCloudflareContext();
