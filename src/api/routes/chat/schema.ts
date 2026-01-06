@@ -232,6 +232,10 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
       description: 'Initial user message to start the conversation',
       example: 'What are innovative product ideas for sustainability?',
     }),
+    firstMessageId: z.string().optional().openapi({
+      description: 'Optional message ID for the first message - if provided, will be used instead of generating a new one. Critical for streaming which expects the message to exist with this exact ID.',
+      example: 'msg_abc123',
+    }),
     attachmentIds: z.array(z.string()).optional().openapi({
       description: 'Upload IDs to attach to the first message',
       example: ['01HXYZ123ABC', '01HXYZ456DEF'],
@@ -774,6 +778,14 @@ export const StreamChatRequestSchema = z.object({
   id: z.string().min(1).openapi({
     description: 'Thread ID',
     example: 'thread_abc123',
+  }),
+  // ✅ CRITICAL FIX: userMessageId allows frontend to pass the correct message ID
+  // AI SDK's sendMessage creates messages with its own generated IDs (nanoid-style)
+  // But the user message was already persisted via PATCH/POST with a backend ULID.
+  // This field allows the backend to look up the correct pre-persisted message.
+  userMessageId: z.string().optional().openapi({
+    description: 'Backend-generated user message ID (ULID). If provided, backend uses this instead of message.id for DB lookup. Critical for multi-round chat where messages are pre-persisted via PATCH.',
+    example: '01HXYZ123ABC',
   }),
   participantIndex: z.number().int().min(0).optional().default(0).openapi({
     description: 'Participant index (0-based)',

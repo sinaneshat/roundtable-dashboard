@@ -136,6 +136,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const {
         message,
         id: threadId,
+        // ✅ CRITICAL FIX: userMessageId allows correct DB lookup for pre-persisted messages
+        // AI SDK generates its own message IDs, but user messages are pre-persisted via PATCH/POST
+        // with backend ULIDs. Using userMessageId (when provided) ensures we find the correct message.
+        userMessageId,
         participantIndex,
         participants: providedParticipants,
         regenerateRound,
@@ -426,18 +430,22 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         message.role === UIMessageRoles.USER
         && participantIndex === 0
       ) {
-        const lastMessage = message;
+        // ✅ CRITICAL FIX: Use userMessageId (backend ULID) instead of message.id (AI SDK generated)
+        // AI SDK's sendMessage creates messages with its own nanoid-style IDs, but the user message
+        // was already persisted via PATCH/POST with a backend-generated ULID. The frontend sends
+        // the correct ID in userMessageId so we can find the pre-persisted message.
+        const lookupMessageId = userMessageId || message.id;
         const existsInDb = await db.query.chatMessage.findFirst({
-          where: eq(tables.chatMessage.id, lastMessage.id),
+          where: eq(tables.chatMessage.id, lookupMessageId),
         });
 
         if (!existsInDb) {
           // Check if this is an optimistic message (created by frontend before PATCH)
           // Optimistic messages have format: "optimistic-user-{roundNumber}-{timestamp}"
-          const isOptimisticMessage = lastMessage.id.startsWith('optimistic-');
+          const isOptimisticMessage = lookupMessageId.startsWith('optimistic-');
           if (!isOptimisticMessage) {
             // Only warn for non-optimistic messages - those should have been persisted via PATCH
-            console.error(`[stream] User message not found in DB, expected pre-persisted: ${lastMessage.id}`);
+            console.error(`[stream] User message not found in DB, expected pre-persisted: ${lookupMessageId} (userMessageId=${userMessageId}, message.id=${message.id})`);
           }
           // For optimistic messages, this is a timing race between store update and streaming
           // The message will be persisted by the PATCH that's running concurrently

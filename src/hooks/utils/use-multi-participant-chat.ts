@@ -360,6 +360,12 @@ export function useMultiParticipantChat(
   // Key format: "r{round}_p{participantIndex}"
   const triggeredNextForRef = useRef<Set<string>>(new Set());
 
+  // ✅ CRITICAL FIX: Track expected user message ID for backend lookup
+  // AI SDK's sendMessage creates messages with its own nanoid-style IDs, but user messages
+  // are pre-persisted via PATCH/POST with backend ULIDs. This ref allows us to pass the
+  // correct ID to the streaming endpoint so backend can find the pre-persisted message.
+  const expectedUserMessageIdRef = useRef<string | null>(null);
+
   // Refs to hold values needed for triggering (to avoid closure issues in callbacks)
   const messagesRef = useRef<UIMessage[]>([]);
   // ✅ TYPE-SAFE: Use DbUserMessageMetadata (without createdAt which is added by backend)
@@ -641,6 +647,11 @@ export function useMultiParticipantChat(
         enableWebSearch: callbackRefs.enableWebSearch.current,
         // ✅ ATTACHMENTS: Include attachment IDs for message association (first participant only)
         ...(attachmentIdsForRequest && attachmentIdsForRequest.length > 0 && { attachmentIds: attachmentIdsForRequest }),
+        // ✅ CRITICAL FIX: Pass expected user message ID for backend DB lookup
+        // AI SDK's sendMessage creates messages with its own nanoid-style IDs, but user messages
+        // are pre-persisted via PATCH/POST with backend ULIDs. This allows backend to find the
+        // correct pre-persisted message instead of using AI SDK's generated ID.
+        ...(expectedUserMessageIdRef.current && participantIndexToUse === 0 && { userMessageId: expectedUserMessageIdRef.current }),
       };
 
       return { body };
@@ -1692,6 +1703,12 @@ export function useMultiParticipantChat(
       participantIndexQueue.current.push(0);
     }
 
+    // ✅ CRITICAL FIX: Store the expected user message ID for backend DB lookup
+    // AI SDK's sendMessage creates messages with its own nanoid-style IDs, but the user message
+    // was already persisted via PATCH/POST with a backend ULID. Store the correct ID so
+    // prepareSendMessagesRequest can pass it to the backend for correct DB lookup.
+    expectedUserMessageIdRef.current = lastUserMessage.id;
+
     // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
     // The AI SDK's Chat instance can be in an invalid state during:
     // - Hot Module Replacement (Fast Refresh in development)
@@ -1946,6 +1963,14 @@ export function useMultiParticipantChat(
     if (!queuedParticipantsThisRoundRef.current.has(fromIndex)) {
       queuedParticipantsThisRoundRef.current.add(fromIndex);
       participantIndexQueue.current.push(fromIndex);
+    }
+
+    // ✅ CRITICAL FIX: Store expected user message ID for backend DB lookup
+    // Only needed when this is triggering the first participant (index 0)
+    // AI SDK's sendMessage will create a message with its own ID, but we need
+    // the backend to look up by the correct pre-persisted message ID.
+    if (fromIndex === 0) {
+      expectedUserMessageIdRef.current = lastUserMessage.id;
     }
 
     // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors

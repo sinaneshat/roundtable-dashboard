@@ -279,10 +279,15 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       );
     }
     // ✅ CREDITS: Credits already enforced at start of handler (line 134)
+    // ✅ CRITICAL FIX: Use provided ID if present, otherwise generate new ULID
+    // Streaming handler expects user messages to be pre-persisted with the EXACT ID
+    // that the frontend sends in the streaming request. If we generate a different ID,
+    // streaming will fail with "User message not found in DB" error.
+    const firstMessageId = body.firstMessageId || ulid();
     const [firstMessage] = await db
       .insert(tables.chatMessage)
       .values({
-        id: ulid(),
+        id: firstMessageId,
         threadId,
         role: MessageRoles.USER,
         parts: [{ type: MessagePartTypes.TEXT, text: body.firstMessage }],

@@ -43,8 +43,9 @@ async function authenticateUser(
 
   try {
     // Navigate to the app first to establish origin cookies
-    await page.goto(baseURL);
-    await page.waitForLoadState('networkidle');
+    // ✅ FIX: Increase timeout for slow initial compilation
+    await page.goto(baseURL, { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 60000 });
 
     // Try sign-up first (creates user if doesn't exist)
     const signUpResponse = await page.request.post(`${baseURL}/api/auth/sign-up/email`, {
@@ -100,8 +101,9 @@ async function authenticateUser(
     }
 
     // Navigate to /chat to verify auth and get final cookies
-    await page.goto(`${baseURL}/chat`, { timeout: 30000 });
-    await page.waitForLoadState('networkidle', { timeout: 30000 });
+    // ✅ FIX: Increase timeout for slow initial compilation
+    await page.goto(`${baseURL}/chat`, { timeout: 90000 });
+    await page.waitForLoadState('networkidle', { timeout: 90000 });
 
     // Verify we're authenticated (should be on /chat, not redirected to sign-in)
     const currentUrl = page.url();
@@ -150,6 +152,30 @@ function setupBillingData(): void {
   const now = Math.floor(Date.now() / 1000);
   const futureDate = now + 365 * 24 * 60 * 60; // 1 year from now (in seconds)
 
+  // ✅ FIX: Query for an existing price_id from stripe_price table (FK constraint)
+  let priceId = 'price_test_e2e';
+  try {
+    const priceResult = execSync(
+      `npx wrangler d1 execute DB --local --command="SELECT id FROM stripe_price LIMIT 1" --json`,
+      { stdio: 'pipe', encoding: 'utf-8' },
+    );
+    const priceData = JSON.parse(priceResult);
+    const prices = priceData[0]?.results || [];
+    if (prices.length > 0) {
+      priceId = prices[0].id;
+      console.error(`📋 Using existing price: ${priceId}`);
+    } else {
+      // Create a test price if none exists
+      console.error('📋 No prices found, creating test price...');
+      execSync(
+        `npx wrangler d1 execute DB --local --command="INSERT OR IGNORE INTO stripe_price (id, product_id, currency, unit_amount, interval_count, type, lookup_key, active, created_at, updated_at) VALUES ('${priceId}', 'prod_test_e2e', 'usd', 5900, 1, 'recurring', 'pro_monthly', 1, ${now}, ${now});"`,
+        { stdio: 'pipe', encoding: 'utf-8' },
+      );
+    }
+  } catch {
+    console.error('⚠️ Could not query/create price, subscription setup may fail');
+  }
+
   for (const user of ALL_TEST_USERS) {
     const userId = userIds.get(user.email);
     if (!userId) {
@@ -182,19 +208,29 @@ function setupBillingData(): void {
       // Create subscription for Pro user
       if (user.tier === 'pro') {
         const subscriptionId = `sub_e2e_${emailHash}`;
-        const subscriptionSql = `INSERT OR IGNORE INTO stripe_subscription (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, current_period_start, current_period_end, metadata, version, created_at, updated_at) VALUES ('${subscriptionId}', '${customerId}', '${userId}', 'active', 'price_1Shoc952vWNZ3v8wCuBiKKIA', 1, 0, ${now}, ${futureDate}, NULL, 1, ${now}, ${now});`;
+        // ✅ FIX: Use dynamic priceId (queried from DB) to satisfy FK constraint
+        const subscriptionSql = `INSERT OR IGNORE INTO stripe_subscription (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, current_period_start, current_period_end, metadata, version, created_at, updated_at) VALUES ('${subscriptionId}', '${customerId}', '${userId}', 'active', '${priceId}', 1, 0, ${now}, ${futureDate}, NULL, 1, ${now}, ${now});`;
 
         execSync(`npx wrangler d1 execute DB --local --command="${subscriptionSql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });
 
-        // Create credit balance for Pro user - use INSERT OR IGNORE
+        // Create credit balance for Pro user - use INSERT OR IGNORE then UPDATE to reset balance
         const creditBalanceId = `cb_e2e_${emailHash}`;
         const monthlyCredits = 50000; // Pro tier monthly credits
-        const creditBalanceSql = `INSERT OR IGNORE INTO user_credit_balance (id, user_id, balance, reserved_credits, plan_type, monthly_credits, pay_as_you_go_enabled, next_refill_at, version, created_at, updated_at) VALUES ('${creditBalanceId}', '${userId}', ${monthlyCredits}, 0, 'paid', ${monthlyCredits}, 0, ${futureDate}, 1, ${now}, ${now});`;
+        // ✅ FIX: Removed pay_as_you_go_enabled column (doesn't exist in schema)
+        const creditBalanceSql = `INSERT OR IGNORE INTO user_credit_balance (id, user_id, balance, reserved_credits, plan_type, monthly_credits, next_refill_at, version, created_at, updated_at) VALUES ('${creditBalanceId}', '${userId}', ${monthlyCredits}, 0, 'paid', ${monthlyCredits}, ${futureDate}, 1, ${now}, ${now});`;
 
         execSync(`npx wrangler d1 execute DB --local --command="${creditBalanceSql}"`, {
+          stdio: 'pipe',
+          encoding: 'utf-8',
+        });
+
+        // ✅ FIX: ALWAYS reset credit balance to full on each test run
+        // INSERT OR IGNORE doesn't update existing records, so credits get exhausted across runs
+        const resetCreditsSql = `UPDATE user_credit_balance SET balance = ${monthlyCredits}, reserved_credits = 0, updated_at = ${now} WHERE user_id = '${userId}';`;
+        execSync(`npx wrangler d1 execute DB --local --command="${resetCreditsSql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });
@@ -210,12 +246,55 @@ function setupBillingData(): void {
           stdio: 'pipe',
           encoding: 'utf-8',
         });
+
+        // ✅ FIX: ALWAYS reset usage counters on each test run
+        // INSERT OR IGNORE doesn't update existing records, so counters accumulate across runs
+        const resetUsageSql = `UPDATE user_chat_usage SET threads_created = 0, messages_created = 0, custom_roles_created = 0, analysis_generated = 0, subscription_tier = 'pro', updated_at = ${now} WHERE user_id = '${userId}';`;
+        execSync(`npx wrangler d1 execute DB --local --command="${resetUsageSql}"`, {
+          stdio: 'pipe',
+          encoding: 'utf-8',
+        });
       }
 
       console.error(`✅ Billing setup complete for ${user.tier} user: ${user.email}`);
     } catch (error) {
       console.error(`❌ Failed billing setup for ${user.email}:`, error);
     }
+  }
+}
+
+/**
+ * Ensure billing data exists for test users when auth files are already valid
+ * Fetches user IDs from the database by email and sets up billing
+ */
+async function ensureBillingDataFromExistingUsers(_baseURL: string): Promise<void> {
+  console.error('\n💳 Ensuring billing data exists for E2E test users...\n');
+
+  for (const user of ALL_TEST_USERS) {
+    try {
+      // Fetch user ID from database by email
+      const result = execSync(
+        `npx wrangler d1 execute DB --local --command="SELECT id FROM user WHERE email = '${user.email}'" --json`,
+        { stdio: 'pipe', encoding: 'utf-8' },
+      );
+
+      const parsed = JSON.parse(result);
+      const rows = parsed[0]?.results || [];
+      if (rows.length === 0) {
+        console.error(`⚠️ User not found in DB: ${user.email} - skipping billing setup`);
+        continue;
+      }
+
+      const userId = rows[0].id;
+      userIds.set(user.email, userId);
+    } catch (error) {
+      console.error(`⚠️ Failed to fetch user ID for ${user.email}:`, error);
+    }
+  }
+
+  // Now run billing setup with the fetched user IDs
+  if (userIds.size > 0) {
+    setupBillingData();
   }
 }
 
@@ -260,6 +339,9 @@ async function globalSetup(config: FullConfig): Promise<void> {
   if (allAuthFilesValid) {
     console.error('✅ Valid auth files found - skipping re-authentication');
     console.error('   Run `pnpm test:e2e:seed` if you need to refresh auth state\n');
+    // ✅ FIX: Still ensure billing data exists (INSERT OR IGNORE is safe for re-runs)
+    // User IDs need to be fetched from DB since we're not authenticating
+    await ensureBillingDataFromExistingUsers(baseURL);
     return;
   }
 

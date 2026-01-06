@@ -258,7 +258,10 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
             // Ready! Execute continuation
             resumptionTriggeredRef.current = pollResumptionKey;
             rlog.trigger('resume-poll', `p${getParticipantIndex(pollNextParticipant)} after ${retryCount} polls`);
-            chat.continueFromParticipant(pollNextParticipant, pollParticipants);
+            // ✅ CRITICAL FIX: Pass pollMessages to ensure correct userMessageId for backend lookup
+            // Without this, continueFromParticipant uses stale AI SDK messages instead of
+            // the freshly-persisted messages from PATCH, causing "User message not found" errors
+            chat.continueFromParticipant(pollNextParticipant, pollParticipants, pollMessages);
           };
 
           retryTimeoutRef.current = setTimeout(pollUntilReady, 100);
@@ -285,7 +288,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         // Mark as triggered and execute
         resumptionTriggeredRef.current = retryResumptionKey;
         // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes
-        chat.continueFromParticipant(latestNextParticipant, latestParticipants);
+        // ✅ CRITICAL FIX: Pass latestMessages to ensure correct userMessageId for backend lookup
+        chat.continueFromParticipant(latestNextParticipant, latestParticipants, latestMessages);
       }, 100); // Small delay for AI SDK hydration to complete
       return;
     }
@@ -306,7 +310,10 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
     // Resume from specific participant
     // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes
-    chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants);
+    // ✅ CRITICAL FIX: Pass storeMessages to ensure correct userMessageId for backend lookup
+    // Without this, continueFromParticipant uses stale AI SDK messages instead of
+    // the freshly-persisted messages from PATCH, causing "User message not found" errors
+    chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants, storeMessages);
 
     // Cleanup
     return () => {
