@@ -18,7 +18,8 @@
 
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { type ProjectIndexStatus, ProjectIndexStatuses } from '@/api/core/enums';
+import type { ProjectIndexStatus } from '@/api/core/enums';
+import { ProjectIndexStatuses } from '@/api/core/enums';
 import type { TypedLogger } from '@/api/types/logger';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';

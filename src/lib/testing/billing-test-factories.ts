@@ -16,7 +16,7 @@ import type { GetProductResponse, GetProductsResponse } from '@/services/api';
  */
 export function createMockPrice(overrides?: Partial<Price>): Price {
   const hasIntervalKey = overrides && 'interval' in overrides;
-  const defaultInterval = hasIntervalKey ? overrides.interval : UIBillingIntervals.MONTH;
+  const defaultInterval = hasIntervalKey ? (overrides.interval ?? UIBillingIntervals.MONTH) : UIBillingIntervals.MONTH;
 
   return {
     id: overrides?.id ?? 'price_test_123',

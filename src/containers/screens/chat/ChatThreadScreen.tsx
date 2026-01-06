@@ -228,8 +228,6 @@ export default function ChatThreadScreen({
     const currentRound = getCurrentRoundNumber(messages);
     const allParticipantsComplete = areAllParticipantsCompleteForRound(messages, participants, currentRound);
     const moderatorExists = getModeratorMessageForRound(messages, currentRound) !== undefined;
-
-    // Block if all participants are done but moderator hasn't been created yet
     return allParticipantsComplete && !moderatorExists;
   }, [messages, participants]);
 

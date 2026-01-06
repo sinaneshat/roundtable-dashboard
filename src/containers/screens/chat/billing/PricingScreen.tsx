@@ -39,7 +39,7 @@ export default function PricingScreen() {
   const subscriptions: Subscription[] = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
 
   const hasValidProductData = productsData?.success === true && !!productsData.data?.items;
-  const hasApiErrorWithMessage = productsData !== undefined && productsData.success === false && 'error' in productsData && productsData.error;
+  const hasApiErrorWithMessage = productsData !== undefined && !productsData.success && 'error' in productsData && productsData.error;
   const hasFetchError = productsError !== undefined;
   const shouldShowError = hasApiErrorWithMessage || hasFetchError;
   const shouldShowLoading = isLoadingProducts || (!hasValidProductData && !shouldShowError);

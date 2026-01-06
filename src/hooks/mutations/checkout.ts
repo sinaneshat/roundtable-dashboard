@@ -91,4 +91,3 @@ export function useSyncAfterCheckoutMutation() {
     throwOnError: false,
   });
 }
-

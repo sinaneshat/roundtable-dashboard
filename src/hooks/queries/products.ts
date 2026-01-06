@@ -22,22 +22,8 @@ import {
 export function useProductsQuery() {
   return useQuery({
     queryKey: queryKeys.products.list(),
-    queryFn: async () => {
-      const response = await getProductsService();
-
-      if (response.success && response.data) {
-        return {
-          ...response,
-          data: {
-            products: response.data.items,
-            count: response.data.count,
-          },
-        };
-      }
-
-      return response;
-    },
-    staleTime: Infinity, // Static catalog - never stale, matches server prefetch
+    queryFn: getProductsService,
+    staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
     refetchOnWindowFocus: false,

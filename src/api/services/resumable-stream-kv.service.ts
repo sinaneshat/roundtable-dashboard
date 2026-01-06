@@ -25,7 +25,8 @@
  * @module api/services/resumable-stream-kv
  */
 
-import { type ParticipantStreamStatus, ParticipantStreamStatuses, StreamStatuses } from '@/api/core/enums';
+import type { ParticipantStreamStatus } from '@/api/core/enums';
+import { ParticipantStreamStatuses, StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
 import type { StreamState, ThreadActiveStream } from '@/api/types/streaming';

@@ -43,12 +43,11 @@ export * from './subscription-mocks';
 export { testLocale, testTimeZone } from './test-messages';
 export * from './test-providers';
 // ============================================================================
+// Typed Test Mocks (type-safe mock factories)
+// ============================================================================
+export * from './typed-test-mocks';
+// ============================================================================
 // Testing Library Utilities (imported from canonical sources)
 // ============================================================================
 export { act, screen, waitFor, within } from '@testing-library/react';
 export { default as userEvent } from '@testing-library/user-event';
-
-// ============================================================================
-// Typed Test Mocks (type-safe mock factories)
-// ============================================================================
-export * from './typed-test-mocks';

@@ -7,8 +7,6 @@ import { ToastAction } from '@/components/ui/toast';
 import { toast as baseToast } from '@/hooks/utils';
 
 function createToastActionElement(label: string, onClick: () => void): ToastActionElement {
-  // ToastActionElement is the return type of React.createElement(ToastAction, ...)
-  // This is type-safe as ToastAction props match the expected shape
   const element = React.createElement(
     ToastAction,
     {
@@ -17,8 +15,7 @@ function createToastActionElement(label: string, onClick: () => void): ToastActi
     },
     label,
   );
-  // The element conforms to ToastActionElement which is ReactElement<typeof ToastAction>
-  return element as ToastActionElement;
+  return element as unknown as ToastActionElement;
 }
 
 // Global toast tracking and management

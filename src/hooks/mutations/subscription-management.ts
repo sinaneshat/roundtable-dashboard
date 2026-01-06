@@ -43,12 +43,12 @@ export function useSwitchSubscriptionMutation() {
         queryClient.setQueryData<GetSubscriptionsResponse>(
           queryKeys.subscriptions.list(),
           (oldData) => {
-            if (!oldData || !oldData.data?.items) {
+            if (!oldData || !oldData.success || !oldData.data?.items) {
               return oldData;
             }
 
-            const updatedItems = oldData.data.items.map((sub) =>
-              sub.id === updatedSubscription.id ? updatedSubscription : sub
+            const updatedItems = oldData.data.items.map((sub: typeof updatedSubscription) =>
+              sub.id === updatedSubscription.id ? updatedSubscription : sub,
             );
 
             return {
@@ -58,7 +58,7 @@ export function useSwitchSubscriptionMutation() {
                 count: oldData.data.count,
               },
             };
-          }
+          },
         );
       }
 
@@ -103,12 +103,12 @@ export function useCancelSubscriptionMutation() {
         queryClient.setQueryData<GetSubscriptionsResponse>(
           queryKeys.subscriptions.list(),
           (oldData) => {
-            if (!oldData || !oldData.data?.items) {
+            if (!oldData || !oldData.success || !oldData.data?.items) {
               return oldData;
             }
 
-            const updatedItems = oldData.data.items.map((sub) =>
-              sub.id === updatedSubscription.id ? updatedSubscription : sub
+            const updatedItems = oldData.data.items.map((sub: typeof updatedSubscription) =>
+              sub.id === updatedSubscription.id ? updatedSubscription : sub,
             );
 
             return {
@@ -118,7 +118,7 @@ export function useCancelSubscriptionMutation() {
                 count: oldData.data.count,
               },
             };
-          }
+          },
         );
       }
 

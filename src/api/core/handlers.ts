@@ -7,7 +7,8 @@ import type { z } from 'zod';
 
 import { executeBatch, validateBatchSize } from '@/api/common/batch-operations';
 import { AppError } from '@/api/common/error-handling';
-import { type ErrorCode, ErrorCodes } from '@/api/core/enums';
+import type { ErrorCode } from '@/api/core/enums';
+import { ErrorCodes } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import { auth } from '@/lib/auth/server';

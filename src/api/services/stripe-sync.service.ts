@@ -27,7 +27,6 @@ import { CustomerCacheTags, getUserSubscriptionCacheTags } from '@/db/cache/cach
 import {
   hasBillingCycleAnchor,
   hasPeriodTimestamps,
-  isObject,
   isStringRecord,
   isStripePaymentMethod,
   safeParse,
@@ -404,11 +403,12 @@ export async function syncStripeDataFromStripe(
 
   // Prepare invoice upsert operations
   const invoiceUpserts = invoices.data.map((invoice) => {
-    // Extract subscription ID (Stripe.Invoice.subscription is string | Stripe.Subscription)
-    const subscriptionId = invoice.subscription
-      ? typeof invoice.subscription === 'string'
-        ? invoice.subscription
-        : invoice.subscription.id
+    // Extract subscription ID (Stripe SDK v20+: subscription is in parent.subscription_details)
+    const sub = invoice.parent?.subscription_details?.subscription;
+    const subscriptionId = sub
+      ? typeof sub === 'string'
+        ? sub
+        : sub.id
       : null;
 
     const isPaid = invoice.status === InvoiceStatuses.PAID;

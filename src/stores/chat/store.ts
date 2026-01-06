@@ -377,9 +377,9 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
       && typeof optionsOrMessage === 'object'
       && 'message' in optionsOrMessage
       && typeof optionsOrMessage.message === 'object';
-    const message: UIMessage = isOptionsObject
+    const message = (isOptionsObject
       ? optionsOrMessage.message
-      : optionsOrMessage;
+      : optionsOrMessage) as UIMessage;
     const insertOnly = isOptionsObject ? optionsOrMessage.insertOnly : undefined;
 
     set((draft) => {

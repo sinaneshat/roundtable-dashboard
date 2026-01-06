@@ -78,9 +78,10 @@ type StatusPageActionsProps = {
   secondaryOnClick?: () => void;
 };
 
-// Glass button styles for billing pages (consistent with chat toolbar)
-const glassButtonPrimary = 'h-11 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors';
-const glassButtonSecondary = 'h-10 rounded-xl border-white/20 bg-white/10 text-foreground hover:bg-white/15 hover:border-white/30 transition-colors';
+export const BILLING_BUTTON_STYLES = {
+  primary: 'h-11 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors',
+  secondary: 'h-10 rounded-xl border-white/20 bg-white/10 text-foreground hover:bg-white/15 hover:border-white/30 transition-colors',
+} as const;
 
 export function StatusPageActions({
   primaryLabel,
@@ -94,14 +95,14 @@ export function StatusPageActions({
     <>
       {primaryHref
         ? (
-            <Button asChild className={cn('w-full', glassButtonPrimary)}>
+            <Button asChild className={cn('w-full', BILLING_BUTTON_STYLES.primary)}>
               <Link href={primaryHref}>
                 {primaryLabel}
               </Link>
             </Button>
           )
         : (
-            <Button onClick={primaryOnClick} className={cn('w-full', glassButtonPrimary)}>
+            <Button onClick={primaryOnClick} className={cn('w-full', BILLING_BUTTON_STYLES.primary)}>
               {primaryLabel}
             </Button>
           )}
@@ -112,7 +113,7 @@ export function StatusPageActions({
                 asChild
                 variant="outline"
                 size="sm"
-                className={cn('w-full', glassButtonSecondary)}
+                className={cn('w-full', BILLING_BUTTON_STYLES.secondary)}
               >
                 <Link href={secondaryHref}>
                   {secondaryLabel}
@@ -124,7 +125,7 @@ export function StatusPageActions({
                 onClick={secondaryOnClick}
                 variant="outline"
                 size="sm"
-                className={cn('w-full', glassButtonSecondary)}
+                className={cn('w-full', BILLING_BUTTON_STYLES.secondary)}
               >
                 {secondaryLabel}
               </Button>
