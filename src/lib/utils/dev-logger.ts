@@ -1,5 +1,5 @@
-import type { DevLogLevel, DevLogModEvent, DevLogMsgEvent, RlogCategory, RlogStreamAction } from '@/api/core/enums';
-import { DevLogLevels, DevLogModEvents, DevLogMsgEvents, RLOG_CATEGORY_STYLES, RlogCategories } from '@/api/core/enums';
+import type { DebugData, DevLogLevel, RlogCategory, RlogStreamAction } from '@/api/core/enums';
+import { DevLogLevels, RLOG_CATEGORY_STYLES, RlogCategories } from '@/api/core/enums';
 
 type LogEntry = {
   key: string;
@@ -15,12 +15,6 @@ type UpdateTracker = {
   windowStart: number;
 };
 
-type DebugDataValue = string | number | boolean | null | undefined;
-
-type DebugData = {
-  readonly [K: string]: DebugDataValue;
-};
-
 const DEBOUNCE_MS = 500;
 const UPDATE_WINDOW_MS = 1000;
 const EXCESSIVE_UPDATE_THRESHOLD = 10;
@@ -30,15 +24,13 @@ const updateCounts = new Map<string, UpdateTracker>();
 
 const isDev = process.env.NODE_ENV === 'development';
 
-type ConsoleMethod = (message?: unknown, ...optionalParams: unknown[]) => void;
-
 /* eslint-disable no-console */
-function getConsoleMethod(level: DevLogLevel): ConsoleMethod {
-  const consoleMethodMap: Record<DevLogLevel, ConsoleMethod> = {
-    debug: console.debug.bind(console),
-    info: console.info.bind(console),
-    warn: console.warn.bind(console),
-    error: console.error.bind(console),
+function getConsoleMethod(level: DevLogLevel): typeof console.debug {
+  const consoleMethodMap: Record<DevLogLevel, typeof console.debug> = {
+    [DevLogLevels.DEBUG]: console.debug.bind(console),
+    [DevLogLevels.INFO]: console.info.bind(console),
+    [DevLogLevels.WARN]: console.warn.bind(console),
+    [DevLogLevels.ERROR]: console.error.bind(console),
   };
   return consoleMethodMap[level];
 }
@@ -117,7 +109,7 @@ function trackUpdate(key: string): { count: number; isExcessive: boolean } {
   return { count: entry.count, isExcessive };
 }
 
-function formatDebugValue(key: string, value: DebugDataValue): string {
+function formatDebugValue(key: string, value: string | number | boolean | null | undefined): string {
   if (typeof value === 'boolean')
     return `${key}=${value ? 1 : 0}`;
   if (typeof value === 'number')
@@ -129,12 +121,8 @@ function formatDebugValue(key: string, value: DebugDataValue): string {
   return `${key}=?`;
 }
 
-// ============================================================================
-// RESUMPTION DEBUG LOGGER (rlog)
-// ============================================================================
-
-const rlogDebounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 const RLOG_DEBOUNCE_MS = 300;
+const rlogDebounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 const rlogLastLogged: Record<string, string> = {};
 let rlogEnabled = isDev;
 
@@ -195,11 +183,9 @@ export const rlog = {
   presearch: (action: string, detail: string): void => rlogNow(RlogCategories.PRESRCH, `${action}: ${detail}`),
   moderator: (action: string, detail: string): void => rlogNow(RlogCategories.MOD, `${action}: ${detail}`),
   state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
+  changelog: (action: string, detail: string): void => rlogNow(RlogCategories.CHANGELOG, `${action}: ${detail}`),
+  submit: (action: string, detail: string): void => rlogNow(RlogCategories.SUBMIT, `${action}: ${detail}`),
 };
-
-// ============================================================================
-// DEV LOG
-// ============================================================================
 
 export const devLog = {
   d: (tag: string, data: DebugData): void => {
@@ -209,46 +195,14 @@ export const devLog = {
       return;
 
     const pairs = Object.entries(data)
-      .map(([k, v]) => formatDebugValue(k, v))
+      .map(([k, v]) => {
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null || v === undefined) {
+          return formatDebugValue(k, v);
+        }
+        return `${k}=${String(v)}`;
+      })
       .join(' ');
 
     debouncedLog(key, DevLogLevels.DEBUG, pairs);
   },
-
-  mod: (event: DevLogModEvent, data?: DebugData): void => {
-    const key = `mod:${event}`;
-    if (event === DevLogModEvents.TEXT) {
-      trackUpdate(key);
-      return;
-    }
-    const pairs = data
-      ? Object.entries(data).map(([k, v]) => formatDebugValue(k, v)).join(' ')
-      : '';
-    debouncedLog(key, DevLogLevels.INFO, pairs);
-  },
-
-  msg: (event: DevLogMsgEvent, delta: number, extra?: string): void => {
-    const key = `msg:${event}`;
-    const { isExcessive } = trackUpdate(key);
-    if (isExcessive)
-      return;
-    if (delta === 0 && event === DevLogMsgEvents.SYNC)
-      return;
-    debouncedLog(key, DevLogLevels.DEBUG, `Δ${delta}${extra ? ` ${extra}` : ''}`);
-  },
-
-  render: (component: string): void => {
-    const key = `r:${component}`;
-    const { count, isExcessive } = trackUpdate(key);
-    if (isExcessive && count % 10 === 0) {
-      logWarning(`[!R] ${component} ×${count}/s`);
-    }
-  },
-
-  reset: (): void => {
-    logCache.clear();
-    updateCounts.clear();
-  },
 };
-
-export type DevLogger = typeof devLog;

@@ -15,13 +15,9 @@ import {
 import { DEFAULT_PROJECT_INDEX_STATUS } from '@/api/core/enums';
 import {
   getAggregatedProjectContext,
-} from '@/api/services/project-context.service';
-import { generateProjectFileR2Key } from '@/api/services/rag-indexing.service';
-import { copyFile, deleteFile } from '@/api/services/storage.service';
-import {
-  cancelUploadCleanup,
-  isCleanupSchedulerAvailable,
-} from '@/api/services/upload-cleanup.service';
+} from '@/api/services/context';
+import { generateProjectFileR2Key } from '@/api/services/search';
+import { cancelUploadCleanup, copyFile, deleteFile, isCleanupSchedulerAvailable } from '@/api/services/uploads';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';

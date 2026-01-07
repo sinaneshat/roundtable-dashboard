@@ -11,9 +11,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
+import { categorizeParticipantChanges } from '@/api/services/participants';
 import type { ParticipantConfigInput } from '@/lib/schemas/participant-schemas';
-
-import { categorizeParticipantChanges } from '../participant-config.service';
 
 // ============================================================================
 // TEST HELPER FUNCTIONS

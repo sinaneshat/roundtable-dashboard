@@ -21,20 +21,21 @@ import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, IdParamSchema, Responses, STREAMING_CONFIG, ThreadRoundParamSchema } from '@/api/core';
 import { FinishReasons, IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PollingStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
-import { loadAttachmentContent } from '@/api/services/attachment-content.service';
 import {
   deductCreditsForAction,
   enforceCredits,
-} from '@/api/services/credit.service';
-import { buildEmptyResponseError, extractErrorMetadata } from '@/api/services/error-metadata.service';
-import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
-import type { PreSearchTrackingContext } from '@/api/services/posthog-llm-tracking.service';
+} from '@/api/services/billing';
+import type { PreSearchTrackingContext } from '@/api/services/errors';
+import { buildEmptyResponseError, extractErrorMetadata, initializePreSearchTracking, trackPreSearchComplete, trackQueryGeneration, trackWebSearchExecution } from '@/api/services/errors';
+import { loadAttachmentContent } from '@/api/services/messages';
+import { initializeOpenRouter, openRouterService } from '@/api/services/models';
+import { analyzeQueryComplexity, IMAGE_ANALYSIS_FOR_SEARCH_PROMPT, simpleOptimizeQuery } from '@/api/services/prompts';
 import {
-  initializePreSearchTracking,
-  trackPreSearchComplete,
-  trackQueryGeneration,
-  trackWebSearchExecution,
-} from '@/api/services/posthog-llm-tracking.service';
+  createSearchCache,
+  generateSearchQuery,
+  performWebSearch,
+  streamSearchQuery,
+} from '@/api/services/search';
 import {
   appendPreSearchStreamChunk,
   clearActivePreSearchStream,
@@ -45,16 +46,8 @@ import {
   getPreSearchStreamChunks,
   initializePreSearchStreamBuffer,
   isPreSearchBufferStale,
-} from '@/api/services/pre-search-stream-buffer.service';
-import { analyzeQueryComplexity, IMAGE_ANALYSIS_FOR_SEARCH_PROMPT } from '@/api/services/prompts.service';
-import { simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
-import { getUserTier } from '@/api/services/usage-tracking.service';
-import {
-  createSearchCache,
-  generateSearchQuery,
-  performWebSearch,
-  streamSearchQuery,
-} from '@/api/services/web-search.service';
+} from '@/api/services/streaming';
+import { getUserTier } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
 import { generatePreSearchStreamId } from '@/api/types/streaming';
 import { getDbAsync } from '@/db';
@@ -221,8 +214,9 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     await verifyThreadOwnership(threadId, user.id, db);
 
     // ✅ CREDITS: Enforce credits for web search (1 credit minimum for web search)
+    // Skip round completion check - pre-search is PART of the round, not a new round
     // Actual deduction happens per successful query execution
-    await enforceCredits(user.id, 1);
+    await enforceCredits(user.id, 1, { skipRoundCheck: true });
 
     // ✅ DATABASE-FIRST: Check if record exists, create if not
     // Record may not exist when web search is enabled mid-conversation

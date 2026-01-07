@@ -36,7 +36,7 @@ import {
   enforceCredits,
   getUserCreditBalance,
   zeroOutFreeUserCredits,
-} from '@/api/services/credit.service';
+} from '@/api/services/billing';
 import { getDbAsync } from '@/db';
 
 vi.mock('@/db', async (importOriginal) => {

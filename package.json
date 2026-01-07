@@ -199,6 +199,7 @@
     "react-hook-form": "^7.70.0",
     "react-markdown": "^10.1.0",
     "recharts": "3.6.0",
+    "server-only": "^0.0.1",
     "shiki": "^3.20.0",
     "simplex-noise": "^4.0.3",
     "stoker": "^2.0.1",
@@ -264,6 +265,7 @@
     "knip": "^5.80.0",
     "lint-staged": "^16.2.7",
     "prettier": "^3.7.4",
+    "puppeteer": "^24.34.0",
     "puppeteer-core": "^24.34.0",
     "rimraf": "^6.1.2",
     "serwist": "^9.4.4",
@@ -307,6 +309,7 @@
   },
   "pnpm": {
     "ignoredBuiltDependencies": [
+      "puppeteer",
       "workerd"
     ],
     "onlyBuiltDependencies": [

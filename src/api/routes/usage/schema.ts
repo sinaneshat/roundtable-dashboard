@@ -34,7 +34,7 @@ export const UsageStatsPayloadSchema = z.object({
       example: 'Free',
     }),
     monthlyCredits: z.number().openapi({
-      description: 'Monthly credit allocation (0 for free, 1M for paid)',
+      description: 'Monthly credit allocation (0 for free, 100K for paid)',
       example: 0,
     }),
     hasActiveSubscription: z.boolean().openapi({

@@ -8,7 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ModelSelectionTab, SubscriptionTier } from '@/api/core/enums';
 import { ChatModes, DEFAULT_MODEL_SELECTION_TAB, ModelSelectionTabs, PlanTypes, PREDEFINED_ROLE_TEMPLATES, SubscriptionTiers } from '@/api/core/enums';
-import { createRoleSystemPrompt } from '@/api/services/prompts.service';
+// Direct import to avoid barrel export pulling in server-only slug-generator.service.ts
+import { createRoleSystemPrompt } from '@/api/services/prompts/prompts.service';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {

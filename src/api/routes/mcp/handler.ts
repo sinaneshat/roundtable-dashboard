@@ -22,21 +22,15 @@ import {
   MessageRoles,
   MessageStatuses,
   ProjectIndexStatusSchema,
+  SubscriptionTiers,
   ThreadStatuses,
 } from '@/api/core/enums';
-import { saveStreamedMessage } from '@/api/services/message-persistence.service';
-import { getAllModels, getModelById } from '@/api/services/models-config.service';
-import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
-import {
-  AI_RETRY_CONFIG,
-  AI_TIMEOUT_CONFIG,
-  canAccessModelByPricing,
-  getSafeMaxOutputTokens,
-} from '@/api/services/product-logic.service';
-import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
-import { handleRoundRegeneration } from '@/api/services/regeneration.service';
-import { calculateRoundNumber } from '@/api/services/round.service';
-import { getUserTier } from '@/api/services/usage-tracking.service';
+import { AI_RETRY_CONFIG, AI_TIMEOUT_CONFIG, canAccessModelByPricing, checkFreeUserHasCompletedRound, getSafeMaxOutputTokens } from '@/api/services/billing';
+import { saveStreamedMessage } from '@/api/services/messages';
+import { getAllModels, getModelById, initializeOpenRouter, openRouterService } from '@/api/services/models';
+import { buildParticipantSystemPrompt } from '@/api/services/prompts';
+import { calculateRoundNumber, handleRoundRegeneration } from '@/api/services/threads';
+import { getUserTier } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -556,12 +550,17 @@ async function toolCreateThread(
   const userTier = await getUserTier(user.id);
   const allModels = getAllModels();
 
-  // Validate model access
+  // ✅ FREE ROUND BYPASS: Free users who haven't completed their free round
+  // can use ANY models for their first experience.
+  const isFreeUserWithFreeRound = userTier === SubscriptionTiers.FREE
+    && !(await checkFreeUserHasCompletedRound(user.id));
+
+  // Validate model access (skip for free round users)
   for (const p of input.participants) {
     const model = allModels.find(m => m.id === p.modelId);
     if (!model)
       throw createError.badRequest(`Model not found: ${p.modelId}`, ErrorContextBuilders.resourceNotFound('model', p.modelId));
-    if (!canAccessModelByPricing(userTier, model)) {
+    if (!isFreeUserWithFreeRound && !canAccessModelByPricing(userTier, model)) {
       throw createError.unauthorized(`Model requires higher tier: ${p.modelId}`, ErrorContextBuilders.authorization('model', p.modelId, user.id));
     }
   }
@@ -867,7 +866,6 @@ async function toolGenerateResponses(
         response: finishResult.response,
         reasoning: await finishResult.reasoning,
       },
-      userId: user.id,
       db,
     });
 
@@ -1034,10 +1032,16 @@ async function toolAddParticipant(
   }
 
   const userTier = await getUserTier(user.id);
+
+  // ✅ FREE ROUND BYPASS: Free users who haven't completed their free round
+  // can add ANY models for their first experience.
+  const isFreeUserWithFreeRound = userTier === SubscriptionTiers.FREE
+    && !(await checkFreeUserHasCompletedRound(user.id));
+
   const model = getAllModels().find(m => m.id === input.modelId);
   if (!model)
     throw createError.badRequest(`Model not found: ${input.modelId}`, ErrorContextBuilders.resourceNotFound('model', input.modelId));
-  if (!canAccessModelByPricing(userTier, model)) {
+  if (!isFreeUserWithFreeRound && !canAccessModelByPricing(userTier, model)) {
     throw createError.unauthorized(`Model requires higher tier: ${input.modelId}`, ErrorContextBuilders.authorization('model', input.modelId, user.id));
   }
 

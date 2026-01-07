@@ -16,7 +16,7 @@ import { streamText } from 'ai';
 import { asc, eq } from 'drizzle-orm';
 
 import { createError } from '@/api/common/error-handling';
-import { getErrorMessage, getErrorName } from '@/api/common/error-types';
+import { getErrorMessage, getErrorName, toError } from '@/api/common/error-types';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/api/core';
 import { MessagePartTypes, MessageRoles, PlanTypes, PollingStatuses } from '@/api/core/enums';
@@ -26,26 +26,23 @@ import {
   enforceCredits,
   getUserCreditBalance,
   zeroOutFreeUserCredits,
-} from '@/api/services/credit.service';
-import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
-import { extractModeratorModelName } from '@/api/services/models-config.service';
-import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
+} from '@/api/services/billing';
 import {
   generateTraceId,
   trackLLMError,
   trackLLMGeneration,
-} from '@/api/services/posthog-llm-tracking.service';
+} from '@/api/services/errors';
+import { filterDbToParticipantMessages } from '@/api/services/messages';
+import { extractModeratorModelName, initializeOpenRouter, openRouterService } from '@/api/services/models';
 import {
+  appendParticipantStreamChunk,
   clearThreadActiveStream,
+  completeParticipantStreamBuffer,
+  failParticipantStreamBuffer,
+  initializeParticipantStreamBuffer,
   markStreamActive,
   setThreadActiveStream,
-} from '@/api/services/resumable-stream-kv.service';
-import {
-  appendStreamChunk,
-  completeStreamBuffer,
-  failStreamBuffer,
-  initializeStreamBuffer,
-} from '@/api/services/stream-buffer.service';
+} from '@/api/services/streaming';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -541,7 +538,7 @@ function generateCouncilModerator(
                 modelName: moderatorModelName,
                 threadMode: mode,
               },
-              error as Error,
+              toError(error),
               llmTraceId,
               'council_moderator',
             );
@@ -597,11 +594,11 @@ function generateCouncilModerator(
             const { done, value } = await reader.read();
 
             if (done) {
-              await completeStreamBuffer(messageId, c.env);
+              await completeParticipantStreamBuffer(messageId, c.env);
               break;
             }
 
-            await appendStreamChunk(messageId, value, c.env);
+            await appendParticipantStreamChunk(messageId, value, c.env);
           }
         } catch (error) {
           const isAbortError
@@ -615,7 +612,7 @@ function generateCouncilModerator(
           }
 
           const errorMessage = error instanceof Error ? error.message : 'Stream buffer error';
-          await failStreamBuffer(messageId, errorMessage, c.env);
+          await failParticipantStreamBuffer(messageId, errorMessage, c.env);
         }
       };
 
@@ -813,11 +810,15 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
       .sort((a, b) => a.participantIndex - b.participantIndex);
 
     // ✅ CREDITS: Enforce and deduct credits for analysis generation
-    await enforceCredits(user.id, 2); // Analysis requires ~2 credits
+    // Skip round completion check because moderator is PART of completing the round
+    // Without this, multi-participant threads hit a circular dependency:
+    // - Round isn't complete until moderator runs
+    // - But enforceCredits blocks moderator if round "appears complete" (all participants done)
+    await enforceCredits(user.id, 2, { skipRoundCheck: true }); // Analysis requires ~2 credits
     await deductCreditsForAction(user.id, 'analysisGeneration', { threadId });
 
     // ✅ RESUMABLE STREAMS: Initialize stream buffer for resumption
-    await initializeStreamBuffer(messageId, threadId, roundNum, MODERATOR_PARTICIPANT_INDEX, c.env);
+    await initializeParticipantStreamBuffer(messageId, threadId, roundNum, MODERATOR_PARTICIPANT_INDEX, c.env);
 
     // ✅ RESUMABLE STREAMS: Mark moderator stream as active in KV for resume detection
     await markStreamActive(threadId, roundNum, MODERATOR_PARTICIPANT_INDEX, c.env);

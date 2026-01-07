@@ -16,6 +16,7 @@ import { useCallback, useMemo } from 'react';
 import { z } from 'zod';
 
 import { UploadStatuses, UploadStatusSchema } from '@/api/core/enums';
+import { toastManager } from '@/lib/toast';
 
 import { FilePreviewSchema } from './use-file-preview';
 import { UploadItemSchema, useFileUpload } from './use-file-upload';
@@ -52,15 +53,44 @@ export const PendingAttachmentSchema = z.object({
  */
 export type PendingAttachment = z.infer<typeof PendingAttachmentSchema>;
 
-export type UseChatAttachmentsReturn = {
+/**
+ * Upload state summary schema
+ */
+const UploadStateSummarySchema = z.object({
+  /** Total number of uploads */
+  total: z.number().int().nonnegative(),
+  /** Number of pending uploads */
+  pending: z.number().int().nonnegative(),
+  /** Number of currently uploading files */
+  uploading: z.number().int().nonnegative(),
+  /** Number of completed uploads */
+  completed: z.number().int().nonnegative(),
+  /** Number of failed uploads */
+  failed: z.number().int().nonnegative(),
+  /** Overall progress percentage (0-100) */
+  overallProgress: z.number().min(0).max(100),
+});
+
+/**
+ * Return type schema for useChatAttachments hook
+ */
+const _UseChatAttachmentsReturnSchema = z.object({
   /** Current pending attachments with previews and upload state */
-  attachments: PendingAttachment[];
+  attachments: z.array(PendingAttachmentSchema),
   /** Whether there are any attachments */
-  hasAttachments: boolean;
+  hasAttachments: z.boolean(),
   /** Whether all attachments are uploaded and ready */
-  allUploaded: boolean;
+  allUploaded: z.boolean(),
   /** Whether any upload is in progress */
-  isUploading: boolean;
+  isUploading: z.boolean(),
+  /** Upload state summary */
+  uploadState: UploadStateSummarySchema,
+});
+
+/**
+ * Return type for useChatAttachments hook - inferred from schema
+ */
+export type UseChatAttachmentsReturn = z.infer<typeof _UseChatAttachmentsReturnSchema> & {
   /** Get completed upload IDs for message association */
   getUploadIds: () => string[];
   /** Add files (validates and starts upload) */
@@ -71,15 +101,6 @@ export type UseChatAttachmentsReturn = {
   clearAttachments: () => void;
   /** Retry a failed upload */
   retryUpload: (id: string) => void;
-  /** Upload state summary */
-  uploadState: {
-    total: number;
-    pending: number;
-    uploading: number;
-    completed: number;
-    failed: number;
-    overallProgress: number;
-  };
 };
 
 /**
@@ -119,7 +140,6 @@ export type UseChatAttachmentsReturn = {
  * };
  */
 export function useChatAttachments(): UseChatAttachmentsReturn {
-  // Use the comprehensive file upload hook with auto-upload enabled
   const {
     items,
     previews,
@@ -128,13 +148,13 @@ export function useChatAttachments(): UseChatAttachmentsReturn {
     clearAll,
     retryUpload: retryUploadItem,
     state,
+    validation,
   } = useFileUpload({
-    autoUpload: true, // Start upload immediately when files are added
+    autoUpload: true,
     maxConcurrent: 3,
     maxRetries: 3,
   });
 
-  // Transform upload items to pending attachments with previews
   const attachments = useMemo((): PendingAttachment[] => {
     return items.map((item) => {
       const preview = previews.find(p => p.file === item.file);
@@ -149,36 +169,60 @@ export function useChatAttachments(): UseChatAttachmentsReturn {
     });
   }, [items, previews]);
 
-  // Check if all uploads are complete
   const allUploaded = useMemo(() => {
     if (items.length === 0)
       return true;
     return items.every(item => item.status === UploadStatuses.COMPLETED);
   }, [items]);
 
-  // Get upload IDs for completed uploads (to send with message)
   const getUploadIds = useCallback((): string[] => {
     return items
       .filter(item => item.status === UploadStatuses.COMPLETED && item.uploadId)
       .map(item => item.uploadId!);
   }, [items]);
 
-  // Add files - validates and starts upload automatically
   const addFiles = useCallback((files: File[]) => {
-    addUploadFiles(files);
-  }, [addUploadFiles]);
+    const validFiles: File[] = [];
+    const invalidFiles: { file: File; message: string }[] = [];
 
-  // Remove attachment (cancels upload if in progress)
+    for (const file of files) {
+      const result = validation.validateFile(file);
+      if (result.valid) {
+        validFiles.push(file);
+      } else {
+        invalidFiles.push({
+          file,
+          message: result.error?.message || 'File validation failed',
+        });
+      }
+    }
+
+    const firstInvalid = invalidFiles[0];
+    if (firstInvalid) {
+      const fileNames = invalidFiles.map(f => f.file.name);
+      const displayNames = fileNames.length <= 2
+        ? fileNames.join(' and ')
+        : `${fileNames.slice(0, 2).join(', ')} and ${fileNames.length - 2} more`;
+
+      toastManager.error(
+        'Unsupported file type',
+        `${displayNames}: ${firstInvalid.message}`,
+      );
+    }
+
+    if (validFiles.length > 0) {
+      addUploadFiles(validFiles);
+    }
+  }, [addUploadFiles, validation]);
+
   const removeAttachment = useCallback((id: string) => {
     removeItem(id);
   }, [removeItem]);
 
-  // Clear all attachments
   const clearAttachments = useCallback(() => {
     clearAll();
   }, [clearAll]);
 
-  // Retry a failed upload
   const retryUpload = useCallback((id: string) => {
     retryUploadItem(id);
   }, [retryUploadItem]);

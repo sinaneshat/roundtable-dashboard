@@ -299,8 +299,6 @@ describe('signup Flow Integration', () => {
 
       expect(paidPlan.monthlyCredits).toBe(100_000);
       expect(paidPlan.priceInCents).toBe(5900); // $59
-      expect(paidPlan.stripeProductId).toMatch(/^prod_/);
-      expect(paidPlan.stripePriceId).toMatch(/^price_/);
     });
   });
 

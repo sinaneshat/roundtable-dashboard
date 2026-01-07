@@ -15,14 +15,13 @@ import { ChatStoreContext, useChatStore } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
-import { PreSearchSkeleton } from '@/components/ui/skeleton';
+import { PreSearchQuerySkeleton, PreSearchResultsSkeleton, PreSearchSkeleton } from '@/components/ui/skeleton';
 import { useBoolean } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 import { executePreSearchStreamService, getThreadPreSearchesService } from '@/services/api';
 
 import { WebSearchResultItem } from './web-search-result-item';
 
-// Infer PreSearchDataPayload from StoredPreSearch
 type PreSearchDataPayload = NonNullable<StoredPreSearch['searchData']>;
 
 type PreSearchStreamProps = {
@@ -30,14 +29,6 @@ type PreSearchStreamProps = {
   preSearch: StoredPreSearch;
   onStreamComplete?: (completedSearchData?: PreSearchDataPayload) => void;
   onStreamStart?: () => void;
-};
-
-type PreSearchPollingResponseData = {
-  data?: {
-    status?: string;
-    searchData?: PreSearchDataPayload;
-    retryAfterMs?: number;
-  };
 };
 
 function PreSearchStreamComponent({
@@ -80,8 +71,16 @@ function PreSearchStreamComponent({
   const abortControllerRef = useRef<AbortController | null>(null);
   const [forceRetryCount, setForceRetryCount] = useState(0);
 
+  // Progressive skeleton state - track expected counts and stream completion
+  const [expectedQueryCount, setExpectedQueryCount] = useState<number | null>(null);
+  const [isStreamComplete, setIsStreamComplete] = useState(false);
+
   useEffect(() => {
     retryCountRef.current = 0;
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
+    setExpectedQueryCount(null);
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
+    setIsStreamComplete(false);
   }, [preSearch.id]);
 
   useEffect(() => {
@@ -104,11 +103,6 @@ function PreSearchStreamComponent({
   isAutoRetryingOnFalseRef.current = isAutoRetrying.onFalse;
 
   useEffect(() => {
-    // ✅ FIX: Block pre-search execution until changelog is fetched
-    // Order: PATCH → changelog → pre-search → participant streams
-    // configChangeRoundNumber is set BEFORE PATCH (signals pending config changes)
-    // isWaitingForChangelog is set AFTER PATCH (triggers changelog fetch)
-    // Both must be null/false before pre-search can proceed
     if (isWaitingForChangelog || configChangeRoundNumber !== null) {
       return;
     }
@@ -125,8 +119,8 @@ function PreSearchStreamComponent({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    const queriesMap = new Map<number, PreSearchDataPayload['queries'][number]>();
-    const resultsMap = new Map<number, PreSearchDataPayload['results'][number]>();
+    const queriesMap = new Map<number, NonNullable<PreSearchDataPayload['queries']>[number]>();
+    const resultsMap = new Map<number, NonNullable<PreSearchDataPayload['results']>[number]>();
 
     const MAX_POST_RETRIES = 5;
     const DEFAULT_RETRY_DELAY_MS = 2000;
@@ -150,10 +144,10 @@ function PreSearchStreamComponent({
 
         if (response.status === 202) {
           let retryDelayMs = DEFAULT_RETRY_DELAY_MS;
-          let responseData: PreSearchPollingResponseData | undefined;
+          let responseData: { data?: { status?: string; searchData?: PreSearchDataPayload; retryAfterMs?: number } } | undefined;
 
           try {
-            responseData = await response.json() as PreSearchPollingResponseData;
+            responseData = await response.json();
             if (responseData?.data?.retryAfterMs) {
               retryDelayMs = responseData.data.retryAfterMs;
             }
@@ -165,6 +159,7 @@ function PreSearchStreamComponent({
             // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI update
             flushSync(() => {
               setPartialSearchData(completedSearchData);
+              setIsStreamComplete(true); // Mark complete - no more skeletons needed
               isAutoRetryingOnFalseRef.current();
             });
             onStreamCompleteRef.current?.(completedSearchData);
@@ -210,6 +205,7 @@ function PreSearchStreamComponent({
             // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI update
             flushSync(() => {
               setPartialSearchData(searchData);
+              setIsStreamComplete(true); // JSON response means complete
             });
             onStreamCompleteRef.current?.(searchData);
           }
@@ -244,6 +240,10 @@ function PreSearchStreamComponent({
               const results = Array.from(resultsMap.values());
               // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
               flushSync(() => {
+                // Capture expected query count from first QUERY event
+                if (queryData.total && queryData.total > 0) {
+                  setExpectedQueryCount(queryData.total);
+                }
                 setPartialSearchData({ queries, results });
               });
               await new Promise(resolve => requestAnimationFrame(resolve));
@@ -292,6 +292,7 @@ function PreSearchStreamComponent({
               // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
               flushSync(() => {
                 setPartialSearchData(finalData);
+                setIsStreamComplete(true); // Mark stream as complete - remove all skeletons
               });
               onStreamCompleteRef.current?.(finalData);
             } else if (event === PreSearchSseEvents.FAILED) {
@@ -404,6 +405,7 @@ function PreSearchStreamComponent({
             // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive polling UI
             flushSync(() => {
               setPartialSearchData(completedData);
+              setIsStreamComplete(true); // Polling found complete - no more skeletons
             });
             onStreamCompleteRef.current?.(completedData);
             if (isMounted) {
@@ -479,10 +481,8 @@ function PreSearchStreamComponent({
     }
   }, [store, preSearch.roundNumber, preSearch.status, markPreSearchTriggered]);
 
-  const shouldShowError = error && !is409Conflict.value && !(
-    error instanceof Error
-    && (error.name === 'AbortError' || error.message?.includes('aborted'))
-  );
+  const isAbortError = error instanceof Error && (error.name === 'AbortError' || error.message?.includes('aborted'));
+  const shouldShowError = error && !is409Conflict.value && !isAbortError;
 
   if (shouldShowError) {
     return (
@@ -501,18 +501,15 @@ function PreSearchStreamComponent({
   }
 
   const displayData = partialSearchData || preSearch.searchData;
+  const hasQueries = displayData?.queries && displayData.queries.length > 0;
+  const hasResults = displayData?.results && displayData.results.length > 0;
+  const hasData = hasQueries || hasResults;
+  const isPending = preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING;
+  const isPendingWithNoData = isPending && !hasData;
 
-  const hasData = displayData && (
-    (displayData.queries && displayData.queries.length > 0)
-    || (displayData.results && displayData.results.length > 0)
-  );
-
-  const hasResults = displayData && displayData.results && displayData.results.length > 0;
   if (preSearch.status === MessageStatuses.COMPLETE && !hasResults) {
     return null;
   }
-
-  const isPendingWithNoData = (preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING) && !hasData;
 
   if (!hasData && !isPendingWithNoData) {
     return null;
@@ -526,6 +523,7 @@ function PreSearchStreamComponent({
   const validQueries = queries.filter((q): q is NonNullable<typeof q> => q != null);
   const validResults = results.filter((r): r is NonNullable<typeof r> => r != null);
   const isStreamingNow = preSearch.status === MessageStatuses.STREAMING;
+  const isEffectivelyComplete = isStreamComplete || preSearch.status === MessageStatuses.COMPLETE;
 
   if (isPendingWithNoData || isAutoRetrying.value) {
     return (
@@ -568,11 +566,13 @@ function PreSearchStreamComponent({
           return null;
         }
 
-        const searchResult = validResults.find(r => r?.index === query?.index)
-          || validResults.find(r => r?.query === query?.query);
+        const searchResult = validResults.find(r => r?.index === query?.index) || validResults.find(r => r?.query === query?.query);
         const hasResult = !!searchResult;
         const uniqueKey = `query-${query?.query || queryIndex}`;
-        const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
+        const hasResultsData = hasResult && searchResult.results && searchResult.results.length > 0;
+        const isLastQuery = queryIndex === validQueries.length - 1;
+        const remainingQueriesCount = !isEffectivelyComplete && expectedQueryCount ? Math.max(0, expectedQueryCount - validQueries.length) : 0;
+        const showSeparator = !isLastQuery || remainingQueriesCount > 0;
 
         return (
           <AnimatedStreamingItem
@@ -611,7 +611,7 @@ function PreSearchStreamComponent({
                       {query.rationale}
                     </p>
                   )}
-                  {/* Result count */}
+                  {/* Result count - only show when results have arrived */}
                   {hasResult && (
                     <p className="text-xs text-muted-foreground/70 mt-1">
                       {searchResult.results.length}
@@ -622,8 +622,8 @@ function PreSearchStreamComponent({
                 </div>
               </div>
 
-              {/* Results list */}
-              {hasResults && (
+              {/* Results list - show actual results if available */}
+              {hasResultsData && (
                 <div className="pl-6">
                   {searchResult.results.map((result, idx) => (
                     <WebSearchResultItem
@@ -635,14 +635,50 @@ function PreSearchStreamComponent({
                 </div>
               )}
 
+              {/* Results skeleton - show when query arrived but results haven't yet (during streaming) */}
+              {!hasResultsData && !isEffectivelyComplete && isStreamingNow && (
+                <PreSearchResultsSkeleton count={3} />
+              )}
+
               {/* Separator between searches */}
-              {queryIndex < validQueries.length - 1 && (
+              {showSeparator && (
                 <Separator className="!mt-4" />
               )}
             </div>
           </AnimatedStreamingItem>
         );
       })}
+
+      {/* Remaining query skeletons - show for expected queries that haven't arrived yet */}
+      {!isEffectivelyComplete && expectedQueryCount && validQueries.length < expectedQueryCount && (
+        Array.from({ length: expectedQueryCount - validQueries.length }, (_, idx) => {
+          const skeletonIndex = validQueries.length + idx;
+          const isLastSkeleton = skeletonIndex === expectedQueryCount - 1;
+          return (
+            <AnimatedStreamingItem
+              key={`skeleton-query-${idx}`}
+              itemKey={`skeleton-query-${idx}`}
+              index={validQueries.length + 1 + idx}
+            >
+              <PreSearchQuerySkeleton
+                resultsPerQuery={3}
+                showSeparator={!isLastSkeleton}
+              />
+            </AnimatedStreamingItem>
+          );
+        })
+      )}
+
+      {/* Fallback skeleton - show when streaming but no expected count yet (before first QUERY with total) */}
+      {!isEffectivelyComplete && !expectedQueryCount && isStreamingNow && validQueries.length === 0 && (
+        <AnimatedStreamingItem
+          key="skeleton-fallback"
+          itemKey="skeleton-fallback"
+          index={1}
+        >
+          <PreSearchQuerySkeleton resultsPerQuery={3} showSeparator={false} />
+        </AnimatedStreamingItem>
+      )}
     </AnimatedStreamingList>
   );
 }

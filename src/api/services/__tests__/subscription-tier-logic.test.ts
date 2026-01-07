@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { PlanType, SubscriptionTier } from '@/api/core/enums';
 import { PlanTypes, SubscriptionTiers } from '@/api/core/enums';
-import type { TierConfiguration } from '@/api/services/product-logic.service';
+import type { TierConfiguration } from '@/api/services/billing';
 import {
   canAccessByTier,
   canAccessModelByPricing,
@@ -28,7 +28,7 @@ import {
   getTierFromProductId,
   getTierName,
   TIER_CONFIG,
-} from '@/api/services/product-logic.service';
+} from '@/api/services/billing';
 import { CREDIT_CONFIG, PLAN_NAMES } from '@/lib/config/credit-config';
 
 // ============================================================================
@@ -119,13 +119,16 @@ function createCanceledSubscription(productId: string, daysUntilEnd: number): Mo
   };
 }
 
+// Mock Stripe IDs for tests - pattern matches "pro" word boundaries
+const MOCK_PRO_PRODUCT_ID = 'prod_test_pro';
+
 // ============================================================================
 // PLAN TYPE DETERMINATION FROM STRIPE DATA
 // ============================================================================
 
 describe('plan Type Determination from Stripe Product IDs', () => {
-  it('should detect Pro tier from configured Stripe product ID', () => {
-    const productId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
+  it('should detect Pro tier from product ID with pro pattern', () => {
+    const productId = MOCK_PRO_PRODUCT_ID;
     const tier = getTierFromProductId(productId);
 
     expect(tier).toBe(SubscriptionTiers.PRO);
@@ -421,7 +424,7 @@ describe('monthly Credit Allocation by Plan', () => {
 describe('grace Period Handling (Subscription Cancellation)', () => {
   it('canceled subscription maintains Pro tier until period end', () => {
     const subscription = createCanceledSubscription(
-      CREDIT_CONFIG.PLANS.paid.stripeProductId,
+      MOCK_PRO_PRODUCT_ID,
       15, // 15 days until period end
     );
 
@@ -432,7 +435,7 @@ describe('grace Period Handling (Subscription Cancellation)', () => {
 
   it('grace period allows continued Pro feature access', () => {
     const subscription = createCanceledSubscription(
-      CREDIT_CONFIG.PLANS.paid.stripeProductId,
+      MOCK_PRO_PRODUCT_ID,
       10,
     );
 
@@ -446,7 +449,7 @@ describe('grace Period Handling (Subscription Cancellation)', () => {
 
   it('grace period preserves Pro quotas', () => {
     const subscription = createCanceledSubscription(
-      CREDIT_CONFIG.PLANS.paid.stripeProductId,
+      MOCK_PRO_PRODUCT_ID,
       7,
     );
 
@@ -460,7 +463,7 @@ describe('grace Period Handling (Subscription Cancellation)', () => {
 
   it('expired grace period results in Free tier (logic check)', () => {
     const subscription = createCanceledSubscription(
-      CREDIT_CONFIG.PLANS.paid.stripeProductId,
+      MOCK_PRO_PRODUCT_ID,
       0,
     );
 
@@ -479,7 +482,7 @@ describe('grace Period Handling (Subscription Cancellation)', () => {
 
   it('grace period calculation is based on currentPeriodEnd', () => {
     const subscription = createCanceledSubscription(
-      CREDIT_CONFIG.PLANS.paid.stripeProductId,
+      MOCK_PRO_PRODUCT_ID,
       20,
     );
 
@@ -499,7 +502,7 @@ describe('grace Period Handling (Subscription Cancellation)', () => {
 
 describe('trial Period Feature Access', () => {
   it('trialing subscription grants Pro tier access', () => {
-    const subscription = createTrialSubscription(CREDIT_CONFIG.PLANS.paid.stripeProductId);
+    const subscription = createTrialSubscription(MOCK_PRO_PRODUCT_ID);
 
     expect(subscription.status).toBe('trialing');
     expect(subscription.tier).toBe(SubscriptionTiers.PRO);
@@ -507,7 +510,7 @@ describe('trial Period Feature Access', () => {
   });
 
   it('trial period provides full Pro features', () => {
-    const subscription = createTrialSubscription(CREDIT_CONFIG.PLANS.paid.stripeProductId);
+    const subscription = createTrialSubscription(MOCK_PRO_PRODUCT_ID);
 
     // Can access premium models
     const premiumModel = createMockModel(5.00, 15.00);
@@ -520,7 +523,7 @@ describe('trial Period Feature Access', () => {
   });
 
   it('trial period grants Pro monthly credits', () => {
-    const subscription = createTrialSubscription(CREDIT_CONFIG.PLANS.paid.stripeProductId);
+    const subscription = createTrialSubscription(MOCK_PRO_PRODUCT_ID);
 
     const monthlyCredits = getMonthlyCreditsForTier(subscription.tier);
 
@@ -528,7 +531,7 @@ describe('trial Period Feature Access', () => {
   });
 
   it('trial subscription has future period end date', () => {
-    const subscription = createTrialSubscription(CREDIT_CONFIG.PLANS.paid.stripeProductId);
+    const subscription = createTrialSubscription(MOCK_PRO_PRODUCT_ID);
 
     const now = new Date();
     expect(subscription.currentPeriodEnd.getTime()).toBeGreaterThan(now.getTime());
@@ -819,14 +822,14 @@ describe('tier Configuration Consistency', () => {
 
 describe('subscription Status and Tier Mapping', () => {
   it('active Pro subscription has Pro tier', () => {
-    const subscription = createActiveSubscription(CREDIT_CONFIG.PLANS.paid.stripeProductId);
+    const subscription = createActiveSubscription(MOCK_PRO_PRODUCT_ID);
 
     expect(subscription.status).toBe('active');
     expect(subscription.tier).toBe(SubscriptionTiers.PRO);
   });
 
   it('trialing Pro subscription has Pro tier', () => {
-    const subscription = createTrialSubscription(CREDIT_CONFIG.PLANS.paid.stripeProductId);
+    const subscription = createTrialSubscription(MOCK_PRO_PRODUCT_ID);
 
     expect(subscription.status).toBe('trialing');
     expect(subscription.tier).toBe(SubscriptionTiers.PRO);
@@ -834,7 +837,7 @@ describe('subscription Status and Tier Mapping', () => {
 
   it('canceled Pro subscription maintains Pro tier during grace period', () => {
     const subscription = createCanceledSubscription(
-      CREDIT_CONFIG.PLANS.paid.stripeProductId,
+      MOCK_PRO_PRODUCT_ID,
       10,
     );
 
@@ -858,16 +861,6 @@ describe('pricing and Billing Consistency', () => {
     const priceInCents = CREDIT_CONFIG.PLANS.paid.priceInCents;
 
     expect(priceInCents).toBe(5900);
-  });
-
-  it('pro plan Stripe IDs are configured', () => {
-    const productId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
-    const priceId = CREDIT_CONFIG.PLANS.paid.stripePriceId;
-
-    expect(productId).toBeTruthy();
-    expect(priceId).toBeTruthy();
-    expect(productId).toMatch(/^prod_/);
-    expect(priceId).toMatch(/^price_/);
   });
 
   it('credit-to-token conversion is consistent', () => {

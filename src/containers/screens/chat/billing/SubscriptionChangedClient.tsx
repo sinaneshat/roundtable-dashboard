@@ -8,7 +8,8 @@ import { Suspense } from 'react';
 import type { SubscriptionChangeType, SubscriptionTier } from '@/api/core/enums';
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers, SubscriptionTierSchema } from '@/api/core/enums';
 import type { Subscription } from '@/api/routes/billing/schema';
-import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
+// Direct import to avoid barrel export pulling in server-only credit.service.ts
+import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/billing/product-logic.service';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

@@ -2,6 +2,9 @@
  * Product Query Hooks
  *
  * TanStack Query hooks for Stripe products
+ *
+ * IMPORTANT: staleTime must match server prefetch (STALE_TIMES.products)
+ * for proper SSR hydration. Mismatched staleTime causes client refetch.
  */
 
 'use client';
@@ -9,6 +12,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getProductService,
   getProductsService,
@@ -16,18 +20,17 @@ import {
 
 /**
  * Hook to fetch all products with pricing plans
- * Protected route - requires authentication
- * Products are static catalog data, cached infinitely
+ * Public endpoint - no authentication required
+ * Products are static catalog data with ISR (24h revalidation)
  */
 export function useProductsQuery() {
   return useQuery({
     queryKey: queryKeys.products.list(),
     queryFn: getProductsService,
-    staleTime: Infinity,
+    staleTime: STALE_TIMES.products, // Must match server prefetch for hydration
     gcTime: Infinity,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    retry: false,
+    throwOnError: false,
   });
 }
 

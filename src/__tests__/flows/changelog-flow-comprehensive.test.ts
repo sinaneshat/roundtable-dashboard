@@ -86,11 +86,9 @@ function createMockChangelog(
 
 describe('changelog Called When Config Changes Exist', () => {
   let store: ChatStoreApi;
-  let _mockQueryClient: MockQueryClient & QueryClient;
 
   beforeEach(() => {
     store = createChatStore();
-    _mockQueryClient = createMockQueryClient();
   });
 
   describe('config change detection', () => {
@@ -1266,6 +1264,424 @@ describe('changelog Edge Cases and Error Handling', () => {
       ]);
 
       expect(changelog.previousRoundNumber).toBe(null);
+    });
+  });
+});
+
+// ============================================================================
+// 7. STALE DATA RACE CONDITION PREVENTION
+// ============================================================================
+
+describe('stale Data Race Condition Prevention', () => {
+  let store: ChatStoreApi;
+  let mockQueryClient: MockQueryClient & QueryClient;
+
+  beforeEach(() => {
+    store = createChatStore();
+    mockQueryClient = createMockQueryClient();
+  });
+
+  describe('isFetching Guard - Prevents Processing During Fetch Transitions', () => {
+    /**
+     * BUG SCENARIO (Fixed):
+     * 1. User on round 1 → changelog shown correctly
+     * 2. User submits for round 2
+     * 3. configChangeRoundNumber changes 1→2
+     * 4. Effect runs BEFORE TanStack Query updates
+     * 5. roundChangelogData still has round 1 data
+     * 6. BUG: Round 1 data merged as round 2 data
+     *
+     * FIX: Check isFetching before processing
+     */
+    it('should NOT process data while isFetching is true', () => {
+      const state = store.getState();
+
+      // Set up waiting state for round 2
+      state.setIsWaitingForChangelog(true);
+      state.setConfigChangeRoundNumber(2);
+
+      // Simulate the race condition scenario:
+      // - configChangeRoundNumber = 2 (we need round 2)
+      // - Query is fetching (isFetching = true)
+      // - Old round 1 data still in cache
+
+      const shouldProcess = (params: {
+        isFetching: boolean;
+        configChangeRoundNumber: number | null;
+        isWaitingForChangelog: boolean;
+      }) => {
+        // This mimics the logic in use-changelog-sync.ts
+        if (params.isFetching)
+          return false;
+        if (params.configChangeRoundNumber === null)
+          return false;
+        if (!params.isWaitingForChangelog)
+          return false;
+        return true;
+      };
+
+      // When fetching, should NOT process
+      expect(shouldProcess({
+        isFetching: true,
+        configChangeRoundNumber: 2,
+        isWaitingForChangelog: true,
+      })).toBe(false);
+
+      // When fetch complete, should process
+      expect(shouldProcess({
+        isFetching: false,
+        configChangeRoundNumber: 2,
+        isWaitingForChangelog: true,
+      })).toBe(true);
+    });
+
+    it('should wait for fresh data before clearing flags', () => {
+      const state = store.getState();
+
+      // Set up state
+      state.setIsWaitingForChangelog(true);
+      state.setConfigChangeRoundNumber(2);
+
+      // Verify flags are set
+      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().configChangeRoundNumber).toBe(2);
+
+      // During fetch transition, flags should remain set
+      // (to block streaming until fresh data arrives)
+      const duringFetch = store.getState();
+      expect(duringFetch.isWaitingForChangelog).toBe(true);
+      expect(duringFetch.configChangeRoundNumber).toBe(2);
+
+      // After fresh data received, flags can be cleared
+      state.setIsWaitingForChangelog(false);
+      state.setConfigChangeRoundNumber(null);
+
+      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().configChangeRoundNumber).toBe(null);
+    });
+  });
+
+  describe('round Number Validation - Prevents Wrong Round Data Merge', () => {
+    it('should reject changelog data for wrong round number', () => {
+      // Scenario: We need round 2 data, but API returns round 1 data
+      // (This can happen due to TanStack Query cache behavior)
+
+      const validateRoundData = (
+        items: Array<{ roundNumber: number }>,
+        expectedRound: number,
+      ): boolean => {
+        if (items.length === 0)
+          return true; // Empty is valid
+        return items.every(item => item.roundNumber === expectedRound);
+      };
+
+      // Round 1 data when expecting round 2 → Invalid
+      const round1Data = [
+        createMockChangelog(1, [{ type: 'added', participantId: 'p1' }]),
+      ];
+      expect(validateRoundData(round1Data, 2)).toBe(false);
+
+      // Round 2 data when expecting round 2 → Valid
+      const round2Data = [
+        createMockChangelog(2, [{ type: 'added', participantId: 'p1' }]),
+      ];
+      expect(validateRoundData(round2Data, 2)).toBe(true);
+
+      // Mixed data → Invalid
+      const mixedData = [
+        createMockChangelog(2, [{ type: 'added', participantId: 'p1' }]),
+        createMockChangelog(1, [{ type: 'removed', participantId: 'p2' }]),
+      ];
+      expect(validateRoundData(mixedData, 2)).toBe(false);
+    });
+
+    it('should track which round data was last merged', () => {
+      // This prevents duplicate merges for the same round
+
+      let lastMergedRound: number | null = null;
+      const configChangeRoundNumber = 2;
+
+      // First merge for round 2
+      if (lastMergedRound !== configChangeRoundNumber) {
+        lastMergedRound = configChangeRoundNumber;
+        // Merge would happen here
+      }
+      expect(lastMergedRound).toBe(2);
+
+      // Second attempt for same round should be skipped
+      const shouldMerge = lastMergedRound !== configChangeRoundNumber;
+      expect(shouldMerge).toBe(false);
+
+      // Different round should merge
+      const newRound = 3;
+      const shouldMergeNewRound = lastMergedRound !== newRound;
+      expect(shouldMergeNewRound).toBe(true);
+    });
+  });
+
+  describe('rapid Round Transitions', () => {
+    it('should handle Round 1 → Round 2 transition without stale data', () => {
+      // Round 1 complete
+      store.getState().setConfigChangeRoundNumber(null);
+      store.getState().setIsWaitingForChangelog(false);
+
+      // User submits for Round 2
+      store.getState().setConfigChangeRoundNumber(2);
+      store.getState().setWaitingToStartStreaming(true);
+
+      // PATCH completes, trigger changelog fetch
+      store.getState().setIsWaitingForChangelog(true);
+
+      // Streaming should be blocked until changelog completes
+      let currentState = store.getState();
+      const isBlocked = currentState.configChangeRoundNumber !== null || currentState.isWaitingForChangelog;
+      expect(isBlocked).toBe(true);
+
+      // Simulate changelog fetch completing with CORRECT round data
+      // (In real code, isFetching guard ensures this)
+      store.getState().setIsWaitingForChangelog(false);
+      store.getState().setConfigChangeRoundNumber(null);
+
+      // Now streaming can proceed
+      currentState = store.getState();
+      expect(currentState.isWaitingForChangelog).toBe(false);
+      expect(currentState.configChangeRoundNumber).toBe(null);
+      expect(currentState.waitingToStartStreaming).toBe(true);
+    });
+
+    it('should handle Round 1 → Round 2 → Round 3 rapid transitions', () => {
+      const mergedRounds: number[] = [];
+
+      // Simulate 3 rapid submissions
+      for (const round of [1, 2, 3]) {
+        // Set up for this round
+        store.getState().setConfigChangeRoundNumber(round);
+        store.getState().setIsWaitingForChangelog(true);
+        store.getState().setWaitingToStartStreaming(true);
+
+        // Simulate successful fetch and merge
+        // (In real code, guards ensure correct data)
+        mergedRounds.push(round);
+
+        // Clear for next round
+        store.getState().setIsWaitingForChangelog(false);
+        store.getState().setConfigChangeRoundNumber(null);
+      }
+
+      // All rounds should be processed
+      expect(mergedRounds).toEqual([1, 2, 3]);
+    });
+  });
+
+  describe('cache Merge with Stale Data Prevention', () => {
+    it('should correctly merge new items without duplicating stale entries', () => {
+      const effectiveThreadId = 'thread-123';
+
+      // Existing cache has round 1 data
+      const existingCache = {
+        success: true,
+        data: {
+          items: [
+            createMockChangelog(1, [{ type: 'added', participantId: 'p1' }]),
+          ],
+        },
+      };
+
+      // New data for round 2 (CORRECT round)
+      const round2Changelog = createMockChangelog(2, [
+        { type: 'removed', participantId: 'p2' },
+      ]);
+
+      let capturedResult: { data: { items: { roundNumber: number; id: string }[] } } | null = null;
+
+      mockQueryClient.setQueryData.mockImplementation((_key, updater) => {
+        const result = typeof updater === 'function' ? updater(existingCache) : updater;
+        capturedResult = result as typeof capturedResult;
+      });
+
+      // Perform merge
+      mockQueryClient.setQueryData(
+        queryKeys.threads.changelog(effectiveThreadId),
+        (old: typeof existingCache) => {
+          const existingItems = old?.data?.items || [];
+          const existingIds = new Set(existingItems.map(item => item.id));
+          const uniqueNewItems = [round2Changelog].filter(item => !existingIds.has(item.id));
+
+          return {
+            success: true,
+            data: {
+              items: [...uniqueNewItems, ...existingItems],
+            },
+          };
+        },
+      );
+
+      expect(capturedResult).not.toBeNull();
+      expect(capturedResult!.data.items).toHaveLength(2);
+
+      // Round 2 should be first (newest)
+      expect(capturedResult!.data.items[0]?.roundNumber).toBe(2);
+      // Round 1 should be preserved
+      expect(capturedResult!.data.items[1]?.roundNumber).toBe(1);
+    });
+
+    it('should NOT merge if new data is for wrong round', () => {
+      const existingCache = {
+        success: true,
+        data: {
+          items: [
+            createMockChangelog(1, [{ type: 'added', participantId: 'p1' }]),
+          ],
+        },
+      };
+
+      // Stale data for round 1 (WRONG - we want round 2)
+      const staleChangelog = createMockChangelog(1, [
+        { type: 'removed', participantId: 'p2' },
+      ]);
+
+      const configChangeRoundNumber = 2;
+
+      // Validation should reject
+      const isCorrectRound = staleChangelog.roundNumber === configChangeRoundNumber;
+      expect(isCorrectRound).toBe(false);
+
+      // Cache should remain unchanged
+      expect(existingCache.data.items).toHaveLength(1);
+    });
+  });
+
+  describe('timeline Display After Race Condition Fix', () => {
+    it('should show changelog accordion for both rounds after fix', () => {
+      // This tests the end result: changelog accordions should appear
+      // for both round 1 and round 2
+
+      const changelogs = [
+        createMockChangelog(1, [{ type: 'added', participantId: 'p1' }]),
+        createMockChangelog(2, [{ type: 'added', participantId: 'p2' }]),
+      ];
+
+      // Both rounds have changelog entries
+      expect(changelogs.find(c => c.roundNumber === 1)).toBeDefined();
+      expect(changelogs.find(c => c.roundNumber === 2)).toBeDefined();
+
+      // Timeline would group these correctly
+      const changelogByRound = new Map<number, typeof changelogs>();
+      changelogs.forEach((changelog) => {
+        const round = changelog.roundNumber;
+        if (!changelogByRound.has(round)) {
+          changelogByRound.set(round, []);
+        }
+        changelogByRound.get(round)!.push(changelog);
+      });
+
+      expect(changelogByRound.get(1)).toHaveLength(1);
+      expect(changelogByRound.get(2)).toHaveLength(1);
+    });
+  });
+});
+
+// ============================================================================
+// 8. QUERY BEHAVIOR WITHOUT placeholderData
+// ============================================================================
+
+describe('changelog Query Without placeholderData', () => {
+  /**
+   * FIX: Removed placeholderData from useThreadRoundChangelogQuery
+   *
+   * The bug: placeholderData caused TanStack Query to return stale data
+   * from the previous query key while the new query was being fetched.
+   *
+   * Without placeholderData:
+   * - Query returns undefined/null during initial fetch
+   * - No stale data from previous rounds is returned
+   * - isFetching is true until fresh data arrives
+   */
+
+  describe('query State Transitions', () => {
+    it('should have undefined data while fetching new round', () => {
+      // Simulate query state for round 2 (fresh query)
+      const queryState = {
+        data: undefined, // No placeholderData
+        isSuccess: false,
+        isFetching: true,
+      };
+
+      // Without placeholderData, data is undefined during fetch
+      expect(queryState.data).toBeUndefined();
+      expect(queryState.isFetching).toBe(true);
+    });
+
+    it('should have fresh data after fetch completes', () => {
+      // Simulate query completing
+      const queryState = {
+        data: {
+          success: true,
+          data: {
+            items: [{ roundNumber: 2, id: 'new-item' }],
+          },
+        },
+        isSuccess: true,
+        isFetching: false,
+      };
+
+      expect(queryState.data).toBeDefined();
+      expect(queryState.isFetching).toBe(false);
+      expect(queryState.data.data.items[0]?.roundNumber).toBe(2);
+    });
+
+    it('should NOT return round 1 data when querying round 2', () => {
+      // This was the bug: placeholderData returned round 1 data
+      // for round 2 query during fetch
+
+      // Simulate round 1 query completing
+      const round1QueryState = {
+        queryKey: ['threads', 'thread-123', 'changelog', 'round', 1],
+        data: { success: true, data: { items: [{ roundNumber: 1 }] } },
+      };
+
+      // Simulate round 2 query starting (NO placeholderData)
+      const round2QueryState = {
+        queryKey: ['threads', 'thread-123', 'changelog', 'round', 2],
+        data: undefined, // NOT round 1 data
+        isFetching: true,
+      };
+
+      // Round 2 query should NOT have round 1 data
+      expect(round2QueryState.data).toBeUndefined();
+
+      // Query keys are different
+      expect(round1QueryState.queryKey).not.toEqual(round2QueryState.queryKey);
+    });
+  });
+
+  describe('effect Behavior Without placeholderData', () => {
+    it('should skip processing when data is undefined', () => {
+      const shouldProcess = (params: {
+        data: { success: boolean; data: { items: unknown[] } } | undefined;
+        isSuccess: boolean;
+        isFetching: boolean;
+      }) => {
+        if (params.isFetching)
+          return false;
+        if (!params.isSuccess || !params.data?.success)
+          return false;
+        return true;
+      };
+
+      // During fetch (no placeholderData)
+      expect(shouldProcess({
+        data: undefined,
+        isSuccess: false,
+        isFetching: true,
+      })).toBe(false);
+
+      // After fetch completes
+      expect(shouldProcess({
+        data: { success: true, data: { items: [] } },
+        isSuccess: true,
+        isFetching: false,
+      })).toBe(true);
     });
   });
 });

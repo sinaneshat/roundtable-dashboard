@@ -14,8 +14,8 @@
  * to ensure tier-based access control is applied per-user.
  */
 
-import type { ListModelsResponse } from '@/services/api/models';
-import { listModelsPublicService } from '@/services/api/models';
+import type { ListModelsResponse } from '@/services/api';
+import { listModelsPublicService } from '@/services/api';
 
 // ============================================================================
 // Cache Tag Constants

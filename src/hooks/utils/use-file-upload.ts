@@ -21,6 +21,7 @@ import {
   RECOMMENDED_PART_SIZE,
   UploadStatuses,
   UploadStatusSchema,
+  UploadStrategies,
   UploadStrategySchema,
 } from '@/api/core/enums';
 import {
@@ -106,8 +107,30 @@ export const UseFileUploadOptionsSchema = z.object({
   maxRetries: z.number().optional(),
 });
 
-// Note: Callbacks can't be validated with Zod, so we extend the schema type
-export type UseFileUploadOptions = z.infer<typeof UseFileUploadOptionsSchema> & {
+/**
+ * Upload state schema
+ */
+const _UploadStateSchema = z.object({
+  /** Total items count */
+  total: z.number().int().nonnegative(),
+  /** Pending items count */
+  pending: z.number().int().nonnegative(),
+  /** Uploading items count */
+  uploading: z.number().int().nonnegative(),
+  /** Completed items count */
+  completed: z.number().int().nonnegative(),
+  /** Failed items count */
+  failed: z.number().int().nonnegative(),
+  /** Overall progress (0-100) */
+  overallProgress: z.number().min(0).max(100),
+  /** Whether any upload is in progress */
+  isUploading: z.boolean(),
+});
+
+/**
+ * Callback types for upload events
+ */
+export type UseFileUploadCallbacks = {
   /** Callback when upload completes */
   onComplete?: (item: UploadItem) => void;
   /** Callback when upload fails */
@@ -116,6 +139,14 @@ export type UseFileUploadOptions = z.infer<typeof UseFileUploadOptionsSchema> & 
   onAllComplete?: (items: UploadItem[]) => void;
 };
 
+/**
+ * Complete options for useFileUpload hook
+ */
+export type UseFileUploadOptions = z.infer<typeof UseFileUploadOptionsSchema> & UseFileUploadCallbacks;
+
+/**
+ * Return type for useFileUpload hook
+ */
 export type UseFileUploadReturn = {
   /** Current upload items */
   items: UploadItem[];
@@ -136,22 +167,7 @@ export type UseFileUploadReturn = {
   /** Retry a failed upload */
   retryUpload: (id: string) => Promise<void>;
   /** Overall upload state */
-  state: {
-    /** Total items count */
-    total: number;
-    /** Pending items count */
-    pending: number;
-    /** Uploading items count */
-    uploading: number;
-    /** Completed items count */
-    completed: number;
-    /** Failed items count */
-    failed: number;
-    /** Overall progress (0-100) */
-    overallProgress: number;
-    /** Whether any upload is in progress */
-    isUploading: boolean;
-  };
+  state: z.infer<typeof _UploadStateSchema>;
   /** Validation utilities */
   validation: ReturnType<typeof useFileValidation>;
 };
@@ -217,11 +233,10 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
 
   // State
   const [items, setItems] = useState<UploadItem[]>([]);
-  const itemsRef = useRef<UploadItem[]>(items); // ✅ FIX: Ref for current items to avoid stale closures
+  const itemsRef = useRef<UploadItem[]>(items);
   const activeUploadsRef = useRef<Set<string>>(new Set());
   const retryCountRef = useRef<Map<string, number>>(new Map());
 
-  // Keep itemsRef in sync with items state
   itemsRef.current = items;
 
   // Hooks
@@ -236,19 +251,12 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   const abortMultipart = useAbortMultipartUploadMutation();
   const deleteAttachment = useDeleteAttachmentMutation();
 
-  /**
-   * Update a specific item
-   */
   const updateItem = useCallback((id: string, updates: Partial<UploadItem>) => {
     setItems(prev =>
       prev.map(item => (item.id === id ? { ...item, ...updates } : item)),
     );
   }, []);
 
-  /**
-   * Perform single-request upload
-   * Uses secure ticket-based upload (S3 presigned URL pattern)
-   */
   const performSingleUpload = useCallback(
     async (item: UploadItem): Promise<void> => {
       updateItem(item.id, {
@@ -286,9 +294,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     [onComplete, onError, updateItem, uploadSingle],
   );
 
-  /**
-   * Perform multipart upload
-   */
   const performMultipartUpload = useCallback(
     async (item: UploadItem): Promise<void> => {
       const { file } = item;
@@ -307,7 +312,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       });
 
       try {
-        // Step 1: Create multipart upload
         const createResult = await createMultipart.mutateAsync({
           json: {
             filename: file.name,
@@ -324,12 +328,10 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         const { uploadId: multipartId, attachmentId: dbUploadId } = createResult.data;
         updateItem(item.id, { multipartUploadId: multipartId, uploadId: dbUploadId });
 
-        // Step 2: Upload parts
         const parts: { partNumber: number; etag: string }[] = [];
         let uploadedBytes = 0;
 
         for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
-          // Check if cancelled
           const currentItem = itemsRef.current.find(i => i.id === item.id);
           if (currentItem?.status === UploadStatuses.CANCELLED) {
             throw new Error('Upload cancelled');
@@ -369,7 +371,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           });
         }
 
-        // Step 3: Complete multipart upload
         const completeResult = await completeMultipart.mutateAsync({
           param: { id: dbUploadId },
           json: { parts },
@@ -399,7 +400,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         console.error('[File Upload] Multipart upload failed:', error);
         const errorMessage = error instanceof Error ? error.message : 'Multipart upload failed';
 
-        // Try to abort multipart upload if we have multipartUploadId
         const currentItem = itemsRef.current.find(i => i.id === item.id);
         if (currentItem?.multipartUploadId && currentItem?.uploadId) {
           try {
@@ -420,25 +420,19 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     [abortMultipart, completeMultipart, createMultipart, onComplete, onError, updateItem, uploadPart],
   );
 
-  /**
-   * Start uploading a specific item
-   * ✅ FIX: Uses itemsRef.current to avoid stale closure issues with auto-upload
-   */
   const startUpload = useCallback(
     async (id: string): Promise<void> => {
-      // ✅ FIX: Use ref instead of closure to get current items
       const item = itemsRef.current.find(i => i.id === id);
       if (!item || item.status !== UploadStatuses.PENDING)
         return;
 
-      // Check concurrent limit
       if (activeUploadsRef.current.size >= maxConcurrent)
         return;
 
       activeUploadsRef.current.add(id);
 
       try {
-        if (item.strategy === 'multipart') {
+        if (item.strategy === UploadStrategies.MULTIPART) {
           await performMultipartUpload(item);
         } else {
           await performSingleUpload(item);
@@ -446,7 +440,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       } finally {
         activeUploadsRef.current.delete(id);
 
-        // Check if all uploads complete
         setItems((currentItems) => {
           const allDone = currentItems.every(i =>
             i.status === UploadStatuses.COMPLETED || i.status === UploadStatuses.FAILED || i.status === UploadStatuses.CANCELLED,
@@ -461,27 +454,19 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     [maxConcurrent, onAllComplete, performMultipartUpload, performSingleUpload],
   );
 
-  /**
-   * Start all pending uploads
-   */
   const startAllUploads = useCallback(async (): Promise<void> => {
     const pendingItems = itemsRef.current.filter(i => i.status === UploadStatuses.PENDING);
 
-    // Start uploads up to max concurrent
     const uploadsToStart = pendingItems.slice(0, maxConcurrent);
 
     await Promise.all(uploadsToStart.map(item => startUpload(item.id)));
 
-    // Continue with remaining items as slots become available
     const remaining = pendingItems.slice(maxConcurrent);
     for (const item of remaining) {
       await startUpload(item.id);
     }
   }, [maxConcurrent, startUpload]);
 
-  /**
-   * Cancel an upload
-   */
   const cancelUpload = useCallback(
     async (id: string): Promise<void> => {
       const item = itemsRef.current.find(i => i.id === id);
@@ -491,7 +476,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       updateItem(id, { status: UploadStatuses.CANCELLED });
       activeUploadsRef.current.delete(id);
 
-      // Abort multipart upload if in progress
       if (item.multipartUploadId && item.uploadId) {
         try {
           await abortMultipart.mutateAsync({
@@ -503,7 +487,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         }
       }
 
-      // Delete upload record if created (non-multipart)
       if (item.uploadId && !item.multipartUploadId) {
         try {
           await deleteAttachment.mutateAsync({
@@ -517,9 +500,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     [abortMultipart, deleteAttachment, updateItem],
   );
 
-  /**
-   * Remove an item from queue
-   */
   const removeItem = useCallback(
     (id: string) => {
       const item = itemsRef.current.find(i => i.id === id);
@@ -538,11 +518,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     [cancelUpload, removePreview],
   );
 
-  /**
-   * Clear all items
-   */
   const clearAll = useCallback(() => {
-    // Cancel all active uploads
     itemsRef.current.forEach((item) => {
       if (item.status === UploadStatuses.UPLOADING) {
         cancelUpload(item.id);
@@ -555,9 +531,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     retryCountRef.current.clear();
   }, [cancelUpload, clearPreviews]);
 
-  /**
-   * Retry a failed upload
-   */
   const retryUpload = useCallback(
     async (id: string): Promise<void> => {
       const item = itemsRef.current.find(i => i.id === id);
@@ -581,9 +554,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     [maxRetries, startUpload, updateItem],
   );
 
-  /**
-   * Add files to upload queue
-   */
   const addFiles = useCallback(
     (files: File[]) => {
       const newItems: UploadItem[] = [];
@@ -593,14 +563,13 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         const validationResult = validation.validateFile(file);
 
         if (!validationResult.valid) {
-          // Add as failed item
           newItems.push({
             id,
             file,
             status: UploadStatuses.FAILED,
             progress: createInitialProgress(),
             validation: validationResult,
-            strategy: 'single',
+            strategy: UploadStrategies.SINGLE,
             threadId,
             error: validationResult.error?.message,
             createdAt: new Date(),
@@ -620,21 +589,15 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         });
       }
 
-      // Add previews
       addPreviews(files);
 
-      // ✅ FIX: Update both state AND ref together to avoid stale closure issues
-      // The ref update is synchronous, so startUpload can find items immediately
       setItems((prev) => {
         const updated = [...prev, ...newItems];
-        itemsRef.current = updated; // Update ref synchronously
+        itemsRef.current = updated;
         return updated;
       });
 
-      // Auto-start if enabled
       if (autoUpload) {
-        // ✅ FIX: Use queueMicrotask for better timing than setTimeout(0)
-        // This ensures React state update is committed before we start uploads
         queueMicrotask(() => {
           newItems
             .filter(i => i.status === UploadStatuses.PENDING)
@@ -645,7 +608,6 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     [addPreviews, autoUpload, startUpload, threadId, validation],
   );
 
-  // Calculate state
   const state = {
     total: items.length,
     pending: items.filter(i => i.status === UploadStatuses.PENDING).length,
@@ -658,7 +620,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
             items.reduce((sum, item) => sum + item.progress.percent, 0) / items.length,
           )
         : 0,
-    isUploading: items.some(i => i.status === UploadStatuses.UPLOADING),
+    isUploading: items.some(i => i.status === UploadStatuses.UPLOADING || i.status === UploadStatuses.PENDING),
   };
 
   return {
@@ -685,23 +647,39 @@ export const UseSingleFileUploadOptionsSchema = z.object({
   threadId: z.string().optional(),
 });
 
-// Note: Callbacks can't be validated with Zod, so we extend the schema type
-export type UseSingleFileUploadOptions = z.infer<typeof UseSingleFileUploadOptionsSchema> & {
+/**
+ * Callback types for single file upload events
+ */
+export type UseSingleFileUploadCallbacks = {
   /** Callback when upload completes */
   onComplete?: (uploadId: string) => void;
   /** Callback when upload fails */
   onError?: (error: Error) => void;
 };
 
-export type UseSingleFileUploadReturn = {
+/**
+ * Complete options for useSingleFileUpload hook
+ */
+export type UseSingleFileUploadOptions = z.infer<typeof UseSingleFileUploadOptionsSchema> & UseSingleFileUploadCallbacks;
+
+/**
+ * Return type schema for useSingleFileUpload hook
+ */
+const _UseSingleFileUploadReturnSchema = z.object({
+  /** Current upload progress */
+  progress: UploadProgressSchema,
+  /** Current status */
+  status: UploadStatusSchema,
+  /** Error message */
+  error: z.string().optional(),
+});
+
+/**
+ * Return type for useSingleFileUpload hook - inferred from schema + functions
+ */
+export type UseSingleFileUploadReturn = z.infer<typeof _UseSingleFileUploadReturnSchema> & {
   /** Upload a single file */
   upload: (file: File) => Promise<string | null>;
-  /** Current upload progress */
-  progress: UploadProgress;
-  /** Current status */
-  status: UploadStatus;
-  /** Error message */
-  error?: string;
   /** Reset state */
   reset: () => void;
   /** Cancel current upload */
@@ -748,7 +726,6 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
 
   const upload = useCallback(
     async (file: File): Promise<string | null> => {
-      // Validate
       const validationResult = validation.validateFile(file);
       if (!validationResult.valid) {
         setError(validationResult.error?.message);
@@ -757,8 +734,7 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
         return null;
       }
 
-      // Only support single upload in this simplified hook
-      if (validationResult.uploadStrategy === 'multipart') {
+      if (validationResult.uploadStrategy === UploadStrategies.MULTIPART) {
         setError('File too large. Use useFileUpload for large files.');
         setStatus(UploadStatuses.FAILED);
         onError?.(new Error('File too large for single upload'));
@@ -770,7 +746,6 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
       abortControllerRef.current = new AbortController();
 
       try {
-        // Use secure ticket-based upload
         const result = await uploadMutation.mutateAsync(file);
 
         if (result.success && result.data) {

@@ -1,24 +1,5 @@
 'use client';
 
-/**
- * Pre-Search Resumption Hook
- *
- * ✅ FIX: Handles resuming streaming pre-searches after page refresh
- *
- * Bug Scenario:
- * 1. User starts a pre-search (status: STREAMING)
- * 2. User refreshes the page during streaming
- * 3. Store hydrates with preSearch.status='streaming' but:
- *    - triggeredPreSearchRounds is EMPTY (Set not persisted)
- *    - waitingToStartStreaming may be false
- * 4. BUG: No hook attempts to resume the stream
- * 5. UI shows "Searching..." stuck indefinitely
- *
- * This hook detects streaming pre-searches that aren't tracked locally
- * and attempts to resume them via the backend (which handles KV buffer
- * resumption or re-execution).
- */
-
 import type { QueryClient } from '@tanstack/react-query';
 import type { RefObject } from 'react';
 import { useEffect, useRef } from 'react';
@@ -39,100 +20,70 @@ type UsePreSearchResumptionParams = {
   queryClientRef: RefObject<QueryClient>;
 };
 
-/**
- * Handles resuming streaming pre-searches after page refresh
- *
- * This hook runs independently of waitingToStartStreaming and detects
- * when a pre-search is in STREAMING status but hasn't been triggered locally.
- */
 export function usePreSearchResumption({
   store,
   effectiveThreadId,
   queryClientRef,
 }: UsePreSearchResumptionParams) {
-  // ✅ PERF: Batch selectors with useShallow to prevent unnecessary re-renders
   const {
-    storeMessages,
-    storePreSearches,
-    storeThread,
+    messages,
+    preSearches,
+    thread,
     hasInitiallyLoaded,
     isStreaming,
-    // ✅ BUG FIX: Use form state for web search, NOT thread.enableWebSearch
-    // Form state is the source of truth for current round web search decision
-    storeEnableWebSearch,
+    enableWebSearch,
   } = useStore(store, useShallow(s => ({
-    storeMessages: s.messages,
-    storePreSearches: s.preSearches,
-    storeThread: s.thread,
+    messages: s.messages,
+    preSearches: s.preSearches,
+    thread: s.thread,
     hasInitiallyLoaded: s.hasInitiallyLoaded,
     isStreaming: s.isStreaming,
-    // ✅ BUG FIX: Form state for web search toggle (user's current intent)
-    storeEnableWebSearch: s.enableWebSearch,
+    enableWebSearch: s.enableWebSearch,
   })));
 
-  // Track which rounds we've attempted resumption for
   const attemptedResumptionRef = useRef<Set<number>>(new Set());
 
-  // Pre-search resumption effect
   useEffect(() => {
-    // Wait for initial load to complete
     if (!hasInitiallyLoaded) {
       return;
     }
 
-    // Don't interfere with active participant streaming
     if (isStreaming) {
       return;
     }
 
-    // Need messages to determine current round
-    if (storeMessages.length === 0) {
+    if (messages.length === 0) {
       return;
     }
 
-    // Check if web search is enabled
-    // ✅ BUG FIX: Use form state (storeEnableWebSearch) NOT thread.enableWebSearch
-    // When user enables web search mid-conversation, form state is true but thread is false
-    if (!storeEnableWebSearch) {
+    if (!enableWebSearch) {
       return;
     }
 
-    // Find pre-search for current round
-    const currentRound = getCurrentRoundNumber(storeMessages);
-    const currentRoundPreSearch = storePreSearches.find(ps => ps.roundNumber === currentRound);
+    const currentRound = getCurrentRoundNumber(messages);
+    const currentRoundPreSearch = preSearches.find(ps => ps.roundNumber === currentRound);
 
     if (!currentRoundPreSearch) {
       return;
     }
 
-    // Only handle STREAMING status that needs resumption
     if (currentRoundPreSearch.status !== MessageStatuses.STREAMING) {
-      // rlog.presearch('skip', `r${currentRound} status=${currentRoundPreSearch.status}`);
       return;
     }
 
-    // Prevent duplicate resumption attempts for same round
     if (attemptedResumptionRef.current.has(currentRound)) {
-      // rlog.presearch('skip', `r${currentRound} already attempted`);
       return;
     }
 
-    // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between multiple components
     const currentState = store.getState();
     const didMark = currentState.tryMarkPreSearchTriggered(currentRound);
     if (!didMark) {
-      // Already triggered locally, stream should be running
-      // rlog.presearch('skip', `r${currentRound} already marked`);
       return;
     }
 
-    // ✅ RESUMPTION: Pre-search is streaming but not tracked locally = page refresh scenario
-    // Mark as attempted
-    // rlog.presearch('RESUME', `r${currentRound} resuming stream`);
     attemptedResumptionRef.current.add(currentRound);
 
-    // Get user query
-    const userMessageForRound = storeMessages.find((msg) => {
+    const userMessageForRound = messages.find((msg) => {
       if (msg.role !== MessageRoles.USER)
         return false;
       const msgRound = getRoundNumber(msg.metadata);
@@ -144,38 +95,26 @@ export function usePreSearchResumption({
       return;
     }
 
-    const threadIdForSearch = storeThread?.id || effectiveThreadId;
+    const threadIdForSearch = thread?.id || effectiveThreadId;
 
-    // Execute resumption
     queueMicrotask(() => {
       const resumeSearch = async () => {
         try {
-          // Call execute endpoint - backend handles resume from KV buffer or re-execution
-          // Backend returns: live stream (buffer exists), 202 (stream active), or re-executes if timed out
           const response = await executePreSearchStreamService({
             param: { threadId: threadIdForSearch, roundNumber: String(currentRound) },
             json: { userQuery },
           });
 
-          // 202 means stream is active but buffer unavailable, poll for completion
-          // checkStuckPreSearches interval will handle completion detection
-          if (response.status === 202) {
-            return;
-          }
-
-          // 409 means another stream already active
-          if (response.status === 409) {
+          if (response.status === 202 || response.status === 409) {
             return;
           }
 
           if (!response.ok) {
-            // rlog.presearch('resume-fail', `status=${response.status}`);
             store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
             store.getState().clearPreSearchActivity(currentRound);
             return;
           }
 
-          // Read the resumed/re-executed stream
           const searchData = await readPreSearchStreamData(
             response,
             () => store.getState().updatePreSearchActivity(currentRound),
@@ -192,8 +131,7 @@ export function usePreSearchResumption({
           queryClientRef.current.invalidateQueries({
             queryKey: queryKeys.threads.preSearches(threadIdForSearch),
           });
-        } catch (_error) {
-          // rlog.presearch('resume-error', error instanceof Error ? error.message : String(error));
+        } catch {
           store.getState().clearPreSearchActivity(currentRound);
           store.getState().clearPreSearchTracking(currentRound);
         }
@@ -204,16 +142,15 @@ export function usePreSearchResumption({
   }, [
     hasInitiallyLoaded,
     isStreaming,
-    storeMessages,
-    storePreSearches,
-    storeThread,
-    storeEnableWebSearch,
+    messages,
+    preSearches,
+    thread,
+    enableWebSearch,
     store,
     effectiveThreadId,
     queryClientRef,
   ]);
 
-  // Reset attempt tracking on thread change
   useEffect(() => {
     attemptedResumptionRef.current = new Set();
   }, [effectiveThreadId]);

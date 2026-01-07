@@ -312,15 +312,39 @@ export function isCreditTransactionType(value: unknown): value is CreditTransact
   return typeof value === 'string' && CREDIT_TRANSACTION_TYPES.includes(value as CreditTransactionType);
 }
 
-const GRANT_TYPE_TO_TRANSACTION: Record<'credit_grant' | 'monthly_refill' | 'purchase', CreditTransactionType> = {
+// ============================================================================
+// CREDIT GRANT TYPE (subset of transaction types used for granting credits)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for grant types
+export const CREDIT_GRANT_TYPES = ['credit_grant', 'monthly_refill', 'purchase'] as const;
+
+// 2️⃣ ZOD SCHEMA - Runtime validation
+export const CreditGrantTypeSchema = z.enum(CREDIT_GRANT_TYPES).openapi({
+  description: 'Type of credit grant operation',
+  example: 'credit_grant',
+});
+
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type CreditGrantType = z.infer<typeof CreditGrantTypeSchema>;
+
+// 4️⃣ DEFAULT VALUE
+export const DEFAULT_CREDIT_GRANT_TYPE: CreditGrantType = 'credit_grant';
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const CreditGrantTypes = {
+  CREDIT_GRANT: 'credit_grant' as const,
+  MONTHLY_REFILL: 'monthly_refill' as const,
+  PURCHASE: 'purchase' as const,
+} as const;
+
+const GRANT_TYPE_TO_TRANSACTION: Record<CreditGrantType, CreditTransactionType> = {
   credit_grant: CreditTransactionTypes.CREDIT_GRANT,
   monthly_refill: CreditTransactionTypes.MONTHLY_REFILL,
   purchase: CreditTransactionTypes.PURCHASE,
 };
 
-export function getGrantTransactionType(
-  grantType: 'credit_grant' | 'monthly_refill' | 'purchase',
-): CreditTransactionType {
+export function getGrantTransactionType(grantType: CreditGrantType): CreditTransactionType {
   return GRANT_TYPE_TO_TRANSACTION[grantType];
 }
 
@@ -600,4 +624,64 @@ export const InvoiceStatuses = {
   PAID: 'paid' as const,
   UNCOLLECTIBLE: 'uncollectible' as const,
   VOID: 'void' as const,
+} as const;
+
+// ============================================================================
+// STRIPE PRORATION BEHAVIOR
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const STRIPE_PRORATION_BEHAVIORS = ['create_prorations', 'none', 'always_invoice'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_STRIPE_PRORATION_BEHAVIOR: StripeProratioBehavior = 'create_prorations';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const StripeProratioBehaviorSchema = z.enum(STRIPE_PRORATION_BEHAVIORS).openapi({
+  description: 'Stripe proration behavior for subscription changes',
+  example: 'create_prorations',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type StripeProratioBehavior = z.infer<typeof StripeProratioBehaviorSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const StripeProratioBehaviors = {
+  CREATE_PRORATIONS: 'create_prorations' as const,
+  NONE: 'none' as const,
+  ALWAYS_INVOICE: 'always_invoice' as const,
+} as const;
+
+// ============================================================================
+// STRIPE BILLING REASON
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const STRIPE_BILLING_REASONS = [
+  'subscription_create',
+  'subscription_update',
+  'subscription_cycle',
+  'manual',
+  'upcoming',
+] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_STRIPE_BILLING_REASON: StripeBillingReason = 'subscription_cycle';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const StripeBillingReasonSchema = z.enum(STRIPE_BILLING_REASONS).openapi({
+  description: 'Stripe invoice billing reason (matches Stripe.Invoice.BillingReason)',
+  example: 'subscription_create',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type StripeBillingReason = z.infer<typeof StripeBillingReasonSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const StripeBillingReasons = {
+  SUBSCRIPTION_CREATE: 'subscription_create' as const,
+  SUBSCRIPTION_UPDATE: 'subscription_update' as const,
+  SUBSCRIPTION_CYCLE: 'subscription_cycle' as const,
+  MANUAL: 'manual' as const,
+  UPCOMING: 'upcoming' as const,
 } as const;

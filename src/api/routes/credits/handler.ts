@@ -5,13 +5,11 @@ import type { UsageStatus } from '@/api/core/enums';
 import { CreditActions, PlanTypes, UsageStatuses } from '@/api/core/enums';
 import {
   canAffordCredits,
+  estimateStreamingCredits,
   getUserCreditBalance,
   getUserTransactionHistory,
-} from '@/api/services/credit.service';
-import {
-  estimateStreamingCredits,
   tokensToCredits,
-} from '@/api/services/product-logic.service';
+} from '@/api/services/billing';
 import type { ApiEnv } from '@/api/types';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 

@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, ne, notLike, or, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
+import { z } from 'zod';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import { invalidateThreadCache } from '@/api/common/cache-utils';
@@ -24,28 +25,25 @@ import {
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
 import { ChangelogChangeTypes, ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, PlanTypes, SubscriptionTiers, ThreadStatusSchema } from '@/api/core/enums';
 import {
+  canAccessModelByPricing,
   checkFreeUserHasCreatedThread,
   deductCreditsForAction,
   enforceCredits,
+  enrichWithTierAccess,
+  estimateStreamingCredits,
+  getRequiredTierForModel,
   getUserCreditBalance,
-} from '@/api/services/credit.service';
-import { getModelById } from '@/api/services/models-config.service';
-import { trackThreadCreated } from '@/api/services/posthog-llm-tracking.service';
-import { canAccessModelByPricing, enrichWithTierAccess, estimateStreamingCredits, getRequiredTierForModel, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
-import { generateSignedDownloadPath } from '@/api/services/signed-url.service';
-import { generateUniqueSlug } from '@/api/services/slug-generator.service';
-import { logModeChange, logWebSearchToggle } from '@/api/services/thread-changelog.service';
-import {
-  generateTitleFromMessage,
-  updateThreadTitleAndSlug,
-} from '@/api/services/title-generator.service';
-import {
-  cancelUploadCleanup,
-  isCleanupSchedulerAvailable,
-} from '@/api/services/upload-cleanup.service';
+  isFreeUserWithPendingRound,
+  SUBSCRIPTION_TIER_NAMES,
+} from '@/api/services/billing';
+import { trackThreadCreated } from '@/api/services/errors';
+import { getModelById } from '@/api/services/models';
+import { generateTitleFromMessage, generateUniqueSlug, updateThreadTitleAndSlug } from '@/api/services/prompts';
+import { logModeChange, logWebSearchToggle } from '@/api/services/threads';
+import { cancelUploadCleanup, generateSignedDownloadPath, isCleanupSchedulerAvailable } from '@/api/services/uploads';
 import {
   getUserTier,
-} from '@/api/services/usage-tracking.service';
+} from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -178,6 +176,14 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       console.error('[CREATE-THREAD-DEBUG] User tier:', { userTier });
     }
 
+    // ✅ FREE ROUND BYPASS: Free users who haven't completed their free round
+    // can use ANY models (within 3-model limit) for their first experience.
+    // Model pricing restrictions only apply after free round is used.
+    const skipPricingCheck = await isFreeUserWithPendingRound(user.id, userTier);
+    if (debugRequests) {
+      console.error('[CREATE-THREAD-DEBUG] Free round bypass:', { skipPricingCheck });
+    }
+
     for (const participant of body.participants) {
       const model = getModelById(participant.modelId);
       if (debugRequests) {
@@ -196,17 +202,20 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
           },
         );
       }
-      const canAccess = canAccessModelByPricing(userTier, model);
-      if (!canAccess) {
-        const requiredTier = getRequiredTierForModel(model);
-        throw createError.unauthorized(
-          `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan does not include access to ${model.name}. Upgrade to ${SUBSCRIPTION_TIER_NAMES[requiredTier]} or higher to use this model.`,
-          {
-            errorType: 'authorization',
-            resource: 'model',
-            resourceId: participant.modelId,
-          },
-        );
+      // Skip pricing check for free users on their first (free) round
+      if (!skipPricingCheck) {
+        const canAccess = canAccessModelByPricing(userTier, model);
+        if (!canAccess) {
+          const requiredTier = getRequiredTierForModel(model);
+          throw createError.unauthorized(
+            `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan does not include access to ${model.name}. Upgrade to ${SUBSCRIPTION_TIER_NAMES[requiredTier]} or higher to use this model.`,
+            {
+              errorType: 'authorization',
+              resource: 'model',
+              resourceId: participant.modelId,
+            },
+          );
+        }
       }
     }
     const tempTitle = 'New Chat';
@@ -1503,15 +1512,16 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       .filter(m => m.role === MessageRoles.USER)
       .map(m => m.id);
 
-    // Define type for attachment results
-    type MessageAttachment = {
-      messageId: string;
-      displayOrder: number;
-      uploadId: string;
-      filename: string;
-      mimeType: string;
-      fileSize: number;
-    };
+    const _MessageAttachmentSchema = z.object({
+      messageId: z.string(),
+      displayOrder: z.number(),
+      uploadId: z.string(),
+      filename: z.string(),
+      mimeType: z.string(),
+      fileSize: z.number(),
+    });
+
+    type MessageAttachment = z.infer<typeof _MessageAttachmentSchema>;
 
     // Get all attachments for user messages in one query
     const messageAttachmentsRaw = userMessageIds.length > 0

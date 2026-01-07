@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { SUBSCRIPTION_TIERS, SubscriptionTiers } from '@/api/core/enums';
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
-
 import {
   getMaxModelsForTier,
   getMonthlyCreditsForTier,
@@ -14,14 +12,17 @@ import {
   SUBSCRIPTION_TIER_NAMES,
   TIER_CONFIG,
   TIER_QUOTAS,
-} from '../product-logic.service';
+} from '@/api/services/billing';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+
+// Mock Stripe IDs for tests - pattern matches "pro" word boundaries
+const MOCK_PRO_PRODUCT_ID = 'prod_test_pro';
 
 describe('product Logic Service', () => {
   describe('getTierFromProductId', () => {
     describe('direct Product ID Matching', () => {
-      it('returns "pro" for the Paid plan product ID', () => {
-        const paidProductId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
-        expect(getTierFromProductId(paidProductId)).toBe(SubscriptionTiers.PRO);
+      it('returns "pro" for product IDs with "pro" pattern', () => {
+        expect(getTierFromProductId(MOCK_PRO_PRODUCT_ID)).toBe(SubscriptionTiers.PRO);
       });
 
       it('returns "free" for unknown product IDs (users without subscription)', () => {
@@ -85,8 +86,7 @@ describe('product Logic Service', () => {
   describe('plan Comparison Integration', () => {
     it('compares Free vs Pro plan differences', () => {
       const freeTier = SubscriptionTiers.FREE;
-      const proProductId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
-      const proTier = getTierFromProductId(proProductId);
+      const proTier = getTierFromProductId(MOCK_PRO_PRODUCT_ID);
 
       expect(proTier).toBe(SubscriptionTiers.PRO);
 
@@ -108,8 +108,7 @@ describe('product Logic Service', () => {
 
     it('provides consistent data for subscription change display', () => {
       const oldTier = SubscriptionTiers.FREE;
-      const newProductId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
-      const newTier = getTierFromProductId(newProductId);
+      const newTier = getTierFromProductId(MOCK_PRO_PRODUCT_ID);
 
       const comparison = {
         oldPlan: {

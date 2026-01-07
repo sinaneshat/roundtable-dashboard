@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CreditActions, CreditTransactionTypes, ModelPricingTiers } from '@/api/core/enums';
-import type { ModelForPricing } from '@/api/services/product-logic.service';
+import type { ModelForPricing } from '@/api/services/billing';
 import {
   calculateBaseCredits,
   calculateWeightedCredits,
@@ -24,7 +24,7 @@ import {
   getModelCreditMultiplier,
   getModelPricingTier,
   tokensToCredits,
-} from '@/api/services/product-logic.service';
+} from '@/api/services/billing';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 describe('credit Configuration', () => {

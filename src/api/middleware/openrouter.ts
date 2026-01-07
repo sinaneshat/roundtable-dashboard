@@ -13,7 +13,7 @@
 
 import { createMiddleware } from 'hono/factory';
 
-import { initializeOpenRouter } from '@/api/services/openrouter.service';
+import { initializeOpenRouter } from '@/api/services/models';
 import type { ApiEnv } from '@/api/types';
 
 /**

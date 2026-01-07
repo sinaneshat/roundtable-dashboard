@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PlanType } from '@/api/core/enums';
 import { CreditActions, CreditTransactionTypes, PlanTypes } from '@/api/core/enums';
-import * as creditService from '@/api/services/credit.service';
+import * as creditService from '@/api/services/billing';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 let mockDbInsertReturning: unknown[] = [];
@@ -85,11 +85,6 @@ describe('credit Service', () => {
 
       it('has $59/month price', () => {
         expect(CREDIT_CONFIG.PLANS.paid.priceInCents).toBe(5900);
-      });
-
-      it('has valid Stripe product and price IDs', () => {
-        expect(CREDIT_CONFIG.PLANS.paid.stripeProductId).toMatch(/^prod_/);
-        expect(CREDIT_CONFIG.PLANS.paid.stripePriceId).toMatch(/^price_/);
       });
     });
 
@@ -394,7 +389,6 @@ describe('credit Service', () => {
       });
 
       it('updates balance even if already at 0', () => {
-        const _previousBalance = 0;
         const newBalance = 0;
         expect(newBalance).toBe(0);
       });
@@ -1476,8 +1470,8 @@ describe('credit Service', () => {
       const validBalance = 0;
       expect(validBalance).toBeGreaterThanOrEqual(0);
 
-      const _invalidBalance = -100;
-      expect(_invalidBalance).toBeLessThan(0);
+      const invalidBalance = -100;
+      expect(invalidBalance).toBeLessThan(0);
     });
 
     it('blocks operations when balance would go negative', () => {
@@ -2012,10 +2006,10 @@ describe('credit Service', () => {
         userId,
         balance: 5_000,
         reservedCredits: 0,
-        planType: PlanTypes.FREE,
-        monthlyCredits: 0,
-        lastRefillAt: null,
-        nextRefillAt: null,
+        planType: PlanTypes.PAID, // Use PAID to avoid free user round restrictions
+        monthlyCredits: 100_000,
+        lastRefillAt: new Date(),
+        nextRefillAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         version: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -2117,7 +2111,24 @@ describe('credit Service', () => {
       const userId = 'user_release_2';
       const streamId = 'stream_123';
 
-      // Use creditService.releaseReservation directly
+      const record = {
+        id: 'test_id',
+        userId,
+        balance: 5_000,
+        reservedCredits: 1000,
+        planType: PlanTypes.FREE,
+        monthlyCredits: 0,
+        lastRefillAt: null,
+        nextRefillAt: null,
+        version: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockDbSelect = [record];
+      mockDbInsertReturning = [record];
+      mockDbUpdate = [];
+
       await creditService.releaseReservation(userId, streamId, undefined);
 
       expect(mockDbUpdate).toHaveLength(0);

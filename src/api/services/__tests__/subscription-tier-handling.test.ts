@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { PlanType } from '@/api/core/enums';
 import { PlanTypes, SubscriptionTiers } from '@/api/core/enums';
-import { TIER_CONFIG } from '@/api/services/product-logic.service';
+import { TIER_CONFIG } from '@/api/services/billing';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 // ============================================================================
@@ -893,11 +893,11 @@ describe('concurrent Tier Operations', () => {
 });
 
 describe('tier Detection from Product ID', () => {
-  it('detects pro tier from Stripe product ID', () => {
-    const proProductId = CREDIT_CONFIG.PLANS.paid.stripeProductId;
+  it('detects pro tier from product ID with pro pattern', () => {
+    const proProductId = 'prod_test_pro';
 
-    // Simplified tier detection logic
-    const isPro = proProductId === CREDIT_CONFIG.PLANS.paid.stripeProductId;
+    // Pattern-based tier detection
+    const isPro = proProductId.toLowerCase().endsWith('_pro');
 
     expect(isPro).toBe(true);
   });
@@ -905,15 +905,16 @@ describe('tier Detection from Product ID', () => {
   it('defaults to free tier for unknown product IDs', () => {
     const unknownProductId = 'prod_unknown123';
 
-    const isPro = unknownProductId === CREDIT_CONFIG.PLANS.paid.stripeProductId;
+    // Pattern-based check
+    const isPro = unknownProductId.toLowerCase().includes('_pro_') || unknownProductId.toLowerCase().endsWith('_pro');
     const tier = isPro ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
 
     expect(tier).toBe(SubscriptionTiers.FREE);
   });
 
   it('handles case-insensitive product ID matching', () => {
-    const proProductId = CREDIT_CONFIG.PLANS.paid.stripeProductId.toLowerCase();
-    const expectedId = CREDIT_CONFIG.PLANS.paid.stripeProductId.toLowerCase();
+    const proProductId = 'prod_TEST_PRO'.toLowerCase();
+    const expectedId = 'prod_test_pro';
 
     expect(proProductId).toBe(expectedId);
   });

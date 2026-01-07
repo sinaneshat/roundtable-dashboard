@@ -22,7 +22,7 @@ import { CreditActions, CreditTransactionTypes } from '@/api/core/enums';
 import {
   calculateBaseCredits,
   tokensToCredits,
-} from '@/api/services/product-logic.service';
+} from '@/api/services/billing';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 // ============================================================================

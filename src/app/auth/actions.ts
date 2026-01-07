@@ -4,6 +4,8 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
+import type { ThreadPublishAction } from '@/api/core/enums/chat';
+import { ThreadPublishActions } from '@/api/core/enums/chat';
 import { auth } from '@/lib/auth';
 import { THREAD_CACHE_TAGS } from '@/lib/cache/thread-cache';
 
@@ -48,6 +50,16 @@ export async function requireAuth() {
 }
 
 /**
+ * Optional auth check - returns session if authenticated, null otherwise
+ * Used for public pages that show different content based on auth state
+ */
+export async function getOptionalAuth() {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+  return session ?? null;
+}
+
+/**
  * Redirect authenticated users away from auth pages (sign-in, sign-up)
  * This prevents logged-in users from accessing authentication pages
  */
@@ -72,12 +84,12 @@ export async function redirectIfAuthenticated() {
  * All business logic remains in Hono API (/src/api/routes/)
  *
  * @param slug - Thread slug to revalidate
- * @param action - 'publish' or 'unpublish'
+ * @param action - Thread publish action
  * @returns Success status
  */
 export async function revalidatePublicThread(
   slug: string,
-  action: 'publish' | 'unpublish',
+  action: ThreadPublishAction,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Verify authentication
@@ -93,7 +105,7 @@ export async function revalidatePublicThread(
       return { success: false, error: 'Invalid slug' };
     }
 
-    if (!['publish', 'unpublish'].includes(action)) {
+    if (action !== ThreadPublishActions.PUBLISH && action !== ThreadPublishActions.UNPUBLISH) {
       return { success: false, error: 'Invalid action' };
     }
 

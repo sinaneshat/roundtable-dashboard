@@ -403,52 +403,6 @@ export const CacheOptions = {
 } as const;
 
 // ============================================================================
-// SIZE VALIDATION TYPE (Request/Response Validation Categories)
-// ============================================================================
-
-// 1. ARRAY CONSTANT
-export const SIZE_VALIDATION_TYPES = [
-  'url_length',
-  'headers_size',
-  'single_header_size',
-  'headers_size_warning',
-  'body_size_header',
-  'body_size_warning',
-  'invalid_content_length',
-  'response_headers_size',
-  'response_body_size',
-  'response_body_warning',
-  'validation_error',
-] as const;
-
-// 2. ZOD SCHEMA
-export const SizeValidationTypeSchema = z.enum(SIZE_VALIDATION_TYPES).openapi({
-  description: 'Type of size validation violation or warning',
-  example: 'body_size_warning',
-});
-
-// 3. TYPESCRIPT TYPE
-export type SizeValidationType = z.infer<typeof SizeValidationTypeSchema>;
-
-// 4. DEFAULT VALUE
-export const DEFAULT_SIZE_VALIDATION_TYPE: SizeValidationType = 'validation_error';
-
-// 5. CONSTANT OBJECT
-export const SizeValidationTypes = {
-  URL_LENGTH: 'url_length' as const,
-  HEADERS_SIZE: 'headers_size' as const,
-  SINGLE_HEADER_SIZE: 'single_header_size' as const,
-  HEADERS_SIZE_WARNING: 'headers_size_warning' as const,
-  BODY_SIZE_HEADER: 'body_size_header' as const,
-  BODY_SIZE_WARNING: 'body_size_warning' as const,
-  INVALID_CONTENT_LENGTH: 'invalid_content_length' as const,
-  RESPONSE_HEADERS_SIZE: 'response_headers_size' as const,
-  RESPONSE_BODY_SIZE: 'response_body_size' as const,
-  RESPONSE_BODY_WARNING: 'response_body_warning' as const,
-  VALIDATION_ERROR: 'validation_error' as const,
-} as const;
-
-// ============================================================================
 // CIRCUIT BREAKER STATE (Fetch Resilience Pattern)
 // ============================================================================
 

@@ -10,8 +10,8 @@
  * - On-demand revalidation via revalidateTag('products')
  */
 
-import type { GetProductsResponse } from '@/services/api/products';
-import { getProductService, getProductsService } from '@/services/api/products';
+import type { GetProductsResponse } from '@/services/api';
+import { getProductService, getProductsService } from '@/services/api';
 
 // ============================================================================
 // Cache Tag Constants

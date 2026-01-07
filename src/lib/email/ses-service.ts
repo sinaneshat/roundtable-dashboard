@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { render } from '@react-email/components';
 import { AwsClient } from 'aws4fetch';
 

@@ -8,7 +8,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { eq } from 'drizzle-orm';
 
 import { createHandler, Responses } from '@/api/core';
-import { getUserCreditBalance } from '@/api/services/credit.service';
+import { getUserCreditBalance } from '@/api/services/billing';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync, userCreditBalance } from '@/db';
 

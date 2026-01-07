@@ -6,16 +6,13 @@ import { z } from 'zod';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError } from '@/api/common/error-handling';
 import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from '@/api/core';
-import { isActiveSubscriptionStatus, PurchaseTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
-import { getUserCreditBalance } from '@/api/services/credit.service';
-import { stripeService } from '@/api/services/stripe.service';
-import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
+import { isActiveSubscriptionStatus, PlanTypes, PurchaseTypes, StripeBillingReasons, StripeProratioBehaviors, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
+import { getCustomerIdByUserId, getUserCreditBalance, stripeService, syncStripeDataFromStripe } from '@/api/services/billing';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
 import { revenueTracking } from '@/lib/analytics';
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { isObject } from '@/lib/utils';
 
 import type {
@@ -45,13 +42,17 @@ function validateSubscriptionOwnership(
   return subscription.userId === user.id;
 }
 
-function serializeSubscriptionDates<T extends {
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  canceledAt: Date | null;
-  trialStart: Date | null;
-  trialEnd: Date | null;
-}>(subscription: T) {
+const _SerializableSubscriptionDatesSchema = z.object({
+  currentPeriodStart: z.date(),
+  currentPeriodEnd: z.date(),
+  canceledAt: z.date().nullable(),
+  trialStart: z.date().nullable(),
+  trialEnd: z.date().nullable(),
+});
+
+type SerializableSubscriptionDates = z.infer<typeof _SerializableSubscriptionDatesSchema>;
+
+function serializeSubscriptionDates<T extends SerializableSubscriptionDates>(subscription: T) {
   return {
     ...subscription,
     currentPeriodStart: subscription.currentPeriodStart.toISOString(),
@@ -119,8 +120,15 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
           tag: STATIC_CACHE_TAGS.ACTIVE_PRICES,
         });
 
-      // Filter to only show Pro plan product
-      const filteredProducts = dbProducts.filter(p => p.id === CREDIT_CONFIG.PLANS.paid.stripeProductId);
+      // Filter to only show Pro plan product (by metadata.planType from seeded data)
+      const filteredProducts = dbProducts.filter((p) => {
+        try {
+          const metadata = typeof p.metadata === 'string' ? JSON.parse(p.metadata) : p.metadata;
+          return metadata?.planType === PlanTypes.PAID;
+        } catch {
+          return false;
+        }
+      });
 
       // Step 3: Join products with their prices and sort - minimal transformation
       const products = filteredProducts
@@ -319,8 +327,6 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
       if (error instanceof AppError) {
         throw error;
       }
-      // Log the actual Stripe error for debugging
-      console.error('[Checkout] Stripe error:', error instanceof Error ? error.message : String(error));
       throw createError.internal('Failed to create checkout session', ErrorContextBuilders.stripe('create_checkout_session'));
     }
   },
@@ -672,7 +678,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
               price: newPriceId,
             },
           ],
-          proration_behavior: 'create_prorations', // Immediate with proration
+          proration_behavior: StripeProratioBehaviors.CREATE_PRORATIONS, // Immediate with proration
         });
       } else if (isDowngrade) {
         // DOWNGRADE: Schedule for end of period
@@ -684,7 +690,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
               price: newPriceId,
             },
           ],
-          proration_behavior: 'none',
+          proration_behavior: StripeProratioBehaviors.NONE,
           billing_cycle_anchor: 'unchanged',
         });
       } else {
@@ -696,7 +702,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
               price: newPriceId,
             },
           ],
-          proration_behavior: 'create_prorations',
+          proration_behavior: StripeProratioBehaviors.CREATE_PRORATIONS,
         });
       }
 
@@ -1075,7 +1081,7 @@ async function trackRevenueFromWebhook(
           return;
         }
 
-        const isFirstInvoice = invoice.billing_reason === 'subscription_create';
+        const isFirstInvoice = invoice.billing_reason === StripeBillingReasons.SUBSCRIPTION_CREATE;
 
         if (isFirstInvoice) {
           await revenueTracking.subscriptionStarted({

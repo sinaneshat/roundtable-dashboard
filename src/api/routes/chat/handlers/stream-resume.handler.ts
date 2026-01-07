@@ -6,9 +6,7 @@ import { createError } from '@/api/common/error-handling';
 import { createHandler, Responses, STREAMING_CONFIG, ThreadIdParamSchema } from '@/api/core';
 import type { MessageStatus, RoundPhase } from '@/api/core/enums';
 import { MessageRoles, MessageStatuses, ParticipantStreamStatuses, RoundPhases, StreamStatuses } from '@/api/core/enums';
-import { getActivePreSearchStreamId, getPreSearchStreamChunks, getPreSearchStreamMetadata } from '@/api/services/pre-search-stream-buffer.service';
-import { clearThreadActiveStream, getNextParticipantToStream, getThreadActiveStream, updateParticipantStatus } from '@/api/services/resumable-stream-kv.service';
-import { createLiveParticipantResumeStream, getActiveStreamId, getStreamChunks, getStreamMetadata } from '@/api/services/stream-buffer.service';
+import { clearThreadActiveStream, createLiveParticipantResumeStream, getActiveParticipantStreamId, getActivePreSearchStreamId, getNextParticipantToStream, getParticipantStreamChunks, getParticipantStreamMetadata, getPreSearchStreamChunks, getPreSearchStreamMetadata, getThreadActiveStream, updateParticipantStatus } from '@/api/services/streaming';
 import type { ApiEnv } from '@/api/types';
 import { parseStreamId } from '@/api/types/streaming';
 import { getDbAsync } from '@/db';
@@ -91,7 +89,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
         return Responses.noContentWithHeaders();
       }
 
-      const metadata = await getStreamMetadata(streamIdToResume, c.env);
+      const metadata = await getParticipantStreamMetadata(streamIdToResume, c.env);
 
       if (!metadata) {
         if (nextParticipant && !roundComplete) {
@@ -106,7 +104,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
         return Responses.noContentWithHeaders();
       }
 
-      const chunks = await getStreamChunks(streamIdToResume, c.env);
+      const chunks = await getParticipantStreamChunks(streamIdToResume, c.env);
       const lastChunkTime = chunks && chunks.length > 0
         ? Math.max(...chunks.map(chunk => chunk.timestamp))
         : 0;
@@ -172,10 +170,10 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 
     // ✅ FIX: Return resumable stream for moderator phase (was returning just headers)
     // This enables true stream resumption for moderator like participants
-    const moderatorStreamId = await getActiveStreamId(threadId, currentRound, NO_PARTICIPANT_SENTINEL, c.env);
+    const moderatorStreamId = await getActiveParticipantStreamId(threadId, currentRound, NO_PARTICIPANT_SENTINEL, c.env);
     if (moderatorStreamId) {
-      const moderatorMetadata = await getStreamMetadata(moderatorStreamId, c.env);
-      const moderatorChunks = await getStreamChunks(moderatorStreamId, c.env);
+      const moderatorMetadata = await getParticipantStreamMetadata(moderatorStreamId, c.env);
+      const moderatorChunks = await getParticipantStreamChunks(moderatorStreamId, c.env);
 
       if (moderatorMetadata && (moderatorMetadata.status === StreamStatuses.ACTIVE || moderatorMetadata.status === StreamStatuses.STREAMING)) {
         const lastChunkTime = moderatorChunks && moderatorChunks.length > 0
@@ -386,7 +384,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
       const activeStream = await getThreadActiveStream(threadId, c.env);
 
       if (activeStream && activeStream.roundNumber === currentRoundNumber) {
-        const chunks = await getStreamChunks(activeStream.streamId, c.env);
+        const chunks = await getParticipantStreamChunks(activeStream.streamId, c.env);
         const lastChunkTime = chunks && chunks.length > 0
           ? Math.max(...chunks.map(chunk => chunk.timestamp))
           : 0;
@@ -497,11 +495,11 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
     let moderatorKVStatus: MessageStatus | null = null;
 
     if (hasKV) {
-      moderatorStreamId = await getActiveStreamId(threadId, currentRoundNumber, NO_PARTICIPANT_SENTINEL, c.env);
+      moderatorStreamId = await getActiveParticipantStreamId(threadId, currentRoundNumber, NO_PARTICIPANT_SENTINEL, c.env);
 
       if (moderatorStreamId) {
-        const metadata = await getStreamMetadata(moderatorStreamId, c.env);
-        const chunks = await getStreamChunks(moderatorStreamId, c.env);
+        const metadata = await getParticipantStreamMetadata(moderatorStreamId, c.env);
+        const chunks = await getParticipantStreamChunks(moderatorStreamId, c.env);
         const lastChunkTime = chunks && chunks.length > 0
           ? Math.max(...chunks.map((chunk: { timestamp: number }) => chunk.timestamp))
           : 0;

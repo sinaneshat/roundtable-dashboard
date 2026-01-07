@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';

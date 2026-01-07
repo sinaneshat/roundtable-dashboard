@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SubscriptionTier } from '@/api/core/enums';
 import { SubscriptionTiers } from '@/api/core/enums';
-import { TIER_QUOTAS } from '@/api/services/product-logic.service';
+import { TIER_QUOTAS } from '@/api/services/billing';
 
 type MockUsageRecord = {
   userId: string;

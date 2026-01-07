@@ -13,7 +13,7 @@
 
 import { createMiddleware } from 'hono/factory';
 
-import { initializeStripe } from '@/api/services/stripe.service';
+import { initializeStripe } from '@/api/services/billing';
 import type { ApiEnv } from '@/api/types';
 
 /**

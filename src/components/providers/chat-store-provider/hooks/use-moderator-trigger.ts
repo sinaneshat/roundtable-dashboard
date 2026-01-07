@@ -5,7 +5,16 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
-import { FinishReasons, MessagePartTypes, MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases, TextPartStates, UIMessageRoles } from '@/api/core/enums';
+import {
+  FinishReasons,
+  MessagePartTypes,
+  MessageRoles,
+  MODERATOR_NAME,
+  MODERATOR_PARTICIPANT_INDEX,
+  RoundPhases,
+  TextPartStates,
+  UIMessageRoles,
+} from '@/api/core/enums';
 import { getRoundNumber, isObject } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { isRoundComplete } from '@/stores/chat';
@@ -52,7 +61,6 @@ function parseAiSdkStreamLine(line: string): string | null {
 }
 
 export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
-  // ✅ PERF: Batch selectors with useShallow to prevent unnecessary re-renders
   const { threadId, createdThreadId } = useStore(store, useShallow(s => ({
     threadId: s.thread?.id,
     createdThreadId: s.createdThreadId,
@@ -68,32 +76,17 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     participantMessageIds: string[],
   ) => {
     const state = store.getState();
-
-    // ✅ FLASH FIX: Get effectiveThreadId from FRESH state, not stale closure
-    // The closure can be stale if thread was just created but React hasn't re-rendered
-    // This was causing completeStreaming() to be called incorrectly, clearing streamingRoundNumber
     const freshThreadId = state.thread?.id || state.createdThreadId || '';
 
     if (!freshThreadId) {
-      // rlog.moderator('skip', 'no threadId');
-      // ✅ FLASH FIX: Don't call completeStreaming() on early return
-      // This clears streamingRoundNumber causing isLatestRound to be false → flash
-      // handleComplete already set isModeratorStreaming=true, let it timeout naturally
-      // This case should never happen with fresh state since handleComplete checks threadId
       return;
     }
 
     const moderatorId = `${freshThreadId}_r${roundNumber}_moderator`;
     if (state.hasModeratorStreamBeenTriggered(moderatorId, roundNumber)) {
-      // rlog.moderator('skip', `r${roundNumber} already triggered`);
-
-      // ✅ FIX: Check if the round is actually complete but streamingRoundNumber is stale
-      // This can happen if the original trigger completed but completeStreaming() wasn't called
-      // (e.g., due to component unmount, error, or race condition)
       if (state.streamingRoundNumber === roundNumber) {
         const roundComplete = isRoundComplete(state.messages, state.participants, roundNumber);
         if (roundComplete) {
-          // rlog.moderator('cleanup', `r${roundNumber} complete but streamingRoundNumber stale - cleaning up`);
           state.completeStreaming();
         }
       }
@@ -102,11 +95,8 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     }
 
     if (triggeringRoundRef.current !== null) {
-      // rlog.moderator('skip', `r${roundNumber} trigger in progress`);
       return;
     }
-
-    // rlog.moderator('TRIGGER', `r${roundNumber} pMsgs=${participantMessageIds.length}`);
     state.markModeratorStreamTriggered(moderatorId, roundNumber);
     triggeringRoundRef.current = roundNumber;
 
@@ -252,14 +242,14 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
                     ...msg,
                     parts: [{ type: MessagePartTypes.TEXT, text: finalText, state: TextPartStates.DONE }],
                     metadata: {
-                      ...(msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}),
+                      ...(msg.metadata && isObject(msg.metadata) ? msg.metadata : {}),
                       finishReason: FinishReasons.STOP,
                     },
                   }
                 : msg,
             );
           } else {
-            const moderatorMessage = {
+            const moderatorMessage: UIMessage = {
               id: moderatorMessageId,
               role: UIMessageRoles.ASSISTANT,
               parts: [{ type: MessagePartTypes.TEXT, text: finalText, state: TextPartStates.DONE }],
@@ -267,7 +257,8 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
                 role: MessageRoles.ASSISTANT,
                 roundNumber,
                 isModerator: true,
-                model: 'anthropic/claude-sonnet-4',
+                participantIndex: MODERATOR_PARTICIPANT_INDEX,
+                model: MODERATOR_NAME,
                 finishReason: FinishReasons.STOP,
               },
             };
@@ -277,17 +268,14 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        // rlog.moderator('abort', `r${roundNumber}`);
         return;
       }
-      // rlog.moderator('error', `r${roundNumber}`);
     } finally {
-      // rlog.phase('MOD→DONE', `r${roundNumber} complete`);
       store.getState().completeStreaming();
       triggeringRoundRef.current = null;
       abortControllerRef.current = null;
     }
-  }, [store]); // ✅ FLASH FIX: Removed effectiveThreadId - now read from fresh state inside callback
+  }, [store]);
 
   useEffect(() => {
     return () => {
@@ -297,7 +285,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     };
   }, []);
 
-  // ✅ PERF: Batch resumption selectors with useShallow
   const {
     isModeratorStreaming,
     currentResumptionPhase,

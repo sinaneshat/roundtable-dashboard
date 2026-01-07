@@ -205,7 +205,7 @@ function simulateProcessMonthlyRefill(userId: string): void {
 }
 
 describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
-  it('upgrades free user to pro and grants 1M monthly credits', () => {
+  it('upgrades free user to pro and grants 100K monthly credits', () => {
     const userId = 'user_1';
 
     mockState.userCreditBalances.set(userId, {

@@ -17,7 +17,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { PlanTypes, SubscriptionTiers } from '@/api/core/enums';
-import { TIER_CONFIG } from '@/api/services/product-logic.service';
+import { TIER_CONFIG } from '@/api/services/billing';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 // ============================================================================

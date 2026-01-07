@@ -4,7 +4,8 @@ import { memo, useMemo } from 'react';
 
 import type { SubscriptionTier } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
+// Direct import to avoid barrel export pulling in server-only credit.service.ts
+import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/billing/product-logic.service';
 import { ModelAvatarWithRole } from '@/components/chat/model-avatar-with-role';
 import { Icons } from '@/components/icons';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';

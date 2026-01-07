@@ -10,17 +10,4 @@ export {
 export { errorLogger } from './error-logger';
 export { ensureOpenRouterInitialized } from './openrouter';
 export { RateLimiterFactory } from './rate-limiter-factory';
-export {
-  createApiSizeLimitMiddleware,
-  createFileUploadSizeLimitMiddleware,
-  createRequestSizeLimitMiddleware,
-  createResponseSizeLimitMiddleware,
-  createSizeLimitsMiddleware,
-  DEFAULT_SIZE_LIMITS,
-  type SizeLimitConfig,
-  type SizeValidationResult,
-  validateRequestBodySize,
-  validateRequestSize,
-  validateResponseSize,
-} from './size-limits';
 export { ensureStripeInitialized } from './stripe';

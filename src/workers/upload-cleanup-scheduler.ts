@@ -26,7 +26,7 @@ import {
   createDrizzleFromD1,
   deleteFromR2,
   deleteUploadRecord,
-} from '@/api/services/upload-orphan-check.service';
+} from '@/api/services/uploads';
 
 // ============================================================================
 // REQUEST SCHEMAS (Zod validation for type-safe request bodies)

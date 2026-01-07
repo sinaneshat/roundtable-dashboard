@@ -20,8 +20,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PlanType } from '@/api/core/enums';
 import { CreditActions, CreditTransactionTypes, PlanTypes, SubscriptionTiers } from '@/api/core/enums';
-import { ensureUserCreditRecord, getUserCreditBalance } from '@/api/services/credit.service';
-import { ensureUserUsageRecord } from '@/api/services/usage-tracking.service';
+import { ensureUserCreditRecord, getUserCreditBalance } from '@/api/services/billing';
+import { ensureUserUsageRecord } from '@/api/services/usage';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 type MockCreditRecord = {

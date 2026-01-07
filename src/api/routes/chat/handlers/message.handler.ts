@@ -4,7 +4,7 @@ import { and, asc, desc, eq } from 'drizzle-orm';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, IdParamSchema, Responses, ThreadRoundParamSchema } from '@/api/core';
 import { MessagePartTypes } from '@/api/core/enums';
-import { generateSignedDownloadPath } from '@/api/services/signed-url.service';
+import { generateSignedDownloadPath } from '@/api/services/uploads';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';

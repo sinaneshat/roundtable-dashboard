@@ -2,21 +2,21 @@ import type { ComponentProps } from 'react';
 
 import type { SkeletonUsecase } from '@/api/core/enums';
 import { SkeletonUsecases } from '@/api/core/enums';
-import { cn } from "@/lib/ui/cn"
+import { cn } from '@/lib/ui/cn';
 
-function Skeleton({ className, ...props }: ComponentProps<"div">) {
+function Skeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="skeleton"
-      className={cn("bg-accent animate-pulse rounded-xl", className)}
+      className={cn('bg-accent animate-pulse rounded-xl', className)}
       {...props}
     />
-  )
+  );
 }
 
-function CardSkeleton({ className, ...props }: ComponentProps<"div">) {
+function CardSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn("rounded-2xl border bg-card p-6 space-y-4", className)} {...props}>
+    <div className={cn('rounded-2xl border bg-card p-6 space-y-4', className)} {...props}>
       <div className="flex items-center justify-between">
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-6 w-16" />
@@ -33,28 +33,26 @@ function CardSkeleton({ className, ...props }: ComponentProps<"div">) {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-type TableRowSkeletonBaseProps = ComponentProps<"div">;
-
-interface TableRowSkeletonProps extends TableRowSkeletonBaseProps {
-  columns?: number
+interface TableRowSkeletonProps extends ComponentProps<'div'> {
+  columns?: number;
 }
 
 function TableRowSkeleton({ columns = 4, className, ...props }: TableRowSkeletonProps) {
   return (
-    <div className={cn("flex items-center space-x-4 p-4 border-b", className)} {...props}>
+    <div className={cn('flex items-center space-x-4 p-4 border-b', className)} {...props}>
       {Array.from({ length: columns }).map((_, i) => (
-        <Skeleton key={i} className={cn("h-4", i === 0 ? "w-48" : "w-24")} />
+        <Skeleton key={i} className={cn('h-4', i === 0 ? 'w-48' : 'w-24')} />
       ))}
     </div>
-  )
+  );
 }
 
-function StatCardSkeleton({ className, ...props }: ComponentProps<"div">) {
+function StatCardSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn("rounded-2xl border bg-card p-6", className)} {...props}>
+    <div className={cn('rounded-2xl border bg-card p-6', className)} {...props}>
       <div className="flex items-center justify-between mb-4">
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-8 w-8 rounded" />
@@ -65,12 +63,12 @@ function StatCardSkeleton({ className, ...props }: ComponentProps<"div">) {
         <Skeleton className="h-3 w-16" />
       </div>
     </div>
-  )
+  );
 }
 
-function ChartSkeleton({ className, ...props }: ComponentProps<"div">) {
+function ChartSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn("rounded-2xl border bg-card p-6", className)} {...props}>
+    <div className={cn('rounded-2xl border bg-card p-6', className)} {...props}>
       <div className="flex items-center justify-between mb-6">
         <div className="space-y-1">
           <Skeleton className="h-6 w-40" />
@@ -80,12 +78,12 @@ function ChartSkeleton({ className, ...props }: ComponentProps<"div">) {
       </div>
       <div className="h-32 w-full bg-accent animate-pulse rounded" />
     </div>
-  )
+  );
 }
 
-function PaymentMethodSkeleton({ className, ...props }: ComponentProps<"div">) {
+function PaymentMethodSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn("rounded-2xl border bg-card p-6 space-y-4", className)} {...props}>
+    <div className={cn('rounded-2xl border bg-card p-6 space-y-4', className)} {...props}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Skeleton className="h-8 w-8 rounded" />
@@ -104,12 +102,12 @@ function PaymentMethodSkeleton({ className, ...props }: ComponentProps<"div">) {
         <Skeleton className="h-4 w-16" />
       </div>
     </div>
-  )
+  );
 }
 
-function SubscriptionSkeleton({ className, ...props }: ComponentProps<"div">) {
+function SubscriptionSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn("rounded-2xl border bg-card", className)} {...props}>
+    <div className={cn('rounded-2xl border bg-card', className)} {...props}>
       <div className="p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -136,33 +134,30 @@ function SubscriptionSkeleton({ className, ...props }: ComponentProps<"div">) {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-function UserMessageSkeleton({ className, ...props }: ComponentProps<"div">) {
+function UserMessageSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn("mb-4 flex justify-end", className)} {...props}>
+    <div className={cn('mb-4 flex justify-end', className)} {...props}>
       <div className="max-w-[80%]">
-        {/* Header - simplified without borders, avatar on right */}
         <div className="flex items-center gap-3 py-2 mb-2 flex-row-reverse">
           <Skeleton className="size-8 rounded-full bg-white/15" />
           <Skeleton className="h-5 w-24 bg-white/20" />
         </div>
-        {/* Content */}
         <div className="space-y-2">
           <Skeleton className="h-4 w-full bg-white/15" />
           <Skeleton className="h-4 w-3/4 bg-white/15" />
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-function AssistantMessageSkeleton({ className, ...props }: ComponentProps<"div">) {
+function AssistantMessageSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn("mb-4 flex justify-start", className)} {...props}>
+    <div className={cn('mb-4 flex justify-start', className)} {...props}>
       <div className="max-w-[85%]">
-        {/* Header - simplified without borders */}
         <div className="flex items-center gap-3 py-2 mb-2">
           <Skeleton className="size-8 rounded-full bg-white/15" />
           <div className="flex items-center gap-2">
@@ -170,7 +165,6 @@ function AssistantMessageSkeleton({ className, ...props }: ComponentProps<"div">
             <Skeleton className="h-4 w-20 bg-white/15" />
           </div>
         </div>
-        {/* Content */}
         <div className="space-y-2">
           <Skeleton className="h-4 w-full bg-white/10" />
           <Skeleton className="h-4 w-full bg-white/10" />
@@ -178,20 +172,18 @@ function AssistantMessageSkeleton({ className, ...props }: ComponentProps<"div">
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-function ModeratorCardSkeleton({ className, ...props }: ComponentProps<"div">) {
+function ModeratorCardSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn("mt-6", className)} {...props}>
+    <div className={cn('mt-6', className)} {...props}>
       <div className="rounded-2xl bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-white/5">
-        {/* Moderator header */}
         <div className="flex items-center gap-2">
           <Skeleton className="size-4 rounded bg-white/15" />
           <Skeleton className="h-4 w-32 bg-white/15" />
           <Skeleton className="h-6 w-20 rounded-full bg-white/10" />
         </div>
-        {/* Leaderboard skeleton */}
         <div className="space-y-2">
           <Skeleton className="h-4 w-24 bg-white/15" />
           <div className="space-y-1.5">
@@ -206,16 +198,16 @@ function ModeratorCardSkeleton({ className, ...props }: ComponentProps<"div">) {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-function StickyInputSkeleton({ className, ...props }: ComponentProps<"div">) {
+function StickyInputSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        "sticky bottom-0 z-30 mt-auto",
-        "bg-gradient-to-t from-background via-background to-transparent pt-6",
-        className
+        'sticky bottom-0 z-30 mt-auto',
+        'bg-gradient-to-t from-background via-background to-transparent pt-6',
+        className,
       )}
       {...props}
     >
@@ -231,15 +223,12 @@ function StickyInputSkeleton({ className, ...props }: ComponentProps<"div">) {
           </div>
         </div>
       </div>
-      {/* Bottom safe area fill */}
       <div className="h-4 bg-background" />
     </div>
-  )
+  );
 }
 
-type ThreadMessagesSkeletonBaseProps = ComponentProps<"div">;
-
-interface ThreadMessagesSkeletonProps extends ThreadMessagesSkeletonBaseProps {
+interface ThreadMessagesSkeletonProps extends ComponentProps<'div'> {
   participantCount?: number;
   showModerator?: boolean;
   showInput?: boolean;
@@ -254,12 +243,11 @@ function ThreadMessagesSkeleton({
   className,
   ...props
 }: ThreadMessagesSkeletonProps) {
-  // demo usecase: only user + participant messages, no moderator or input
   const shouldShowModerator = usecase === SkeletonUsecases.DEMO ? false : showModerator;
   const shouldShowInput = usecase === SkeletonUsecases.DEMO ? false : showInput;
 
   return (
-    <div className={cn("space-y-3", className)} {...props}>
+    <div className={cn('space-y-3', className)} {...props}>
       <UserMessageSkeleton />
       {Array.from({ length: participantCount }, (_, i) => (
         <AssistantMessageSkeleton key={i} />
@@ -267,21 +255,19 @@ function ThreadMessagesSkeleton({
       {shouldShowModerator && <ModeratorCardSkeleton />}
       {shouldShowInput && <StickyInputSkeleton />}
     </div>
-  )
+  );
 }
 
-function PresetCardSkeleton({ className, ...props }: ComponentProps<"div">) {
+function PresetCardSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
-      className={cn("rounded-2xl border border-border/50 bg-card p-4 space-y-3", className)}
+      className={cn('rounded-2xl border border-border/50 bg-card p-4 space-y-3', className)}
       {...props}
     >
-      {/* Header - name and badge */}
       <div className="flex items-start justify-between gap-2">
         <Skeleton className="h-5 w-32 bg-white/15" />
         <Skeleton className="h-5 w-16 rounded-full bg-white/10" />
       </div>
-      {/* Model avatars row */}
       <div className="flex items-start gap-4">
         {Array.from({ length: 3 }, (_, i) => (
           <div key={i} className="flex flex-col items-center gap-1">
@@ -290,33 +276,28 @@ function PresetCardSkeleton({ className, ...props }: ComponentProps<"div">) {
           </div>
         ))}
       </div>
-      {/* Description */}
       <div className="space-y-1.5">
         <Skeleton className="h-3 w-full bg-white/10" />
         <Skeleton className="h-3 w-3/4 bg-white/10" />
       </div>
     </div>
-  )
+  );
 }
 
-type QuickStartSkeletonBaseProps = ComponentProps<"div">;
-
-interface QuickStartSkeletonProps extends QuickStartSkeletonBaseProps {
-  count?: number
+interface QuickStartSkeletonProps extends ComponentProps<'div'> {
+  count?: number;
 }
 
 function QuickStartSkeleton({ count = 3, className, ...props }: QuickStartSkeletonProps) {
   return (
-    <div className={cn("flex flex-col", className)} {...props}>
+    <div className={cn('flex flex-col', className)} {...props}>
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
           className={cn('px-4 py-3', i < count - 1 && 'border-b border-white/[0.06]')}
         >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
-            {/* Question skeleton */}
             <Skeleton className="h-4 sm:h-5 w-full sm:w-3/4 bg-white/15" />
-            {/* Mode badge + avatars */}
             <div className="flex items-center gap-2 shrink-0">
               <Skeleton className="h-6 w-16 rounded-2xl bg-white/10" />
               <div className="flex items-center">
@@ -332,21 +313,19 @@ function QuickStartSkeleton({ count = 3, className, ...props }: QuickStartSkelet
         </div>
       ))}
     </div>
-  )
+  );
 }
 
-function AuthFormSkeleton({ className, ...props }: ComponentProps<"div">) {
+function AuthFormSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn("w-full flex flex-col gap-4 pt-10", className)} {...props}>
+    <div className={cn('w-full flex flex-col gap-4 pt-10', className)} {...props}>
       <Skeleton className="h-12 w-full rounded-full" />
       <Skeleton className="h-12 w-full rounded-full" />
     </div>
-  )
+  );
 }
 
-type PreSearchSkeletonBaseProps = ComponentProps<"div">;
-
-interface PreSearchSkeletonProps extends PreSearchSkeletonBaseProps {
+interface PreSearchSkeletonProps extends ComponentProps<'div'> {
   queryCount?: number;
   resultsPerQuery?: number;
 }
@@ -358,7 +337,7 @@ function PreSearchSkeleton({
   ...props
 }: PreSearchSkeletonProps) {
   return (
-    <div className={cn("space-y-4", className)} {...props}>
+    <div className={cn('space-y-4', className)} {...props}>
       {Array.from({ length: queryCount }, (_, queryIndex) => (
         <div key={queryIndex} className="space-y-2">
           <div className="flex items-start gap-2">
@@ -391,7 +370,75 @@ function PreSearchSkeleton({
         </div>
       ))}
     </div>
-  )
+  );
+}
+
+interface PreSearchQuerySkeletonProps extends ComponentProps<'div'> {
+  resultsPerQuery?: number;
+  showSeparator?: boolean;
+}
+
+function PreSearchQuerySkeleton({
+  resultsPerQuery = 3,
+  showSeparator = false,
+  className,
+  ...props
+}: PreSearchQuerySkeletonProps) {
+  return (
+    <div className={cn('space-y-2', className)} {...props}>
+      <div className="flex items-start gap-2">
+        <Skeleton className="size-4 rounded mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-4 w-12 rounded-md" />
+          </div>
+          <Skeleton className="h-3 w-64" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      </div>
+
+      <div className="pl-6 space-y-2">
+        {Array.from({ length: resultsPerQuery }, (_, resultIndex) => (
+          <div key={resultIndex} className="flex items-start gap-2 py-1.5">
+            <Skeleton className="size-4 rounded flex-shrink-0" />
+            <div className="flex-1 min-w-0 space-y-1">
+              <Skeleton className="h-3.5 w-3/4" />
+              <Skeleton className="h-3 w-40" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showSeparator && (
+        <Skeleton className="h-px w-full !mt-4" />
+      )}
+    </div>
+  );
+}
+
+interface PreSearchResultsSkeletonProps extends ComponentProps<'div'> {
+  count?: number;
+}
+
+function PreSearchResultsSkeleton({
+  count = 3,
+  className,
+  ...props
+}: PreSearchResultsSkeletonProps) {
+  return (
+    <div className={cn('pl-6 space-y-2', className)} {...props}>
+      {Array.from({ length: count }, (_, resultIndex) => (
+        <div key={resultIndex} className="flex items-start gap-2 py-1.5">
+          <Skeleton className="size-4 rounded flex-shrink-0" />
+          <div className="flex-1 min-w-0 space-y-1">
+            <Skeleton className="h-3.5 w-3/4" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export {
@@ -411,5 +458,7 @@ export {
   QuickStartSkeleton,
   AuthFormSkeleton,
   PreSearchSkeleton,
+  PreSearchQuerySkeleton,
+  PreSearchResultsSkeleton,
 }
 

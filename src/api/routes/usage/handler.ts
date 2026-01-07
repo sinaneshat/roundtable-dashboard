@@ -3,7 +3,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { createHandler, Responses } from '@/api/core';
 import {
   getUserUsageStats,
-} from '@/api/services/usage-tracking.service';
+} from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
 
 import type {

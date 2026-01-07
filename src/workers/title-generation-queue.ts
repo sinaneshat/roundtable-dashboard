@@ -52,7 +52,7 @@ async function processMessage(
 
   // Dynamic import to lazy-load AI SDK (prevents startup memory overflow)
   const { generateTitleFromMessage, updateThreadTitleAndSlug } = await import(
-    '@/api/services/title-generator.service',
+    '@/api/services/prompts',
   );
 
   // Use existing service functions

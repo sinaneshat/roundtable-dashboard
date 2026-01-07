@@ -1,12 +1,5 @@
 'use client';
 
-/**
- * Stuck Stream Detection Hook
- *
- * Auto-stops streams that get stuck in isStreaming=true state.
- * Uses dynamic timeout based on web search complexity.
- */
-
 import { useRouter } from 'next/navigation';
 import type { RefObject } from 'react';
 import { useEffect } from 'react';
@@ -21,9 +14,6 @@ type UseStuckStreamDetectionParams = {
   lastStreamActivityRef: RefObject<number>;
 };
 
-/**
- * Auto-stops stuck streams after timeout
- */
 export function useStuckStreamDetection({
   store,
   lastStreamActivityRef,
@@ -35,12 +25,8 @@ export function useStuckStreamDetection({
     if (!chatIsStreaming)
       return;
 
-    // Reset activity timer when streaming starts
     lastStreamActivityRef.current = Date.now();
 
-    // Calculate dynamic timeout
-    // ✅ BUG FIX: Use form state (enableWebSearch) as source of truth
-    // When user enables web search mid-conversation, form state is true but thread is false
     const currentState = store.getState();
     const webSearchEnabled = currentState.enableWebSearch;
 
@@ -61,8 +47,6 @@ export function useStuckStreamDetection({
       const elapsed = now - lastStreamActivityRef.current;
 
       if (elapsed > streamTimeoutMs) {
-        // rlog.stream('check', `stuck detected elapsed=${elapsed}ms timeout=${streamTimeoutMs}ms web=${webSearchEnabled ? 1 : 0}`);
-
         const latestState = store.getState();
         latestState.setWaitingToStartStreaming(false);
         latestState.setIsStreaming(false);

@@ -1040,12 +1040,13 @@
     }
   },
   "common": {
+    "backToHome": "Back to Home",
     "error": "An error occurred",
     "loading": "Loading...",
-    "none": "None",
-    "or": "Or",
     "logo": "Logo",
     "more": "More",
+    "none": "None",
+    "or": "Or",
     "statusLabel": "Status: {status}"
   },
   "forms": {
@@ -1247,6 +1248,7 @@
     }
   },
   "pricing": {
+    "alreadyHaveAccount": "Already have an account?",
     "card": {
       "cancelSubscription": "Cancel Subscription",
       "credits": "credits",
@@ -1269,10 +1271,15 @@
       "alwaysActive": "Always Active",
       "activatedByDefault": "Activated by default for you"
     },
+    "error": {
+      "title": "Unable to Load Pricing",
+      "description": "We couldn't load the pricing information. Please try again later."
+    },
     "page": {
       "description": "Choose the perfect plan for your needs",
       "title": "Pricing & Plans"
-    }
+    },
+    "questionsContact": "Have questions? Contact us at"
   },
   "pwa": {
     "dismiss": "Dismiss update notification",
@@ -1371,7 +1378,7 @@
       },
       "pro": {
         "name": "Pro",
-        "description": "1M monthly credits with unlimited AI models and priority support"
+        "description": "100,000 credits/month with unlimited AI models and priority support"
       }
     }
   },

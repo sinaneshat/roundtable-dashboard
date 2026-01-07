@@ -14,6 +14,7 @@ import {
   MAX_TOTAL_FILE_SIZE,
   MIN_MULTIPART_PART_SIZE,
   RECOMMENDED_PART_SIZE,
+  UploadStrategies,
   UploadStrategySchema,
 } from '@/api/core/enums';
 import { formatFileSize } from '@/lib/format';
@@ -63,20 +64,50 @@ export const UseFileValidationOptionsSchema = z.object({
 
 export type UseFileValidationOptions = z.infer<typeof UseFileValidationOptionsSchema>;
 
+/**
+ * File size calculation result schema
+ */
+const _PartCalculationResultSchema = z.object({
+  /** Number of parts needed */
+  partCount: z.number().int().positive(),
+  /** Size of each part in bytes */
+  partSize: z.number().int().positive(),
+});
+
+/**
+ * Constants schema for validation
+ */
+const _FileValidationConstantsSchema = z.object({
+  /** Maximum single upload size in bytes */
+  maxSingleUploadSize: z.number().int().positive(),
+  /** Maximum total file size in bytes */
+  maxTotalFileSize: z.number().int().positive(),
+  /** Minimum multipart part size in bytes */
+  minPartSize: z.number().int().positive(),
+  /** Recommended part size in bytes */
+  recommendedPartSize: z.number().int().positive(),
+  /** Allowed MIME types */
+  allowedTypes: z.array(z.string()).readonly(),
+});
+
+/**
+ * Return type for useFileValidation hook
+ */
 export type UseFileValidationReturn = {
+  /** Validate a single file */
   validateFile: (file: File) => FileValidationResult;
+  /** Validate multiple files */
   validateFiles: (files: File[]) => Map<File, FileValidationResult>;
+  /** Check if MIME type is allowed */
   isAllowedType: (mimeType: string) => boolean;
+  /** Get file category from MIME type */
   getFileCategory: (mimeType: string) => FileCategory;
+  /** Format file size to human readable */
   formatFileSize: (bytes: number) => string;
-  calculateParts: (fileSize: number) => { partCount: number; partSize: number };
-  constants: {
-    maxSingleUploadSize: number;
-    maxTotalFileSize: number;
-    minPartSize: number;
-    recommendedPartSize: number;
-    allowedTypes: readonly string[];
-  };
+  /** Calculate multipart upload parts */
+  calculateParts: (fileSize: number) => z.infer<typeof _PartCalculationResultSchema>;
+  /** Validation constants */
+  constants: z.infer<typeof _FileValidationConstantsSchema>;
 };
 
 // ============================================================================
@@ -84,7 +115,7 @@ export type UseFileValidationReturn = {
 // ============================================================================
 
 function checkAllowedMimeType(mimeType: string, allowedTypes: readonly string[]): boolean {
-  return allowedTypes.includes(mimeType) || mimeType.startsWith('text/');
+  return allowedTypes.includes(mimeType);
 }
 
 function calculateMultipartParts(fileSize: number): { partCount: number; partSize: number } {
@@ -128,7 +159,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
             code: 'empty_file',
             message: 'File is empty',
           },
-          uploadStrategy: 'single',
+          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
         };
       }
@@ -140,7 +171,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
             code: 'filename_too_long',
             message: 'Filename must be 255 characters or less',
           },
-          uploadStrategy: 'single',
+          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
         };
       }
@@ -156,7 +187,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
               actualType: file.type,
             },
           },
-          uploadStrategy: 'single',
+          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
         };
       }
@@ -172,7 +203,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
               actualSize: file.size,
             },
           },
-          uploadStrategy: 'single',
+          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
         };
       }
@@ -180,7 +211,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
       if (file.size <= MAX_SINGLE_UPLOAD_SIZE) {
         return {
           valid: true,
-          uploadStrategy: 'single',
+          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
         };
       }
@@ -196,7 +227,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
               actualSize: file.size,
             },
           },
-          uploadStrategy: 'single',
+          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
         };
       }
@@ -204,7 +235,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
       const { partCount, partSize } = calculateMultipartParts(file.size);
       return {
         valid: true,
-        uploadStrategy: 'multipart',
+        uploadStrategy: UploadStrategies.MULTIPART,
         partCount,
         partSize,
         fileCategory,

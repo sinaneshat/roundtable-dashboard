@@ -12,7 +12,6 @@ import {
   ChatModeSchema,
   ErrorBoundaryContexts,
   MessageStatuses,
-  SubscriptionTiers,
   UploadStatuses,
 } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -177,12 +176,7 @@ export default function ChatOverviewScreen() {
     (page?.success && page.data?.items) ? page.data.items : [],
   ) ?? [];
 
-  const userTierConfig = modelsData?.data?.user_tier_config || {
-    tier: SubscriptionTiers.FREE,
-    tier_name: 'Free',
-    max_models: 2,
-    can_upgrade: true,
-  };
+  const userTierConfig = modelsData?.data?.user_tier_config;
 
   const { modelOrder, setModelOrder } = useChatStore(
     useShallow(s => ({
@@ -842,26 +836,28 @@ export default function ChatOverviewScreen() {
         }}
       />
 
-      <ModelSelectionModal
-        open={modelModal.value}
-        onOpenChange={modelModal.setValue}
-        orderedModels={orderedModels}
-        onReorder={handleReorderModels}
-        customRoles={customRoles}
-        onToggle={handleToggleModel}
-        onRoleChange={handleRoleChange}
-        onClearRole={handleClearRole}
-        onPresetSelect={handlePresetSelect}
-        selectedCount={selectedParticipants.length}
-        maxModels={userTierConfig.max_models}
-        userTierInfo={{
-          tier_name: userTierConfig.tier_name,
-          max_models: userTierConfig.max_models,
-          current_tier: userTierConfig.tier,
-          can_upgrade: userTierConfig.can_upgrade,
-        }}
-        incompatibleModelIds={incompatibleModelIds}
-      />
+      {userTierConfig && (
+        <ModelSelectionModal
+          open={modelModal.value}
+          onOpenChange={modelModal.setValue}
+          orderedModels={orderedModels}
+          onReorder={handleReorderModels}
+          customRoles={customRoles}
+          onToggle={handleToggleModel}
+          onRoleChange={handleRoleChange}
+          onClearRole={handleClearRole}
+          onPresetSelect={handlePresetSelect}
+          selectedCount={selectedParticipants.length}
+          maxModels={userTierConfig.max_models}
+          userTierInfo={{
+            tier_name: userTierConfig.tier_name,
+            max_models: userTierConfig.max_models,
+            current_tier: userTierConfig.tier,
+            can_upgrade: userTierConfig.can_upgrade,
+          }}
+          incompatibleModelIds={incompatibleModelIds}
+        />
+      )}
     </>
   );
 }

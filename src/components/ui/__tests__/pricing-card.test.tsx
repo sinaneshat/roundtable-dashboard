@@ -80,7 +80,7 @@ describe('pricingCard', () => {
         />,
       );
 
-      expect(screen.getByText('USD 19.99')).toBeInTheDocument();
+      expect(screen.getByText('$20')).toBeInTheDocument();
     });
 
     it('displays interval when provided', () => {
@@ -125,7 +125,7 @@ describe('pricingCard', () => {
         />,
       );
 
-      expect(screen.getByText('USD 0.00')).toBeInTheDocument();
+      expect(screen.getByText('$0')).toBeInTheDocument();
     });
 
     it('handles different currencies', () => {
@@ -140,7 +140,7 @@ describe('pricingCard', () => {
         />,
       );
 
-      expect(screen.getByText('EUR 19.99')).toBeInTheDocument();
+      expect(screen.getByText('€20')).toBeInTheDocument();
     });
   });
 

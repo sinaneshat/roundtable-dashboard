@@ -1,22 +1,5 @@
 'use client';
 
-/**
- * Stale Streaming State Cleanup Hook
- *
- * Detects and cleans up stale streaming state where streamingRoundNumber
- * is still set but the round has actually completed (all participants +
- * moderator have finished).
- *
- * This is a safety net to prevent the chat input from being stuck in a
- * disabled state due to race conditions or missed cleanup calls.
- *
- * The hook runs periodically when streamingRoundNumber is set and checks:
- * 1. All participants have complete messages (finishReason or content)
- * 2. Moderator message exists and is complete
- *
- * If both conditions are met, it calls completeStreaming() to reset state.
- */
-
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
@@ -48,19 +31,15 @@ export function useStaleStreamingCleanup({
   })));
 
   useEffect(() => {
-    // Only run when streamingRoundNumber is set but streaming flags are false
-    // This indicates potentially stale state
     if (streamingRoundNumber === null) {
       cleanupAttemptedRef.current = null;
       return;
     }
 
-    // If actively streaming, no cleanup needed
     if (isStreaming || isModeratorStreaming || waitingToStartStreaming) {
       return;
     }
 
-    // Avoid duplicate cleanup for the same round
     if (cleanupAttemptedRef.current === streamingRoundNumber) {
       return;
     }
@@ -68,7 +47,6 @@ export function useStaleStreamingCleanup({
     const checkStaleState = () => {
       const state = store.getState();
 
-      // Double-check conditions haven't changed
       if (state.streamingRoundNumber !== streamingRoundNumber) {
         return;
       }
@@ -76,7 +54,6 @@ export function useStaleStreamingCleanup({
         return;
       }
 
-      // Check if the round is actually complete
       const roundComplete = isRoundComplete(
         state.messages,
         state.participants,
@@ -84,16 +61,12 @@ export function useStaleStreamingCleanup({
       );
 
       if (roundComplete) {
-        // rlog.phase('STALE-CLEANUP', `r${streamingRoundNumber} complete but streamingRoundNumber still set - cleaning up`);
         cleanupAttemptedRef.current = streamingRoundNumber;
         state.completeStreaming();
       }
     };
 
-    // Initial check after a short delay to allow for normal completion
     const initialTimeout = setTimeout(checkStaleState, 500);
-
-    // Periodic check as a safety net
     const intervalId = setInterval(checkStaleState, CLEANUP_CHECK_INTERVAL_MS);
 
     return () => {

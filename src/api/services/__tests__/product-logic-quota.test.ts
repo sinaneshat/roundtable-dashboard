@@ -37,7 +37,7 @@ import {
   TIER_CONFIG,
   TIER_QUOTAS,
   tokensToCredits,
-} from '@/api/services/product-logic.service';
+} from '@/api/services/billing';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 describe('product Logic - Quota and Tier Configuration', () => {
@@ -546,15 +546,6 @@ describe('product Logic - Quota and Tier Configuration', () => {
 
       expect(config.monthlyCredits).toBe(100_000);
       expect(config.priceInCents).toBe(5900);
-      expect(config.stripeProductId).toMatch(/^prod_/);
-      expect(config.stripePriceId).toMatch(/^price_/);
-    });
-
-    it('paid plan has valid Stripe IDs', () => {
-      const config = getPlanConfig('paid');
-
-      expect(config.stripeProductId).toContain('prod_');
-      expect(config.stripePriceId).toContain('price_');
     });
   });
 

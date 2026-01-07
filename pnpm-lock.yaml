@@ -209,6 +209,9 @@ importers:
       recharts:
         specifier: 3.6.0
         version: 3.6.0(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react-is@17.0.2)(react@19.2.3)(redux@5.0.1)
+      server-only:
+        specifier: ^0.0.1
+        version: 0.0.1
       shiki:
         specifier: ^3.20.0
         version: 3.20.0
@@ -399,6 +402,9 @@ importers:
       prettier:
         specifier: ^3.7.4
         version: 3.7.4
+      puppeteer:
+        specifier: ^24.34.0
+        version: 24.34.0(typescript@5.9.3)
       puppeteer-core:
         specifier: ^24.34.0
         version: 24.34.0
@@ -9802,6 +9808,11 @@ packages:
     resolution: {integrity: sha512-24evawO+mUGW4mvS2a2ivwLdX3gk8zRLZr9HP+7+VT2vBQnm0oh9jJEZmUE3ePJhRkYlZ93i7OMpdcoi2qNCLg==}
     engines: {node: '>=18'}
 
+  puppeteer@24.34.0:
+    resolution: {integrity: sha512-Sdpl/zsYOsagZ4ICoZJPGZw8d9gZmK5DcxVal11dXi/1/t2eIXHjCf5NfmhDg5XnG9Nye+yo/LqMzIxie2rHTw==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   qs@6.14.1:
     resolution: {integrity: sha512-4EK3+xJl8Ts67nLYNwqw/dsFVnCf+qR7RgXSK9jEEm9unao3njwMDdmsdvoKBKHzxd7tCYz5e5M+SnMjdtXGQQ==}
     engines: {node: '>=0.6'}
@@ -10230,6 +10241,9 @@ packages:
   serve-static@2.2.1:
     resolution: {integrity: sha512-xRXBn0pPqQTVQiC8wyQrKs2MOlX24zQ0POGaj0kultvoOCstBQM5yvOhAVSUwOMjQtTvsPWoNCHfPGwaaQJhTw==}
     engines: {node: '>= 18'}
+
+  server-only@0.0.1:
+    resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
 
   serwist@9.4.4:
     resolution: {integrity: sha512-MrsVo5ruv8De4zRphWRyBh2XnQNtSplVg4NR1j4RNoQrjECMLncxYUirnJqkplBH7CA5IIUl+mlsKs4uD5JjiA==}
@@ -22559,6 +22573,23 @@ snapshots:
       - supports-color
       - utf-8-validate
 
+  puppeteer@24.34.0(typescript@5.9.3):
+    dependencies:
+      '@puppeteer/browsers': 2.11.0
+      chromium-bidi: 12.0.1(devtools-protocol@0.0.1534754)
+      cosmiconfig: 9.0.0(typescript@5.9.3)
+      devtools-protocol: 0.0.1534754
+      puppeteer-core: 24.34.0
+      typed-query-selector: 2.12.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bufferutil
+      - react-native-b4a
+      - supports-color
+      - typescript
+      - utf-8-validate
+
   qs@6.14.1:
     dependencies:
       side-channel: 1.1.0
@@ -23170,6 +23201,8 @@ snapshots:
       send: 1.2.1
     transitivePeerDependencies:
       - supports-color
+
+  server-only@0.0.1: {}
 
   serwist@9.4.4(typescript@5.9.3):
     dependencies:

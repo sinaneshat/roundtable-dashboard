@@ -3,23 +3,24 @@
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
+import type { UIBillingInterval } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { cn } from '@/lib/ui/cn';
 
 import { GlowingEffect } from './glowing-effect';
 import { HoverBorderGradient } from './hover-border-gradient';
 
-import type { UIBillingInterval } from '@/api/core/enums';
+type PriceConfig = {
+  amount: number;
+  currency: string;
+  interval?: UIBillingInterval | null;
+  trialDays?: number | null;
+}
 
-interface PricingCardProps {
+type PricingCardProps = {
   name: string;
   description?: string | null;
-  price: {
-    amount: number;
-    currency: string;
-    interval?: UIBillingInterval | null;
-    trialDays?: number | null;
-  };
+  price: PriceConfig;
   features?: string[] | null;
   isCurrentPlan?: boolean;
   isMostPopular?: boolean;
@@ -151,9 +152,12 @@ export function PricingCard({
             >
               <div className="flex items-baseline gap-1">
                 <span className="text-4xl font-bold tracking-tight">
-                  {price.currency.toUpperCase()}
-                  {' '}
-                  {(price.amount / 100).toFixed(2)}
+                  {new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: price.currency,
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  }).format(price.amount / 100)}
                 </span>
                 {price.interval && (
                   <span className="text-sm text-muted-foreground">

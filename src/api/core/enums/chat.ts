@@ -82,6 +82,31 @@ export const ThreadStatuses = {
 } as const;
 
 // ============================================================================
+// THREAD PUBLISH ACTION
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const THREAD_PUBLISH_ACTIONS = ['publish', 'unpublish'] as const;
+
+// 2. ZOD SCHEMA
+export const ThreadPublishActionSchema = z.enum(THREAD_PUBLISH_ACTIONS).openapi({
+  description: 'Thread publish/unpublish action for ISR revalidation',
+  example: 'publish',
+});
+
+// 3. TYPESCRIPT TYPE
+export type ThreadPublishAction = z.infer<typeof ThreadPublishActionSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_THREAD_PUBLISH_ACTION: ThreadPublishAction = 'publish';
+
+// 5. CONSTANT OBJECT
+export const ThreadPublishActions = {
+  PUBLISH: 'publish' as const,
+  UNPUBLISH: 'unpublish' as const,
+} as const;
+
+// ============================================================================
 // MESSAGE STATUS
 // ============================================================================
 
@@ -497,6 +522,33 @@ export const LimitationImportances = {
   CRITICAL: 'critical' as const,
   SECONDARY: 'secondary' as const,
   OUT_OF_SCOPE: 'out_of_scope' as const,
+} as const;
+
+// ============================================================================
+// CHANGELOG OPERATION (CRUD operation on changelog entries)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const CHANGELOG_OPERATIONS = ['none', 'delete', 'update', 'insert'] as const;
+
+// 2. ZOD SCHEMA
+export const ChangelogOperationSchema = z.enum(CHANGELOG_OPERATIONS).openapi({
+  description: 'CRUD operation type for changelog entry management',
+  example: 'insert',
+});
+
+// 3. TYPESCRIPT TYPE
+export type ChangelogOperation = z.infer<typeof ChangelogOperationSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_CHANGELOG_OPERATION: ChangelogOperation = 'none';
+
+// 5. CONSTANT OBJECT
+export const ChangelogOperations = {
+  NONE: 'none' as const,
+  DELETE: 'delete' as const,
+  UPDATE: 'update' as const,
+  INSERT: 'insert' as const,
 } as const;
 
 // ============================================================================

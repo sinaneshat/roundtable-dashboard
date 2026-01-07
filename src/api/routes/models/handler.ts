@@ -12,10 +12,10 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { createHandler, Responses } from '@/api/core';
 import type { SubscriptionTier } from '@/api/core/enums';
 import { SubscriptionTiers } from '@/api/core/enums';
-import { getAllModels } from '@/api/services/models-config.service';
-import type { ModelForPricing } from '@/api/services/product-logic.service';
-import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
-import { getUserTier } from '@/api/services/usage-tracking.service';
+import type { ModelForPricing } from '@/api/services/billing';
+import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/billing';
+import { getAllModels } from '@/api/services/models';
+import { getUserTier } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
 
 import type { listModelsRoute } from './route';

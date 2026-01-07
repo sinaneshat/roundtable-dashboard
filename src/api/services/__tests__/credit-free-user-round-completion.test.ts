@@ -15,7 +15,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { checkFreeUserHasCompletedRound } from '@/api/services/credit.service';
+import { checkFreeUserHasCompletedRound } from '@/api/services/billing';
 // Import the mocked module
 import { getDbAsync } from '@/db';
 
@@ -37,6 +37,9 @@ describe('checkFreeUserHasCompletedRound', () => {
       };
       chatParticipant: {
         findMany: ReturnType<typeof vi.fn>;
+      };
+      chatMessage: {
+        findFirst: ReturnType<typeof vi.fn>;
       };
     };
   };
@@ -83,6 +86,9 @@ describe('checkFreeUserHasCompletedRound', () => {
         },
         chatParticipant: {
           findMany: vi.fn(),
+        },
+        chatMessage: {
+          findFirst: vi.fn(),
         },
       },
     };
@@ -211,6 +217,15 @@ describe('checkFreeUserHasCompletedRound', () => {
           { id: 'p1', modelId: 'model-1', isEnabled: true },
           { id: 'p2', modelId: 'model-2', isEnabled: true },
         ]);
+
+        // For 2+ participants, moderator must also complete for round to be done
+        mockDb.query.chatMessage.findFirst.mockResolvedValue({
+          id: 'thread-123_r0_moderator',
+          threadId: 'thread-123',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Moderator summary...' }],
+          roundNumber: 0,
+        });
       });
 
       it('should return true', async () => {
@@ -243,6 +258,15 @@ describe('checkFreeUserHasCompletedRound', () => {
           { id: 'p3', modelId: 'model-3', isEnabled: true },
           { id: 'p4', modelId: 'model-4', isEnabled: true },
         ]);
+
+        // For 2+ participants, moderator must also complete for round to be done
+        mockDb.query.chatMessage.findFirst.mockResolvedValue({
+          id: 'thread-123_r0_moderator',
+          threadId: 'thread-123',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Moderator summary...' }],
+          roundNumber: 0,
+        });
       });
 
       it('should return true', async () => {
@@ -275,6 +299,15 @@ describe('checkFreeUserHasCompletedRound', () => {
           { id: 'p1', modelId: 'model-1', isEnabled: true },
           { id: 'p2', modelId: 'model-2', isEnabled: true },
         ]);
+
+        // For 2+ participants, moderator must also complete for round to be done
+        mockDb.query.chatMessage.findFirst.mockResolvedValue({
+          id: 'thread-123_r0_moderator',
+          threadId: 'thread-123',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Moderator summary...' }],
+          roundNumber: 0,
+        });
       });
 
       it('should return true (disabled participants should not count)', async () => {
@@ -372,6 +405,15 @@ describe('checkFreeUserHasCompletedRound', () => {
         { id: 'p1', modelId: 'model-1', isEnabled: true },
         { id: 'p2', modelId: 'model-2', isEnabled: true },
       ]);
+
+      // For 2+ participants, moderator must also complete for round to be done
+      mockDb.query.chatMessage.findFirst.mockResolvedValue({
+        id: 'thread-123_r0_moderator',
+        threadId: 'thread-123',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Moderator summary...' }],
+        roundNumber: 0,
+      });
     });
 
     it('should count participant only once even with multiple messages', async () => {
@@ -458,6 +500,15 @@ describe('checkFreeUserHasCompletedRound', () => {
           { id: 'p1', modelId: 'model-1', isEnabled: true },
           { id: 'p2', modelId: 'model-2', isEnabled: true },
         ]);
+
+        // For 2+ participants, moderator must also complete for round to be done
+        mockDb.query.chatMessage.findFirst.mockResolvedValue({
+          id: 'thread-123_r0_moderator',
+          threadId: 'thread-123',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Moderator summary...' }],
+          roundNumber: 0,
+        });
       });
 
       it('should return true when all enabled participants responded in round 0', async () => {

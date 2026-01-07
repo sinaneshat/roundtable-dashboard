@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, FeedbackType, ScreenMode } from '@/api/core/enums';
-import { ChatModeSchema, MessageStatuses, ScreenModes, SubscriptionTiers } from '@/api/core/enums';
+import { ChatModeSchema, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
@@ -58,12 +58,6 @@ export type ChatViewProps = {
   mode: ScreenMode;
   onSubmit: (e: React.FormEvent) => Promise<void>;
   chatAttachments: UseChatAttachmentsReturn;
-  /**
-   * Thread ID from server props - used for SSR query hydration.
-   * CRITICAL: Pass this from server data to ensure changelog/feedback show on first render.
-   * Without this, queries use store threadId which isn't available until after first render,
-   * causing a cache key mismatch with server-prefetched data.
-   */
   threadId?: string;
 };
 
@@ -174,12 +168,7 @@ export function ChatView({
     [customRolesData?.pages],
   );
 
-  const userTierConfig = modelsData?.data?.user_tier_config || {
-    tier: SubscriptionTiers.FREE,
-    tier_name: 'Free',
-    max_models: 2,
-    can_upgrade: true,
-  };
+  const userTierConfig = modelsData?.data?.user_tier_config;
 
   const changelog = useMemo(() => {
     if (!changelogResponse?.success)
@@ -291,7 +280,10 @@ export function ChatView({
   });
 
   useEffect(() => {
-    if (mode === ScreenModes.OVERVIEW && messages.length === 0)
+    const hasVisionAttachments = chatAttachments.attachments.some(att =>
+      isVisionRequiredMimeType(att.file.type),
+    );
+    if (mode === ScreenModes.OVERVIEW && messages.length === 0 && !hasVisionAttachments)
       return;
     if (incompatibleModelIds.size === 0)
       return;
@@ -327,7 +319,7 @@ export function ChatView({
         t('models.modelsDeselectedDescription', { models: modelList }),
       );
     }
-  }, [mode, incompatibleModelIds, selectedParticipants, messages.length, threadActions, setSelectedParticipants, allEnabledModels, t]);
+  }, [mode, incompatibleModelIds, selectedParticipants, messages.length, threadActions, setSelectedParticipants, allEnabledModels, t, chatAttachments.attachments]);
 
   const formActions = useChatFormActions();
 
@@ -360,8 +352,6 @@ export function ChatView({
     || formActions.isSubmitting
     || isRoundInProgress;
 
-  // Show spinner only from submit click until first stream chunk arrives (web search or participant)
-  // After first stream chunk, button is disabled (not loading) until round finishes
   const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming;
 
   const keyboardOffset = useVisualViewportPosition();
@@ -599,26 +589,28 @@ export function ChatView({
         onModeSelect={handleModeSelect}
       />
 
-      <ModelSelectionModal
-        open={isModelModalOpen.value}
-        onOpenChange={isModelModalOpen.setValue}
-        orderedModels={orderedModels}
-        onReorder={handleModelReorder}
-        customRoles={customRoles}
-        onToggle={handleModelToggle}
-        onRoleChange={handleModelRoleChange}
-        onClearRole={handleModelRoleClear}
-        onPresetSelect={handlePresetSelect}
-        selectedCount={selectedParticipants.length}
-        maxModels={userTierConfig.max_models}
-        userTierInfo={{
-          tier_name: userTierConfig.tier_name,
-          max_models: userTierConfig.max_models,
-          current_tier: userTierConfig.tier,
-          can_upgrade: userTierConfig.can_upgrade,
-        }}
-        incompatibleModelIds={incompatibleModelIds}
-      />
+      {userTierConfig && (
+        <ModelSelectionModal
+          open={isModelModalOpen.value}
+          onOpenChange={isModelModalOpen.setValue}
+          orderedModels={orderedModels}
+          onReorder={handleModelReorder}
+          customRoles={customRoles}
+          onToggle={handleModelToggle}
+          onRoleChange={handleModelRoleChange}
+          onClearRole={handleModelRoleClear}
+          onPresetSelect={handlePresetSelect}
+          selectedCount={selectedParticipants.length}
+          maxModels={userTierConfig.max_models}
+          userTierInfo={{
+            tier_name: userTierConfig.tier_name,
+            max_models: userTierConfig.max_models,
+            current_tier: userTierConfig.tier,
+            can_upgrade: userTierConfig.can_upgrade,
+          }}
+          incompatibleModelIds={incompatibleModelIds}
+        />
+      )}
     </>
   );
 }

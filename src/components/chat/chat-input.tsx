@@ -122,9 +122,6 @@ export const ChatInput = memo(({
     return credits.available <= 0;
   }, [statsData]);
 
-  // For UI display: use local messages OR API flag (API is source of truth)
-  const hasCompletedRound = freeRoundUsedFromApi || hasLocalMessages;
-
   // Check if free user has existing threads (blocks new thread creation from overview)
   const hasExistingThread = useMemo(() => {
     if (!threadsData?.pages?.[0]?.success) {
@@ -134,18 +131,16 @@ export const ChatInput = memo(({
     return threads.length > 0;
   }, [threadsData]);
 
-  // Free users who have completed their round are blocked from further input
-  // Uses API flag as source of truth (survives thread deletion)
+  const hasCompletedRound = freeRoundUsedFromApi || hasExistingThread || hasLocalMessages;
   const isFreeRoundExhausted = showUpgradePrompt && freeRoundUsedFromApi;
-  // Free users with existing thread must continue it (can't create new from overview)
   const isFreeUserWithExistingThread = showUpgradePrompt && hasExistingThread && isOnOverviewScreen;
-  // Free users on thread page who have started their round (have messages) can't submit new messages
-  // They can only resume AI streaming, not start new rounds
   const isFreeUserRoundStarted = showUpgradePrompt && !isOnOverviewScreen && hasLocalMessages;
-  const isInputDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted || isFreeUserWithExistingThread || isFreeUserRoundStarted;
-  const isMicDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted || isFreeUserWithExistingThread || isFreeUserRoundStarted;
+  const isFreeUserBlocked = isFreeRoundExhausted || isFreeUserWithExistingThread || isFreeUserRoundStarted;
+
+  const isInputDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
+  const isMicDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
-  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || isFreeRoundExhausted || isFreeUserWithExistingThread || isFreeUserRoundStarted;
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || isFreeUserBlocked;
   const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
 
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -235,24 +230,10 @@ export const ChatInput = memo(({
       e.preventDefault();
       if (!isSubmitDisabled && hasValidInput) {
         const form = e.currentTarget.form || e.currentTarget;
-        const syntheticEvent: FormEvent<HTMLFormElement | HTMLTextAreaElement> = {
-          bubbles: e.bubbles,
-          cancelable: e.cancelable,
-          currentTarget: form,
-          defaultPrevented: true,
-          eventPhase: e.eventPhase,
-          isTrusted: e.isTrusted,
-          nativeEvent: e.nativeEvent,
-          target: form,
-          timeStamp: e.timeStamp,
-          type: 'submit',
-          preventDefault: () => {},
-          isDefaultPrevented: () => true,
-          stopPropagation: () => e.stopPropagation(),
-          isPropagationStopped: () => false,
-          persist: () => {},
-        };
-        onSubmit(syntheticEvent);
+        const submitEvent = new Event('submit', { bubbles: true, cancelable: true }) as unknown as FormEvent<HTMLFormElement>;
+        Object.defineProperty(submitEvent, 'currentTarget', { value: form, writable: false });
+        Object.defineProperty(submitEvent, 'target', { value: form, writable: false });
+        onSubmit(submitEvent);
       }
     }
   };

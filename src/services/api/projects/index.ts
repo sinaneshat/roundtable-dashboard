@@ -1,0 +1,58 @@
+/**
+ * Projects Services - Domain Barrel Export
+ *
+ * Single source of truth for all project-related API services
+ * Matches backend route structure: /api/v1/projects/*
+ */
+
+export {
+  // Project operations
+  type AddUploadToProjectRequest,
+  type AddUploadToProjectResponse,
+  addUploadToProjectService,
+  type CreateProjectMemoryRequest,
+  type CreateProjectMemoryResponse,
+  createProjectMemoryService,
+  type CreateProjectRequest,
+  type CreateProjectResponse,
+  createProjectService,
+  type DeleteProjectMemoryRequest,
+  type DeleteProjectMemoryResponse,
+  deleteProjectMemoryService,
+  type DeleteProjectRequest,
+  type DeleteProjectResponse,
+  deleteProjectService,
+  type GetProjectAttachmentRequest,
+  type GetProjectAttachmentResponse,
+  getProjectAttachmentService,
+  type GetProjectContextRequest,
+  type GetProjectContextResponse,
+  getProjectContextService,
+  type GetProjectMemoryRequest,
+  type GetProjectMemoryResponse,
+  getProjectMemoryService,
+  type GetProjectRequest,
+  type GetProjectResponse,
+  getProjectService,
+  type ListProjectAttachmentsRequest,
+  type ListProjectAttachmentsResponse,
+  listProjectAttachmentsService,
+  type ListProjectMemoriesRequest,
+  type ListProjectMemoriesResponse,
+  listProjectMemoriesService,
+  type ListProjectsRequest,
+  type ListProjectsResponse,
+  listProjectsService,
+  type RemoveAttachmentFromProjectRequest,
+  type RemoveAttachmentFromProjectResponse,
+  removeAttachmentFromProjectService,
+  type UpdateProjectAttachmentRequest,
+  type UpdateProjectAttachmentResponse,
+  updateProjectAttachmentService,
+  type UpdateProjectMemoryRequest,
+  type UpdateProjectMemoryResponse,
+  updateProjectMemoryService,
+  type UpdateProjectRequest,
+  type UpdateProjectResponse,
+  updateProjectService,
+} from './projects';

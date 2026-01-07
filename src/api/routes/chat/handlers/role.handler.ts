@@ -19,8 +19,8 @@ import { SubscriptionTiers } from '@/api/core/enums';
 import {
   deductCreditsForAction,
   enforceCredits,
-} from '@/api/services/credit.service';
-import { getUserTier } from '@/api/services/usage-tracking.service';
+} from '@/api/services/billing';
+import { getUserTier } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';

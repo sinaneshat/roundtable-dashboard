@@ -188,3 +188,34 @@ export function getErrorStatusCode(error: unknown): number | undefined {
   const networkError = extractNetworkError(error);
   return networkError?.statusCode || networkError?.status;
 }
+
+/**
+ * Normalize unknown error to Error instance
+ *
+ * **REPLACES**: `error as Error` unsafe casts
+ * **PATTERN**: Type-safe error normalization from type-inference-patterns.md
+ *
+ * @param error - Unknown error value
+ * @returns Error instance (never null/undefined)
+ *
+ * @example
+ * ```typescript
+ * await trackLLMError(context, toError(error), traceId, stage);
+ * ```
+ */
+export function toError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  if (typeof error === 'string') {
+    return new Error(error);
+  }
+
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = typeof error.message === 'string' ? error.message : String(error);
+    return new Error(message);
+  }
+
+  return new Error(String(error));
+}

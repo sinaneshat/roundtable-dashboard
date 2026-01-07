@@ -1,8 +1,7 @@
 import { z } from '@hono/zod-openapi';
 
-import { PurchaseTypeSchema, StripeSubscriptionStatusSchema } from '@/api/core/enums';
+import { PurchaseTypeSchema, StripeSubscriptionStatusSchema, SubscriptionTierSchema } from '@/api/core/enums';
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
-import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
 import {
   stripePriceSelectSchema,
   stripeProductSelectSchema,
@@ -254,11 +253,11 @@ export const SyncedSubscriptionStateSchema = z.object({
 }).openapi('SyncedSubscriptionState');
 
 const TierChangeSchema = z.object({
-  previousTier: subscriptionTierSchemaOpenAPI.openapi({
+  previousTier: SubscriptionTierSchema.openapi({
     description: 'Previous subscription tier before sync',
     example: 'free',
   }),
-  newTier: subscriptionTierSchemaOpenAPI.openapi({
+  newTier: SubscriptionTierSchema.openapi({
     description: 'New subscription tier after sync',
     example: 'pro',
   }),

@@ -20,7 +20,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CreditActions, PlanTypes } from '@/api/core/enums';
-import { checkFreeUserHasCompletedRound, getUserCreditBalance, zeroOutFreeUserCredits } from '@/api/services/credit.service';
+import { checkFreeUserHasCompletedRound, getUserCreditBalance, zeroOutFreeUserCredits } from '@/api/services/billing';
 import { getDbAsync } from '@/db';
 
 // Mock the database module
@@ -44,6 +44,9 @@ describe('multi-Participant Round Completion - Credit Calculation', () => {
       chatParticipant: {
         findMany: ReturnType<typeof vi.fn>;
       };
+      chatMessage: {
+        findFirst: ReturnType<typeof vi.fn>;
+      };
       userCreditBalance: {
         findFirst: ReturnType<typeof vi.fn>;
       };
@@ -61,6 +64,9 @@ describe('multi-Participant Round Completion - Credit Calculation', () => {
         },
         chatParticipant: {
           findMany: vi.fn(),
+        },
+        chatMessage: {
+          findFirst: vi.fn(),
         },
         userCreditBalance: {
           findFirst: vi.fn(),
@@ -264,6 +270,15 @@ describe('multi-Participant Round Completion - Credit Calculation', () => {
         from: fromMock,
       });
 
+      // For 2+ participants, moderator must also complete
+      mockDb.query.chatMessage.findFirst.mockResolvedValue({
+        id: 'thread-2_r0_moderator',
+        threadId: 'thread-2',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Moderator summary...' }],
+        roundNumber: 0,
+      });
+
       const result = await checkFreeUserHasCompletedRound('user-2');
 
       expect(result).toBe(true); // ✅ Round complete after ALL participants respond
@@ -346,6 +361,15 @@ describe('multi-Participant Round Completion - Credit Calculation', () => {
 
       (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
         from: fromMock,
+      });
+
+      // For 2+ participants, moderator must also complete
+      mockDb.query.chatMessage.findFirst.mockResolvedValue({
+        id: 'thread-2_r0_moderator',
+        threadId: 'thread-2',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Moderator summary...' }],
+        roundNumber: 0,
       });
 
       const roundComplete = await checkFreeUserHasCompletedRound('user-2');
@@ -464,6 +488,15 @@ describe('multi-Participant Round Completion - Credit Calculation', () => {
         from: fromMock,
       });
 
+      // For 2+ participants, moderator must also complete
+      mockDb.query.chatMessage.findFirst.mockResolvedValue({
+        id: 'thread-3_r0_moderator',
+        threadId: 'thread-3',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Moderator summary...' }],
+        roundNumber: 0,
+      });
+
       const result = await checkFreeUserHasCompletedRound('user-3');
 
       expect(result).toBe(true); // ✅ ONLY complete after ALL 3 participants
@@ -543,6 +576,14 @@ describe('multi-Participant Round Completion - Credit Calculation', () => {
       }));
 
       (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({ from: fromMockP2 });
+      // For 2+ participants, moderator must also complete for P2 to return true
+      mockDb.query.chatMessage.findFirst.mockResolvedValue({
+        id: 'thread-3_r0_moderator',
+        threadId: 'thread-3',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Moderator summary...' }],
+        roundNumber: 0,
+      });
       const afterP2 = await checkFreeUserHasCompletedRound('user-3');
       expect(afterP2).toBe(true); // ✅ ONLY true after ALL participants
     });
@@ -625,6 +666,15 @@ describe('multi-Participant Round Completion - Credit Calculation', () => {
 
       (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
         from: fromMock,
+      });
+
+      // For 2+ participants, moderator must also complete
+      mockDb.query.chatMessage.findFirst.mockResolvedValue({
+        id: 'thread-4_r0_moderator',
+        threadId: 'thread-4',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Moderator summary...' }],
+        roundNumber: 0,
       });
 
       const result = await checkFreeUserHasCompletedRound('user-4');
@@ -774,6 +824,14 @@ describe('multi-Participant Round Completion - Credit Calculation', () => {
       }));
 
       (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({ from: fromMock2 });
+      // For 2+ participants, moderator must also complete for afterResume to return true
+      mockDb.query.chatMessage.findFirst.mockResolvedValue({
+        id: 'thread-resume_r0_moderator',
+        threadId: 'thread-resume',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Moderator summary...' }],
+        roundNumber: 0,
+      });
       const afterResume = await checkFreeUserHasCompletedRound('user-resume');
       expect(afterResume).toBe(true); // ✅ Now complete after resumption
     });
@@ -1075,6 +1133,15 @@ describe('multi-Participant Round Completion - Credit Calculation', () => {
         from: fromMock,
       });
 
+      // For 2+ participants, moderator must also complete
+      mockDb.query.chatMessage.findFirst.mockResolvedValue({
+        id: 'thread-dup_r0_moderator',
+        threadId: 'thread-dup',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Moderator summary...' }],
+        roundNumber: 0,
+      });
+
       const result = await checkFreeUserHasCompletedRound('user-dup');
 
       expect(result).toBe(true); // Set deduplicates participant IDs
@@ -1136,6 +1203,15 @@ describe('multi-Participant Round Completion - Credit Calculation', () => {
 
       (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
         from: fromMock,
+      });
+
+      // For 2+ participants, moderator must also complete
+      mockDb.query.chatMessage.findFirst.mockResolvedValue({
+        id: 'thread-disabled_r0_moderator',
+        threadId: 'thread-disabled',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Moderator summary...' }],
+        roundNumber: 0,
       });
 
       const result = await checkFreeUserHasCompletedRound('user-disabled');

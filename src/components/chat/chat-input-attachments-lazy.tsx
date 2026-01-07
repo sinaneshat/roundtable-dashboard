@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { Suspense } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PendingAttachment } from '@/hooks/utils';
@@ -10,13 +11,22 @@ type ChatInputAttachmentsProps = {
   onRemove?: (id: string) => void;
 };
 
-function ChatInputAttachmentsSkeleton() {
+const SKELETON_WIDTHS = ['w-24', 'w-20', 'w-28', 'w-22', 'w-26', 'w-18', 'w-30', 'w-20', 'w-24', 'w-22'] as const;
+
+type ChatInputAttachmentsSkeletonProps = {
+  count: number;
+};
+
+function ChatInputAttachmentsSkeleton({ count }: ChatInputAttachmentsSkeletonProps) {
   return (
     <div className="px-3 sm:px-4 py-2 border-b border-border/30">
       <div className="flex items-center gap-1.5">
-        <Skeleton className="h-8 w-24 rounded-xl" />
-        <Skeleton className="h-8 w-20 rounded-xl" />
-        <Skeleton className="h-8 w-28 rounded-xl" />
+        {Array.from({ length: count }, (_, i) => (
+          <Skeleton
+            key={`attachment-skeleton-${i}`}
+            className={`h-8 ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]} rounded-xl`}
+          />
+        ))}
       </div>
     </div>
   );
@@ -26,17 +36,17 @@ const ChatInputAttachmentsInternal = dynamic<ChatInputAttachmentsProps>(
   () => import('@/components/chat/chat-input-attachments').then(m => ({
     default: m.ChatInputAttachments,
   })),
-  {
-    ssr: false,
-    loading: () => <ChatInputAttachmentsSkeleton />,
-  },
+  { ssr: false },
 );
 
 export function ChatInputAttachments(props: ChatInputAttachmentsProps) {
-  // Only render if there are attachments
   if (props.attachments.length === 0) {
     return null;
   }
 
-  return <ChatInputAttachmentsInternal {...props} />;
+  return (
+    <Suspense fallback={<ChatInputAttachmentsSkeleton count={props.attachments.length} />}>
+      <ChatInputAttachmentsInternal {...props} />
+    </Suspense>
+  );
 }

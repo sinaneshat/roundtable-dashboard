@@ -1,14 +1,18 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
+import { createError } from '@/api/common/error-handling';
 import { verifyParticipantOwnership, verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from '@/api/core';
-import { ChangelogChangeTypes, ChangelogTypes, MessageRoles } from '@/api/core/enums';
-import { validateModelAccess, validateTierLimits } from '@/api/services/participant-validation.service';
-import { getUserTier } from '@/api/services/usage-tracking.service';
+import type { ChangelogOperation } from '@/api/core/enums';
+import { ChangelogChangeTypes, ChangelogOperations, ChangelogTypes } from '@/api/core/enums';
+import { isFreeUserWithPendingRound } from '@/api/services/billing';
+import { validateModelAccess, validateTierLimits } from '@/api/services/participants';
+import { getNextRoundForChangelog } from '@/api/services/threads';
+import { getUserTier } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -16,7 +20,6 @@ import {
   isParticipantRoleChange,
   safeParseChangelogData,
 } from '@/db/schemas/chat-metadata';
-import { calculateNextRound, NO_ROUND_SENTINEL } from '@/lib/schemas/round-schemas';
 
 import type {
   addParticipantRoute,
@@ -43,21 +46,15 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     await verifyThreadOwnership(id, user.id, db);
     const userTier = await getUserTier(user.id);
 
+    // ✅ FREE ROUND BYPASS: Free users who haven't completed their free round
+    // can add ANY models (within limit) for their first experience.
+    const skipPricingCheck = await isFreeUserWithPendingRound(user.id, userTier);
+
     await validateTierLimits(id, userTier, db);
-    await validateModelAccess(body.modelId, userTier);
+    await validateModelAccess(body.modelId, userTier, { skipPricingCheck });
 
     // Get round number BEFORE batch (read-only)
-    const existingUserMessages = await db.query.chatMessage.findMany({
-      where: and(
-        eq(tables.chatMessage.threadId, id),
-        eq(tables.chatMessage.role, MessageRoles.USER),
-      ),
-      columns: { roundNumber: true },
-      orderBy: desc(tables.chatMessage.roundNumber),
-      limit: 1,
-    });
-    const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
-    const nextRoundNumber = calculateNextRound(lastRoundNumber);
+    const nextRoundNumber = await getNextRoundForChangelog(id, db);
 
     // Prepare IDs and data
     const participantId = ulid();
@@ -97,7 +94,11 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       db.update(tables.chatThread).set({ updatedAt: now }).where(eq(tables.chatThread.id, id)),
     ]);
 
-    const participant = (results[0] as Array<typeof tables.chatParticipant.$inferSelect>)[0];
+    const participantResult = results[0];
+    if (!Array.isArray(participantResult) || participantResult.length === 0) {
+      throw createError.internal('Failed to create participant', { errorType: 'database', operation: 'insert', table: 'chatParticipant' });
+    }
+    const participant = participantResult[0];
 
     return Responses.ok(c, {
       participant,
@@ -126,17 +127,7 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
     let existingRoleChange: typeof tables.chatThreadChangelog.$inferSelect | undefined;
 
     if (roleChanged) {
-      const existingUserMessages = await db.query.chatMessage.findMany({
-        where: and(
-          eq(tables.chatMessage.threadId, participant.threadId),
-          eq(tables.chatMessage.role, MessageRoles.USER),
-        ),
-        columns: { roundNumber: true },
-        orderBy: desc(tables.chatMessage.roundNumber),
-        limit: 1,
-      });
-      const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
-      nextRoundNumber = calculateNextRound(lastRoundNumber);
+      nextRoundNumber = await getNextRoundForChangelog(participant.threadId, db);
 
       existingRoleChange = await db.query.chatThreadChangelog.findFirst({
         where: and(
@@ -149,21 +140,20 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
     }
 
     // Determine changelog operation based on reads
-    type ChangelogOp = 'none' | 'delete' | 'update' | 'insert';
-    let changelogOp: ChangelogOp = 'none';
+    let changelogOp: ChangelogOperation = ChangelogOperations.NONE;
     let baselineRole: string | null = null;
 
     if (roleChanged) {
       if (existingRoleChange) {
         const validated = safeParseChangelogData(existingRoleChange.changeData);
         if (!validated || !isParticipantRoleChange(validated)) {
-          changelogOp = 'delete';
+          changelogOp = ChangelogOperations.DELETE;
         } else {
           baselineRole = validated.oldRole ?? null;
-          changelogOp = baselineRole === newRole ? 'delete' : 'update';
+          changelogOp = baselineRole === newRole ? ChangelogOperations.DELETE : ChangelogOperations.UPDATE;
         }
       } else {
-        changelogOp = 'insert';
+        changelogOp = ChangelogOperations.INSERT;
         baselineRole = participant.role;
       }
     }
@@ -182,9 +172,9 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
       }).where(eq(tables.chatParticipant.id, id)).returning(),
     ];
 
-    if (changelogOp === 'delete' && existingRoleChange) {
+    if (changelogOp === ChangelogOperations.DELETE && existingRoleChange) {
       ops.push(db.delete(tables.chatThreadChangelog).where(eq(tables.chatThreadChangelog.id, existingRoleChange.id)));
-    } else if (changelogOp === 'update' && existingRoleChange) {
+    } else if (changelogOp === ChangelogOperations.UPDATE && existingRoleChange) {
       ops.push(db.update(tables.chatThreadChangelog).set({
         changeSummary: `Updated ${modelName} role from ${baselineRole || 'none'} to ${newRole || 'none'}`,
         changeData: {
@@ -196,7 +186,7 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
         },
         createdAt: now,
       }).where(eq(tables.chatThreadChangelog.id, existingRoleChange.id)));
-    } else if (changelogOp === 'insert') {
+    } else if (changelogOp === ChangelogOperations.INSERT) {
       ops.push(db.insert(tables.chatThreadChangelog).values({
         id: ulid(),
         threadId: participant.threadId,
@@ -216,7 +206,11 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
     }
 
     const results = await executeBatch(db, ops);
-    const updatedParticipant = (results[0] as Array<typeof tables.chatParticipant.$inferSelect>)[0];
+    const participantResult = results[0];
+    if (!Array.isArray(participantResult) || participantResult.length === 0) {
+      throw createError.internal('Failed to update participant', { errorType: 'database', operation: 'update', table: 'chatParticipant' });
+    }
+    const updatedParticipant = participantResult[0];
 
     return Responses.ok(c, {
       participant: updatedParticipant,
@@ -235,18 +229,8 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
     const db = await getDbAsync();
     const participant = await verifyParticipantOwnership(id, user.id, db);
 
-    // Collect reads BEFORE batch
-    const existingUserMessages = await db.query.chatMessage.findMany({
-      where: and(
-        eq(tables.chatMessage.threadId, participant.threadId),
-        eq(tables.chatMessage.role, MessageRoles.USER),
-      ),
-      columns: { roundNumber: true },
-      orderBy: desc(tables.chatMessage.roundNumber),
-      limit: 1,
-    });
-    const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
-    const nextRoundNumber = calculateNextRound(lastRoundNumber);
+    // Get round number BEFORE batch (read-only)
+    const nextRoundNumber = await getNextRoundForChangelog(participant.threadId, db);
 
     // Prepare changelog data
     const now = new Date();

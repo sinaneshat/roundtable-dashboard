@@ -9,8 +9,8 @@
 
 import { unstable_cache } from 'next/cache';
 
-import type { GetPublicThreadResponse } from '@/services/api/chat-threads';
-import { getPublicThreadService } from '@/services/api/chat-threads';
+import type { GetPublicThreadResponse } from '@/services/api';
+import { getPublicThreadService } from '@/services/api';
 
 // ============================================================================
 // Cache Tag Constants

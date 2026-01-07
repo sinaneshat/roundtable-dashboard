@@ -8,7 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PlanTypes } from '@/api/core/enums';
-import * as creditService from '@/api/services/credit.service';
+import * as creditService from '@/api/services/billing';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 let mockDbInsertReturning: MockUserCreditData[] | [];

@@ -363,3 +363,75 @@ export const PreSearchStreamingEventTypes = {
   PRE_SEARCH_COMPLETE: 'pre_search_complete' as const,
   PRE_SEARCH_ERROR: 'pre_search_error' as const,
 } as const;
+
+// ============================================================================
+// SSE EVENT TYPE (AI SDK v6 SSE line prefixes)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+// AI SDK v6 SSE line prefixes - event types for classifying chunks during stream resumption
+export const SSE_EVENT_TYPES = [
+  'text-delta', // 0: prefix - text content
+  'reasoning-delta', // g: prefix - reasoning/thinking content
+  'finish', // d: prefix - stream finish
+  'error', // 3: prefix - error event
+  'step-finish', // e: prefix - step completion
+  'data', // 2: prefix - tool results, metadata
+  'unknown', // unrecognized prefix
+] as const;
+
+// 2. ZOD SCHEMA
+export const SSEEventTypeSchema = z.enum(SSE_EVENT_TYPES).openapi({
+  description: 'AI SDK v6 SSE event type for stream chunk classification',
+  example: 'text-delta',
+});
+
+// 3. TYPESCRIPT TYPE
+export type SSEEventType = z.infer<typeof SSEEventTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_SSE_EVENT_TYPE: SSEEventType = 'unknown';
+
+// 5. CONSTANT OBJECT
+export const SSEEventTypes = {
+  TEXT_DELTA: 'text-delta' as const,
+  REASONING_DELTA: 'reasoning-delta' as const,
+  FINISH: 'finish' as const,
+  ERROR: 'error' as const,
+  STEP_FINISH: 'step-finish' as const,
+  DATA: 'data' as const,
+  UNKNOWN: 'unknown' as const,
+} as const;
+
+// Map AI SDK line prefixes to event types
+// Keys are string prefixes extracted from SSE data lines
+export const SSE_PREFIX_TO_EVENT = {
+  0: 'text-delta',
+  g: 'reasoning-delta',
+  d: 'finish',
+  3: 'error',
+  e: 'step-finish',
+  2: 'data',
+} as const satisfies Record<string | number, SSEEventType>;
+
+/**
+ * Parse SSE event type from AI SDK v6 formatted data line
+ * Format: `{prefix}:{json_content}` or `{prefix}:"{string_content}"`
+ */
+export function parseSSEEventType(data: string): SSEEventType {
+  // Skip empty lines or lines without colon
+  if (!data || !data.includes(':')) {
+    return SSEEventTypes.UNKNOWN;
+  }
+
+  // Extract prefix (everything before first colon)
+  const colonIndex = data.indexOf(':');
+  const prefix = data.substring(0, colonIndex);
+
+  // Check if prefix is a known SSE event prefix
+  if (prefix in SSE_PREFIX_TO_EVENT) {
+    return SSE_PREFIX_TO_EVENT[prefix as keyof typeof SSE_PREFIX_TO_EVENT];
+  }
+
+  return SSEEventTypes.UNKNOWN;
+}

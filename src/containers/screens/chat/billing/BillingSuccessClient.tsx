@@ -6,7 +6,8 @@ import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PlanTypes, PurchaseTypes, StatusVariants, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import type { Subscription } from '@/api/routes/billing/schema';
-import { getMaxModelsForTier, getMonthlyCreditsForTier } from '@/api/services/product-logic.service';
+// Direct import to avoid barrel export pulling in server-only credit.service.ts
+import { getMaxModelsForTier, getMonthlyCreditsForTier } from '@/api/services/billing/product-logic.service';
 import { PlanOverviewCard, StatusPage, StatusPageActions } from '@/components/billing';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';

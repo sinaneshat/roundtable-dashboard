@@ -15,7 +15,7 @@ import { and, eq } from 'drizzle-orm';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { ulid } from 'ulid';
 
-import { createError } from '@/api/common/error-handling';
+import { createError, runBackgroundTask } from '@/api/common';
 import {
   applyCursorPagination,
   buildCursorWhereWithFilters,
@@ -32,28 +32,22 @@ import {
   MIN_MULTIPART_PART_SIZE,
 } from '@/api/core/enums';
 import {
+  createUploadTicket,
+  deleteFile,
   deleteMultipartMetadata,
+  deleteTicket,
+  generateSignedDownloadUrl,
+  getFileStream,
+  isCleanupSchedulerAvailable,
+  isLocalDevelopment,
+  markTicketUsed,
+  putFile,
+  scheduleUploadCleanup,
   storeMultipartMetadata,
   validateMultipartOwnership,
   validateR2UploadId,
-} from '@/api/services/multipart-upload.service';
-import { generateSignedDownloadUrl } from '@/api/services/signed-url.service';
-import {
-  deleteFile,
-  getFileStream,
-  isLocalDevelopment,
-  putFile,
-} from '@/api/services/storage.service';
-import {
-  isCleanupSchedulerAvailable,
-  scheduleUploadCleanup,
-} from '@/api/services/upload-cleanup.service';
-import {
-  createUploadTicket,
-  deleteTicket,
-  markTicketUsed,
   validateUploadTicket,
-} from '@/api/services/upload-ticket.service';
+} from '@/api/services/uploads';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -116,7 +110,7 @@ function generateR2Key(userId: string, uploadId: string, filename: string): stri
  * Validate MIME type against allowed list
  */
 function isAllowedMimeType(mimeType: string): boolean {
-  return (ALLOWED_MIME_TYPES as readonly string[]).includes(mimeType) || mimeType.startsWith('text/');
+  return (ALLOWED_MIME_TYPES as readonly string[]).includes(mimeType);
 }
 
 // ============================================================================
@@ -544,7 +538,7 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
   },
   async (c) => {
     // Dynamic import to avoid linter removing "unused" static import
-    const signedUrlService = await import('@/api/services/signed-url.service');
+    const signedUrlService = await import('@/api/services/uploads');
 
     const { id } = c.validated.params;
     const db = await getDbAsync();
@@ -721,20 +715,12 @@ export const deleteUploadHandler: RouteHandler<typeof deleteUploadRoute, ApiEnv>
       .delete(tables.upload)
       .where(eq(tables.upload.id, id));
 
-    // Non-blocking storage cleanup via waitUntil
-    const deleteStorageFile = async () => {
-      try {
-        await deleteFile(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key);
-      } catch {
-        // Silent failure - storage cleanup is best-effort
-      }
-    };
-
-    if (c.executionCtx) {
-      c.executionCtx.waitUntil(deleteStorageFile());
-    } else {
-      deleteStorageFile().catch(() => {});
-    }
+    // Non-blocking storage cleanup via runBackgroundTask
+    runBackgroundTask(
+      c.executionCtx,
+      () => deleteFile(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key),
+      { operationName: 'upload-storage-cleanup' },
+    );
 
     return Responses.ok(c, {
       id,

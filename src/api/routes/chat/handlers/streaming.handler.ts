@@ -41,69 +41,62 @@ import {
   UIMessageRoles,
 } from '@/api/core/enums';
 import {
+  AI_RETRY_CONFIG,
+  AI_TIMEOUT_CONFIG,
   checkFreeUserHasCompletedRound,
+  estimateWeightedCredits,
   finalizeCredits,
+  getModelCreditMultiplierById,
+  getSafeMaxOutputTokens,
   getUserCreditBalance,
   releaseReservation,
   reserveCredits,
   zeroOutFreeUserCredits,
-} from '@/api/services/credit.service';
-import { saveStreamedMessage } from '@/api/services/message-persistence.service';
-import {
-  getModelById,
-  isDeepSeekModel,
-  isNanoOrMiniVariant,
-  isOSeriesModel,
-  needsSmoothStream,
-} from '@/api/services/models-config.service';
-import {
-  initializeOpenRouter,
-  openRouterService,
-} from '@/api/services/openrouter.service';
-import { processParticipantChanges } from '@/api/services/participant-config.service';
+} from '@/api/services/billing';
 import {
   createTrackingContext,
   generateTraceId,
   trackLLMError,
   trackLLMGeneration,
-} from '@/api/services/posthog-llm-tracking.service';
+} from '@/api/services/errors';
+import { saveStreamedMessage } from '@/api/services/messages';
 import {
-  AI_RETRY_CONFIG,
-  AI_TIMEOUT_CONFIG,
-  estimateWeightedCredits,
-  getModelCreditMultiplierById,
-  getSafeMaxOutputTokens,
-} from '@/api/services/product-logic.service';
-import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
-import { handleRoundRegeneration } from '@/api/services/regeneration.service';
-import {
-  markStreamActive,
-  markStreamCompleted,
-  markStreamFailed,
-  setThreadActiveStream,
-  updateParticipantStatus,
-} from '@/api/services/resumable-stream-kv.service';
-import { calculateRoundNumber } from '@/api/services/round.service';
-import {
-  appendStreamChunk,
-  completeStreamBuffer,
-  failStreamBuffer,
-  initializeStreamBuffer,
-} from '@/api/services/stream-buffer.service';
+  getModelById,
+  initializeOpenRouter,
+  isDeepSeekModel,
+  isNanoOrMiniVariant,
+  isOSeriesModel,
+  needsSmoothStream,
+  openRouterService,
+} from '@/api/services/models';
 import {
   buildSystemPromptWithContext,
   extractUserQuery,
   loadParticipantConfiguration,
   prepareValidatedMessages,
-} from '@/api/services/streaming-orchestration.service';
-// ✅ SINGLE SOURCE OF TRUTH: Using global Ai type from cloudflare-env.d.ts
+} from '@/api/services/orchestration';
+import { processParticipantChanges } from '@/api/services/participants';
+import { buildParticipantSystemPrompt } from '@/api/services/prompts';
 import {
+  appendParticipantStreamChunk,
+  completeParticipantStreamBuffer,
+  failParticipantStreamBuffer,
+  initializeParticipantStreamBuffer,
+  markStreamActive,
+  markStreamCompleted,
+  markStreamFailed,
+  setThreadActiveStream,
+  updateParticipantStatus,
+} from '@/api/services/streaming';
+import {
+  calculateRoundNumber,
+  handleRoundRegeneration,
   logModeChange,
   logWebSearchToggle,
-} from '@/api/services/thread-changelog.service';
+} from '@/api/services/threads';
 import {
   getUserTier,
-} from '@/api/services/usage-tracking.service';
+} from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
 import type { CitableSource } from '@/api/types/citations';
 import { getDbAsync } from '@/db';
@@ -571,13 +564,28 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const isDeepSeek = isDeepSeekModel(participant.modelId);
 
       /**
-       * Framework type bridge: OpenRouter returns LanguageModelV1 but wrapLanguageModel
-       * expects a narrower LanguageModel type. Both are runtime-compatible for streaming.
-       * @see AI SDK docs: https://sdk.vercel.ai/docs/ai-sdk-core/middleware
+       * Type adapter for AI SDK v6 middleware compatibility.
+       *
+       * OpenRouter provider returns spec v2 models, but wrapLanguageModel expects v3.
+       * Runtime behavior is identical for streaming - both implement the same doStream interface.
+       *
+       * Type incompatibility:
+       * - OpenRouter: specificationVersion "v2" (from @openrouter/ai-sdk-provider)
+       * - wrapLanguageModel: expects specificationVersion "v3" (from ai package)
+       *
+       * This adapter function preserves type safety by explicitly documenting the conversion
+       * while avoiding unsafe double casts. The model interface is structurally compatible.
+       *
+       * @see AI SDK Middleware: https://sdk.vercel.ai/docs/ai-sdk-core/middleware
+       * @see OpenRouter Provider Issue: Types don't align with latest AI SDK middleware
        */
+      function adaptModelForMiddleware<T>(model: T): Parameters<typeof wrapLanguageModel>[0]['model'] {
+        return model as Parameters<typeof wrapLanguageModel>[0]['model'];
+      }
+
       const modelForStreaming = isDeepSeek
         ? wrapLanguageModel({
-            model: baseModel as unknown as Parameters<typeof wrapLanguageModel>[0]['model'],
+            model: adaptModelForMiddleware(baseModel),
             middleware: extractReasoningMiddleware({ tagName: 'think' }),
           })
         : baseModel;
@@ -830,12 +838,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         highestMultiplierModel.modelId,
         getModelById,
       );
-      await reserveCredits(user.id, streamMessageId, estimatedCredits);
+      // Skip round completion check - participants are PART of the round, not a new round
+      await reserveCredits(user.id, streamMessageId, estimatedCredits, { skipRoundCheck: true });
 
       // =========================================================================
       // ✅ RESUMABLE STREAMS: Initialize stream buffer for resumption
       // =========================================================================
-      await initializeStreamBuffer(
+      await initializeParticipantStreamBuffer(
         streamMessageId,
         threadId,
         currentRoundNumber,
@@ -1017,7 +1026,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             text: finishResult.text,
             reasoningDeltas,
             finishResult,
-            userId: user.id,
             db,
             citationSourceMap,
             availableSources,
@@ -1327,13 +1335,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
                 if (done) {
                   // Stream completed - mark buffer as complete
-                  await completeStreamBuffer(streamMessageId, c.env);
+                  await completeParticipantStreamBuffer(streamMessageId, c.env);
                   break;
                 }
 
                 // Value is already a string from ReadableStream<string>
                 // Append chunk to buffer
-                await appendStreamChunk(streamMessageId, value, c.env);
+                await appendParticipantStreamChunk(streamMessageId, value, c.env);
               }
             } catch (error) {
               // ✅ BACKGROUND STREAMING: Detect timeout aborts
@@ -1357,7 +1365,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               // Buffer failure shouldn't break streaming - only mark failed on real errors
               const errorMessage
                 = error instanceof Error ? error.message : 'Stream buffer error';
-              await failStreamBuffer(streamMessageId, errorMessage, c.env);
+              await failParticipantStreamBuffer(streamMessageId, errorMessage, c.env);
             } finally {
               // ✅ FIX: Always release the reader lock to prevent "unused stream branch" warnings
               // This ensures the stream is properly consumed/cleaned up in Cloudflare Workers

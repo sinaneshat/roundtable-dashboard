@@ -1,3 +1,5 @@
+import 'server-only';
+
 /**
  * PostHog Server-Side Client
  *
@@ -31,7 +33,6 @@
  * Reference: https://posthog.com/docs/libraries/next-js
  * Pattern: src/lib/posthog-server.ts
  */
-
 import { PostHog } from 'posthog-node';
 
 let posthogClient: PostHog | null = null;

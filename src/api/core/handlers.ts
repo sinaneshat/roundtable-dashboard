@@ -7,6 +7,7 @@ import type { z } from 'zod';
 
 import { executeBatch, validateBatchSize } from '@/api/common/batch-operations';
 import { AppError } from '@/api/common/error-handling';
+import { getErrorMessage } from '@/api/common/error-types';
 import type { ErrorCode } from '@/api/core/enums';
 import { ErrorCodes } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
@@ -630,7 +631,7 @@ export function createHandlerWithBatch<
             validateBatchSize(statements.length, batchMetrics.maxBatchSize);
           } catch (error) {
             throw new AppError({
-              message: (error as Error).message,
+              message: getErrorMessage(error),
               code: 'BATCH_SIZE_EXCEEDED' as ErrorCode,
               statusCode: HttpStatusCodes.BAD_REQUEST,
             });

@@ -1,12 +1,12 @@
 /**
- * API Services - Centralized Exports
+ * API Services - Centralized Domain Exports
  *
- * Single import point for all API service functions and types
- * Follows the pattern from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
+ * Single source of truth for all API service functions and types
+ * Organized by domain for proper segregation of concerns
  */
 
 // ============================================================================
-// API Keys Service Exports
+// Auth Domain Services
 // ============================================================================
 
 export {
@@ -25,100 +25,69 @@ export {
   type UpdateApiKeyRequest,
   type UpdateApiKeyResponse,
   updateApiKeyService,
-} from './api-keys';
+} from './auth';
 
 // ============================================================================
-// Chat Feedback Service Exports
-// ============================================================================
-
-export {
-  type GetThreadFeedbackRequest,
-  type GetThreadFeedbackResponse,
-  getThreadFeedbackService,
-  type SetRoundFeedbackRequest,
-  type SetRoundFeedbackResponse,
-  setRoundFeedbackService,
-} from './chat-feedback';
-
-// ============================================================================
-// Chat Messages Service Exports
+// Billing Domain Services
 // ============================================================================
 
 export {
-  type StreamChatRequest,
-  type StreamChatResponse,
-  streamChatService,
-} from './chat-messages';
+  type CancelSubscriptionRequest,
+  type CancelSubscriptionResponse,
+  cancelSubscriptionService,
+  type CreateCheckoutSessionRequest,
+  type CreateCheckoutSessionResponse,
+  createCheckoutSessionService,
+  type CreateCustomerPortalSessionRequest,
+  type CreateCustomerPortalSessionResponse,
+  createCustomerPortalSessionService,
+  type GetProductRequest,
+  type GetProductResponse,
+  getProductService,
+  type GetProductsRequest,
+  type GetProductsResponse,
+  getProductsService,
+  type GetSubscriptionRequest,
+  type GetSubscriptionResponse,
+  getSubscriptionService,
+  type GetSubscriptionsRequest,
+  type GetSubscriptionsResponse,
+  getSubscriptionsService,
+  type SwitchSubscriptionRequest,
+  type SwitchSubscriptionResponse,
+  switchSubscriptionService,
+  type SyncAfterCheckoutRequest,
+  type SyncAfterCheckoutResponse,
+  syncAfterCheckoutService,
+} from './billing';
 
 // ============================================================================
-// Chat Participants Service Exports
+// Chat Domain Services
 // ============================================================================
 
 export {
   type AddParticipantRequest,
   type AddParticipantResponse,
   addParticipantService,
-  type DeleteParticipantRequest,
-  type DeleteParticipantResponse,
-  deleteParticipantService,
-  type UpdateParticipantRequest,
-  type UpdateParticipantResponse,
-  updateParticipantService,
-} from './chat-participants';
-
-// ============================================================================
-// Chat Pre-Search Service Exports
-// ============================================================================
-
-export {
-  executePreSearchStreamService,
-  type GetThreadPreSearchesRequest,
-  type GetThreadPreSearchesResponse,
-  getThreadPreSearchesService,
-  type PreSearchRequest,
-  type PreSearchResponse,
-} from './chat-pre-search';
-
-// ============================================================================
-// AI SDK Resume Pattern - No separate resume service needed
-// ============================================================================
-// Per AI SDK docs, stream resumption is handled via GET /stream endpoint
-// which is called automatically by useChat with resume: true.
-// No separate /resume service call is needed from the frontend.
-
-// ============================================================================
-// Chat Custom Roles Service Exports
-// ============================================================================
-
-export {
   type CreateCustomRoleRequest,
   type CreateCustomRoleResponse,
   createCustomRoleService,
-  type DeleteCustomRoleRequest,
-  type DeleteCustomRoleResponse,
-  deleteCustomRoleService,
-  type GetCustomRoleRequest,
-  type GetCustomRoleResponse,
-  getCustomRoleService,
-  type ListCustomRolesRequest,
-  type ListCustomRolesResponse,
-  listCustomRolesService,
-  type UpdateCustomRoleRequest,
-  type UpdateCustomRoleResponse,
-  updateCustomRoleService,
-} from './chat-roles';
-
-// ============================================================================
-// Chat Threads Service Exports
-// ============================================================================
-
-export {
   type CreateThreadRequest,
   type CreateThreadResponse,
   createThreadService,
+  type DeleteCustomRoleRequest,
+  type DeleteCustomRoleResponse,
+  deleteCustomRoleService,
+  type DeleteParticipantRequest,
+  type DeleteParticipantResponse,
+  deleteParticipantService,
   type DeleteThreadRequest,
   type DeleteThreadResponse,
   deleteThreadService,
+  executePreSearchStreamService,
+  type GetCustomRoleRequest,
+  type GetCustomRoleResponse,
+  getCustomRoleService,
   type GetPublicThreadRequest,
   type GetPublicThreadResponse,
   getPublicThreadService,
@@ -128,9 +97,15 @@ export {
   type GetThreadChangelogRequest,
   type GetThreadChangelogResponse,
   getThreadChangelogService,
+  type GetThreadFeedbackRequest,
+  type GetThreadFeedbackResponse,
+  getThreadFeedbackService,
   type GetThreadMessagesRequest,
   type GetThreadMessagesResponse,
   getThreadMessagesService,
+  type GetThreadPreSearchesRequest,
+  type GetThreadPreSearchesResponse,
+  getThreadPreSearchesService,
   type GetThreadRequest,
   type GetThreadResponse,
   type GetThreadRoundChangelogRequest,
@@ -143,43 +118,37 @@ export {
   type GetThreadStreamResumptionStateRequest,
   type GetThreadStreamResumptionStateResponse,
   getThreadStreamResumptionStateService,
+  type ListCustomRolesRequest,
+  type ListCustomRolesResponse,
+  listCustomRolesService,
   type ListPublicThreadSlugsResponse,
   listPublicThreadSlugsService,
   type ListThreadsRequest,
   type ListThreadsResponse,
   listThreadsService,
+  type PreSearchRequest,
+  type PreSearchResponse,
+  type SetRoundFeedbackRequest,
+  type SetRoundFeedbackResponse,
+  setRoundFeedbackService,
+  type StreamChatRequest,
+  type StreamChatResponse,
+  streamChatService,
   type SummarizeRoundRequest,
   type SummarizeRoundResponse,
+  type UpdateCustomRoleRequest,
+  type UpdateCustomRoleResponse,
+  updateCustomRoleService,
+  type UpdateParticipantRequest,
+  type UpdateParticipantResponse,
+  updateParticipantService,
   type UpdateThreadRequest,
   type UpdateThreadResponse,
   updateThreadService,
-} from './chat-threads';
+} from './chat';
 
 // ============================================================================
-// Checkout Service Exports
-// ============================================================================
-
-export {
-  type CreateCheckoutSessionRequest,
-  type CreateCheckoutSessionResponse,
-  createCheckoutSessionService,
-  type SyncAfterCheckoutRequest,
-  type SyncAfterCheckoutResponse,
-  syncAfterCheckoutService,
-} from './checkout';
-
-// ============================================================================
-// Customer Portal Service Exports
-// ============================================================================
-
-export {
-  type CreateCustomerPortalSessionRequest,
-  type CreateCustomerPortalSessionResponse,
-  createCustomerPortalSessionService,
-} from './customer-portal';
-
-// ============================================================================
-// Models Service Exports
+// Models Domain Services
 // ============================================================================
 
 export {
@@ -189,32 +158,38 @@ export {
 } from './models';
 
 // ============================================================================
-// Products Service Exports
+// Presets Domain Services
 // ============================================================================
 
 export {
-  type GetProductRequest,
-  type GetProductResponse,
-  getProductService,
-  type GetProductsRequest,
-  type GetProductsResponse,
-  getProductsService,
-} from './products';
+  type CreateUserPresetRequest,
+  type CreateUserPresetResponse,
+  createUserPresetService,
+  type DeleteUserPresetRequest,
+  type DeleteUserPresetResponse,
+  deleteUserPresetService,
+  type GetUserPresetRequest,
+  type GetUserPresetResponse,
+  getUserPresetService,
+  type ListUserPresetsRequest,
+  type ListUserPresetsResponse,
+  listUserPresetsService,
+  type UpdateUserPresetRequest,
+  type UpdateUserPresetResponse,
+  updateUserPresetService,
+} from './presets';
 
 // ============================================================================
-// Projects Service Exports
+// Projects Domain Services
 // ============================================================================
 
 export {
-  // Project attachment operations (reference-based)
   type AddUploadToProjectRequest,
   type AddUploadToProjectResponse,
   addUploadToProjectService,
-  // Project memory operations
   type CreateProjectMemoryRequest,
   type CreateProjectMemoryResponse,
   createProjectMemoryService,
-  // Project operations
   type CreateProjectRequest,
   type CreateProjectResponse,
   createProjectService,
@@ -227,7 +202,6 @@ export {
   type GetProjectAttachmentRequest,
   type GetProjectAttachmentResponse,
   getProjectAttachmentService,
-  // Project context (RAG aggregation)
   type GetProjectContextRequest,
   type GetProjectContextResponse,
   getProjectContextService,
@@ -261,37 +235,10 @@ export {
 } from './projects';
 
 // ============================================================================
-// Subscription Management Service Exports
+// Uploads Domain Services
 // ============================================================================
 
 export {
-  type CancelSubscriptionRequest,
-  type CancelSubscriptionResponse,
-  cancelSubscriptionService,
-  type SwitchSubscriptionRequest,
-  type SwitchSubscriptionResponse,
-  switchSubscriptionService,
-} from './subscription-management';
-
-// ============================================================================
-// Subscriptions Service Exports
-// ============================================================================
-
-export {
-  type GetSubscriptionRequest,
-  type GetSubscriptionResponse,
-  getSubscriptionService,
-  type GetSubscriptionsRequest,
-  type GetSubscriptionsResponse,
-  getSubscriptionsService,
-} from './subscriptions';
-
-// ============================================================================
-// Uploads Service Exports
-// ============================================================================
-
-export {
-  // Multipart upload services
   type AbortMultipartUploadRequest,
   type AbortMultipartUploadResponse,
   abortMultipartUploadService,
@@ -301,21 +248,18 @@ export {
   type CreateMultipartUploadRequest,
   type CreateMultipartUploadResponse,
   createMultipartUploadService,
-  // Upload management services
   type DeleteAttachmentRequest,
   type DeleteAttachmentResponse,
   deleteAttachmentService,
   type GetAttachmentRequest,
   type GetAttachmentResponse,
   getAttachmentService,
-  // Download URL service
   type GetDownloadUrlRequest,
   type GetDownloadUrlResponse,
   getDownloadUrlService,
   type ListAttachmentsRequest,
   type ListAttachmentsResponse,
   listAttachmentsService,
-  // Secure ticket-based upload services (S3 presigned URL pattern)
   type RequestUploadTicketRequest,
   type RequestUploadTicketResponse,
   requestUploadTicketService,
@@ -333,7 +277,7 @@ export {
 } from './uploads';
 
 // ============================================================================
-// Usage Service Exports
+// Usage Domain Services
 // ============================================================================
 
 export {
@@ -341,25 +285,3 @@ export {
   type GetUsageStatsResponse,
   getUserUsageStatsService,
 } from './usage';
-
-// ============================================================================
-// User Presets Service Exports
-// ============================================================================
-
-export {
-  type CreateUserPresetRequest,
-  type CreateUserPresetResponse,
-  createUserPresetService,
-  type DeleteUserPresetRequest,
-  type DeleteUserPresetResponse,
-  deleteUserPresetService,
-  type GetUserPresetRequest,
-  type GetUserPresetResponse,
-  getUserPresetService,
-  type ListUserPresetsRequest,
-  type ListUserPresetsResponse,
-  listUserPresetsService,
-  type UpdateUserPresetRequest,
-  type UpdateUserPresetResponse,
-  updateUserPresetService,
-} from './user-presets';

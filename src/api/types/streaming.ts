@@ -17,6 +17,7 @@ import { z } from 'zod';
 import type { StreamPhase } from '@/api/core/enums';
 import {
   ParticipantStreamStatusSchema,
+  SSEEventTypeSchema,
   StreamPhases,
   StreamStatusSchema,
 } from '@/api/core/enums';
@@ -30,56 +31,18 @@ import { TypedLoggerSchema } from '@/api/types/logger';
 export const STREAM_BUFFER_TTL_SECONDS = 60 * 60;
 
 // ============================================================================
-// SSE EVENT TYPE CLASSIFICATION
+// SSE EVENT TYPE RE-EXPORTS (from core/enums/streaming.ts)
 // ============================================================================
 
-// AI SDK v6 SSE line prefixes - event types
-// Used to classify chunks for deduplication during stream resumption
-export const SSE_EVENT_TYPES = [
-  'text-delta', // 0: prefix - text content
-  'reasoning-delta', // g: prefix - reasoning/thinking content
-  'finish', // d: prefix - stream finish
-  'error', // 3: prefix - error event
-  'step-finish', // e: prefix - step completion
-  'data', // 2: prefix - tool results, metadata
-  'unknown', // unrecognized prefix
-] as const;
-
-export const SSEEventTypeSchema = z.enum(SSE_EVENT_TYPES);
-export type SSEEventType = z.infer<typeof SSEEventTypeSchema>;
-
-// Map AI SDK line prefixes to event types
-// Keys are string prefixes extracted from SSE data lines
-export const SSE_PREFIX_TO_EVENT = {
-  0: 'text-delta',
-  g: 'reasoning-delta',
-  d: 'finish',
-  3: 'error',
-  e: 'step-finish',
-  2: 'data',
-} as const satisfies Record<string, SSEEventType>;
-
-/**
- * Parse SSE event type from AI SDK v6 formatted data line
- * Format: `{prefix}:{json_content}` or `{prefix}:"{string_content}"`
- */
-export function parseSSEEventType(data: string): SSEEventType {
-  // Skip empty lines or lines without colon
-  if (!data || !data.includes(':')) {
-    return 'unknown';
-  }
-
-  // Extract prefix (everything before first colon)
-  const colonIndex = data.indexOf(':');
-  const prefix = data.substring(0, colonIndex);
-
-  // Check if prefix is a known SSE event prefix
-  if (prefix in SSE_PREFIX_TO_EVENT) {
-    return SSE_PREFIX_TO_EVENT[prefix as keyof typeof SSE_PREFIX_TO_EVENT];
-  }
-
-  return 'unknown';
-}
+// Re-export SSE event types from centralized enum location for backwards compatibility
+export {
+  parseSSEEventType,
+  SSE_EVENT_TYPES,
+  SSE_PREFIX_TO_EVENT,
+  type SSEEventType,
+  SSEEventTypes,
+  SSEEventTypeSchema,
+} from '@/api/core/enums';
 
 // ============================================================================
 // STREAM CHUNK TYPES
