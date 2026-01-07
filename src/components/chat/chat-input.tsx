@@ -139,10 +139,13 @@ export const ChatInput = memo(({
   const isFreeRoundExhausted = showUpgradePrompt && freeRoundUsedFromApi;
   // Free users with existing thread must continue it (can't create new from overview)
   const isFreeUserWithExistingThread = showUpgradePrompt && hasExistingThread && isOnOverviewScreen;
-  const isInputDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted || isFreeUserWithExistingThread;
-  const isMicDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted || isFreeUserWithExistingThread;
+  // Free users on thread page who have started their round (have messages) can't submit new messages
+  // They can only resume AI streaming, not start new rounds
+  const isFreeUserRoundStarted = showUpgradePrompt && !isOnOverviewScreen && hasLocalMessages;
+  const isInputDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted || isFreeUserWithExistingThread || isFreeUserRoundStarted;
+  const isMicDisabled = disabled || isQuotaExceeded || isFreeRoundExhausted || isFreeUserWithExistingThread || isFreeUserRoundStarted;
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
-  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || isFreeRoundExhausted || isFreeUserWithExistingThread;
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || isFreeRoundExhausted || isFreeUserWithExistingThread || isFreeUserRoundStarted;
   const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
 
   const handleFilesSelected = useCallback((files: File[]) => {
