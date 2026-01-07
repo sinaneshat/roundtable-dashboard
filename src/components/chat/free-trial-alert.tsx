@@ -10,9 +10,21 @@ import { Button } from '@/components/ui/button';
 import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { cn } from '@/lib/ui/cn';
 
-type AlertState = 'fresh' | 'hasThread' | 'completed';
+type TrialState = 'available' | 'used';
 
-export function CardConnectionAlert() {
+/**
+ * Free Trial Alert - Shows upgrade prompt for free users
+ *
+ * Free users get ONE thread + ONE round upon signup.
+ * Once they create a thread, they've used their quota and can only:
+ * - Resume that thread (stream resumption works)
+ * - Upgrade to Pro for unlimited access
+ *
+ * States:
+ * - 'available': Fresh user, no thread created yet (green)
+ * - 'used': User has created a thread (amber warning)
+ */
+export function FreeTrialAlert() {
   const t = useTranslations();
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
   const { data: threadsData, isLoading: isLoadingThreads } = useThreadsQuery();
@@ -27,25 +39,19 @@ export function CardConnectionAlert() {
   }, [statsData]);
 
   // Check if free user has existing threads (even incomplete ones)
-  const existingThread = useMemo(() => {
+  const hasExistingThread = useMemo(() => {
     if (!threadsData?.pages?.[0]?.success) {
-      return null;
+      return false;
     }
     const threads = threadsData.pages[0].data?.items ?? [];
-    return threads[0] ?? null; // Get first/most recent thread
+    return threads.length > 0;
   }, [threadsData]);
 
-  const hasExistingThread = existingThread !== null;
-  const hasCompletedRound = freeRoundUsedFromApi || hasLocalMessages;
+  // User has used their free trial if they have a thread OR completed a round
+  const hasUsedTrial = freeRoundUsedFromApi || hasExistingThread || hasLocalMessages;
 
-  // Determine alert state: fresh (no thread), hasThread (incomplete), completed (round done)
-  const alertState: AlertState = useMemo(() => {
-    if (hasCompletedRound)
-      return 'completed';
-    if (hasExistingThread)
-      return 'hasThread';
-    return 'fresh';
-  }, [hasCompletedRound, hasExistingThread]);
+  // Determine trial state: available (no thread) or used (has thread/round)
+  const trialState: TrialState = hasUsedTrial ? 'used' : 'available';
 
   const shouldShow = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
@@ -63,27 +69,13 @@ export function CardConnectionAlert() {
 
   // Get appropriate message based on state
   const getMessage = () => {
-    switch (alertState) {
-      case 'completed':
-        return t('usage.alert.postRoundDescription');
-      case 'hasThread':
-        return t('usage.alert.incompleteThreadDescription');
-      default:
-        return t('usage.alert.defaultDescription');
+    if (trialState === 'used') {
+      return t('usage.freeTrial.usedDescription');
     }
+    return t('usage.freeTrial.availableDescription');
   };
 
-  // ✅ FIX: Always show upgrade button for free users
-  // Free users should always see "Upgrade to Pro" - never "Continue thread"
-  // Once they create a thread, they're limited to that thread only
-  const buttonConfig = {
-    text: t('usage.alert.upgradeToPro'),
-    href: '/chat/pricing',
-  };
-
-  // ✅ FIX: Show warning (amber) state when user has ANY thread or completed round
-  // Fresh = green, has thread OR completed = amber
-  const isWarningState = alertState !== 'fresh';
+  const isWarningState = trialState === 'used';
 
   return (
     <AnimatePresence>
@@ -123,8 +115,8 @@ export function CardConnectionAlert() {
                 : 'border-green-500/40 bg-green-500/20 text-green-600 dark:text-green-400 hover:bg-green-500/30',
             )}
           >
-            <Link href={buttonConfig.href} className="flex items-center justify-center w-full h-full">
-              {buttonConfig.text}
+            <Link href="/chat/pricing" className="flex items-center justify-center w-full h-full">
+              {t('usage.freeTrial.upgradeToPro')}
             </Link>
           </Button>
         </div>

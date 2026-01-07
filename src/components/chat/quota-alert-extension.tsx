@@ -11,7 +11,7 @@ import { cn } from '@/lib/ui/cn';
 /**
  * Quota Alert Extension - Shows ONLY for PAID users who are out of credits.
  *
- * Free users see the CardConnectionAlert (yellow/amber wrapper) instead.
+ * Free users see FreeTrialAlert (amber warning) instead.
  * This component shows a simple message without an upgrade button since
  * paid users cannot purchase the same plan again.
  */
@@ -20,13 +20,13 @@ export function QuotaAlertExtension() {
   const { data: statsData, isLoading } = useUsageStatsQuery();
 
   // Only show for PAID users who are out of credits
-  // Free users see CardConnectionAlert instead
+  // Free users see FreeTrialAlert instead
   const shouldShow = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
       return false;
     }
     const { credits, plan } = statsData.data;
-    // Only show for paid users - free users get CardConnectionAlert
+    // Only show for paid users - free users get FreeTrialAlert
     if (plan?.type !== PlanTypes.PAID) {
       return false;
     }

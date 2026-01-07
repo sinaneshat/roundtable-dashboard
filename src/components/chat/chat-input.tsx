@@ -5,9 +5,9 @@ import type { FormEvent } from 'react';
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 
 import { AiSdkStatuses, ComponentSizes, ComponentVariants, PlanTypes } from '@/api/core/enums';
-import { CardConnectionAlert } from '@/components/chat/card-connection-alert';
 import { ChatInputDropzoneOverlay } from '@/components/chat/chat-input-attachments';
 import { ChatInputAttachments } from '@/components/chat/chat-input-attachments-lazy';
+import { FreeTrialAlert } from '@/components/chat/free-trial-alert';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization-lazy';
 import { Icons } from '@/components/icons';
@@ -288,7 +288,7 @@ export const ChatInput = memo(({
 
         <div className="flex flex-col overflow-hidden h-full">
           {showCreditAlert && <QuotaAlertExtension />}
-          {showUpgradePrompt && <CardConnectionAlert />}
+          {showUpgradePrompt && <FreeTrialAlert />}
           {showNoModelsError && (
             <div
               className={cn(
