@@ -52,6 +52,10 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
  * Used for incremental changelog updates after config changes mid-conversation
  * Much more efficient than fetching all changelogs
  *
+ * ⚠️ NO placeholderData: This query is used for background cache merges.
+ * placeholderData would return stale data from previous rounds during fetch,
+ * causing race conditions where old round data is merged instead of new round data.
+ *
  * @param threadId - Thread ID
  * @param roundNumber - Round number (0-BASED)
  * @param enabled - Optional control over whether to fetch
@@ -69,7 +73,7 @@ export function useThreadRoundChangelogQuery(
       param: { threadId, roundNumber: String(roundNumber) },
     }),
     staleTime: STALE_TIMES.threadChangelog, // Infinity - never stale
-    placeholderData: previousData => previousData,
+    // ⚠️ NO placeholderData - prevents stale data from previous rounds causing race conditions
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
     throwOnError: false,

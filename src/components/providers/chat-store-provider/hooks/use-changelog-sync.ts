@@ -21,7 +21,6 @@ import { useStore } from 'zustand';
 
 import { useThreadRoundChangelogQuery } from '@/hooks/queries';
 import { queryKeys } from '@/lib/data/query-keys';
-import { rlog } from '@/lib/utils';
 import type { ChangelogListCache, ChatStoreApi } from '@/stores/chat';
 import { validateChangelogListCache } from '@/stores/chat';
 
@@ -59,7 +58,7 @@ export function useChangelogSync({
     rlog.trigger('changelog-fetch', `r${configChangeRoundNumber}`);
   }
 
-  const { data: roundChangelogData, isSuccess: roundChangelogSuccess } = useThreadRoundChangelogQuery(
+  const { data: roundChangelogData, isSuccess: roundChangelogSuccess, isFetching: roundChangelogFetching } = useThreadRoundChangelogQuery(
     effectiveThreadId,
     configChangeRoundNumber ?? 0,
     shouldFetch,
@@ -70,6 +69,12 @@ export function useChangelogSync({
   // isWaitingForChangelog is set AFTER PATCH. Without this check, the query can complete
   // and clear flags before post-patch sets isWaitingForChangelog, causing a race condition.
   useEffect(() => {
+    // ✅ ROOT CAUSE FIX: Don't process while fetching - prevents stale data race conditions
+    // When configChangeRoundNumber changes (e.g., 1→2), React may run this effect BEFORE
+    // TanStack Query has updated its state. isFetching=true means new data is being loaded.
+    if (roundChangelogFetching) {
+      return;
+    }
     if (!roundChangelogSuccess || !roundChangelogData?.success) {
       return;
     }
@@ -86,6 +91,19 @@ export function useChangelogSync({
     }
 
     const newItems = roundChangelogData.data.items || [];
+
+    // ✅ BUG FIX: Ensure data is for the correct round before merging
+    // When configChangeRoundNumber changes (e.g., from 1 to 2), the effect runs immediately
+    // but roundChangelogData may still contain STALE data from the previous round
+    // because TanStack Query hasn't completed the new fetch yet.
+    // Guard: Only merge when ALL items are for the requested round.
+    const allItemsForCorrectRound = newItems.length > 0 && newItems.every(item => item.roundNumber === configChangeRoundNumber);
+    if (!allItemsForCorrectRound && newItems.length > 0) {
+      // Data is stale from previous round, wait for correct data
+      rlog.trigger('changelog-stale', `r${configChangeRoundNumber} got r${newItems[0]?.roundNumber} data, waiting...`);
+      return;
+    }
+
     const state = store.getState();
 
     if (newItems.length === 0) {
@@ -134,6 +152,7 @@ export function useChangelogSync({
     state.setConfigChangeRoundNumber(null);
     lastMergedRoundRef.current = configChangeRoundNumber;
   }, [
+    roundChangelogFetching,
     roundChangelogSuccess,
     roundChangelogData,
     configChangeRoundNumber,
