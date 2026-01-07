@@ -53,11 +53,6 @@ export function useChangelogSync({
   // Fetch round-specific changelog when waiting
   const shouldFetch = isWaitingForChangelog && configChangeRoundNumber !== null && !!effectiveThreadId;
 
-  // Log only when fetching
-  if (shouldFetch) {
-    rlog.trigger('changelog-fetch', `r${configChangeRoundNumber}`);
-  }
-
   const { data: roundChangelogData, isSuccess: roundChangelogSuccess, isFetching: roundChangelogFetching } = useThreadRoundChangelogQuery(
     effectiveThreadId,
     configChangeRoundNumber ?? 0,
@@ -100,7 +95,6 @@ export function useChangelogSync({
     const allItemsForCorrectRound = newItems.length > 0 && newItems.every(item => item.roundNumber === configChangeRoundNumber);
     if (!allItemsForCorrectRound && newItems.length > 0) {
       // Data is stale from previous round, wait for correct data
-      rlog.trigger('changelog-stale', `r${configChangeRoundNumber} got r${newItems[0]?.roundNumber} data, waiting...`);
       return;
     }
 
@@ -133,9 +127,6 @@ export function useChangelogSync({
         // Only add items that don't already exist (prevent duplicates)
         const uniqueNewItems = newItems.filter(item => !existingIds.has(item.id));
 
-        // 🔍 LOG: Track actual merge
-        rlog.trigger('changelog-merge', `r${configChangeRoundNumber} new=${uniqueNewItems.length}/${newItems.length} existing=${existingItems.length}`);
-
         return {
           ...existingCache,
           data: {
@@ -147,7 +138,6 @@ export function useChangelogSync({
     );
 
     // Clear flags after successful merge
-    rlog.trigger('changelog-done', `r${configChangeRoundNumber} ${newItems.length} items`);
     state.setIsWaitingForChangelog(false);
     state.setConfigChangeRoundNumber(null);
     lastMergedRoundRef.current = configChangeRoundNumber;

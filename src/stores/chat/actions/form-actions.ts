@@ -16,7 +16,7 @@ import {
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
-import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, rlog, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
+import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 
 import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';
@@ -280,9 +280,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     // Uses freshHasPendingConfigChanges from fresh state to ensure accurate detection
     const hasAnyChanges = hasParticipantChanges || modeChanged || webSearchChanged || freshHasPendingConfigChanges;
 
-    // 🔍 LOG 1: Submit - what changed
-    rlog.trigger('submit', `r${nextRoundNumber} p=${hasParticipantChanges ? freshSelectedParticipants.length + 'p' : '-'} m=${modeChanged ? freshSelectedMode : '-'} ws=${webSearchChanged ? freshEnableWebSearch : '-'}`);
-
     // ✅ IMMEDIATE UI FEEDBACK: Add optimistic user message BEFORE any async operations
     // This ensures the streaming trigger sees the correct round when it runs
     const fileParts: ExtendedFilePart[] = attachmentInfos && attachmentInfos.length > 0
@@ -327,9 +324,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     if (hasAnyChanges) {
       actions.setConfigChangeRoundNumber(nextRoundNumber);
     }
-
-    // 🔍 LOG 2: Pre-PATCH
-    rlog.trigger('pre-patch', `r${nextRoundNumber} block=${hasAnyChanges}`);
 
     // ✅ FIX: Create pre-search placeholder AFTER blocking flag is set
     // This ensures effects see configChangeRoundNumber and block appropriately
@@ -437,9 +431,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       if (hasAnyChanges) {
         actions.setIsWaitingForChangelog(true);
       }
-
-      // 🔍 LOG 3: Post-PATCH
-      rlog.trigger('post-patch', `r${nextRoundNumber} changelog=${hasAnyChanges}`);
 
       // ✅ PATCH BLOCKING: Clear flag after PATCH succeeds and participants are updated
       actions.setIsPatchInProgress(false);

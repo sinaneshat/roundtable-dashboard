@@ -18,7 +18,7 @@ import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
-import { extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber, rlog, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
+import { extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { AnimationIndices, getEffectiveWebSearchEnabled, readPreSearchStreamData } from '@/stores/chat';
@@ -115,9 +115,6 @@ export function useStreamingTrigger({
       return;
     }
 
-    // 🔍 LOG 4: Streaming trigger ready
-    rlog.trigger('ready', `r${currentRound} ws=${formEnableWebSearch} initial=${isInitialThreadCreation}`);
-
     // Wait for pre-search completion before streaming participants
     // ✅ BUG FIX: Use form state (user's current intent) instead of thread.enableWebSearch
     // During submission, thread.enableWebSearch is stale (not yet updated via PATCH)
@@ -208,8 +205,7 @@ export function useStreamingTrigger({
               queryClientRef.current.invalidateQueries({
                 queryKey: queryKeys.threads.preSearches(threadIdForSearch),
               });
-            } catch (_error) {
-              // rlog.presearch('resume-error', error instanceof Error ? error.message : String(error));
+            } catch {
               store.getState().clearPreSearchActivity(currentRound);
               store.getState().clearPreSearchTracking(currentRound);
             }
@@ -285,8 +281,7 @@ export function useStreamingTrigger({
               queryClientRef.current.invalidateQueries({
                 queryKey: queryKeys.threads.preSearches(threadIdForSearch),
               });
-            } catch (_error) {
-              // rlog.presearch('execute-error', error instanceof Error ? error.message : String(error));
+            } catch {
               store.getState().clearPreSearchActivity(currentRound);
               store.getState().clearPreSearchTracking(currentRound);
             }
@@ -337,9 +332,6 @@ export function useStreamingTrigger({
     // to appear BEFORE participants in the UI, leading to incorrect timeline ordering.
     // The old pattern: User → Moderator → Participants (wrong)
     // The new pattern: User → Participants → Moderator (correct)
-
-    // 🔍 LOG 5: Participants starting
-    rlog.trigger('participants', `r${currentRound} starting ${storeParticipants.length}p`);
 
     // ✅ FIX: Use queueMicrotask to run startRound outside React's lifecycle
     queueMicrotask(() => {

@@ -1,11 +1,11 @@
 'use client';
 
 import type { UIMessage } from 'ai';
-import { useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 
 import { MessageRoles } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
-import { getParticipantIndex, getRoundNumberFromMetadata, isModeratorMessage, rlog } from '@/lib/utils';
+import { getParticipantIndex, getRoundNumberFromMetadata, isModeratorMessage } from '@/lib/utils';
 
 /**
  * Changelog type that accepts both Date (from DB) and string (from API JSON)
@@ -110,10 +110,7 @@ export function useThreadTimeline({
   changelog,
   preSearches = [],
 }: UseThreadTimelineOptions): TimelineItem[] {
-  // Track last logged value for debouncing
-  const lastLogRef = useRef<string>('');
-
-  const timeline = useMemo(() => {
+  return useMemo(() => {
     // STEP 1: Group messages by round number
     // Includes ALL messages: user, participants, and moderator
     const messagesByRound = new Map<number, UIMessage[]>();
@@ -257,19 +254,4 @@ export function useThreadTimeline({
 
     return timeline;
   }, [messages, changelog, preSearches]);
-
-  // 🔍 LOG: Track timeline output (debounced - only on changelog structure change)
-  const changelogItems = timeline.filter(i => i.type === 'changelog');
-  if (changelogItems.length > 0 || changelog.length > 0) {
-    const changelogRounds = changelogItems.map(i => i.roundNumber).join(',');
-    const logKey = `cl=[${changelogRounds}] input=${changelog.length}`;
-    if (logKey !== lastLogRef.current) {
-      lastLogRef.current = logKey;
-      const msgItems = timeline.filter(i => i.type === 'messages');
-      const msgRounds = [...new Set(msgItems.map(i => i.roundNumber))].join(',');
-      rlog.trigger('ui-timeline', `cl=[${changelogRounds}] msg=[${msgRounds}] input=${changelog.length}`);
-    }
-  }
-
-  return timeline;
 }
