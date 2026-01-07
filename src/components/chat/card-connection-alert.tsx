@@ -73,21 +73,16 @@ export function CardConnectionAlert() {
     }
   };
 
-  // Get button text and link based on state
-  const getButtonConfig = () => {
-    if (alertState === 'hasThread' && existingThread?.slug) {
-      return {
-        text: t('usage.alert.continueThread'),
-        href: `/chat/${existingThread.slug}`,
-      };
-    }
-    return {
-      text: t('usage.alert.upgradeToPro'),
-      href: '/chat/pricing',
-    };
+  // ✅ FIX: Always show upgrade button for free users
+  // Free users should always see "Upgrade to Pro" - never "Continue thread"
+  // Once they create a thread, they're limited to that thread only
+  const buttonConfig = {
+    text: t('usage.alert.upgradeToPro'),
+    href: '/chat/pricing',
   };
 
-  const buttonConfig = getButtonConfig();
+  // ✅ FIX: Show warning (amber) state when user has ANY thread or completed round
+  // Fresh = green, has thread OR completed = amber
   const isWarningState = alertState !== 'fresh';
 
   return (
