@@ -85,10 +85,6 @@ export function useStreamingTrigger({
 
   // Main round 0 trigger effect
   useEffect(() => {
-    const effectRound = getCurrentRoundNumber(storeMessages);
-
-    rlog.trigger('effect-run', `waitingToStart=${waitingToStart} round=${effectRound} isReady=${chat.isReady} configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
-
     if (!waitingToStart) {
       startRoundCalledForRoundRef.current = null;
       return;
@@ -98,40 +94,40 @@ export function useStreamingTrigger({
 
     // Only handle overview screen - thread screen uses continueFromParticipant
     if (currentScreenMode !== ScreenModes.OVERVIEW) {
-      rlog.trigger('block-screenmode', `screenMode=${currentScreenMode}, expected=OVERVIEW`);
       return;
     }
 
     // Wait for required conditions
     if (!chat.startRound || storeParticipants.length === 0 || storeMessages.length === 0) {
-      rlog.trigger('block-conditions', `startRound=${!!chat.startRound} participants=${storeParticipants.length} messages=${storeMessages.length}`);
       return;
     }
 
     // ✅ CHANGELOG: Wait for changelog to be fetched before streaming when config changed
     // configChangeRoundNumber is set BEFORE PATCH (signals pending changes)
     // isWaitingForChangelog is set AFTER PATCH (triggers changelog fetch)
-    // ✅ FIX: Bypass for initial thread creation (round 0)
+    // ✅ FIX: Bypass for initial thread creation (round 0 ONLY)
     // handleCreateThread does NOT set configChangeRoundNumber - only handleUpdateThreadAndSend does
-    // So if configChangeRoundNumber is null AND we're on OVERVIEW screen = initial thread
-    const isInitialThreadCreation = currentScreenMode === ScreenModes.OVERVIEW && waitingToStart && configChangeRoundNumber === null;
+    // ✅ BUG FIX: Must check round === 0, otherwise round 2+ bypasses changelog blocking
+    // when React batches state updates and configChangeRoundNumber appears null briefly
+    const currentRound = getCurrentRoundNumber(storeMessages);
+    const isInitialThreadCreation = currentRound === 0 && currentScreenMode === ScreenModes.OVERVIEW && waitingToStart && configChangeRoundNumber === null;
     if ((configChangeRoundNumber !== null || isWaitingForChangelog || isPatchInProgress) && !isInitialThreadCreation) {
-      rlog.trigger('block-changelog', `configChangeRoundNumber=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog} isPatchInProgress=${isPatchInProgress}`);
       return;
     }
+
+    // 🔍 LOG 4: Streaming trigger ready
+    rlog.trigger('ready', `r${currentRound} ws=${formEnableWebSearch} initial=${isInitialThreadCreation}`);
 
     // Wait for pre-search completion before streaming participants
     // ✅ BUG FIX: Use form state (user's current intent) instead of thread.enableWebSearch
     // During submission, thread.enableWebSearch is stale (not yet updated via PATCH)
     // Form state is the source of truth for what the user wants NOW
     const webSearchEnabled = formEnableWebSearch;
-    const currentRound = getCurrentRoundNumber(storeMessages);
 
     if (webSearchEnabled) {
       const currentRoundPreSearch = storePreSearches.find(ps => ps.roundNumber === currentRound);
 
       if (!currentRoundPreSearch) {
-        rlog.trigger('block-presearch-missing', `round=${currentRound} webSearch=true noPreSearch`);
         return;
       }
 
@@ -189,7 +185,7 @@ export function useStreamingTrigger({
               }
 
               if (!response.ok) {
-                rlog.presearch('resume-fail', `status=${response.status}`);
+                // rlog.presearch('resume-fail', `status=${response.status}`);
                 store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
                 store.getState().clearPreSearchActivity(currentRound);
                 return;
@@ -212,8 +208,8 @@ export function useStreamingTrigger({
               queryClientRef.current.invalidateQueries({
                 queryKey: queryKeys.threads.preSearches(threadIdForSearch),
               });
-            } catch (error) {
-              rlog.presearch('resume-error', error instanceof Error ? error.message : String(error));
+            } catch (_error) {
+              // rlog.presearch('resume-error', error instanceof Error ? error.message : String(error));
               store.getState().clearPreSearchActivity(currentRound);
               store.getState().clearPreSearchTracking(currentRound);
             }
@@ -267,7 +263,7 @@ export function useStreamingTrigger({
               });
 
               if (!response.ok && response.status !== 409) {
-                rlog.presearch('execute-fail', `status=${response.status}`);
+                // rlog.presearch('execute-fail', `status=${response.status}`);
                 store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
                 store.getState().clearPreSearchActivity(currentRound);
                 return;
@@ -289,8 +285,8 @@ export function useStreamingTrigger({
               queryClientRef.current.invalidateQueries({
                 queryKey: queryKeys.threads.preSearches(threadIdForSearch),
               });
-            } catch (error) {
-              rlog.presearch('execute-error', error instanceof Error ? error.message : String(error));
+            } catch (_error) {
+              // rlog.presearch('execute-error', error instanceof Error ? error.message : String(error));
               store.getState().clearPreSearchActivity(currentRound);
               store.getState().clearPreSearchTracking(currentRound);
             }
@@ -305,7 +301,6 @@ export function useStreamingTrigger({
       // Check animation status
       const isPreSearchAnimating = storePendingAnimations.has(AnimationIndices.PRE_SEARCH);
       if (isPreSearchAnimating) {
-        rlog.trigger('block-presearch-animating', `round=${currentRound} animating=true`);
         return;
       }
 
@@ -320,38 +315,21 @@ export function useStreamingTrigger({
       // too-rapid processing. Additionally, the duplicate round check (lines 328-332)
       // and the isTriggeringRef check (lines 334-337) prevent redundant startRound calls.
       //
-      // Log timing for debugging but don't block:
-      if (currentRoundPreSearch.status === MessageStatuses.COMPLETE && currentRoundPreSearch.completedAt) {
-        const completedTime = currentRoundPreSearch.completedAt instanceof Date
-          ? currentRoundPreSearch.completedAt.getTime()
-          : new Date(currentRoundPreSearch.completedAt).getTime();
-        const timeSinceComplete = Date.now() - completedTime;
-        rlog.trigger('presearch-timing', `round=${currentRound} timeSinceComplete=${timeSinceComplete}ms`);
-      }
     }
 
     // Prevent duplicate startRound calls
     if (startRoundCalledForRoundRef.current === currentRound) {
-      rlog.trigger('block-duplicate', `round=${currentRound} alreadyCalled=true`);
       return;
     }
 
     if (chat.isTriggeringRef.current || chat.isStreamingRef.current) {
-      rlog.trigger('block-refs', `round=${currentRound} triggering=${chat.isTriggeringRef.current} streaming=${chat.isStreamingRef.current}`);
       return;
     }
 
     // ✅ FIX: Check chat.isReady before setting ref and calling startRound
-    // Without this, startRound may silently return early (if AI SDK status !== 'ready')
-    // but the ref would be set, blocking all future attempts for this round.
-    // Bug: Pre-search completes → effect runs → ref set → startRound returns early
-    // → status becomes ready → effect re-runs → ref already set → blocked forever
     if (!chat.isReady) {
-      rlog.trigger('block-notready', `round=${currentRound} chat.isReady=false (AI SDK not ready)`);
       return;
     }
-
-    rlog.trigger('proceed', `round=${currentRound} calling startRound with ${storeParticipants.length} participants`);
     startRoundCalledForRoundRef.current = currentRound;
 
     // ✅ RACE CONDITION FIX: Moderator placeholder is now added in useModeratorTrigger
@@ -360,10 +338,10 @@ export function useStreamingTrigger({
     // The old pattern: User → Moderator → Participants (wrong)
     // The new pattern: User → Participants → Moderator (correct)
 
+    // 🔍 LOG 5: Participants starting
+    rlog.trigger('participants', `r${currentRound} starting ${storeParticipants.length}p`);
+
     // ✅ FIX: Use queueMicrotask to run startRound outside React's lifecycle
-    // startRound uses flushSync internally which cannot be called during render/effects
-    // ✅ STALE CLOSURE FIX: Pass storeMessages directly to avoid capturing old closure
-    // Messages are now persisted via PATCH before streaming, so store state is fresh
     queueMicrotask(() => {
       chat.startRound(storeParticipants, storeMessages);
     });

@@ -136,7 +136,7 @@ function formatDebugValue(key: string, value: DebugDataValue): string {
 const rlogDebounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 const RLOG_DEBOUNCE_MS = 300;
 const rlogLastLogged: Record<string, string> = {};
-let rlogEnabled = false;
+let rlogEnabled = isDev;
 
 function getRlogStyle(category: RlogCategory): string {
   return RLOG_CATEGORY_STYLES[category];

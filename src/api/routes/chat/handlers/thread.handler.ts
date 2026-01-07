@@ -129,21 +129,28 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
   async (c, batch) => {
     const { user } = c.auth();
 
-    // 🔍 DEBUG: Log thread creation attempt
-    console.error('[CREATE-THREAD-DEBUG] Starting thread creation for user:', user.id, user.email);
+    // 🔍 DEBUG: Log thread creation attempt (enable with DEBUG_REQUESTS=true)
+    const debugRequests = process.env.DEBUG_REQUESTS === 'true';
+    if (debugRequests) {
+      console.error('[CREATE-THREAD-DEBUG] Starting thread creation for user:', user.id, user.email);
+    }
 
     // ✅ FREE USER THREAD LIMIT: Free users can only create ONE thread total
     // This check runs BEFORE credit enforcement to provide a clearer error message
     const creditBalance = await getUserCreditBalance(user.id);
-    console.error('[CREATE-THREAD-DEBUG] Credit balance:', {
-      planType: creditBalance.planType,
-      balance: creditBalance.balance,
-      userId: user.id,
-    });
+    if (debugRequests) {
+      console.error('[CREATE-THREAD-DEBUG] Credit balance:', {
+        planType: creditBalance.planType,
+        balance: creditBalance.balance,
+        userId: user.id,
+      });
+    }
 
     if (creditBalance.planType === PlanTypes.FREE) {
       const hasExistingThread = await checkFreeUserHasCreatedThread(user.id);
-      console.error('[CREATE-THREAD-DEBUG] Free user thread check:', { hasExistingThread });
+      if (debugRequests) {
+        console.error('[CREATE-THREAD-DEBUG] Free user thread check:', { hasExistingThread });
+      }
       if (hasExistingThread) {
         throw createError.badRequest(
           'Free users can only create one thread. Subscribe to Pro for unlimited threads.',
@@ -160,20 +167,26 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // This is the PRIMARY gating mechanism - if user passes this check, they have credits
     // and should be able to create threads. Credits are the real limiting factor.
     const estimatedCredits = estimateStreamingCredits(1); // Minimum estimate
-    console.error('[CREATE-THREAD-DEBUG] Enforcing credits:', { estimatedCredits });
+    if (debugRequests) {
+      console.error('[CREATE-THREAD-DEBUG] Enforcing credits:', { estimatedCredits });
+    }
     await enforceCredits(user.id, estimatedCredits);
     const body = c.validated.body;
     const db = batch.db;
     const userTier = await getUserTier(user.id);
-    console.error('[CREATE-THREAD-DEBUG] User tier:', { userTier });
+    if (debugRequests) {
+      console.error('[CREATE-THREAD-DEBUG] User tier:', { userTier });
+    }
 
     for (const participant of body.participants) {
       const model = getModelById(participant.modelId);
-      console.error('[CREATE-THREAD-DEBUG] Model lookup:', {
-        modelId: participant.modelId,
-        found: !!model,
-        modelName: model?.name,
-      });
+      if (debugRequests) {
+        console.error('[CREATE-THREAD-DEBUG] Model lookup:', {
+          modelId: participant.modelId,
+          found: !!model,
+          modelName: model?.name,
+        });
+      }
       if (!model) {
         throw createError.badRequest(
           `Model "${participant.modelId}" not found`,

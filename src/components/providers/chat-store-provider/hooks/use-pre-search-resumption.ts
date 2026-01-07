@@ -28,7 +28,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { MessageRoles, MessageStatuses } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { getCurrentRoundNumber, getRoundNumber, rlog } from '@/lib/utils';
+import { getCurrentRoundNumber, getRoundNumber } from '@/lib/utils';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { readPreSearchStreamData } from '@/stores/chat';
@@ -107,13 +107,13 @@ export function usePreSearchResumption({
 
     // Only handle STREAMING status that needs resumption
     if (currentRoundPreSearch.status !== MessageStatuses.STREAMING) {
-      rlog.presearch('skip', `r${currentRound} status=${currentRoundPreSearch.status}`);
+      // rlog.presearch('skip', `r${currentRound} status=${currentRoundPreSearch.status}`);
       return;
     }
 
     // Prevent duplicate resumption attempts for same round
     if (attemptedResumptionRef.current.has(currentRound)) {
-      rlog.presearch('skip', `r${currentRound} already attempted`);
+      // rlog.presearch('skip', `r${currentRound} already attempted`);
       return;
     }
 
@@ -122,13 +122,13 @@ export function usePreSearchResumption({
     const didMark = currentState.tryMarkPreSearchTriggered(currentRound);
     if (!didMark) {
       // Already triggered locally, stream should be running
-      rlog.presearch('skip', `r${currentRound} already marked`);
+      // rlog.presearch('skip', `r${currentRound} already marked`);
       return;
     }
 
     // ✅ RESUMPTION: Pre-search is streaming but not tracked locally = page refresh scenario
     // Mark as attempted
-    rlog.presearch('RESUME', `r${currentRound} resuming stream`);
+    // rlog.presearch('RESUME', `r${currentRound} resuming stream`);
     attemptedResumptionRef.current.add(currentRound);
 
     // Get user query
@@ -169,7 +169,7 @@ export function usePreSearchResumption({
           }
 
           if (!response.ok) {
-            rlog.presearch('resume-fail', `status=${response.status}`);
+            // rlog.presearch('resume-fail', `status=${response.status}`);
             store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
             store.getState().clearPreSearchActivity(currentRound);
             return;
@@ -192,8 +192,8 @@ export function usePreSearchResumption({
           queryClientRef.current.invalidateQueries({
             queryKey: queryKeys.threads.preSearches(threadIdForSearch),
           });
-        } catch (error) {
-          rlog.presearch('resume-error', error instanceof Error ? error.message : String(error));
+        } catch (_error) {
+          // rlog.presearch('resume-error', error instanceof Error ? error.message : String(error));
           store.getState().clearPreSearchActivity(currentRound);
           store.getState().clearPreSearchTracking(currentRound);
         }

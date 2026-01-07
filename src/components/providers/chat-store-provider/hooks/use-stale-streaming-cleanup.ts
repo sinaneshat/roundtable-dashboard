@@ -21,7 +21,6 @@ import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
-import { rlog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { isRoundComplete } from '@/stores/chat';
 
@@ -85,7 +84,7 @@ export function useStaleStreamingCleanup({
       );
 
       if (roundComplete) {
-        rlog.phase('STALE-CLEANUP', `r${streamingRoundNumber} complete but streamingRoundNumber still set - cleaning up`);
+        // rlog.phase('STALE-CLEANUP', `r${streamingRoundNumber} complete but streamingRoundNumber still set - cleaning up`);
         cleanupAttemptedRef.current = streamingRoundNumber;
         state.completeStreaming();
       }

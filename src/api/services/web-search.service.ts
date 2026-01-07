@@ -185,15 +185,6 @@ export function streamSearchQuery(
       prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3,
       onError: (error) => {
-        // ✅ DETAILED ERROR LOGGING: Helps diagnose schema failures
-        console.error('[Web Search] Stream generation error:', {
-          modelId,
-          errorType: error.constructor?.name || 'Unknown',
-          errorMessage:
-            error instanceof Error ? error.message : String(error),
-          userMessage: userMessage.substring(0, 100),
-        });
-
         if (logger) {
           logger.error('Stream generation error', {
             logType: 'operation',
@@ -925,36 +916,22 @@ async function searchDuckDuckGoFallback(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.error('[WebSearch] DuckDuckGo returned non-OK status:', response.status);
       return [];
     }
 
     const html = await response.text();
 
-    // ✅ DEBUG: Log if we got a captcha or error page
+    // Bot detection or rate limit - silently return empty
     if (html.includes('g-recaptcha') || html.includes('captcha')) {
-      console.error('[WebSearch] DuckDuckGo returned captcha page - bot detection triggered');
       return [];
     }
 
     if (html.includes('rate limit') || html.includes('too many requests')) {
-      console.error('[WebSearch] DuckDuckGo rate limit detected');
       return [];
     }
 
-    const results = parseDuckDuckGoResults(html, maxResults);
-
-    // ✅ DEBUG: Log when no results found despite successful response
-    if (results.length === 0) {
-      console.error('[WebSearch] DuckDuckGo returned HTML but no results parsed. Query:', query.substring(0, 50));
-      // Log a snippet of the HTML structure for debugging (first 500 chars)
-      const snippet = html.substring(0, 500).replace(/\s+/g, ' ');
-      console.error('[WebSearch] HTML snippet:', snippet);
-    }
-
-    return results;
-  } catch (error) {
-    console.error('[WebSearch] DuckDuckGo fetch error:', error instanceof Error ? error.message : String(error));
+    return parseDuckDuckGoResults(html, maxResults);
+  } catch {
     return [];
   }
 }

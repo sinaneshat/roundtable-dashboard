@@ -19,7 +19,7 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ScreenModes } from '@/api/core/enums';
-import { getCurrentRoundNumber, rlog } from '@/lib/utils';
+import { getCurrentRoundNumber } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { shouldWaitForPreSearch } from '@/stores/chat';
 
@@ -207,7 +207,6 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
           const pollUntilReady = () => {
             retryCount++;
             if (retryCount > maxRetries) {
-              rlog.trigger('resume-timeout', `gave up after ${maxRetries} retries`);
               return;
             }
 
@@ -257,7 +256,6 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
             // Ready! Execute continuation
             resumptionTriggeredRef.current = pollResumptionKey;
-            rlog.trigger('resume-poll', `p${getParticipantIndex(pollNextParticipant)} after ${retryCount} polls`);
             // ✅ CRITICAL FIX: Pass pollMessages to ensure correct userMessageId for backend lookup
             // Without this, continueFromParticipant uses stale AI SDK messages instead of
             // the freshly-persisted messages from PATCH, causing "User message not found" errors
@@ -306,7 +304,6 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
     // ✅ Mark as triggered before calling to prevent race condition double-triggers
     resumptionTriggeredRef.current = resumptionKey;
-    rlog.trigger('resume', `p${getParticipantIndex(nextParticipantToTrigger)} key=${resumptionKey}`);
 
     // Resume from specific participant
     // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes

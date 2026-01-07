@@ -6,7 +6,7 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 import { FinishReasons, MessagePartTypes, MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases, TextPartStates, UIMessageRoles } from '@/api/core/enums';
-import { getRoundNumber, isObject, rlog } from '@/lib/utils';
+import { getRoundNumber, isObject } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { isRoundComplete } from '@/stores/chat';
 
@@ -75,7 +75,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     const freshThreadId = state.thread?.id || state.createdThreadId || '';
 
     if (!freshThreadId) {
-      rlog.moderator('skip', 'no threadId');
+      // rlog.moderator('skip', 'no threadId');
       // ✅ FLASH FIX: Don't call completeStreaming() on early return
       // This clears streamingRoundNumber causing isLatestRound to be false → flash
       // handleComplete already set isModeratorStreaming=true, let it timeout naturally
@@ -85,7 +85,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
 
     const moderatorId = `${freshThreadId}_r${roundNumber}_moderator`;
     if (state.hasModeratorStreamBeenTriggered(moderatorId, roundNumber)) {
-      rlog.moderator('skip', `r${roundNumber} already triggered`);
+      // rlog.moderator('skip', `r${roundNumber} already triggered`);
 
       // ✅ FIX: Check if the round is actually complete but streamingRoundNumber is stale
       // This can happen if the original trigger completed but completeStreaming() wasn't called
@@ -93,7 +93,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       if (state.streamingRoundNumber === roundNumber) {
         const roundComplete = isRoundComplete(state.messages, state.participants, roundNumber);
         if (roundComplete) {
-          rlog.moderator('cleanup', `r${roundNumber} complete but streamingRoundNumber stale - cleaning up`);
+          // rlog.moderator('cleanup', `r${roundNumber} complete but streamingRoundNumber stale - cleaning up`);
           state.completeStreaming();
         }
       }
@@ -102,11 +102,11 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     }
 
     if (triggeringRoundRef.current !== null) {
-      rlog.moderator('skip', `r${roundNumber} trigger in progress`);
+      // rlog.moderator('skip', `r${roundNumber} trigger in progress`);
       return;
     }
 
-    rlog.moderator('TRIGGER', `r${roundNumber} pMsgs=${participantMessageIds.length}`);
+    // rlog.moderator('TRIGGER', `r${roundNumber} pMsgs=${participantMessageIds.length}`);
     state.markModeratorStreamTriggered(moderatorId, roundNumber);
     triggeringRoundRef.current = roundNumber;
 
@@ -277,12 +277,12 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        rlog.moderator('abort', `r${roundNumber}`);
+        // rlog.moderator('abort', `r${roundNumber}`);
         return;
       }
-      rlog.moderator('error', `r${roundNumber}`);
+      // rlog.moderator('error', `r${roundNumber}`);
     } finally {
-      rlog.phase('MOD→DONE', `r${roundNumber} complete`);
+      // rlog.phase('MOD→DONE', `r${roundNumber} complete`);
       store.getState().completeStreaming();
       triggeringRoundRef.current = null;
       abortControllerRef.current = null;

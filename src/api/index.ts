@@ -278,47 +278,51 @@ const app = createOpenApiApp();
 // ============================================================================
 
 // 🔍 DEBUG: Log ALL requests (especially POST) to diagnose 400 errors
-app.use('*', async (c, next) => {
-  const startTime = Date.now();
-  const method = c.req.method;
-  const path = c.req.path;
+// Enable with DEBUG_REQUESTS=true to avoid MaxListenersExceeded warnings
+// from parallel console.error() calls during high-concurrency development
+if (process.env.DEBUG_REQUESTS === 'true') {
+  app.use('*', async (c, next) => {
+    const startTime = Date.now();
+    const method = c.req.method;
+    const path = c.req.path;
 
-  // Log ALL POST requests to catch the 400 source
-  if (method === 'POST') {
-    try {
-      const clonedRequest = c.req.raw.clone();
-      const bodyText = await clonedRequest.text();
-      const contentLength = c.req.header('content-length');
-      const contentType = c.req.header('content-type');
+    // Log ALL POST requests to catch the 400 source
+    if (method === 'POST') {
+      try {
+        const clonedRequest = c.req.raw.clone();
+        const bodyText = await clonedRequest.text();
+        const contentLength = c.req.header('content-length');
+        const contentType = c.req.header('content-type');
 
-      console.error(`[REQUEST-DEBUG] ${method} ${path}:`, {
-        contentLength,
-        contentType,
-        bodyLength: bodyText.length,
-        bodyPreview: bodyText.slice(0, 300),
-        isValidJson: (() => {
-          try {
-            JSON.parse(bodyText);
-            return true;
-          } catch (e) {
-            return `Invalid: ${e instanceof Error ? e.message : String(e)}`;
-          }
-        })(),
-      });
-    } catch (err) {
-      console.error(`[REQUEST-DEBUG] Error reading ${method} ${path} body:`, err);
+        console.error(`[REQUEST-DEBUG] ${method} ${path}:`, {
+          contentLength,
+          contentType,
+          bodyLength: bodyText.length,
+          bodyPreview: bodyText.slice(0, 300),
+          isValidJson: (() => {
+            try {
+              JSON.parse(bodyText);
+              return true;
+            } catch (e) {
+              return `Invalid: ${e instanceof Error ? e.message : String(e)}`;
+            }
+          })(),
+        });
+      } catch (err) {
+        console.error(`[REQUEST-DEBUG] Error reading ${method} ${path} body:`, err);
+      }
     }
-  }
 
-  await next();
+    await next();
 
-  // Log response status for all 4xx/5xx errors
-  const status = c.res.status;
-  if (status >= 400) {
-    const duration = Date.now() - startTime;
-    console.error(`[RESPONSE-DEBUG] ${method} ${path} -> ${status} in ${duration}ms`);
-  }
-});
+    // Log response status for all 4xx/5xx errors
+    const status = c.res.status;
+    if (status >= 400) {
+      const duration = Date.now() - startTime;
+      console.error(`[RESPONSE-DEBUG] ${method} ${path} -> ${status} in ${duration}ms`);
+    }
+  });
+}
 
 // Formatting
 app.use('*', prettyJSON());

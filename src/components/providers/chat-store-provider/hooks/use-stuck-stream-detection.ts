@@ -13,7 +13,7 @@ import { useEffect } from 'react';
 import { useStore } from 'zustand';
 
 import { showApiErrorToast } from '@/lib/toast';
-import { getCurrentRoundNumber, getPreSearchTimeout, rlog, TIMEOUT_CONFIG } from '@/lib/utils';
+import { getCurrentRoundNumber, getPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseStuckStreamDetectionParams = {
@@ -61,7 +61,7 @@ export function useStuckStreamDetection({
       const elapsed = now - lastStreamActivityRef.current;
 
       if (elapsed > streamTimeoutMs) {
-        rlog.stream('check', `stuck detected elapsed=${elapsed}ms timeout=${streamTimeoutMs}ms web=${webSearchEnabled ? 1 : 0}`);
+        // rlog.stream('check', `stuck detected elapsed=${elapsed}ms timeout=${streamTimeoutMs}ms web=${webSearchEnabled ? 1 : 0}`);
 
         const latestState = store.getState();
         latestState.setWaitingToStartStreaming(false);

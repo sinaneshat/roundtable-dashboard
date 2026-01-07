@@ -54,8 +54,9 @@ export function useChangelogSync({
   // Fetch round-specific changelog when waiting
   const shouldFetch = isWaitingForChangelog && configChangeRoundNumber !== null && !!effectiveThreadId;
 
+  // Log only when fetching
   if (shouldFetch) {
-    rlog.trigger('changelog-fetch', `round=${configChangeRoundNumber} waiting=${isWaitingForChangelog}`);
+    rlog.trigger('changelog-fetch', `r${configChangeRoundNumber}`);
   }
 
   const { data: roundChangelogData, isSuccess: roundChangelogSuccess } = useThreadRoundChangelogQuery(
@@ -65,23 +66,19 @@ export function useChangelogSync({
   );
 
   // Merge changelog data into cache when fetched
+  // ✅ BUG FIX: Must wait for BOTH flags - configChangeRoundNumber is set BEFORE PATCH,
+  // isWaitingForChangelog is set AFTER PATCH. Without this check, the query can complete
+  // and clear flags before post-patch sets isWaitingForChangelog, causing a race condition.
   useEffect(() => {
     if (!roundChangelogSuccess || !roundChangelogData?.success) {
-      if (shouldFetch) {
-        rlog.trigger('changelog-waiting', `round=${configChangeRoundNumber} success=${roundChangelogSuccess}`);
-      }
       return;
     }
-    if (configChangeRoundNumber === null)
+    if (configChangeRoundNumber === null || !isWaitingForChangelog)
       return;
     // Prevent duplicate merges for the same round
-    // ✅ CRITICAL FIX: Still clear flags even when skipping duplicate merge
-    // Without this, the streaming flow would be stuck waiting for flags to clear
     if (lastMergedRoundRef.current === configChangeRoundNumber) {
       const state = store.getState();
-      // Only clear if flags are still set (race condition safety)
       if (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) {
-        rlog.trigger('changelog-duplicate', `round=${configChangeRoundNumber} already merged, clearing stale flags`);
         state.setIsWaitingForChangelog(false);
         state.setConfigChangeRoundNumber(null);
       }
@@ -92,8 +89,6 @@ export function useChangelogSync({
     const state = store.getState();
 
     if (newItems.length === 0) {
-      // No new changelog entries, but still clear the waiting flag
-      rlog.trigger('changelog-clear', `round=${configChangeRoundNumber} items=0 (no changes)`);
       state.setIsWaitingForChangelog(false);
       state.setConfigChangeRoundNumber(null);
       lastMergedRoundRef.current = configChangeRoundNumber;
@@ -120,6 +115,9 @@ export function useChangelogSync({
         // Only add items that don't already exist (prevent duplicates)
         const uniqueNewItems = newItems.filter(item => !existingIds.has(item.id));
 
+        // 🔍 LOG: Track actual merge
+        rlog.trigger('changelog-merge', `r${configChangeRoundNumber} new=${uniqueNewItems.length}/${newItems.length} existing=${existingItems.length}`);
+
         return {
           ...existingCache,
           data: {
@@ -131,7 +129,7 @@ export function useChangelogSync({
     );
 
     // Clear flags after successful merge
-    rlog.trigger('changelog-merged', `round=${configChangeRoundNumber} items=${newItems.length} clearing flags`);
+    rlog.trigger('changelog-done', `r${configChangeRoundNumber} ${newItems.length} items`);
     state.setIsWaitingForChangelog(false);
     state.setConfigChangeRoundNumber(null);
     lastMergedRoundRef.current = configChangeRoundNumber;
@@ -139,6 +137,7 @@ export function useChangelogSync({
     roundChangelogSuccess,
     roundChangelogData,
     configChangeRoundNumber,
+    isWaitingForChangelog,
     effectiveThreadId,
     queryClientRef,
     store,
@@ -152,10 +151,9 @@ export function useChangelogSync({
 
     const timeout = setTimeout(() => {
       const state = store.getState();
-      rlog.trigger('changelog-timeout', 'clearing flags after 30s timeout');
       state.setIsWaitingForChangelog(false);
       state.setConfigChangeRoundNumber(null);
-    }, 30000); // 30 second timeout
+    }, 30000);
 
     return () => clearTimeout(timeout);
   }, [isWaitingForChangelog, store]);
@@ -167,7 +165,6 @@ export function useChangelogSync({
   // This effect detects the inconsistency and clears isWaitingForChangelog immediately.
   useEffect(() => {
     if (isWaitingForChangelog && configChangeRoundNumber === null) {
-      rlog.trigger('changelog-inconsistent', 'isWaitingForChangelog=true but configChangeRoundNumber=null, clearing');
       const state = store.getState();
       state.setIsWaitingForChangelog(false);
     }

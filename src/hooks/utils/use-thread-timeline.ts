@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 
 import { MessageRoles } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
-import { getParticipantIndex, getRoundNumberFromMetadata, isModeratorMessage } from '@/lib/utils';
+import { getParticipantIndex, getRoundNumberFromMetadata, isModeratorMessage, rlog } from '@/lib/utils';
 
 /**
  * Changelog type that accepts both Date (from DB) and string (from API JSON)
@@ -251,6 +251,15 @@ export function useThreadTimeline({
         });
       }
     });
+
+    // 🔍 LOG: Track timeline output
+    const changelogItems = timeline.filter(i => i.type === 'changelog');
+    const msgItems = timeline.filter(i => i.type === 'messages');
+    if (changelogItems.length > 0 || changelog.length > 0) {
+      const changelogRounds = changelogItems.map(i => i.roundNumber);
+      const msgRounds = [...new Set(msgItems.map(i => i.roundNumber))];
+      rlog.trigger('ui-timeline', `cl=[${changelogRounds.join(',')}] msg=[${msgRounds.join(',')}] input=${changelog.length}`);
+    }
 
     return timeline;
   }, [messages, changelog, preSearches]);

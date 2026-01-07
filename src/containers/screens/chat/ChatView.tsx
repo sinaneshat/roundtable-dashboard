@@ -26,7 +26,7 @@ import type { ModelPreset } from '@/lib/config/model-presets';
 import { filterPresetParticipants, ToastNamespaces } from '@/lib/config/model-presets';
 import { isFilePart } from '@/lib/schemas/message-schemas';
 import { toastManager } from '@/lib/toast';
-import { getIncompatibleModelIds, getModeratorMetadata, getRoundNumber, isModeratorMessage, isVisionRequiredMimeType } from '@/lib/utils';
+import { getIncompatibleModelIds, getModeratorMetadata, getRoundNumber, isModeratorMessage, isVisionRequiredMimeType, rlog } from '@/lib/utils';
 import {
   useChatFormActions,
   useFeedbackActions,
@@ -192,6 +192,11 @@ export function ChatView({
       seen.add(item.id);
       return true;
     });
+    // 🔍 LOG: Track what changelog rounds UI sees
+    const rounds = [...new Set(filtered.map(i => i.roundNumber))].sort((a, b) => a - b);
+    if (filtered.length > 0) {
+      rlog.trigger('ui-changelog', `${filtered.length} items rounds=[${rounds.join(',')}]`);
+    }
     return filtered;
   }, [changelogResponse]);
 

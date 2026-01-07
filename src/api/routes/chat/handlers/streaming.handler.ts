@@ -149,17 +149,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       } = c.validated.body;
 
       // 🔍 DEBUG: Log incoming request for troubleshooting 400 errors
-      console.error('[STREAM-DEBUG] Request body:', {
-        hasMessage: !!message,
-        messageId: message?.id,
-        messageRole: message?.role,
-        hasParts: !!message?.parts,
-        partsLength: message?.parts?.length,
-        threadId,
-        participantIndex,
-        participantCount: providedParticipants?.length,
-        enableWebSearch: providedEnableWebSearch,
-      });
+      // Enable with DEBUG_REQUESTS=true
+      if (process.env.DEBUG_REQUESTS === 'true') {
+        console.error('[STREAM-DEBUG] Request body:', {
+          hasMessage: !!message,
+          messageId: message?.id,
+          messageRole: message?.role,
+          hasParts: !!message?.parts,
+          partsLength: message?.parts?.length,
+          threadId,
+          participantIndex,
+          participantCount: providedParticipants?.length,
+          enableWebSearch: providedEnableWebSearch,
+        });
+      }
 
       // =========================================================================
       // STEP 1: Validate incoming message

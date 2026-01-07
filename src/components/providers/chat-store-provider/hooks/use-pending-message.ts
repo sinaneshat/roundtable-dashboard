@@ -9,7 +9,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { extractFileContextForSearch, getCurrentRoundNumber, getEnabledParticipantModelIds, rlog } from '@/lib/utils';
+import { extractFileContextForSearch, getCurrentRoundNumber, getEnabledParticipantModelIds } from '@/lib/utils';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { getEffectiveWebSearchEnabled, readPreSearchStreamData } from '@/stores/chat';
@@ -107,7 +107,7 @@ export function usePendingMessage({
     // only handleUpdateThreadAndSend does. So if configChangeRoundNumber is set, it's NOT initial.
     const isInitialThreadCreation = screenMode === ScreenModes.OVERVIEW && waitingToStart && configChangeRoundNumber === null;
     if ((isWaitingForChangelog || configChangeRoundNumber !== null) && !isInitialThreadCreation) {
-      rlog.presearch('block-changelog', `configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
+      // rlog.presearch('block-changelog', `configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
       return;
     }
 
@@ -163,7 +163,7 @@ export function usePendingMessage({
         preSearchExecutionRef.current.add(newRoundNumber);
 
         const threadIdForSearch = thread?.id || effectiveThreadId;
-        rlog.presearch('execute-thread', `r${newRoundNumber} executing PENDING pre-search on THREAD screen`);
+        // rlog.presearch('execute-thread', `r${newRoundNumber} executing PENDING pre-search on THREAD screen`);
 
         queueMicrotask(() => {
           const executeSearch = async () => {
@@ -181,7 +181,7 @@ export function usePendingMessage({
               });
 
               if (!response.ok && response.status !== 409) {
-                rlog.presearch('execute-fail', `status=${response.status}`);
+                // rlog.presearch('execute-fail', `status=${response.status}`);
                 store.getState().updatePreSearchStatus(newRoundNumber, MessageStatuses.FAILED);
                 store.getState().clearPreSearchActivity(newRoundNumber);
                 return;
@@ -203,8 +203,8 @@ export function usePendingMessage({
               queryClientRef.current.invalidateQueries({
                 queryKey: queryKeys.threads.preSearches(threadIdForSearch),
               });
-            } catch (error) {
-              rlog.presearch('execute-error', error instanceof Error ? error.message : String(error));
+            } catch (_error) {
+              // rlog.presearch('execute-error', error instanceof Error ? error.message : String(error));
               store.getState().clearPreSearchActivity(newRoundNumber);
               store.getState().clearPreSearchTracking(newRoundNumber);
             }
@@ -240,11 +240,11 @@ export function usePendingMessage({
 
         if (result && typeof result.catch === 'function') {
           result.catch((error: Error) => {
-            rlog.stream('end', `sendMessage failed: ${error.message}`);
+            // rlog.stream('end', `sendMessage failed: ${error.message}`);
           });
         }
-      } catch (error) {
-        rlog.stream('end', `sendMessage threw: ${error instanceof Error ? error.message : String(error)}`);
+      } catch (_error) {
+        // rlog.stream('end', `sendMessage threw: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
   }, [
@@ -307,7 +307,7 @@ export function usePendingMessage({
     // ✅ FIX: Block until changelog is fetched
     // Order: PATCH → changelog → pre-search → streams
     if (isWaitingForChangelog || configChangeRoundNumber !== null) {
-      rlog.presearch('block-changelog-non-initial', `configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
+      // rlog.presearch('block-changelog-non-initial', `configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
       return;
     }
 
@@ -344,7 +344,7 @@ export function usePendingMessage({
     preSearchExecutionRef.current.add(currentRound);
 
     const threadIdForSearch = thread?.id || effectiveThreadId;
-    rlog.presearch('execute-non-initial', `r${currentRound} executing PENDING pre-search (non-initial round)`);
+    // rlog.presearch('execute-non-initial', `r${currentRound} executing PENDING pre-search (non-initial round)`);
 
     // Extract user query from messages (since pendingMessage is null)
     const userMessageForRound = messages.find((msg) => {
@@ -359,7 +359,7 @@ export function usePendingMessage({
       : preSearchForRound.userQuery || '';
 
     if (!userQuery) {
-      rlog.presearch('execute-fail', `r${currentRound} no user query found`);
+      // rlog.presearch('execute-fail', `r${currentRound} no user query found`);
       return;
     }
 
@@ -379,7 +379,7 @@ export function usePendingMessage({
           });
 
           if (!response.ok && response.status !== 409) {
-            rlog.presearch('execute-fail', `status=${response.status}`);
+            // rlog.presearch('execute-fail', `status=${response.status}`);
             store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
             store.getState().clearPreSearchActivity(currentRound);
             return;
@@ -401,8 +401,8 @@ export function usePendingMessage({
           queryClientRef.current.invalidateQueries({
             queryKey: queryKeys.threads.preSearches(threadIdForSearch),
           });
-        } catch (error) {
-          rlog.presearch('execute-error', error instanceof Error ? error.message : String(error));
+        } catch (_error) {
+          // rlog.presearch('execute-error', error instanceof Error ? error.message : String(error));
           store.getState().clearPreSearchActivity(currentRound);
           store.getState().clearPreSearchTracking(currentRound);
         }

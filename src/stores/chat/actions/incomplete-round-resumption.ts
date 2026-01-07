@@ -13,7 +13,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { RoundPhase } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getModeratorMetadata, getParticipantIndex, getParticipantModelIds, getRoundNumber, hasError as checkHasError, rlog } from '@/lib/utils';
+import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getModeratorMetadata, getParticipantIndex, getParticipantModelIds, getRoundNumber, hasError as checkHasError } from '@/lib/utils';
 
 import {
   getMessageStreamingStatus,
@@ -769,7 +769,6 @@ export function useIncompleteRoundResumption(
   useEffect(() => {
     // Skip if not enabled or already streaming
     if (!enabled || isStreaming || waitingToStartStreaming) {
-      rlog.resume('skip', `en=${enabled} strm=${isStreaming} wait=${waitingToStartStreaming}`);
       return;
     }
 
@@ -801,7 +800,6 @@ export function useIncompleteRoundResumption(
     // Without this check, resumption could trigger with stale config (before changelog fetched).
     // ✅ FIX: Use != to check both null and undefined (for test compatibility)
     if (configChangeRoundNumber != null || isWaitingForChangelog) {
-      rlog.resume('block-changelog', `configChangeRound=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
       return;
     }
 
@@ -935,8 +933,6 @@ export function useIncompleteRoundResumption(
     // Mark as attempted to prevent duplicate triggers for this specific participant
     resumptionAttemptedRef.current = resumptionKey;
 
-    rlog.trigger('RESUME', `r${currentRoundNumber} p${effectiveNextParticipant} responded=${respondedParticipantIndices.size} inProg=${inProgressParticipantIndices.size}`);
-
     // Set up store state for resumption
     // The provider's effect watching nextParticipantToTrigger will trigger the participant
     actions.setStreamingRoundNumber(currentRoundNumber);
@@ -1067,7 +1063,6 @@ export function useIncompleteRoundResumption(
   useEffect(() => {
     // Only run if we have a pre-search phase to resume
     if (currentResumptionPhase !== RoundPhases.PRE_SEARCH || !streamResumptionPrefilled) {
-      rlog.presearch('skip', `phase=${currentResumptionPhase} prefilled=${streamResumptionPrefilled}`);
       return;
     }
 
@@ -1092,16 +1087,12 @@ export function useIncompleteRoundResumption(
       // Mark as attempted
       preSearchPhaseResumptionAttemptedRef.current = resumptionKey;
 
-      const status = preSearchComplete ? 'complete' : preSearchFailed ? 'failed' : prefilledComplete ? 'pf-complete' : 'pf-failed';
-      rlog.phase('PRESRCH→PARTS', `r${resumptionRoundNumber} ${status}`);
-
       // ✅ PHASE TRANSITION FIX: Clear pre-search state and transition to participants phase
       // This prevents stale preSearchResumption.status: 'streaming' when pre-search is complete
       actions.transitionToParticipantsPhase();
 
       // Set up for participant triggering
       if ((preSearchComplete || prefilledComplete) && resumptionRoundNumber !== null) {
-        rlog.trigger('PRESRCH-DONE', `r${resumptionRoundNumber} trigger p0`);
         actions.setStreamingRoundNumber(resumptionRoundNumber);
         actions.setNextParticipantToTrigger(0);
         actions.setWaitingToStartStreaming(true);
@@ -1134,7 +1125,6 @@ export function useIncompleteRoundResumption(
   useEffect(() => {
     // Only run if we have a moderator phase to resume
     if (currentResumptionPhase !== RoundPhases.MODERATOR || !streamResumptionPrefilled) {
-      rlog.moderator('skip', `phase=${currentResumptionPhase} prefilled=${streamResumptionPrefilled}`);
       return;
     }
 
@@ -1160,10 +1150,6 @@ export function useIncompleteRoundResumption(
 
         if (hasValidFinishReason) {
           // Moderator resumption failed but message is complete - clear all state
-          rlog.moderator(
-            'FAILED-BUT-COMPLETE',
-            `r${resumptionRoundNumber} clearing stuck state, finishReason=${metadata?.finishReason}`,
-          );
           const resumptionKey = `${threadId}_moderator_${resumptionRoundNumber}`;
           moderatorPhaseResumptionAttemptedRef.current = resumptionKey;
           actions.clearStreamResumption();
@@ -1207,10 +1193,6 @@ export function useIncompleteRoundResumption(
     if (!participantCompletionCheck.allComplete) {
       // Server sent moderator phase but participants aren't done!
       // Clear the moderator phase and let participant resumption handle it
-      rlog.moderator(
-        'PHASE-MISMATCH',
-        `r${resumptionRoundNumber} server said moderator but only ${participantCompletionCheck.completedCount}/${participantCompletionCheck.expectedCount} participants complete`,
-      );
       moderatorPhaseResumptionAttemptedRef.current = resumptionKey;
 
       // Transition to participants phase instead
@@ -1246,8 +1228,6 @@ export function useIncompleteRoundResumption(
       participants,
       resumptionRoundNumber,
     );
-
-    rlog.gate('MOD-GATE', `r${resumptionRoundNumber} ${completionStatus.completedCount}/${completionStatus.expectedCount} strm=${completionStatus.streamingCount}`);
 
     if (!completionStatus.allComplete) {
       // Participants still streaming - don't trigger moderator yet
@@ -1288,7 +1268,6 @@ export function useIncompleteRoundResumption(
       // This happens when user navigates away after all participants finish
       // but before moderator could be triggered. We need to trigger moderator now.
       // The use-moderator-trigger hook will handle the actual API call.
-      rlog.moderator('TRIGGER-NEEDED', `r${resumptionRoundNumber} no moderator, all participants complete`);
       moderatorPhaseResumptionAttemptedRef.current = resumptionKey;
 
       // Set streaming state to trigger moderator via use-moderator-trigger hook
@@ -1382,7 +1361,6 @@ export function useIncompleteRoundResumption(
     }
 
     // All participants complete, no moderator - trigger moderator!
-    rlog.moderator('TRIGGER-NOPREFILL', `r${currentRoundNumber} all ${completionStatus.completedCount} participants complete, triggering moderator`);
     moderatorNoPrefillAttemptedRef.current = attemptKey;
 
     // Set state to trigger moderator via use-moderator-trigger hook
