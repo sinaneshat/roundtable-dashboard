@@ -37,11 +37,29 @@ const nextConfig: NextConfig = {
   // cacheComponents: true,
 
   serverExternalPackages: [
+    // React Email - prevent bundling email rendering (~1.4MB)
     '@react-email/components',
     '@react-email/html',
     '@react-email/render',
+    '@react-email/code-block',
+    '@react-email/tailwind',
     'react-email',
+    // Auth
     'jose',
+    // Puppeteer - massive packages (~8MB with typescript)
+    // Local dev uses puppeteer, Cloudflare uses Browser binding
+    'puppeteer',
+    'puppeteer-core',
+    '@cloudflare/puppeteer',
+    // Puppeteer dependencies that pull in typescript
+    'cosmiconfig',
+    'cosmiconfig-typescript-loader',
+    // Shiki syntax highlighting (~2MB)
+    'shiki',
+    '@shikijs/core',
+    '@shikijs/langs',
+    '@shikijs/themes',
+    '@shikijs/engine-oniguruma',
   ],
 
   async rewrites() {
