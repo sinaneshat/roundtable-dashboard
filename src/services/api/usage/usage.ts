@@ -38,8 +38,11 @@ export type GetUsageStatsResponse = InferResponseType<
  * - customRoles: { used, limit, remaining, percentage, status }
  * - period: { start, end, daysRemaining }
  * - subscription: { tier, isAnnual }
+ *
+ * @param options - Service options
+ * @param options.bypassCache - If true, bypasses HTTP cache to get fresh data
  */
-export async function getUserUsageStatsService(args?: GetUsageStatsRequest) {
-  const client = await createApiClient();
-  return parseResponse(client.usage.stats.$get(args ?? {}));
+export async function getUserUsageStatsService(options?: { bypassCache?: boolean }) {
+  const client = await createApiClient({ bypassCache: options?.bypassCache });
+  return parseResponse(client.usage.stats.$get());
 }

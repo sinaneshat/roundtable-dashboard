@@ -9,7 +9,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import { createCheckoutSessionService, listModelsService, syncAfterCheckoutService } from '@/services/api';
+import { createCheckoutSessionService, getUserUsageStatsService, listModelsService, syncAfterCheckoutService } from '@/services/api';
 
 /**
  * Hook to create Stripe checkout session
@@ -67,10 +67,19 @@ export function useSyncAfterCheckoutMutation() {
       });
 
       // Usage queries - reflect new quota limits from subscription
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.usage.all,
-        refetchType: 'all',
-      });
+      // ⚠️ CRITICAL: Usage stats API has HTTP caching (2min browser)
+      // Must bypass cache to get fresh data with updated quota limits
+      try {
+        const freshUsageData = await getUserUsageStatsService({ bypassCache: true });
+        queryClient.setQueryData(queryKeys.usage.stats(), freshUsageData);
+      } catch (error) {
+        console.error('[Checkout] Failed to refresh usage stats after checkout:', error);
+        // Fallback: invalidate and let normal refetch handle it
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.usage.all,
+          refetchType: 'all',
+        });
+      }
 
       // Models query - tier-based access needs immediate refresh
       // ⚠️ CRITICAL: Models API has aggressive HTTP caching (1hr browser, 24hr CDN)

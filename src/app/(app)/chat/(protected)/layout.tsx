@@ -43,7 +43,7 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
       }),
       queryClient.prefetchQuery({
         queryKey: queryKeys.usage.stats(),
-        queryFn: getUserUsageStatsService,
+        queryFn: () => getUserUsageStatsService(),
         staleTime: STALE_TIMES.quota,
       }),
       // ✅ Thread list for sidebar - prevents skeleton on initial load
