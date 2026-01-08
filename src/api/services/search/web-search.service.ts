@@ -805,25 +805,32 @@ async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
   }
 
   // =========================================================================
-  // LOCAL DEVELOPMENT: Use standard puppeteer with bundled Chromium
+  // LOCAL DEVELOPMENT ONLY: Use standard puppeteer with bundled Chromium
+  // Skip in production/Cloudflare to avoid bundling 8MB+ of puppeteer/typescript
   // =========================================================================
-  try {
-    const puppeteer = await import('puppeteer');
-    const browser = await puppeteer.default.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-      ],
-    });
-    return { type: BrowserEnvironments.LOCAL, browser };
-  } catch (error) {
-    console.error('[Browser] Local puppeteer launch failed:', error);
-    return null;
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      // Use variable to prevent static analysis by bundler
+      const puppeteerPkg = 'puppeteer';
+      const puppeteer = await import(/* webpackIgnore: true */ puppeteerPkg);
+      const browser = await puppeteer.default.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+        ],
+      });
+      return { type: BrowserEnvironments.LOCAL, browser };
+    } catch (error) {
+      console.error('[Browser] Local puppeteer launch failed:', error);
+    }
   }
+
+  // No browser available in production without Cloudflare Browser binding
+  return null;
 }
 
 // ============================================================================
