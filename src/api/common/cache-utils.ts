@@ -27,8 +27,14 @@
 
 import { revalidateTag } from 'next/cache';
 
+import { SUBSCRIPTION_TIERS } from '@/api/core/enums/billing';
 import type { getDbAsync } from '@/db';
-import { ThreadCacheTags } from '@/db/cache/cache-tags';
+import {
+  MessageCacheTags,
+  ModelsCacheTags,
+  PublicThreadCacheTags,
+  ThreadCacheTags,
+} from '@/db/cache/cache-tags';
 import { THREAD_CACHE_TAGS } from '@/lib/cache/thread-cache';
 
 // ============================================================================
@@ -101,6 +107,77 @@ export async function invalidateThreadCache(
  */
 export function invalidateThreadMessagesCache(threadId: string): void {
   revalidateTag(THREAD_CACHE_TAGS.threadMessages(threadId), 'max');
+}
+
+// ============================================================================
+// MESSAGE CACHE INVALIDATION
+// ============================================================================
+
+/**
+ * Invalidate message-related caches for a thread
+ *
+ * Invalidates both KV cache and Next.js cache for messages.
+ *
+ * @param db - Database instance with cache support
+ * @param threadId - Thread ID to invalidate messages for
+ */
+export async function invalidateMessagesCache(
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+  threadId: string,
+): Promise<void> {
+  if (db.$cache?.invalidate) {
+    await db.$cache.invalidate({
+      tags: MessageCacheTags.all(threadId),
+    });
+  }
+  revalidateTag(THREAD_CACHE_TAGS.threadMessages(threadId), 'max');
+}
+
+// ============================================================================
+// PUBLIC THREAD CACHE INVALIDATION
+// ============================================================================
+
+/**
+ * Invalidate public thread caches
+ *
+ * Use when thread visibility changes or public thread content updates.
+ *
+ * @param db - Database instance with cache support
+ * @param slug - Thread slug to invalidate
+ */
+export async function invalidatePublicThreadCache(
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+  slug: string,
+): Promise<void> {
+  if (db.$cache?.invalidate) {
+    await db.$cache.invalidate({
+      tags: PublicThreadCacheTags.all(slug),
+    });
+  }
+  revalidateTag(THREAD_CACHE_TAGS.publicThread(slug), 'max');
+  revalidateTag(THREAD_CACHE_TAGS.allPublicThreads, 'max');
+}
+
+// ============================================================================
+// MODELS CACHE INVALIDATION
+// ============================================================================
+
+/**
+ * Invalidate models cache for all tiers
+ *
+ * Use when subscription tier logic changes.
+ *
+ * @param db - Database instance with cache support
+ */
+export async function invalidateModelsCache(
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+): Promise<void> {
+  if (db.$cache?.invalidate) {
+    const tierTags = SUBSCRIPTION_TIERS.map(tier => ModelsCacheTags.byTier(tier));
+    await db.$cache.invalidate({
+      tags: [ModelsCacheTags.static, ...tierTags],
+    });
+  }
 }
 
 // ============================================================================

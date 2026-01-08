@@ -7,7 +7,7 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 
 import { executeBatch } from '@/api/common/batch-operations';
-import { invalidateThreadCache } from '@/api/common/cache-utils';
+import { invalidatePublicThreadCache, invalidateThreadCache } from '@/api/common/cache-utils';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
@@ -45,8 +45,9 @@ import {
   getUserTier,
 } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
-import { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { getDbAsync } from '@/db';
+import { MessageCacheTags } from '@/db/cache/cache-tags';
 import type { DbThreadMetadata } from '@/db/schemas/chat-metadata';
 import { isModeChange, isWebSearchChange, safeParseChangelogData } from '@/db/schemas/chat-metadata';
 import type {
@@ -623,7 +624,11 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
         asc(tables.chatMessage.roundNumber),
         asc(tables.chatMessage.createdAt),
         asc(tables.chatMessage.id),
-      );
+      )
+      .$withCache({
+        config: { ex: 5 }, // 5 seconds - matches STALE_TIMES.threadMessages
+        tag: MessageCacheTags.byThread(id),
+      });
     const changelog = await db.query.chatThreadChangelog.findMany({
       where: eq(tables.chatThreadChangelog.threadId, id),
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
@@ -1116,6 +1121,11 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       await invalidateThreadCache(db, user.id, id, thread.slug);
     }
 
+    // ✅ PUBLIC THREAD CACHE: Invalidate when visibility changes
+    if (body.isPublic !== undefined && thread.slug) {
+      await invalidatePublicThreadCache(db, thread.slug);
+    }
+
     // ✅ NEW MESSAGE CREATION: Create user message if provided
     // ✅ CRITICAL FIX: Use provided ID if present, otherwise generate new ULID
     // Streaming handler expects user messages to be pre-persisted with the EXACT ID
@@ -1256,6 +1266,12 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
       .where(eq(tables.chatThread.id, id));
 
     await invalidateThreadCache(db, user.id, id, thread.slug);
+
+    // ✅ PUBLIC THREAD CACHE: Invalidate if thread was public
+    if (thread.isPublic && thread.slug) {
+      await invalidatePublicThreadCache(db, thread.slug);
+    }
+
     return Responses.ok(c, {
       deleted: true,
     });
@@ -1327,7 +1343,11 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
         asc(tables.chatMessage.roundNumber),
         asc(tables.chatMessage.createdAt),
         asc(tables.chatMessage.id),
-      );
+      )
+      .$withCache({
+        config: { ex: 3600 }, // 1 hour - public thread messages are immutable
+        tag: MessageCacheTags.byThread(thread.id),
+      });
 
     // ✅ PUBLIC PAGE FIX: Exclude incomplete rounds from public view
     // Incomplete rounds (mid-stream) can cause duplications when the same user
@@ -1505,7 +1525,11 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
         asc(tables.chatMessage.roundNumber),
         asc(tables.chatMessage.createdAt),
         asc(tables.chatMessage.id),
-      );
+      )
+      .$withCache({
+        config: { ex: 5 }, // 5 seconds - matches STALE_TIMES.threadMessages
+        tag: MessageCacheTags.byThread(thread.id),
+      });
 
     // ✅ ATTACHMENT SUPPORT: Load message attachments for user messages
     const userMessageIds = rawMessages

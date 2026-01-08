@@ -1,4 +1,4 @@
-import { Link } from '@react-email/link';
+import { Link } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
 import type { EmailColor } from '@/api/core/enums';

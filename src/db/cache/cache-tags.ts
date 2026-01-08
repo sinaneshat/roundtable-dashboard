@@ -71,6 +71,39 @@ export const ThreadCacheTags = {
   },
 } as const;
 
+export const MessageCacheTags = {
+  byThread: (threadId: string) => `messages-${threadId}`,
+  changelog: (threadId: string) => `changelog-${threadId}`,
+  all: (threadId: string) => [
+    MessageCacheTags.byThread(threadId),
+    MessageCacheTags.changelog(threadId),
+  ],
+} as const;
+
+export const PublicThreadCacheTags = {
+  single: (slug: string) => `public-thread-${slug}`,
+  slugsList: 'public-slugs-list',
+  all: (slug?: string) => {
+    const tags: string[] = [PublicThreadCacheTags.slugsList];
+    if (slug) {
+      tags.push(PublicThreadCacheTags.single(slug));
+    }
+    return tags;
+  },
+} as const;
+
+export const ModelsCacheTags = {
+  byTier: (tier: string) => `models-tier-${tier}`,
+  static: 'models-static',
+  all: (tier?: string) => {
+    const tags: string[] = [ModelsCacheTags.static];
+    if (tier) {
+      tags.push(ModelsCacheTags.byTier(tier));
+    }
+    return tags;
+  },
+} as const;
+
 export function getUserSubscriptionCacheTags(
   userId: string,
   customerId?: string,

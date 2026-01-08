@@ -1,4 +1,4 @@
-import { Heading } from '@react-email/heading';
+import { Heading } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
 import type { TextAlignment } from '@/api/core/enums';

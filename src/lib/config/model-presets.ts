@@ -93,8 +93,8 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     mode: 'analyzing',
     searchEnabled: false,
     modelRoles: [
-      { modelId: 'google/gemini-2.5-flash', role: 'Structured Reasoner' },
-      { modelId: 'deepseek/deepseek-r1-0528', role: 'Deep Reasoner' },
+      { modelId: 'openai/gpt-5-nano', role: 'Structured Reasoner' },
+      { modelId: 'openai/gpt-4.1-nano', role: 'Deep Reasoner' },
       { modelId: 'google/gemini-2.0-flash-001', role: 'Alternative Lens' },
     ],
   },

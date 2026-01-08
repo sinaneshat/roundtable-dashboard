@@ -1,4 +1,4 @@
-import { Section } from '@react-email/section';
+import { Section } from '@react-email/components';
 import type { ReactNode } from 'react';
 
 import { Logo } from './logo';

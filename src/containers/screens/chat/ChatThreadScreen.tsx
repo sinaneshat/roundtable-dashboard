@@ -144,17 +144,30 @@ export default function ChatThreadScreen({
   );
 
   const incompatibleModelIds = useMemo(() => {
+    const incompatible = new Set<string>();
+
+    // Add tier-inaccessible models (user can't access based on subscription)
+    for (const model of allEnabledModels) {
+      if (!model.is_accessible_to_user) {
+        incompatible.add(model.id);
+      }
+    }
+
+    // Add vision-incompatible models if there are vision files
     const existingVisionFiles = threadHasVisionRequiredFiles(messages);
     const newVisionFiles = chatAttachments.attachments.some(att =>
       isVisionRequiredMimeType(att.file.type),
     );
 
-    if (!existingVisionFiles && !newVisionFiles) {
-      return new Set<string>();
+    if (existingVisionFiles || newVisionFiles) {
+      const files = [{ mimeType: 'image/png' }];
+      const visionIncompatible = getIncompatibleModelIds(allEnabledModels, files);
+      for (const id of visionIncompatible) {
+        incompatible.add(id);
+      }
     }
 
-    const files = [{ mimeType: 'image/png' }];
-    return getIncompatibleModelIds(allEnabledModels, files);
+    return incompatible;
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
   useEffect(() => {

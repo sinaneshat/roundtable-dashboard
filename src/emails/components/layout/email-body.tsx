@@ -1,4 +1,4 @@
-import { Body } from '@react-email/body';
+import { Body } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
 import { colors, spacing, typography } from '@/emails/design-tokens';

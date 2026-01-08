@@ -1,6 +1,4 @@
-import { Column } from '@react-email/column';
-import { Row } from '@react-email/row';
-import { Section } from '@react-email/section';
+import { Column, Row, Section } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
 import { BRAND } from '@/constants';

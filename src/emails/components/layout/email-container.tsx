@@ -1,4 +1,4 @@
-import { Container } from '@react-email/container';
+import { Container } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
 import { borderRadius, colors, spacing } from '@/emails/design-tokens';

@@ -1,4 +1,4 @@
-import { Button } from '@react-email/button';
+import { Button } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
 import type { ComponentSize } from '@/api/core/enums';

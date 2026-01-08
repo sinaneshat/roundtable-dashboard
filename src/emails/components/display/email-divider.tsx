@@ -1,4 +1,4 @@
-import { Hr } from '@react-email/hr';
+import { Hr } from '@react-email/components';
 import type { CSSProperties } from 'react';
 
 import { colors, spacing } from '@/emails/design-tokens';
