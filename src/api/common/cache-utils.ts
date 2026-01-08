@@ -32,6 +32,7 @@ import type { getDbAsync } from '@/db';
 import {
   MessageCacheTags,
   ModelsCacheTags,
+  PublicSlugsListCacheTags,
   PublicThreadCacheTags,
   ThreadCacheTags,
 } from '@/db/cache/cache-tags';
@@ -141,6 +142,7 @@ export async function invalidateMessagesCache(
  * Invalidate public thread caches
  *
  * Use when thread visibility changes or public thread content updates.
+ * Also invalidates the public slugs list cache for SSG regeneration.
  *
  * @param db - Database instance with cache support
  * @param slug - Thread slug to invalidate
@@ -151,7 +153,10 @@ export async function invalidatePublicThreadCache(
 ): Promise<void> {
   if (db.$cache?.invalidate) {
     await db.$cache.invalidate({
-      tags: PublicThreadCacheTags.all(slug),
+      tags: [
+        ...PublicThreadCacheTags.all(slug),
+        ...PublicSlugsListCacheTags.all(),
+      ],
     });
   }
   revalidateTag(THREAD_CACHE_TAGS.publicThread(slug), 'max');

@@ -36,9 +36,10 @@ export const STALE_TIMES = {
   subscriptions: 2 * 60 * 1000, // 2 minutes - subscription status changes occasionally
 
   // ============================================================================
-  // AI Models (SSG-like caching: HTTP cache + client cache)
+  // AI Models (Aggressive caching: HTTP + KV + client cache)
   // ============================================================================
   models: Infinity, // Never auto-refetch - HTTP cache (1h client, 24h CDN) + manual invalidation on tier changes
+  modelsKV: 24 * 3600, // 24 hours KV cache TTL (in seconds for $withCache)
   modelDetail: 5 * 60 * 1000, // 5 minutes - individual model details can change
   providers: 10 * 60 * 1000, // 10 minutes - provider list changes infrequently
 
@@ -61,6 +62,16 @@ export const STALE_TIMES = {
   messages: 10 * 1000, // 10 seconds - messages can be added in real-time
   publicThreadDetail: 24 * 3600 * 1000, // 24 hours - matches ISR cache (1 day)
   publicThreadSlugs: 24 * 3600 * 1000, // 24 hours - matches ISR cache (used for SSG)
+
+  // ============================================================================
+  // KV Cache TTLs (in seconds for $withCache DB-level caching)
+  // ============================================================================
+  threadListKV: 60, // 1 minute - thread list DB cache (fast enough for recent threads)
+  threadDetailKV: 300, // 5 minutes - thread detail DB cache
+  threadMessagesKV: 60, // 1 minute - messages cache when viewing threads
+  publicThreadKV: 3600, // 1 hour - public thread immutable content
+  publicMessagesKV: 3600, // 1 hour - public messages are immutable
+  publicSlugsListKV: 3600, // 1 hour - public slugs list for SSG
 
   // ============================================================================
   // User & Settings (infrequent changes)

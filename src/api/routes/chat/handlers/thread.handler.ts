@@ -47,7 +47,7 @@ import {
 import type { ApiEnv } from '@/api/types';
 import * as tables from '@/db';
 import { getDbAsync } from '@/db';
-import { MessageCacheTags } from '@/db/cache/cache-tags';
+import { MessageCacheTags, PublicSlugsListCacheTags, PublicThreadCacheTags, ThreadCacheTags } from '@/db/cache/cache-tags';
 import type { DbThreadMetadata } from '@/db/schemas/chat-metadata';
 import { isModeChange, isWebSearchChange, safeParseChangelogData } from '@/db/schemas/chat-metadata';
 import type {
@@ -88,16 +88,26 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
       ne(tables.chatThread.status, ThreadStatusSchema.enum.deleted),
     ];
     const fetchLimit = query.search ? 200 : (query.limit + 1);
-    const allThreads = await db.query.chatThread.findMany({
-      where: buildCursorWhereWithFilters(
+
+    // ✅ DB-LEVEL CACHING: Cache thread list queries for faster subsequent loads
+    // Cache key includes user ID for isolation, TTL 60 seconds
+    // Invalidated on thread create/update/delete via invalidateThreadCache()
+    const allThreads = await db
+      .select()
+      .from(tables.chatThread)
+      .where(buildCursorWhereWithFilters(
         tables.chatThread.updatedAt,
         query.cursor,
         'desc',
         filters,
-      ),
-      orderBy: getCursorOrderBy(tables.chatThread.updatedAt, 'desc'),
-      limit: fetchLimit,
-    });
+      ))
+      .orderBy(getCursorOrderBy(tables.chatThread.updatedAt, 'desc'))
+      .limit(fetchLimit)
+      .$withCache({
+        config: { ex: 60 }, // 1 minute cache
+        tag: ThreadCacheTags.list(user.id),
+      });
+
     let threads = allThreads;
     if (query.search && query.search.trim().length > 0) {
       const fuse = new Fuse(allThreads, {
@@ -567,9 +577,20 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
     const user = c.get('user');
     const { id } = c.validated.params;
     const db = await getDbAsync();
-    const thread = await db.query.chatThread.findFirst({
-      where: eq(tables.chatThread.id, id),
-    });
+
+    // ✅ DB-LEVEL CACHING: Cache thread lookup (5 minutes)
+    // Fast retrieval for subsequent visits to the same thread
+    const threadResults = await db
+      .select()
+      .from(tables.chatThread)
+      .where(eq(tables.chatThread.id, id))
+      .limit(1)
+      .$withCache({
+        config: { ex: 300 }, // 5 minutes cache
+        tag: ThreadCacheTags.single(id),
+      });
+    const thread = threadResults[0];
+
     if (!thread) {
       throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', id));
     }
@@ -587,13 +608,20 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
         );
       }
     }
-    const rawParticipants = await db.query.chatParticipant.findMany({
-      where: and(
+
+    // ✅ DB-LEVEL CACHING: Cache participants (5 minutes)
+    const rawParticipants = await db
+      .select()
+      .from(tables.chatParticipant)
+      .where(and(
         eq(tables.chatParticipant.threadId, id),
         eq(tables.chatParticipant.isEnabled, true),
-      ),
-      orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
-    });
+      ))
+      .orderBy(tables.chatParticipant.priority, tables.chatParticipant.id)
+      .$withCache({
+        config: { ex: 300 }, // 5 minutes cache
+        tag: ThreadCacheTags.participants(id),
+      });
 
     // ✅ SUBSCRIPTION ACCESS: Enrich participants with model access info
     // For authenticated users, show which models they can/cannot access
@@ -1286,12 +1314,21 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
   async (c) => {
     const { slug } = c.validated.params;
     const db = await getDbAsync();
-    const thread = await db.query.chatThread.findFirst({
-      where: or(
+
+    // ✅ DB-LEVEL CACHING: Cache public thread lookups (1 hour)
+    const threads = await db
+      .select()
+      .from(tables.chatThread)
+      .where(or(
         eq(tables.chatThread.slug, slug),
         eq(tables.chatThread.previousSlug, slug),
-      ),
-    });
+      ))
+      .limit(1)
+      .$withCache({
+        config: { ex: 3600 }, // 1 hour cache
+        tag: PublicThreadCacheTags.single(slug),
+      });
+    const thread = threads[0];
     if (!thread) {
       throw createError.notFound(
         'Thread not found',
@@ -1318,13 +1355,19 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
         ErrorContextBuilders.resourceNotFound('user', thread.userId),
       );
     }
-    const participants = await db.query.chatParticipant.findMany({
-      where: and(
+    // ✅ DB-LEVEL CACHING: Cache participants for public threads (1 hour)
+    const participants = await db
+      .select()
+      .from(tables.chatParticipant)
+      .where(and(
         eq(tables.chatParticipant.threadId, thread.id),
         eq(tables.chatParticipant.isEnabled, true),
-      ),
-      orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
-    });
+      ))
+      .orderBy(tables.chatParticipant.priority, tables.chatParticipant.id)
+      .$withCache({
+        config: { ex: 3600 }, // 1 hour cache
+        tag: ThreadCacheTags.participants(thread.id),
+      });
     // ✅ CRITICAL FIX: Exclude pre-search messages from messages array
     // Pre-search messages are stored in chat_message table for historical reasons,
     // but they're rendered separately using the pre_search table via PreSearchCard.
@@ -1414,7 +1457,7 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     });
     const preSearches = allPreSearches.filter(ps => completeRounds.has(ps.roundNumber));
 
-    return Responses.ok(c, {
+    const response = Responses.ok(c, {
       thread,
       participants,
       messages,
@@ -1428,6 +1471,14 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
         image: threadOwner.image,
       },
     });
+
+    // ✅ HTTP CACHING: Public threads are immutable once complete
+    // Enable aggressive CDN caching for faster public page loads
+    response.headers.set('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600');
+    response.headers.set('CDN-Cache-Control', 'max-age=86400'); // 24h Cloudflare cache
+    response.headers.set('Vary', 'Accept-Encoding');
+
+    return response;
   },
 );
 
@@ -1435,6 +1486,9 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
  * List Public Thread Slugs Handler
  * Returns all public, active thread slugs for SSG/ISR page generation
  * Used by generateStaticParams in public thread pages
+ *
+ * ✅ AGGRESSIVE CACHING: 1-hour DB cache + 1-hour HTTP cache
+ * This data changes infrequently and is critical for SSG build performance
  */
 export const listPublicThreadSlugsHandler: RouteHandler<typeof listPublicThreadSlugsRoute, ApiEnv> = createHandler(
   {
@@ -1444,22 +1498,32 @@ export const listPublicThreadSlugsHandler: RouteHandler<typeof listPublicThreadS
   async (c) => {
     const db = await getDbAsync();
 
-    const publicThreads = await db.query.chatThread.findMany({
-      where: and(
+    // ✅ DB-LEVEL CACHING: Cache public slugs for 1 hour
+    // Invalidated when thread visibility changes via invalidatePublicThreadCache()
+    const publicThreads = await db
+      .select()
+      .from(tables.chatThread)
+      .where(and(
         eq(tables.chatThread.isPublic, true),
         eq(tables.chatThread.status, ThreadStatusSchema.enum.active),
-      ),
-      columns: {
-        slug: true,
-      },
-      limit: 1000, // Reasonable limit for SSG build time
-    });
+      ))
+      .limit(1000)
+      .$withCache({
+        config: { ex: 3600 }, // 1 hour cache
+        tag: PublicSlugsListCacheTags.list,
+      });
 
     const slugs = publicThreads
       .filter(thread => thread.slug)
-      .map(thread => ({ slug: thread.slug }));
+      .map(thread => ({ slug: thread.slug! }));
 
-    return Responses.ok(c, { slugs });
+    const response = Responses.ok(c, { slugs });
+
+    // ✅ HTTP CACHING: Enable CDN caching for SSG builds
+    response.headers.set('Cache-Control', 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=1800');
+    response.headers.set('CDN-Cache-Control', 'max-age=3600');
+
+    return response;
   },
 );
 

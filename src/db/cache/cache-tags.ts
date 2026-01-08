@@ -95,13 +95,19 @@ export const PublicThreadCacheTags = {
 export const ModelsCacheTags = {
   byTier: (tier: string) => `models-tier-${tier}`,
   static: 'models-static',
+  enrichedResponse: (tier: string) => `models-enriched-${tier}`,
   all: (tier?: string) => {
     const tags: string[] = [ModelsCacheTags.static];
     if (tier) {
-      tags.push(ModelsCacheTags.byTier(tier));
+      tags.push(ModelsCacheTags.byTier(tier), ModelsCacheTags.enrichedResponse(tier));
     }
     return tags;
   },
+} as const;
+
+export const PublicSlugsListCacheTags = {
+  list: 'public-thread-slugs-list',
+  all: () => [PublicSlugsListCacheTags.list, PublicThreadCacheTags.slugsList],
 } as const;
 
 export function getUserSubscriptionCacheTags(
