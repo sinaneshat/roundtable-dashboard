@@ -40,7 +40,11 @@ import {
 import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
-import { filterPresetParticipants, ToastNamespaces } from '@/lib/config/model-presets';
+import {
+  filterPresetParticipants,
+  MODEL_PRESETS,
+  ToastNamespaces,
+} from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { showApiErrorToast, toastManager } from '@/lib/toast';
 import {
@@ -193,11 +197,15 @@ export default function ChatOverviewScreen() {
       .map(m => m.id);
   }, [allEnabledModels]);
 
+  // Get the first preset (Quick Perspectives) for default selection
+  const firstPreset = MODEL_PRESETS[0];
+
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
     if (!preferencesHydrated || accessibleModelIds.length === 0) {
       return [];
     }
 
+    // Use persisted selection if available and valid
     if (persistedModelIds.length > 0) {
       const validIds = persistedModelIds.filter(id => accessibleModelIds.includes(id));
       if (validIds.length > 0) {
@@ -210,6 +218,24 @@ export default function ChatOverviewScreen() {
       }
     }
 
+    // For first-time users: use first preset's models and roles
+    if (firstPreset) {
+      const accessibleSet = new Set(accessibleModelIds);
+      const presetParticipants = firstPreset.modelRoles
+        .filter(mr => accessibleSet.has(mr.modelId))
+        .map((mr, index) => ({
+          id: mr.modelId,
+          modelId: mr.modelId,
+          role: mr.role,
+          priority: index,
+        }));
+
+      if (presetParticipants.length > 0) {
+        return presetParticipants;
+      }
+    }
+
+    // Fallback: first 3 accessible models without roles
     const defaultIds = accessibleModelIds.slice(0, 3);
     if (defaultIds.length > 0) {
       return defaultIds.map((modelId, index) => ({
@@ -230,7 +256,7 @@ export default function ChatOverviewScreen() {
     }
 
     return [];
-  }, [preferencesHydrated, accessibleModelIds, persistedModelIds, defaultModelId]);
+  }, [preferencesHydrated, accessibleModelIds, persistedModelIds, defaultModelId, firstPreset]);
 
   const orderedModels = useOrderedModels({
     selectedParticipants,
@@ -291,9 +317,29 @@ export default function ChatOverviewScreen() {
       && persistedModelIds.length === 0
     ) {
       init.persistedDefaults = true;
-      const defaultIds = accessibleModelIds.slice(0, 3);
-      if (defaultIds.length > 0) {
-        setPersistedModelIds(defaultIds);
+      // Use first preset's model IDs for first-time users
+      if (firstPreset) {
+        const accessibleSet = new Set(accessibleModelIds);
+        const presetModelIds = firstPreset.modelRoles
+          .filter(mr => accessibleSet.has(mr.modelId))
+          .map(mr => mr.modelId);
+        if (presetModelIds.length > 0) {
+          setPersistedModelIds(presetModelIds);
+          // Also persist the preset's mode and web search settings
+          setPersistedMode(firstPreset.mode);
+          setPersistedWebSearch(firstPreset.searchEnabled === true);
+        } else {
+          // Fallback to first 3 accessible models
+          const defaultIds = accessibleModelIds.slice(0, 3);
+          if (defaultIds.length > 0) {
+            setPersistedModelIds(defaultIds);
+          }
+        }
+      } else {
+        const defaultIds = accessibleModelIds.slice(0, 3);
+        if (defaultIds.length > 0) {
+          setPersistedModelIds(defaultIds);
+        }
       }
     }
 
@@ -336,10 +382,14 @@ export default function ChatOverviewScreen() {
       init.participants = true;
       setSelectedParticipants(initialParticipants);
       if (!selectedMode) {
+        // For first-time users, use preset's mode; otherwise use persisted or default
         const modeResult = ChatModeSchema.safeParse(persistedMode);
-        setSelectedMode(modeResult.success ? modeResult.data : getDefaultChatMode());
+        const defaultMode = firstPreset?.mode ?? getDefaultChatMode();
+        setSelectedMode(modeResult.success ? modeResult.data : defaultMode);
       }
-      setEnableWebSearch(persistedWebSearch);
+      // For first-time users, use preset's web search setting
+      const defaultWebSearch = firstPreset?.searchEnabled === true;
+      setEnableWebSearch(persistedWebSearch ?? defaultWebSearch);
     }
 
     if (!init.threadActions) {
@@ -351,6 +401,8 @@ export default function ChatOverviewScreen() {
     accessibleModelIds,
     persistedModelIds.length,
     setPersistedModelIds,
+    setPersistedMode,
+    setPersistedWebSearch,
     syncWithAccessibleModels,
     allEnabledModels,
     modelOrder.length,
@@ -366,6 +418,7 @@ export default function ChatOverviewScreen() {
     persistedWebSearch,
     setEnableWebSearch,
     setThreadActions,
+    firstPreset,
   ]);
 
   useEffect(() => {
