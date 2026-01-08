@@ -1,6 +1,6 @@
 {
   "name": "roundtable",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "private": true,
   "packageManager": "pnpm@10.11.0",
   "description": "Roundtable Dashboard - Watch multiple models debate and brainstorm together",
