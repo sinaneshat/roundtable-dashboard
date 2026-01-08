@@ -1,4 +1,6 @@
-import { Column, Row, Section } from '@react-email/components';
+import { Column } from '@react-email/column';
+import { Row } from '@react-email/row';
+import { Section } from '@react-email/section';
 import type { CSSProperties, ReactNode } from 'react';
 
 import type { EmailSpacing } from '@/api/core/enums';

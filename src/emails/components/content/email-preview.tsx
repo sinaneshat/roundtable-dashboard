@@ -1,4 +1,4 @@
-import { Preview } from '@react-email/components';
+import { Preview } from '@react-email/preview';
 
 type EmailPreviewProps = {
   text: string;

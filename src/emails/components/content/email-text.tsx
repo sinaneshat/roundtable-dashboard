@@ -1,4 +1,4 @@
-import { Text } from '@react-email/components';
+import { Text } from '@react-email/text';
 import type { CSSProperties, ReactNode } from 'react';
 
 import type { EmailColor, EmailTextWeight, TextAlignment } from '@/api/core/enums';

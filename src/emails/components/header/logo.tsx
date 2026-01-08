@@ -1,4 +1,4 @@
-import { Img } from '@react-email/components';
+import { Img } from '@react-email/img';
 
 import { BRAND } from '@/constants';
 import { assets } from '@/emails/design-tokens';

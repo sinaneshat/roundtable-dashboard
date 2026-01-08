@@ -1,6 +1,6 @@
-/* eslint-disable simple-import-sort/imports */
-
-import { Html as EmailHtml, Head, pixelBasedPreset, Tailwind } from '@react-email/components';
+import { Head } from '@react-email/head';
+import { Html as EmailHtml } from '@react-email/html';
+import { pixelBasedPreset, Tailwind } from '@react-email/tailwind';
 import type { ReactNode } from 'react';
 
 type EmailLayoutProps = {

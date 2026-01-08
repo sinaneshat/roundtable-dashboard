@@ -1,6 +1,8 @@
 import 'server-only';
 
-import { render } from '@react-email/components';
+// IMPORTANT: Import render directly from @react-email/render, NOT from @react-email/components
+// The barrel export pulls in shiki (9.8MB) and prettier (256KB) which bloats the bundle
+import { render } from '@react-email/render';
 import { AwsClient } from 'aws4fetch';
 
 import { BRAND } from '@/constants';

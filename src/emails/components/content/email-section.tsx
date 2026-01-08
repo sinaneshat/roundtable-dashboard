@@ -1,4 +1,4 @@
-import { Section } from '@react-email/components';
+import { Section } from '@react-email/section';
 import type { CSSProperties, ReactNode } from 'react';
 
 import type { EmailSpacing, TextAlignment } from '@/api/core/enums';

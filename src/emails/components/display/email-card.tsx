@@ -1,4 +1,4 @@
-import { Section } from '@react-email/components';
+import { Section } from '@react-email/section';
 
 export function EmailCard({ children }: { children: React.ReactNode }) {
   return (
