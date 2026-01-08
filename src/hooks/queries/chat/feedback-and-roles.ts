@@ -14,7 +14,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIME_PRESETS } from '@/lib/data/stale-times';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getCustomRoleService,
   getThreadFeedbackService,
@@ -41,9 +41,12 @@ export function useThreadFeedbackQuery(threadId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.threads.feedback(threadId),
     queryFn: () => getThreadFeedbackService({ param: { id: threadId } }),
-    staleTime: STALE_TIME_PRESETS.medium, // 2 minutes - feedback changes occasionally
+    staleTime: STALE_TIMES.threadFeedback, // Never stale - invalidated only on mutation
     placeholderData: previousData => previousData,
     enabled: isAuthenticated && !!threadId && enabled,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     retry: false,
     throwOnError: false,
   });

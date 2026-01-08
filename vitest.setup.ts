@@ -54,6 +54,9 @@ if (typeof globalThis.require === 'undefined') {
 vi.mock('*.css', () => ({}));
 vi.mock('*.scss', () => ({}));
 
+// Mock server-only - prevents "This module cannot be imported from a Client Component" error in tests
+vi.mock('server-only', () => ({}));
+
 // Polyfill TextDecoder/TextEncoder for streaming tests
 // Node.js and DOM types are compatible at runtime but slightly different in TypeScript
 // Using Object.defineProperty to avoid type mismatch while maintaining runtime compatibility

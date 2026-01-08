@@ -163,18 +163,6 @@ export function PublicPricingScreen() {
             })}
           </div>
 
-          {!isAuthenticated && (
-            <div className="text-center mt-12">
-              <p className="text-muted-foreground mb-4">
-                {t('pricing.alreadyHaveAccount')}
-              </p>
-              <Button asChild variant="outline">
-                <Link href={`/auth/sign-in?redirect=${encodeURIComponent('/chat/pricing')}`}>
-                  {t('auth.signIn.title')}
-                </Link>
-              </Button>
-            </div>
-          )}
         </div>
       </div>
     </ChatPage>

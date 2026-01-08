@@ -57,6 +57,7 @@ export const STALE_TIMES = {
   threadMessages: 5 * 1000, // 5 seconds - messages added in real-time
   threadChangelog: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
   threadModerators: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
+  threadFeedback: Infinity, // Never stale - invalidated only on mutation
   moderators: 30_000, // 30 seconds - round moderators update per round
   preSearch: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (same as summaries)
   messages: 10 * 1000, // 10 seconds - messages can be added in real-time

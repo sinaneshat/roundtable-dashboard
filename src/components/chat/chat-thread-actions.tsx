@@ -68,6 +68,10 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       threadId: thread.id,
       isPublic: true,
       slug,
+    }, {
+      onSuccess: () => {
+        setIsShareDialogOpen(false);
+      },
     });
   };
 

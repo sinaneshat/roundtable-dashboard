@@ -31,7 +31,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const EXPECTED_STALE_TIMES = {
   preSearch: Infinity, // Never auto-refetch
   threadChangelog: Infinity, // Never auto-refetch
-  feedback: 2 * 60 * 1000, // 2 minutes (STALE_TIME_PRESETS.medium)
+  feedback: Infinity, // Never auto-refetch - invalidated only on mutation
 } as const;
 
 /**
@@ -214,24 +214,25 @@ describe('sSR Prefetch - No Client Refetch', () => {
   });
 
   describe('feedback Query', () => {
-    it('should have 2 minute staleTime', () => {
-      expect(EXPECTED_STALE_TIMES.feedback).toBe(2 * 60 * 1000);
+    it('should have Infinity staleTime to prevent auto-refetch', () => {
+      expect(EXPECTED_STALE_TIMES.feedback).toBe(Infinity);
     });
 
     it('should be prefetched on server with matching staleTime', () => {
       /**
-       * ✅ FIX APPLIED: Feedback is now prefetched in page.tsx:
+       * ✅ FIX APPLIED: Feedback now uses Infinity staleTime:
        *
        * queryClient.prefetchQuery({
        *   queryKey: queryKeys.threads.feedback(thread.id),
        *   queryFn: () => getThreadFeedbackService({ param: { id: thread.id } }),
-       *   staleTime: STALE_TIME_PRESETS.medium, // 2 minutes - matches client hook
+       *   staleTime: STALE_TIMES.threadFeedback, // Infinity - never auto-refetch
        * })
        *
        * This prevents the client-side fetch on initial page load.
+       * Invalidation only happens via setRoundFeedbackMutation.
        */
-      const serverStaleTime = 2 * 60 * 1000; // STALE_TIME_PRESETS.medium
-      const clientStaleTime = 2 * 60 * 1000; // STALE_TIME_PRESETS.medium in hook
+      const serverStaleTime = Infinity; // STALE_TIMES.threadFeedback
+      const clientStaleTime = Infinity; // STALE_TIMES.threadFeedback in hook
 
       expect(serverStaleTime).toBe(clientStaleTime);
     });
@@ -579,13 +580,13 @@ describe('stale Time Consistency - Server/Client Match', () => {
     const staleTimeReference = {
       preSearch: 'Infinity - ONE-WAY DATA FLOW pattern',
       threadChangelog: 'Infinity - ONE-WAY DATA FLOW pattern',
-      feedback: '2 minutes - STALE_TIME_PRESETS.medium',
+      feedback: 'Infinity - invalidated only on mutation',
     };
 
     // These should match actual values in stale-times.ts
     expect(staleTimeReference.preSearch).toContain('Infinity');
     expect(staleTimeReference.threadChangelog).toContain('Infinity');
-    expect(staleTimeReference.feedback).toContain('2 minutes');
+    expect(staleTimeReference.feedback).toContain('Infinity');
   });
 });
 

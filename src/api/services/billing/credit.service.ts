@@ -722,6 +722,12 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
   const db = await getDbAsync();
 
   const record = await ensureUserCreditRecord(userId);
+
+  // Skip if already on paid plan (idempotent)
+  if (record.planType === PlanTypes.PAID) {
+    return;
+  }
+
   const planConfig = getPlanConfig(PlanTypes.PAID);
   const now = new Date();
   const nextRefill = new Date(now);
@@ -731,7 +737,8 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     .update(tables.userCreditBalance)
     .set({
       planType: PlanTypes.PAID,
-      balance: sql`${tables.userCreditBalance.balance} + ${planConfig.monthlyCredits}`,
+      // SET to monthlyCredits (not ADD) - everyone gets same amount on upgrade
+      balance: planConfig.monthlyCredits,
       monthlyCredits: planConfig.monthlyCredits,
       lastRefillAt: now,
       nextRefillAt: nextRefill,

@@ -6,7 +6,7 @@ import { BRAND } from '@/constants';
 import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService, getThreadPreSearchesService, getThreadStreamResumptionStateService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
@@ -72,7 +72,7 @@ export default async function ChatThreadPage({
       queryClient.prefetchQuery({
         queryKey: queryKeys.threads.feedback(thread.id),
         queryFn: () => getThreadFeedbackService({ param: { id: thread.id } }),
-        staleTime: STALE_TIME_PRESETS.medium, // ✅ Match client hook staleTime (2 minutes)
+        staleTime: STALE_TIMES.threadFeedback, // ✅ Never stale - invalidated only on mutation
       }),
     ]);
   } catch (error) {

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import type { ConfirmationDialogVariant } from '@/api/core/enums';
 import { ConfirmationDialogVariants } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -59,13 +60,21 @@ export function ConfirmationDialog({
   onCancel,
 }: ConfirmationDialogProps) {
   const handleCancel = () => {
+    if (isLoading)
+      return;
     onCancel?.();
     onOpenChange(false);
   };
 
+  const handleOpenChange = (newOpen: boolean) => {
+    if (isLoading && !newOpen)
+      return;
+    onOpenChange(newOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent showCloseButton={!isLoading}>
         <DialogHeader>
           {icon
             ? (
@@ -96,6 +105,7 @@ export function ConfirmationDialog({
             onClick={onConfirm}
             disabled={isLoading}
             className={cn(variantStyles[variant])}
+            startIcon={isLoading ? <Icons.loader className="size-4 animate-spin" /> : undefined}
           >
             {isLoading && confirmingText ? confirmingText : confirmText}
           </Button>

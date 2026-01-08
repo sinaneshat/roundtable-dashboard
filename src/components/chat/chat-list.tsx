@@ -245,10 +245,10 @@ export function ChatList({
   }, []);
 
   const handleShareDialogClose = useCallback((open: boolean) => {
-    if (!open) {
+    if (!open && !togglePublicMutation.isPending) {
       setChatToShare(null);
     }
-  }, []);
+  }, [togglePublicMutation.isPending]);
 
   const handleMakePublicConfirm = useCallback(() => {
     if (chatToMakePublic) {
@@ -270,18 +270,25 @@ export function ChatList({
   }, [chatToMakePublic, togglePublicMutation]);
 
   const handleMakePublicDialogClose = useCallback((open: boolean) => {
-    if (!open) {
+    if (!open && !togglePublicMutation.isPending) {
       setChatToMakePublic(null);
     }
-  }, []);
+  }, [togglePublicMutation.isPending]);
 
   const handleMakePrivate = useCallback(() => {
     if (chatToShare) {
-      togglePublicMutation.mutate({
-        threadId: chatToShare.id,
-        isPublic: false,
-        slug: chatToShare.slug,
-      });
+      togglePublicMutation.mutate(
+        {
+          threadId: chatToShare.id,
+          isPublic: false,
+          slug: chatToShare.slug,
+        },
+        {
+          onSuccess: () => {
+            setChatToShare(null);
+          },
+        },
+      );
     }
   }, [chatToShare, togglePublicMutation]);
 
@@ -366,11 +373,17 @@ export function ChatList({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('actions.cancel')}</AlertDialogCancel>
+            <AlertDialogCancel disabled={togglePublicMutation.isPending}>
+              {t('actions.cancel')}
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleMakePublicConfirm}
               disabled={togglePublicMutation.isPending}
+              className="gap-2"
             >
+              {togglePublicMutation.isPending && (
+                <Icons.loader className="size-4 animate-spin" />
+              )}
               {togglePublicMutation.isPending ? t('chat.makingPublic') : t('chat.makePublicConfirmAction')}
             </AlertDialogAction>
           </AlertDialogFooter>
