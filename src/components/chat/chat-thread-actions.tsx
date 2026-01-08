@@ -41,13 +41,16 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
 
-  // Track pre-mutation isPublic state for dialog display
-  // This prevents dialog from switching during mutation (optimistic updates affect thread.isPublic)
+  // Local state for confirmed public status - more reliable than mutation state
+  const [confirmedIsPublic, setConfirmedIsPublic] = useState(thread.isPublic);
+
+  // Track pre-mutation value for dialog (prevents view switching during loading)
   const preMutationIsPublicRef = useRef(thread.isPublic);
 
-  // Update ref only when not in a pending state (captures the stable pre-mutation value)
+  // Sync with thread prop when it changes (e.g., from server/cache)
   useEffect(() => {
     if (!togglePublicMutation.isPending) {
+      setConfirmedIsPublic(thread.isPublic);
       preMutationIsPublicRef.current = thread.isPublic;
     }
   }, [thread.isPublic, togglePublicMutation.isPending]);
@@ -58,18 +61,16 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       ? toggleFavoriteMutation.variables.isFavorite
       : thread.isFavorite;
 
-  // For dialog display: use pre-mutation state during pending to prevent premature view switch
-  // Only switch to new state after mutation succeeds
-  const dialogIsPublic = togglePublicMutation.isSuccess && togglePublicMutation.data?.success
-    ? togglePublicMutation.data.data.thread.isPublic
-    : togglePublicMutation.isPending
-      ? preMutationIsPublicRef.current // Stay on current view during loading
-      : thread.isPublic;
+  // For dialog: use pre-mutation value during pending to prevent view switching during loading
+  // After success, use confirmed local state (updated in onSuccess callbacks)
+  const dialogIsPublic = togglePublicMutation.isPending
+    ? preMutationIsPublicRef.current
+    : confirmedIsPublic;
 
-  // For other UI elements (badges, etc): use optimistic updates for better UX
+  // For header badge: use optimistic value during pending for immediate feedback
   const displayIsPublic = togglePublicMutation.isPending && togglePublicMutation.variables
     ? togglePublicMutation.variables.isPublic
-    : dialogIsPublic;
+    : confirmedIsPublic;
 
   const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/public/chat/${slug}`;
 
@@ -86,8 +87,14 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       threadId: thread.id,
       isPublic: true,
       slug,
+    }, {
+      onSuccess: (data) => {
+        if (data?.success) {
+          // Update local state - dialog will switch to share view
+          setConfirmedIsPublic(true);
+        }
+      },
     });
-    // Dialog stays open after success so user sees share options
   };
 
   const handleMakePrivate = () => {
@@ -96,9 +103,12 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       isPublic: false,
       slug,
     }, {
-      onSuccess: () => {
-        // Close dialog after successfully making private
-        setIsShareDialogOpen(false);
+      onSuccess: (data) => {
+        if (data?.success) {
+          // Update local state and close dialog
+          setConfirmedIsPublic(false);
+          setIsShareDialogOpen(false);
+        }
       },
     });
   };
@@ -132,6 +142,14 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     return (
       <TooltipProvider>
         <div className="flex items-center gap-2">
+          {/* Public status indicator */}
+          {displayIsPublic && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+              <Icons.globe className="size-3.5" />
+              <span className="text-xs font-medium">{t('shareDialog.publicStatus')}</span>
+            </div>
+          )}
+
           <Tooltip delayDuration={800}>
             <TooltipTrigger asChild>
               <Button

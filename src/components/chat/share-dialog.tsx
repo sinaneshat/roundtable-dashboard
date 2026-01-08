@@ -12,7 +12,6 @@ import {
 } from 'next-share';
 import { useEffect, useRef, useState } from 'react';
 
-import { ConfirmationDialog } from '@/components/chat/confirmation-dialog';
 import { Icons } from '@/components/icons';
 import {
   Accordion,
@@ -131,7 +130,6 @@ export function ShareDialog({
   const tActions = useTranslations('actions');
 
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
-  const [confirmingPrivate, setConfirmingPrivate] = useState(false);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const baseUrl = getAppBaseUrl();
@@ -165,187 +163,176 @@ export function ShareDialog({
       return;
     }
     if (!newOpen) {
-      setConfirmingPrivate(false);
       setCopySuccess(null);
     }
     onOpenChange(newOpen);
   };
 
-  const handleMakePrivate = () => setConfirmingPrivate(true);
-  const handleConfirmPrivate = () => {
-    onMakePrivate();
-  };
-
-  // Check confirmingPrivate FIRST to maintain dialog state during make-private mutation
-  // (optimistic updates may change isPublic before mutation completes)
-  if (confirmingPrivate) {
-    return (
-      <ConfirmationDialog
-        open={open}
-        onOpenChange={handleOpenChange}
-        title={t('makePrivate')}
-        description={t('shareDialog.privateWarningDescription')}
-        confirmText={t('makePrivate')}
-        confirmingText={t('makingPrivate')}
-        cancelText={tActions('cancel')}
-        isLoading={isLoading}
-        variant="warning"
-        onConfirm={handleConfirmPrivate}
-        onCancel={() => setConfirmingPrivate(false)}
-      />
-    );
-  }
-
-  if (!isPublic) {
-    return (
-      <ConfirmationDialog
-        open={open}
-        onOpenChange={handleOpenChange}
-        title={t('shareThread')}
-        description={t('makePublicConfirmDescription')}
-        confirmText={t('makePublic')}
-        confirmingText={t('makingPublic')}
-        cancelText={tActions('cancel')}
-        isLoading={isLoading}
-        variant="default"
-        onConfirm={onMakePublic}
-      />
-    );
-  }
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="!max-w-2xl !w-[calc(100vw-2.5rem)]" showCloseButton={!isLoading}>
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <DialogTitle className="text-xl">{t('shareThread')}</DialogTitle>
-            <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30">
-              {t('shareDialog.publicStatus')}
-            </Badge>
-          </div>
-          <DialogDescription>{t('shareThreadDescription')}</DialogDescription>
-        </DialogHeader>
+      <DialogContent
+        className={cn(isPublic && '!max-w-2xl !w-[calc(100vw-2.5rem)]')}
+        showCloseButton={!isLoading}
+      >
+        {/* Make Public Confirmation View */}
+        {!isPublic && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{t('shareThread')}</DialogTitle>
+              <DialogDescription>
+                {t('makePublicConfirmDescription')}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+                {tActions('cancel')}
+              </Button>
+              <Button
+                onClick={onMakePublic}
+                disabled={isLoading}
+                startIcon={isLoading ? <Icons.loader className="size-4 animate-spin" /> : undefined}
+              >
+                {isLoading ? t('makingPublic') : t('makePublic')}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
 
-        <div className="flex flex-col gap-4">
-          {/* Share Link Section */}
-          <div className="space-y-3">
-            <div className="text-sm font-medium">
-              {t('shareDialog.copyLinkLabel')}
-            </div>
-            {/* Mobile: stack vertically, Desktop: horizontal */}
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative flex-1">
-                <Input
-                  readOnly
-                  value={shareUrl}
-                  className="h-11 sm:h-10 w-full pr-11 sm:pr-9 font-mono text-sm bg-muted/50"
-                  onClick={e => e.currentTarget.select()}
-                />
-                <button
-                  type="button"
-                  onClick={() => handleCopy(shareUrl, 'link')}
-                  className={cn(
-                    'absolute right-0 top-0 flex h-11 sm:h-10 w-11 sm:w-9 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground',
-                    copySuccess === 'link' && 'text-green-500 hover:text-green-500',
-                  )}
-                >
-                  {copySuccess === 'link' ? <Icons.check className="size-5 sm:size-4" /> : <Icons.copy className="size-5 sm:size-4" />}
-                </button>
+        {/* Share View (thread is public) */}
+        {isPublic && (
+          <>
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <DialogTitle className="text-xl">{t('shareThread')}</DialogTitle>
+                <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30">
+                  {t('shareDialog.publicStatus')}
+                </Badge>
               </div>
-              <div className="flex gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="h-11 sm:h-10 flex-1 sm:flex-none" startIcon={<Icons.share className="size-4" />}>
-                      {t('shareDialog.shareOn')}
+              <DialogDescription>{t('shareThreadDescription')}</DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-4">
+              {/* Share Link Section */}
+              <div className="space-y-3">
+                <div className="text-sm font-medium">
+                  {t('shareDialog.copyLinkLabel')}
+                </div>
+                {/* Mobile: stack vertically, Desktop: horizontal */}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="relative flex-1">
+                    <Input
+                      readOnly
+                      value={shareUrl}
+                      className="h-11 sm:h-10 w-full pr-11 sm:pr-9 font-mono text-sm bg-muted/50"
+                      onClick={e => e.currentTarget.select()}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(shareUrl, 'link')}
+                      className={cn(
+                        'absolute right-0 top-0 flex h-11 sm:h-10 w-11 sm:w-9 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground',
+                        copySuccess === 'link' && 'text-green-500 hover:text-green-500',
+                      )}
+                    >
+                      {copySuccess === 'link' ? <Icons.check className="size-5 sm:size-4" /> : <Icons.copy className="size-5 sm:size-4" />}
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="h-11 sm:h-10 flex-1 sm:flex-none" startIcon={<Icons.share className="size-4" />}>
+                          {t('shareDialog.shareOn')}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-56 p-1">
+                        <div className="flex flex-col">
+                          {SOCIAL_PLATFORMS.map(({ id, name, Component }) => (
+                            <Component key={id} url={shareUrl} title={shareTitle} blankTarget>
+                              <div
+                                className="focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-center gap-2 rounded-xl px-2 py-2.5 text-sm outline-none transition-colors [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+                              >
+                                {SOCIAL_ICONS[id]}
+                                <span>{name}</span>
+                              </div>
+                            </Component>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    <Button variant="outline" size="icon" className="size-11 sm:size-10 shrink-0" onClick={() => window.open(shareUrl, '_blank')}>
+                      <Icons.externalLink className="size-5 sm:size-4" />
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-56 p-1">
-                    <div className="flex flex-col">
-                      {SOCIAL_PLATFORMS.map(({ id, name, Component }) => (
-                        <Component key={id} url={shareUrl} title={shareTitle} blankTarget>
-                          <div
-                            className="focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-center gap-2 rounded-xl px-2 py-2.5 text-sm outline-none transition-colors [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-                          >
-                            {SOCIAL_ICONS[id]}
-                            <span>{name}</span>
-                          </div>
-                        </Component>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                <Button variant="outline" size="icon" className="size-11 sm:size-10 shrink-0" onClick={() => window.open(shareUrl, '_blank')}>
-                  <Icons.externalLink className="size-5 sm:size-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Preview Card - contained to prevent overflow */}
-          <div className="py-2">
-            <CometCard className="overflow-hidden">
-              <div className="rounded-2xl bg-zinc-900 p-1">
-                <SmartImage
-                  src={ogImageUrl}
-                  alt="Thread preview"
-                  aspectRatio="1200/630"
-                  unoptimized
-                  containerClassName="rounded-xl overflow-hidden"
-                />
-              </div>
-            </CometCard>
-          </div>
-
-          {/* Embed Options Accordion */}
-          <Accordion type="single" collapsible className="w-full rounded-xl border border-border">
-            <AccordionItem value="embed" className="border-0">
-              <AccordionTrigger className="px-4 hover:no-underline">
-                <div className="flex items-center gap-3">
-                  <Icons.code className="size-4 text-muted-foreground" />
-                  <div className="flex flex-col items-start gap-1">
-                    <span className="text-sm font-medium">{t('shareDialog.embedOptionsLabel')}</span>
-                    <span className="text-xs font-normal text-muted-foreground">
-                      {t('shareDialog.embedOptionsDescription')}
-                    </span>
                   </div>
                 </div>
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pb-4">
-                <Tabs defaultValue="html" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="html">{t('shareDialog.embedFormat.html')}</TabsTrigger>
-                    <TabsTrigger value="markdown">{t('shareDialog.embedFormat.markdown')}</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="html" className="mt-4">
-                    <CodeSnippet
-                      code={embedHtml}
-                      onCopy={() => handleCopy(embedHtml, 'html')}
-                      copied={copySuccess === 'html'}
-                    />
-                  </TabsContent>
-                  <TabsContent value="markdown" className="mt-4">
-                    <CodeSnippet
-                      code={embedMarkdown}
-                      onCopy={() => handleCopy(embedMarkdown, 'markdown')}
-                      copied={copySuccess === 'markdown'}
-                    />
-                  </TabsContent>
-                </Tabs>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
+              </div>
 
-        <DialogFooter className="mt-2">
-          <Button
-            onClick={handleMakePrivate}
-            disabled={isLoading}
-            className="w-full sm:w-auto h-11 sm:h-10 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
-            startIcon={isLoading ? <Icons.loader className="size-4 animate-spin" /> : <Icons.lock className="size-4" />}
-          >
-            {isLoading ? t('makingPrivate') : t('makePrivate')}
-          </Button>
-        </DialogFooter>
+              {/* Preview Card - contained to prevent overflow */}
+              <div className="py-2">
+                <CometCard className="overflow-hidden">
+                  <div className="rounded-2xl bg-zinc-900 p-1">
+                    <SmartImage
+                      src={ogImageUrl}
+                      alt="Thread preview"
+                      aspectRatio="1200/630"
+                      unoptimized
+                      containerClassName="rounded-xl overflow-hidden"
+                    />
+                  </div>
+                </CometCard>
+              </div>
+
+              {/* Embed Options Accordion */}
+              <Accordion type="single" collapsible className="w-full rounded-xl border border-border">
+                <AccordionItem value="embed" className="border-0">
+                  <AccordionTrigger className="px-4 hover:no-underline">
+                    <div className="flex items-center gap-3">
+                      <Icons.code className="size-4 text-muted-foreground" />
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="text-sm font-medium">{t('shareDialog.embedOptionsLabel')}</span>
+                        <span className="text-xs font-normal text-muted-foreground">
+                          {t('shareDialog.embedOptionsDescription')}
+                        </span>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    <Tabs defaultValue="html" className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="html">{t('shareDialog.embedFormat.html')}</TabsTrigger>
+                        <TabsTrigger value="markdown">{t('shareDialog.embedFormat.markdown')}</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="html" className="mt-4">
+                        <CodeSnippet
+                          code={embedHtml}
+                          onCopy={() => handleCopy(embedHtml, 'html')}
+                          copied={copySuccess === 'html'}
+                        />
+                      </TabsContent>
+                      <TabsContent value="markdown" className="mt-4">
+                        <CodeSnippet
+                          code={embedMarkdown}
+                          onCopy={() => handleCopy(embedMarkdown, 'markdown')}
+                          copied={copySuccess === 'markdown'}
+                        />
+                      </TabsContent>
+                    </Tabs>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+
+            <DialogFooter className="mt-2">
+              <Button
+                onClick={onMakePrivate}
+                disabled={isLoading}
+                className="w-full sm:w-auto h-11 sm:h-10 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                startIcon={isLoading ? <Icons.loader className="size-4 animate-spin" /> : <Icons.lock className="size-4" />}
+              >
+                {isLoading ? t('makingPrivate') : t('makePrivate')}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
