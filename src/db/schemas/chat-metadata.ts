@@ -188,11 +188,11 @@ export type DbToolCalls = z.infer<typeof DbToolCallsSchema>;
 
 /**
  * Model Role Entry Schema
- * Single model-role pair in user presets
+ * Single model-role pair in user presets (role is optional)
  */
 export const DbModelRoleEntrySchema = z.object({
   modelId: z.string(),
-  role: z.string(),
+  role: z.string().nullish(),
 });
 
 export type DbModelRoleEntry = z.infer<typeof DbModelRoleEntrySchema>;

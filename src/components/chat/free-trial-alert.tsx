@@ -27,7 +27,7 @@ type TrialState = 'available' | 'used';
 export function FreeTrialAlert() {
   const t = useTranslations();
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
-  const { data: threadsData, isLoading: isLoadingThreads } = useThreadsQuery();
+  const { data: threadsData } = useThreadsQuery();
   const messages = useChatStore(state => state.messages);
   const hasLocalMessages = messages.length > 0;
 
@@ -61,9 +61,10 @@ export function FreeTrialAlert() {
     return plan?.type !== PlanTypes.PAID;
   }, [statsData]);
 
-  const isLoading = isLoadingStats || isLoadingThreads;
-
-  if (isLoading || !shouldShow) {
+  // Only wait for stats to load - threads loading shouldn't block the alert
+  // The alert's visibility (shouldShow) depends only on usage stats
+  // The message state (trialState) will update when threads data arrives
+  if (isLoadingStats || !shouldShow) {
     return null;
   }
 

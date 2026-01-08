@@ -695,8 +695,8 @@ export const UserPresetModelRoleSchema = z.object({
     description: 'Model ID (e.g., anthropic/claude-3.5-sonnet)',
     example: 'anthropic/claude-3.5-sonnet',
   }),
-  role: z.string().min(1).max(100).openapi({
-    description: 'Role name for this model in the preset',
+  role: z.string().max(100).nullish().openapi({
+    description: 'Optional role name for this model in the preset',
     example: 'The Ideator',
   }),
 }).openapi('UserPresetModelRole');

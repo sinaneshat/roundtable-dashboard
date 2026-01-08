@@ -53,6 +53,7 @@ import { isModeChange, isWebSearchChange, safeParseChangelogData } from '@/db/sc
 import type {
   ChatCustomRole,
 } from '@/db/validation';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { sortByPriority } from '@/lib/utils';
 
@@ -104,7 +105,7 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
       .orderBy(getCursorOrderBy(tables.chatThread.updatedAt, 'desc'))
       .limit(fetchLimit)
       .$withCache({
-        config: { ex: 60 }, // 1 minute cache
+        config: { ex: STALE_TIMES.threadListKV }, // 2 minutes cache
         tag: ThreadCacheTags.list(user.id),
       });
 
@@ -126,6 +127,10 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
       query.limit,
       thread => createTimestampCursor(thread.updatedAt),
     );
+
+    // ✅ PERF: Cache sidebar thread list for faster navigation
+    c.header('Cache-Control', 'private, max-age=60, stale-while-revalidate=120');
+
     return Responses.cursorPaginated(c, items, pagination);
   },
 );
@@ -586,7 +591,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       .where(eq(tables.chatThread.id, id))
       .limit(1)
       .$withCache({
-        config: { ex: 300 }, // 5 minutes cache
+        config: { ex: STALE_TIMES.threadDetailKV }, // 5 minutes cache
         tag: ThreadCacheTags.single(id),
       });
     const thread = threadResults[0];
@@ -609,7 +614,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       }
     }
 
-    // ✅ DB-LEVEL CACHING: Cache participants (5 minutes)
+    // ✅ DB-LEVEL CACHING: Cache participants (10 minutes - rarely change)
     const rawParticipants = await db
       .select()
       .from(tables.chatParticipant)
@@ -619,7 +624,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       ))
       .orderBy(tables.chatParticipant.priority, tables.chatParticipant.id)
       .$withCache({
-        config: { ex: 300 }, // 5 minutes cache
+        config: { ex: STALE_TIMES.threadParticipantsKV }, // 10 minutes - participants rarely change
         tag: ThreadCacheTags.participants(id),
       });
 
@@ -654,7 +659,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
         asc(tables.chatMessage.id),
       )
       .$withCache({
-        config: { ex: 5 }, // 5 seconds - matches STALE_TIMES.threadMessages
+        config: { ex: STALE_TIMES.threadMessagesKV }, // 5 minutes - messages immutable
         tag: MessageCacheTags.byThread(id),
       });
     const changelog = await db.query.chatThreadChangelog.findMany({
@@ -1591,7 +1596,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
         asc(tables.chatMessage.id),
       )
       .$withCache({
-        config: { ex: 5 }, // 5 seconds - matches STALE_TIMES.threadMessages
+        config: { ex: STALE_TIMES.threadMessagesKV }, // 5 minutes - messages are immutable
         tag: MessageCacheTags.byThread(thread.id),
       });
 
@@ -1695,6 +1700,10 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       tier: userTier,
       tier_name: SUBSCRIPTION_TIER_NAMES[userTier],
     };
+
+    // ✅ PERF: Add cache headers for faster navigation
+    // private = browser cache only (not CDN), stale-while-revalidate for instant loads
+    c.header('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
 
     return Responses.ok(c, {
       thread,

@@ -44,32 +44,33 @@ export const STALE_TIMES = {
   providers: 10 * 60 * 1000, // 10 minutes - provider list changes infrequently
 
   // ============================================================================
-  // Usage & Quota (change frequently)
+  // Usage & Quota (invalidated after mutations, longer cache OK)
   // ============================================================================
-  usage: 60 * 1000, // 1 minute - usage stats update frequently
-  quota: 10 * 1000, // 10 seconds - quota checks need to be fresh for UI blocking
+  usage: 2 * 60 * 1000, // 2 minutes - invalidated after chat operations
+  quota: 2 * 60 * 1000, // 2 minutes - invalidated after messages/upgrades, no need for polling
 
   // ============================================================================
-  // Chat & Messages (real-time data)
+  // Chat & Messages (optimized for navigation speed)
   // ============================================================================
-  threads: 30 * 1000, // 30 seconds - threads list updated when new thread created
-  threadDetail: 10 * 1000, // 10 seconds - thread detail refreshed on each visit
-  threadMessages: 5 * 1000, // 5 seconds - messages added in real-time
+  threads: 60 * 1000, // 1 minute - sidebar list, invalidated on mutations
+  threadDetail: 2 * 60 * 1000, // 2 minutes - thread metadata rarely changes, instant nav
+  threadMessages: 2 * 60 * 1000, // 2 minutes - messages are immutable once created
   threadChangelog: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
   threadModerators: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
   threadFeedback: Infinity, // Never stale - invalidated only on mutation
-  moderators: 30_000, // 30 seconds - round moderators update per round
+  moderators: 2 * 60 * 1000, // 2 minutes - moderators per round
   preSearch: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (same as summaries)
-  messages: 10 * 1000, // 10 seconds - messages can be added in real-time
+  messages: 2 * 60 * 1000, // 2 minutes - messages immutable, new ones added via streaming
   publicThreadDetail: 24 * 3600 * 1000, // 24 hours - matches ISR cache (1 day)
   publicThreadSlugs: 24 * 3600 * 1000, // 24 hours - matches ISR cache (used for SSG)
 
   // ============================================================================
   // KV Cache TTLs (in seconds for $withCache DB-level caching)
   // ============================================================================
-  threadListKV: 60, // 1 minute - thread list DB cache (fast enough for recent threads)
+  threadListKV: 120, // 2 minutes - thread list DB cache
   threadDetailKV: 300, // 5 minutes - thread detail DB cache
-  threadMessagesKV: 60, // 1 minute - messages cache when viewing threads
+  threadMessagesKV: 300, // 5 minutes - messages immutable, fast load on nav
+  threadParticipantsKV: 600, // 10 minutes - participants rarely change
   publicThreadKV: 3600, // 1 hour - public thread immutable content
   publicMessagesKV: 3600, // 1 hour - public messages are immutable
   publicSlugsListKV: 3600, // 1 hour - public slugs list for SSG

@@ -12,7 +12,7 @@ import { getProviderIcon, getRoleColors } from '@/lib/utils';
 
 type ModelAvatarWithRoleProps = {
   model: EnhancedModelResponse;
-  role: string;
+  role?: string | null;
   size?: AvatarSize;
 };
 
@@ -21,8 +21,8 @@ export function ModelAvatarWithRole({
   role,
   size = DEFAULT_AVATAR_SIZE,
 }: ModelAvatarWithRoleProps) {
-  const shortRole = getShortRoleName(role);
-  const roleColors = useMemo(() => getRoleColors(shortRole), [shortRole]);
+  const shortRole = role ? getShortRoleName(role) : null;
+  const roleColors = useMemo(() => getRoleColors(shortRole ?? ''), [shortRole]);
   const sizeMetadata = AvatarSizeMetadata[size];
 
   const cssVars = useMemo(() => ({
@@ -41,11 +41,13 @@ export function ModelAvatarWithRole({
           {model.name.slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
-      <span
-        className={cn(sizeMetadata.text, 'font-medium leading-none text-[var(--role-icon-color)]')}
-      >
-        {shortRole}
-      </span>
+      {shortRole && (
+        <span
+          className={cn(sizeMetadata.text, 'font-medium leading-none text-[var(--role-icon-color)]')}
+        >
+          {shortRole}
+        </span>
+      )}
     </div>
   );
 }

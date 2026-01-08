@@ -20,7 +20,7 @@ import { toastManager } from '@/lib/toast';
 
 export const PresetModelRoleSchema = z.object({
   modelId: z.string().min(1),
-  role: z.string().min(1),
+  role: z.string().nullish(),
 });
 
 export type PresetModelRole = z.infer<typeof PresetModelRoleSchema>;

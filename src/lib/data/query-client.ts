@@ -33,6 +33,10 @@ function makeQueryClient() {
         // above 0 to avoid refetching immediately on the client
         staleTime: 60 * 1000, // 60 seconds - official recommended value
 
+        // ✅ CACHE RETENTION: Keep inactive queries in cache for 10 minutes
+        // Default is 5 minutes - extending for faster sidebar navigation
+        gcTime: 10 * 60 * 1000, // 10 minutes - prevents garbage collection on nav
+
         // ✅ STREAMING PROTECTION: Disable aggressive refetch behaviors globally
         // These can be overridden per-query if needed
         refetchOnWindowFocus: false,

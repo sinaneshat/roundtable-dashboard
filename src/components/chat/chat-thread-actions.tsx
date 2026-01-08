@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ComponentSizes, ComponentVariants } from '@/api/core/enums';
 import type { ChatThread, ChatThreadFlexible } from '@/api/routes/chat/schema';
@@ -41,17 +41,35 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
 
+  // Track pre-mutation isPublic state for dialog display
+  // This prevents dialog from switching during mutation (optimistic updates affect thread.isPublic)
+  const preMutationIsPublicRef = useRef(thread.isPublic);
+
+  // Update ref only when not in a pending state (captures the stable pre-mutation value)
+  useEffect(() => {
+    if (!togglePublicMutation.isPending) {
+      preMutationIsPublicRef.current = thread.isPublic;
+    }
+  }, [thread.isPublic, togglePublicMutation.isPending]);
+
   const displayIsFavorite = toggleFavoriteMutation.isSuccess && toggleFavoriteMutation.data?.success
     ? toggleFavoriteMutation.data.data.thread.isFavorite
     : toggleFavoriteMutation.isPending && toggleFavoriteMutation.variables
       ? toggleFavoriteMutation.variables.isFavorite
       : thread.isFavorite;
 
-  const displayIsPublic = togglePublicMutation.isSuccess && togglePublicMutation.data?.success
+  // For dialog display: use pre-mutation state during pending to prevent premature view switch
+  // Only switch to new state after mutation succeeds
+  const dialogIsPublic = togglePublicMutation.isSuccess && togglePublicMutation.data?.success
     ? togglePublicMutation.data.data.thread.isPublic
-    : togglePublicMutation.isPending && togglePublicMutation.variables
-      ? togglePublicMutation.variables.isPublic
+    : togglePublicMutation.isPending
+      ? preMutationIsPublicRef.current // Stay on current view during loading
       : thread.isPublic;
+
+  // For other UI elements (badges, etc): use optimistic updates for better UX
+  const displayIsPublic = togglePublicMutation.isPending && togglePublicMutation.variables
+    ? togglePublicMutation.variables.isPublic
+    : dialogIsPublic;
 
   const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/public/chat/${slug}`;
 
@@ -162,7 +180,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
             onOpenChange={setIsShareDialogOpen}
             slug={slug}
             threadTitle={thread.title}
-            isPublic={displayIsPublic}
+            isPublic={dialogIsPublic}
             isLoading={togglePublicMutation.isPending}
             onMakePublic={handleMakePublic}
             onMakePrivate={handleMakePrivate}
@@ -217,7 +235,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
           onOpenChange={setIsShareDialogOpen}
           slug={slug}
           threadTitle={thread.title}
-          isPublic={displayIsPublic}
+          isPublic={dialogIsPublic}
           isLoading={togglePublicMutation.isPending}
           onMakePublic={handleMakePublic}
           onMakePrivate={handleMakePrivate}

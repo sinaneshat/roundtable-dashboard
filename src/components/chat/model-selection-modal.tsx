@@ -304,18 +304,9 @@ export function ModelSelectionModal({
       return;
     }
 
-    const modelsWithoutRoles = selectedModels.filter(om => !om.participant?.role?.trim());
-    if (modelsWithoutRoles.length > 0) {
-      toastManager.error(
-        tModels('presets.cannotSave'),
-        tModels('presets.rolesRequired', { count: modelsWithoutRoles.length }),
-      );
-      return;
-    }
-
     const modelRoles = selectedModels.map(om => ({
       modelId: om.model.id,
-      role: om.participant?.role ?? '',
+      role: om.participant?.role || null,
     }));
 
     try {
@@ -352,18 +343,9 @@ export function ModelSelectionModal({
       return;
     }
 
-    const modelsWithoutRoles = selectedModels.filter(om => !om.participant?.role?.trim());
-    if (modelsWithoutRoles.length > 0) {
-      toastManager.error(
-        tModels('presets.cannotSave'),
-        tModels('presets.rolesRequired', { count: modelsWithoutRoles.length }),
-      );
-      return;
-    }
-
     const modelRoles = selectedModels.map(om => ({
       modelId: om.model.id,
-      role: om.participant?.role ?? '',
+      role: om.participant?.role || null,
     }));
 
     const existingPreset = userPresets.find(p => p.id === editingPresetId);
@@ -435,17 +417,13 @@ export function ModelSelectionModal({
 
   const presetValidation = useMemo(() => {
     const selectedModels = orderedModels.filter(om => om.participant !== null);
-    const modelsWithoutRoles = selectedModels.filter(om => !om.participant?.role?.trim());
 
     return {
       hasSelectedModels: selectedModels.length > 0,
-      modelsWithoutRoles,
-      canSave: selectedModels.length > 0 && modelsWithoutRoles.length === 0,
+      canSave: selectedModels.length > 0,
       errorMessage: selectedModels.length === 0
         ? tModels('modal.selectAtLeastOneModel')
-        : modelsWithoutRoles.length > 0
-          ? tModels('presets.rolesRequired', { count: modelsWithoutRoles.length })
-          : null,
+        : null,
     };
   }, [orderedModels, tModels]);
 

@@ -36,6 +36,10 @@ export const getUserUsageStatsHandler: RouteHandler<
 
     const stats = await getUserUsageStats(user.id);
 
+    // ✅ PERF: Cache stats for 2 minutes, stale-while-revalidate for 5 minutes
+    // Invalidated after mutations (message send, plan change)
+    c.header('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
+
     return Responses.ok(c, stats);
   },
 );
