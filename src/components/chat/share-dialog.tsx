@@ -160,6 +160,10 @@ export function ShareDialog({
   };
 
   const handleOpenChange = (newOpen: boolean) => {
+    // Prevent closing dialog while mutation is in progress
+    if (isLoading && !newOpen) {
+      return;
+    }
     if (!newOpen) {
       setConfirmingPrivate(false);
       setCopySuccess(null);
@@ -172,23 +176,8 @@ export function ShareDialog({
     onMakePrivate();
   };
 
-  if (!isPublic) {
-    return (
-      <ConfirmationDialog
-        open={open}
-        onOpenChange={handleOpenChange}
-        title={t('shareThread')}
-        description={t('makePublicConfirmDescription')}
-        confirmText={t('makePublic')}
-        confirmingText={t('makingPublic')}
-        cancelText={tActions('cancel')}
-        isLoading={isLoading}
-        variant="default"
-        onConfirm={onMakePublic}
-      />
-    );
-  }
-
+  // Check confirmingPrivate FIRST to maintain dialog state during make-private mutation
+  // (optimistic updates may change isPublic before mutation completes)
   if (confirmingPrivate) {
     return (
       <ConfirmationDialog
@@ -207,9 +196,26 @@ export function ShareDialog({
     );
   }
 
+  if (!isPublic) {
+    return (
+      <ConfirmationDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        title={t('shareThread')}
+        description={t('makePublicConfirmDescription')}
+        confirmText={t('makePublic')}
+        confirmingText={t('makingPublic')}
+        cancelText={tActions('cancel')}
+        isLoading={isLoading}
+        variant="default"
+        onConfirm={onMakePublic}
+      />
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="!max-w-2xl !w-[calc(100vw-2.5rem)]">
+      <DialogContent className="!max-w-2xl !w-[calc(100vw-2.5rem)]" showCloseButton={!isLoading}>
         <DialogHeader>
           <div className="flex items-center gap-3">
             <DialogTitle className="text-xl">{t('shareThread')}</DialogTitle>
@@ -333,10 +339,11 @@ export function ShareDialog({
         <DialogFooter className="mt-2">
           <Button
             onClick={handleMakePrivate}
-            className="w-full sm:w-auto h-11 sm:h-10 bg-amber-600 text-white hover:bg-amber-700"
-            startIcon={<Icons.lock className="size-4" />}
+            disabled={isLoading}
+            className="w-full sm:w-auto h-11 sm:h-10 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+            startIcon={isLoading ? <Icons.loader className="size-4 animate-spin" /> : <Icons.lock className="size-4" />}
           >
-            {t('makePrivate')}
+            {isLoading ? t('makingPrivate') : t('makePrivate')}
           </Button>
         </DialogFooter>
       </DialogContent>

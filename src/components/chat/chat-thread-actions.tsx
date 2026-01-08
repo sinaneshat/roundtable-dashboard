@@ -68,11 +68,8 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       threadId: thread.id,
       isPublic: true,
       slug,
-    }, {
-      onSuccess: () => {
-        setIsShareDialogOpen(false);
-      },
     });
+    // Dialog stays open after success so user sees share options
   };
 
   const handleMakePrivate = () => {
@@ -80,6 +77,11 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       threadId: thread.id,
       isPublic: false,
       slug,
+    }, {
+      onSuccess: () => {
+        // Close dialog after successfully making private
+        setIsShareDialogOpen(false);
+      },
     });
   };
 

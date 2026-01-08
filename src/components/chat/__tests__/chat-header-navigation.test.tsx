@@ -13,13 +13,22 @@
  * - Header logic doesn't properly check for known static routes
  */
 
-import { usePathname } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useCurrentPathname } from '@/hooks/utils';
 import { render, screen } from '@/lib/testing';
 
 import { NavigationHeader } from '../chat-header';
 import { ChatHeaderSwitch } from '../chat-header-switch';
+
+// Mock useCurrentPathname hook (used instead of next/navigation's usePathname for history API support)
+vi.mock('@/hooks/utils', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/hooks/utils')>();
+  return {
+    ...original,
+    useCurrentPathname: vi.fn(() => '/chat'),
+  };
+});
 
 // Mock useSidebar hook
 vi.mock('@/components/ui/sidebar', async (importOriginal) => {
@@ -76,7 +85,7 @@ describe('chatHeaderSwitch - navigation bug', () => {
 
   describe('overview page without active thread', () => {
     it('shows MinimalHeader on /chat with no active thread', () => {
-      vi.mocked(usePathname).mockReturnValue('/chat');
+      vi.mocked(useCurrentPathname).mockReturnValue('/chat');
 
       render(<ChatHeaderSwitch />);
 
@@ -90,7 +99,7 @@ describe('chatHeaderSwitch - navigation bug', () => {
 
   describe('thread created from overview', () => {
     it('shows NavigationHeader when thread is created but URL is still /chat', () => {
-      vi.mocked(usePathname).mockReturnValue('/chat');
+      vi.mocked(useCurrentPathname).mockReturnValue('/chat');
 
       // Simulate thread creation - store state has thread data
       mockStoreState.showInitialUI = false;
@@ -110,7 +119,7 @@ describe('chatHeaderSwitch - navigation bug', () => {
 
   describe('bUG: navigating away preserves thread header', () => {
     it('should show pricing page header on /chat/pricing, NOT thread header', () => {
-      vi.mocked(usePathname).mockReturnValue('/chat/pricing');
+      vi.mocked(useCurrentPathname).mockReturnValue('/chat/pricing');
 
       // BUG SCENARIO: Store still has thread state from previous page
       mockStoreState.showInitialUI = false;
@@ -132,7 +141,7 @@ describe('chatHeaderSwitch - navigation bug', () => {
     });
 
     it('breadcrumb should show "Pricing" on /chat/pricing, not thread title', () => {
-      vi.mocked(usePathname).mockReturnValue('/chat/pricing');
+      vi.mocked(useCurrentPathname).mockReturnValue('/chat/pricing');
 
       // Store has stale thread state
       mockStoreState.showInitialUI = false;
@@ -160,7 +169,7 @@ describe('navigationHeader - static routes detection', () => {
   });
 
   it('shows correct breadcrumb for /chat/pricing even with stale thread state', () => {
-    vi.mocked(usePathname).mockReturnValue('/chat/pricing');
+    vi.mocked(useCurrentPathname).mockReturnValue('/chat/pricing');
 
     // Stale thread state from previous navigation
     mockStoreState.showInitialUI = false;
@@ -183,7 +192,7 @@ describe('navigationHeader - static routes detection', () => {
   });
 
   it('correctly identifies /chat/pricing as not a thread page', () => {
-    vi.mocked(usePathname).mockReturnValue('/chat/pricing');
+    vi.mocked(useCurrentPathname).mockReturnValue('/chat/pricing');
 
     render(<NavigationHeader />);
 
@@ -194,7 +203,7 @@ describe('navigationHeader - static routes detection', () => {
   });
 
   it('correctly identifies /chat/some-thread-slug as a thread page', () => {
-    vi.mocked(usePathname).mockReturnValue('/chat/some-thread-slug');
+    vi.mocked(useCurrentPathname).mockReturnValue('/chat/some-thread-slug');
 
     mockStoreState.showInitialUI = false;
     mockStoreState.thread = {
@@ -219,7 +228,7 @@ describe('hasActiveThread logic edge cases', () => {
   });
 
   it('hasActiveThread should be false on static routes like /chat/pricing', () => {
-    vi.mocked(usePathname).mockReturnValue('/chat/pricing');
+    vi.mocked(useCurrentPathname).mockReturnValue('/chat/pricing');
 
     // Even with stale store state
     mockStoreState.showInitialUI = false;
@@ -234,7 +243,7 @@ describe('hasActiveThread logic edge cases', () => {
   });
 
   it('hasActiveThread should be true only on /chat with actual thread state', () => {
-    vi.mocked(usePathname).mockReturnValue('/chat');
+    vi.mocked(useCurrentPathname).mockReturnValue('/chat');
 
     mockStoreState.showInitialUI = false;
     mockStoreState.createdThreadId = 'active-thread';

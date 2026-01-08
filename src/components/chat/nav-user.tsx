@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
@@ -232,6 +233,12 @@ export function NavUser({ initialSession }: NavUserProps) {
                 <DropdownMenuItem onClick={showApiKeysModal.onTrue}>
                   <Icons.key />
                   API Keys
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/chat/pricing">
+                    <Icons.sparkles />
+                    {t('navigation.pricing')}
+                  </Link>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               {activeSubscription && (

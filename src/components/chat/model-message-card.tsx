@@ -7,11 +7,13 @@ import { useShallow } from 'zustand/react/shallow';
 import type { MessageStatus } from '@/api/core/enums';
 import { MessagePartTypes, MessageStatuses, TextPartStates } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
+import { Actions } from '@/components/ai-elements/actions';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { CitedMessageContent } from '@/components/chat/cited-message-content';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
+import { MessageCopyAction } from '@/components/chat/message-copy-action';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { MessageSources } from '@/components/chat/message-sources';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
@@ -76,6 +78,8 @@ type ModelMessageCardProps = {
   isAccessible?: boolean;
   hideInlineHeader?: boolean;
   hideAvatar?: boolean;
+  /** Hide the copy action (used for moderator where council actions handle it) */
+  hideActions?: boolean;
   /** Custom loading text to display instead of "Generating response from {model}..." */
   loadingText?: string;
   /** Max height for scrollable content area. When set, wraps content in ScrollArea */
@@ -97,6 +101,7 @@ export const ModelMessageCard = memo(({
   isAccessible,
   hideInlineHeader = false,
   hideAvatar = false,
+  hideActions = false,
   loadingText,
   maxContentHeight,
 }: ModelMessageCardProps) => {
@@ -284,6 +289,27 @@ export const ModelMessageCard = memo(({
             {assistantMetadata?.availableSources && assistantMetadata.availableSources.length > 0 && (
               <MessageSources sources={assistantMetadata.availableSources} />
             )}
+
+            {/* ✅ MESSAGE ACTIONS: Copy button for individual model response */}
+            {/* Only show when message is complete (not streaming), has text content, and actions not hidden */}
+            {!hideActions && (() => {
+              const isComplete = status === MessageStatuses.COMPLETE;
+              const textContent = renderableParts
+                .filter(p => p.type === MessagePartTypes.TEXT)
+                .map(p => p.text)
+                .join('\n\n')
+                .trim();
+              const hasText = textContent.length > 0;
+
+              if (!isComplete || !hasText)
+                return null;
+
+              return (
+                <Actions className="mt-4">
+                  <MessageCopyAction messageText={textContent} />
+                </Actions>
+              );
+            })()}
           </>
         </MessageContent>
         {!hideAvatar && <MessageAvatar src={avatarSrc} name={avatarName} />}

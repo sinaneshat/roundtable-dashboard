@@ -1,10 +1,13 @@
 'use client';
 /* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect -- Animation demo uses setInterval pattern */
 
+import { Scale } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FinishReasons, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { AvatarGroup } from '@/components/chat/avatar-group';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
+import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ChatMessage, ChatParticipant } from '@/db/validation/chat';
 import { useThreadTimeline } from '@/hooks/utils';
@@ -16,7 +19,7 @@ const DEMO_USER = {
   image: null,
 };
 
-const DEMO_USER_MESSAGE_CONTENT = 'We\'re a B2B SaaS startup with $2M ARR considering whether to expand into enterprise sales or double down on our SMB motion. Our sales cycle is currently 14 days with an ACV of $8K. What factors should we consider and what would you recommend?';
+const DEMO_USER_MESSAGE_CONTENT = 'We\'re a B2B SaaS startup with $2M ARR considering enterprise expansion vs doubling down on SMB. Our sales cycle is 14 days with $8K ACV. What would you recommend?';
 
 const DEMO_PARTICIPANTS_DATA = [
   { modelId: 'anthropic/claude-sonnet-4', role: 'Strategic Analyst' },
@@ -24,103 +27,27 @@ const DEMO_PARTICIPANTS_DATA = [
   { modelId: 'google/gemini-2.5-pro', role: 'Operations Expert' },
 ];
 
-const DEMO_MODERATOR_SYNTHESIS = `### Synthesis Conclusion
+const DEMO_MODELS = [
+  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'anthropic' },
+  { id: 'openai/gpt-4.1', name: 'GPT-4.1', provider: 'openai' },
+  { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'google' },
+];
 
-The council recommends a **staged approach**: run a 90-day enterprise experiment with 5 existing customers before committing to a full pivot.
+const DEMO_PARTICIPANTS_FOR_AVATAR = DEMO_PARTICIPANTS_DATA.map((p, idx) => ({
+  id: `participant-${idx}`,
+  modelId: p.modelId,
+  role: p.role,
+  priority: idx,
+}));
 
----
-
-### Key Strategic Factors
-
-**Current Position:** $2M ARR, 14-day sales cycle, $8K ACV indicates a healthy SMB motion with ~250+ customers.
-
-**Enterprise Trade-offs:**
-- Sales cycles extend to 3-6 months
-- ACV increases to $50K-$200K
-- Requires significant infrastructure (SOC 2, legal, sales engineers)
-
-**SMB Scale Path:**
-- Need ~1,250 customers at current ACV to reach $10M
-- Focus on product-led growth and automation
-- Lower talent costs, faster iteration
-
----
-
-### Areas of Agreement
-
-All participants agreed on:
-1. **Data-driven decision**: Audit top 20 customers before choosing
-2. **Avoid splitting focus**: Doing both simultaneously is the most common way startups stall
-3. **Mid-market option**: "Enterprise Lite" at $25K ACV offers a middle path
-
----
-
-### Recommended Action
-
-Run a controlled 90-day experiment with 5 enterprise prospects from your existing customer base. Track time-to-close, resources required, product gaps, and deal economics. This provides real data instead of speculation.
-
-**Consensus Status:** Strong alignment on experimental approach before major strategic commitment.`;
+const DEMO_MODERATOR_SYNTHESIS = `The council agrees on a staged approach: start with **Claude's customer audit**, then run **Gemini's 90-day experiment** before committing resources. **GPT's "Enterprise Lite"** mid-market option emerged as a potential middle path if the experiment shows promise.`;
 
 const DEMO_RESPONSES = [
-  `This is a pivotal decision that will fundamentally shape your company's trajectory. Let me break down the key factors:
+  `At $2M ARR with a 14-day sales cycle, your SMB motion is healthy. Before pivoting to enterprise, I'd audit your top 20 customers—if 5+ want enterprise features at 5x ACV, that's worth testing. **GPT, what does the growth math suggest?**`,
 
-**Current State Analysis:**
-Your 14-day sales cycle with $8K ACV suggests a healthy SMB motion. At $2M ARR, you likely have 250+ customers, which provides meaningful data for pattern recognition.
+  `**Building on Claude's audit**—the math: SMB needs ~1,250 customers at $8K to hit $10M, while enterprise needs just 100-200 at $50K+. Consider "Enterprise Lite" at $25K ACV for 3x revenue without full complexity.`,
 
-**Enterprise Considerations:**
-- Sales cycles typically extend to 3-6 months
-- ACV jumps to $50K-$200K range
-- Requires dedicated sales engineers, legal review processes, and security certifications (SOC 2, HIPAA)
-- Customer success becomes more relationship-driven
-
-**SMB Scale Considerations:**
-- Can you reduce CAC through product-led growth?
-- Is your product sticky enough for upsells/expansions?
-- What's your current NDR (Net Dollar Retention)?
-
-**My recommendation:** Before choosing, audit your top 20 customers. If 5+ are asking for enterprise features and willing to pay 5x your current ACV, that's a strong signal to test enterprise. Otherwise, your fastest path to $10M ARR is likely perfecting your SMB flywheel.`,
-
-  `Great framing from the strategic perspective. I want to add the **growth mechanics** angle:
-
-**The Math That Matters:**
-- SMB path: Need ~1,250 customers at $8K to hit $10M ARR
-- Enterprise path: Need ~100-200 customers at $50K-$100K ACV
-
-**What I'd optimize for:**
-
-1. **Lead velocity rate (LVR)** - Are qualified leads growing month-over-month? If LVR is strong, SMB has momentum.
-
-2. **Payback period** - Enterprise extends this significantly. Can you fund 6+ months of sales effort before seeing returns?
-
-3. **Talent acquisition** - Enterprise sales requires experienced reps ($150K+ OTE) vs. SMB can often be closed by founders or junior AEs.
-
-**Growth hack to consider:** Instead of full enterprise motion, try "Enterprise Lite" - target mid-market companies (500-2000 employees) with a $25K ACV. You get 3x the revenue without the full enterprise complexity. Test this with 10 prospects before committing.
-
-The companies that win long-term often start SMB, perfect their product, then **expand up-market with product-led signals** (power users at larger companies already using you).`,
-
-  `Building on both perspectives, let me address the **operational readiness** you'll need:
-
-**For Enterprise Expansion:**
-- **Team structure:** You'll need at minimum: 1 Enterprise AE, 1 Sales Engineer, 1 dedicated CSM. Budget $400-500K/year fully loaded.
-- **Product gaps:** Enterprise buyers expect SSO/SAML, audit logs, custom SLAs, dedicated support channels. Estimate 3-6 months of engineering focus.
-- **Process changes:** Legal review cycles, procurement workflows, security questionnaires. Your current 14-day cycle will not survive first contact.
-
-**For SMB Scale:**
-- **Automation:** Invest in self-serve onboarding, in-app guidance, automated billing
-- **Support model:** Move from 1:1 to 1:many through knowledge bases, community, webinars
-- **Hiring:** Focus on SDRs and customer success associates vs. expensive enterprise talent
-
-**My operational recommendation:**
-
-Run a 90-day experiment. Identify 5 enterprise prospects from your existing customer base (larger companies using your product). Attempt a manual enterprise sale process. Track:
-- Time to close
-- Resources required
-- Product gaps discovered
-- Deal economics
-
-This gives you real data instead of speculation. If the experiment succeeds, you have proof points to raise capital for enterprise expansion. If it fails, you've validated doubling down on SMB without burning 12+ months.
-
-**One warning:** Trying to do both simultaneously at your stage is the most common way startups stall. Pick one, execute relentlessly, then expand.`,
+  `**I'd push back slightly** on jumping to enterprise without data. Run a 90-day experiment with 5 prospects from your existing base—that gives you real numbers on sales cycles and resources before committing.`,
 ];
 
 const STATIC_PARTICIPANTS: ChatParticipant[] = DEMO_PARTICIPANTS_DATA.map((p, idx) => ({
@@ -318,15 +245,34 @@ export function LiveChatDemo() {
     changelog: [],
   });
 
-  // Streaming states - participants (0-2) vs moderator (3)
+  // Streaming states for pending cards system
   const isParticipantStreaming = activeParticipant >= 0 && activeParticipant <= 2;
   const isModeratorStreaming = activeParticipant === 3;
-  const isAnyStreaming = isParticipantStreaming || isModeratorStreaming;
+  const isDemoActive = activeParticipant >= 0 && activeParticipant <= 3;
 
   return (
     <div className="flex flex-col h-full min-h-0 relative">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-border/50">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/80">
+            <span className="text-sm text-muted-foreground">Models</span>
+            <AvatarGroup
+              participants={DEMO_PARTICIPANTS_FOR_AVATAR}
+              allModels={DEMO_MODELS}
+              size="sm"
+              showCount={false}
+              overlap={true}
+            />
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/80">
+            <Scale className="size-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Debating</span>
+          </div>
+        </div>
+        <Badge variant="secondary" className="text-xs">Demo</Badge>
+      </div>
       <ScrollArea className="h-full min-h-0 flex-1">
-        <div className="w-full px-4 sm:px-6 pt-6 pb-6">
+        <div className="w-full p-12 [&_p]:text-muted-foreground [&_strong]:text-foreground">
           <ThreadTimeline
             timelineItems={timelineItems}
             user={DEMO_USER}
@@ -335,7 +281,7 @@ export function LiveChatDemo() {
             isStreaming={isParticipantStreaming}
             currentParticipantIndex={isParticipantStreaming ? activeParticipant : 0}
             currentStreamingParticipant={isParticipantStreaming ? STATIC_PARTICIPANTS[activeParticipant] ?? null : null}
-            streamingRoundNumber={isAnyStreaming ? 1 : null}
+            streamingRoundNumber={isDemoActive ? 1 : null}
             preSearches={[]}
             isReadOnly={true}
             skipEntranceAnimations={false}

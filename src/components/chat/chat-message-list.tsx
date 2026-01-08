@@ -194,6 +194,8 @@ type ParticipantMessageWrapperProps = {
   avatarName?: string;
   /** Override display name (for moderator) */
   displayName?: string;
+  /** Hide action buttons (for moderator where council actions handle it) */
+  hideActions?: boolean;
 };
 
 /**
@@ -216,6 +218,7 @@ const ParticipantMessageWrapper = memo(({
   avatarSrc: avatarSrcOverride,
   avatarName: avatarNameOverride,
   displayName: displayNameOverride,
+  hideActions = false,
 }: ParticipantMessageWrapperProps) => {
   const defaultAvatarProps = participant
     ? getAvatarPropsFromModelId(MessageRoles.ASSISTANT, participant.modelId, null, 'AI')
@@ -254,6 +257,7 @@ const ParticipantMessageWrapper = memo(({
           isAccessible={isAccessible}
           hideInlineHeader
           hideAvatar
+          hideActions={hideActions}
           loadingText={loadingText}
           maxContentHeight={maxContentHeight}
         />
@@ -363,6 +367,7 @@ function AssistantGroupCard({
                   isAccessible={isAccessible}
                   hideInlineHeader
                   hideAvatar
+                  hideActions={isModerator}
                   maxContentHeight={maxContentHeight}
                   loadingText={isModerator ? t('chat.participant.moderatorObserving') : undefined}
                 />
@@ -1055,7 +1060,7 @@ export const ChatMessageList = memo(
     });
 
     return (
-      <div className="touch-pan-y space-y-8">
+      <div className="touch-pan-y space-y-14">
         {messageGroups.map((group, groupIndex) => {
           const roundNumber = group.type === 'user-group'
             ? getRoundNumber(group.messages[0]?.message.metadata) ?? 0
@@ -1144,12 +1149,12 @@ export const ChatMessageList = memo(
                 </div>
 
                 {/* CRITICAL FIX: Render PreSearchCard immediately after user message, before assistant messages */}
-                {/* ✅ mt-8 provides consistent spacing from user message content to PreSearchCard */}
+                {/* ✅ mt-14 provides consistent spacing from user message content to PreSearchCard */}
                 {/* ✅ ScrollFromTop wraps card for scroll-triggered slide-down animation */}
                 {preSearch && (
                   <ScrollFromTop
                     skipAnimation={skipEntranceAnimations}
-                    className="mt-8"
+                    className="mt-14"
                   >
                     <PreSearchCard
                       key={`pre-search-${roundNumber}`}
@@ -1261,17 +1266,17 @@ export const ChatMessageList = memo(
                   const wasRenderedDuringStreaming = renderedRoundsRef.current.has(roundNumber);
 
                   return (
-                    // mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
+                    // mt-14 provides consistent spacing from user message (matches space-y-14 between participants)
                     // ✅ FLASH FIX: Use opacity transition instead of conditional rendering
                     // ✅ POSITION FIX: Use visibility+height instead of absolute positioning
                     // absolute -z-10 caused layout jumps when content became visible
                     // ✅ POST-MODERATOR FLASH FIX: No transition when hiding (instant) to prevent overlap with messageGroups
                     <div
                       className={cn(
-                        'space-y-8 overflow-hidden',
+                        'space-y-14 overflow-hidden',
                         // Only transition when showing, not when hiding (prevents flash)
                         shouldShowPendingCards && 'transition-all duration-150',
-                        shouldShowPendingCards ? 'mt-8 opacity-100' : 'h-0 opacity-0 pointer-events-none',
+                        shouldShowPendingCards ? 'mt-14 opacity-100' : 'h-0 opacity-0 pointer-events-none',
                         // Force instant hide when round was already rendered (prevents flash)
                         wasRenderedDuringStreaming && !shouldShowPendingCards && 'transition-none',
                       )}
@@ -1439,7 +1444,7 @@ export const ChatMessageList = memo(
                     <div
                       className={cn(
                         'transition-all duration-150 overflow-hidden',
-                        shouldShowModerator ? 'mt-8 opacity-100' : 'h-0 opacity-0 pointer-events-none',
+                        shouldShowModerator ? 'mt-14 opacity-100' : 'h-0 opacity-0 pointer-events-none',
                       )}
                       aria-hidden={!shouldShowModerator}
                     >
@@ -1606,7 +1611,7 @@ export const ChatMessageList = memo(
           }
 
           return (
-            <div className="mt-8">
+            <div className="mt-14">
               <ScrollAwareParticipant
                 key={`moderator-pending-after-groups-${latestRound}`}
                 index={enabledParticipants.length}

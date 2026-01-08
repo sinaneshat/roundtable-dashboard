@@ -159,6 +159,18 @@ export const ChatInput = memo(({
     fileInputRef.current?.click();
   }, []);
 
+  // Paste handler for clipboard file attachments (Cmd+V / Ctrl+V)
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!enableAttachments || !onAddAttachments)
+      return;
+
+    const files = Array.from(e.clipboardData.files);
+    if (files.length > 0) {
+      e.preventDefault();
+      handleFilesSelected(files);
+    }
+  }, [enableAttachments, onAddAttachments, handleFilesSelected]);
+
   useEffect(() => {
     if (attachmentClickRef && enableAttachments) {
       attachmentClickRef.current = handleAttachmentClick;
@@ -336,6 +348,7 @@ export const ChatInput = memo(({
                   onChange(e.target.value);
                 }}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 disabled={isInputDisabled}
                 placeholder={
                   isStreaming
@@ -387,9 +400,10 @@ export const ChatInput = memo(({
                     ? (
                         <Button
                           type="button"
+                          variant={ComponentVariants.WHITE}
                           size={ComponentSizes.ICON}
                           onClick={onStop}
-                          className="size-9 sm:size-10 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform bg-white text-black hover:bg-white/90"
+                          className="size-9 sm:size-10 shrink-0 touch-manipulation active:scale-95 transition-transform"
                           aria-label={t('chat.input.stopStreaming')}
                         >
                           <Icons.square className="size-4 sm:size-5" />
@@ -398,9 +412,10 @@ export const ChatInput = memo(({
                     : (
                         <Button
                           type="submit"
+                          variant={ComponentVariants.WHITE}
                           size={ComponentSizes.ICON}
                           disabled={isSubmitDisabled || !hasValidInput}
-                          className="size-9 sm:size-10 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
+                          className="size-9 sm:size-10 shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 disabled:bg-white/20 disabled:text-white/40"
                           aria-label={isSubmitting ? t('chat.input.submitting') : t('chat.input.send')}
                         >
                           {isSubmitting

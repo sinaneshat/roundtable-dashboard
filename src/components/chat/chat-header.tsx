@@ -1,6 +1,5 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import React from 'react';
@@ -22,6 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { useSidebarOptional } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants';
+import { useCurrentPathname } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
 import { ChatScrollButton } from './chat-scroll-button';
@@ -51,7 +51,7 @@ function NavigationHeaderComponent({
   maxWidth = false,
   showScrollButton = false,
 }: NavigationHeaderProps = {}) {
-  const pathname = usePathname();
+  const pathname = useCurrentPathname();
   const t = useTranslations();
   const sidebarContext = useSidebarOptional();
   const hasSidebar = sidebarContext !== null;
@@ -99,7 +99,7 @@ function NavigationHeaderComponent({
       )}
     >
       <div className={cn(
-        'flex items-center justify-between gap-2 px-3 sm:px-4 md:px-6 lg:px-8 h-14 sm:h-16 w-full',
+        'flex items-center justify-between gap-2 pt-4 px-3 sm:px-4 md:px-6 lg:px-8 h-14 sm:h-16 w-full',
         maxWidth && 'max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto',
       )}
       >
@@ -109,11 +109,11 @@ function NavigationHeaderComponent({
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden size-9 shrink-0"
+              className="md:hidden size-10 shrink-0"
               onClick={() => sidebarContext.setOpenMobile(true)}
               aria-label={t('accessibility.openSidebar')}
             >
-              <Icons.menu className="size-5" />
+              <Icons.panelLeft className="size-6" />
             </Button>
           )}
           {showLogo && !isOverviewPage && (
@@ -135,7 +135,7 @@ function NavigationHeaderComponent({
                   <BreadcrumbLink asChild>
                     <Link
                       href="/chat"
-                      className="text-muted-foreground hover:text-foreground transition-colors text-sm sm:text-base"
+                      className="text-muted-foreground hover:text-foreground transition-colors text-base"
                     >
                       {BRAND.displayName}
                     </Link>
@@ -145,7 +145,7 @@ function NavigationHeaderComponent({
                 {/* Current page title - truncates to preserve brand visibility */}
                 <BreadcrumbItem className="min-w-0 overflow-hidden max-w-64">
                   <BreadcrumbPage
-                    className="line-clamp-1 truncate overflow-hidden text-ellipsis whitespace-nowrap text-sm sm:text-base max-w-64"
+                    className="line-clamp-1 truncate overflow-hidden text-ellipsis whitespace-nowrap text-base max-w-64"
                     title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey)}
                   >
                     {'isDynamic' in currentPage && currentPage.isDynamic
@@ -215,11 +215,11 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
           <Button
             variant="ghost"
             size="icon"
-            className="size-9 shrink-0"
+            className="size-10 shrink-0"
             onClick={() => sidebarContext.setOpenMobile(true)}
             aria-label={t('accessibility.openSidebar')}
           >
-            <Icons.menu className="size-5" />
+            <Icons.panelLeft className="size-6" />
           </Button>
         </div>
       )}

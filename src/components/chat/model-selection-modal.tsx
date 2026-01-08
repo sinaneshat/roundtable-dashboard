@@ -35,7 +35,7 @@ import type { useCustomRolesQuery } from '@/hooks/queries';
 import { useUsageStatsQuery, useUserPresetsQuery } from '@/hooks/queries';
 import { useBoolean } from '@/hooks/utils';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
-import { MODEL_PRESETS } from '@/lib/config/model-presets';
+import { canAccessPreset, MODEL_PRESETS } from '@/lib/config/model-presets';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { toastManager } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';
@@ -399,6 +399,10 @@ export function ModelSelectionModal({
   }, [orderedModels]);
 
   const userTier = userTierInfo?.current_tier ?? SubscriptionTiers.FREE;
+
+  const hasLockedPresets = useMemo(() => {
+    return MODEL_PRESETS.some(preset => !canAccessPreset(preset, userTier));
+  }, [userTier]);
 
   const selectedPreset = useMemo((): ModelPreset | null => {
     if (!selectedPresetId)
@@ -969,15 +973,30 @@ export function ModelSelectionModal({
                 )}
               </div>
 
-              <Button
-                onClick={activeTab === ModelSelectionTabs.PRESETS ? handleApplyPreset : () => onOpenChange(false)}
-                disabled={activeTab === ModelSelectionTabs.PRESETS && !selectedPreset}
-                variant="white"
-                size="sm"
-                className="shrink-0 text-xs sm:text-sm"
-              >
-                {activeTab === ModelSelectionTabs.PRESETS ? tModels('presets.save') : tModels('presets.done')}
-              </Button>
+              <div className="flex items-center gap-2">
+                {hasLockedPresets && userTierInfo?.can_upgrade && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="text-xs sm:text-sm border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                  >
+                    <Link href="/chat/pricing" className="flex items-center gap-1.5">
+                      <Icons.lockOpen className="size-3.5" />
+                      {tModels('unlockAllModels')}
+                    </Link>
+                  </Button>
+                )}
+                <Button
+                  onClick={activeTab === ModelSelectionTabs.PRESETS ? handleApplyPreset : () => onOpenChange(false)}
+                  disabled={activeTab === ModelSelectionTabs.PRESETS && !selectedPreset}
+                  variant="white"
+                  size="sm"
+                  className="shrink-0 text-xs sm:text-sm"
+                >
+                  {activeTab === ModelSelectionTabs.PRESETS ? tModels('presets.save') : tModels('presets.done')}
+                </Button>
+              </div>
             </div>
           </div>
         )}
