@@ -11,36 +11,53 @@
  * - Uses SQLite storage for persistence across restarts
  * - Alarms survive worker restarts and failovers
  *
+ * IMPORTANT: Uses dynamic imports to prevent Drizzle/Zod/schemas from being
+ * bundled at worker startup. Heavy dependencies only loaded when processing.
+ * This prevents "Script startup exceeded memory limits" deployment errors.
+ *
  * Following established patterns from:
- * - src/api/services/title-generator.service.ts (service layer usage)
+ * - src/workers/title-generation-queue.ts (dynamic import pattern)
  * - docs/backend-patterns.md (Drizzle ORM patterns)
  *
  * @see src/api/services/upload-orphan-check.service.ts - Business logic
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import { z } from 'zod';
 
-import {
-  checkUploadOrphaned,
-  createDrizzleFromD1,
-  deleteFromR2,
-  deleteUploadRecord,
-} from '@/api/services/uploads';
+// IMPORTANT: No static imports of @/api/services or zod here!
+// Use dynamic imports in methods to lazy-load heavy dependencies
 
 // ============================================================================
-// REQUEST SCHEMAS (Zod validation for type-safe request bodies)
+// REQUEST VALIDATION (inline, no Zod dependency at startup)
 // ============================================================================
 
-const ScheduleCleanupRequestSchema = z.object({
-  uploadId: z.string().min(1),
-  userId: z.string().min(1),
-  r2Key: z.string().min(1),
-});
+type ScheduleCleanupRequest = {
+  uploadId: string;
+  userId: string;
+  r2Key: string;
+};
 
-const CancelCleanupRequestSchema = z.object({
-  uploadId: z.string().min(1),
-});
+type CancelCleanupRequest = {
+  uploadId: string;
+};
+
+function isValidScheduleRequest(data: unknown): data is ScheduleCleanupRequest {
+  if (typeof data !== 'object' || data === null)
+    return false;
+  const obj = data as Record<string, unknown>;
+  return (
+    typeof obj.uploadId === 'string' && obj.uploadId.length > 0
+    && typeof obj.userId === 'string' && obj.userId.length > 0
+    && typeof obj.r2Key === 'string' && obj.r2Key.length > 0
+  );
+}
+
+function isValidCancelRequest(data: unknown): data is CancelCleanupRequest {
+  if (typeof data !== 'object' || data === null)
+    return false;
+  const obj = data as Record<string, unknown>;
+  return typeof obj.uploadId === 'string' && obj.uploadId.length > 0;
+}
 
 // Cleanup delay in milliseconds (15 minutes)
 const CLEANUP_DELAY_MS = 15 * 60 * 1000;
@@ -67,18 +84,18 @@ type UploadCleanupState = {
  * Uses DO Alarms for guaranteed execution after the delay period.
  *
  * Database Access:
- * - Uses createDrizzleFromD1() from upload-orphan-check.service.ts
- * - Follows established patterns from title-generator.service.ts
+ * - Uses dynamic import of createDrizzleFromD1() to prevent startup memory overflow
+ * - Drizzle instance created lazily only when needed for database operations
  */
 export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
   private sql: SqlStorage;
-  private db: ReturnType<typeof createDrizzleFromD1>;
+  // NOTE: db is lazily initialized via dynamic import to prevent startup memory issues
+  private _db: unknown = null;
 
   constructor(ctx: DurableObjectState, env: CloudflareEnv) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
-    // Initialize Drizzle ORM instance for D1 access
-    this.db = createDrizzleFromD1(env.DB);
+    // NOTE: Do NOT initialize Drizzle here - use lazy initialization via getDb()
 
     // Initialize SQLite table on first access
     this.sql.exec(`
@@ -90,6 +107,18 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
         created_at INTEGER NOT NULL
       )
     `);
+  }
+
+  /**
+   * Lazy initialization of Drizzle database instance
+   * Uses dynamic import to prevent startup memory overflow
+   */
+  private async getDb() {
+    if (!this._db) {
+      const { createDrizzleFromD1 } = await import('@/api/services/uploads');
+      this._db = createDrizzleFromD1(this.env.DB);
+    }
+    return this._db as Awaited<ReturnType<typeof import('@/api/services/uploads')['createDrizzleFromD1']>>;
   }
 
   /**
@@ -252,14 +281,17 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
    * Check if upload is orphaned with retry logic
    * Returns null if all retries fail (caller should reschedule)
    *
-   * Uses checkUploadOrphaned from upload-orphan-check.service.ts
-   * (Drizzle ORM instead of raw D1 queries)
+   * Uses dynamic import of checkUploadOrphaned to prevent startup memory overflow
    */
   private async checkIfOrphanedWithRetry(uploadId: string): Promise<boolean | null> {
+    // Dynamic import to lazy-load Drizzle ORM
+    const { checkUploadOrphaned } = await import('@/api/services/uploads');
+    const db = await this.getDb();
+
     for (let attempt = 0; attempt <= MAX_D1_RETRIES; attempt++) {
       try {
         // Use service function with Drizzle ORM
-        const result = await checkUploadOrphaned(uploadId, this.db);
+        const result = await checkUploadOrphaned(uploadId, db);
         return result.isOrphaned;
       } catch (error) {
         console.error({
@@ -284,18 +316,21 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
 
   /**
    * Delete file from R2 storage
-   * Delegates to service function for consistent error handling
+   * Uses dynamic import to prevent startup memory overflow
    */
   private async deleteR2File(r2Key: string): Promise<void> {
+    const { deleteFromR2 } = await import('@/api/services/uploads');
     await deleteFromR2(this.env.UPLOADS_R2_BUCKET, r2Key);
   }
 
   /**
    * Delete upload record from database
-   * Uses Drizzle ORM via service function
+   * Uses dynamic import to prevent startup memory overflow
    */
   private async deleteFromDatabase(uploadId: string): Promise<void> {
-    await deleteUploadRecord(uploadId, this.db);
+    const { deleteUploadRecord } = await import('@/api/services/uploads');
+    const db = await this.getDb();
+    await deleteUploadRecord(uploadId, db);
   }
 
   /**
@@ -308,23 +343,22 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
 
     try {
       if (request.method === 'POST' && path === '/schedule') {
-        // ✅ TYPE-SAFE: Use Zod schema validation
-        const parseResult = ScheduleCleanupRequestSchema.safeParse(await request.json());
-        if (!parseResult.success) {
+        // ✅ TYPE-SAFE: Inline validation (no Zod at startup)
+        const data = await request.json();
+        if (!isValidScheduleRequest(data)) {
           return new Response('Invalid request body', { status: 400 });
         }
-        const { uploadId, userId, r2Key } = parseResult.data;
-        const result = await this.scheduleCleanup(uploadId, userId, r2Key);
+        const result = await this.scheduleCleanup(data.uploadId, data.userId, data.r2Key);
         return Response.json(result);
       }
 
       if (request.method === 'POST' && path === '/cancel') {
-        // ✅ TYPE-SAFE: Use Zod schema validation
-        const parseResult = CancelCleanupRequestSchema.safeParse(await request.json());
-        if (!parseResult.success) {
+        // ✅ TYPE-SAFE: Inline validation (no Zod at startup)
+        const data = await request.json();
+        if (!isValidCancelRequest(data)) {
           return new Response('Invalid request body', { status: 400 });
         }
-        const result = await this.cancelCleanup(parseResult.data.uploadId);
+        const result = await this.cancelCleanup(data.uploadId);
         return Response.json(result);
       }
 
