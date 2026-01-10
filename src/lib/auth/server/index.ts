@@ -11,7 +11,7 @@ import { db } from '@/db';
 import * as authSchema from '@/db/tables/auth';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
-import { validateEmailDomain } from '../utils';
+import { isAllowedEmailDomain, isRestrictedEnvironment, validateEmailDomain } from '../utils';
 
 /**
  * Get auth secret from available sources.
@@ -129,6 +129,45 @@ function createAuth() {
         // Handles: /sign-up/email, /sign-in/email, /sign-in/magic-link
         validateEmailDomain(ctx);
       }),
+    },
+
+    // Database hooks to validate ALL user creation and session creation
+    // This catches Google OAuth and any other social provider signups/signins
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user) => {
+            // Skip validation in production - only restrict preview/local
+            if (!isRestrictedEnvironment()) {
+              return;
+            }
+
+            // Validate email domain for all user creation methods
+            if (user.email && !isAllowedEmailDomain(user.email)) {
+              throw new Error('Access restricted: Only @deadpixel.ai email addresses are allowed in preview environments');
+            }
+          },
+        },
+      },
+      session: {
+        create: {
+          before: async (session) => {
+            // Skip validation in production - only restrict preview/local
+            if (!isRestrictedEnvironment()) {
+              return;
+            }
+
+            // Fetch user to check email domain for existing users signing in
+            const user = await db.query.user.findFirst({
+              where: (u, { eq }) => eq(u.id, session.userId),
+            });
+
+            if (user?.email && !isAllowedEmailDomain(user.email)) {
+              throw new Error('Access restricted: Only @deadpixel.ai email addresses are allowed in preview environments');
+            }
+          },
+        },
+      },
     },
 
     // Session configuration

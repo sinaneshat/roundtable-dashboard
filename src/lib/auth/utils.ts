@@ -28,15 +28,9 @@ const PROTECTED_AUTH_PATHS: readonly string[] = [
 
 /**
  * Specific email addresses allowed in local/preview environments
- * These are exceptions to the domain restriction
+ * These are exceptions to the domain restriction (currently empty - only @deadpixel.ai allowed)
  */
-const ALLOWED_EMAIL_EXCEPTIONS: readonly string[] = [
-  'sinaneshatdxb@gmail.com',
-  'a.m.fallah@aol.com',
-  'firstexhotic@gmail.com',
-  'ava@deadpixel.ai',
-  'soheil@deadpixel.ai',
-];
+const ALLOWED_EMAIL_EXCEPTIONS: readonly string[] = [];
 
 /**
  * Configuration for email domain restrictions
@@ -45,7 +39,7 @@ const EMAIL_DOMAIN_CONFIG = {
   /**
    * Allowed email domain for local and preview environments
    */
-  ALLOWED_DOMAIN: '@roundtable.now',
+  ALLOWED_DOMAIN: '@deadpixel.ai',
 
   /**
    * Specific email addresses allowed as exceptions
@@ -55,7 +49,7 @@ const EMAIL_DOMAIN_CONFIG = {
   /**
    * Error message for domain restriction violations
    */
-  ERROR_MESSAGE: 'Access restricted: Only @roundtable.now email addresses or whitelisted emails are allowed in this environment',
+  ERROR_MESSAGE: 'Access restricted: Only @deadpixel.ai email addresses are allowed in preview environments',
 
   /**
    * Authentication paths that require email domain validation
