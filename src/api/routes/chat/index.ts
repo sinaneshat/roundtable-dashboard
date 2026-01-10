@@ -1,4 +1,7 @@
 export {
+  analyzePromptHandler,
+} from './handlers/analyze.handler';
+export {
   getThreadFeedbackHandler,
   setRoundFeedbackHandler,
 } from './handlers/feedback.handler';

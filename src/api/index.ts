@@ -75,6 +75,7 @@ import {
 // Chat routes
 import {
   addParticipantHandler,
+  analyzePromptHandler,
   councilModeratorRoundHandler,
   createCustomRoleHandler,
   createThreadHandler,
@@ -110,6 +111,7 @@ import {
 } from './routes/chat';
 import {
   addParticipantRoute,
+  analyzePromptRoute,
   councilModeratorRoundRoute,
   createCustomRoleRoute,
   createThreadRoute,
@@ -625,6 +627,8 @@ const appRoutes = app
   .openapi(addParticipantRoute, addParticipantHandler) // Add AI model participant to thread
   .openapi(updateParticipantRoute, updateParticipantHandler) // Update participant role/priority/settings
   .openapi(deleteParticipantRoute, deleteParticipantHandler) // Remove participant from thread
+  // Auto Mode (protected)
+  .openapi(analyzePromptRoute, analyzePromptHandler) // Analyze prompt for auto mode configuration
   // Custom Role System (protected)
   .openapi(listCustomRolesRoute, listCustomRolesHandler) // List user custom role templates
   .openapi(createCustomRoleRoute, createCustomRoleHandler) // Create custom role template

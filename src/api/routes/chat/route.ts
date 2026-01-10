@@ -5,6 +5,7 @@ import { ApiErrorResponseSchema, createApiResponseSchema, createMutationRouteRes
 
 import {
   AddParticipantRequestSchema,
+  AnalyzePromptRequestSchema,
   ChangelogListResponseSchema,
   CreateCustomRoleRequestSchema,
   CreateThreadRequestSchema,
@@ -582,6 +583,50 @@ See [API Streaming Guide](/docs/api-streaming-guide.md) for complete implementat
     ...createMutationRouteResponses(),
   },
 });
+
+/**
+ * POST /chat/analyze - Auto Mode Prompt Analysis (Streaming)
+ * Analyzes user prompt and streams optimal model/role/mode configuration
+ * Used by Auto Mode feature for intelligent chat setup
+ *
+ * SSE Events:
+ * - start: Analysis started
+ * - config: Partial/incremental config update
+ * - done: Final config with complete analysis
+ * - failed: Error with fallback config
+ */
+export const analyzePromptRoute = createRoute({
+  method: 'post',
+  path: '/chat/analyze',
+  tags: ['chat'],
+  summary: 'Analyze prompt for auto mode configuration (streaming)',
+  description: 'Analyzes user prompt and streams optimal participants, mode, and web search settings via SSE based on prompt complexity and user tier.',
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: AnalyzePromptRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'SSE stream of config updates (events: start, config, done, failed)',
+      content: {
+        'text/event-stream': {
+          schema: z.string().openapi({
+            description: 'Server-Sent Events stream with analyze events',
+            example: 'event: config\ndata: {"config":{"participants":[...],"mode":"analyzing","enableWebSearch":false}}\n\n',
+          }),
+        },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+
 export const listCustomRolesRoute = createRoute({
   method: 'get',
   path: '/chat/custom-roles',

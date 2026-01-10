@@ -1107,6 +1107,10 @@ export {
 
 // Web search enums
 export {
+  ANALYZE_PROMPT_SSE_EVENTS,
+  type AnalyzePromptSseEvent,
+  AnalyzePromptSseEvents,
+  AnalyzePromptSseEventSchema,
   BLOCKED_RESOURCE_TYPES,
   type BlockedResourceType,
   BlockedResourceTypes,
@@ -1116,6 +1120,7 @@ export {
   BrowserEnvironments,
   BrowserEnvironmentSchema,
   DEFAULT_ACTIVE_ANSWER_MODE,
+  DEFAULT_ANALYZE_PROMPT_SSE_EVENT,
   DEFAULT_BLOCKED_RESOURCE_TYPE,
   DEFAULT_BLOCKED_RESOURCE_TYPES,
   DEFAULT_BROWSER_ENVIRONMENT,

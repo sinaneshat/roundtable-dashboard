@@ -57,6 +57,17 @@ export const WEB_SEARCH_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_5_FLASH;
 export const IMAGE_ANALYSIS_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_0_FLASH_001;
 
 // ============================================================================
+// PROMPT ANALYSIS MODELS
+// ============================================================================
+
+/**
+ * Model for auto mode prompt analysis
+ * Analyzes user prompts to recommend optimal model/role/mode configuration
+ * ✅ GEMINI 2.5 FLASH: Fast, cheap, reliable structured JSON output
+ */
+export const PROMPT_ANALYSIS_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_5_FLASH;
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -65,4 +76,5 @@ export const AIModels = {
   TITLE_GENERATION: TITLE_GENERATION_MODEL_ID,
   WEB_SEARCH: WEB_SEARCH_MODEL_ID,
   IMAGE_ANALYSIS: IMAGE_ANALYSIS_MODEL_ID,
+  PROMPT_ANALYSIS: PROMPT_ANALYSIS_MODEL_ID,
 } as const;

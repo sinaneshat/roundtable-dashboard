@@ -89,6 +89,7 @@ import type {
   ResetToNewChat,
   ResetToOverview,
   ResetUI,
+  SetAutoMode,
   SetChatSetMessages,
   SetConfigChangeRoundNumber,
   SetCreatedThreadId,
@@ -103,6 +104,7 @@ import type {
   SetHasPendingConfigChanges,
   SetHasSentPendingMessage,
   SetInputValue,
+  SetIsAnalyzingPrompt,
   SetIsCreatingThread,
   SetIsModeratorStreaming,
   SetIsPatchInProgress,
@@ -163,6 +165,7 @@ export const FormStateSchema = z.object({
   selectedParticipants: z.array(ParticipantConfigSchema),
   enableWebSearch: z.boolean(),
   modelOrder: z.array(z.string()),
+  autoMode: z.boolean(),
 });
 
 export const FormActionsSchema = z.object({
@@ -171,6 +174,7 @@ export const FormActionsSchema = z.object({
   setSelectedParticipants: z.custom<SetSelectedParticipants>(),
   setEnableWebSearch: z.custom<SetEnableWebSearch>(),
   setModelOrder: z.custom<SetModelOrder>(),
+  setAutoMode: z.custom<SetAutoMode>(),
   addParticipant: z.custom<AddParticipant>(),
   removeParticipant: z.custom<RemoveParticipant>(),
   updateParticipant: z.custom<UpdateParticipant>(),
@@ -210,6 +214,7 @@ export const UIStateSchema = z.object({
   waitingToStartStreaming: z.boolean(),
   isCreatingThread: z.boolean(),
   createdThreadId: z.string().nullable(),
+  isAnalyzingPrompt: z.boolean(),
 });
 
 export const UIActionsSchema = z.object({
@@ -217,6 +222,7 @@ export const UIActionsSchema = z.object({
   setWaitingToStartStreaming: z.custom<SetWaitingToStartStreaming>(),
   setIsCreatingThread: z.custom<SetIsCreatingThread>(),
   setCreatedThreadId: z.custom<SetCreatedThreadId>(),
+  setIsAnalyzingPrompt: z.custom<SetIsAnalyzingPrompt>(),
   resetUI: z.custom<ResetUI>(),
 });
 

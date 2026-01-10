@@ -308,3 +308,32 @@ export async function getThreadStreamResumptionStateService(data: GetThreadStrea
   };
   return parseResponse(client.chat.threads[':threadId']['stream-status'].$get(params));
 }
+
+// ============================================================================
+// Type Inference - Auto Mode Prompt Analysis
+// ============================================================================
+
+export type AnalyzePromptRequest = InferRequestType<
+  ApiClientType['chat']['analyze']['$post']
+>;
+
+export type AnalyzePromptResponse = InferResponseType<
+  ApiClientType['chat']['analyze']['$post']
+>;
+
+// ============================================================================
+// Service Functions - Auto Mode
+// ============================================================================
+
+/**
+ * Execute analyze prompt SSE stream
+ * Protected endpoint - requires authentication
+ *
+ * Returns SSE stream with events: start, config, done, failed
+ * EXCEPTION: Does NOT parse response because SSE streams must return raw Response
+ * object for EventSource/ReadableStream processing.
+ */
+export async function analyzePromptStreamService(data: AnalyzePromptRequest) {
+  const client = await createApiClient();
+  return client.chat.analyze.$post(data);
+}

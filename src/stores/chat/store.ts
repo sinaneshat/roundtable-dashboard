@@ -95,6 +95,8 @@ const createFormSlice: SliceCreator<FormSlice> = (set, _get) => ({
     set({ enableWebSearch: enabled }, false, 'form/setEnableWebSearch'),
   setModelOrder: (modelIds: string[]) =>
     set({ modelOrder: modelIds }, false, 'form/setModelOrder'),
+  setAutoMode: (enabled: boolean) =>
+    set({ autoMode: enabled }, false, 'form/setAutoMode'),
   // ✅ IMMER: Direct mutations instead of spread patterns
   addParticipant: (participant: ParticipantConfig) =>
     set((draft) => {
@@ -159,6 +161,8 @@ const createUISlice: SliceCreator<UISlice> = set => ({
     set({ isCreatingThread: creating }, false, 'ui/setIsCreatingThread'),
   setCreatedThreadId: (id: string | null) =>
     set({ createdThreadId: id }, false, 'ui/setCreatedThreadId'),
+  setIsAnalyzingPrompt: (analyzing: boolean) =>
+    set({ isAnalyzingPrompt: analyzing }, false, 'ui/setIsAnalyzingPrompt'),
   resetUI: () =>
     set(UI_DEFAULTS, false, 'ui/resetUI'),
 });

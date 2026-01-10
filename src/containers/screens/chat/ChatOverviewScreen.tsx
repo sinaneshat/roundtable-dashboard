@@ -15,6 +15,7 @@ import {
   MessageStatuses,
   UploadStatuses,
 } from '@/api/core/enums';
+import { ChatAutoModeToggle } from '@/components/chat/chat-auto-mode-toggle';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
@@ -32,6 +33,7 @@ import { LogoGlow } from '@/components/ui/logo-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
+  useAnalyzePromptStream,
   useBoolean,
   useChatAttachments,
   useIsMobile,
@@ -129,6 +131,8 @@ export default function ChatOverviewScreen() {
     enableWebSearch,
     preSearches,
     messages,
+    autoMode,
+    isAnalyzingPrompt,
     setInputValue,
     setSelectedMode,
     setSelectedParticipants,
@@ -136,6 +140,8 @@ export default function ChatOverviewScreen() {
     removeParticipant,
     updateParticipant,
     setEnableWebSearch,
+    setAutoMode,
+    setIsAnalyzingPrompt,
     resetToOverview,
   } = useChatStore(
     useShallow(s => ({
@@ -145,6 +151,8 @@ export default function ChatOverviewScreen() {
       enableWebSearch: s.enableWebSearch,
       preSearches: s.preSearches,
       messages: s.messages,
+      autoMode: s.autoMode,
+      isAnalyzingPrompt: s.isAnalyzingPrompt,
       setInputValue: s.setInputValue,
       setSelectedMode: s.setSelectedMode,
       setSelectedParticipants: s.setSelectedParticipants,
@@ -152,6 +160,8 @@ export default function ChatOverviewScreen() {
       removeParticipant: s.removeParticipant,
       updateParticipant: s.updateParticipant,
       setEnableWebSearch: s.setEnableWebSearch,
+      setAutoMode: s.setAutoMode,
+      setIsAnalyzingPrompt: s.setIsAnalyzingPrompt,
       resetToOverview: s.resetToOverview,
     })),
   );
@@ -177,6 +187,7 @@ export default function ChatOverviewScreen() {
 
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(modelModal.value && !isStreaming);
+  const { streamConfig: analyzePromptStream } = useAnalyzePromptStream();
 
   const allEnabledModels = useMemo(
     () => modelsData?.data?.items || [],
@@ -495,7 +506,7 @@ export default function ChatOverviewScreen() {
   });
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
-  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting || isModelsLoading;
+  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting || isModelsLoading || isAnalyzingPrompt;
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
 
   const lastResetPathRef = useRef<string | null>(null);
@@ -567,11 +578,51 @@ export default function ChatOverviewScreen() {
           showApiErrorToast('Error sending message', error);
         }
       } else {
-        if (!inputValue.trim() || selectedParticipants.length === 0 || isInitialUIInputBlocked) {
+        // New thread creation
+        if (!inputValue.trim() || isInitialUIInputBlocked) {
           return;
         }
 
         if (!chatAttachments.allUploaded) {
+          return;
+        }
+
+        // Auto mode: analyze prompt with streaming and configure settings before creating thread
+        if (autoMode && inputValue.trim()) {
+          setIsAnalyzingPrompt(true);
+          try {
+            // Stream config analysis - partial configs will update partialAnalyzeConfig state
+            const result = await analyzePromptStream(inputValue.trim());
+            if (result) {
+              const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;
+              // Update store with AI recommendations
+              const newParticipants = participants.map((p: { modelId: string; role: string | null }, index: number) => ({
+                id: p.modelId,
+                modelId: p.modelId,
+                role: p.role || '',
+                priority: index,
+              }));
+              setSelectedParticipants(newParticipants);
+              setModelOrder(newParticipants.map((p: { modelId: string }) => p.modelId));
+              setSelectedMode(recommendedMode);
+              setEnableWebSearch(recommendedWebSearch);
+              // Persist to preferences
+              setPersistedModelIds(newParticipants.map((p: { modelId: string }) => p.modelId));
+              setPersistedModelOrder(newParticipants.map((p: { modelId: string }) => p.modelId));
+              setPersistedMode(recommendedMode);
+              setPersistedWebSearch(recommendedWebSearch);
+            }
+          } catch {
+            // Continue with current config if analysis fails
+            console.error('[ChatOverview] Auto mode analysis failed, using current config');
+          } finally {
+            setIsAnalyzingPrompt(false);
+          }
+        }
+
+        // Check participants again after auto mode might have updated them
+        const currentParticipants = storeApi.getState().selectedParticipants;
+        if (currentParticipants.length === 0) {
           return;
         }
 
@@ -594,7 +645,7 @@ export default function ChatOverviewScreen() {
         }
       }
     },
-    [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId, chatAttachments],
+    [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId, chatAttachments, autoMode, setIsAnalyzingPrompt, analyzePromptStream, setSelectedParticipants, setModelOrder, setSelectedMode, setEnableWebSearch, setPersistedModelIds, setPersistedModelOrder, setPersistedMode, setPersistedWebSearch, storeApi],
   );
 
   const handleToggleModel = useCallback((modelId: string) => {
@@ -698,6 +749,7 @@ export default function ChatOverviewScreen() {
       attachmentCount={chatAttachments.attachments.length}
       enableAttachments={!isInitialUIInputBlocked}
       disabled={isInitialUIInputBlocked}
+      autoMode={autoMode}
     />
   ), [
     selectedParticipants,
@@ -710,6 +762,7 @@ export default function ChatOverviewScreen() {
     handleAttachmentClick,
     chatAttachments.attachments.length,
     isInitialUIInputBlocked,
+    autoMode,
   ]);
 
   const sharedChatInputProps = useMemo(() => {
@@ -841,13 +894,23 @@ export default function ChatOverviewScreen() {
 
                       {!isMobile && (
                         <motion.div
-                          className="w-full mt-6"
+                          className="w-full mt-14"
                           initial={{ opacity: 0, y: 15 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0 }}
                           transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                         >
-                          <ChatInput {...sharedChatInputProps} />
+                          <div className="relative">
+                            <div className="absolute -top-9 left-0 z-10">
+                              <ChatAutoModeToggle
+                                autoMode={autoMode}
+                                onAutoModeChange={setAutoMode}
+                                isAnalyzing={isAnalyzingPrompt}
+                                disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
+                              />
+                            </div>
+                            <ChatInput {...sharedChatInputProps} className="rounded-tl-none" />
+                          </div>
                         </motion.div>
                       )}
                     </div>
@@ -864,7 +927,17 @@ export default function ChatOverviewScreen() {
                       exit={{ opacity: 0 }}
                       transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                     >
-                      <ChatInput {...sharedChatInputProps} />
+                      <div className="relative">
+                        <div className="absolute -top-9 left-0 z-10">
+                          <ChatAutoModeToggle
+                            autoMode={autoMode}
+                            onAutoModeChange={setAutoMode}
+                            isAnalyzing={isAnalyzingPrompt}
+                            disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
+                          />
+                        </div>
+                        <ChatInput {...sharedChatInputProps} className="rounded-tl-none" />
+                      </div>
                     </motion.div>
                   </div>
                 </div>

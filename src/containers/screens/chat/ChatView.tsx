@@ -7,6 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
 import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { ChatAutoModeToggle } from '@/components/chat/chat-auto-mode-toggle';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
@@ -15,6 +16,7 @@ import { useChatStore, useChatStoreApi } from '@/components/providers';
 import { useCustomRolesQuery, useModelsQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries';
 import type { TimelineItem, UseChatAttachmentsReturn } from '@/hooks/utils';
 import {
+  useAnalyzePromptStream,
   useBoolean,
   useChatScroll,
   useOrderedModels,
@@ -101,6 +103,12 @@ export function ChatView({
     enableWebSearch,
     modelOrder,
     setModelOrder,
+    autoMode,
+    setAutoMode,
+    isAnalyzingPrompt,
+    setIsAnalyzingPrompt,
+    setSelectedMode,
+    setEnableWebSearch,
   } = useChatStore(
     useShallow(s => ({
       messages: s.messages,
@@ -126,6 +134,12 @@ export function ChatView({
       enableWebSearch: s.enableWebSearch,
       modelOrder: s.modelOrder,
       setModelOrder: s.setModelOrder,
+      autoMode: s.autoMode,
+      setAutoMode: s.setAutoMode,
+      isAnalyzingPrompt: s.isAnalyzingPrompt,
+      setIsAnalyzingPrompt: s.setIsAnalyzingPrompt,
+      setSelectedMode: s.setSelectedMode,
+      setEnableWebSearch: s.setEnableWebSearch,
     })),
   );
 
@@ -313,6 +327,7 @@ export function ChatView({
   }, [mode, incompatibleModelIds, selectedParticipants, messages.length, threadActions, setSelectedParticipants, allEnabledModels, t, chatAttachments.attachments]);
 
   const formActions = useChatFormActions();
+  const { streamConfig: analyzePromptStream } = useAnalyzePromptStream();
 
   const { showLoader } = useFlowLoading({ mode });
 
@@ -341,9 +356,59 @@ export function ChatView({
     || isModelsLoading
     || isResumptionActive
     || formActions.isSubmitting
-    || isRoundInProgress;
+    || isRoundInProgress
+    || isAnalyzingPrompt;
 
-  const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming;
+  const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming || isAnalyzingPrompt;
+
+  // Auto mode submit handler - analyzes prompt with streaming and applies config before creating thread
+  const handleAutoModeSubmit = useCallback(async (e: React.FormEvent) => {
+    // Only run auto mode analysis for new chats (OVERVIEW mode)
+    if (mode === ScreenModes.OVERVIEW && autoMode && inputValue.trim()) {
+      setIsAnalyzingPrompt(true);
+
+      try {
+        // Stream config analysis - partial configs will update in real-time
+        const result = await analyzePromptStream(inputValue.trim());
+
+        if (result) {
+          // Apply recommended config
+          const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;
+
+          // Map to participant config format
+          const newParticipants = participants.map((p: { modelId: string; role: string | null }, index: number) => ({
+            id: p.modelId,
+            modelId: p.modelId,
+            role: p.role || '',
+            priority: index,
+          }));
+
+          setSelectedParticipants(newParticipants);
+          setModelOrder(newParticipants.map((p: { modelId: string }) => p.modelId));
+          setSelectedMode(recommendedMode);
+          setEnableWebSearch(recommendedWebSearch);
+        }
+      } catch {
+        // Continue with current config on error
+      } finally {
+        setIsAnalyzingPrompt(false);
+      }
+    }
+
+    // Continue with normal submit flow
+    await onSubmit(e);
+  }, [
+    mode,
+    autoMode,
+    inputValue,
+    setIsAnalyzingPrompt,
+    analyzePromptStream,
+    setSelectedParticipants,
+    setModelOrder,
+    setSelectedMode,
+    setEnableWebSearch,
+    onSubmit,
+  ]);
 
   const keyboardOffset = useVisualViewportPosition();
 
@@ -531,40 +596,55 @@ export function ChatView({
             <div className="absolute inset-0 -bottom-10 bg-gradient-to-t from-background from-90% to-transparent pointer-events-none" />
             <div className="w-full max-w-4xl mx-auto px-5 md:px-6 relative">
               <ChatScrollButton variant="input" />
-              <ChatInput
-                value={inputValue}
-                onChange={setInputValue}
-                onSubmit={onSubmit}
-                status={isInputBlocked ? 'submitted' : 'ready'}
-                placeholder={t('input.placeholder')}
-                participants={selectedParticipants}
-                showCreditAlert={true}
-                attachments={chatAttachments.attachments}
-                onAddAttachments={chatAttachments.addFiles}
-                onRemoveAttachment={chatAttachments.removeAttachment}
-                enableAttachments={!isInputBlocked}
-                attachmentClickRef={attachmentClickRef}
-                isUploading={chatAttachments.isUploading}
-                isHydrating={mode === ScreenModes.THREAD && !hasInitiallyLoaded}
-                isSubmitting={showSubmitSpinner}
-                isModelsLoading={isModelsLoading}
-                toolbar={(
-                  <ChatInputToolbarMenu
-                    selectedParticipants={selectedParticipants}
-                    allModels={allEnabledModels}
-                    onOpenModelModal={isModelModalOpen.onTrue}
-                    selectedMode={selectedMode || ChatModeSchema.catch(getDefaultChatMode()).parse(thread?.mode)}
-                    onOpenModeModal={isModeModalOpen.onTrue}
-                    enableWebSearch={enableWebSearch}
-                    onWebSearchToggle={handleWebSearchToggle}
-                    onAttachmentClick={handleAttachmentClick}
-                    attachmentCount={chatAttachments.attachments.length}
-                    enableAttachments={!isInputBlocked}
-                    disabled={isInputBlocked}
-                    isModelsLoading={isModelsLoading}
-                  />
+              <div className="relative">
+                {/* Auto Mode Toggle - only visible in new chat mode */}
+                {mode === ScreenModes.OVERVIEW && (
+                  <div className="absolute -top-9 left-0 z-10">
+                    <ChatAutoModeToggle
+                      autoMode={autoMode}
+                      onAutoModeChange={setAutoMode}
+                      isAnalyzing={isAnalyzingPrompt}
+                      disabled={isInputBlocked && !isAnalyzingPrompt}
+                    />
+                  </div>
                 )}
-              />
+                <ChatInput
+                  className={mode === ScreenModes.OVERVIEW ? 'rounded-tl-none' : undefined}
+                  value={inputValue}
+                  onChange={setInputValue}
+                  onSubmit={handleAutoModeSubmit}
+                  status={isInputBlocked ? 'submitted' : 'ready'}
+                  placeholder={t('input.placeholder')}
+                  participants={selectedParticipants}
+                  showCreditAlert={true}
+                  attachments={chatAttachments.attachments}
+                  onAddAttachments={chatAttachments.addFiles}
+                  onRemoveAttachment={chatAttachments.removeAttachment}
+                  enableAttachments={!isInputBlocked}
+                  attachmentClickRef={attachmentClickRef}
+                  isUploading={chatAttachments.isUploading}
+                  isHydrating={mode === ScreenModes.THREAD && !hasInitiallyLoaded}
+                  isSubmitting={showSubmitSpinner}
+                  isModelsLoading={isModelsLoading}
+                  toolbar={(
+                    <ChatInputToolbarMenu
+                      selectedParticipants={selectedParticipants}
+                      allModels={allEnabledModels}
+                      onOpenModelModal={isModelModalOpen.onTrue}
+                      selectedMode={selectedMode || ChatModeSchema.catch(getDefaultChatMode()).parse(thread?.mode)}
+                      onOpenModeModal={isModeModalOpen.onTrue}
+                      enableWebSearch={enableWebSearch}
+                      onWebSearchToggle={handleWebSearchToggle}
+                      onAttachmentClick={handleAttachmentClick}
+                      attachmentCount={chatAttachments.attachments.length}
+                      enableAttachments={!isInputBlocked}
+                      disabled={isInputBlocked}
+                      isModelsLoading={isModelsLoading}
+                      autoMode={mode === ScreenModes.OVERVIEW && autoMode}
+                    />
+                  )}
+                />
+              </div>
             </div>
           </div>
         </div>

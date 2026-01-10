@@ -172,6 +172,33 @@ export const PreSearchSseEvents = {
 } as const;
 
 // ============================================================================
+// ANALYZE PROMPT SSE EVENT NAMES
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ANALYZE_PROMPT_SSE_EVENTS = ['start', 'config', 'done', 'failed'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_ANALYZE_PROMPT_SSE_EVENT = 'start' as const;
+
+// 3. ZOD SCHEMA
+export const AnalyzePromptSseEventSchema = z.enum(ANALYZE_PROMPT_SSE_EVENTS).openapi({
+  description: 'Server-Sent Events (SSE) event names for auto mode prompt analysis streaming',
+  example: 'config',
+});
+
+// 4. TYPESCRIPT TYPE
+export type AnalyzePromptSseEvent = z.infer<typeof AnalyzePromptSseEventSchema>;
+
+// 5. CONSTANT OBJECT
+export const AnalyzePromptSseEvents = {
+  START: 'start' as const,
+  CONFIG: 'config' as const,
+  DONE: 'done' as const,
+  FAILED: 'failed' as const,
+} as const;
+
+// ============================================================================
 // WEB SEARCH COMPLEXITY
 // ============================================================================
 

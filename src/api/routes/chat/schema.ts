@@ -1691,3 +1691,49 @@ export const WebSearchResultItemPropsSchema = z.object({
 }).openapi('WebSearchResultItemProps');
 
 export type WebSearchResultItemProps = z.infer<typeof WebSearchResultItemPropsSchema>;
+
+// ============================================================================
+// AUTO MODE PROMPT ANALYSIS
+// ============================================================================
+
+export const AnalyzePromptRequestSchema = z.object({
+  prompt: z.string().min(1).max(STRING_LIMITS.MESSAGE_MAX).openapi({
+    description: 'User prompt to analyze for optimal configuration',
+    example: 'What are the best practices for building a SaaS product?',
+  }),
+}).openapi('AnalyzePromptRequest');
+
+export type AnalyzePromptRequest = z.infer<typeof AnalyzePromptRequestSchema>;
+
+export const RecommendedParticipantSchema = z.object({
+  modelId: z.string().openapi({
+    description: 'Model ID from accessible models list',
+    example: 'google/gemini-2.5-flash',
+  }),
+  role: z.string().nullable().openapi({
+    description: 'Short role name (Ideator, Strategist, Analyst, Builder, Critic) or null',
+    example: 'Analyst',
+  }),
+}).openapi('RecommendedParticipant');
+
+export type RecommendedParticipant = z.infer<typeof RecommendedParticipantSchema>;
+
+export const AnalyzePromptPayloadSchema = z.object({
+  participants: z.array(RecommendedParticipantSchema).min(1).max(12).openapi({
+    description: 'Recommended model-role pairs for the prompt',
+  }),
+  mode: ChatModeSchema.openapi({
+    description: 'Recommended chat mode',
+    example: 'brainstorming',
+  }),
+  enableWebSearch: z.boolean().openapi({
+    description: 'Whether web search should be enabled',
+    example: false,
+  }),
+}).openapi('AnalyzePromptPayload');
+
+export type AnalyzePromptPayload = z.infer<typeof AnalyzePromptPayloadSchema>;
+
+export const AnalyzePromptResponseSchema = createApiResponseSchema(AnalyzePromptPayloadSchema).openapi('AnalyzePromptResponse');
+
+export type AnalyzePromptResponse = z.infer<typeof AnalyzePromptResponseSchema>;

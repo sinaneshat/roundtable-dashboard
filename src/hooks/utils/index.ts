@@ -1,4 +1,5 @@
 export { shouldRetryMutation } from './mutation-retry';
+export { useAnalyzePromptStream } from './use-analyze-prompt-stream';
 export type { UseAuthCheckReturn } from './use-auth-check';
 export { useAuthCheck } from './use-auth-check';
 export type { UseAutoResizeTextareaOptions, UseAutoResizeTextareaReturn } from './use-auto-resize-textarea';

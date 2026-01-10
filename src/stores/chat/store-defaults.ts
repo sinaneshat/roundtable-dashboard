@@ -42,6 +42,7 @@ export const FORM_DEFAULTS = {
   selectedParticipants: [],
   enableWebSearch: false, // ⚠️ NOTE: This is ONLY used for new chats - thread screen syncs from thread.enableWebSearch
   modelOrder: [], // Visual order of models for drag-and-drop
+  autoMode: true, // ✅ Auto mode ON by default - AI selects models/roles/mode based on prompt
 } satisfies FormState;
 
 // ============================================================================
@@ -63,6 +64,7 @@ export const UI_DEFAULTS = {
   waitingToStartStreaming: false,
   isCreatingThread: false,
   createdThreadId: null,
+  isAnalyzingPrompt: false, // ✅ True when AI is analyzing prompt for auto mode
 } satisfies UIState;
 
 // ============================================================================
@@ -283,6 +285,7 @@ export const COMPLETE_RESET_STATE = {
   selectedParticipants: FORM_DEFAULTS.selectedParticipants,
   enableWebSearch: FORM_DEFAULTS.enableWebSearch,
   modelOrder: FORM_DEFAULTS.modelOrder,
+  autoMode: FORM_DEFAULTS.autoMode,
   // Feedback state - create fresh Map instance to prevent state pollution
   feedbackByRound: new Map(),
   pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
@@ -292,6 +295,7 @@ export const COMPLETE_RESET_STATE = {
   waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
   isCreatingThread: UI_DEFAULTS.isCreatingThread,
   createdThreadId: UI_DEFAULTS.createdThreadId,
+  isAnalyzingPrompt: UI_DEFAULTS.isAnalyzingPrompt,
   // Pre-search state
   preSearches: PRESEARCH_DEFAULTS.preSearches,
   preSearchActivityTimes: new Map<number, number>(),

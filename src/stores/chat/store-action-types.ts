@@ -60,6 +60,7 @@ export type SetSelectedMode = (mode: ChatMode | null) => void;
 export type SetSelectedParticipants = (participants: ParticipantConfig[]) => void;
 export type SetEnableWebSearch = (enabled: boolean) => void;
 export type SetModelOrder = (modelIds: string[]) => void;
+export type SetAutoMode = (enabled: boolean) => void;
 export type AddParticipant = (participant: ParticipantConfig) => void;
 export type RemoveParticipant = (participantId: string) => void;
 export type UpdateParticipant = (participantId: string, updates: Partial<ParticipantConfig>) => void;
@@ -82,6 +83,7 @@ export type SetShowInitialUI = (show: boolean) => void;
 export type SetWaitingToStartStreaming = (waiting: boolean) => void;
 export type SetIsCreatingThread = (creating: boolean) => void;
 export type SetCreatedThreadId = (id: string | null) => void;
+export type SetIsAnalyzingPrompt = (analyzing: boolean) => void;
 export type ResetUI = () => void;
 
 // ============================================================================

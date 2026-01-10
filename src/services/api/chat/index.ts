@@ -64,8 +64,11 @@ export {
   updateCustomRoleService,
 } from './roles';
 
-// Threads
+// Threads (including Auto Mode)
 export {
+  type AnalyzePromptRequest,
+  type AnalyzePromptResponse,
+  analyzePromptStreamService,
   type CreateThreadRequest,
   type CreateThreadResponse,
   createThreadService,

@@ -25,6 +25,7 @@ type ChatInputToolbarMenuProps = {
   isSpeechSupported?: boolean;
   disabled?: boolean;
   isModelsLoading?: boolean;
+  autoMode?: boolean;
 };
 
 function ChatInputToolbarSkeleton() {
