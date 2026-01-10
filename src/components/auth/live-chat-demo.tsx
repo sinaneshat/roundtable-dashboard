@@ -1,9 +1,9 @@
 'use client';
-/* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect -- Animation demo uses setInterval pattern */
 
 import { Scale } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+/* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect -- Animation demo requires setState in intervals/timeouts */
 import { FinishReasons, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
@@ -137,6 +137,8 @@ export function LiveChatDemo() {
   const [moderatorText, setModeratorText] = useState('');
   const [demoCompleted, setDemoCompleted] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Demo animation: intentional setState in intervals/timeouts triggered by useEffect
 
   useEffect(() => {
     if (activeParticipant >= 4 && !demoCompleted) {
@@ -272,7 +274,7 @@ export function LiveChatDemo() {
         <Badge variant="secondary" className="text-xs">Demo</Badge>
       </div>
       <ScrollArea className="h-full min-h-0 flex-1">
-        <div className="w-full p-12 [&_p]:text-muted-foreground [&_strong]:text-foreground">
+        <div className="w-full px-10 pt-10 pb-4 [&_p]:text-muted-foreground [&_strong]:text-foreground">
           <ThreadTimeline
             timelineItems={timelineItems}
             user={DEMO_USER}

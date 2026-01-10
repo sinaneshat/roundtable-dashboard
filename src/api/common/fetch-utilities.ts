@@ -296,10 +296,6 @@ export async function fetchWithRetry<T = unknown>(
           };
         }
 
-        // Type handling based on schema presence:
-        // - With schema: parseResult.data is validated T (no casting needed)
-        // - Without schema: parseResult.data is unknown, consumer casts to T at their own risk
-        // This is the contract of the function - callers must provide schema for type safety
         const data = parseResult.data as T;
 
         const duration = Date.now() - startTime;
@@ -383,7 +379,7 @@ export async function fetchJSON<T = unknown>(
     method: 'GET',
     headers: {
       'Accept': 'application/json',
-      'User-Agent': 'Roundtable-Dashboard/1.0',
+      'User-Agent': 'Roundtable/1.0',
     },
   }, config, schema);
 }
@@ -403,7 +399,7 @@ export async function postJSON<T = unknown>(
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'Roundtable-Dashboard/1.0',
+      'User-Agent': 'Roundtable/1.0',
       ...headers, // Custom headers override defaults
     },
     body: JSON.stringify(body),

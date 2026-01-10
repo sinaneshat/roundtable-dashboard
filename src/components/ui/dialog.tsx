@@ -1,40 +1,30 @@
-"use client"
+'use client';
 
 import type { ComponentProps } from 'react';
 
-import * as DialogPrimitive from "@radix-ui/react-dialog"
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
 
-import { Icons } from "@/components/icons"
-import { cn } from "@/lib/ui/cn"
+import { Icons } from '@/components/icons';
+import { cn } from '@/lib/ui/cn';
 
-function Dialog({
-  ...props
-}: ComponentProps<typeof DialogPrimitive.Root>) {
+function Dialog(props: ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
 }
 
-function DialogTrigger({
-  ...props
-}: ComponentProps<typeof DialogPrimitive.Trigger>) {
+function DialogTrigger(props: ComponentProps<typeof DialogPrimitive.Trigger>) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 }
 
-function DialogPortal({
-  ...props
-}: ComponentProps<typeof DialogPrimitive.Portal>) {
+function DialogPortal(props: ComponentProps<typeof DialogPrimitive.Portal>) {
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
 }
 
-function DialogClose({
-  ...props
-}: ComponentProps<typeof DialogPrimitive.Close>) {
+function DialogClose(props: ComponentProps<typeof DialogPrimitive.Close>) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
-type DialogOverlayBaseProps = ComponentProps<typeof DialogPrimitive.Overlay>;
-
-interface DialogOverlayProps extends DialogOverlayBaseProps {
+interface DialogOverlayProps extends ComponentProps<typeof DialogPrimitive.Overlay> {
   glass?: boolean
 }
 
@@ -47,8 +37,8 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50",
-        glass ? "bg-black/95" : "bg-black/90",
+        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50',
+        glass ? 'bg-black/95' : 'bg-black/90',
         className
       )}
       {...props}
@@ -56,9 +46,7 @@ function DialogOverlay({
   )
 }
 
-type DialogContentBaseProps = ComponentProps<typeof DialogPrimitive.Content>;
-
-interface DialogContentProps extends DialogContentBaseProps {
+interface DialogContentProps extends ComponentProps<typeof DialogPrimitive.Content> {
   showCloseButton?: boolean
   glass?: boolean
 }
@@ -78,11 +66,11 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] duration-200",
-          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          'fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] sm:w-full max-w-lg translate-x-[-50%] translate-y-[-50%] duration-200',
+          'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
           glass
-            ? cn("gap-0 rounded-2xl border border-border bg-card p-0 shadow-lg overflow-hidden")
-            : "gap-4 rounded-2xl border bg-background p-6 shadow-lg overflow-hidden",
+            ? cn('gap-0 rounded-2xl border border-border bg-card p-0 shadow-lg overflow-hidden')
+            : 'gap-3 sm:gap-4 rounded-2xl border bg-background p-4 sm:p-6 shadow-lg overflow-hidden',
           className
         )}
         {...props}
@@ -91,7 +79,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="ring-offset-background focus-visible:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 end-4 rounded-full opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className="ring-offset-background focus-visible:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-3 end-3 sm:top-4 sm:end-4 rounded-full opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <Icons.x />
             <span className="sr-only">{t('close')}</span>
@@ -102,9 +90,7 @@ function DialogContent({
   )
 }
 
-type DialogHeaderBaseProps = ComponentProps<"div">;
-
-interface DialogHeaderProps extends DialogHeaderBaseProps {
+interface DialogHeaderProps extends ComponentProps<'div'> {
   glass?: boolean
 }
 
@@ -113,8 +99,8 @@ function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps)
     <div
       data-slot="dialog-header"
       className={cn(
-        "flex flex-col space-y-1.5 text-left",
-        glass && "bg-card px-4 sm:px-5 md:px-6 pt-4 sm:pt-5 md:pt-6 pb-3 sm:pb-4",
+        'flex flex-col space-y-1.5 text-left',
+        glass && 'bg-card px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4',
         className
       )}
       {...props}
@@ -122,14 +108,11 @@ function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps)
   )
 }
 
-type DialogFooterBaseProps = ComponentProps<"div">;
-type DialogBodyBaseProps = ComponentProps<"div">;
-
-interface DialogFooterProps extends DialogFooterBaseProps {
+interface DialogFooterProps extends ComponentProps<'div'> {
   glass?: boolean
 }
 
-interface DialogBodyProps extends DialogBodyBaseProps {
+interface DialogBodyProps extends ComponentProps<'div'> {
   glass?: boolean
 }
 
@@ -138,7 +121,7 @@ function DialogBody({ className, glass = false, ...props }: DialogBodyProps) {
     <div
       data-slot="dialog-body"
       className={cn(
-        glass && "bg-background px-4 sm:px-5 md:px-6",
+        glass && 'bg-background px-4 sm:px-6 py-4 sm:py-6',
         className
       )}
       {...props}
@@ -151,8 +134,8 @@ function DialogFooter({ className, glass = false, ...props }: DialogFooterProps)
     <div
       data-slot="dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-3 sm:flex-row sm:justify-end sm:gap-2",
-        glass && "bg-background px-4 sm:px-5 md:px-6 pb-4 sm:pb-5 md:pb-6 pt-3 sm:pt-4",
+        'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3',
+        glass && 'bg-background px-4 sm:px-6 pb-4 sm:pb-6 pt-3 sm:pt-4',
         className
       )}
       {...props}
@@ -199,4 +182,3 @@ export {
   DialogTitle,
   DialogTrigger
 }
-

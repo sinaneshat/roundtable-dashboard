@@ -1,7 +1,6 @@
 import type { ComponentProps } from 'react';
 
-import type { SkeletonUsecase } from '@/api/core/enums';
-import { SkeletonUsecases } from '@/api/core/enums';
+import { SkeletonUsecases, type SkeletonUsecase } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
 
 function Skeleton({ className, ...props }: ComponentProps<'div'>) {
@@ -211,7 +210,7 @@ function StickyInputSkeleton({ className, ...props }: ComponentProps<'div'>) {
       )}
       {...props}
     >
-      <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+      <div className="w-full max-w-4xl mx-auto px-5 md:px-6">
         <div className="rounded-2xl bg-card border shadow-lg p-4">
           <Skeleton className="h-12 w-full bg-white/10 rounded-xl" />
           <div className="flex items-center justify-between mt-3">
@@ -306,7 +305,7 @@ function QuickStartSkeleton({ count = 3, className, ...props }: QuickStartSkelet
                   <Skeleton className="size-6 rounded-full bg-white/15 relative z-[2]" />
                   <Skeleton className="size-6 rounded-full bg-white/15 relative z-[1]" />
                 </div>
-                <Skeleton className="size-6 rounded-full bg-white/30 ml-2" />
+                <Skeleton className="size-6 rounded-full bg-white/30 ms-2" />
               </div>
             </div>
           </div>
@@ -352,7 +351,7 @@ function PreSearchSkeleton({
             </div>
           </div>
 
-          <div className="pl-6 space-y-2">
+          <div className="ps-6 space-y-2">
             {Array.from({ length: resultsPerQuery }, (_, resultIndex) => (
               <div key={resultIndex} className="flex items-start gap-2 py-1.5">
                 <Skeleton className="size-4 rounded flex-shrink-0" />
@@ -398,7 +397,7 @@ function PreSearchQuerySkeleton({
         </div>
       </div>
 
-      <div className="pl-6 space-y-2">
+      <div className="ps-6 space-y-2">
         {Array.from({ length: resultsPerQuery }, (_, resultIndex) => (
           <div key={resultIndex} className="flex items-start gap-2 py-1.5">
             <Skeleton className="size-4 rounded flex-shrink-0" />
@@ -427,7 +426,7 @@ function PreSearchResultsSkeleton({
   ...props
 }: PreSearchResultsSkeletonProps) {
   return (
-    <div className={cn('pl-6 space-y-2', className)} {...props}>
+    <div className={cn('ps-6 space-y-2', className)} {...props}>
       {Array.from({ length: count }, (_, resultIndex) => (
         <div key={resultIndex} className="flex items-start gap-2 py-1.5">
           <Skeleton className="size-4 rounded flex-shrink-0" />
@@ -461,4 +460,3 @@ export {
   PreSearchQuerySkeleton,
   PreSearchResultsSkeleton,
 }
-

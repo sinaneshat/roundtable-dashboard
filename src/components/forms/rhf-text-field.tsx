@@ -21,6 +21,7 @@ type RHFTextFieldProps<TFieldValues extends FieldValues = FieldValues> = {
   required?: boolean;
   disabled?: boolean;
   className?: string;
+  inputClassName?: string;
   fieldType?: FieldType;
 };
 
@@ -33,6 +34,7 @@ export function RHFTextField<TFieldValues extends FieldValues = FieldValues>({
   disabled,
   fieldType = FieldTypes.TEXT,
   className,
+  inputClassName,
 }: RHFTextFieldProps<TFieldValues>) {
   const { control } = useFormContext<TFieldValues>();
 
@@ -51,6 +53,7 @@ export function RHFTextField<TFieldValues extends FieldValues = FieldValues>({
               data-testid={field.name}
               type={fieldType}
               placeholder={placeholder}
+              className={inputClassName}
               onChange={(e) => {
                 const rawValue = e.target.value;
                 const value = fieldType === FieldTypes.NUMBER && rawValue !== ''

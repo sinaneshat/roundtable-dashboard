@@ -5,6 +5,8 @@ import type { ComponentProps, ReactElement } from 'react';
 import * as ToastPrimitives from '@radix-ui/react-toast';
 import { cva, type VariantProps } from 'class-variance-authority';
 
+import type { BaseToastVariant } from '@/api/core/enums';
+import { BaseToastVariants } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { cn } from '@/lib/ui/cn';
 
@@ -22,7 +24,7 @@ function ToastViewport({
     <ToastPrimitives.Viewport
       data-slot="toast-viewport"
       className={cn(
-        'fixed bottom-0 end-0 z-[100] flex max-h-screen w-full flex-col p-4 md:max-w-[420px]',
+        'fixed bottom-0 end-0 z-[100] flex max-h-screen w-full flex-col p-3 sm:p-4 sm:max-w-[380px] md:max-w-[420px]',
         className,
       )}
       {...props}
@@ -31,26 +33,27 @@ function ToastViewport({
 }
 
 const toastVariants = cva(
-  'group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-2xl border p-6 pe-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-bottom-full data-[state=open]:slide-in-from-bottom-full',
+  'group pointer-events-auto relative flex w-full items-center justify-between space-x-3 sm:space-x-4 overflow-hidden rounded-2xl border p-4 sm:p-6 pe-7 sm:pe-8 shadow-lg backdrop-blur-xl transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-bottom-full data-[state=open]:slide-in-from-bottom-full',
   {
     variants: {
       variant: {
-        default: 'border bg-background text-foreground',
-        destructive:
-          'destructive group border-destructive bg-destructive text-destructive-foreground',
-        success: 'border bg-chart-3/10 text-chart-3 border-chart-3/20',
-      },
+        [BaseToastVariants.DEFAULT]: 'border bg-background/80 text-foreground',
+        [BaseToastVariants.DESTRUCTIVE]:
+          'destructive group border-destructive/30 bg-destructive/15 text-destructive',
+        [BaseToastVariants.SUCCESS]: 'border border-success/30 bg-success/15 text-success',
+        [BaseToastVariants.WARNING]: 'border border-warning/30 bg-warning/15 text-warning',
+        [BaseToastVariants.INFO]: 'border border-info/30 bg-info/15 text-info',
+      } satisfies Record<BaseToastVariant, string>,
     },
     defaultVariants: {
-      variant: 'default',
+      variant: BaseToastVariants.DEFAULT,
     },
   },
 );
 
-type ToastBaseProps = ComponentProps<typeof ToastPrimitives.Root>;
-type ToastVariantProps = VariantProps<typeof toastVariants>;
-
-interface ToastProps extends ToastBaseProps, ToastVariantProps {}
+interface ToastProps
+  extends ComponentProps<typeof ToastPrimitives.Root>,
+    VariantProps<typeof toastVariants> {}
 
 function Toast({
   className,
@@ -138,4 +141,3 @@ export {
   ToastTitle,
   ToastViewport, type ToastActionElement, type ToastProps
 };
-

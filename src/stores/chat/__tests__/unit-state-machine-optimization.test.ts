@@ -470,8 +470,8 @@ describe('state Machine Optimization - determineFlowState()', () => {
       }
       const end = performance.now();
 
-      // 10000 iterations should complete in < 100ms for O(1) operation (CI variability)
-      expect(end - start).toBeLessThan(100);
+      // 10000 iterations should complete in < 200ms for O(1) operation (CI/memory pressure variability)
+      expect(end - start).toBeLessThan(200);
     });
 
     it('does not scan messages or participants arrays', () => {

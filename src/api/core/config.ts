@@ -45,7 +45,7 @@ const coreEnvironmentSchema = z.object({
   // Optional: URLs are derived from centralized config based on WEBAPP_ENV
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   NEXT_PUBLIC_API_URL: z.string().url().optional(),
-  NEXT_PUBLIC_APP_NAME: z.string().min(1).default('Roundtable Dashboard'),
+  NEXT_PUBLIC_APP_NAME: z.string().min(1).default('Roundtable'),
   NEXT_PUBLIC_APP_VERSION: z.string().min(1).default('1.0.0'),
   API_BASE_PATH: z.string().min(1).default('/api'),
   API_VERSION: ApiVersionSchema.default('v1'),
@@ -289,9 +289,9 @@ async function parseEnvironment() {
  */
 export const APP_CONFIG = {
   // Application metadata
-  NAME: 'Roundtable Dashboard',
+  NAME: 'Roundtable',
   VERSION: '1.0.0',
-  DESCRIPTION: 'AI collaboration platform where multiple minds meet',
+  DESCRIPTION: 'Chat with multiple AI models at once',
 
   // API configuration
   API_BASE_PATH: '/api',

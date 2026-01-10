@@ -117,18 +117,16 @@ export function PreSearchCard({
   }, [preSearch.searchData]);
 
   const handleOpenChange = useCallback((open: boolean) => {
-    if (isStreamingOrPending)
-      return;
     setManualControl({ round: preSearch.roundNumber, open });
-  }, [isStreamingOrPending, preSearch.roundNumber]);
+  }, [preSearch.roundNumber]);
 
   const isOpen = useMemo(() => {
     if (demoOpen !== undefined)
       return demoOpen;
-    if (isStreamingOrPending)
-      return true;
     if (isManualControlValid && manualControl)
       return manualControl.open;
+    if (isStreamingOrPending)
+      return true;
     return false;
   }, [demoOpen, isStreamingOrPending, isManualControlValid, manualControl]);
 
@@ -154,12 +152,11 @@ export function PreSearchCard({
         </div>
       </div>
 
-      <Collapsible open={isOpen} onOpenChange={handleOpenChange} disabled={isStreamingOrPending}>
+      <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
         <CollapsibleTrigger
           className={cn(
             'flex items-center gap-1.5 text-muted-foreground text-sm cursor-pointer',
             'hover:text-foreground transition-colors',
-            isStreamingOrPending && 'cursor-default pointer-events-none',
           )}
         >
           <Icons.chevronRight

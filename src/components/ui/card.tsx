@@ -10,10 +10,10 @@ type CardProps = ComponentProps<"div"> & {
 };
 
 const CARD_VARIANT_CLASSES: Record<CardVariant, string> = {
-  [CardVariants.DEFAULT]: "bg-card text-card-foreground rounded-2xl border py-6 shadow-sm",
-  [CardVariants.GLASS]: cn(glassCard("medium"), "rounded-2xl py-6"),
-  [CardVariants.GLASS_SUBTLE]: cn(glassCard("subtle"), "rounded-2xl py-6"),
-  [CardVariants.GLASS_STRONG]: cn(glassCard("strong"), "rounded-2xl py-6"),
+  [CardVariants.DEFAULT]: "bg-card text-card-foreground rounded-2xl border py-4 sm:py-6 shadow-sm",
+  [CardVariants.GLASS]: cn(glassCard("medium"), "rounded-2xl py-4 sm:py-6"),
+  [CardVariants.GLASS_SUBTLE]: cn(glassCard("subtle"), "rounded-2xl py-4 sm:py-6"),
+  [CardVariants.GLASS_STRONG]: cn(glassCard("strong"), "rounded-2xl py-4 sm:py-6"),
 };
 
 function Card({ className, variant = DEFAULT_CARD_VARIANT, ...props }: CardProps) {
@@ -21,7 +21,7 @@ function Card({ className, variant = DEFAULT_CARD_VARIANT, ...props }: CardProps
     <div
       data-slot="card"
       className={cn(
-        "flex flex-col gap-6 w-full min-w-0 overflow-hidden",
+        "flex flex-col gap-4 sm:gap-6 w-full min-w-0 overflow-hidden",
         CARD_VARIANT_CLASSES[variant],
         className
       )}
@@ -35,7 +35,7 @@ function CardHeader({ className, ...props }: ComponentProps<"div">) {
     <div
       data-slot="card-header"
       className={cn(
-        "flex flex-col items-start gap-1.5 px-6 [.border-b]:pb-6 w-full min-w-0 overflow-hidden",
+        "flex flex-col items-start gap-1.5 px-4 sm:px-6 [.border-b]:pb-4 sm:[.border-b]:pb-6 w-full min-w-0 overflow-hidden",
         className
       )}
       {...props}
@@ -80,7 +80,7 @@ function CardContent({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="card-content"
-      className={cn("px-6 w-full min-w-0 overflow-hidden", className)}
+      className={cn("px-4 sm:px-6 w-full min-w-0 overflow-hidden", className)}
       {...props}
     />
   )
@@ -90,7 +90,7 @@ function CardFooter({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="card-footer"
-      className={cn("flex items-center px-6 [.border-t]:pt-6 w-full min-w-0 overflow-hidden", className)}
+      className={cn("flex items-center px-4 sm:px-6 [.border-t]:pt-4 sm:[.border-t]:pt-6 w-full min-w-0 overflow-hidden", className)}
       {...props}
     />
   )
@@ -99,4 +99,3 @@ function CardFooter({ className, ...props }: ComponentProps<"div">) {
 export {
   Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle
 }
-

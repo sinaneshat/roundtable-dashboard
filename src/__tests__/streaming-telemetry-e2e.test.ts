@@ -728,7 +728,7 @@ describe('telemetry Purpose Verification', () => {
     it('should enable A/B testing of prompts', () => {
       const promptExperiment = {
         promptId: 'moderator_summary',
-        promptVersion: 'v2.7',
+        promptVersion: 'v3.0',
         variantId: 'A',
         conversionMetrics: {
           userSatisfactionScore: 4.2,

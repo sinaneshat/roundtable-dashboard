@@ -2,11 +2,12 @@ import { BRAND } from '@/constants';
 
 // Stable default values to prevent re-renders
 const DEFAULT_FEATURES = [
-  'Multi-model AI collaboration',
-  'Real-time chat interface',
-  'Session management',
-  'Public sharing',
-  'Usage tracking',
+  'Chat with ChatGPT, Claude, and Gemini simultaneously',
+  'Multi-model AI collaboration in real-time',
+  'Compare AI responses side by side',
+  'AI brainstorming and problem solving',
+  'Share conversations publicly',
+  'Web search integration for AI models',
 ];
 const DEFAULT_LANGUAGES = ['en-US'];
 
@@ -81,13 +82,8 @@ export function SoftwareApplicationSchema(props: SoftwareApplicationSchemaProps)
     screenshots,
   } = props;
 
-  // Compute default screenshots after baseUrl is available
   const screenshotUrls = screenshots || [`${baseUrl}/static/og-image.png`];
-
-  // ✅ FIX: Use static date to prevent hydration mismatch
-  // Calculate once at build time, not on every render
-  // This prevents server/client Date.now() difference causing hydration errors
-  const oneYearFromNow = new Date(2026, 0, 1).toISOString(); // Jan 1, 2026 - update yearly
+  const oneYearFromNow = new Date(2026, 0, 1).toISOString();
 
   const structuredData = {
     '@context': 'https://schema.org',
@@ -96,7 +92,8 @@ export function SoftwareApplicationSchema(props: SoftwareApplicationSchemaProps)
     'description': description,
     'url': baseUrl,
     'applicationCategory': 'BusinessApplication',
-    'applicationSubCategory': 'Productivity Software',
+    'applicationSubCategory': 'AI Collaboration Platform',
+    'keywords': 'ChatGPT, Claude, Gemini, AI chat, multiple AI models, AI collaboration, AI comparison',
     'operatingSystem': 'Any',
     'browserRequirements': softwareRequirements,
     'softwareVersion': version,

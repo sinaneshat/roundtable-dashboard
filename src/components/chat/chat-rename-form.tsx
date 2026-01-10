@@ -62,7 +62,6 @@ export const ChatRenameForm = memo(({
     }
   };
 
-  // Focus and select on mount
   useEffect(() => {
     requestAnimationFrame(() => {
       inputRef.current?.focus();
@@ -76,7 +75,7 @@ export const ChatRenameForm = memo(({
       className={cn(
         'flex w-full min-w-0 items-center rounded-full bg-accent transition-all duration-200',
         'focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring',
-        isMobile ? 'h-10 gap-1 px-3 py-2' : 'h-9 gap-2.5 px-4 py-2',
+        isMobile ? 'h-10 gap-1.5 pl-3 pr-1.5 py-2' : 'h-9 gap-1.5 pl-4 pr-1.5 py-2',
       )}
     >
       <input
@@ -95,30 +94,18 @@ export const ChatRenameForm = memo(({
         data-testid="chat-rename-input"
       />
 
-      {/* Action buttons - always visible for accessibility */}
-      <div className={cn('flex items-center shrink-0', isMobile ? 'gap-0.5' : 'gap-1')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onCancel}
-          disabled={isPending}
-          className={cn('rounded-full', isMobile ? 'size-7' : 'size-6')}
-          aria-label={t('actions.cancel')}
-        >
-          <Icons.x className={isMobile ? 'size-4' : 'size-3.5'} />
-        </Button>
-        <Button
-          type="submit"
-          variant="ghost"
-          size="icon"
-          disabled={isPending || !isValid || !isDirty}
-          className={cn('rounded-full', isMobile ? 'size-7' : 'size-6')}
-          aria-label={t('actions.save')}
-        >
-          <Icons.check className={isMobile ? 'size-4' : 'size-3.5'} />
-        </Button>
-      </div>
+      <Button
+        type="submit"
+        variant="ghost"
+        size="icon"
+        disabled={isPending || !isValid || !isDirty}
+        className={cn('shrink-0 rounded-full', isMobile ? 'size-6' : 'size-5')}
+        aria-label={t('actions.save')}
+      >
+        {isPending
+          ? <Icons.loader className={cn('animate-spin', isMobile ? 'size-3.5' : 'size-3')} />
+          : <Icons.check className={isMobile ? 'size-3.5' : 'size-3'} />}
+      </Button>
     </form>
   );
 });

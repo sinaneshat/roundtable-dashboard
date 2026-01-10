@@ -1,11 +1,11 @@
-"use client"
+'use client';
 
 import type { ComponentProps } from 'react';
 
-import { Drawer as DrawerPrimitive } from "vaul"
+import { Drawer as DrawerPrimitive } from 'vaul';
 
-import { cn } from "@/lib/ui/cn"
-import { glassCard } from "@/lib/ui/glassmorphism"
+import { cn } from '@/lib/ui/cn';
+import { glassCard } from '@/lib/ui/glassmorphism';
 
 function Drawer({
   shouldScaleBackground = true,
@@ -19,21 +19,15 @@ function Drawer({
   )
 }
 
-function DrawerTrigger({
-  ...props
-}: ComponentProps<typeof DrawerPrimitive.Trigger>) {
+function DrawerTrigger(props: ComponentProps<typeof DrawerPrimitive.Trigger>) {
   return <DrawerPrimitive.Trigger data-slot="drawer-trigger" {...props} />
 }
 
-function DrawerPortal({
-  ...props
-}: ComponentProps<typeof DrawerPrimitive.Portal>) {
+function DrawerPortal(props: ComponentProps<typeof DrawerPrimitive.Portal>) {
   return <DrawerPrimitive.Portal data-slot="drawer-portal" {...props} />
 }
 
-function DrawerClose({
-  ...props
-}: ComponentProps<typeof DrawerPrimitive.Close>) {
+function DrawerClose(props: ComponentProps<typeof DrawerPrimitive.Close>) {
   return <DrawerPrimitive.Close data-slot="drawer-close" {...props} />
 }
 
@@ -44,15 +38,13 @@ function DrawerOverlay({
   return (
     <DrawerPrimitive.Overlay
       data-slot="drawer-overlay"
-      className={cn("fixed inset-0 z-50 bg-black/80", className)}
+      className={cn('fixed inset-0 z-50 bg-black/80', className)}
       {...props}
     />
   )
 }
 
-type DrawerContentBaseProps = ComponentProps<typeof DrawerPrimitive.Content>;
-
-interface DrawerContentProps extends DrawerContentBaseProps {
+interface DrawerContentProps extends ComponentProps<typeof DrawerPrimitive.Content> {
   glass?: boolean
 }
 
@@ -68,16 +60,16 @@ function DrawerContent({
       <DrawerPrimitive.Content
         data-slot="drawer-content"
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-2xl border",
+          'fixed inset-x-0 bottom-0 z-50 mt-16 sm:mt-24 flex h-auto flex-col rounded-t-2xl border',
           glass
-            ? glassCard("medium")
-            : "bg-background",
+            ? glassCard('medium')
+            : 'bg-background',
           className
         )}
         {...props}
       >
-        <div className="mx-auto mt-4 mb-2 h-1.5 w-12 rounded-full bg-white" />
-        <div className="pb-12">
+        <div className="mx-auto mt-3 sm:mt-4 mb-2 h-1.5 w-12 rounded-full bg-white" />
+        <div className="pb-8 sm:pb-12">
           {children}
         </div>
       </DrawerPrimitive.Content>
@@ -88,11 +80,11 @@ function DrawerContent({
 function DrawerHeader({
   className,
   ...props
-}: ComponentProps<"div">) {
+}: ComponentProps<'div'>) {
   return (
     <div
       data-slot="drawer-header"
-      className={cn("grid gap-1.5 p-4 text-center sm:text-left", className)}
+      className={cn('grid gap-1.5 p-4 text-center sm:text-left', className)}
       {...props}
     />
   )
@@ -101,11 +93,11 @@ function DrawerHeader({
 function DrawerFooter({
   className,
   ...props
-}: ComponentProps<"div">) {
+}: ComponentProps<'div'>) {
   return (
     <div
       data-slot="drawer-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+      className={cn('mt-auto flex flex-col gap-2 p-4', className)}
       {...props}
     />
   )

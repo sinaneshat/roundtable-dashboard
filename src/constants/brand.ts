@@ -11,12 +11,12 @@
 
 export const BRAND = {
   name: 'Roundtable',
-  fullName: 'Roundtable Dashboard',
+  fullName: 'Roundtable',
   displayName: 'Roundtable.now',
   domain: 'roundtable.now',
   domainDisplay: 'Roundtable.now',
-  tagline: 'Watch multiple models debate and brainstorm together',
-  description: 'Watch multiple models debate and brainstorm together',
+  tagline: 'Multiple AI Models, One Conversation',
+  description: 'Chat with ChatGPT, Claude, Gemini and more AI models at once. Get diverse perspectives, brainstorm ideas, and solve problems with multiple AIs collaborating in real-time.',
   venture: 'Roundtable',
 
   // URLs
@@ -91,7 +91,6 @@ export const BRAND = {
   } as const,
 } as const;
 
-// Static copyright year - update annually
 const COPYRIGHT_YEAR = 2025;
 
 export function getCopyrightText(): string {

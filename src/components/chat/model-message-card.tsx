@@ -1,4 +1,5 @@
 'use client';
+
 import { useTranslations } from 'next-intl';
 import { memo, useLayoutEffect, useRef } from 'react';
 import { Streamdown } from 'streamdown';
@@ -12,8 +13,8 @@ import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { CitedMessageContent } from '@/components/chat/cited-message-content';
+import { MessageCopyAction } from '@/components/chat/copy-actions';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
-import { MessageCopyAction } from '@/components/chat/message-copy-action';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { MessageSources } from '@/components/chat/message-sources';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
@@ -30,37 +31,14 @@ import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getRoleBadgeStyle, hasCitations, hasProperty, isNonEmptyString } from '@/lib/utils';
 
-/**
- * ✅ MODEL NORMALIZATION: Filter non-renderable reasoning parts
- *
- * Different AI models have quirks during streaming that cause layout shifts:
- * - Grok (xAI): Sends `[REDACTED]` encrypted reasoning that disappears on completion
- * - Claude: Native `type: 'redacted'` parts for encrypted thinking content
- * - DeepSeek: Uses <think> tags handled by extractReasoningMiddleware
- * - Gemini: Native reasoning with `type: 'redacted'` for encrypted content
- *
- * This unified filter prevents layout shifts from:
- * 1. Empty or whitespace-only reasoning text
- * 2. Placeholder content like `[REDACTED]`
- * 3. Parts with `type: 'redacted'` (AI SDK native redacted reasoning)
- * 4. Any reasoning that would render as blank/invisible
- *
- * @see AI SDK docs: Reasoning Detail Object supports 'text' and 'redacted' types
- * @see OpenRouter docs: "Encrypted reasoning content might appear as [REDACTED] in streaming"
- * @see message-persistence.service.ts:extractReasoning() for backend normalization
- */
 function isNonRenderableReasoningPart(part: MessagePart): boolean {
   if (part.type !== MessagePartTypes.REASONING) {
     return false;
   }
-  // Filter reasoning parts with type: 'redacted' (AI SDK native redacted reasoning)
-  // This handles Gemini, Claude, and other models that use native redacted reasoning
-  // ✅ TYPE-SAFE: Use type guard instead of type cast
   if (hasProperty(part, 'reasoningType', isNonEmptyString) && part.reasoningType === 'redacted') {
     return true;
   }
   const text = part.text?.trim() ?? '';
-  // Filter: empty, whitespace-only, or known placeholder patterns
   return !text || text === '[REDACTED]' || /^\[REDACTED\]$/i.test(text);
 }
 
@@ -108,8 +86,6 @@ export const ModelMessageCard = memo(({
   const t = useTranslations('chat.participant');
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
 
-  // ✅ PERFORMANCE FIX: Batch all store subscriptions into single useShallow call
-  // Previously 2 separate useChatStore calls caused 2 re-render cycles
   const { globalIsStreaming, registerAnimation, completeAnimation } = useChatStore(
     useShallow(s => ({
       globalIsStreaming: s.isStreaming,
@@ -118,51 +94,37 @@ export const ModelMessageCard = memo(({
     })),
   );
 
-  // Check if parts have streaming state (only trust when PARTICIPANTS actively streaming)
   const hasActualStreamingParts = globalIsStreaming && parts.some(
     p => 'state' in p && p.state === TextPartStates.STREAMING,
   );
 
-  // ✅ MODEL NORMALIZATION: Filter non-renderable reasoning to prevent layout shifts
   const renderableParts = parts.filter(part => !isNonRenderableReasoningPart(part));
 
-  // ✅ REASONING DETECTION: Check if there were reasoning parts that got filtered
-  // Used to show a more informative message for reasoning-only responses
   const hasFilteredReasoningParts = parts.some(
     part => part.type === MessagePartTypes.REASONING && isNonRenderableReasoningPart(part),
   );
 
-  // ✅ FLASH FIX: Shimmer must stay visible until content arrives
-  // Previous bug: When status changed from PENDING→STREAMING before parts arrived,
-  // both shimmer AND content were hidden (opacity 0) causing a flash.
-  // Fix: Show shimmer whenever no content AND expecting content (pending/streaming)
   const isExpectingContent = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
   const showShimmer = renderableParts.length === 0 && isExpectingContent;
 
-  // Pulsating indicator: pending with no parts OR actively streaming parts
   const showStatusIndicator = (status === MessageStatuses.PENDING && parts.length === 0)
     || hasActualStreamingParts;
 
   const isError = status === MessageStatuses.FAILED;
 
-  // ✅ FIX: isStreaming requires PARTICIPANT streaming active AND parts streaming
   const isStreaming = hasActualStreamingParts;
   const hasRegisteredRef = useRef(false);
   const prevStatusRef = useRef(status);
 
-  // ✅ CONSOLIDATED: Animation lifecycle - registration and completion
-  // Handles: register when streaming starts, complete when streaming ends
   useLayoutEffect(() => {
     const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
     const nowComplete = status !== MessageStatuses.STREAMING && status !== MessageStatuses.PENDING;
 
-    // Register animation when streaming starts
     if (isStreaming && !hasRegisteredRef.current && participantIndex >= 0) {
       registerAnimation(participantIndex);
       hasRegisteredRef.current = true;
     }
 
-    // Complete animation when streaming ends (use RAF for deterministic timing)
     if (wasStreaming && nowComplete && hasRegisteredRef.current && participantIndex >= 0) {
       const rafId = requestAnimationFrame(() => {
         completeAnimation(participantIndex);
@@ -176,7 +138,6 @@ export const ModelMessageCard = memo(({
     return undefined;
   }, [status, isStreaming, participantIndex, registerAnimation, completeAnimation]);
 
-  // ✅ CLEANUP: Complete animation on unmount (prevents orphaned entries)
   useLayoutEffect(() => {
     const index = participantIndex;
     return () => {
@@ -187,7 +148,6 @@ export const ModelMessageCard = memo(({
     };
   }, [participantIndex, completeAnimation]);
 
-  // ✅ STRICT TYPING: Only assistant messages have error fields
   const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
   const hasError = isError || assistantMetadata?.hasError;
   const modelName = model?.name || assistantMetadata?.model || 'AI Assistant';
@@ -230,13 +190,7 @@ export const ModelMessageCard = memo(({
                 className="mb-2"
               />
             )}
-            {/* ✅ FLASH FIX v3: CSS Grid overlay + shimmer stays until content arrives
-                Previous bug: shimmer hid when status=STREAMING before parts arrived
-                Now shimmer stays visible until renderableParts.length > 0 */}
-            {/* ✅ SCROLL FIX: data-message-content enables CSS scroll anchoring */}
-            {/* ✅ AI SDK v6: Handle messages with only non-renderable parts (e.g., [REDACTED] reasoning) */}
-            <div className="grid" style={{ gridTemplateColumns: '1fr' }} data-message-content>
-              {/* Shimmer - stays visible until content actually arrives */}
+            <div className="grid w-full" dir="auto" data-message-content>
               <div
                 style={{ gridArea: '1/1' }}
                 className={cn(
@@ -246,8 +200,6 @@ export const ModelMessageCard = memo(({
               >
                 <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
               </div>
-              {/* Empty state - show when completed but no renderable content
-                  This handles models that return only [REDACTED] reasoning with no text */}
               {!showShimmer && renderableParts.length === 0 && parts.length > 0 && !hasError && (
                 <div
                   style={{ gridArea: '1/1' }}
@@ -258,8 +210,6 @@ export const ModelMessageCard = memo(({
                     : t('emptyResponse', { model: modelName })}
                 </div>
               )}
-              {/* Content - hidden initially, fades in when parts arrive
-                  Always render wrapper to prevent mount/unmount flashing */}
               <div
                 style={{ gridArea: '1/1' }}
                 className={cn(
@@ -284,14 +234,10 @@ export const ModelMessageCard = memo(({
               </div>
             </div>
 
-            {/* ✅ SOURCES: Show files/context available to AI */}
-            {/* Displayed even when AI doesn't cite inline, so users know what files were used */}
             {assistantMetadata?.availableSources && assistantMetadata.availableSources.length > 0 && (
               <MessageSources sources={assistantMetadata.availableSources} />
             )}
 
-            {/* ✅ MESSAGE ACTIONS: Copy button for individual model response */}
-            {/* Only show when message is complete (not streaming), has text content, and actions not hidden */}
             {!hideActions && (() => {
               const isComplete = status === MessageStatuses.COMPLETE;
               const textContent = renderableParts
@@ -317,10 +263,7 @@ export const ModelMessageCard = memo(({
     </div>
   );
 
-  // ✅ Helper function to render content parts (extracted for ScrollArea wrapping)
   function renderContentParts() {
-    // ✅ MODEL NORMALIZATION: Uses pre-filtered renderableParts (non-renderable reasoning excluded)
-    // ✅ TYPE-SAFE: Use enum constants for part ordering (Record<string> for runtime lookup safety)
     const PART_ORDER: Record<string, number> = {
       [MessagePartTypes.REASONING]: 0,
       [MessagePartTypes.TEXT]: 1,
@@ -341,7 +284,7 @@ export const ModelMessageCard = memo(({
 
         if (textHasCitations) {
           return (
-            <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
+            <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`} dir="auto">
               <CitedMessageContent
                 text={part.text}
                 citations={resolvedCitations}
@@ -353,7 +296,7 @@ export const ModelMessageCard = memo(({
         }
 
         return (
-          <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
+          <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`} dir="auto">
             <Streamdown
               className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
               components={streamdownComponents}
@@ -367,9 +310,6 @@ export const ModelMessageCard = memo(({
         const reasoningMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
         const storedDuration = reasoningMetadata?.reasoningDuration;
 
-        // ✅ FIX: Use the reasoning part's own state, not the message's overall status
-        // When text is still streaming but reasoning is done, reasoning animation should stop
-        // part.state can be TextPartStates.STREAMING | TextPartStates.DONE | undefined (undefined = historical/complete)
         const reasoningPartState = 'state' in part ? part.state : undefined;
         const isReasoningStreaming = reasoningPartState === TextPartStates.STREAMING;
 

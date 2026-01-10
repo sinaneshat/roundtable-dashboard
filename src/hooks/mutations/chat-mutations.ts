@@ -3,7 +3,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { ChatThreadCacheSchema } from '@/api/routes/chat/schema';
-import { revalidatePublicThread } from '@/app/auth/actions';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
   addParticipantService,
@@ -181,10 +180,6 @@ export function useUpdateThreadMutation() {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
       }
     },
-    // ✅ PERF: Changelog invalidation REMOVED - was premature (before backend creates entries)
-    // Config changes are persisted here, but changelog entries are created during message streaming.
-    // Round-specific changelog is now fetched AFTER streaming via useThreadRoundChangelogQuery.
-    // See: thread-actions.ts for incremental changelog fetch logic
     retry: false,
     throwOnError: false,
   });
@@ -346,45 +341,35 @@ export function useTogglePublicMutation() {
     mutationFn: ({ threadId, isPublic }: { threadId: string; isPublic: boolean; slug?: string }) =>
       updateThreadService({ param: { id: threadId }, json: { isPublic } }),
     onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
+      // Only cancel/update detail caches - NOT the threads list
+      // Updating threads.all causes sidebar re-render which closes the share dialog
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(variables.threadId) });
       if (variables.slug) {
         await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
       }
 
-      const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
+      const previousDetail = queryClient.getQueryData(queryKeys.threads.detail(variables.threadId));
       const previousBySlug = variables.slug
         ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.slug))
         : null;
 
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.threads.all },
+      // Update thread detail cache (used by header)
+      queryClient.setQueryData(
+        queryKeys.threads.detail(variables.threadId),
         (old) => {
-          if (!old || typeof old !== 'object')
-            return old;
-          if (!('pages' in old))
-            return old;
-          const pages = validateThreadsListPages(old.pages);
-          if (!pages)
+          const parsedData = validateThreadDetailPayloadCache(old);
+          if (!parsedData)
             return old;
 
           return {
-            ...old,
-            pages: pages.map((page) => {
-              if (!page.success || !page.data?.items)
-                return page;
-
-              return {
-                ...page,
-                data: {
-                  ...page.data,
-                  items: page.data.items.map(thread =>
-                    thread.id === variables.threadId
-                      ? { ...thread, isPublic: variables.isPublic }
-                      : thread,
-                  ),
-                },
-              };
-            }),
+            success: true,
+            data: {
+              ...parsedData,
+              thread: {
+                ...parsedData.thread,
+                isPublic: variables.isPublic,
+              },
+            },
           };
         },
       );
@@ -411,18 +396,11 @@ export function useTogglePublicMutation() {
         );
       }
 
-      return { previousThreads, previousBySlug, slug: variables.slug };
-    },
-    onSuccess: async (data, variables) => {
-      // Trigger ISR revalidation for the public page
-      if (data?.success && variables.slug) {
-        const action = variables.isPublic ? 'publish' : 'unpublish';
-        await revalidatePublicThread(variables.slug, action);
-      }
+      return { previousDetail, previousBySlug, slug: variables.slug, threadId: variables.threadId };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previousThreads) {
-        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
+      if (context?.threadId && context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousDetail);
       }
       if (context?.slug && context?.previousBySlug) {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);

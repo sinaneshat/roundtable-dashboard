@@ -31,7 +31,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('seo.keywords');
 
   return createMetadata({
-    title: BRAND.fullName,
+    title: `${BRAND.fullName} - ${BRAND.tagline}`,
     description: BRAND.description,
     keywords: [
       t('aiCollaboration'),
@@ -40,10 +40,17 @@ export async function generateMetadata(): Promise<Metadata> {
       t('chatgpt'),
       t('claude'),
       t('gemini'),
-      `${BRAND.displayName} discussion`,
+      t('gpt4'),
+      t('compareAi'),
+      t('multiModelChat'),
+      t('aiDebate'),
+      t('aiProblemSolving'),
+      t('bestAiChat'),
+      t('chatWithMultipleAi'),
+      t('aiComparisonTool'),
       t('aiChat'),
       t('collaborativeAi'),
-      t('teamProductivity'),
+      BRAND.name,
     ],
   });
 }
@@ -58,10 +65,6 @@ export default async function Layout({ children }: { children: React.ReactNode }
   const timeZone = 'UTC';
   const now = undefined;
   const baseUrl = env.NEXT_PUBLIC_APP_URL || 'https://app.roundtable.now';
-
-  // NOTE: Preferences are hydrated client-side via Zustand persist
-  // This allows SSG/ISR for static pages (privacy, terms, auth, pricing)
-  // The store uses skipHydration:true + persist.rehydrate() on mount
 
   const contentTypeValue = tAeo('contentType');
   const contentType = isValidSeoContentType(contentTypeValue) ? contentTypeValue : DEFAULT_SEO_CONTENT_TYPE;

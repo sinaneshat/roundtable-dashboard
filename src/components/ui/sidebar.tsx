@@ -3,7 +3,7 @@
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useState } from 'react';
 
-import { Slot } from '@/lib/ui/slot';
+import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { useTranslations } from 'next-intl';
 
@@ -32,7 +32,7 @@ import { Skeleton } from './skeleton';
 const SIDEBAR_COOKIE_NAME = 'sidebar_state';
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = '20rem';
-const SIDEBAR_WIDTH_MOBILE = '20rem';
+const SIDEBAR_WIDTH_MOBILE = '18rem';
 const SIDEBAR_WIDTH_ICON = '4rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
@@ -187,7 +187,7 @@ function Sidebar({
       <div
         data-slot="sidebar"
         className={cn(
-          "text-sidebar-foreground flex h-full w-[var(--sidebar-width)] flex-col bg-card border-r border-border",
+          "text-sidebar-foreground flex h-full w-[var(--sidebar-width)] flex-col bg-card border-e border-border",
           className
         )}
         {...props}
@@ -688,7 +688,7 @@ function SidebarMenuSub({ className, ...props }: ComponentProps<"ul">) {
       data-slot="sidebar-menu-sub"
       data-sidebar="menu-sub"
       className={cn(
-        'border-sidebar-border mx-2 flex min-w-0 translate-x-px flex-col gap-0.5 border-l px-2 py-0.5',
+        'border-sidebar-border mx-2 flex min-w-0 translate-x-px flex-col gap-0.5 border-s px-2 py-0.5',
         'group-data-[collapsible=icon]:hidden',
         className,
       )}
@@ -782,4 +782,3 @@ export {
   type SidebarMenuSkeletonProps,
   type SidebarMenuSubButtonProps,
 };
-

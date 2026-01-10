@@ -967,7 +967,7 @@ export function isValidToastPosition(value: unknown): value is ToastPosition {
 // BASE TOAST VARIANT (Subset of ToastVariant supported by base toast component)
 // ============================================================================
 
-export const BASE_TOAST_VARIANTS = ['default', 'destructive', 'success'] as const;
+export const BASE_TOAST_VARIANTS = ['default', 'destructive', 'success', 'warning', 'info'] as const;
 
 export const DEFAULT_BASE_TOAST_VARIANT: BaseToastVariant = 'default';
 
@@ -982,6 +982,8 @@ export const BaseToastVariants = {
   DEFAULT: 'default' as const,
   DESTRUCTIVE: 'destructive' as const,
   SUCCESS: 'success' as const,
+  WARNING: 'warning' as const,
+  INFO: 'info' as const,
 } as const;
 
 export function isValidBaseToastVariant(value: unknown): value is BaseToastVariant {
@@ -1425,4 +1427,94 @@ export const SkeletonUsecases = {
 
 export function isValidSkeletonUsecase(value: unknown): value is SkeletonUsecase {
   return typeof value === 'string' && SKELETON_USECASES.includes(value as SkeletonUsecase);
+}
+
+// ============================================================================
+// USER FEEDBACK TYPE (for feedback modal - captured via PostHog)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const USER_FEEDBACK_TYPES = ['bug', 'feature_request', 'general', 'other'] as const;
+
+// 2️⃣ DEFAULT VALUE (if applicable)
+export const DEFAULT_USER_FEEDBACK_TYPE: UserFeedbackType = 'general';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const UserFeedbackTypeSchema = z.enum(USER_FEEDBACK_TYPES).openapi({
+  description: 'User feedback submission type',
+  example: 'general',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type UserFeedbackType = z.infer<typeof UserFeedbackTypeSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const UserFeedbackTypes = {
+  BUG: 'bug' as const,
+  FEATURE_REQUEST: 'feature_request' as const,
+  GENERAL: 'general' as const,
+  OTHER: 'other' as const,
+} as const;
+
+export function isValidUserFeedbackType(value: unknown): value is UserFeedbackType {
+  return typeof value === 'string' && USER_FEEDBACK_TYPES.includes(value as UserFeedbackType);
+}
+
+// ============================================================================
+// OG IMAGE TYPE
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const OG_IMAGE_TYPES = ['public-thread', 'thread', 'page'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_OG_IMAGE_TYPE: OgImageType = 'page';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const OgImageTypeSchema = z.enum(OG_IMAGE_TYPES).openapi({
+  description: 'Open Graph image type for cache key generation',
+  example: 'public-thread',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type OgImageType = z.infer<typeof OgImageTypeSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const OgImageTypes = {
+  PUBLIC_THREAD: 'public-thread' as const,
+  THREAD: 'thread' as const,
+  PAGE: 'page' as const,
+} as const;
+
+export function isValidOgImageType(value: unknown): value is OgImageType {
+  return typeof value === 'string' && OG_IMAGE_TYPES.includes(value as OgImageType);
+}
+
+// ============================================================================
+// COPY ICON VARIANT (for copy action button icon display)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const COPY_ICON_VARIANTS = ['copy', 'stack'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_COPY_ICON_VARIANT: CopyIconVariant = 'copy';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const CopyIconVariantSchema = z.enum(COPY_ICON_VARIANTS).openapi({
+  description: 'Icon variant for copy action button',
+  example: 'copy',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type CopyIconVariant = z.infer<typeof CopyIconVariantSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const CopyIconVariants = {
+  COPY: 'copy' as const,
+  STACK: 'stack' as const,
+} as const;
+
+export function isValidCopyIconVariant(value: unknown): value is CopyIconVariant {
+  return typeof value === 'string' && COPY_ICON_VARIANTS.includes(value as CopyIconVariant);
 }

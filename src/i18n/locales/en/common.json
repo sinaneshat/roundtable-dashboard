@@ -163,8 +163,8 @@
       "verificationDesc": "Please check your email to verify your account before signing in."
     },
     "layout": {
-      "subtitle": "Experience collaborative AI brainstorming with multiple leading AI models",
-      "welcomeTo": "Welcome to {brand}"
+      "headline": "Your AI Board of Directors",
+      "subtitle": "Get perspectives from multiple AI models working together to solve your toughest problems"
     },
     "continueWithEmail": "Continue with Email",
     "magicLink": {
@@ -326,7 +326,7 @@
   },
   "chat": {
     "dashboard": {
-      "title": "AI Collaboration Dashboard",
+      "title": "AI Collaboration Hub",
       "features": {
         "multipleModels": "Multiple AI Models",
         "realtimeCollaboration": "Real-time Collaboration",
@@ -824,7 +824,11 @@
       "noMessagesDescription": "This conversation hasn't started yet. Create your own multi-AI chat!",
       "learnMore": "Learn More",
       "tryNow": "Try Now",
+      "tryFree": "Try Free",
       "tryRoundtable": "Try Roundtable",
+      "ctaHeadline": "Ready to start your own AI conversation?",
+      "ctaDescription": "Get diverse perspectives from multiple AI models working together.",
+      "getStartedFree": "Get Started Free",
       "description": "lets you chat with multiple AI models simultaneously for deeper insights and better solutions.",
       "loadingPublicChat": "Loading public chat...",
       "privateChat": "Private Chat",
@@ -858,7 +862,9 @@
       "noModelsSelected": "Select at least 1 model to send a message",
       "messageTooLong": "Message too long. Please shorten to send.",
       "send": "Send message",
-      "submitting": "Sending..."
+      "submitting": "Sending...",
+      "recording": "Recording",
+      "clickMicToStop": "Click mic to stop"
     },
     "disclaimer": "AI can make mistakes. Please double-check responses.",
     "sources": {
@@ -892,18 +898,18 @@
     "publicToggleFailedDescription": "Could not update thread visibility. Please try again.",
     "quickStart": {
       "brainstorm": {
-        "description": "Generate creative solutions with multiple AI perspectives",
-        "prompt": "Help me brainstorm innovative ideas for improving team collaboration in remote work environments",
+        "description": "AI models spark off each other to generate unexpected angles",
+        "prompt": "What are the trade-offs between async-first and sync-heavy remote work cultures?",
         "title": "Brainstorm Ideas"
       },
       "debate": {
-        "description": "Explore different perspectives on complex issues",
-        "prompt": "Debate the ethical implications of AI in healthcare decision-making",
+        "description": "Models surface genuine disagreement and explain why",
+        "prompt": "Should AI systems be allowed to make life-or-death medical decisions without human override?",
         "title": "Debate Topics"
       },
       "solve": {
-        "description": "Collaborative problem-solving with AI models",
-        "prompt": "Help me solve technical challenges in building a scalable microservices architecture",
+        "description": "Models build on each other's proposals toward action",
+        "prompt": "I'm choosing between a monolith and microservices for a 10-person startup. What factors should I weigh?",
         "title": "Solve Problems"
       }
     },
@@ -911,6 +917,7 @@
     "renameConversation": "Rename conversation",
     "delete": "Delete",
     "share": "Share",
+    "waitForStreamingToComplete": "Wait for response to complete",
     "scrollToBottom": "Scroll to bottom",
     "searchChats": "Search chats...",
     "searchChatsDescription": "Search and navigate through your chat conversations",
@@ -1002,10 +1009,13 @@
     "roundActions": {
       "copySummary": "Copy summary",
       "copyRound": "Copy round",
-      "copySuccess": "Round copied",
-      "copySuccessDescription": "Round copied to clipboard as markdown",
+      "copyThread": "Copy thread",
+      "copySuccess": "Summary copied",
+      "copySuccessDescription": "Summary copied to clipboard",
+      "copyThreadSuccess": "Thread copied",
+      "copyThreadSuccessDescription": "Full thread copied to clipboard as markdown",
       "copyError": "Copy failed",
-      "copyErrorDescription": "Failed to copy round to clipboard",
+      "copyErrorDescription": "Failed to copy to clipboard",
       "share": "Share thread"
     },
     "messageActions": {
@@ -1197,7 +1207,7 @@
   "navigation": {
     "chat": "Chat",
     "chats": "Chats",
-    "dashboard": "Dashboard",
+    "dashboard": "Home",
     "debates": "Debates",
     "features": "Features",
     "messages": "Messages",
@@ -1261,11 +1271,30 @@
       "oneTime": "one-time",
       "processing": "Processing...",
       "purchase": "Purchase",
+      "startFreeTrial": "Start Free Trial",
       "subscribe": "Subscribe",
       "switchPlan": "Switch to This Plan",
       "upgradePlan": "Upgrade plan",
       "upgradeDescription": "Unlock all AI models & features",
-      "upgradeToPro": "Upgrade to Pro"
+      "upgradeToPro": "Upgrade to Pro",
+      "valueProps": {
+        "allModels": {
+          "title": "All AI Models",
+          "description": "Access GPT, Claude, Gemini & more"
+        },
+        "presets": {
+          "title": "Presets & Custom",
+          "description": "Use ready-made presets or create your own"
+        },
+        "unlimited": {
+          "title": "Unlimited Messages",
+          "description": "No caps, no limits, just chat"
+        },
+        "councilSummary": {
+          "title": "Council Summary",
+          "description": "AI-generated summary of all discussions"
+        }
+      }
     },
     "default": {
       "alwaysActive": "Always Active",
@@ -1297,14 +1326,23 @@
     "keywords": {
       "aiCollaboration": "AI collaboration",
       "multipleAiModels": "multiple AI models",
-      "brainstorming": "brainstorming",
+      "brainstorming": "AI brainstorming tool",
       "chatgpt": "ChatGPT",
-      "claude": "Claude",
-      "gemini": "Gemini",
+      "claude": "Claude AI",
+      "gemini": "Google Gemini",
+      "gpt4": "GPT-4",
       "collaborativeAi": "collaborative AI",
       "teamProductivity": "team productivity",
       "artificialIntelligence": "artificial intelligence",
       "aiChat": "AI chat",
+      "compareAi": "compare AI models",
+      "multiModelChat": "multi-model AI chat",
+      "aiDebate": "AI debate",
+      "aiProblemSolving": "AI problem solving",
+      "bestAiChat": "best AI chat app",
+      "aiAssistant": "AI assistant",
+      "chatWithMultipleAi": "chat with multiple AI",
+      "aiComparisonTool": "AI comparison tool",
       "createAccount": "create account",
       "privacyPolicy": "privacy policy",
       "dataProtection": "data protection",
@@ -1315,21 +1353,22 @@
     },
     "aeo": {
       "primaryQuestion": "What is {brand}?",
-      "primaryAnswer": "A collaborative AI platform where multiple AI models work together to brainstorm, solve problems, and generate ideas in real-time conversations.",
+      "primaryAnswer": "Roundtable is an AI collaboration platform where multiple AI models like ChatGPT, Claude, and Gemini work together in real-time to brainstorm ideas, debate topics, and solve complex problems.",
       "contentType": "guide",
       "relatedQuestions": {
-        "howItWorks": "How does AI collaboration work?",
-        "benefits": "What are the benefits of multiple AI models?",
-        "howToUse": "How to use {brand} for brainstorming?"
+        "howItWorks": "How does multi-AI collaboration work?",
+        "benefits": "Why use multiple AI models together?",
+        "howToUse": "How to brainstorm with ChatGPT, Claude, and Gemini at once?",
+        "comparison": "How to compare AI model responses side by side?"
       }
     },
     "features": {
-      "multiModelCollaboration": "Multi-model AI collaboration",
-      "realtimeChat": "Real-time chat interface",
-      "sessionManagement": "Session management",
-      "publicSharing": "Public sharing capabilities",
+      "multiModelCollaboration": "Multi-model AI collaboration with ChatGPT, Claude, Gemini",
+      "realtimeChat": "Real-time AI chat interface",
+      "sessionManagement": "Conversation session management",
+      "publicSharing": "Share AI conversations publicly",
       "usageTracking": "Usage tracking and analytics",
-      "multipleParticipants": "Multiple AI participants per conversation"
+      "multipleParticipants": "Multiple AI models responding to one prompt"
     }
   },
   "states": {
@@ -1456,6 +1495,41 @@
   },
   "user": {
     "defaultName": "User"
+  },
+  "userMenu": {
+    "proPlan": "Pro Plan",
+    "manageBilling": "Manage billing",
+    "upgradeToPro": "Upgrade to Pro",
+    "upgradeDescription": "Unlock all AI models & unlimited messages",
+    "sendFeedback": "Send Feedback",
+    "feedbackDescription": "Help us improve Roundtable"
+  },
+  "feedback": {
+    "title": "Send Feedback",
+    "description": "Share your thoughts, report bugs, or request features",
+    "typeLabel": "Feedback Type",
+    "types": {
+      "bug": "Bug Report",
+      "feature_request": "Feature Request",
+      "general": "General Feedback",
+      "other": "Other"
+    },
+    "messageLabel": "Your Message",
+    "messagePlaceholder": "Tell us what's on your mind...",
+    "submit": "Submit Feedback",
+    "submitting": "Submitting...",
+    "success": {
+      "title": "Thank you!",
+      "message": "Your feedback has been submitted successfully."
+    },
+    "error": {
+      "title": "Error",
+      "message": "Failed to submit feedback. Please try again."
+    },
+    "validation": {
+      "messageMin": "Message must be at least 10 characters",
+      "messageMax": "Message must be less than 5000 characters"
+    }
   },
   "webSearch": {
     "images": {

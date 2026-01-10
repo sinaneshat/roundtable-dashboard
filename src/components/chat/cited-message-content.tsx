@@ -67,13 +67,11 @@ export function CitedMessageContent({
   isStreaming: _isStreaming = false,
   className,
 }: CitedMessageContentProps) {
-  // Parse citations from text - always parse, even during streaming
   const parsedResult = useMemo(
     () => parseCitations(text),
     [text],
   );
 
-  // Build citation map from resolved data
   const citationMap = useMemo(() => {
     if (!citations) {
       return new Map<string, DbCitation>();
@@ -81,10 +79,9 @@ export function CitedMessageContent({
     return new Map(citations.map(c => [c.id, c]));
   }, [citations]);
 
-  // If no citations found, render with Streamdown as usual
   if (parsedResult.citations.length === 0) {
     return (
-      <div className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
+      <div dir="auto" className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
         <Streamdown components={streamdownComponents}>
           {text}
         </Streamdown>
@@ -92,12 +89,8 @@ export function CitedMessageContent({
     );
   }
 
-  // ✅ FIX: Always render citations, even during streaming
-  // During streaming: Show citation badges with basic info (display number, source type)
-  // After streaming: Show full citation cards with resolved metadata
-  // This prevents raw [att_xxx] markers from showing in the UI
   return (
-    <div className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
+    <div dir="auto" className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
       {parsedResult.segments.map((segment) => {
         if (segment.type === CitationSegmentTypes.TEXT) {
           const textKey = `text-${segment.content.slice(0, 20).replace(/\W/g, '')}-${segment.content.length}`;
@@ -111,7 +104,6 @@ export function CitedMessageContent({
           );
         }
 
-        // Render citation segment (type narrowed to citation)
         if (segment.type !== CitationSegmentTypes.CITATION) {
           return null;
         }

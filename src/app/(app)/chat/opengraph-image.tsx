@@ -14,13 +14,10 @@ export const size = {
   height: 630,
 };
 export const contentType = 'image/png';
-export const alt = `Dashboard - ${BRAND.fullName}`;
-
-// Force dynamic to prevent build-time prerendering (fonts loaded at runtime)
+export const alt = `${BRAND.name} - ${BRAND.tagline}`;
 export const dynamic = 'force-dynamic';
 
 export default async function Image() {
-  // Load translations and fonts in parallel
   const [t, fonts, logoBase64] = await Promise.all([
     getTranslations(),
     getOGFonts(),
@@ -43,7 +40,6 @@ export default async function Image() {
           position: 'relative',
         }}
       >
-        {/* Decorative gradient orbs for different modes */}
         <div
           style={{
             position: 'absolute',
@@ -81,7 +77,6 @@ export default async function Image() {
           }}
         />
 
-        {/* Brand Logo */}
         <div
           style={{
             display: 'flex',
@@ -110,7 +105,6 @@ export default async function Image() {
           </div>
         </div>
 
-        {/* Main Title */}
         <div
           style={{
             fontSize: 64,
@@ -124,7 +118,6 @@ export default async function Image() {
           {t('chat.dashboard.title')}
         </div>
 
-        {/* Subtitle */}
         <div
           style={{
             fontSize: 28,
@@ -139,7 +132,6 @@ export default async function Image() {
           {BRAND.tagline}
         </div>
 
-        {/* Mode Badges */}
         <div
           style={{
             display: 'flex',
@@ -210,7 +202,6 @@ export default async function Image() {
           </div>
         </div>
 
-        {/* Features */}
         <div
           style={{
             display: 'flex',

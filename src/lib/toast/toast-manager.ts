@@ -18,7 +18,6 @@ function createToastActionElement(label: string, onClick: () => void): ToastActi
   return element as unknown as ToastActionElement;
 }
 
-// Global toast tracking and management
 const activeToasts = new Set<string>();
 const toastTimeouts = new Map<string, NodeJS.Timeout>();
 const progressToasts = new Map<string, { progress: number; callback?: ToastProgressCallback }>();
@@ -50,16 +49,10 @@ export type ProgressToastOptions = Omit<ToastOptions, 'duration'> & {
   onError?: (error: Error) => void;
 };
 
-/**
- * Create a unique toast identifier based on content
- */
 function createToastId(title: string, description?: string): string {
   return `${title}-${description || ''}`.toLowerCase().replace(/[^a-z0-9]/g, '-');
 }
 
-/**
- * Process toast queue to respect concurrent limits
- */
 function processToastQueue(): void {
   if (isProcessingQueue || toastQueue.length === 0)
     return;
@@ -81,9 +74,6 @@ function processToastQueue(): void {
   }
 }
 
-/**
- * Internal toast function with queue management
- */
 function showToastInternal(options: ToastOptions): void {
   const {
     id,
@@ -112,11 +102,7 @@ function showToastInternal(options: ToastOptions): void {
     ? createToastActionElement(action.label, action.onClick)
     : undefined;
 
-  const normalizedVariant: BaseToastVariant = (
-    variant === ToastVariants.WARNING
-    || variant === ToastVariants.INFO
-    || variant === ToastVariants.LOADING
-  )
+  const normalizedVariant: BaseToastVariant = variant === ToastVariants.LOADING
     ? BaseToastVariants.DEFAULT
     : (variant as BaseToastVariant);
 

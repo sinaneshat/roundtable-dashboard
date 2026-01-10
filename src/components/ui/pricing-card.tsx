@@ -36,11 +36,17 @@ type PricingCardProps = {
   disabled?: boolean;
 }
 
+const VALUE_PROPS = [
+  { icon: 'sparkles', key: 'allModels' },
+  { icon: 'layers', key: 'presets' },
+  { icon: 'infinity', key: 'unlimited' },
+  { icon: 'messagesSquare', key: 'councilSummary' },
+] as const;
+
 export function PricingCard({
   name,
   description,
   price,
-  features,
   isCurrentPlan = false,
   isMostPopular = false,
   isProcessingSubscribe = false,
@@ -72,10 +78,25 @@ export function PricingCard({
     if (hasOtherSubscription) {
       return t('switchPlan');
     }
-    return t('subscribe');
+    return t('getStarted');
   };
 
   const isActionButtonLoading = isCurrentPlan ? isProcessingCancel : isProcessingSubscribe;
+
+  const getIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'sparkles':
+        return <Icons.sparkles className="size-5" />;
+      case 'layers':
+        return <Icons.layers className="size-5" />;
+      case 'infinity':
+        return <Icons.infinity className="size-5" />;
+      case 'messagesSquare':
+        return <Icons.messagesSquare className="size-5" />;
+      default:
+        return <Icons.check className="size-5" />;
+    }
+  };
 
   return (
     <motion.div
@@ -88,19 +109,6 @@ export function PricingCard({
       }}
       className={cn('relative h-full', className)}
     >
-      {isMostPopular && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: delay + 0.2, duration: 0.3 }}
-          className="absolute -top-3 left-1/2 z-20 -translate-x-1/2"
-        >
-          <div className="whitespace-nowrap rounded-full bg-gradient-to-r from-primary to-primary/80 px-3 py-1 text-xs font-medium text-primary-foreground shadow-lg">
-            {t('mostPopular')}
-          </div>
-        </motion.div>
-      )}
-
       {isCurrentPlan && (
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
@@ -109,7 +117,7 @@ export function PricingCard({
           className="absolute -top-3 left-1/2 z-20 -translate-x-1/2"
         >
           <div className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow-lg">
-            <Icons.creditCard className="size-3" />
+            <Icons.check className="size-3" />
             {t('currentPlan')}
           </div>
         </motion.div>
@@ -120,7 +128,7 @@ export function PricingCard({
           blur={0}
           borderWidth={2}
           spread={80}
-          glow={isMostPopular}
+          glow={isMostPopular && !isCurrentPlan}
           disabled={false}
           proximity={64}
           inactiveZone={0.01}
@@ -132,26 +140,21 @@ export function PricingCard({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: delay + 0.1, duration: 0.4 }}
-              className="space-y-2"
+              className="text-center"
             >
-              <h3 className="text-2xl font-semibold tracking-tight">
+              <h3 className="text-lg font-medium tracking-tight text-muted-foreground">
                 {name}
               </h3>
-              {description && (
-                <p className="text-sm text-muted-foreground">
-                  {description}
-                </p>
-              )}
             </motion.div>
 
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: delay + 0.2, duration: 0.4 }}
-              className="space-y-2"
+              transition={{ delay: delay + 0.15, duration: 0.4 }}
+              className="text-center"
             >
-              <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-bold tracking-tight">
+              <div className="flex items-baseline justify-center gap-1">
+                <span className="text-5xl font-bold tracking-tight">
                   {new Intl.NumberFormat('en-US', {
                     style: 'currency',
                     currency: price.currency,
@@ -160,92 +163,75 @@ export function PricingCard({
                   }).format(price.amount / 100)}
                 </span>
                 {price.interval && (
-                  <span className="text-sm text-muted-foreground">
-                    /
-                    {price.interval}
+                  <span className="text-base text-muted-foreground">
+                    /{price.interval}
                   </span>
                 )}
               </div>
-
-              {price.trialDays && price.trialDays > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: delay + 0.25, duration: 0.3 }}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-600 dark:text-green-400"
-                >
-                  <svg
-                    className="size-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  {price.trialDays}
-                  {' '}
-                  {t('daysFreeTrial')}
-                </motion.div>
-              )}
             </motion.div>
 
-            {features && features.length > 0 && (
-              <motion.ul
-                initial="hidden"
-                animate="show"
-                variants={{
-                  hidden: { opacity: 0 },
-                  show: {
-                    opacity: 1,
-                    transition: {
-                      staggerChildren: 0.05,
-                      delayChildren: delay + 0.3,
-                    },
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: delay + 0.25, duration: 0.4 }}
+              className="w-full h-px bg-gradient-to-r from-transparent via-border to-transparent"
+            />
+
+            <motion.ul
+              initial="hidden"
+              animate="show"
+              variants={{
+                hidden: { opacity: 0 },
+                show: {
+                  opacity: 1,
+                  transition: {
+                    staggerChildren: 0.08,
+                    delayChildren: delay + 0.3,
                   },
-                }}
-                className="flex-1 space-y-3"
-              >
-                {features.map((feature, idx) => (
-                  <motion.li
-                    key={idx}
-                    variants={{
-                      hidden: { opacity: 0, x: -10 },
-                      show: { opacity: 1, x: 0 },
-                    }}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 500,
-                      damping: 40,
-                    }}
-                    className="flex items-start gap-3"
-                  >
-                    <div className="mt-0.5 rounded-full bg-primary/10 p-1">
-                      <Icons.check className="size-3.5 text-primary" />
-                    </div>
-                    <span className="flex-1 text-sm text-muted-foreground">
-                      {feature}
+                },
+              }}
+              className="flex-1 space-y-4"
+            >
+              {VALUE_PROPS.map((prop) => (
+                <motion.li
+                  key={prop.key}
+                  variants={{
+                    hidden: { opacity: 0, x: -10 },
+                    show: { opacity: 1, x: 0 },
+                  }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 500,
+                    damping: 40,
+                  }}
+                  className="flex items-center gap-3"
+                >
+                  <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                    {getIcon(prop.icon)}
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-sm font-medium">
+                      {t(`valueProps.${prop.key}.title`)}
                     </span>
-                  </motion.li>
-                ))}
-              </motion.ul>
-            )}
+                    <p className="text-xs text-muted-foreground">
+                      {t(`valueProps.${prop.key}.description`)}
+                    </p>
+                  </div>
+                </motion.li>
+              ))}
+            </motion.ul>
 
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: delay + 0.4, duration: 0.4 }}
-              className="space-y-3"
+              transition={{ delay: delay + 0.5, duration: 0.4 }}
+              className="space-y-3 pt-2"
             >
               {isCurrentPlan && onManageBilling && (
                 <HoverBorderGradient
                   as="button"
                   containerClassName={cn(
-                    'w-full rounded-4xl',
+                    'w-full rounded-full',
                     isProcessingManageBilling && 'cursor-not-allowed opacity-50',
                   )}
                   className="w-full text-center text-sm font-medium transition-all duration-200 bg-background text-foreground"
@@ -268,14 +254,13 @@ export function PricingCard({
               <HoverBorderGradient
                 as="button"
                 containerClassName={cn(
-                  'w-full rounded-4xl',
+                  'w-full rounded-full',
                   (isActionButtonLoading || disabled) && 'cursor-not-allowed opacity-50',
                 )}
                 className={cn(
                   'w-full text-center text-sm font-medium transition-all duration-200',
-                  isMostPopular && !isCurrentPlan && 'bg-primary text-primary-foreground',
+                  !isCurrentPlan && 'bg-primary text-primary-foreground',
                   isCurrentPlan && 'bg-destructive/10 text-destructive hover:bg-destructive/20',
-                  !isMostPopular && !isCurrentPlan && 'bg-background text-foreground',
                 )}
                 onClick={handleAction}
                 disabled={isActionButtonLoading || disabled}

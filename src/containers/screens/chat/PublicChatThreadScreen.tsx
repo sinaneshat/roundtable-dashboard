@@ -4,13 +4,13 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
-import { ComponentSizes, ComponentVariants, ErrorBoundaryContexts } from '@/api/core/enums';
+import { ComponentVariants, ErrorBoundaryContexts } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { BRAND } from '@/constants/brand';
+import { GlowingEffect } from '@/components/ui/glowing-effect';
 import { usePublicThreadQuery } from '@/hooks/queries';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
@@ -26,20 +26,14 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
 
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
   const changelog = useMemo(() => threadResponse?.changelog || [], [threadResponse]);
-  const user = useMemo(() => threadResponse?.user, [threadResponse]);
+  const user = threadResponse?.user;
   const rawParticipants = useMemo(() => threadResponse?.participants || [], [threadResponse]);
 
   const messages = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
+  const participants = useMemo(() => transformChatParticipants(rawParticipants), [rawParticipants]);
 
-  const participants = useMemo(
-    () => transformChatParticipants(rawParticipants),
-    [rawParticipants],
-  );
-
-  const preSearches: StoredPreSearch[] = useMemo(
-    () => transformPreSearches(threadResponse?.preSearches || []),
-    [threadResponse],
-  );
+  const preSearches: StoredPreSearch[] = useMemo(() =>
+    transformPreSearches(threadResponse?.preSearches || []), [threadResponse]);
 
   const timeline: TimelineItem[] = useThreadTimeline({
     messages,
@@ -112,7 +106,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div
           id="public-chat-scroll-container"
-          className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 pt-16 sm:pt-20 pb-24 sm:pb-32"
+          className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-24 sm:pb-32"
         >
           {timeline.length === 0
             ? (
@@ -143,42 +137,32 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                     isDataReady={isStoreReady}
                   />
 
-                  <div className="mt-12 sm:mt-16 mb-6 sm:mb-8">
-                    <div className="rounded-2xl sm:rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-6 sm:p-8 md:p-10 text-center space-y-4 sm:space-y-6">
-                      <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 mb-1 sm:mb-2">
-                        <Icons.sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
-                      </div>
-                      <div className="space-y-2 sm:space-y-3">
-                        <h3 className="text-xl sm:text-2xl md:text-3xl font-bold">
-                          {tPublic('tryRoundtable')}
+                  <div className="mt-8 mb-8">
+                    <div className="relative rounded-2xl border-2 border-white/20 dark:border-white/10 p-2 shadow-lg">
+                      <GlowingEffect
+                        blur={0}
+                        borderWidth={2}
+                        spread={80}
+                        glow={true}
+                        disabled={false}
+                        proximity={64}
+                        inactiveZone={0.01}
+                      />
+                      <div className="relative rounded-xl border border-white/20 dark:border-white/10 bg-background/50 backdrop-blur-sm p-8 dark:shadow-[0px_0px_27px_0px_#2D2D2D] text-center">
+                        <Icons.sparkles className="size-6 text-primary mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">
+                          {tPublic('ctaHeadline')}
                         </h3>
-                        <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
-                          {tPublic('experiencePower')}
-                          {' '}
-                          {BRAND.displayName}
-                          {' '}
-                          {tPublic('description')}
+                        <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+                          {tPublic('ctaDescription')}
                         </p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 sm:pt-4">
-                        <Button
-                          asChild
-                          size={ComponentSizes.LG}
-                          className="gap-2 w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
-                        >
-                          <Link href="/auth/login?utm_source=public_chat&utm_medium=cta&utm_campaign=try_roundtable">
-                            {tPublic('tryRoundtable')}
-                            <Icons.arrowRight className="w-4 h-4" />
-                          </Link>
-                        </Button>
-                        <Button
-                          asChild
-                          variant={ComponentVariants.OUTLINE}
-                          size={ComponentSizes.LG}
-                          className="w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
-                        >
-                          <Link href="/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more">
-                            {tPublic('learnMore')}
+                        <Button asChild>
+                          <Link
+                            href="/auth/sign-up?utm_source=public_chat&utm_medium=bottom_cta&utm_campaign=try_free"
+                            className="flex items-center gap-2"
+                          >
+                            <span>{tPublic('getStartedFree')}</span>
+                            <Icons.arrowRight className="size-4" />
                           </Link>
                         </Button>
                       </div>

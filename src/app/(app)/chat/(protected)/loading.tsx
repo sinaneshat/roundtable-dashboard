@@ -8,7 +8,7 @@ import { cn } from '@/lib/ui';
 export default function ChatOverviewLoading() {
   return (
     <div className="flex flex-col relative flex-1 min-h-dvh">
-      <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-8">
+      <div className="container max-w-4xl mx-auto px-5 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-8">
         <div className="w-full">
           <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
             <div className="relative h-20 w-20 sm:h-24 sm:w-24">

@@ -151,7 +151,7 @@ export function calculateBaseCredits(inputTokens: number, outputTokens: number):
   return tokensToCredits(inputTokens + outputTokens);
 }
 
-export function getPlanConfig(planType: Exclude<'free' | 'paid', 'free'>) {
+export function getPlanConfig(planType: 'paid') {
   return CREDIT_CONFIG.PLANS[planType];
 }
 
@@ -226,15 +226,38 @@ export function getMaxOutputTokensForTier(tier: SubscriptionTier): number {
   return MAX_OUTPUT_TOKENS_BY_TIER[tier];
 }
 
+/**
+ * Calculate safe max output tokens based on model context and tier limits
+ *
+ * @param modelContextLength - Model's total context window
+ * @param estimatedInputTokens - Estimated tokens used by input (system prompt + messages)
+ * @param tier - User's subscription tier
+ * @param isReasoningModel - Whether model uses reasoning tokens (GPT-5 Nano, o3, DeepSeek R1, etc.)
+ * @returns Safe max output tokens that won't exceed context or tier limits
+ *
+ * Reasoning models need higher limits because their output tokens include:
+ * 1. Reasoning tokens (hidden/encrypted thinking)
+ * 2. Response tokens (visible text)
+ *
+ * Without extra headroom, reasoning models exhaust tokens on thinking
+ * before generating complete responses (cut off mid-sentence).
+ */
 export function getSafeMaxOutputTokens(
   modelContextLength: number,
   estimatedInputTokens: number,
   tier: SubscriptionTier,
+  isReasoningModel: boolean = false,
 ): number {
   const tierMaxOutput = getMaxOutputTokensForTier(tier);
   const safetyBuffer = Math.floor(modelContextLength * 0.2);
   const availableTokens = modelContextLength - estimatedInputTokens - safetyBuffer;
-  return Math.max(512, Math.min(tierMaxOutput, availableTokens));
+
+  // Reasoning models need 4x headroom to account for reasoning tokens
+  // e.g., GPT-5 Nano may use 3000 tokens reasoning + 1000 tokens response
+  // With 4096 tier limit → 16384 for reasoning models
+  const effectiveTierMax = isReasoningModel ? tierMaxOutput * 4 : tierMaxOutput;
+
+  return Math.max(512, Math.min(effectiveTierMax, availableTokens));
 }
 
 export function getMaxModelPricingForTier(tier: SubscriptionTier): number | null {

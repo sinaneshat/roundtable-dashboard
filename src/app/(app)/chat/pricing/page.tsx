@@ -1,11 +1,3 @@
-/**
- * Pricing Page - Static Generation with ISR
- *
- * Shows product catalog for all users.
- * Auth is optional (handled in layout).
- * Products are prefetched in layout.
- */
-
 import type { Metadata } from 'next';
 
 import { BRAND } from '@/constants';
@@ -17,10 +9,17 @@ export const revalidate = 86400;
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
-    title: `Pricing - ${BRAND.fullName}`,
-    description: 'Choose the perfect plan for your AI collaboration needs. Compare plans and start your journey with Roundtable.',
+    title: `Pricing - ${BRAND.name}`,
+    description: 'Start free or go Pro. Access ChatGPT, Claude, Gemini and more AI models in one conversation. Compare Roundtable pricing plans.',
     url: '/chat/pricing',
     robots: 'index, follow',
+    keywords: [
+      'AI chat pricing',
+      'ChatGPT alternative',
+      'multi-model AI',
+      'AI collaboration tool',
+      'Roundtable pricing',
+    ],
   });
 }
 

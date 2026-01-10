@@ -4,11 +4,12 @@
  * Tests for the pricing card component covering:
  * - Basic rendering with required props
  * - Price formatting and display
- * - Feature list rendering
- * - Trial period display
+ * - Fixed value props rendering
  * - Button states and actions
  * - Loading states
- * - Badge displays (current plan, most popular)
+ * - Badge displays (current plan)
+ *
+ * Note: Component uses fixed value props instead of custom features/description
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -35,11 +36,11 @@ describe('pricingCard', () => {
       expect(screen.getByText('Pro Plan')).toBeInTheDocument();
     });
 
-    it('renders description when provided', () => {
+    it('renders fixed value props instead of custom description', () => {
       render(
         <PricingCard
           name="Pro Plan"
-          description="Professional features for power users"
+          description="This description is not displayed"
           price={{
             amount: 1999,
             currency: 'usd',
@@ -48,22 +49,9 @@ describe('pricingCard', () => {
         />,
       );
 
-      expect(screen.getByText('Professional features for power users')).toBeInTheDocument();
-    });
-
-    it('does not render description when null', () => {
-      render(
-        <PricingCard
-          name="Pro Plan"
-          description={null}
-          price={{
-            amount: 1999,
-            currency: 'usd',
-          }}
-        />,
-      );
-
-      expect(screen.queryByText(/Professional features/)).not.toBeInTheDocument();
+      // Component shows fixed value props, not custom description
+      expect(screen.getByText('All AI Models')).toBeInTheDocument();
+      expect(screen.getByText('Unlimited Messages')).toBeInTheDocument();
     });
   });
 
@@ -144,66 +132,8 @@ describe('pricingCard', () => {
     });
   });
 
-  describe('trial period display', () => {
-    it('displays trial badge when trial days provided', () => {
-      render(
-        <PricingCard
-          name="Pro Plan"
-          price={{
-            amount: 1999,
-            currency: 'usd',
-            interval: UIBillingIntervals.MONTH,
-            trialDays: 14,
-          }}
-        />,
-      );
-
-      expect(screen.getByText(/14/)).toBeInTheDocument();
-      expect(screen.getByText(/days free trial/)).toBeInTheDocument();
-    });
-
-    it('does not display trial badge when trial days is null', () => {
-      render(
-        <PricingCard
-          name="Pro Plan"
-          price={{
-            amount: 1999,
-            currency: 'usd',
-            interval: UIBillingIntervals.MONTH,
-            trialDays: null,
-          }}
-        />,
-      );
-
-      expect(screen.queryByText(/days free trial/)).not.toBeInTheDocument();
-    });
-
-    it('does not display trial badge when trial days is 0', () => {
-      render(
-        <PricingCard
-          name="Pro Plan"
-          price={{
-            amount: 1999,
-            currency: 'usd',
-            interval: UIBillingIntervals.MONTH,
-            trialDays: 0,
-          }}
-        />,
-      );
-
-      expect(screen.queryByText(/days free trial/)).not.toBeInTheDocument();
-    });
-  });
-
-  describe('feature list rendering', () => {
-    it('renders all features when provided', () => {
-      const features = [
-        'Unlimited AI conversations',
-        'Access to all models',
-        'Priority support',
-        'Advanced analytics',
-      ];
-
+  describe('value props rendering', () => {
+    it('renders all fixed value props', () => {
       render(
         <PricingCard
           name="Pro Plan"
@@ -212,16 +142,33 @@ describe('pricingCard', () => {
             currency: 'usd',
             interval: UIBillingIntervals.MONTH,
           }}
-          features={features}
         />,
       );
 
-      features.forEach((feature) => {
-        expect(screen.getByText(feature)).toBeInTheDocument();
-      });
+      // Fixed value props from component
+      expect(screen.getByText('All AI Models')).toBeInTheDocument();
+      expect(screen.getByText('Presets & Custom')).toBeInTheDocument();
+      expect(screen.getByText('Unlimited Messages')).toBeInTheDocument();
+      expect(screen.getByText('Council Summary')).toBeInTheDocument();
     });
 
-    it('does not render feature list when null', () => {
+    it('renders value prop descriptions', () => {
+      render(
+        <PricingCard
+          name="Pro Plan"
+          price={{
+            amount: 1999,
+            currency: 'usd',
+            interval: UIBillingIntervals.MONTH,
+          }}
+        />,
+      );
+
+      expect(screen.getByText('Access GPT, Claude, Gemini & more')).toBeInTheDocument();
+      expect(screen.getByText('No caps, no limits, just chat')).toBeInTheDocument();
+    });
+
+    it('renders list element for value props', () => {
       render(
         <PricingCard
           name="Pro Plan"
@@ -229,31 +176,32 @@ describe('pricingCard', () => {
             amount: 1999,
             currency: 'usd',
           }}
-          features={null}
         />,
       );
 
-      expect(screen.queryByRole('list')).not.toBeInTheDocument();
-    });
-
-    it('does not render feature list when empty array', () => {
-      render(
-        <PricingCard
-          name="Pro Plan"
-          price={{
-            amount: 1999,
-            currency: 'usd',
-          }}
-          features={[]}
-        />,
-      );
-
-      expect(screen.queryByRole('list')).not.toBeInTheDocument();
+      expect(screen.getByRole('list')).toBeInTheDocument();
     });
   });
 
   describe('badge displays', () => {
-    it('shows "Most Popular" badge when isMostPopular is true', () => {
+    it('uses glowing effect when isMostPopular is true', () => {
+      const { container } = render(
+        <PricingCard
+          name="Pro Plan"
+          price={{
+            amount: 1999,
+            currency: 'usd',
+          }}
+          isMostPopular={true}
+        />,
+      );
+
+      // Component uses GlowingEffect component, not text badge
+      // The glow effect is controlled by isMostPopular && !isCurrentPlan
+      expect(container.querySelector('.glow')).toBeInTheDocument();
+    });
+
+    it('does not show "Most Popular" text badge', () => {
       render(
         <PricingCard
           name="Pro Plan"
@@ -265,21 +213,7 @@ describe('pricingCard', () => {
         />,
       );
 
-      expect(screen.getByText('Most Popular')).toBeInTheDocument();
-    });
-
-    it('does not show "Most Popular" badge when isMostPopular is false', () => {
-      render(
-        <PricingCard
-          name="Pro Plan"
-          price={{
-            amount: 1999,
-            currency: 'usd',
-          }}
-          isMostPopular={false}
-        />,
-      );
-
+      // Component removed text badge in favor of glowing effect
       expect(screen.queryByText('Most Popular')).not.toBeInTheDocument();
     });
 
@@ -298,8 +232,8 @@ describe('pricingCard', () => {
       expect(screen.getByText('Current Plan')).toBeInTheDocument();
     });
 
-    it('shows both badges when both are true', () => {
-      render(
+    it('shows current plan badge with check icon', () => {
+      const { container } = render(
         <PricingCard
           name="Pro Plan"
           price={{
@@ -307,17 +241,17 @@ describe('pricingCard', () => {
             currency: 'usd',
           }}
           isCurrentPlan={true}
-          isMostPopular={true}
         />,
       );
 
       expect(screen.getByText('Current Plan')).toBeInTheDocument();
-      expect(screen.getByText('Most Popular')).toBeInTheDocument();
+      // Check icon is rendered alongside the badge
+      expect(container.querySelector('.lucide-check')).toBeInTheDocument();
     });
   });
 
   describe('button states and actions', () => {
-    it('shows "Subscribe" button by default', () => {
+    it('shows "Get Started" button by default', () => {
       render(
         <PricingCard
           name="Pro Plan"
@@ -329,7 +263,7 @@ describe('pricingCard', () => {
         />,
       );
 
-      expect(screen.getByText('Subscribe')).toBeInTheDocument();
+      expect(screen.getByText('Get Started')).toBeInTheDocument();
     });
 
     it('shows "Switch to This Plan" when user has other subscription', () => {
@@ -364,7 +298,7 @@ describe('pricingCard', () => {
       expect(screen.getByText('Cancel Subscription')).toBeInTheDocument();
     });
 
-    it('calls onSubscribe when subscribe button clicked', async () => {
+    it('calls onSubscribe when get started button clicked', async () => {
       const user = userEvent.setup();
       const handleSubscribe = vi.fn();
 
@@ -379,7 +313,7 @@ describe('pricingCard', () => {
         />,
       );
 
-      await user.click(screen.getByText('Subscribe'));
+      await user.click(screen.getByText('Get Started'));
       expect(handleSubscribe).toHaveBeenCalledTimes(1);
     });
 
@@ -452,7 +386,7 @@ describe('pricingCard', () => {
         />,
       );
 
-      const button = screen.getByText('Subscribe').closest('button');
+      const button = screen.getByText('Get Started').closest('button');
       expect(button).toBeDisabled();
     });
   });
@@ -555,7 +489,7 @@ describe('pricingCard', () => {
         />,
       );
 
-      expect(screen.getByRole('button', { name: /subscribe/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /get started/i })).toBeInTheDocument();
     });
   });
 });

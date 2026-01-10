@@ -482,7 +482,7 @@ export function ModelSelectionModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={cn('!max-w-4xl w-full gap-0', className)}
+        className={cn('!max-w-4xl w-[calc(100%-1.5rem)] sm:w-full gap-0', className)}
       >
         <DialogHeader>
           {selectedModelForRole

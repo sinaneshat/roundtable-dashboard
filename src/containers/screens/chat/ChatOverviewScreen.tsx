@@ -2,6 +2,7 @@
 
 import type { ChatStatus } from 'ai';
 import { motion } from 'motion/react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -59,6 +60,11 @@ import {
 } from '@/stores/chat';
 
 import { ChatView } from './ChatView';
+
+const ChatDeleteDialog = dynamic(
+  () => import('@/components/chat/chat-delete-dialog').then(m => m.ChatDeleteDialog),
+  { ssr: false },
+);
 
 export default function ChatOverviewScreen() {
   const t = useTranslations();
@@ -158,6 +164,7 @@ export default function ChatOverviewScreen() {
 
   const modeModal = useBoolean(false);
   const modelModal = useBoolean(false);
+  const isDeleteDialogOpen = useBoolean(false);
 
   const isMobile = useIsMobile();
 
@@ -198,9 +205,8 @@ export default function ChatOverviewScreen() {
   }, [allEnabledModels]);
 
   // Get the first preset (Quick Perspectives) for default selection
-  const firstPreset = MODEL_PRESETS[0];
-
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
+    const firstPreset = MODEL_PRESETS[0];
     if (!preferencesHydrated || accessibleModelIds.length === 0) {
       return [];
     }
@@ -218,7 +224,6 @@ export default function ChatOverviewScreen() {
       }
     }
 
-    // For first-time users: use first preset's models and roles
     if (firstPreset) {
       const accessibleSet = new Set(accessibleModelIds);
       const presetParticipants = firstPreset.modelRoles
@@ -235,7 +240,6 @@ export default function ChatOverviewScreen() {
       }
     }
 
-    // Fallback: first 3 accessible models without roles
     const defaultIds = accessibleModelIds.slice(0, 3);
     if (defaultIds.length > 0) {
       return defaultIds.map((modelId, index) => ({
@@ -256,7 +260,7 @@ export default function ChatOverviewScreen() {
     }
 
     return [];
-  }, [preferencesHydrated, accessibleModelIds, persistedModelIds, defaultModelId, firstPreset]);
+  }, [preferencesHydrated, accessibleModelIds, persistedModelIds, defaultModelId]);
 
   const orderedModels = useOrderedModels({
     selectedParticipants,
@@ -267,14 +271,12 @@ export default function ChatOverviewScreen() {
   const incompatibleModelIds = useMemo(() => {
     const incompatible = new Set<string>();
 
-    // Add tier-inaccessible models (user can't access based on subscription)
     for (const model of allEnabledModels) {
       if (!model.is_accessible_to_user) {
         incompatible.add(model.id);
       }
     }
 
-    // Add vision-incompatible models if there are vision files
     const existingVisionFiles = threadHasVisionRequiredFiles(messages);
     const newVisionFiles = chatAttachments.attachments.some(att =>
       isVisionRequiredMimeType(att.file.type),
@@ -317,7 +319,7 @@ export default function ChatOverviewScreen() {
       && persistedModelIds.length === 0
     ) {
       init.persistedDefaults = true;
-      // Use first preset's model IDs for first-time users
+      const firstPreset = MODEL_PRESETS[0];
       if (firstPreset) {
         const accessibleSet = new Set(accessibleModelIds);
         const presetModelIds = firstPreset.modelRoles
@@ -325,11 +327,9 @@ export default function ChatOverviewScreen() {
           .map(mr => mr.modelId);
         if (presetModelIds.length > 0) {
           setPersistedModelIds(presetModelIds);
-          // Also persist the preset's mode and web search settings
           setPersistedMode(firstPreset.mode);
           setPersistedWebSearch(firstPreset.searchEnabled === true);
         } else {
-          // Fallback to first 3 accessible models
           const defaultIds = accessibleModelIds.slice(0, 3);
           if (defaultIds.length > 0) {
             setPersistedModelIds(defaultIds);
@@ -382,12 +382,12 @@ export default function ChatOverviewScreen() {
       init.participants = true;
       setSelectedParticipants(initialParticipants);
       if (!selectedMode) {
-        // For first-time users, use preset's mode; otherwise use persisted or default
         const modeResult = ChatModeSchema.safeParse(persistedMode);
+        const firstPreset = MODEL_PRESETS[0];
         const defaultMode = firstPreset?.mode ?? getDefaultChatMode();
         setSelectedMode(modeResult.success ? modeResult.data : defaultMode);
       }
-      // For first-time users, use preset's web search setting
+      const firstPreset = MODEL_PRESETS[0];
       const defaultWebSearch = firstPreset?.searchEnabled === true;
       setEnableWebSearch(persistedWebSearch ?? defaultWebSearch);
     }
@@ -418,7 +418,6 @@ export default function ChatOverviewScreen() {
     persistedWebSearch,
     setEnableWebSearch,
     setThreadActions,
-    firstPreset,
   ]);
 
   useEffect(() => {
@@ -462,9 +461,15 @@ export default function ChatOverviewScreen() {
 
   const threadActions = useMemo(
     () => currentThread && !showInitialUI
-      ? <ChatThreadActions thread={currentThread} slug={currentThread.slug} />
+      ? (
+          <ChatThreadActions
+            thread={currentThread}
+            slug={currentThread.slug}
+            onDeleteClick={isDeleteDialogOpen.onTrue}
+          />
+        )
       : null,
-    [currentThread, showInitialUI],
+    [currentThread, showInitialUI, isDeleteDialogOpen.onTrue],
   );
 
   useEffect(() => {
@@ -753,7 +758,7 @@ export default function ChatOverviewScreen() {
           {showInitialUI && (
             <>
               <div className="flex-1 relative">
-                <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
+                <div className="container max-w-4xl mx-auto px-5 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
                   <motion.div
                     key="initial-ui"
                     initial={{ opacity: 0 }}
@@ -852,7 +857,7 @@ export default function ChatOverviewScreen() {
 
               {isMobile && (
                 <div className="sticky bottom-0 z-30 bg-gradient-to-t from-background via-background to-transparent pt-4">
-                  <div className="container max-w-3xl mx-auto px-2 sm:px-4 pb-4">
+                  <div className="container max-w-4xl mx-auto px-5 pb-4">
                     <motion.div
                       initial={{ opacity: 0, y: 15 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -921,6 +926,15 @@ export default function ChatOverviewScreen() {
             can_upgrade: userTierConfig.can_upgrade,
           }}
           incompatibleModelIds={incompatibleModelIds}
+        />
+      )}
+
+      {currentThread && (
+        <ChatDeleteDialog
+          isOpen={isDeleteDialogOpen.value}
+          onOpenChange={isDeleteDialogOpen.setValue}
+          threadId={currentThread.id}
+          threadSlug={currentThread.slug}
         />
       )}
     </>

@@ -1,7 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { ComponentSizes, ComponentVariants } from '@/api/core/enums';
 import type { ChatThread, ChatThreadFlexible } from '@/api/routes/chat/schema';
@@ -10,6 +11,7 @@ import { ChatThreadMenuItems } from '@/components/chat/chat-thread-menu-items';
 import { ShareDialog } from '@/components/chat/share-dialog';
 import { SocialShareButton } from '@/components/chat/social-share-button';
 import { Icons } from '@/components/icons';
+import { useChatStore } from '@/components/providers';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -23,6 +25,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations';
+import { useThreadQuery } from '@/hooks/queries';
 import { useMediaQuery } from '@/hooks/utils';
 
 type ChatThreadActionsProps = {
@@ -41,19 +44,24 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
 
-  // Local state for confirmed public status - more reliable than mutation state
-  const [confirmedIsPublic, setConfirmedIsPublic] = useState(thread.isPublic);
+  const { data: cachedThreadData } = useThreadQuery(thread.id, !isPublicMode);
 
-  // Track pre-mutation value for dialog (prevents view switching during loading)
-  const preMutationIsPublicRef = useRef(thread.isPublic);
+  const threadIsPublic = cachedThreadData?.success
+    ? cachedThreadData.data.thread.isPublic
+    : thread.isPublic;
 
-  // Sync with thread prop when it changes (e.g., from server/cache)
-  useEffect(() => {
-    if (!togglePublicMutation.isPending) {
-      setConfirmedIsPublic(thread.isPublic);
-      preMutationIsPublicRef.current = thread.isPublic;
-    }
-  }, [thread.isPublic, togglePublicMutation.isPending]);
+  const { storeThreadId, storeThreadTitle, isBusy } = useChatStore(useShallow(s => ({
+    storeThreadId: s.thread?.id,
+    storeThreadTitle: s.thread?.title,
+    isBusy: s.isStreaming
+      || s.waitingToStartStreaming
+      || s.isCreatingThread
+      || s.streamingRoundNumber !== null
+      || s.preSearches.some(ps => ps.status === 'pending' || ps.status === 'streaming'),
+  })));
+  const currentTitle = (storeThreadTitle && thread.id === storeThreadId)
+    ? storeThreadTitle
+    : thread.title;
 
   const displayIsFavorite = toggleFavoriteMutation.isSuccess && toggleFavoriteMutation.data?.success
     ? toggleFavoriteMutation.data.data.thread.isFavorite
@@ -61,16 +69,10 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       ? toggleFavoriteMutation.variables.isFavorite
       : thread.isFavorite;
 
-  // For dialog: use pre-mutation value during pending to prevent view switching during loading
-  // After success, use confirmed local state (updated in onSuccess callbacks)
-  const dialogIsPublic = togglePublicMutation.isPending
-    ? preMutationIsPublicRef.current
-    : confirmedIsPublic;
-
-  // For header badge: use optimistic value during pending for immediate feedback
+  // Derived value: use optimistic mutation value when pending, otherwise use cache
   const displayIsPublic = togglePublicMutation.isPending && togglePublicMutation.variables
     ? togglePublicMutation.variables.isPublic
-    : confirmedIsPublic;
+    : threadIsPublic;
 
   const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/public/chat/${slug}`;
 
@@ -83,34 +85,25 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   };
 
   const handleMakePublic = () => {
-    togglePublicMutation.mutate({
-      threadId: thread.id,
-      isPublic: true,
-      slug,
-    }, {
-      onSuccess: (data) => {
-        if (data?.success) {
-          // Update local state - dialog will switch to share view
-          setConfirmedIsPublic(true);
-        }
-      },
-    });
+    if (threadIsPublic || togglePublicMutation.isPending) {
+      return;
+    }
+    togglePublicMutation.mutate({ threadId: thread.id, isPublic: true, slug });
   };
 
   const handleMakePrivate = () => {
-    togglePublicMutation.mutate({
-      threadId: thread.id,
-      isPublic: false,
-      slug,
-    }, {
-      onSuccess: (data) => {
-        if (data?.success) {
-          // Update local state and close dialog
-          setConfirmedIsPublic(false);
-          setIsShareDialogOpen(false);
-        }
-      },
-    });
+    if (!threadIsPublic || togglePublicMutation.isPending) {
+      setIsShareDialogOpen(false);
+      return;
+    }
+    setIsShareDialogOpen(false);
+    togglePublicMutation.mutate({ threadId: thread.id, isPublic: false, slug });
+  };
+
+  const handleShareDialogOpenChange = (open: boolean) => {
+    if (!open && togglePublicMutation.isPending)
+      return;
+    setIsShareDialogOpen(open);
   };
 
   const handleOpenShareDialog = () => {
@@ -142,7 +135,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     return (
       <TooltipProvider>
         <div className="flex items-center gap-2">
-          {/* Public status indicator */}
           {displayIsPublic && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
               <Icons.globe className="size-3.5" />
@@ -157,7 +149,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                 size={ComponentSizes.SM}
                 aria-label={t('share')}
                 onClick={handleOpenShareDialog}
-                disabled={togglePublicMutation.isPending}
+                disabled={togglePublicMutation.isPending || isBusy}
                 className="gap-2"
               >
                 {togglePublicMutation.isPending
@@ -167,7 +159,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p className="text-sm">{t('share')}</p>
+              <p className="text-sm">{isBusy ? t('waitForStreamingToComplete') : t('share')}</p>
             </TooltipContent>
           </Tooltip>
 
@@ -178,6 +170,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                 size={ComponentSizes.ICON}
                 aria-label={t('moreOptions')}
                 className="size-9"
+                disabled={isBusy}
               >
                 <Icons.moreHorizontal className="size-4" />
               </Button>
@@ -195,10 +188,10 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
 
           <ShareDialog
             open={isShareDialogOpen}
-            onOpenChange={setIsShareDialogOpen}
+            onOpenChange={handleShareDialogOpenChange}
             slug={slug}
-            threadTitle={thread.title}
-            isPublic={dialogIsPublic}
+            threadTitle={currentTitle}
+            isPublic={displayIsPublic}
             isLoading={togglePublicMutation.isPending}
             onMakePublic={handleMakePublic}
             onMakePrivate={handleMakePrivate}
@@ -208,7 +201,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
             open={isRenameDialogOpen}
             onOpenChange={setIsRenameDialogOpen}
             threadId={thread.id}
-            currentTitle={thread.title}
+            currentTitle={currentTitle}
           />
         </div>
       </TooltipProvider>
@@ -219,9 +212,9 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     <TooltipProvider>
       <div className="flex items-center gap-2">
         {displayIsPublic && (
-          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
-            <Icons.globe className="size-3" />
-            <span className="text-xs font-medium">{t('shareDialog.publicStatus')}</span>
+          <div className="flex items-center gap-1 px-1.5 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 shrink-0">
+            <Icons.globe className="size-3.5" />
+            <span className="text-xs font-medium hidden xs:inline">{t('shareDialog.publicStatus')}</span>
           </div>
         )}
 
@@ -232,6 +225,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               size={ComponentSizes.ICON}
               aria-label={t('moreOptions')}
               className="size-9"
+              disabled={isBusy}
             >
               <Icons.moreVertical className="size-4" />
             </Button>
@@ -250,10 +244,10 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
 
         <ShareDialog
           open={isShareDialogOpen}
-          onOpenChange={setIsShareDialogOpen}
+          onOpenChange={handleShareDialogOpenChange}
           slug={slug}
-          threadTitle={thread.title}
-          isPublic={dialogIsPublic}
+          threadTitle={currentTitle}
+          isPublic={displayIsPublic}
           isLoading={togglePublicMutation.isPending}
           onMakePublic={handleMakePublic}
           onMakePrivate={handleMakePrivate}
@@ -263,7 +257,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
           open={isRenameDialogOpen}
           onOpenChange={setIsRenameDialogOpen}
           threadId={thread.id}
-          currentTitle={thread.title}
+          currentTitle={currentTitle}
         />
       </div>
     </TooltipProvider>

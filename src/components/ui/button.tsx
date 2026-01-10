@@ -34,12 +34,12 @@ const buttonVariants = cva(
           "bg-white/5 backdrop-blur-md border border-white/10 shadow-xs hover:bg-white/10",
       } satisfies Record<ComponentVariant, string>,
       size: {
-        [ComponentSizes.DEFAULT]: "h-9 px-4 py-2 has-[>svg]:px-3",
-        [ComponentSizes.SM]: "h-8 gap-1.5 px-3 has-[>svg]:px-2.5",
-        [ComponentSizes.MD]: "h-9 px-4 has-[>svg]:px-3",
+        [ComponentSizes.DEFAULT]: "h-10 sm:h-9 px-4 py-2 has-[>svg]:px-3",
+        [ComponentSizes.SM]: "h-9 sm:h-8 gap-1.5 px-3 has-[>svg]:px-2.5",
+        [ComponentSizes.MD]: "h-10 sm:h-9 px-4 has-[>svg]:px-3",
         [ComponentSizes.LG]: "h-11 px-6 has-[>svg]:px-4",
         [ComponentSizes.XL]: "h-12 px-8 has-[>svg]:px-5",
-        [ComponentSizes.ICON]: "size-9",
+        [ComponentSizes.ICON]: "size-10 sm:size-9",
       } satisfies Record<ComponentSize, string>,
     },
     defaultVariants: {

@@ -30,7 +30,6 @@ import {
 
 import { ChatView } from './ChatView';
 
-// Lazy-loaded dialog - only loaded when delete action triggered
 const ChatDeleteDialog = dynamic(
   () => import('@/components/chat/chat-delete-dialog').then(m => m.ChatDeleteDialog),
   { ssr: false },
@@ -73,7 +72,6 @@ function useThreadHeaderUpdater({
 
   useEffect(() => {
     setThreadActions(threadActions);
-    // Cleanup: reset thread actions when navigating away
     return () => setThreadActions(null);
   }, [threadActions, setThreadActions]);
 }
@@ -90,11 +88,7 @@ export default function ChatThreadScreen({
   const isDeleteDialogOpen = useBoolean(false);
   const chatAttachments = useChatAttachments();
 
-  useThreadHeaderUpdater({
-    thread,
-    slug,
-    onDeleteClick: isDeleteDialogOpen.onTrue,
-  });
+  useThreadHeaderUpdater({ thread, slug, onDeleteClick: isDeleteDialogOpen.onTrue });
 
   const { setSelectedModelIds } = useModelPreferencesStore(useShallow(s => ({
     setSelectedModelIds: s.setSelectedModelIds,
@@ -146,14 +140,12 @@ export default function ChatThreadScreen({
   const incompatibleModelIds = useMemo(() => {
     const incompatible = new Set<string>();
 
-    // Add tier-inaccessible models (user can't access based on subscription)
     for (const model of allEnabledModels) {
       if (!model.is_accessible_to_user) {
         incompatible.add(model.id);
       }
     }
 
-    // Add vision-incompatible models if there are vision files
     const existingVisionFiles = threadHasVisionRequiredFiles(messages);
     const newVisionFiles = chatAttachments.attachments.some(att =>
       isVisionRequiredMimeType(att.file.type),
@@ -291,6 +283,7 @@ export default function ChatThreadScreen({
         onOpenChange={isDeleteDialogOpen.setValue}
         threadId={thread.id}
         threadSlug={slug}
+        redirectIfCurrent={true}
       />
     </>
   );

@@ -25,7 +25,6 @@ type SearchResultThread = {
   slug: string;
   title: string;
   updatedAt: string;
-  isFavorite?: boolean | null;
 };
 
 type SearchResultItemProps = {
@@ -50,26 +49,25 @@ function SearchResultItem({
       prefetch={false}
       onClick={onClose}
       className={cn(
-        'flex items-center gap-3 mx-2 my-1 px-3 py-2.5 rounded-full transition-all duration-200',
-        'hover:bg-white/[0.07] active:bg-black/20',
-        selectedIndex === index ? 'bg-white/15 shadow-sm' : 'bg-transparent',
+        'w-full p-3 transition-all text-left rounded-lg',
+        'hover:bg-white/[0.07]',
+        selectedIndex === index && 'bg-white/10',
       )}
       onMouseEnter={() => {
         onSelect(index);
       }}
     >
-      <div className="flex-1 min-w-0 overflow-hidden">
-        <p className="text-sm font-medium truncate text-foreground">
-          {thread.title}
-        </p>
-        <p className="text-xs text-muted-foreground truncate">
-          {new Date(thread.updatedAt).toLocaleDateString()}
-        </p>
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-normal truncate text-foreground">
+            {thread.title}
+          </p>
+          <p className="text-xs text-muted-foreground truncate">
+            {new Date(thread.updatedAt).toLocaleDateString()}
+          </p>
+        </div>
+        <LinkLoadingIndicator variant="spinner" size="sm" className="text-muted-foreground shrink-0" />
       </div>
-      <LinkLoadingIndicator variant="spinner" size="sm" className="text-muted-foreground" />
-      {thread.isFavorite && (
-        <div className="size-2 rounded-full bg-primary shrink-0" />
-      )}
     </Link>
   );
 }
@@ -229,7 +227,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                 )
               : threads.length > 0
                 ? (
-                    <div className="py-2">
+                    <div className="flex flex-col px-2 py-2">
                       {threads.map((thread, index) => (
                         <SearchResultItem
                           key={thread.id}

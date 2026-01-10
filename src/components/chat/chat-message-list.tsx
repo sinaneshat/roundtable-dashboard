@@ -28,7 +28,6 @@ import { allParticipantsHaveVisibleContent, buildParticipantMessageMaps, getAvat
 const EMPTY_PARTICIPANTS: ChatParticipantWithSettings[] = [];
 const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];
 
-// Type definitions for message groups
 type ParticipantInfo = {
   participantIndex: number;
   modelId: string | undefined;
@@ -64,28 +63,6 @@ type MessageGroup
     };
   };
 
-// ============================================================================
-// MODERATOR INLINE RENDERING
-// ============================================================================
-// Moderator messages render inline via standard ModelMessageCard after all participants
-// - Detection: isModeratorMessage(metadata) checks for isModerator flag
-// - Participant Index: MODERATOR_PARTICIPANT_INDEX (-99) for sort order
-// - Avatar: BRAND.logos.main (brand logo)
-// - Display Name: MODERATOR_NAME ("Roundtable")
-// - Role Badge: null (no role badge displayed)
-// - Tier Requirement: undefined (no tier restriction)
-// - Pending Cards: SHOWN when isModeratorStreaming=true (placeholder during streaming)
-// - Skip Logic: Moderator messages never skipped during streaming round
-//
-// Moderator renders AFTER all participant responses complete, using same
-// header/card structure as participants but with moderator-specific styling.
-// When isModeratorStreaming=true and no moderator message exists, a placeholder card
-// is shown with "Gathering thoughts..." text, exactly like participant pending cards.
-
-// ============================================================================
-// Reusable Participant Header Component
-// ============================================================================
-
 type ParticipantHeaderProps = {
   avatarSrc: string;
   avatarName: string;
@@ -97,11 +74,6 @@ type ParticipantHeaderProps = {
   hasError?: boolean;
 };
 
-/**
- * Reusable header component for participant messages
- * Shows avatar, name, role badge, tier requirement, and status indicators
- * ✅ OPTIMIZATION: Memoized to prevent re-renders when parent updates
- */
 const ParticipantHeader = memo(({
   avatarSrc,
   avatarName,
@@ -113,12 +85,9 @@ const ParticipantHeader = memo(({
   hasError = false,
 }: ParticipantHeaderProps) => {
   const t = useTranslations();
-  // ✅ REACT 19: Sync initial render from cache, effect only populates cache if needed
   const [colorClass, setColorClass] = useState<string>(() => getCachedImageColor(avatarSrc));
 
-  // ✅ REACT 19: Only run effect if not already cached (external system sync for image processing)
   useEffect(() => {
-    // Skip if already cached - no async work needed
     if (hasColorCached(avatarSrc))
       return;
 
@@ -171,10 +140,6 @@ const ParticipantHeader = memo(({
   );
 });
 
-// ============================================================================
-// Reusable Participant Message Wrapper
-// ============================================================================
-
 type ParticipantMessageWrapperProps = {
   participant?: ChatParticipantWithSettings;
   participantIndex: number;
@@ -198,12 +163,6 @@ type ParticipantMessageWrapperProps = {
   hideActions?: boolean;
 };
 
-/**
- * Reusable wrapper that renders a participant message with consistent header
- * Used by both AssistantGroupCard (for completed messages) and pending cards (for streaming)
- * Also used for moderator messages with avatar/name overrides
- * ✅ OPTIMIZATION: Memoized to prevent re-renders when sibling messages update
- */
 const ParticipantMessageWrapper = memo(({
   participant,
   participantIndex,
@@ -266,14 +225,6 @@ const ParticipantMessageWrapper = memo(({
   );
 });
 
-// ============================================================================
-// Assistant Group Card Component
-// ============================================================================
-
-/**
- * Assistant Group Component with Header
- * Displays assistant messages with header inside message box
- */
 function AssistantGroupCard({
   group,
   groupIndex: _groupIndex,
@@ -367,7 +318,7 @@ function AssistantGroupCard({
                   isAccessible={isAccessible}
                   hideInlineHeader
                   hideAvatar
-                  hideActions={isModerator}
+                  hideActions={isModerator || demoMode}
                   maxContentHeight={maxContentHeight}
                   loadingText={isModerator ? t('chat.participant.moderatorObserving') : undefined}
                 />
@@ -412,18 +363,6 @@ function AssistantGroupCard({
   );
 }
 
-/**
- * AI SDK v6 Pattern: Determine participant info from message metadata
- *
- * Messages flow through 3 states:
- * 1. Streaming (no metadata yet) - use current participant index
- * 2. Complete (has model metadata) - use saved metadata only
- * 3. Error (has error metadata) - use saved metadata or fallback
- *
- * CRITICAL: Messages are complete once they have metadata.model set by onFinish
- * The AI SDK adds metadata during onFinish callback, AFTER streaming completes.
- * We check for metadata.model to determine if a message has been finalized.
- */
 function getParticipantInfoForMessage({
   message,
   messageIndex,
@@ -449,12 +388,8 @@ function getParticipantInfoForMessage({
   isStreaming: boolean;
 } {
   const metadata = getMessageMetadata(message.metadata);
-
-  // ✅ STRICT TYPING: Use type guard to access assistant-specific fields
   const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
 
-  // ✅ SIMPLIFIED: Check for visible content to determine if message has received data
-  // AI SDK v6 Pattern: Reasoning parts count as visible for UI (model-message-card handles rendering)
   const hasVisibleContent = message.parts?.some(
     p =>
       (p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0)
@@ -462,16 +397,10 @@ function getParticipantInfoForMessage({
       || p.type === MessagePartTypes.REASONING,
   ) ?? false;
 
-  // Check if this is a moderator message (used for shimmer/loading state below)
   const isModerator = isModeratorMessage(message);
 
-  // Messages with visible content should show content, not shimmer
-  // Store guarantees participants are sorted by priority
   if (hasVisibleContent) {
     const fallbackParticipant = participants[currentParticipantIndex];
-    // Show streaming cursor until finishReason indicates actual completion
-    // 'unknown' is a placeholder during streaming - NOT a completion reason
-    // Only 'stop', 'length', 'content-filter', 'tool-calls' indicate actual completion
     const finishReason = assistantMetadata?.finishReason;
     const hasActuallyFinished = isCompletionFinishReason(finishReason);
     return {
@@ -482,7 +411,6 @@ function getParticipantInfoForMessage({
     };
   }
 
-  // AI SDK v6 Pattern: Only messages WITHOUT visible content can be considered streaming
   const isLastMessage = messageIndex === totalMessages - 1;
   const isThisMessageStreaming = !hasVisibleContent && isGlobalStreaming && isLastMessage && message.role === MessageRoles.ASSISTANT;
 
@@ -496,8 +424,6 @@ function getParticipantInfoForMessage({
     };
   }
 
-  // ✅ MODERATOR STREAMING: When moderator is streaming and message has no content
-  // Treat it as streaming so shimmer/loading state shows
   if (isModerator && isModeratorStreaming && !hasVisibleContent) {
     return {
       participantIndex: MODERATOR_PARTICIPANT_INDEX,
@@ -507,7 +433,6 @@ function getParticipantInfoForMessage({
     };
   }
 
-  // Fallback for messages during state transitions
   const fallbackParticipantIndex = assistantMetadata?.participantIndex ?? currentParticipantIndex;
   const fallbackParticipant = participants[fallbackParticipantIndex];
 
@@ -519,7 +444,6 @@ function getParticipantInfoForMessage({
   };
 }
 
-// Stable empty set to prevent render loops
 const EMPTY_COMPLETED_ROUNDS = new Set<number>();
 
 type ChatMessageListProps = {
@@ -1078,7 +1002,7 @@ export const ChatMessageList = memo(
           // User message group with header inside message box
           if (group.type === 'user-group') {
             return (
-              <div key={`user-group-wrapper-${group.messages[0]?.index}`} className="mb-4">
+              <div key={`user-group-wrapper-${group.messages[0]?.index}`}>
                 {/* User messages - right-aligned bubbles, no avatar/name */}
                 <div className="flex flex-col items-end gap-2">
                   {group.messages.map(({ message, index }) => {
@@ -1112,6 +1036,7 @@ export const ChatMessageList = memo(
                         className="w-full"
                       >
                         <div
+                          dir="auto"
                           className={cn(
                             'max-w-[85%] ml-auto w-fit',
                             'bg-secondary text-secondary-foreground',
@@ -1370,6 +1295,7 @@ export const ChatMessageList = memo(
                               messageId={participantMessage?.id}
                               loadingText={loadingText}
                               maxContentHeight={maxContentHeight}
+                              hideActions={demoMode}
                             />
                           </ScrollAwareParticipant>
                         );
@@ -1440,11 +1366,18 @@ export const ChatMessageList = memo(
                   // ✅ POSITION FIX: Use visibility+height instead of absolute positioning
                   // absolute -z-10 caused layout jumps when moderator became visible
                   // Now we keep it in flow but visually hidden with h-0
+                  // ✅ POST-MODERATOR FLASH FIX: When hiding, use instant transition to prevent overlap
+                  const wasRenderedDuringStreaming = renderedRoundsRef.current.has(roundNumber);
+
                   return (
                     <div
                       className={cn(
-                        'transition-all duration-150 overflow-hidden',
+                        'overflow-hidden',
+                        // Only transition when showing, not when hiding (prevents flash)
+                        shouldShowModerator && 'transition-all duration-150',
                         shouldShowModerator ? 'mt-14 opacity-100' : 'h-0 opacity-0 pointer-events-none',
+                        // Force instant hide when round was already rendered (prevents flash)
+                        wasRenderedDuringStreaming && !shouldShowModerator && 'transition-none',
                       )}
                       aria-hidden={!shouldShowModerator}
                     >
@@ -1466,6 +1399,7 @@ export const ChatMessageList = memo(
                           avatarSrc={BRAND.logos.main}
                           avatarName={MODERATOR_NAME}
                           displayName={MODERATOR_NAME}
+                          hideActions
                         />
                       </ScrollAwareParticipant>
                     </div>
@@ -1629,6 +1563,7 @@ export const ChatMessageList = memo(
                   avatarSrc={BRAND.logos.main}
                   avatarName={MODERATOR_NAME}
                   displayName={MODERATOR_NAME}
+                  hideActions
                 />
               </ScrollAwareParticipant>
             </div>

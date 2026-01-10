@@ -1,27 +1,22 @@
 'use client';
 
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 
-import type { FeedbackType } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
 import { ScrollFadeEntrance, ScrollFromTop } from '@/components/ui/motion';
-import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
-import { messageHasError } from '@/lib/schemas/message-metadata';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
 import { getModeratorMetadata, isModeratorMessage } from '@/lib/utils';
 
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
+import { ModeratorCopyAction, ThreadSummaryCopyAction } from './copy-actions';
 import { PreSearchCard } from './pre-search-card';
-import { RoundCopyAction } from './round-copy-action';
-import { RoundFeedback } from './round-feedback';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
-const EMPTY_FEEDBACK_MAP = new Map<number, FeedbackType>();
 const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];
 const EMPTY_COMPLETED_ROUNDS = new Set<number>();
 
@@ -39,9 +34,6 @@ type ThreadTimelineProps = {
   currentParticipantIndex?: number;
   currentStreamingParticipant?: ChatParticipantWithSettings | null;
   streamingRoundNumber?: number | null;
-  feedbackByRound?: Map<number, FeedbackType>;
-  pendingFeedback?: { roundNumber: number; type: FeedbackType } | null;
-  getFeedbackHandler?: (roundNumber: number) => (type: FeedbackType | null) => void;
   onRetry?: () => void;
   isReadOnly?: boolean;
   preSearches?: StoredPreSearch[];
@@ -65,9 +57,6 @@ export function ThreadTimeline({
   currentParticipantIndex = 0,
   currentStreamingParticipant = null,
   streamingRoundNumber = null,
-  feedbackByRound = EMPTY_FEEDBACK_MAP,
-  pendingFeedback = null,
-  getFeedbackHandler,
   onRetry,
   isReadOnly = false,
   preSearches = EMPTY_PRE_SEARCHES,
@@ -81,6 +70,13 @@ export function ThreadTimeline({
   getIsStreamingFromStore,
 }: ThreadTimelineProps) {
   const isActivelyStreaming = isStreaming || isModeratorStreaming;
+
+  // Collect all messages from timeline for thread-level copy action
+  const allMessages = useMemo(() => {
+    return timelineItems
+      .filter((item): item is Extract<TimelineItem, { type: 'messages' }> => item.type === 'messages')
+      .flatMap(item => item.data);
+  }, [timelineItems]);
 
   const {
     virtualItems,
@@ -224,42 +220,19 @@ export function ThreadTimeline({
                       return null;
                     }
 
-                    const hasRoundError = item.data.some((msg) => {
-                      const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
-                      return parseResult.success && messageHasError(parseResult.data);
-                    });
-
                     const moderatorText = extractTextFromMessage(moderatorMessage);
 
                     return (
                       <Actions className="mt-3 mb-2">
-                        {!hasRoundError && (
-                          <RoundFeedback
-                            key={`feedback-${threadId}-${item.roundNumber}`}
-                            threadId={threadId}
-                            roundNumber={item.roundNumber}
-                            currentFeedback={feedbackByRound.get(item.roundNumber) ?? null}
-                            onFeedbackChange={
-                              getFeedbackHandler
-                                ? getFeedbackHandler(item.roundNumber)
-                                : () => {}
-                            }
-                            disabled={isStreaming}
-                            isPending={pendingFeedback?.roundNumber === item.roundNumber}
-                            pendingType={
-                              pendingFeedback?.roundNumber === item.roundNumber
-                                ? pendingFeedback.type ?? null
-                                : null
-                            }
-                          />
-                        )}
-                        <RoundCopyAction
-                          key={`copy-${threadId}-${item.roundNumber}`}
-                          messages={item.data}
-                          participants={participants}
-                          roundNumber={item.roundNumber}
-                          threadTitle={threadTitle}
+                        <ModeratorCopyAction
+                          key={`copy-summary-${threadId}-${item.roundNumber}`}
                           moderatorText={moderatorText}
+                        />
+                        <ThreadSummaryCopyAction
+                          key={`copy-thread-${threadId}`}
+                          messages={allMessages}
+                          participants={participants}
+                          threadTitle={threadTitle}
                         />
                       </Actions>
                     );

@@ -62,9 +62,9 @@ export const CHAT_MODE_CONFIGS: readonly ChatModeConfig[] = [
     metadata: {
       icon: Icons.lightbulb,
       color: '#F59E0B',
-      description: 'Generate creative ideas and explore possibilities together',
+      description: 'AI models spark off each other\'s ideas, building and branching in real-time',
       systemPromptHint: 'Creative ideation with multiple perspectives',
-      placeholder: 'What would you like to brainstorm about?',
+      placeholder: 'What problem needs fresh perspectives?',
     },
   },
   {
@@ -77,9 +77,9 @@ export const CHAT_MODE_CONFIGS: readonly ChatModeConfig[] = [
     metadata: {
       icon: Icons.search,
       color: '#3B82F6',
-      description: 'Deep dive into topics with analytical perspectives',
+      description: 'Models examine the question from different angles, challenging each other\'s framings',
       systemPromptHint: 'Detailed analysis from multiple angles',
-      placeholder: 'What would you like to analyze?',
+      placeholder: 'What topic would benefit from multiple angles?',
     },
   },
   {
@@ -92,9 +92,9 @@ export const CHAT_MODE_CONFIGS: readonly ChatModeConfig[] = [
     metadata: {
       icon: Icons.scale,
       color: '#EF4444',
-      description: 'Explore different viewpoints through structured debate',
+      description: 'Models surface genuine disagreement—and explain why they see things differently',
       systemPromptHint: 'Critical discussion with opposing viewpoints',
-      placeholder: 'What topic would you like to debate?',
+      placeholder: 'What question has reasonable people disagreeing?',
     },
   },
   {
@@ -107,9 +107,9 @@ export const CHAT_MODE_CONFIGS: readonly ChatModeConfig[] = [
     metadata: {
       icon: Icons.target,
       color: '#10B981',
-      description: 'Work together to find practical solutions',
+      description: 'Models build on each other\'s proposals to move toward actionable recommendations',
       systemPromptHint: 'Collaborative problem solving with action plans',
-      placeholder: 'What problem would you like to solve?',
+      placeholder: 'What decision needs different viewpoints weighed?',
     },
   },
 ] as const;

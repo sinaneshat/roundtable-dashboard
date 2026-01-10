@@ -14,6 +14,7 @@ import {
 } from '@/components/chat/chat-sidebar-skeleton';
 import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
+import { ShareDialog } from '@/components/chat/share-dialog';
 import { Icons } from '@/components/icons';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -31,7 +32,8 @@ import {
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
-import { useThreadsQuery } from '@/hooks/queries';
+import { useTogglePublicMutation } from '@/hooks/mutations';
+import { useThreadQuery, useThreadsQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';
 import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
@@ -52,6 +54,22 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
   const handleNavigationReset = useNavigationReset();
   const { data: threadsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error } = useThreadsQuery();
+
+  // Share dialog state - exact same pattern as chat-thread-actions.tsx
+  const [chatToShare, setChatToShare] = useState<ChatSidebarItem | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const togglePublicMutation = useTogglePublicMutation();
+
+  // Read isPublic from thread detail cache (same pattern as chat-thread-actions.tsx)
+  const { data: threadDetailData } = useThreadQuery(chatToShare?.id ?? '', !!chatToShare);
+  const threadIsPublic = threadDetailData?.success
+    ? threadDetailData.data.thread.isPublic
+    : chatToShare?.isPublic ?? false;
+
+  // Derived value: use optimistic mutation value when pending, otherwise use cache
+  const displayIsPublic = togglePublicMutation.isPending && togglePublicMutation.variables
+    ? togglePublicMutation.variables.isPublic
+    : threadIsPublic;
 
   const chats: ChatSidebarItem[] = useMemo(() => {
     if (!threadsData?.pages)
@@ -124,6 +142,35 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     }
     prevPathnameRef.current = pathname;
   }, [pathname, isMobile, setOpenMobile]);
+
+  // Share dialog handlers (same pattern as chat-thread-actions.tsx)
+  const handleShareClick = useCallback((chat: ChatSidebarItem) => {
+    setChatToShare(chat);
+    setIsShareDialogOpen(true);
+  }, []);
+
+  const handleShareDialogOpenChange = useCallback((open: boolean) => {
+    if (!open && togglePublicMutation.isPending) {
+      return;
+    }
+    setIsShareDialogOpen(open);
+  }, [togglePublicMutation.isPending]);
+
+  const handleMakePublic = useCallback(() => {
+    if (!chatToShare || threadIsPublic || togglePublicMutation.isPending) {
+      return;
+    }
+    togglePublicMutation.mutate({ threadId: chatToShare.id, isPublic: true, slug: chatToShare.slug });
+  }, [chatToShare, threadIsPublic, togglePublicMutation]);
+
+  const handleMakePrivate = useCallback(() => {
+    if (!chatToShare || !threadIsPublic || togglePublicMutation.isPending) {
+      setIsShareDialogOpen(false);
+      return;
+    }
+    setIsShareDialogOpen(false);
+    togglePublicMutation.mutate({ threadId: chatToShare.id, isPublic: false, slug: chatToShare.slug });
+  }, [chatToShare, threadIsPublic, togglePublicMutation]);
 
   return (
     <>
@@ -244,7 +291,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                       />
                     </SidebarGroupLabel>
                     {!isFavoritesCollapsed && (
-                      <ChatList chats={favorites} />
+                      <ChatList chats={favorites} onShareClick={handleShareClick} />
                     )}
                   </SidebarGroup>
                 )}
@@ -310,7 +357,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                     </SidebarGroupLabel>
                     {!isChatsCollapsed && (
                       <>
-                        <ChatList chats={nonFavoriteChats} />
+                        <ChatList chats={nonFavoriteChats} onShareClick={handleShareClick} />
                         {isFetchingNextPage && (
                           <ChatSidebarPaginationSkeleton count={20} />
                         )}
@@ -334,6 +381,18 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
           onClose={() => setIsSearchOpen(false)}
         />
       </TooltipProvider>
+
+      {/* ShareDialog rendered outside conditional blocks to survive ChatList remounts */}
+      <ShareDialog
+        open={isShareDialogOpen}
+        onOpenChange={handleShareDialogOpenChange}
+        slug={chatToShare?.slug ?? ''}
+        threadTitle={chatToShare?.title ?? ''}
+        isPublic={displayIsPublic}
+        isLoading={togglePublicMutation.isPending}
+        onMakePublic={handleMakePublic}
+        onMakePrivate={handleMakePrivate}
+      />
     </>
   );
 }

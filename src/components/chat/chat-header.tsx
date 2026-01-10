@@ -21,6 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { useSidebarOptional } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants';
+import { useThreadQuery } from '@/hooks/queries';
 import { useCurrentPathname } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
@@ -28,7 +29,7 @@ import { ChatScrollButton } from './chat-scroll-button';
 import { ChatSection } from './chat-states';
 import { useThreadHeaderOptional } from './thread-header-context';
 
-const breadcrumbMap = {
+const BREADCRUMB_MAP = {
   '/chat': { titleKey: 'navigation.chat' },
   '/chat/pricing': { titleKey: 'navigation.pricing', parent: '/chat' },
 } as const;
@@ -56,9 +57,10 @@ function NavigationHeaderComponent({
   const sidebarContext = useSidebarOptional();
   const hasSidebar = sidebarContext !== null;
 
-  const { storeThreadTitle, showInitialUI, createdThreadId, thread } = useChatStore(
+  const { storeThreadTitle, showInitialUI, createdThreadId, thread, storeThreadId } = useChatStore(
     useShallow(s => ({
       storeThreadTitle: s.thread?.title ?? null,
+      storeThreadId: s.thread?.id ?? null,
       showInitialUI: s.showInitialUI,
       createdThreadId: s.createdThreadId,
       thread: s.thread,
@@ -66,30 +68,27 @@ function NavigationHeaderComponent({
   );
   const context = useThreadHeaderOptional();
 
-  // Known static routes that should never show thread breadcrumbs
-  const isStaticRoute = pathname ? pathname in breadcrumbMap : false;
-
-  // Detect active thread from store (created from overview, URL still /chat)
-  // Only apply on /chat - NOT on static routes like /chat/pricing
+  const isStaticRoute = pathname ? pathname in BREADCRUMB_MAP : false;
   const hasActiveThread = pathname === '/chat' && !showInitialUI && (createdThreadId || thread);
+  const isOnThreadPage = pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute;
+  const { data: cachedThreadData } = useThreadQuery(storeThreadId ?? '', !!storeThreadId && isOnThreadPage);
 
-  // Only use store thread title on thread pages or when there's an active thread from overview
-  // Static routes should never show thread title from store
-  const shouldUseStoreThreadTitle = !isStaticRoute && (hasActiveThread || (pathname?.startsWith('/chat/') && pathname !== '/chat'));
-  const threadTitle = threadTitleProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? storeThreadTitle : null);
+  const effectiveThreadTitle = cachedThreadData?.success
+    ? cachedThreadData.data.thread.title
+    : storeThreadTitle;
+
+  const shouldUseStoreThreadTitle = hasActiveThread || (!isStaticRoute && pathname?.startsWith('/chat/') && pathname !== '/chat');
+  const threadTitle = threadTitleProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? effectiveThreadTitle : null);
   const threadActions = threadActionsProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? context.threadActions : null);
   const isThreadPage = (
     (pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute)
     || pathname?.startsWith('/public/chat/')
   );
-  // Treat as non-overview when we have active thread (even if pathname is /chat)
   const isOverviewPage = pathname === '/chat' && !hasActiveThread;
-  // Show thread breadcrumb when on thread page OR active thread from overview
-  // Never show on static routes - they have their own breadcrumb entries
-  const showThreadBreadcrumb = !isStaticRoute && (isThreadPage || hasActiveThread) && threadTitle;
+  const showThreadBreadcrumb = (isThreadPage || hasActiveThread) && threadTitle;
   const currentPage = showThreadBreadcrumb
     ? { titleKey: threadTitle, isDynamic: true as const }
-    : pathname ? breadcrumbMap[pathname as keyof typeof breadcrumbMap] : undefined;
+    : pathname ? BREADCRUMB_MAP[pathname as keyof typeof BREADCRUMB_MAP] : undefined;
   return (
     <header
       className={cn(
@@ -99,12 +98,11 @@ function NavigationHeaderComponent({
       )}
     >
       <div className={cn(
-        'flex items-center justify-between gap-2 pt-4 px-3 sm:px-4 md:px-6 lg:px-8 h-14 sm:h-16 w-full',
-        maxWidth && 'max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto',
+        'flex items-center justify-between gap-2 pt-4 px-5 md:px-6 lg:px-8 h-14 sm:h-16 w-full',
+        maxWidth && 'max-w-4xl mx-auto',
       )}
       >
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-          {/* Mobile sidebar trigger - only shown when sidebar provider exists */}
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-hidden">
           {hasSidebar && (
             <Button
               variant="ghost"
@@ -130,7 +128,6 @@ function NavigationHeaderComponent({
           {!isOverviewPage && currentPage && (
             <Breadcrumb className="min-w-0 flex-1">
               <BreadcrumbList>
-                {/* Brand name - always visible, muted styling */}
                 <BreadcrumbItem className="shrink-0">
                   <BreadcrumbLink asChild>
                     <Link
@@ -142,10 +139,9 @@ function NavigationHeaderComponent({
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
-                {/* Current page title - truncates to preserve brand visibility */}
-                <BreadcrumbItem className="min-w-0 overflow-hidden max-w-64">
+                <BreadcrumbItem className="min-w-0 overflow-hidden max-w-32 sm:max-w-48 md:max-w-64">
                   <BreadcrumbPage
-                    className="line-clamp-1 truncate overflow-hidden text-ellipsis whitespace-nowrap text-base max-w-64"
+                    className="line-clamp-1 truncate overflow-hidden text-ellipsis whitespace-nowrap text-sm sm:text-base max-w-32 sm:max-w-48 md:max-w-64"
                     title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey)}
                   >
                     {'isDynamic' in currentPage && currentPage.isDynamic
@@ -187,29 +183,23 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
     isModeratorStreaming: s.isModeratorStreaming,
   })));
 
-  // Show glass header on mobile when thread flow is active (placeholders, pending, or streaming)
   const isThreadFlowActive = isStreaming || isCreatingThread || waitingToStartStreaming || isModeratorStreaming;
   const showGlassEffect = !showInitialUI && isThreadFlowActive;
 
   return (
     <header
       className={cn(
-        // Base: sticky positioning
         'sticky top-0 left-0 right-0 z-50',
-        // Layout
         'flex h-14 sm:h-16 shrink-0 items-center',
-        // Mobile glass effect when streaming (sm: breakpoint removes it on tablet+)
         showGlassEffect && [
           'backdrop-blur-xl bg-background/60',
           'border-b border-border/30',
           'mb-2',
-          // Remove glass effect on tablet and up
           'sm:backdrop-blur-none sm:bg-transparent sm:border-b-0 sm:mb-0',
         ],
         className,
       )}
     >
-      {/* Mobile sidebar trigger - only shown when sidebar provider exists */}
       {hasSidebar && (
         <div className="flex items-center px-3 sm:px-4 md:hidden">
           <Button
@@ -223,7 +213,6 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
           </Button>
         </div>
       )}
-      {/* Spacer for desktop - sidebar is visible there */}
       <div className="hidden md:block h-14 sm:h-16" />
     </header>
   );
@@ -263,7 +252,7 @@ export function PageHeader({
       description: 'text-base text-muted-foreground',
       spacing: 'space-y-8',
     },
-  };
+  } as const;
   const config = sizeConfig[size];
   return (
     <div className={cn(config.spacing, className)}>
@@ -297,7 +286,7 @@ export function ChatPageHeader({
 }: ChatPageHeaderProps) {
   return (
     <ChatSection className={className}>
-      <div className="mx-auto px-3 sm:px-4 md:px-6">
+      <div className="mx-auto px-5 md:px-6">
         <div className="flex items-center justify-between">
           <PageHeader
             title={title}
@@ -321,7 +310,7 @@ export function PageHeaderAction({ children }: { children: ReactNode }) {
 
 export function ChatPageHeaderSkeleton() {
   return (
-    <div className="mx-auto px-3 sm:px-4 md:px-6 py-4">
+    <div className="mx-auto px-5 md:px-6 py-4">
       <div className="space-y-1">
         <Skeleton className="h-7 w-32" />
         <Skeleton className="h-4 w-64" />

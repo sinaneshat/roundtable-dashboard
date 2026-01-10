@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import { Logo } from '@/components/logo';
 import { Card } from '@/components/ui/card';
 import { RadialGlow } from '@/components/ui/radial-glow';
-import { BRAND } from '@/constants/brand';
 
 import { LiveChatDemo } from './live-chat-demo';
 
@@ -32,20 +31,18 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
 
       <div className="relative flex flex-col gap-4 p-6 md:p-10 overflow-y-auto">
         <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-sm flex flex-col gap-6">
+          <div className="w-full max-w-md flex flex-col gap-8">
             <Logo
               size="lg"
               variant="icon"
-              className="size-28 mx-auto"
+              className="size-32 mx-auto"
             />
 
-            <div className="flex flex-col gap-3 text-left">
-              <div className="space-y-1">
-                <span className="text-xs font-normal tracking-[0.2em] uppercase text-muted-foreground/50">
-                  {t('auth.layout.welcomeTo', { brand: BRAND.displayName })}
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground/80 font-light leading-relaxed max-w-[280px]">
+            <div className="flex flex-col gap-3">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
+                {t('auth.layout.headline')}
+              </h1>
+              <p className="text-base text-muted-foreground/80 font-light leading-relaxed">
                 {t('auth.layout.subtitle')}
               </p>
             </div>

@@ -1155,8 +1155,9 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     }
 
     // ✅ PUBLIC THREAD CACHE: Invalidate when visibility changes
+    // Also clears cached OG images from R2
     if (body.isPublic !== undefined && thread.slug) {
-      await invalidatePublicThreadCache(db, thread.slug);
+      await invalidatePublicThreadCache(db, thread.slug, c.env.UPLOADS_R2_BUCKET);
     }
 
     // ✅ NEW MESSAGE CREATION: Create user message if provided
@@ -1301,8 +1302,9 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
     await invalidateThreadCache(db, user.id, id, thread.slug);
 
     // ✅ PUBLIC THREAD CACHE: Invalidate if thread was public
+    // Also clears cached OG images from R2
     if (thread.isPublic && thread.slug) {
-      await invalidatePublicThreadCache(db, thread.slug);
+      await invalidatePublicThreadCache(db, thread.slug, c.env.UPLOADS_R2_BUCKET);
     }
 
     return Responses.ok(c, {

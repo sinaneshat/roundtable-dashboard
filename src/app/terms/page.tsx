@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const translatedKeywords = isArrayOf(rawKeywords, isNonEmptyString) ? rawKeywords : [];
 
   return createMetadata({
-    title: t('title'),
+    title: `${t('title')} - ${BRAND.name}`,
     description: t('description'),
     url: '/terms',
     canonicalUrl: '/terms',

@@ -1,11 +1,10 @@
 'use client';
 import { motion } from 'motion/react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
 import { AvatarSizes, ChatModes, PlanTypes, SubscriptionTiers } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-// Direct import to avoid barrel export pulling in server-only credit.service.ts
 import { MIN_MODELS_REQUIRED } from '@/api/services/billing/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,6 +12,134 @@ import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { getChatModeLabel } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
+
+type PromptTemplate = {
+  title: string;
+  prompt: string;
+  mode: ChatMode;
+  roles: string[];
+};
+
+const PROMPT_POOL: PromptTemplate[] = [
+  // CEO/Executive
+  {
+    title: 'Our competitor got acquired. Seek a buyer or raise to compete?',
+    prompt: 'We\'re a $4M ARR B2B SaaS (project management, 40 employees). Our main competitor just got acquired by Microsoft for $200M. We have 18 months runway and 15% MoM growth. Seek acquisition while market is hot, raise Series A to compete, or stay bootstrapped and niche down?',
+    mode: ChatModes.DEBATING,
+    roles: ['Strategic Advisor', 'M&A Expert', 'Growth Strategist'],
+  },
+  {
+    title: 'Cash-flow positive but growth slowing. Cut costs or invest?',
+    prompt: 'We\'re a $6M ARR fintech startup, profitable at $400K/year but growth dropped from 8% to 3% MoM. We have $2M in the bank, 50 employees. Cut 20% of staff to extend runway to 3 years, or spend reserves on sales/marketing to reignite growth?',
+    mode: ChatModes.ANALYZING,
+    roles: ['CFO Advisor', 'Growth Expert', 'Operations Analyst'],
+  },
+  {
+    title: 'Key executive leaving for competitor. Counter-offer or let go?',
+    prompt: 'Our VP of Engineering (5 years, built the whole platform) just got a $450K offer from our main competitor. He currently makes $280K + 1.5% equity. Counter-offer with a $350K + 0.5% refresh, let him go gracefully, or remind him of his 2-year non-compete?',
+    mode: ChatModes.DEBATING,
+    roles: ['HR Strategist', 'Legal Counsel', 'Culture Advisor'],
+  },
+  {
+    title: 'Market consolidating. Acquire a smaller player or be acquired?',
+    prompt: 'We\'re #3 in our market ($8M ARR). #1 and #2 just merged. A smaller competitor ($2M ARR) is available for $5M. We have $3M cash. Take debt to acquire them and become #2, focus on profitability to become attractive acquisition target, or keep competing as is?',
+    mode: ChatModes.ANALYZING,
+    roles: ['M&A Advisor', 'Market Analyst', 'Strategic Planner'],
+  },
+  // Product Management
+  {
+    title: 'Users want feature X, but it conflicts with strategy. Build it?',
+    prompt: 'Our top 5 enterprise customers ($1.2M combined ARR) are demanding Salesforce integration. Building it requires 3 months and pulls us away from our AI roadmap which we believe is our moat. They\'ve hinted they\'ll churn without it. Build the integration, hold firm on AI strategy, or offer a discount to buy time?',
+    mode: ChatModes.DEBATING,
+    roles: ['Product Strategist', 'Customer Success Lead', 'Tech Lead'],
+  },
+  {
+    title: 'Competitor launched our roadmap feature. Pivot or execute better?',
+    prompt: 'We planned to launch AI-powered analytics next quarter—our main differentiator. Competitor just shipped it last week, getting press coverage. We\'re 2 months from launch with arguably better implementation. Ship anyway and compete on quality, pivot to a different AI feature, or accelerate launch and cut scope?',
+    mode: ChatModes.ANALYZING,
+    roles: ['Competitive Analyst', 'Product Lead', 'UX Strategist'],
+  },
+  {
+    title: 'Enterprise wants on-prem but it slows velocity 40%. Worth it?',
+    prompt: 'Three Fortune 500 prospects ($800K combined ACV) require on-premises deployment. Engineering estimates 6 months to build and 40% slower feature velocity ongoing. Current ARR is $3M, all cloud. Accept the architectural complexity for $800K, decline and stay cloud-only, or offer a hybrid compromise?',
+    mode: ChatModes.DEBATING,
+    roles: ['Enterprise Advisor', 'Engineering Lead', 'Revenue Strategist'],
+  },
+  {
+    title: 'Free tier cannibalizing paid. Kill it or lean into viral growth?',
+    prompt: 'Our free tier has 50K users with 2% converting to paid ($50/mo). Conversion dropped from 4% as free features expanded. Free users cost $3/mo to serve. Kill free tier entirely, add aggressive limits (storage, exports), or double down on viral features hoping volume compensates?',
+    mode: ChatModes.ANALYZING,
+    roles: ['Growth Analyst', 'Monetization Expert', 'Product Strategist'],
+  },
+  // Legal
+  {
+    title: 'Cease & desist on trademark. Fight, rebrand, or negotiate?',
+    prompt: 'We\'re \'Beacon Analytics\' (2 years old, $2M brand investment). Received C&D from \'Beacon Insurance\' (Fortune 500). Our lawyer says we\'d likely win (different industries) but litigation costs $300K+. Rebrand for ~$500K, fight it, or offer coexistence agreement with geographic/industry restrictions?',
+    mode: ChatModes.DEBATING,
+    roles: ['IP Attorney', 'Brand Strategist', 'Risk Advisor'],
+  },
+  {
+    title: 'Employee alleges wrongful termination. Settle or litigate?',
+    prompt: 'Terminated employee (sales, 18 months tenure, documented performance issues) is threatening wrongful termination suit claiming discrimination. Their lawyer is asking $150K to settle. Our lawyer estimates $80K to litigate with 70% win probability. Settle quickly to avoid PR, litigate to avoid setting precedent, or counter-offer at $75K?',
+    mode: ChatModes.ANALYZING,
+    roles: ['Employment Counsel', 'HR Advisor', 'PR Strategist'],
+  },
+  {
+    title: 'Patent troll lawsuit. Settle, fight, or find prior art?',
+    prompt: 'Patent troll is suing us for $2M over a vague \'data synchronization\' patent. They\'ve settled with 12 other companies for $200-400K each. Our tech clearly differs but litigation costs $500K+. Pay $300K to settle, fight to set precedent for the industry, or spend $100K on prior art search first?',
+    mode: ChatModes.DEBATING,
+    roles: ['Patent Attorney', 'Litigation Strategist', 'Technical Expert'],
+  },
+  // Healthcare
+  {
+    title: 'New treatment promising but limited data. Recommend to patient?',
+    prompt: 'Stage 4 pancreatic cancer patient, 68yo, otherwise healthy. Standard chemo offers 8% 2-year survival. New immunotherapy trial shows 22% in early data (n=45) but severe side effects in 30% of cases. Patient has good insurance, wants to fight. Recommend trial, standard treatment, or palliative care focus?',
+    mode: ChatModes.ANALYZING,
+    roles: ['Oncologist', 'Medical Ethicist', 'Patient Advocate'],
+  },
+  {
+    title: 'Conflicting specialist opinions on treatment. How to proceed?',
+    prompt: 'Patient with complex cardiac + kidney issues. Cardiologist recommends surgery (15% mortality risk, fixes heart). Nephrologist says surgery will accelerate kidney failure requiring dialysis within a year. Patient is 58, active, values quality of life. Surgery with kidney risk, medical management only, or seek third opinion and delay?',
+    mode: ChatModes.DEBATING,
+    roles: ['Chief Medical Officer', 'Care Coordinator', 'Risk Analyst'],
+  },
+  {
+    title: 'Staff burnout crisis. Cut capacity or hire expensive travel nurses?',
+    prompt: 'ICU at 95% capacity for 8 weeks. Nursing turnover hit 40% annually. Travel nurses cost $150/hr vs $45/hr for staff. Options: reduce beds by 20% (losing $2M/month revenue), hire travel nurses ($800K/month extra), or mandatory overtime with retention bonuses ($200K/month). Which approach for the next 6 months?',
+    mode: ChatModes.ANALYZING,
+    roles: ['Healthcare Administrator', 'HR Director', 'Finance Lead'],
+  },
+  // General Board Room
+  {
+    title: 'Need to cut 20% of costs. Where do we cut without killing growth?',
+    prompt: 'Board mandated 20% cost reduction ($2M annually). Current spend: Engineering $4M, Sales $3M, Marketing $1.5M, G&A $1.5M. Growth is 30% YoY, mostly from sales team. Cut engineering (slow product), cut sales (slow growth), cut marketing (hurt brand), or across-the-board 20% including layoffs?',
+    mode: ChatModes.ANALYZING,
+    roles: ['CFO Advisor', 'Operations Expert', 'Strategic Planner'],
+  },
+  {
+    title: 'Our industry is being disrupted by AI. Adapt, pivot, or ignore?',
+    prompt: 'We run a $10M content writing agency (200 writers). AI tools now produce 70% quality content at 5% of our cost. Revenue down 15% this year. Options: pivot to AI-assisted premium content (layoff 150 writers), become an AI tools reseller, double down on human-only quality positioning, or exit the business while we still can?',
+    mode: ChatModes.DEBATING,
+    roles: ['Innovation Lead', 'Industry Analyst', 'Strategy Advisor'],
+  },
+  {
+    title: 'Key customer with 40% revenue demanding exclusivity. Accept terms?',
+    prompt: 'Our largest customer ($3M of $7.5M ARR) wants exclusive rights to our product in their industry for 3 years. They\'ll pay 25% premium ($750K/year extra). But it blocks us from 4 known prospects worth ~$1M ARR combined. Accept exclusivity, negotiate narrower terms, or decline and risk them churning?',
+    mode: ChatModes.DEBATING,
+    roles: ['Revenue Strategist', 'Risk Advisor', 'Legal Counsel'],
+  },
+  {
+    title: 'PR crisis: executive misconduct allegation. Response strategy?',
+    prompt: 'Our COO (co-founder, 10 years) accused of harassment by former employee. Story broke on Twitter, 500K views. No police report, but two other employees corroborated privately. COO denies everything. Suspend immediately pending investigation, issue statement supporting COO, hire external investigator and say nothing, or ask for resignation?',
+    mode: ChatModes.ANALYZING,
+    roles: ['Crisis Manager', 'Legal Counsel', 'Communications Lead'],
+  },
+];
+
+function getRandomPrompts(count: number): PromptTemplate[] {
+  const shuffled = [...PROMPT_POOL].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
 
 type QuickStartSuggestion = {
   title: string;
@@ -41,9 +168,9 @@ function QuickStartSkeleton({ className }: { className?: string }) {
               index !== 2 && 'border-b border-white/[0.06]',
             )}
           >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-3">
               <Skeleton className="h-5 w-3/4 bg-white/10" />
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2.5 shrink-0">
                 <Skeleton className="h-6 w-16 rounded-2xl bg-white/10" />
                 <div className="flex -space-x-2">
                   {[0, 1, 2].map(i => (
@@ -63,6 +190,7 @@ export function ChatQuickStart({
   onSuggestionClick,
   className,
 }: ChatQuickStartProps) {
+  const [randomPrompts] = useState(() => getRandomPrompts(3));
   const { data: usageData, isLoading: isUsageLoading } = useUsageStatsQuery();
   const { data: modelsResponse, isLoading: isModelsLoading } = useModelsQuery();
 
@@ -159,141 +287,58 @@ export function ChatQuickStart({
     const freeModels = getModelsForTier(MIN_MODELS_REQUIRED);
     const proModels = getModelsForTier(4);
 
-    const freeTierSuggestions: QuickStartSuggestion[] = (() => {
-      const models = freeModels;
-      if (models.length === 0) {
-        return [];
-      }
-
-      const buildParticipants = (roles: string[]) => {
-        const participants = roles
-          .slice(0, models.length)
-          .map((role, idx) => {
-            const modelId = models[idx];
-            if (!modelId)
-              return null;
-            return {
-              id: `p${idx + 1}`,
-              modelId,
-              role,
-              priority: idx,
-              customRoleId: undefined,
-            };
-          })
-          .filter((p): p is NonNullable<typeof p> => p !== null);
-        return participants;
-      };
-
-      const suggestions: QuickStartSuggestion[] = [
-        {
-          title: 'Is privacy a right or a privilege in the digital age?',
-          prompt:
-            'Should individuals sacrifice privacy for security, or is surveillance capitalism the new totalitarianism? Where do we draw the line?',
-          mode: ChatModes.DEBATING,
-          participants: buildParticipants([
-            'Privacy Advocate',
-            'Security Realist',
-            'Legal Scholar',
-          ]),
-        },
-        {
-          title:
-            'Should we resurrect extinct species using genetic engineering?',
-          prompt:
-            'De-extinction: ecological restoration or playing god? Discuss bringing back woolly mammoths, passenger pigeons, and other lost species.',
-          mode: ChatModes.ANALYZING,
-          participants: buildParticipants([
-            'Conservation Biologist',
-            'Bioethicist',
-            'Ecologist',
-          ]),
-        },
-        {
-          title: 'Is meritocracy a myth that justifies inequality?',
-          prompt:
-            'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
-          mode: ChatModes.DEBATING,
-          participants: buildParticipants([
-            'Sociologist',
-            'Economist',
-            'Historian',
-          ]),
-        },
-      ];
-
-      return suggestions;
-    })();
-
-    const proTierSuggestions: QuickStartSuggestion[] = (() => {
-      const models = proModels;
+    const buildSuggestionsFromTemplates = (
+      templates: PromptTemplate[],
+      models: string[],
+    ): QuickStartSuggestion[] => {
       if (models.length === 0)
         return [];
 
-      const buildParticipants = (roles: string[]) => {
-        return roles
-          .slice(0, models.length)
-          .map((role, idx) => {
-            const modelId = models[idx];
-            if (!modelId)
-              return null;
-            return {
-              id: `p${idx + 1}`,
-              modelId,
-              role,
-              priority: idx,
-              customRoleId: undefined,
-            };
-          })
-          .filter((p): p is NonNullable<typeof p> => p !== null);
-      };
+      return templates.map((template, templateIndex) => {
+        const rotatedModels = [
+          ...models.slice(templateIndex % models.length),
+          ...models.slice(0, templateIndex % models.length),
+        ];
 
-      return [
-        {
-          title: 'Should we edit human embryos to eliminate genetic diseases?',
-          prompt:
-            'CRISPR germline editing: eliminating suffering or creating designer babies? Where is the line between treatment and enhancement?',
-          mode: ChatModes.DEBATING,
-          participants: buildParticipants([
-            'Bioethicist',
-            'Geneticist',
-            'Disability Rights Advocate',
-            'Medical Ethicist',
-          ]),
-        },
-        {
-          title:
-            'Can artificial general intelligence be aligned with human values?',
-          prompt:
-            'If we create AGI smarter than us, can we ensure it shares our values? Or is catastrophic misalignment inevitable?',
-          mode: ChatModes.ANALYZING,
-          participants: buildParticipants([
-            'AI Safety Researcher',
-            'Machine Learning Engineer',
-            'Ethics Philosopher',
-            'Systems Architect',
-          ]),
-        },
-        {
-          title: 'Is infinite economic growth possible on a finite planet?',
-          prompt:
-            'Capitalism demands perpetual growth, but Earth has limits. Must we choose between prosperity and survival, or can we transcend this paradox?',
-          mode: ChatModes.DEBATING,
-          participants: buildParticipants([
-            'Ecological Economist',
-            'Free Market Theorist',
-            'Systems Thinker',
-            'Resource Analyst',
-          ]),
-        },
-      ];
-    })();
+        return {
+          title: template.title,
+          prompt: template.prompt,
+          mode: template.mode,
+          participants: template.roles
+            .slice(0, rotatedModels.length)
+            .map((role, idx) => {
+              const modelId = rotatedModels[idx];
+              if (!modelId)
+                return null;
+              return {
+                id: `p${idx + 1}`,
+                modelId,
+                role,
+                priority: idx,
+                customRoleId: undefined,
+              };
+            })
+            .filter((p): p is NonNullable<typeof p> => p !== null),
+        };
+      });
+    };
+
+    const freeTierSuggestions = buildSuggestionsFromTemplates(
+      randomPrompts,
+      freeModels,
+    );
+
+    const proTierSuggestions = buildSuggestionsFromTemplates(
+      randomPrompts,
+      proModels,
+    );
 
     const tierSuggestions: QuickStartSuggestion[] = userTier === SubscriptionTiers.FREE
       ? freeTierSuggestions
       : proTierSuggestions;
 
     return tierSuggestions;
-  }, [userTier, accessibleModels, selectUniqueProviderModels]);
+  }, [userTier, accessibleModels, selectUniqueProviderModels, randomPrompts]);
 
   if (isLoading) {
     return <QuickStartSkeleton className={className} />;
@@ -332,13 +377,13 @@ export function ChatQuickStart({
                 !isLast && 'border-b border-white/[0.02]',
               )}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
-                <h3 className="text-sm sm:text-[15px] font-normal text-white leading-snug flex-1 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-3">
+                <h3 className="text-[15px] sm:text-[15px] font-medium text-white leading-snug flex-1 min-w-0">
                   {suggestion.title}
                 </h3>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2.5 shrink-0">
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.02]">
-                    <span className="text-[11px] font-medium whitespace-nowrap text-white/80">
+                    <span className="text-[11px] font-medium whitespace-nowrap text-white/60">
                       {getChatModeLabel(suggestion.mode)}
                     </span>
                   </div>

@@ -283,10 +283,10 @@ describe('pricingContent', () => {
         />,
       );
 
+      // PricingCard now uses fixed value props instead of custom description/features
       expect(screen.getByText('Test Plan')).toBeInTheDocument();
-      expect(screen.getByText('Test description')).toBeInTheDocument();
-      expect(screen.getByText('Feature 1')).toBeInTheDocument();
-      expect(screen.getByText('Feature 2')).toBeInTheDocument();
+      expect(screen.getByText('All AI Models')).toBeInTheDocument();
+      expect(screen.getByText('Unlimited Messages')).toBeInTheDocument();
     });
   });
 
@@ -450,7 +450,7 @@ describe('pricingContent', () => {
   });
 
   describe('user interactions', () => {
-    it('calls onSubscribe when subscribe button clicked', async () => {
+    it('calls onSubscribe when get started button clicked', async () => {
       const user = userEvent.setup();
       const handleSubscribe = vi.fn();
       const product = createMockProduct({
@@ -468,7 +468,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      await user.click(screen.getByText('Subscribe'));
+      await user.click(screen.getByText('Get Started'));
       expect(handleSubscribe).toHaveBeenCalledWith('price_test');
     });
 

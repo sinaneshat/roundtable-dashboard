@@ -605,9 +605,11 @@ describe('stale Time Configuration', () => {
     expect(STALE_TIMES.models).toBe(Infinity);
   });
 
-  it('should use short times for real-time data', () => {
-    expect(STALE_TIMES.threadMessages).toBe(5 * 1000);
-    expect(STALE_TIMES.threadDetail).toBe(10 * 1000);
+  it('should use medium times for chat data (optimized for navigation)', () => {
+    // Messages and thread detail use 2-minute stale time for instant navigation
+    // Longer stale times reduce API calls while keeping data fresh enough
+    expect(STALE_TIMES.threadMessages).toBe(2 * 60 * 1000);
+    expect(STALE_TIMES.threadDetail).toBe(2 * 60 * 1000);
   });
 
   it('should use longer times for infrequent changes', () => {

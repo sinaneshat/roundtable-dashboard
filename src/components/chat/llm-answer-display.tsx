@@ -29,7 +29,7 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
         </div>
       </FadeInText>
 
-      <div>
+      <div dir="auto">
         {isStreaming
           ? (
               <div>

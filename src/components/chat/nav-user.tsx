@@ -9,23 +9,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import type { Subscription } from '@/api/routes/billing/schema';
 import { Icons } from '@/components/icons';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   useCancelSubscriptionMutation,
   useCreateCustomerPortalSessionMutation,
@@ -36,27 +28,13 @@ import { signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
 import { showApiErrorToast } from '@/lib/toast';
 
-// Dynamic imports - only loaded when user opens dropdown/dialogs
-const UsageMetrics = dynamic(
-  () => import('@/components/chat/usage-metrics').then(m => ({ default: m.UsageMetrics })),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-full rounded-md" />
-        <Skeleton className="h-8 w-full rounded-md" />
-      </div>
-    ),
-  },
-);
-
 const CancelSubscriptionDialog = dynamic(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => m.CancelSubscriptionDialog),
   { ssr: false },
 );
 
-const ApiKeysModal = dynamic(
-  () => import('@/components/modals/api-keys-modal').then(m => m.ApiKeysModal),
+const FeedbackModal = dynamic(
+  () => import('@/components/chat/feedback-modal').then(m => m.FeedbackModal),
   { ssr: false },
 );
 
@@ -72,7 +50,7 @@ export function NavUser({ initialSession }: NavUserProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const showCancelDialog = useBoolean(false);
-  const showApiKeysModal = useBoolean(false);
+  const showFeedbackModal = useBoolean(false);
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
 
@@ -189,14 +167,14 @@ export function NavUser({ initialSession }: NavUserProps) {
           <Icons.chevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="w-[calc(var(--sidebar-width)-1.5rem)] min-w-56 rounded-lg"
+          className="w-[calc(var(--sidebar-width)-1rem)] min-w-52 sm:min-w-60 rounded-xl ml-3"
           side="top"
           align="start"
           sideOffset={8}
         >
           <DropdownMenuLabel className="p-0 font-normal">
-            <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-              <Avatar className="h-8 w-8 rounded-full">
+            <div className="flex items-center gap-2.5 px-2 py-2 text-left text-sm">
+              <Avatar className="h-9 w-9 rounded-full">
                 <AvatarImage
                   src={user?.image || undefined}
                   alt={displayName}
@@ -207,7 +185,7 @@ export function NavUser({ initialSession }: NavUserProps) {
                 <span className="truncate font-semibold">
                   {displayName}
                 </span>
-                <span className="truncate text-xs">{displayEmail}</span>
+                <span className="truncate text-xs text-muted-foreground">{displayEmail}</span>
               </div>
             </div>
           </DropdownMenuLabel>
@@ -215,57 +193,46 @@ export function NavUser({ initialSession }: NavUserProps) {
 
           {isDropdownOpen && (
             <>
-              <div className="px-2">
-                <Accordion type="single" collapsible>
-                  <AccordionItem value="usage" className="border-none">
-                    <AccordionTrigger className="py-2 text-xs font-medium text-muted-foreground hover:no-underline">
-                      {t('usage.planUsage')}
-                    </AccordionTrigger>
-                    <AccordionContent className="pb-2">
-                      <UsageMetrics />
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </div>
-
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem onClick={showApiKeysModal.onTrue}>
-                  <Icons.key />
-                  API Keys
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/chat/pricing">
-                    <Icons.sparkles />
-                    {t('navigation.pricing')}
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              {activeSubscription && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
+              {activeSubscription
+                ? (
                     <DropdownMenuItem
                       onClick={handleManageBilling}
-                      disabled={customerPortalMutation.isPending || cancelSubscriptionMutation.isPending}
+                      disabled={customerPortalMutation.isPending}
+                      className="text-emerald-400 focus:text-emerald-300 focus:bg-emerald-500/10"
                     >
-                      {customerPortalMutation.isPending
-                        ? (
-                            <>
-                              <Icons.loader className="size-4 animate-spin" />
-                              {t('pricing.card.processing')}
-                            </>
-                          )
-                        : (
-                            <>
-                              <Icons.creditCard />
-                              {t('pricing.card.manageBilling')}
-                            </>
-                          )}
+                      <div className="flex items-center gap-2.5 w-full">
+                        {customerPortalMutation.isPending
+                          ? <Icons.loader className="size-4 animate-spin" />
+                          : <Icons.check className="size-4" />}
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold">{t('userMenu.proPlan')}</p>
+                          <p className="text-[10px] text-muted-foreground">{t('userMenu.manageBilling')}</p>
+                        </div>
+                        <Icons.chevronRight className="size-4 opacity-50" />
+                      </div>
                     </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </>
-              )}
+                  )
+                : (
+                    <DropdownMenuItem asChild className="text-emerald-400 focus:text-emerald-300 focus:bg-emerald-500/10">
+                      <Link href="/chat/pricing" className="flex items-center gap-2.5">
+                        <Icons.sparkles className="size-4" />
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold">{t('userMenu.upgradeToPro')}</p>
+                          <p className="text-[10px] text-muted-foreground">{t('userMenu.upgradeDescription')}</p>
+                        </div>
+                        <Icons.chevronRight className="size-4 opacity-50" />
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={showFeedbackModal.onTrue}>
+                <Icons.messageSquare />
+                <div className="flex-1">
+                  <p className="text-xs font-semibold">{t('userMenu.sendFeedback')}</p>
+                  <p className="text-[10px] text-muted-foreground">{t('userMenu.feedbackDescription')}</p>
+                </div>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <Icons.logOut />
@@ -285,10 +252,10 @@ export function NavUser({ initialSession }: NavUserProps) {
           isProcessing={cancelSubscriptionMutation.isPending}
         />
       )}
-      {showApiKeysModal.value && (
-        <ApiKeysModal
-          open={showApiKeysModal.value}
-          onOpenChange={showApiKeysModal.setValue}
+      {showFeedbackModal.value && (
+        <FeedbackModal
+          open={showFeedbackModal.value}
+          onOpenChange={showFeedbackModal.setValue}
         />
       )}
     </>

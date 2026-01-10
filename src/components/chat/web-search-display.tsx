@@ -52,8 +52,8 @@ export function WebSearchDisplay({
     return (
       <AccordionEntrance>
         <div className={cn('relative py-2', className)}>
-          <ChainOfThought open disabled>
-            <ChainOfThoughtHeader disabled>
+          <ChainOfThought open={isOpen.value} onOpenChange={isOpen.setValue}>
+            <ChainOfThoughtHeader>
               <div className="flex items-center gap-2">
                 <Icons.globe className="size-4 animate-pulse" />
                 <TextShimmer className="text-sm">{query ? t('searchingFor', { query }) : t('title')}</TextShimmer>

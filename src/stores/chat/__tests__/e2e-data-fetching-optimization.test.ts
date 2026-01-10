@@ -722,12 +722,13 @@ describe('query Cache Pre-population - Prevent Server Fetches', () => {
 
     // This prevents hydration mismatches and unnecessary refetches
     expect(serverSideStaleTime).toBe(clientSideStaleTime);
-    expect(serverSideStaleTime).toBe(10 * 1000); // 10 seconds
+    expect(serverSideStaleTime).toBe(2 * 60 * 1000); // 2 minutes - optimized for navigation
   });
 
-  it('should verify messages use short staleTime for real-time updates', () => {
-    // Messages need frequent updates (streaming, new rounds)
-    expect(STALE_TIMES.threadMessages).toBe(5 * 1000); // 5 seconds
+  it('should verify messages use medium staleTime for navigation performance', () => {
+    // Messages use 2-minute stale time for instant navigation
+    // New messages arrive via streaming, not polling
+    expect(STALE_TIMES.threadMessages).toBe(2 * 60 * 1000); // 2 minutes
 
     // But changelog is Infinity (ONE-WAY DATA FLOW)
     expect(STALE_TIMES.threadChangelog).toBe(Infinity);

@@ -317,6 +317,7 @@ export const ChatInput = memo(({
             <VoiceVisualization
               isActive={isListening}
               audioLevels={audioLevels}
+              hasAlertAbove={showCreditAlert || showUpgradePrompt || showNoModelsError || isOverLimit}
             />
           )}
 
@@ -343,6 +344,7 @@ export const ChatInput = memo(({
             <div className="px-3 sm:px-4 py-3 sm:py-4">
               <textarea
                 ref={textareaRef}
+                dir="auto"
                 value={value}
                 onChange={(e) => {
                   onChange(e.target.value);

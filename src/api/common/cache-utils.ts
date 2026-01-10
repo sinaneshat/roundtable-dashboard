@@ -28,6 +28,7 @@
 import { revalidateTag } from 'next/cache';
 
 import { SUBSCRIPTION_TIERS } from '@/api/core/enums/billing';
+import { deleteOgImageFromCache } from '@/api/services/og-cache';
 import type { getDbAsync } from '@/db';
 import {
   MessageCacheTags,
@@ -80,14 +81,10 @@ export async function invalidateThreadCache(
     await db.$cache.invalidate({ tags });
   }
 
-  // Invalidate Next.js unstable_cache for public thread (if slug provided)
-  // Uses the bulk tag since unstable_cache doesn't support dynamic per-slug tags
-  // This invalidates ALL public thread caches - necessary for ISR pattern
   if (slug) {
     revalidateTag(THREAD_CACHE_TAGS.allPublicThreads, 'max');
   }
 
-  // Invalidate thread messages cache (if threadId provided)
   if (threadId) {
     revalidateTag(THREAD_CACHE_TAGS.threadMessages(threadId), 'max');
   }
@@ -143,13 +140,16 @@ export async function invalidateMessagesCache(
  *
  * Use when thread visibility changes or public thread content updates.
  * Also invalidates the public slugs list cache for SSG regeneration.
+ * Optionally clears cached OG images from R2.
  *
  * @param db - Database instance with cache support
  * @param slug - Thread slug to invalidate
+ * @param r2Bucket - Optional R2 bucket for OG image cache cleanup
  */
 export async function invalidatePublicThreadCache(
   db: Awaited<ReturnType<typeof getDbAsync>>,
   slug: string,
+  r2Bucket?: R2Bucket,
 ): Promise<void> {
   if (db.$cache?.invalidate) {
     await db.$cache.invalidate({
@@ -161,6 +161,10 @@ export async function invalidatePublicThreadCache(
   }
   revalidateTag(THREAD_CACHE_TAGS.publicThread(slug), 'max');
   revalidateTag(THREAD_CACHE_TAGS.allPublicThreads, 'max');
+
+  if (r2Bucket) {
+    await deleteOgImageFromCache(r2Bucket, 'public-thread', slug).catch(() => {});
+  }
 }
 
 // ============================================================================

@@ -10,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const tSeo = await getTranslations('seo.keywords');
 
   return createMetadata({
-    title: t('title'),
+    title: `${t('title')} - ${BRAND.name}`,
     description: t('description'),
     url: '/auth/sign-in',
     canonicalUrl: '/auth/sign-in',

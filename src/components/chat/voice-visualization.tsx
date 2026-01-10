@@ -13,6 +13,8 @@ type VoiceVisualizationProps = {
   audioLevels?: number[];
   /** Number of visualization bars */
   barCount?: number;
+  /** Whether an alert banner is shown above this component */
+  hasAlertAbove?: boolean;
 };
 
 const EMPTY_AUDIO_LEVELS: number[] = [];
@@ -25,6 +27,7 @@ export function VoiceVisualization({
   isActive,
   audioLevels = EMPTY_AUDIO_LEVELS,
   barCount = 40,
+  hasAlertAbove = false,
 }: VoiceVisualizationProps) {
   const t = useTranslations('chat.input');
   const bars = useMemo(() => {
@@ -50,8 +53,9 @@ export function VoiceVisualization({
         <div
           className={cn(
             'flex items-center gap-3 px-3 py-3',
-            'border-0 border-b border-primary/20 rounded-none rounded-t-2xl',
-            'bg-primary/10 backdrop-blur-xl',
+            'border-0 border-b border-blue-500/20',
+            hasAlertAbove ? 'rounded-none' : 'rounded-none rounded-t-2xl',
+            'bg-blue-500/10 backdrop-blur-xl',
           )}
         >
           <div className="flex items-center gap-2 shrink-0">
@@ -66,9 +70,9 @@ export function VoiceVisualization({
                 ease: 'easeInOut',
               }}
             >
-              <Icons.mic className="size-3.5 text-primary" />
+              <Icons.mic className="size-3.5 text-blue-500" />
             </motion.div>
-            <span className="text-[10px] font-medium text-primary">
+            <span className="text-[10px] font-medium text-blue-500">
               {t('recording')}
             </span>
           </div>
@@ -83,7 +87,7 @@ export function VoiceVisualization({
                 <motion.div
                   // eslint-disable-next-line react/no-array-index-key
                   key={`bar-${index}`}
-                  className="flex-1 bg-primary/60 rounded-full min-w-[2px]"
+                  className="flex-1 bg-blue-500/60 rounded-full min-w-[2px]"
                   initial={{ height: '20%' }}
                   animate={{
                     height: [`${minHeight}%`, `${maxHeight}%`, `${minHeight}%`],
@@ -99,7 +103,7 @@ export function VoiceVisualization({
             })}
           </div>
 
-          <span className="text-[10px] text-primary/60 shrink-0 hidden sm:block">
+          <span className="text-[10px] text-blue-500/60 shrink-0 hidden sm:block">
             {t('clickMicToStop')}
           </span>
         </div>

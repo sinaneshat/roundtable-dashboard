@@ -150,6 +150,7 @@ function AuthFormContent() {
                   fieldType="email"
                   required
                   disabled={isLoading.value}
+                  inputClassName="h-12"
                 />
                 <Button
                   type="submit"

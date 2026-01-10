@@ -2,24 +2,13 @@
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import type { KeyboardEvent } from 'react';
 import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ChatSidebarItem } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
+import { ChatRenameForm } from '@/components/chat/chat-rename-form';
 import { ChatThreadMenuItems } from '@/components/chat/chat-thread-menu-items';
-import { ShareDialog } from '@/components/chat/share-dialog';
 import { Icons } from '@/components/icons';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +21,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations';
+import { useToggleFavoriteMutation, useUpdateThreadMutation } from '@/hooks/mutations';
 import { useCurrentPathname } from '@/hooks/utils';
 
 function isChatActive(chat: ChatSidebarItem, pathname: string): boolean {
@@ -44,6 +33,8 @@ function isChatActive(chat: ChatSidebarItem, pathname: string): boolean {
 type ChatListProps = {
   chats: ChatSidebarItem[];
   disableAnimations?: boolean;
+  /** Share click handler - lifted to parent to survive remounts */
+  onShareClick: (chat: ChatSidebarItem) => void;
 };
 
 type ChatItemProps = {
@@ -54,6 +45,7 @@ type ChatItemProps = {
   onRenameClick: (chat: ChatSidebarItem) => void;
   onShareClick: (chat: ChatSidebarItem) => void;
   isEditing: boolean;
+  isRenaming: boolean;
   onRenameSubmit: (chat: ChatSidebarItem, newTitle: string) => void;
   onRenameCancel: () => void;
   disableAnimation?: boolean;
@@ -67,6 +59,7 @@ function ChatItem({
   onRenameClick,
   onShareClick,
   isEditing,
+  isRenaming,
   onRenameSubmit,
   onRenameCancel,
   disableAnimation,
@@ -74,58 +67,22 @@ function ChatItem({
   const t = useTranslations();
   const chatUrl = `/chat/${chat.slug}`;
   const [shouldPrefetch, setShouldPrefetch] = useState(false);
-  const [editValue, setEditValue] = useState(chat.title);
-  const inputRef = useRef<HTMLInputElement>(null);
   const handleMouseEnter = useCallback(() => setShouldPrefetch(true), []);
 
-  useLayoutEffect(() => {
-    if (isEditing) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [isEditing]);
-
-  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const trimmed = editValue.trim();
-      if (trimmed && trimmed !== chat.title) {
-        onRenameSubmit(chat, trimmed);
-      } else {
-        onRenameCancel();
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      onRenameCancel();
-    }
-  }, [editValue, chat, onRenameSubmit, onRenameCancel]);
-
-  const handleBlur = useCallback(() => {
-    const trimmed = editValue.trim();
-    if (trimmed && trimmed !== chat.title) {
-      onRenameSubmit(chat, trimmed);
-    } else {
-      onRenameCancel();
-    }
-  }, [editValue, chat, onRenameSubmit, onRenameCancel]);
+  const handleRenameFormSubmit = useCallback((title: string) => {
+    onRenameSubmit(chat, title);
+  }, [chat, onRenameSubmit]);
 
   const content = (
     <SidebarMenuItem>
       {isEditing
         ? (
-            <div className="flex h-9 w-full min-w-0 items-center gap-2.5 rounded-full bg-accent px-4 py-2 text-sm transition-all duration-200 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring">
-              <input
-                ref={inputRef}
-                type="text"
-                value={editValue}
-                onChange={e => setEditValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onBlur={handleBlur}
-                className="w-full min-w-0 bg-transparent text-sm outline-none border-0 p-0 truncate caret-foreground placeholder:text-muted-foreground"
-                style={{ maxWidth: '13rem' }}
-                aria-label={t('chat.renameConversation')}
-              />
-            </div>
+            <ChatRenameForm
+              initialTitle={chat.title}
+              onSubmit={handleRenameFormSubmit}
+              onCancel={onRenameCancel}
+              isPending={isRenaming}
+            />
           )
         : (
             <SidebarMenuButton
@@ -178,15 +135,12 @@ function ChatItem({
 export function ChatList({
   chats,
   disableAnimations = false,
+  onShareClick,
 }: ChatListProps) {
-  const t = useTranslations();
   const pathname = useCurrentPathname();
   const [chatToDelete, setChatToDelete] = useState<ChatSidebarItem | null>(null);
-  const [chatToShare, setChatToShare] = useState<ChatSidebarItem | null>(null);
-  const [chatToMakePublic, setChatToMakePublic] = useState<ChatSidebarItem | null>(null);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const toggleFavoriteMutation = useToggleFavoriteMutation();
-  const togglePublicMutation = useTogglePublicMutation();
   const updateThreadMutation = useUpdateThreadMutation();
 
   const hasTriggeredAnimationRef = useRef(false);
@@ -217,80 +171,33 @@ export function ChatList({
   }, []);
 
   const handleRenameSubmit = useCallback((chat: ChatSidebarItem, newTitle: string) => {
-    setEditingChatId(null);
-    updateThreadMutation.mutate({
-      param: { id: chat.id },
-      json: { title: newTitle },
-    });
+    // Don't exit edit mode yet - stay in edit mode with loading state
+    updateThreadMutation.mutate(
+      {
+        param: { id: chat.id },
+        json: { title: newTitle },
+      },
+      {
+        onSettled: () => {
+          // Exit edit mode after mutation completes (success or error)
+          setEditingChatId(null);
+        },
+      },
+    );
   }, [updateThreadMutation]);
 
   const handleRenameCancel = useCallback(() => {
-    setEditingChatId(null);
-  }, []);
-
-  const handleShareClick = useCallback((chat: ChatSidebarItem) => {
-    if (chat.isPublic) {
-      // Already public, open share dialog directly
-      setChatToShare(chat);
-    } else {
-      // Not public, show confirmation first
-      setChatToMakePublic(chat);
+    // Only allow cancel if not currently renaming
+    if (!updateThreadMutation.isPending) {
+      setEditingChatId(null);
     }
-  }, []);
+  }, [updateThreadMutation.isPending]);
 
   const handleDeleteDialogClose = useCallback((open: boolean) => {
     if (!open) {
       setChatToDelete(null);
     }
   }, []);
-
-  const handleShareDialogClose = useCallback((open: boolean) => {
-    if (!open && !togglePublicMutation.isPending) {
-      setChatToShare(null);
-    }
-  }, [togglePublicMutation.isPending]);
-
-  const handleMakePublicConfirm = useCallback(() => {
-    if (chatToMakePublic) {
-      togglePublicMutation.mutate(
-        {
-          threadId: chatToMakePublic.id,
-          isPublic: true,
-          slug: chatToMakePublic.slug,
-        },
-        {
-          onSuccess: () => {
-            // After making public, open the share dialog
-            setChatToShare(chatToMakePublic);
-            setChatToMakePublic(null);
-          },
-        },
-      );
-    }
-  }, [chatToMakePublic, togglePublicMutation]);
-
-  const handleMakePublicDialogClose = useCallback((open: boolean) => {
-    if (!open && !togglePublicMutation.isPending) {
-      setChatToMakePublic(null);
-    }
-  }, [togglePublicMutation.isPending]);
-
-  const handleMakePrivate = useCallback(() => {
-    if (chatToShare) {
-      togglePublicMutation.mutate(
-        {
-          threadId: chatToShare.id,
-          isPublic: false,
-          slug: chatToShare.slug,
-        },
-        {
-          onSuccess: () => {
-            setChatToShare(null);
-          },
-        },
-      );
-    }
-  }, [chatToShare, togglePublicMutation]);
 
   if (chats.length === 0) {
     return null;
@@ -316,16 +223,18 @@ export function ChatList({
               <SidebarMenu>
                 {chats.map((chat) => {
                   const isActive = isChatActive(chat, pathname);
+                  const isThisChatEditing = editingChatId === chat.id;
                   return (
                     <ChatItem
-                      key={editingChatId === chat.id ? `${chat.id}-editing` : chat.id}
+                      key={isThisChatEditing ? `${chat.id}-editing` : chat.id}
                       chat={chat}
                       isActive={isActive}
                       onDeleteClick={handleDeleteClick}
                       onPinClick={handlePinClick}
                       onRenameClick={handleRenameClick}
-                      onShareClick={handleShareClick}
-                      isEditing={editingChatId === chat.id}
+                      onShareClick={onShareClick}
+                      isEditing={isThisChatEditing}
+                      isRenaming={isThisChatEditing && updateThreadMutation.isPending}
                       onRenameSubmit={handleRenameSubmit}
                       onRenameCancel={handleRenameCancel}
                       disableAnimation={false}
@@ -339,16 +248,18 @@ export function ChatList({
             <SidebarMenu>
               {chats.map((chat) => {
                 const isActive = isChatActive(chat, pathname);
+                const isThisChatEditing = editingChatId === chat.id;
                 return (
                   <ChatItem
-                    key={editingChatId === chat.id ? `${chat.id}-editing` : chat.id}
+                    key={isThisChatEditing ? `${chat.id}-editing` : chat.id}
                     chat={chat}
                     isActive={isActive}
                     onDeleteClick={handleDeleteClick}
                     onPinClick={handlePinClick}
                     onRenameClick={handleRenameClick}
-                    onShareClick={handleShareClick}
-                    isEditing={editingChatId === chat.id}
+                    onShareClick={onShareClick}
+                    isEditing={isThisChatEditing}
+                    isRenaming={isThisChatEditing && updateThreadMutation.isPending}
                     onRenameSubmit={handleRenameSubmit}
                     onRenameCancel={handleRenameCancel}
                     disableAnimation={true}
@@ -363,41 +274,6 @@ export function ChatList({
         threadId={chatToDelete?.id ?? ''}
         threadSlug={chatToDelete?.slug}
         redirectIfCurrent={true}
-      />
-      <AlertDialog open={!!chatToMakePublic} onOpenChange={handleMakePublicDialogClose}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('chat.makePublicConfirmTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('chat.makePublicConfirmDescription')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={togglePublicMutation.isPending}>
-              {t('actions.cancel')}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleMakePublicConfirm}
-              disabled={togglePublicMutation.isPending}
-              className="gap-2"
-            >
-              {togglePublicMutation.isPending && (
-                <Icons.loader className="size-4 animate-spin" />
-              )}
-              {togglePublicMutation.isPending ? t('chat.makingPublic') : t('chat.makePublicConfirmAction')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <ShareDialog
-        open={!!chatToShare}
-        onOpenChange={handleShareDialogClose}
-        slug={chatToShare?.slug ?? ''}
-        threadTitle={chatToShare?.title ?? ''}
-        isPublic={true}
-        isLoading={togglePublicMutation.isPending}
-        onMakePublic={() => {}}
-        onMakePrivate={handleMakePrivate}
       />
     </>
   );

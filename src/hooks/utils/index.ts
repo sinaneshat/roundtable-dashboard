@@ -8,6 +8,8 @@ export { useBoolean } from './use-boolean';
 export type { PendingAttachment, UseChatAttachmentsReturn } from './use-chat-attachments';
 export { PendingAttachmentSchema, useChatAttachments } from './use-chat-attachments';
 export { useChatScroll } from './use-chat-scroll';
+export type { UseCopyToClipboardOptions, UseCopyToClipboardReturn } from './use-copy-to-clipboard';
+export { useCopyToClipboard } from './use-copy-to-clipboard';
 export type { UseCountdownRedirectOptions, UseCountdownRedirectReturn } from './use-countdown-redirect';
 export { useCountdownRedirect } from './use-countdown-redirect';
 export { useCurrentPathname } from './use-current-pathname';

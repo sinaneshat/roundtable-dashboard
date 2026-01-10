@@ -26,6 +26,9 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -63,6 +66,9 @@
   --accent: oklch(0.967 0.001 286.375);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.52 0.17 160);
+  --warning: oklch(0.75 0.18 70);
+  --info: oklch(0.55 0.2 260);
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.705 0.015 286.067);
@@ -98,6 +104,9 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.87 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  --success: oklch(0.696 0.17 162.48);
+  --warning: oklch(0.769 0.188 70.08);
+  --info: oklch(0.488 0.243 264.376);
   --border: oklch(1 0 0 / 4%);
   --input: oklch(1 0 0 / 5%);
   --ring: oklch(0.556 0 0);
@@ -121,12 +130,6 @@
     @apply border-border outline-ring/50;
   }
   html {
-    /* ⚠️ SCROLL FIX: Use 'auto' instead of 'smooth' for virtualized content
-     * smooth scroll-behavior conflicts with TanStack Virtual's scroll position
-     * calculations and can cause unexpected jumps during dynamic content updates.
-     * Smooth scrolling is applied manually via scrollTo({ behavior: 'smooth' })
-     * only when explicitly needed (e.g., ChatScrollButton).
-     */
     scroll-behavior: auto;
   }
   body {
@@ -138,16 +141,11 @@
   }
 }
 
-/* ============================================================================
- * Smooth Scrolling & Scroll Containers
- * Provides buttery smooth scrolling throughout the app
- * ============================================================================ */
 .smooth-scroll {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Accessibility: Instant scroll for reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   html,
   .smooth-scroll {
@@ -155,20 +153,6 @@
   }
 }
 
-/* ============================================================================
- * Scroll Anchoring DISABLED for Virtualized Chat Timeline
- *
- * ✅ SCROLL FIX: DISABLE ALL overflow-anchor to prevent auto-scrolling
- * Browser scroll anchoring conflicts with TanStack Virtual and causes
- * viewport shifts during streaming. We handle scroll manually via:
- * - ChatScrollButton for user-triggered scroll-to-bottom
- * - Frozen totalSize during streaming (useVirtualizedTimeline)
- * - Disabled measureElement during streaming (thread-timeline)
- *
- * CRITICAL: Do NOT enable overflow-anchor on any virtualized content
- * ============================================================================ */
-
-/* Disable scroll anchoring globally and for virtualized timeline */
 html,
 [data-virtualized-timeline],
 [data-virtualized-timeline] > div,
@@ -176,29 +160,15 @@ html,
   overflow-anchor: none;
 }
 
-/* ✅ PERFORMANCE: CSS Containment for virtualized content
- * From TanStack Virtual official examples (Context7 docs)
- * contain: strict tells the browser this element's layout/paint is independent
- * This significantly improves rendering performance for large lists
- * Reference: https://developer.mozilla.org/en-US/docs/Web/CSS/contain
- */
 [data-virtualized-timeline] {
   contain: strict;
 }
 
-/* Virtual items use content-visibility for additional performance
- * content-visibility: auto skips rendering of off-screen content
- * Combined with contain-intrinsic-size to prevent layout shift
- */
 [data-virtualized-timeline] > div > div {
   content-visibility: auto;
-  contain-intrinsic-size: auto 200px; /* Match estimateSize default */
+  contain-intrinsic-size: auto 200px;
 }
 
-/* ============================================================================
- * Collapsible/Accordion Animations
- * Smooth height transitions for collapsible content using CSS grid technique
- * ============================================================================ */
 @keyframes collapsible-down {
   from {
     height: 0;
@@ -229,7 +199,6 @@ html,
   animation: collapsible-up 0.2s cubic-bezier(0.4, 0, 1, 1);
 }
 
-/* Accessibility: Instant animations for reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   .animate-collapsible-down,
   .animate-collapsible-up {
@@ -237,11 +206,6 @@ html,
   }
 }
 
-/* ============================================================================
- * Custom Scrollbar Styling
- * Matches shadcn ScrollArea appearance for native overflow scroll containers
- * Used when ScrollArea wrapper interferes with drag-and-drop functionality
- * ============================================================================ */
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
@@ -266,11 +230,6 @@ html,
   background-color: hsl(var(--muted-foreground) / 0.5);
 }
 
-/* ============================================================================
- * Link Loading Indicator (useLinkStatus)
- * Debounced animation prevents flash on fast navigations
- * 100ms delay before showing - per Next.js best practices
- * ============================================================================ */
 .link-pending-indicator {
   animation: link-pending-fade-in 150ms ease-out 100ms forwards;
 }
@@ -281,7 +240,6 @@ html,
   }
 }
 
-/* Accessibility: Instant indicator for reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   .link-pending-indicator {
     animation-delay: 0ms;

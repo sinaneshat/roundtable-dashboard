@@ -5,8 +5,8 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { ChatMode, FeedbackType, ScreenMode } from '@/api/core/enums';
-import { ChatModeSchema, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import type { ChatMode, ScreenMode } from '@/api/core/enums';
+import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
@@ -34,7 +34,6 @@ import {
   useThreadActions,
 } from '@/stores/chat';
 
-// Lazy-loaded components - only loaded when needed
 const ModelSelectionModal = dynamic(
   () => import('@/components/chat/model-selection-modal').then(m => m.ModelSelectionModal),
   { ssr: false },
@@ -43,7 +42,6 @@ const ConversationModeModal = dynamic(
   () => import('@/components/chat/conversation-mode-modal').then(m => m.ConversationModeModal),
   { ssr: false },
 );
-// Toolbar now lazy-loaded within ChatInput via chat-input-toolbar-lazy.tsx
 const ChatInputToolbarMenu = dynamic(
   () => import('@/components/chat/chat-input-toolbar-lazy').then(m => m.ChatInputToolbarMenu),
   { ssr: false },
@@ -209,14 +207,12 @@ export function ChatView({
   const incompatibleModelIds = useMemo(() => {
     const incompatible = new Set<string>();
 
-    // Add tier-inaccessible models (user can't access based on subscription)
     for (const model of allEnabledModels) {
       if (!model.is_accessible_to_user) {
         incompatible.add(model.id);
       }
     }
 
-    // Add vision-incompatible models if there are vision files
     const existingVisionFiles = messages.some((msg) => {
       if (!msg.parts)
         return false;
@@ -253,23 +249,6 @@ export function ChatView({
     preSearches,
   });
 
-  const { feedbackByRound, pendingFeedback } = useChatStore(
-    useShallow(s => ({
-      feedbackByRound: s.feedbackByRound,
-      pendingFeedback: s.pendingFeedback,
-    })),
-  );
-
-  const filteredFeedbackByRound = useMemo(() => {
-    const filtered = new Map<number, FeedbackType>();
-    feedbackByRound.forEach((value, key) => {
-      if (value !== null) {
-        filtered.set(key, value);
-      }
-    });
-    return filtered;
-  }, [feedbackByRound]);
-
   const feedbackActions = useFeedbackActions({ threadId: effectiveThreadId });
 
   const lastLoadedFeedbackRef = useRef<string>('');
@@ -300,8 +279,8 @@ export function ChatView({
     if (incompatibleModelIds.size === 0)
       return;
 
-    const incompatibleSelected = selectedParticipants.filter(
-      p => incompatibleModelIds.has(p.modelId),
+    const incompatibleSelected = selectedParticipants.filter(p =>
+      incompatibleModelIds.has(p.modelId),
     );
 
     if (incompatibleSelected.length === 0)
@@ -519,9 +498,9 @@ export function ChatView({
 
   return (
     <>
-      <UnifiedErrorBoundary context="chat">
+      <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div className="flex flex-col relative flex-1 min-h-full">
-          <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-16 pb-4">
+          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-4">
             <ThreadTimeline
               timelineItems={timelineItems}
               user={user}
@@ -536,9 +515,6 @@ export function ChatView({
                   : null
               }
               streamingRoundNumber={streamingRoundNumber}
-              feedbackByRound={filteredFeedbackByRound}
-              pendingFeedback={pendingFeedback}
-              getFeedbackHandler={feedbackActions.getFeedbackHandler}
               preSearches={preSearches}
               isDataReady={isStoreReady}
               completedRoundNumbers={completedRoundNumbers}
@@ -549,10 +525,11 @@ export function ChatView({
 
           <div
             ref={inputContainerRef}
-            className="sticky z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-6 relative"
+            className="sticky z-30 mt-auto pt-6 relative"
             style={{ bottom: `${keyboardOffset + 16}px` }}
           >
-            <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+            <div className="absolute inset-0 -bottom-10 bg-gradient-to-t from-background from-90% to-transparent pointer-events-none" />
+            <div className="w-full max-w-4xl mx-auto px-5 md:px-6 relative">
               <ChatScrollButton variant="input" />
               <ChatInput
                 value={inputValue}
@@ -589,7 +566,6 @@ export function ChatView({
                 )}
               />
             </div>
-            <div className="-z-10 absolute inset-x-0 top-full h-4 bg-background pointer-events-none" />
           </div>
         </div>
       </UnifiedErrorBoundary>

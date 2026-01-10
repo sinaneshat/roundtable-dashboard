@@ -211,7 +211,7 @@ describe('pricingScreen', () => {
   });
 
   describe('subscription actions', () => {
-    it('shows subscribe button when no subscription', async () => {
+    it('shows get started button when no subscription', async () => {
       const queryClient = createMockQueryClient();
       const products = createMockProductCatalog();
 
@@ -232,7 +232,7 @@ describe('pricingScreen', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getAllByText('Subscribe').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Get Started').length).toBeGreaterThan(0);
       });
     });
 

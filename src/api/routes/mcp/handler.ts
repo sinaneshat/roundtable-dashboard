@@ -114,14 +114,14 @@ function mcpResult(data: unknown): ToolCallResult {
   const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
   const structuredContent = isObject(data) ? data : undefined;
   return {
-    content: [{ type: 'text', text }],
+    content: [{ type: MessagePartTypes.TEXT, text }],
     structuredContent,
   };
 }
 
 function mcpError(message: string): ToolCallResult {
   return {
-    content: [{ type: 'text', text: message }],
+    content: [{ type: MessagePartTypes.TEXT, text: message }],
     isError: true,
   };
 }
@@ -739,7 +739,7 @@ async function toolSendMessage(
     id: messageId,
     threadId: input.threadId,
     role: MessageRoles.USER,
-    parts: [{ type: 'text', text: input.content }],
+    parts: [{ type: MessagePartTypes.TEXT, text: input.content }],
     participantId: null,
     roundNumber,
     metadata: { role: MessageRoles.USER, roundNumber },
@@ -825,7 +825,8 @@ async function toolGenerateResponses(
     const modelInfo = getModelById(participant.modelId);
     const modelContextLength = modelInfo?.context_length || 16000;
     const estimatedInputTokens = typedMessages.length * 200 + 500;
-    const maxOutputTokens = getSafeMaxOutputTokens(modelContextLength, estimatedInputTokens, userTier);
+    const isReasoningModel = modelInfo?.is_reasoning_model ?? false;
+    const maxOutputTokens = getSafeMaxOutputTokens(modelContextLength, estimatedInputTokens, userTier, isReasoningModel);
 
     const systemPrompt = participant.settings?.systemPrompt || buildParticipantSystemPrompt(participant.role);
     const supportsTemperature = modelInfo?.supports_temperature ?? true;

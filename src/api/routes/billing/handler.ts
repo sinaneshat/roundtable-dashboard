@@ -42,15 +42,13 @@ function validateSubscriptionOwnership(
   return subscription.userId === user.id;
 }
 
-const _SerializableSubscriptionDatesSchema = z.object({
-  currentPeriodStart: z.date(),
-  currentPeriodEnd: z.date(),
-  canceledAt: z.date().nullable(),
-  trialStart: z.date().nullable(),
-  trialEnd: z.date().nullable(),
-});
-
-type SerializableSubscriptionDates = z.infer<typeof _SerializableSubscriptionDatesSchema>;
+type SerializableSubscriptionDates = {
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  canceledAt: Date | null;
+  trialStart: Date | null;
+  trialEnd: Date | null;
+};
 
 function serializeSubscriptionDates<T extends SerializableSubscriptionDates>(subscription: T) {
   return {
@@ -227,19 +225,7 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
 
 /**
  * Create Checkout Session
- *
- * Following Theo's "Stay Sane with Stripe" pattern:
- * - Creates Stripe Checkout session for Pro subscription ($59/month, 100K credits)
- * - Redirects to /chat/billing/subscription-success
- * - Success page auto-triggers eager sync from Stripe API
- * - This prevents race condition where UI loads before webhooks arrive
- *
- * Flow:
- * 1. User clicks "Subscribe" → Creates checkout session
- * 2. User completes payment on Stripe
- * 3. Stripe redirects to subscription success URL
- * 4. Success page calls sync endpoint to fetch fresh data from Stripe API
- * 5. User sees updated status immediately
+ * Theo's pattern: eager sync after checkout prevents race condition
  */
 export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSessionRoute, ApiEnv> = createHandlerWithBatch(
   {
@@ -252,8 +238,6 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
     const body = c.validated.body;
 
     try {
-      // Theo's Pattern: "ENABLE 'Limit customers to one subscription'"
-      // Check if user already has an active subscription
       const existingSubscriptions = await batch.db.query.stripeSubscription.findMany({
         where: eq(tables.stripeSubscription.userId, user.id),
       });
@@ -269,7 +253,6 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
         );
       }
 
-      // Get or create Stripe customer (using batch.db for consistency)
       const stripeCustomer = await batch.db.query.stripeCustomer.findFirst({
         where: eq(tables.stripeCustomer.userId, user.id),
       });
@@ -283,7 +266,6 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
           metadata: { userId: user.id },
         });
 
-        // Insert using batch.db for atomic operation
         const [insertedCustomer] = await batch.db.insert(tables.stripeCustomer).values({
           id: customer.id,
           userId: user.id,
@@ -327,6 +309,7 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
       if (error instanceof AppError) {
         throw error;
       }
+      console.error('[Billing] Checkout session error:', error);
       throw createError.internal('Failed to create checkout session', ErrorContextBuilders.stripe('create_checkout_session'));
     }
   },
@@ -479,12 +462,7 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
 
 /**
  * Sync Stripe Subscription Data After Checkout
- *
- * Theo's "Stay Sane with Stripe" pattern:
- * - Called immediately after user returns from Stripe Checkout
- * - Prevents race condition where user sees page before webhooks arrive
- * - Fetches fresh data from Stripe API (not webhook payload)
- * - Returns synced subscription state
+ * Fetches fresh data from Stripe API to prevent race condition
  */
 export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRoute, ApiEnv> = createHandler(
   {
@@ -497,7 +475,6 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
     try {
       const db = await getDbAsync();
 
-      // Get customer ID - use direct query (no cache) since customer may have just been created
       const customerResults = await db
         .select()
         .from(tables.stripeCustomer)
@@ -507,8 +484,6 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
       const customerId = customerResults[0]?.id;
 
       if (!customerId) {
-        // No customer found - this shouldn't happen if checkout completed
-        // Return gracefully instead of error
         const balance = await getUserCreditBalance(user.id);
         return Responses.ok(c, {
           synced: false,
@@ -525,22 +500,18 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
         });
       }
 
-      // Capture previous tier BEFORE sync
       const previousUsage = await db.query.userChatUsage.findFirst({
         where: eq(tables.userChatUsage.userId, user.id),
       });
       const previousTier = previousUsage?.subscriptionTier || SubscriptionTiers.FREE;
 
-      // Eagerly sync data from Stripe API
       const syncedState = await syncStripeDataFromStripe(customerId);
 
-      // Get new tier AFTER sync
       const newUsage = await db.query.userChatUsage.findFirst({
         where: eq(tables.userChatUsage.userId, user.id),
       });
       const newTier = newUsage?.subscriptionTier || SubscriptionTiers.FREE;
 
-      // Get credit balance
       const balance = await getUserCreditBalance(user.id);
 
       return Responses.ok(c, {
@@ -562,7 +533,6 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
         creditsBalance: balance.available,
       });
     } catch {
-      // Return graceful error response instead of 500
       const balance = await getUserCreditBalance(user.id).catch(() => ({ available: 0 }));
       return Responses.ok(c, {
         synced: false,
@@ -587,11 +557,7 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
 
 /**
  * Switch Subscription Handler
- *
- * Switches the user to a different price plan.
- * - Updates subscription to new price using Stripe API
- * - Uses 'create_prorations' - Stripe handles billing automatically
- * - Syncs fresh data from Stripe API after update
+ * Updates subscription to new price with prorations
  */
 export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRoute, ApiEnv> = createHandler(
   {
@@ -669,8 +635,6 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       const isDowngrade = newAmount < currentAmount;
 
       if (isUpgrade) {
-        // UPGRADE: Apply immediately with proration
-        // User gets instant access to higher limits and pays prorated difference
         await stripeService.updateSubscription(subscriptionId, {
           items: [
             {
@@ -678,11 +642,9 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
               price: newPriceId,
             },
           ],
-          proration_behavior: StripeProratioBehaviors.CREATE_PRORATIONS, // Immediate with proration
+          proration_behavior: StripeProratioBehaviors.CREATE_PRORATIONS,
         });
       } else if (isDowngrade) {
-        // DOWNGRADE: Schedule for end of period
-        // User keeps current access until period ends, no immediate charge/refund
         await stripeService.updateSubscription(subscriptionId, {
           items: [
             {
@@ -694,7 +656,6 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
           billing_cycle_anchor: 'unchanged',
         });
       } else {
-        // SAME PRICE: Just update (e.g., switching between monthly/annual of same tier)
         await stripeService.updateSubscription(subscriptionId, {
           items: [
             {
@@ -706,14 +667,10 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
         });
       }
 
-      // Sync fresh data from Stripe API
       await syncStripeDataFromStripe(subscription.customerId);
 
-      // Fetch updated subscription from database with nested price data
       const refreshedSubscription = await fetchRefreshedSubscription(db, subscriptionId);
 
-      // ✅ DATE SERIALIZATION: Serialize subscription for JSON response
-      // ✅ Include old and new price information for success page comparison
       return Responses.ok(c, {
         subscription: serializeSubscriptionDates(refreshedSubscription),
         message: 'Subscription updated successfully',
@@ -738,10 +695,6 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
 
 /**
  * Cancel Subscription Handler
- *
- * Cancels the user's subscription.
- * - Default: Cancel at period end (user retains access until then)
- * - Optional: Cancel immediately (user loses access now)
  */
 export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRoute, ApiEnv> = createHandler(
   {
@@ -785,21 +738,16 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
         );
       }
 
-      // Cancel subscription in Stripe
       await stripeService.cancelSubscription(subscriptionId, !immediately);
 
-      // Sync fresh data from Stripe API
       await syncStripeDataFromStripe(subscription.customerId);
 
-      // Fetch updated subscription from database with nested price data
       const refreshedSubscription = await fetchRefreshedSubscription(db, subscriptionId);
 
-      // Build message using Date object (before serialization)
       const message = immediately
         ? 'Subscription canceled immediately. You no longer have access.'
         : `Subscription will be canceled at the end of the current billing period (${refreshedSubscription.currentPeriodEnd.toLocaleDateString()}). You retain access until then.`;
 
-      // ✅ DATE SERIALIZATION: Serialize subscription for JSON response
       return Responses.ok(c, {
         subscription: serializeSubscriptionDates(refreshedSubscription),
         message,
@@ -822,28 +770,7 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
 
 /**
  * Stripe Webhook Handler
- *
- * Following Theo's "Stay Sane with Stripe" pattern:
- * - Verifies webhook signature from Stripe
- * - ALWAYS returns 200 OK (even on processing errors) to prevent retry storms
- * - Extracts only customerId from webhook payload (never trust full payload data)
- * - Fetches fresh data from Stripe API (single source of truth)
- * - Processes asynchronously using Cloudflare Workers waitUntil (production)
- * - Falls back to synchronous processing (local development)
- * - Implements idempotency check to prevent duplicate processing
- *
- * Architecture:
- * 1. Verify signature → Return 400 if invalid (Stripe will not retry)
- * 2. Check idempotency → Return 200 if already processed
- * 3. Insert webhook event record (processed: false)
- * 4. Return 200 immediately
- * 5. Process webhook in background (extract customerId, sync from Stripe API)
- * 6. Update webhook event record (processed: true)
- *
- * Error Handling:
- * - Signature errors → 400 Bad Request (not 401)
- * - Processing errors → Log and return 200 (prevents Stripe retry storms)
- * - Background errors → Logged for manual investigation/retry
+ * Always returns 200 to prevent retry storms, processes async
  */
 export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEnv> = createHandlerWithBatch(
   {
@@ -877,8 +804,6 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
         });
       }
 
-      // Insert webhook event using batch.db for atomic operation
-      // ✅ TYPE-SAFE: Validate event.data.object is a proper object before storing
       const eventData = isObject(event.data.object) ? event.data.object : {};
 
       await batch.db.insert(tables.stripeWebhookEvent).values({
@@ -889,24 +814,16 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
         createdAt: new Date(event.created * 1000),
       }).onConflictDoNothing();
 
-      // Async webhook processing pattern for Cloudflare Workers
-      // Return 200 immediately, process webhook in background
       const processAsync = async () => {
         try {
-          // Process webhook event using batch.db
           await processWebhookEvent(event, batch.db);
 
-          // Update webhook event as processed using batch.db
           await batch.db.update(tables.stripeWebhookEvent)
             .set({ processed: true })
             .where(eq(tables.stripeWebhookEvent.id, event.id));
-        } catch {
-          // Background processing error - log but don't fail the response
-        }
+        } catch {}
       };
 
-      // Use Cloudflare Workers async processing if available (production)
-      // Otherwise process synchronously (local development)
       if (c.executionCtx) {
         c.executionCtx.waitUntil(processAsync());
       } else {
@@ -922,9 +839,6 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
         },
       });
     } catch {
-      // CRITICAL (Theo's Pattern): ALWAYS return 200 to Stripe even on errors
-      // This prevents webhook retry storms. Stripe will mark webhook as delivered.
-      // Failed processing is logged for investigation and manual retry if needed.
       return Responses.ok(c, {
         received: true,
         event: {
@@ -943,54 +857,11 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
 // ============================================================================
 
 /**
- * Tracked Webhook Events (Following Theo's "Stay Sane with Stripe" Pattern)
- *
- * Source: https://github.com/t3dotgg/stay-sane-with-stripe
- *
- * Philosophy:
- * - ALL events trigger the SAME sync function (syncStripeDataFromStripe)
- * - NO event-specific logic needed
- * - Extract customerId → Fetch fresh data from Stripe API → Upsert to database
- * - Never trust webhook payloads, always fetch fresh from Stripe API
- *
- * This is Theo's EXACT event list from his implementation.
- * While some events may seem redundant (e.g., customer.subscription.paused is also
- * fired as customer.subscription.updated), tracking them explicitly ensures we never
- * miss critical subscription state changes due to Stripe's eventual consistency model.
- *
- * Event Categories:
- *
- * 1. CHECKOUT EVENTS:
- *    - checkout.session.completed: User completes checkout
- *
- * 2. SUBSCRIPTION LIFECYCLE:
- *    - customer.subscription.created: New subscription
- *    - customer.subscription.updated: Subscription changed
- *    - customer.subscription.deleted: Subscription canceled
- *    - customer.subscription.paused: Subscription paused
- *    - customer.subscription.resumed: Subscription resumed
- *    - customer.subscription.pending_update_applied: Scheduled update applied
- *    - customer.subscription.pending_update_expired: Scheduled update expired
- *    - customer.subscription.trial_will_end: Trial ending (3 days before)
- *
- * 3. INVOICE & PAYMENT EVENTS:
- *    - invoice.paid: Invoice successfully paid
- *    - invoice.payment_failed: Payment failed
- *    - invoice.payment_action_required: 3D Secure/SCA required
- *    - invoice.upcoming: Invoice upcoming (7 days before)
- *    - invoice.marked_uncollectible: Invoice uncollectible after retries
- *    - invoice.payment_succeeded: Payment succeeded (safety duplicate)
- *    - payment_intent.succeeded: Payment intent succeeded
- *    - payment_intent.payment_failed: Payment intent failed
- *    - payment_intent.canceled: Payment intent canceled
- *
- * Total Events: 18 (Theo's exact specification)
+ * Tracked Webhook Events
+ * All events trigger sync from Stripe API
  */
 const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [
-  // Checkout
   'checkout.session.completed',
-
-  // Subscription lifecycle
   'customer.subscription.created',
   'customer.subscription.updated',
   'customer.subscription.deleted',
@@ -999,8 +870,6 @@ const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [
   'customer.subscription.pending_update_applied',
   'customer.subscription.pending_update_expired',
   'customer.subscription.trial_will_end',
-
-  // Invoice and payment events
   'invoice.paid',
   'invoice.payment_failed',
   'invoice.payment_action_required',
@@ -1012,9 +881,6 @@ const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [
   'payment_intent.canceled',
 ];
 
-/**
- * Stripe Invoice Schema - Runtime validation for webhook objects
- */
 const StripeInvoiceSchema = z.object({
   id: z.string(),
   amount_paid: z.number(),
@@ -1031,9 +897,6 @@ const StripeInvoiceSchema = z.object({
   }).optional(),
 });
 
-/**
- * Stripe Subscription Schema - Runtime validation for webhook objects
- */
 const StripeSubscriptionSchema = z.object({
   id: z.string(),
   currency: z.string().optional(),
@@ -1047,12 +910,6 @@ const StripeSubscriptionSchema = z.object({
   }).optional(),
 });
 
-/**
- * Track Revenue Events to PostHog
- *
- * Captures key billing events for PostHog Revenue Analytics.
- * Only tracks events with actual revenue impact.
- */
 async function trackRevenueFromWebhook(
   event: Stripe.Event,
   userId: string,
@@ -1071,7 +928,6 @@ async function trackRevenueFromWebhook(
         if (!invoice.amount_paid || invoice.amount_paid <= 0)
           return;
 
-        // Extract subscription ID safely (Stripe API may have it as string or object)
         const subscriptionData = 'subscription' in invoice ? invoice.subscription : null;
         const subscriptionId = typeof subscriptionData === 'string'
           ? subscriptionData
@@ -1140,7 +996,6 @@ async function trackRevenueFromWebhook(
         const subscription = subscriptionResult.data;
         const previousAttributes = event.data.previous_attributes;
 
-        // Check if plan changed (upgrade/downgrade)
         if (isObject(previousAttributes) && 'items' in previousAttributes) {
           const currentAmount = subscription.items?.data[0]?.price?.unit_amount ?? 0;
           const previousItems = previousAttributes.items;
@@ -1179,21 +1034,10 @@ async function trackRevenueFromWebhook(
         break;
       }
     }
-  } catch {
-    // Silently fail - don't block webhook processing for analytics
-  }
+  } catch {}
 }
 
-/**
- * Extract customer ID from webhook event
- * All tracked events have a customer property
- *
- * Theo's Pattern: Type-check customerId is string (throw if not)
- *
- * ✅ TYPE-SAFE: Uses isObject type guard instead of type cast
- */
 function extractCustomerId(event: Stripe.Event): string | null {
-  // ✅ TYPE-SAFE: Use isObject type guard instead of type cast
   const obj = event.data.object;
   if (!isObject(obj) || !('customer' in obj)) {
     return null;
@@ -1205,17 +1049,14 @@ function extractCustomerId(event: Stripe.Event): string | null {
     return null;
   }
 
-  // Type guard: string customer ID
   if (typeof customer === 'string') {
     return customer;
   }
 
-  // Type guard: expanded customer object with id
   if (isObject(customer) && typeof customer.id === 'string') {
     return customer.id;
   }
 
-  // Throw on invalid type (Theo's requirement: "Type-check customerId is string (throw if not)")
   throw createError.badRequest(
     `Invalid customer type in webhook event: expected string or object with id, got ${typeof customer}`,
     ErrorContextBuilders.stripe('webhook_processing'),
@@ -1226,19 +1067,16 @@ async function processWebhookEvent(
   event: Stripe.Event,
   db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<void> {
-  // Skip if event type not tracked
   if (!TRACKED_WEBHOOK_EVENTS.includes(event.type)) {
     return;
   }
 
-  // Extract customer ID
   const customerId = extractCustomerId(event);
 
   if (!customerId) {
     return;
   }
 
-  // Verify customer exists in our database
   const customer = await db.query.stripeCustomer.findFirst({
     where: eq(tables.stripeCustomer.id, customerId),
   });
@@ -1247,21 +1085,14 @@ async function processWebhookEvent(
     return;
   }
 
-  // Track revenue events to PostHog (before sync to ensure we capture the event)
   await trackRevenueFromWebhook(event, customer.userId);
 
-  // Single sync function - fetches fresh data from Stripe API (Theo's pattern)
   await syncStripeDataFromStripe(customerId);
 }
 
 // ============================================================================
 // Credits Sync Handler
 // ============================================================================
-
-/**
- * Sync Credits After Checkout Handler
- * Returns current credit balance from subscription grants.
- */
 export const syncCreditsAfterCheckoutHandler: RouteHandler<typeof syncCreditsAfterCheckoutRoute, ApiEnv> = createHandler(
   {
     auth: 'session',

@@ -483,6 +483,41 @@ describe('product Logic - Quota and Tier Configuration', () => {
 
       expect(safeMax).toBeGreaterThanOrEqual(512);
     });
+
+    it('gives reasoning models 4x token headroom', () => {
+      const modelContext = 400000; // GPT-5 Nano context
+      const estimatedInput = 2000;
+      const tier = SubscriptionTiers.PRO;
+
+      const regularMax = getSafeMaxOutputTokens(modelContext, estimatedInput, tier, false);
+      const reasoningMax = getSafeMaxOutputTokens(modelContext, estimatedInput, tier, true);
+
+      // Reasoning models should get 4x the regular tier limit
+      expect(reasoningMax).toBe(regularMax * 4);
+    });
+
+    it('reasoning model limit still respects available tokens', () => {
+      const modelContext = 10000; // Small context
+      const estimatedInput = 2000;
+      const tier = SubscriptionTiers.PRO;
+
+      const reasoningMax = getSafeMaxOutputTokens(modelContext, estimatedInput, tier, true);
+
+      // Even with 4x multiplier, should not exceed available tokens
+      // Available = 10000 - 2000 - (10000 * 0.2) = 6000
+      expect(reasoningMax).toBeLessThanOrEqual(6000);
+    });
+
+    it('free tier reasoning models get 4x of free limit', () => {
+      const modelContext = 400000;
+      const estimatedInput = 2000;
+      const tier = SubscriptionTiers.FREE;
+
+      const reasoningMax = getSafeMaxOutputTokens(modelContext, estimatedInput, tier, true);
+
+      // Free tier is 512, reasoning should be 2048 (512 * 4)
+      expect(reasoningMax).toBe(MAX_OUTPUT_TOKENS_BY_TIER[tier] * 4);
+    });
   });
 
   describe('weighted Credit Calculations', () => {

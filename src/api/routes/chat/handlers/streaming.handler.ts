@@ -35,6 +35,7 @@ import {
 import { createHandler } from '@/api/core';
 import {
   FinishReasons,
+  MessagePartTypes,
   MessageRoles,
   ParticipantStreamStatuses,
   PlanTypes,
@@ -529,10 +530,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const averageTokensPerMessage = 200;
       const messageTokens = modelMessages.length * averageTokensPerMessage;
       const estimatedInputTokens = systemPromptTokens + messageTokens + 500;
+      // Pass isReasoningModel flag so reasoning models get extra token headroom
+      // Reasoning models (GPT-5 Nano, o3, DeepSeek R1) use tokens for hidden thinking
+      const isReasoningModel = modelInfo?.is_reasoning_model ?? false;
       const maxOutputTokens = getSafeMaxOutputTokens(
         modelContextLength,
         estimatedInputTokens,
         userTier,
+        isReasoningModel,
       );
 
       const modelSupportsTemperature = modelInfo?.supports_temperature ?? true;
@@ -1091,12 +1096,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                     : Array.isArray(msg.content)
                       ? msg.content.map((part: { type: string; text?: string }): { type: string; text: string } => {
                           if ('text' in part && part.text) {
-                            return { type: 'text', text: part.text };
+                            return { type: MessagePartTypes.TEXT, text: part.text };
                           }
                           if (part.type === 'image') {
                             return { type: 'image', text: '[image content]' };
                           }
-                          return { type: 'unknown', text: '[content]' };
+                          return { type: MessagePartTypes.TEXT, text: '[content]' };
                         })
                       : [],
               };
@@ -1188,7 +1193,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                       promptId: participant.role
                         ? `role_${participant.role.replace(/\s+/g, '_').toLowerCase()}`
                         : 'default',
-                      promptVersion: 'v1.0', // Version your prompts for experimentation
+                      promptVersion: 'v3.0', // V3.0: Natural dialogue + CEBR protocol
                       systemPromptTokens,
                     },
 

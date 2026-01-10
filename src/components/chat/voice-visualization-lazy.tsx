@@ -9,6 +9,7 @@ type VoiceVisualizationProps = {
   isActive: boolean;
   audioLevels?: number[];
   barCount?: number;
+  hasAlertAbove?: boolean;
 };
 
 function VoiceVisualizationSkeleton() {
@@ -17,13 +18,13 @@ function VoiceVisualizationSkeleton() {
       <div
         className={cn(
           'flex items-center gap-3 px-3 py-3',
-          'border-0 border-b border-primary/20 rounded-none rounded-t-2xl',
-          'bg-primary/10 backdrop-blur-xl',
+          'border-0 border-b border-blue-500/20 rounded-none rounded-t-2xl',
+          'bg-blue-500/10 backdrop-blur-xl',
         )}
       >
         <div className="flex items-center gap-2 shrink-0">
-          <Icons.mic className="size-3.5 text-primary animate-pulse" />
-          <span className="text-[10px] font-medium text-primary">
+          <Icons.mic className="size-3.5 text-blue-500 animate-pulse" />
+          <span className="text-[10px] font-medium text-blue-500">
             Loading...
           </span>
         </div>
@@ -31,7 +32,7 @@ function VoiceVisualizationSkeleton() {
           {Array.from({ length: 20 }, (_, i) => (
             <div
               key={`skeleton-bar-${i}`}
-              className="flex-1 bg-primary/30 rounded-full min-w-[2px] h-[40%] animate-pulse"
+              className="flex-1 bg-blue-500/30 rounded-full min-w-[2px] h-[40%] animate-pulse"
               style={{ animationDelay: `${i * 50}ms` }}
             />
           ))}

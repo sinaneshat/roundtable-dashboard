@@ -6,9 +6,7 @@ import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PlanTypes, PurchaseTypes, StatusVariants, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import type { Subscription } from '@/api/routes/billing/schema';
-// Direct import to avoid barrel export pulling in server-only credit.service.ts
-import { getMaxModelsForTier, getMonthlyCreditsForTier } from '@/api/services/billing/product-logic.service';
-import { PlanOverviewCard, StatusPage, StatusPageActions } from '@/components/billing';
+import { StatusPage, StatusPageActions } from '@/components/billing';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
@@ -35,7 +33,6 @@ export function BillingSuccessClient() {
   const usageStats = usageStatsQuery.data;
 
   const syncResult = syncMutation.data;
-  const syncedCreditsBalance = syncResult?.data?.creditsBalance;
   const syncedTier = syncResult?.data?.tierChange?.newTier;
 
   const displaySubscription = useMemo((): Subscription | null => {
@@ -50,7 +47,6 @@ export function BillingSuccessClient() {
     if (!hasInitiatedSync.current) {
       syncMutation.mutate(undefined);
       hasInitiatedSync.current = true;
-      // Prefetch /chat early - user will navigate there after success
       router.prefetch('/chat');
     }
   }, [syncMutation, router]);
@@ -138,16 +134,18 @@ export function BillingSuccessClient() {
   }
 
   const isPaidPlan = (syncedTier !== undefined && syncedTier !== SubscriptionTiers.FREE) || (syncedTier === undefined && usageStats?.data?.plan?.type === PlanTypes.PAID);
-  const currentTier = isPaidPlan ? SubscriptionTiers.PRO : SubscriptionTiers.FREE;
   const tierName = isPaidPlan ? t('subscription.tiers.pro.name') : t('subscription.tiers.free.name');
-  const maxModels = getMaxModelsForTier(currentTier);
-  const creditsBalance = syncedCreditsBalance ?? usageStats?.data?.credits?.available ?? 0;
-  const monthlyCredits = getMonthlyCreditsForTier(currentTier);
-
-  const formatCredits = (credits: number) => credits.toLocaleString();
 
   const successTitle = t('billing.success.title');
   const successDescription = t('billing.success.description');
+
+  const activeUntilDate = displaySubscription?.currentPeriodEnd
+    ? new Date(displaySubscription.currentPeriodEnd).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null;
 
   return (
     <StatusPage
@@ -158,30 +156,25 @@ export function BillingSuccessClient() {
         <StatusPageActions
           primaryLabel={t('billing.success.startChat')}
           primaryHref="/chat"
-          secondaryLabel={t('billing.success.viewPricing')}
-          secondaryHref="/chat/pricing"
         />
       )}
     >
-      {displaySubscription && (
-        <PlanOverviewCard
-          tierName={tierName}
-          description={isPaidPlan
-            ? t('billing.success.planLimits.paidDescription')
-            : t('billing.success.planLimits.defaultDescription')}
-          status={displaySubscription.status}
-          stats={[
-            { label: t('billing.success.planLimits.models'), value: maxModels },
-            { label: t('billing.success.planLimits.credits'), value: formatCredits(creditsBalance) },
-            {
-              label: isPaidPlan ? t('billing.success.planLimits.monthly') : t('billing.success.planLimits.bonus'),
-              value: isPaidPlan ? formatCredits(monthlyCredits) : t('billing.success.planLimits.oneTime'),
-            },
-          ]}
-          activeUntil={isPaidPlan && displaySubscription.currentPeriodEnd
-            ? new Date(displaySubscription.currentPeriodEnd).toLocaleDateString()
-            : undefined}
-        />
+      {displaySubscription && isPaidPlan && (
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-3 py-1 text-green-500 font-medium">
+            {tierName}
+          </span>
+          {activeUntilDate && (
+            <>
+              <span className="text-muted-foreground/50">•</span>
+              <span>
+                Active until
+                {' '}
+                {activeUntilDate}
+              </span>
+            </>
+          )}
+        </div>
       )}
 
       <p className="text-xs text-muted-foreground">

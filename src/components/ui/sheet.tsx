@@ -9,27 +9,19 @@ import { useTranslations } from 'next-intl';
 import { Icons } from '@/components/icons';
 import { cn } from '@/lib/ui/cn';
 
-function Sheet({
-  ...props
-}: ComponentProps<typeof SheetPrimitive.Root>) {
+function Sheet(props: ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
 }
 
-function SheetTrigger({
-  ...props
-}: ComponentProps<typeof SheetPrimitive.Trigger>) {
+function SheetTrigger(props: ComponentProps<typeof SheetPrimitive.Trigger>) {
   return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
 }
 
-function SheetClose({
-  ...props
-}: ComponentProps<typeof SheetPrimitive.Close>) {
+function SheetClose(props: ComponentProps<typeof SheetPrimitive.Close>) {
   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
 }
 
-function SheetPortal({
-  ...props
-}: ComponentProps<typeof SheetPrimitive.Portal>) {
+function SheetPortal(props: ComponentProps<typeof SheetPrimitive.Portal>) {
   return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
 }
 
@@ -50,16 +42,16 @@ function SheetOverlay({
 }
 
 const sheetVariants = cva(
-  'fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out',
+  'fixed z-50 gap-3 sm:gap-4 bg-background p-4 sm:p-6 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out',
   {
     variants: {
       side: {
         top: 'inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top',
         bottom:
           'inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
-        start: 'inset-y-0 start-0 h-full w-3/4 border-e data-[state=closed]:slide-out-to-start data-[state=open]:slide-in-from-start sm:max-w-sm',
+        start: 'inset-y-0 start-0 h-full w-[85%] max-w-[18rem] border-e data-[state=closed]:slide-out-to-start data-[state=open]:slide-in-from-start sm:max-w-sm',
         end:
-          'inset-y-0 end-0 h-full w-3/4  border-s data-[state=closed]:slide-out-to-end data-[state=open]:slide-in-from-end sm:max-w-sm',
+          'inset-y-0 end-0 h-full w-[85%] max-w-[18rem] border-s data-[state=closed]:slide-out-to-end data-[state=open]:slide-in-from-end sm:max-w-sm',
       },
     },
     defaultVariants: {
@@ -68,10 +60,9 @@ const sheetVariants = cva(
   },
 );
 
-type SheetContentBaseProps = ComponentProps<typeof SheetPrimitive.Content>;
-type SheetContentVariantProps = VariantProps<typeof sheetVariants>;
-
-interface SheetContentProps extends SheetContentBaseProps, SheetContentVariantProps {}
+interface SheetContentProps
+  extends ComponentProps<typeof SheetPrimitive.Content>,
+    VariantProps<typeof sheetVariants> {}
 
 function SheetContent({
   side = 'end',
@@ -90,7 +81,7 @@ function SheetContent({
         {...props}
       >
         {children}
-        <SheetPrimitive.Close className="absolute end-4 top-4 rounded-full opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+        <SheetPrimitive.Close className="absolute end-3 top-3 sm:end-4 sm:top-4 rounded-full opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
           <Icons.x className="size-4" />
           <span className="sr-only">{t('close')}</span>
         </SheetPrimitive.Close>
@@ -102,7 +93,7 @@ function SheetContent({
 function SheetHeader({
   className,
   ...props
-}: ComponentProps<"div">) {
+}: ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-header"
@@ -118,13 +109,13 @@ function SheetHeader({
 function SheetFooter({
   className,
   ...props
-}: ComponentProps<"div">) {
+}: ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-footer"
       className={cn(
-        'flex flex-col-reverse gap-3',
-        'sm:flex-row sm:justify-end sm:gap-2',
+        'flex flex-col-reverse gap-2',
+        'sm:flex-row sm:justify-end sm:gap-3',
         className,
       )}
       {...props}
@@ -170,4 +161,3 @@ export {
   SheetTitle,
   SheetTrigger
 };
-
