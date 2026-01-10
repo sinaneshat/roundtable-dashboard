@@ -204,6 +204,37 @@ export const StatusVariants = {
 } as const;
 
 // ============================================================================
+// BORDER VARIANT
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT
+export const BORDER_VARIANTS = ['default', 'success', 'warning', 'error'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_BORDER_VARIANT: BorderVariant = 'default';
+
+// 3️⃣ ZOD SCHEMA
+export const BorderVariantSchema = z.enum(BORDER_VARIANTS).openapi({
+  description: 'Border styling variant for input components',
+  example: 'default',
+});
+
+// 4️⃣ TYPESCRIPT TYPE
+export type BorderVariant = z.infer<typeof BorderVariantSchema>;
+
+// 5️⃣ CONSTANT OBJECT
+export const BorderVariants = {
+  DEFAULT: 'default' as const,
+  SUCCESS: 'success' as const,
+  WARNING: 'warning' as const,
+  ERROR: 'error' as const,
+} as const;
+
+export function isValidBorderVariant(value: unknown): value is BorderVariant {
+  return typeof value === 'string' && BORDER_VARIANTS.includes(value as BorderVariant);
+}
+
+// ============================================================================
 // NETWORK ERROR TYPE
 // ============================================================================
 

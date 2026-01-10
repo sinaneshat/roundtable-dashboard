@@ -685,3 +685,32 @@ export const StripeBillingReasons = {
   MANUAL: 'manual' as const,
   UPCOMING: 'upcoming' as const,
 } as const;
+
+// ============================================================================
+// TRIAL STATE (free trial status for UI display)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const TRIAL_STATES = ['available', 'used'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_TRIAL_STATE: TrialState = 'available';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const TrialStateSchema = z.enum(TRIAL_STATES).openapi({
+  description: 'Free trial state for UI display',
+  example: 'available',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type TrialState = z.infer<typeof TrialStateSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const TrialStates = {
+  AVAILABLE: 'available' as const,
+  USED: 'used' as const,
+} as const;
+
+export function isValidTrialState(value: unknown): value is TrialState {
+  return typeof value === 'string' && TRIAL_STATES.includes(value as TrialState);
+}

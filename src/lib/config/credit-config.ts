@@ -27,6 +27,7 @@ export const CREDIT_CONFIG = {
     fileReading: 100,
     analysisGeneration: 2000,
     customRoleCreation: 50,
+    autoModeAnalysis: 500, // ~500 tokens for prompt analysis (Gemini 2.5 Flash)
   },
 
   RESERVATION_MULTIPLIER: 1.5,

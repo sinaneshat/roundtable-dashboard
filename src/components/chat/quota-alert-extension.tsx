@@ -8,6 +8,10 @@ import { PlanTypes } from '@/api/core/enums';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { cn } from '@/lib/ui/cn';
 
+type QuotaAlertExtensionProps = {
+  hasHeaderToggle?: boolean;
+};
+
 /**
  * Quota Alert Extension - Shows ONLY for PAID users who are out of credits.
  *
@@ -15,7 +19,7 @@ import { cn } from '@/lib/ui/cn';
  * This component shows a simple message without an upgrade button since
  * paid users cannot purchase the same plan again.
  */
-export function QuotaAlertExtension() {
+export function QuotaAlertExtension({ hasHeaderToggle = false }: QuotaAlertExtensionProps) {
   const t = useTranslations('usage');
   const { data: statsData, isLoading } = useUsageStatsQuery();
 
@@ -49,8 +53,9 @@ export function QuotaAlertExtension() {
         <div
           className={cn(
             'flex items-center justify-center gap-3 px-3 py-2',
-            'border-0 border-b border-destructive/20 rounded-none rounded-t-2xl',
+            'border-0 border-b border-destructive/20 rounded-none',
             'bg-destructive/10',
+            hasHeaderToggle ? 'rounded-tr-2xl' : 'rounded-t-2xl',
           )}
         >
           <p className="text-[10px] leading-tight text-destructive font-medium text-center">

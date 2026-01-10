@@ -6,9 +6,9 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
-import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, ScreenModes } from '@/api/core/enums';
-import { ChatAutoModeToggle } from '@/components/chat/chat-auto-mode-toggle';
+import { BorderVariants, ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
+import { ChatInputHeader } from '@/components/chat/chat-input-header';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
@@ -19,6 +19,7 @@ import {
   useAnalyzePromptStream,
   useBoolean,
   useChatScroll,
+  useFreeTrialState,
   useOrderedModels,
   useThreadTimeline,
   useVisualViewportPosition,
@@ -154,6 +155,8 @@ export function ChatView({
 
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
+  const { borderVariant } = useFreeTrialState();
+  const headerBorderVariant = mode === ScreenModes.OVERVIEW ? borderVariant : BorderVariants.DEFAULT;
 
   const { data: changelogResponse } = useThreadChangelogQuery(
     effectiveThreadId,
@@ -596,20 +599,20 @@ export function ChatView({
             <div className="absolute inset-0 -bottom-10 bg-gradient-to-t from-background from-90% to-transparent pointer-events-none" />
             <div className="w-full max-w-4xl mx-auto px-5 md:px-6 relative">
               <ChatScrollButton variant="input" />
-              <div className="relative">
-                {/* Auto Mode Toggle - only visible in new chat mode */}
+              <div className="flex flex-col">
+                {/* Auto Mode Header - only visible in new chat mode */}
                 {mode === ScreenModes.OVERVIEW && (
-                  <div className="absolute -top-9 left-0 z-10">
-                    <ChatAutoModeToggle
-                      autoMode={autoMode}
-                      onAutoModeChange={setAutoMode}
-                      isAnalyzing={isAnalyzingPrompt}
-                      disabled={isInputBlocked && !isAnalyzingPrompt}
-                    />
-                  </div>
+                  <ChatInputHeader
+                    autoMode={autoMode}
+                    onAutoModeChange={setAutoMode}
+                    isAnalyzing={isAnalyzingPrompt}
+                    disabled={isInputBlocked && !isAnalyzingPrompt}
+                  />
                 )}
                 <ChatInput
-                  className={mode === ScreenModes.OVERVIEW ? 'rounded-tl-none' : undefined}
+                  className={mode === ScreenModes.OVERVIEW ? 'rounded-t-none border-t-0' : undefined}
+                  hideInternalAlerts={mode === ScreenModes.OVERVIEW}
+                  borderVariant={mode === ScreenModes.OVERVIEW ? headerBorderVariant : undefined}
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handleAutoModeSubmit}

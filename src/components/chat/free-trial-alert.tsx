@@ -2,15 +2,15 @@
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useMemo } from 'react';
 
-import { ComponentSizes, ComponentVariants, PlanTypes } from '@/api/core/enums';
-import { useChatStore } from '@/components/providers/chat-store-provider/context';
+import { ComponentSizes, ComponentVariants } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
-import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
+import { useFreeTrialState } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
-type TrialState = 'available' | 'used';
+type FreeTrialAlertProps = {
+  hasHeaderToggle?: boolean;
+};
 
 /**
  * Free Trial Alert - Shows upgrade prompt for free users
@@ -24,59 +24,20 @@ type TrialState = 'available' | 'used';
  * - 'available': Fresh user, no thread created yet (green)
  * - 'used': User has created a thread (amber warning)
  */
-export function FreeTrialAlert() {
+export function FreeTrialAlert({ hasHeaderToggle = false }: FreeTrialAlertProps) {
   const t = useTranslations();
-  const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
-  const { data: threadsData } = useThreadsQuery();
-  const messages = useChatStore(state => state.messages);
-  const hasLocalMessages = messages.length > 0;
+  const { isFreeUser, hasUsedTrial, isWarningState, isLoadingStats } = useFreeTrialState();
 
-  const freeRoundUsedFromApi = useMemo(() => {
-    if (!statsData?.success || !statsData.data) {
-      return false;
-    }
-    return statsData.data.plan?.freeRoundUsed ?? false;
-  }, [statsData]);
-
-  // Check if free user has existing threads (even incomplete ones)
-  const hasExistingThread = useMemo(() => {
-    if (!threadsData?.pages?.[0]?.success) {
-      return false;
-    }
-    const threads = threadsData.pages[0].data?.items ?? [];
-    return threads.length > 0;
-  }, [threadsData]);
-
-  // User has used their free trial if they have a thread OR completed a round
-  const hasUsedTrial = freeRoundUsedFromApi || hasExistingThread || hasLocalMessages;
-
-  // Determine trial state: available (no thread) or used (has thread/round)
-  const trialState: TrialState = hasUsedTrial ? 'used' : 'available';
-
-  const shouldShow = useMemo(() => {
-    if (!statsData?.success || !statsData.data) {
-      return false;
-    }
-    const { plan } = statsData.data;
-    return plan?.type !== PlanTypes.PAID;
-  }, [statsData]);
-
-  // Only wait for stats to load - threads loading shouldn't block the alert
-  // The alert's visibility (shouldShow) depends only on usage stats
-  // The message state (trialState) will update when threads data arrives
-  if (isLoadingStats || !shouldShow) {
+  if (isLoadingStats || !isFreeUser) {
     return null;
   }
 
-  // Get appropriate message based on state
   const getMessage = () => {
-    if (trialState === 'used') {
+    if (hasUsedTrial) {
       return t('usage.freeTrial.usedDescription');
     }
     return t('usage.freeTrial.availableDescription');
   };
-
-  const isWarningState = trialState === 'used';
 
   return (
     <AnimatePresence>
@@ -90,7 +51,8 @@ export function FreeTrialAlert() {
         <div
           className={cn(
             'flex items-center justify-between gap-3 px-3 py-2',
-            'border-0 border-b rounded-none rounded-t-2xl',
+            'border-0 border-b rounded-none',
+            hasHeaderToggle ? 'rounded-tr-2xl' : 'rounded-t-2xl',
             isWarningState
               ? 'border-amber-500/20 bg-amber-500/10'
               : 'border-green-500/20 bg-green-500/10',

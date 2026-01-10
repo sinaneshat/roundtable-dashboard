@@ -47,6 +47,7 @@ export function useOverviewActions(): UseOverviewActionsReturn {
     setInputValue: s.setInputValue,
     setSelectedMode: s.setSelectedMode,
     setSelectedParticipants: s.setSelectedParticipants,
+    setAutoMode: s.setAutoMode,
   })));
 
   // Delegate flow control to centralized controller
@@ -54,13 +55,15 @@ export function useOverviewActions(): UseOverviewActionsReturn {
 
   /**
    * Handle suggestion click from quick start
-   * Sets form state (input, mode, participants)
+   * Sets form state (input, mode, participants) and switches to manual mode
+   * since the configuration is already predefined by the suggestion
    */
   const handleSuggestionClick = useCallback((
     prompt: string,
     mode: ChatMode,
     participants: ParticipantConfig[],
   ) => {
+    actions.setAutoMode(false); // Switch to manual - suggestion has predefined config
     actions.setInputValue(prompt);
     actions.setSelectedMode(mode);
     actions.setSelectedParticipants(participants);

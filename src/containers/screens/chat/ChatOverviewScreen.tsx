@@ -15,8 +15,8 @@ import {
   MessageStatuses,
   UploadStatuses,
 } from '@/api/core/enums';
-import { ChatAutoModeToggle } from '@/components/chat/chat-auto-mode-toggle';
 import { ChatInput } from '@/components/chat/chat-input';
+import { ChatInputHeader } from '@/components/chat/chat-input-header';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
@@ -36,6 +36,7 @@ import {
   useAnalyzePromptStream,
   useBoolean,
   useChatAttachments,
+  useFreeTrialState,
   useIsMobile,
   useModelLookup,
   useOrderedModels,
@@ -188,6 +189,7 @@ export default function ChatOverviewScreen() {
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(modelModal.value && !isStreaming);
   const { streamConfig: analyzePromptStream } = useAnalyzePromptStream();
+  const { borderVariant: headerBorderVariant } = useFreeTrialState();
 
   const allEnabledModels = useMemo(
     () => modelsData?.data?.items || [],
@@ -900,16 +902,14 @@ export default function ChatOverviewScreen() {
                           exit={{ opacity: 0 }}
                           transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                         >
-                          <div className="relative">
-                            <div className="absolute -top-9 left-0 z-10">
-                              <ChatAutoModeToggle
-                                autoMode={autoMode}
-                                onAutoModeChange={setAutoMode}
-                                isAnalyzing={isAnalyzingPrompt}
-                                disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
-                              />
-                            </div>
-                            <ChatInput {...sharedChatInputProps} className="rounded-tl-none" />
+                          <div className="flex flex-col">
+                            <ChatInputHeader
+                              autoMode={autoMode}
+                              onAutoModeChange={setAutoMode}
+                              isAnalyzing={isAnalyzingPrompt}
+                              disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
+                            />
+                            <ChatInput {...sharedChatInputProps} className="rounded-t-none border-t-0" hideInternalAlerts borderVariant={headerBorderVariant} />
                           </div>
                         </motion.div>
                       )}
@@ -927,16 +927,14 @@ export default function ChatOverviewScreen() {
                       exit={{ opacity: 0 }}
                       transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                     >
-                      <div className="relative">
-                        <div className="absolute -top-9 left-0 z-10">
-                          <ChatAutoModeToggle
-                            autoMode={autoMode}
-                            onAutoModeChange={setAutoMode}
-                            isAnalyzing={isAnalyzingPrompt}
-                            disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
-                          />
-                        </div>
-                        <ChatInput {...sharedChatInputProps} className="rounded-tl-none" />
+                      <div className="flex flex-col">
+                        <ChatInputHeader
+                          autoMode={autoMode}
+                          onAutoModeChange={setAutoMode}
+                          isAnalyzing={isAnalyzingPrompt}
+                          disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
+                        />
+                        <ChatInput {...sharedChatInputProps} className="rounded-t-none border-t-0" hideInternalAlerts borderVariant={headerBorderVariant} />
                       </div>
                     </motion.div>
                   </div>

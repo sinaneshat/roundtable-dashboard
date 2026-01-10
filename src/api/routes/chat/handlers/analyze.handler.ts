@@ -28,9 +28,12 @@ import {
   DEFAULT_CHAT_MODE,
   SHORT_ROLE_NAMES,
   ShortRoleNameSchema,
+  SubscriptionTiers,
 } from '@/api/core/enums';
 import {
   canAccessModelByPricing,
+  checkFreeUserHasCompletedRound,
+  deductCreditsForAction,
   MAX_MODELS_BY_TIER,
 } from '@/api/services/billing';
 import { HARDCODED_MODELS, initializeOpenRouter, openRouterService } from '@/api/services/models';
@@ -339,6 +342,17 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
     // Get user tier and model limits
     const userTier = await getUserTier(user.id);
     const maxModels = MAX_MODELS_BY_TIER[userTier];
+
+    // Free users get 1 free round - skip credit deduction if they haven't used it yet
+    const isFreeUser = userTier === SubscriptionTiers.FREE;
+    const freeRoundUsed = isFreeUser ? await checkFreeUserHasCompletedRound(user.id) : false;
+
+    // Only deduct credits if user is paid OR has already used their free round
+    if (!isFreeUser || freeRoundUsed) {
+      await deductCreditsForAction(user.id, 'autoModeAnalysis', {
+        description: 'Auto mode prompt analysis',
+      });
+    }
 
     // Filter models accessible to user's tier
     const accessibleModels = HARDCODED_MODELS.filter(

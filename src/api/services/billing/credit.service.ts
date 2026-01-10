@@ -624,6 +624,7 @@ const ACTION_COST_TO_CREDIT_ACTION_MAP: Record<keyof typeof CREDIT_CONFIG.ACTION
   fileReading: CreditActions.FILE_READING,
   analysisGeneration: CreditActions.ANALYSIS_GENERATION,
   customRoleCreation: CreditActions.THREAD_CREATION,
+  autoModeAnalysis: CreditActions.ANALYSIS_GENERATION, // Uses same action type for tracking
 } as const;
 
 export async function deductCreditsForAction(

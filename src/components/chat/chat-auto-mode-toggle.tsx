@@ -37,14 +37,10 @@ export const ChatAutoModeToggle = memo(({
   return (
     <div
       className={cn(
-        'inline-flex items-center rounded-tl-2xl rounded-tr-xl rounded-b-none',
-        'border border-b-0',
-        'bg-card',
+        'inline-flex items-center shrink-0',
         'px-1 py-1',
         'transition-all duration-300 ease-out',
         disabled && 'opacity-50 pointer-events-none',
-        // Glow effect when auto mode is active
-        autoMode && 'shadow-[0_-4px_20px_-4px_rgba(147,51,234,0.2)]',
       )}
       role="radiogroup"
       aria-label={t('label')}

@@ -4,7 +4,8 @@ import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 
-import { AiSdkStatuses, ComponentSizes, ComponentVariants, PlanTypes } from '@/api/core/enums';
+import type { BorderVariant } from '@/api/core/enums';
+import { AiSdkStatuses, BorderVariants, ComponentSizes, ComponentVariants, PlanTypes } from '@/api/core/enums';
 import { ChatInputDropzoneOverlay } from '@/components/chat/chat-input-attachments';
 import { ChatInputAttachments } from '@/components/chat/chat-input-attachments-lazy';
 import { FreeTrialAlert } from '@/components/chat/free-trial-alert';
@@ -53,6 +54,9 @@ type ChatInputProps = {
   isHydrating?: boolean;
   isSubmitting?: boolean;
   isModelsLoading?: boolean;
+  hasHeaderToggle?: boolean;
+  hideInternalAlerts?: boolean;
+  borderVariant?: BorderVariant;
 };
 
 export const ChatInput = memo(({
@@ -80,6 +84,9 @@ export const ChatInput = memo(({
   isHydrating = false,
   isSubmitting = false,
   isModelsLoading = false,
+  hasHeaderToggle = false,
+  hideInternalAlerts = false,
+  borderVariant = BorderVariants.DEFAULT,
 }: ChatInputProps) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -274,8 +281,13 @@ export const ChatInput = memo(({
           'shadow-lg',
           'transition-all duration-200',
           isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && 'cursor-not-allowed',
-          (isOverLimit || showNoModelsError || (isQuotaExceeded && !showUpgradePrompt)) && 'border-destructive',
-          showUpgradePrompt && !isOverLimit && !showNoModelsError && (hasCompletedRound ? 'border-amber-500/30' : 'border-green-500/30'),
+          // When header handles alerts, use passed borderVariant for consistent borders
+          hideInternalAlerts && borderVariant === BorderVariants.SUCCESS && 'border-green-500/30',
+          hideInternalAlerts && borderVariant === BorderVariants.WARNING && 'border-amber-500/30',
+          hideInternalAlerts && borderVariant === BorderVariants.ERROR && 'border-destructive',
+          // When no header, apply borders based on internal state
+          !hideInternalAlerts && (isOverLimit || showNoModelsError || (isQuotaExceeded && !showUpgradePrompt)) && 'border-destructive',
+          !hideInternalAlerts && showUpgradePrompt && !isOverLimit && !showNoModelsError && (hasCompletedRound ? 'border-amber-500/30' : 'border-green-500/30'),
           className,
         )}
         {...(enableAttachments ? dragHandlers : {})}
@@ -283,14 +295,16 @@ export const ChatInput = memo(({
         {enableAttachments && <ChatInputDropzoneOverlay isDragging={isDragging} />}
 
         <div className="flex flex-col overflow-hidden h-full">
-          {showCreditAlert && <QuotaAlertExtension />}
-          {showUpgradePrompt && <FreeTrialAlert />}
+          {showCreditAlert && !hideInternalAlerts && <QuotaAlertExtension hasHeaderToggle={hasHeaderToggle} />}
+          {showUpgradePrompt && !hideInternalAlerts && <FreeTrialAlert hasHeaderToggle={hasHeaderToggle} />}
           {showNoModelsError && (
             <div
               className={cn(
                 'flex items-center gap-3 px-3 py-2',
-                'border-0 border-b border-destructive/20 rounded-none rounded-t-2xl',
+                'border-0 border-b border-destructive/20',
                 'bg-destructive/10',
+                // No top rounding when header is present (hideInternalAlerts means header handles top)
+                hideInternalAlerts ? 'rounded-none' : 'rounded-t-2xl',
               )}
             >
               <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
@@ -303,8 +317,10 @@ export const ChatInput = memo(({
             <div
               className={cn(
                 'flex items-center gap-3 px-3 py-2',
-                'border-0 border-b border-destructive/20 rounded-none rounded-t-2xl',
+                'border-0 border-b border-destructive/20',
                 'bg-destructive/10',
+                // No top rounding when header is present
+                hideInternalAlerts ? 'rounded-none' : 'rounded-t-2xl',
               )}
             >
               <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
