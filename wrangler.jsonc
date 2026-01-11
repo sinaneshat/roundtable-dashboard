@@ -47,11 +47,6 @@
       "database_id": "12ce87b8-9d6d-4c54-a9d4-7c59ceb3ef8e",
       "migrations_dir": "./src/db/migrations",
       "preview_database_id": "12ce87b8-9d6d-4c54-a9d4-7c59ceb3ef8e"
-    },
-    {
-      "binding": "NEXT_TAG_CACHE_D1",
-      "database_name": "roundtable-tag-cache-local",
-      "database_id": "acc02371-760f-4f50-adf5-c7f4c5531c07"
     }
   ],
   "kv_namespaces": [
@@ -224,11 +219,6 @@
           "database_id": "45ba3c83-ee28-4138-a4af-fed442b3ad05",
           "migrations_dir": "./src/db/migrations",
           "preview_database_id": "45ba3c83-ee28-4138-a4af-fed442b3ad05"
-        },
-        {
-          "binding": "NEXT_TAG_CACHE_D1",
-          "database_name": "roundtable-tag-cache-preview",
-          "database_id": "a69a2dd5-50bf-4024-ad33-1f5b7609f092"
         }
       ],
       "kv_namespaces": [
@@ -369,11 +359,6 @@
           "database_id": "8d7d88e0-7f78-4fa8-a70b-9aa32895ad6a",
           "migrations_dir": "./src/db/migrations",
           "preview_database_id": "8d7d88e0-7f78-4fa8-a70b-9aa32895ad6a"
-        },
-        {
-          "binding": "NEXT_TAG_CACHE_D1",
-          "database_name": "roundtable-tag-cache-prod",
-          "database_id": "28d6b58e-d5a0-4acc-9b54-70fb54a089f6"
         }
       ],
       "kv_namespaces": [
