@@ -22,6 +22,8 @@ import { timing } from 'hono/timing';
 import { trimTrailingSlash } from 'hono/trailing-slash';
 import notFound from 'stoker/middlewares/not-found';
 
+import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
+
 import { createOpenApiApp } from './core/app';
 import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, protectMutations, RateLimiterFactory, requireSession } from './middleware';
 // API Keys routes
@@ -391,8 +393,6 @@ app.use('/uploads', bodyLimit({
 
 // CORS configuration - Uses centralized URL config from base-urls.ts
 app.use('*', async (c, next) => {
-  // Dynamic import for centralized URL config
-  const { getAllowedOriginsFromContext } = await import('@/lib/config/base-urls');
   const allowedOrigins = getAllowedOriginsFromContext(c);
 
   const middleware = cors({
@@ -421,8 +421,23 @@ app.use('*', async (c, next) => {
   return etag()(c, next);
 });
 
-// Session attachment
-app.use('*', attachSession);
+// Session attachment - skip for public endpoints that don't need auth
+// This avoids expensive database queries on every public request
+app.use('*', async (c, next) => {
+  const path = c.req.path;
+  // Skip session for truly public endpoints - handlers use requireOptionalSession if needed
+  if (
+    path.startsWith('/chat/public/')
+    || path.startsWith('/system/')
+    || path === '/health'
+    || path === '/api/v1/health'
+  ) {
+    c.set('session', null);
+    c.set('user', null);
+    return next();
+  }
+  return attachSession(c, next);
+});
 
 // Stripe initialization for all billing routes and webhooks
 // Using wildcard pattern to apply middleware to all /billing/* routes

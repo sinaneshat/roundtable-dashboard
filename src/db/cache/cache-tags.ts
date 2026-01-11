@@ -140,6 +140,9 @@ export function getUserSubscriptionCacheTags(
     ...UserCacheTags.all(userId),
     ...SubscriptionCacheTags.all(userId),
     ...CustomerCacheTags.all(userId, customerId),
+    // CRITICAL: Include credit balance cache - subscription changes affect planType
+    // Without this, stale planType=FREE may cause incorrect free user limit enforcement
+    ...CreditCacheTags.all(userId),
   ];
 
   if (priceId) {

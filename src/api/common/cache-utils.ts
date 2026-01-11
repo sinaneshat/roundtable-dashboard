@@ -31,6 +31,7 @@ import { SUBSCRIPTION_TIERS } from '@/api/core/enums/billing';
 import { deleteOgImageFromCache } from '@/api/services/og-cache';
 import type { getDbAsync } from '@/db';
 import {
+  CreditCacheTags,
   MessageCacheTags,
   ModelsCacheTags,
   PublicSlugsListCacheTags,
@@ -185,6 +186,35 @@ export async function invalidateModelsCache(
     const tierTags = SUBSCRIPTION_TIERS.map(tier => ModelsCacheTags.byTier(tier));
     await db.$cache.invalidate({
       tags: [ModelsCacheTags.static, ...tierTags],
+    });
+  }
+}
+
+// ============================================================================
+// CREDIT BALANCE CACHE INVALIDATION
+// ============================================================================
+
+/**
+ * Invalidate credit balance cache for a user
+ *
+ * CRITICAL: Must be called after any operation that changes:
+ * - planType (FREE -> PAID upgrade)
+ * - balance (credit grants, refills)
+ * - subscription status changes
+ *
+ * Without this, users may see stale planType after subscription upgrades,
+ * causing incorrect enforcement of free user limits (e.g., one thread limit).
+ *
+ * @param db - Database instance with cache support
+ * @param userId - User ID to invalidate credit cache for
+ */
+export async function invalidateCreditBalanceCache(
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+  userId: string,
+): Promise<void> {
+  if (db.$cache?.invalidate) {
+    await db.$cache.invalidate({
+      tags: CreditCacheTags.all(userId),
     });
   }
 }

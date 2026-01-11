@@ -11,6 +11,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 
+import { invalidateCreditBalanceCache } from '@/api/common/cache-utils';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { CreditAction, CreditGrantType, CreditTransactionType } from '@/api/core/enums';
@@ -757,6 +758,10 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     action: CreditActions.MONTHLY_RENEWAL,
     description: `Upgraded to Pro plan: ${planConfig.monthlyCredits} credits`,
   });
+
+  // CRITICAL: Invalidate cached credit balance so subsequent requests see the new planType
+  // Without this, thread creation checks may still see planType=FREE from stale cache
+  await invalidateCreditBalanceCache(db, userId);
 }
 
 const _RecordTransactionSchema = z.object({
