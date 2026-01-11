@@ -4,19 +4,15 @@ import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { permanentRedirect, redirect } from 'next/navigation';
 
 import { MessageRoles, ResourceUnavailableReasons } from '@/api/core/enums';
-import type { ThreadDetailPayload } from '@/api/routes/chat/schema';
 import { BRAND } from '@/constants';
 import PublicChatThreadScreen from '@/containers/screens/chat/PublicChatThreadScreen';
 import { getCachedPublicThreadForMetadata } from '@/lib/cache/thread-cache';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { getPublicThreadService, listPublicThreadSlugsService } from '@/services/api';
+import { listPublicThreadSlugsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
-// ISR: 1 day (matches unstable_cache duration)
-// On-demand revalidation triggered via revalidateTag when visibility changes
 export const revalidate = 86400;
 
 // Pre-generate pages for all active public threads at build time
@@ -34,15 +30,14 @@ export async function generateStaticParams(): Promise<{ slug: string }[]> {
   }
 }
 
-export async function generateMetadata({
-  params,
-}: {
+type PageParams = {
   params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
+};
+
+export async function generateMetadata({ params }: PageParams): Promise<Metadata> {
   const { slug } = await params;
 
   try {
-    // Use cached function for metadata - shares cache with page data
     const response = await getCachedPublicThreadForMetadata(slug);
 
     if (!response.success || !response.data?.thread) {
@@ -61,8 +56,11 @@ export async function generateMetadata({
       ? `${firstUserText.slice(0, 150)}${firstUserText.length > 150 ? '...' : ''}`
       : `A ${thread.mode} conversation with ${participants.length} AI ${participants.length === 1 ? 'participant' : 'participants'}.`;
 
-    const participantRoles = participants?.map(p => p.role).filter((role): role is string => typeof role === 'string' && role.length > 0) ?? [];
-    const keywords: string[] = [
+    const participantRoles = participants
+      .map(p => p.role)
+      .filter((role): role is string => typeof role === 'string' && role.length > 0);
+
+    const keywords = [
       thread.mode,
       'AI chat',
       'conversation',
@@ -89,83 +87,101 @@ export async function generateMetadata({
   }
 }
 
-export default async function PublicChatThreadPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+type ErrorDetails = {
+  statusCode?: number;
+  detail?: {
+    unavailabilityReason?: string;
+  };
+};
+
+function isErrorDetails(error: unknown): error is ErrorDetails {
+  return (
+    error !== null
+    && typeof error === 'object'
+    && ('statusCode' in error || 'detail' in error)
+  );
+}
+
+function getErrorMessage(statusCode: number | undefined, reason: string): { message: string; action: string } {
+  if (statusCode === 410) {
+    switch (reason) {
+      case ResourceUnavailableReasons.DELETED:
+        return {
+          message: 'This conversation was deleted by its owner. Create your own to get started!',
+          action: 'create',
+        };
+      case ResourceUnavailableReasons.ARCHIVED:
+        return {
+          message: 'This conversation has been archived and is no longer publicly available.',
+          action: 'signin',
+        };
+      case ResourceUnavailableReasons.PRIVATE:
+        return {
+          message: 'This conversation is now private. Sign in if you own it, or create your own!',
+          action: 'signin',
+        };
+      default:
+        return {
+          message: 'This conversation is no longer available.',
+          action: 'create',
+        };
+    }
+  }
+
+  if (statusCode === 404) {
+    return {
+      message: 'This conversation doesn\'t exist. Create your own to get started!',
+      action: 'create',
+    };
+  }
+
+  return {
+    message: 'This conversation is no longer available.',
+    action: 'create',
+  };
+}
+
+export default async function PublicChatThreadPage({ params }: PageParams) {
   const { slug } = await params;
   const queryClient = getQueryClient();
 
   try {
-    // Prefetch thread data - will be hydrated to client via HydrationBoundary
-    await queryClient.prefetchQuery({
-      queryKey: queryKeys.threads.public(slug),
-      queryFn: () => getPublicThreadService({ param: { slug } }),
-      staleTime: STALE_TIMES.publicThreadDetail,
-    });
+    const response = await getCachedPublicThreadForMetadata(slug);
 
-    const cachedData = queryClient.getQueryData<{ success: true; data: ThreadDetailPayload } | { success: false }>(queryKeys.threads.public(slug));
-    if (!cachedData?.success) {
-      const params = new URLSearchParams({
+    queryClient.setQueryData(queryKeys.threads.public(slug), response);
+
+    if (!response.success) {
+      const searchParams = new URLSearchParams({
         toast: 'failed',
         message: 'This conversation no longer exists. Create your own to get started!',
         action: 'create',
       });
-      redirect(`/auth/sign-in?${params.toString()}`);
+      redirect(`/auth/sign-in?${searchParams.toString()}`);
     }
 
-    const thread = cachedData.data?.thread;
+    const thread = response.data?.thread;
     if (thread?.isAiGeneratedTitle && thread.slug !== slug) {
       permanentRedirect(`/public/chat/${thread.slug}`);
     }
   } catch (error) {
-    // Re-throw redirect errors - they must propagate to Next.js
     if (isRedirectError(error)) {
       throw error;
     }
 
-    const isErrorObject = error && typeof error === 'object';
-    const statusCode = isErrorObject && 'statusCode' in error && typeof error.statusCode === 'number'
-      ? error.statusCode
-      : null;
-    const errorContext = isErrorObject && 'detail' in error ? error.detail : null;
+    const errorDetails = isErrorDetails(error) ? error : undefined;
+    const statusCode = errorDetails?.statusCode;
+    const reason = errorDetails?.detail?.unavailabilityReason ?? 'unavailable';
 
-    let reason = 'unavailable';
-    if (errorContext && typeof errorContext === 'object' && 'unavailabilityReason' in errorContext) {
-      const unavailabilityReason = errorContext.unavailabilityReason;
-      if (typeof unavailabilityReason === 'string') {
-        reason = unavailabilityReason;
-      }
-    }
+    const { message, action } = getErrorMessage(statusCode, reason);
 
-    let message = 'This conversation is no longer available.';
-    let action = 'create';
-
-    if (statusCode === 410) {
-      if (reason === ResourceUnavailableReasons.DELETED) {
-        message = 'This conversation was deleted by its owner. Create your own to get started!';
-        action = 'create';
-      } else if (reason === ResourceUnavailableReasons.ARCHIVED) {
-        message = 'This conversation has been archived and is no longer publicly available.';
-        action = 'signin';
-      } else if (reason === ResourceUnavailableReasons.PRIVATE) {
-        message = 'This conversation is now private. Sign in if you own it, or create your own!';
-        action = 'signin';
-      }
-    } else if (statusCode === 404) {
-      message = 'This conversation doesn\'t exist. Create your own to get started!';
-      action = 'create';
-    }
-
-    const params = new URLSearchParams({
+    const searchParams = new URLSearchParams({
       toast: 'info',
       message,
       action,
       from: `/public/chat/${slug}`,
     });
 
-    redirect(`/auth/sign-in?${params.toString()}`);
+    redirect(`/auth/sign-in?${searchParams.toString()}`);
   }
 
   return (

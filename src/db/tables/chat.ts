@@ -84,6 +84,8 @@ export const chatThread = sqliteTable('chat_thread', {
   index('chat_thread_previous_slug_idx').on(table.previousSlug), // Fast lookups by previous slug
   index('chat_thread_favorite_idx').on(table.isFavorite),
   index('chat_thread_public_idx').on(table.isPublic),
+  // ✅ PERF: Composite index for public thread list queries (isPublic + status filter)
+  index('chat_thread_public_status_idx').on(table.isPublic, table.status),
 ]);
 
 /**

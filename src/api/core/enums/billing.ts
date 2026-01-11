@@ -141,6 +141,42 @@ export function isActiveSubscriptionStatus(status: StripeSubscriptionStatus): st
 }
 
 // ============================================================================
+// SYNCED SUBSCRIPTION STATUS (includes 'none' for no subscription)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const SYNCED_SUBSCRIPTION_STATUSES = [
+  'none',
+  ...STRIPE_SUBSCRIPTION_STATUSES,
+] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_SYNCED_SUBSCRIPTION_STATUS: SyncedSubscriptionStatus = 'none';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const SyncedSubscriptionStatusSchema = z.enum(SYNCED_SUBSCRIPTION_STATUSES).openapi({
+  description: 'Subscription sync status: either no subscription (none) or Stripe status',
+  example: 'active',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type SyncedSubscriptionStatus = z.infer<typeof SyncedSubscriptionStatusSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const SyncedSubscriptionStatuses = {
+  NONE: 'none' as const,
+  ...StripeSubscriptionStatuses,
+} as const;
+
+export function isSyncedSubscriptionStatus(value: unknown): value is SyncedSubscriptionStatus {
+  return typeof value === 'string' && SYNCED_SUBSCRIPTION_STATUSES.includes(value as SyncedSubscriptionStatus);
+}
+
+export function hasSubscription(status: SyncedSubscriptionStatus): status is StripeSubscriptionStatus {
+  return status !== SyncedSubscriptionStatuses.NONE;
+}
+
+// ============================================================================
 // SUBSCRIPTION TIER
 // ============================================================================
 

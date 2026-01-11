@@ -23,7 +23,7 @@ import { ulid } from 'ulid';
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import type { StripeSubscriptionStatus, SubscriptionTier, UsageStatus } from '@/api/core/enums';
+import type { SubscriptionTier, SyncedSubscriptionStatus, UsageStatus } from '@/api/core/enums';
 import {
   BillingIntervals,
   PlanTypes,
@@ -428,7 +428,7 @@ async function getPlanStatsForUsage(userId: string) {
 export async function syncUserQuotaFromSubscription(
   userId: string,
   priceId: string,
-  subscriptionStatus: StripeSubscriptionStatus | 'none',
+  subscriptionStatus: SyncedSubscriptionStatus,
   currentPeriodStart: Date,
   currentPeriodEnd: Date,
 ): Promise<void> {

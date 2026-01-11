@@ -3,7 +3,7 @@ export const STATIC_CACHE_TAGS = {
   ACTIVE_PRICES: 'active-prices',
 } as const;
 
-export const UserCacheTags = {
+const UserCacheTags = {
   tier: (userId: string) => `user-tier-${userId}`,
   usage: (userId: string) => `user-usage-${userId}`,
   record: (userId: string) => `user-${userId}`,
@@ -14,7 +14,7 @@ export const UserCacheTags = {
   ],
 } as const;
 
-export const CustomerCacheTags = {
+const CustomerCacheTags = {
   byUserId: (userId: string) => `customer-${userId}`,
   byCustomerId: (customerId: string) => `customer-id-${customerId}`,
   all: (userId: string, customerId?: string) => {
@@ -26,12 +26,21 @@ export const CustomerCacheTags = {
   },
 } as const;
 
-export const SubscriptionCacheTags = {
+const SubscriptionCacheTags = {
   active: (userId: string) => `active-subscription-${userId}`,
   all: (userId: string) => [SubscriptionCacheTags.active(userId)],
 } as const;
 
-export const PriceCacheTags = {
+const CreditCacheTags = {
+  balance: (userId: string) => `credit-balance-${userId}`,
+  hasActiveSubscription: (userId: string) => `has-active-sub-${userId}`,
+  all: (userId: string) => [
+    CreditCacheTags.balance(userId),
+    CreditCacheTags.hasActiveSubscription(userId),
+  ],
+} as const;
+
+const PriceCacheTags = {
   single: (priceId: string) => `price-${priceId}`,
   byProduct: (productId: string) => `product-prices-${productId}`,
   all: (priceId: string, productId?: string) => {
@@ -43,7 +52,7 @@ export const PriceCacheTags = {
   },
 } as const;
 
-export const ProductCacheTags = {
+const ProductCacheTags = {
   single: (productId: string) => `product-${productId}`,
   all: (productId: string) => [
     ProductCacheTags.single(productId),
@@ -51,7 +60,7 @@ export const ProductCacheTags = {
   ],
 } as const;
 
-export const ThreadCacheTags = {
+const ThreadCacheTags = {
   list: (userId: string) => `threads-list-${userId}`,
   single: (threadId: string) => `thread-${threadId}`,
   bySlug: (slug: string) => `thread-slug-${slug}`,
@@ -71,7 +80,7 @@ export const ThreadCacheTags = {
   },
 } as const;
 
-export const MessageCacheTags = {
+const MessageCacheTags = {
   byThread: (threadId: string) => `messages-${threadId}`,
   changelog: (threadId: string) => `changelog-${threadId}`,
   all: (threadId: string) => [
@@ -80,19 +89,31 @@ export const MessageCacheTags = {
   ],
 } as const;
 
-export const PublicThreadCacheTags = {
+const PublicThreadCacheTags = {
   single: (slug: string) => `public-thread-${slug}`,
   slugsList: 'public-slugs-list',
-  all: (slug?: string) => {
+  owner: (threadId: string) => `public-thread-owner-${threadId}`,
+  changelog: (threadId: string) => `public-changelog-${threadId}`,
+  feedback: (threadId: string) => `public-feedback-${threadId}`,
+  preSearch: (threadId: string) => `public-presearch-${threadId}`,
+  all: (slug?: string, threadId?: string) => {
     const tags: string[] = [PublicThreadCacheTags.slugsList];
     if (slug) {
       tags.push(PublicThreadCacheTags.single(slug));
+    }
+    if (threadId) {
+      tags.push(
+        PublicThreadCacheTags.owner(threadId),
+        PublicThreadCacheTags.changelog(threadId),
+        PublicThreadCacheTags.feedback(threadId),
+        PublicThreadCacheTags.preSearch(threadId),
+      );
     }
     return tags;
   },
 } as const;
 
-export const ModelsCacheTags = {
+const ModelsCacheTags = {
   byTier: (tier: string) => `models-tier-${tier}`,
   static: 'models-static',
   enrichedResponse: (tier: string) => `models-enriched-${tier}`,
@@ -105,7 +126,7 @@ export const ModelsCacheTags = {
   },
 } as const;
 
-export const PublicSlugsListCacheTags = {
+const PublicSlugsListCacheTags = {
   list: 'public-thread-slugs-list',
   all: () => [PublicSlugsListCacheTags.list, PublicThreadCacheTags.slugsList],
 } as const;
@@ -144,3 +165,17 @@ export function getBillingDataCacheTags(productId?: string, priceId?: string): s
 
   return tags;
 }
+
+export {
+  CreditCacheTags,
+  CustomerCacheTags,
+  MessageCacheTags,
+  ModelsCacheTags,
+  PriceCacheTags,
+  ProductCacheTags,
+  PublicSlugsListCacheTags,
+  PublicThreadCacheTags,
+  SubscriptionCacheTags,
+  ThreadCacheTags,
+  UserCacheTags,
+};

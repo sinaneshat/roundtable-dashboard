@@ -18,6 +18,7 @@ import { extractErrorMetadata } from '@/api/services/errors';
 import type { AvailableSource, CitationSourceMap } from '@/api/types/citations';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import type { DbMessageParts } from '@/db/schemas/chat-metadata';
 import type { MessagePart, StreamingFinishResult } from '@/lib/schemas/message-schemas';
 import { createParticipantMetadata, hasCitations, isObject, parseCitations, toDbCitations } from '@/lib/utils';
 
@@ -307,7 +308,7 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
         threadId,
         participantId,
         role: MessageRoles.ASSISTANT,
-        parts,
+        parts: parts as DbMessageParts,
         roundNumber,
         metadata: messageMetadata,
         createdAt: new Date(),
@@ -334,7 +335,7 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
           threadId,
           participantId,
           role: MessageRoles.TOOL,
-          parts: toolParts,
+          parts: toolParts as DbMessageParts,
           roundNumber,
           metadata: null,
           createdAt: new Date(),

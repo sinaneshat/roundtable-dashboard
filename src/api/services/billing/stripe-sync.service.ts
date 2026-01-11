@@ -1,8 +1,5 @@
 /**
  * Stripe Data Synchronization Service
- *
- * Single source of truth for Stripe data sync
- * Based on Theo's pattern: https://github.com/t3dotgg/stay-sane-implementing-stripe
  */
 
 import { eq } from 'drizzle-orm';
@@ -10,7 +7,13 @@ import type Stripe from 'stripe';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
-import type { PaymentMethodType, StripeSubscriptionStatus } from '@/api/core/enums';
+import type {
+  BillingInterval,
+  InvoiceStatus,
+  PaymentMethodType,
+  PriceType,
+  StripeSubscriptionStatus,
+} from '@/api/core/enums';
 import {
   BillingIntervals,
   DEFAULT_PAYMENT_METHOD_TYPE,
@@ -18,6 +21,7 @@ import {
   isPaymentMethodType,
   PriceTypes,
   StripeSubscriptionStatusSchema,
+  SyncedSubscriptionStatuses,
 } from '@/api/core/enums';
 import { syncUserQuotaFromSubscription } from '@/api/services/usage';
 import * as tables from '@/db';
@@ -35,7 +39,7 @@ import { stripeService } from './stripe.service';
 
 function calculatePeriodEnd(
   startTimestamp: number,
-  interval: 'month' | 'year' | 'week' | 'day' = BillingIntervals.MONTH,
+  interval: BillingInterval = BillingIntervals.MONTH,
   intervalCount: number = 1,
 ): number {
   const startDate = new Date(startTimestamp * 1000);
@@ -72,8 +76,15 @@ export type SyncedSubscriptionState
     } | null;
   }
   | {
-    status: 'none';
+    status: typeof SyncedSubscriptionStatuses.NONE;
   };
+
+/** Type guard to check if synced state has an active subscription */
+export function hasSyncedSubscription(
+  state: SyncedSubscriptionState,
+): state is SyncedSubscriptionState & { status: StripeSubscriptionStatus } {
+  return state.status !== SyncedSubscriptionStatuses.NONE;
+}
 
 export async function syncStripeDataFromStripe(
   customerId: string,
@@ -122,12 +133,12 @@ export async function syncStripeDataFromStripe(
   }
 
   if (subscriptions.data.length === 0) {
-    return { status: 'none' };
+    return { status: SyncedSubscriptionStatuses.NONE };
   }
 
   const subscription = subscriptions.data[0];
   if (!subscription) {
-    return { status: 'none' };
+    return { status: SyncedSubscriptionStatuses.NONE };
   }
 
   const firstItem = subscription.items.data[0];
@@ -182,36 +193,23 @@ export async function syncStripeDataFromStripe(
     }
   }
 
+  const stripe = stripeService.getClient();
+
   let invoices: Stripe.ApiList<Stripe.Invoice>;
-  try {
-    const stripe = stripeService.getClient();
-    invoices = await stripe.invoices.list({ customer: customerId, limit: 10 });
-  } catch {
-    throw createError.internal(
-      'Failed to sync invoice data',
-      { errorType: 'external_service', service: 'stripe', operation: 'sync_invoices', resourceId: customerId },
-    );
-  }
-
   let paymentMethods: Stripe.ApiList<Stripe.PaymentMethod>;
-  try {
-    const stripe = stripeService.getClient();
-    paymentMethods = await stripe.paymentMethods.list({ customer: customerId, type: 'card' });
-  } catch {
-    throw createError.internal(
-      'Failed to sync payment method data',
-      { errorType: 'external_service', service: 'stripe', operation: 'sync_payment_methods', resourceId: customerId },
-    );
-  }
-
   let stripeCustomer: Stripe.Customer | Stripe.DeletedCustomer;
+
   try {
-    const stripe = stripeService.getClient();
-    stripeCustomer = await stripe.customers.retrieve(customerId);
-  } catch {
+    [invoices, paymentMethods, stripeCustomer] = await Promise.all([
+      stripe.invoices.list({ customer: customerId, limit: 10 }),
+      stripe.paymentMethods.list({ customer: customerId, type: 'card' }),
+      stripe.customers.retrieve(customerId),
+    ]);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw createError.internal(
-      'Failed to sync customer data',
-      { errorType: 'external_service', service: 'stripe', operation: 'sync_customer', resourceId: customerId },
+      `Failed to sync Stripe data: ${errorMessage}`,
+      { errorType: 'external_service', service: 'stripe', operation: 'sync_parallel', resourceId: customerId },
     );
   }
 
@@ -257,14 +255,17 @@ export async function syncStripeDataFromStripe(
     },
   });
 
+  const priceType: PriceType = price.type === PriceTypes.ONE_TIME ? PriceTypes.ONE_TIME : PriceTypes.RECURRING;
+  const priceInterval: BillingInterval | null = price.recurring?.interval ?? null;
+
   const priceUpsert = db.insert(tables.stripePrice).values({
     id: price.id,
     productId: product,
     active: price.active,
     currency: price.currency,
     unitAmount: price.unit_amount ?? null,
-    type: price.type === PriceTypes.ONE_TIME ? PriceTypes.ONE_TIME : PriceTypes.RECURRING,
-    interval: price.recurring?.interval ?? null,
+    type: priceType,
+    interval: priceInterval,
     intervalCount: price.recurring?.interval_count ?? null,
     trialPeriodDays: null,
     metadata: null,
@@ -276,7 +277,7 @@ export async function syncStripeDataFromStripe(
       active: price.active,
       currency: price.currency,
       unitAmount: price.unit_amount ?? null,
-      interval: price.recurring?.interval ?? null,
+      interval: priceInterval,
       intervalCount: price.recurring?.interval_count ?? null,
       updatedAt: now,
     },
@@ -322,13 +323,14 @@ export async function syncStripeDataFromStripe(
   const invoiceUpserts = invoices.data.map((invoice) => {
     const sub = invoice.parent?.subscription_details?.subscription;
     const subscriptionId = sub ? (typeof sub === 'string' ? sub : sub.id) : null;
-    const isPaid = invoice.status === InvoiceStatuses.PAID;
+    const invoiceStatus: InvoiceStatus = invoice.status || InvoiceStatuses.DRAFT;
+    const isPaid = invoiceStatus === InvoiceStatuses.PAID;
 
     return db.insert(tables.stripeInvoice).values({
       id: invoice.id,
       customerId,
       subscriptionId,
-      status: invoice.status || 'draft',
+      status: invoiceStatus,
       amountDue: invoice.amount_due,
       amountPaid: invoice.amount_paid,
       currency: invoice.currency,
@@ -343,7 +345,7 @@ export async function syncStripeDataFromStripe(
     }).onConflictDoUpdate({
       target: tables.stripeInvoice.id,
       set: {
-        status: invoice.status || 'draft',
+        status: invoiceStatus,
         amountDue: invoice.amount_due,
         amountPaid: invoice.amount_paid,
         periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : null,

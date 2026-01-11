@@ -10,27 +10,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-// Theo's expected return type structure
-type SyncedSubscriptionState
-  = | {
-    status: string;
-    subscriptionId: string;
-    priceId: string;
-    productId: string;
-    currentPeriodStart: number;
-    currentPeriodEnd: number;
-    cancelAtPeriodEnd: boolean;
-    canceledAt: number | null;
-    trialStart: number | null;
-    trialEnd: number | null;
-    paymentMethod: {
-      brand: string | null;
-      last4: string | null;
-    } | null;
-  }
-  | {
-    status: 'none';
-  };
+import { SyncedSubscriptionStatuses } from '@/api/core/enums';
+import type { SyncedSubscriptionState } from '@/api/services/billing';
 
 describe('stripe Sync Service (Theo Pattern)', () => {
   describe('return Type Structure', () => {
@@ -64,10 +45,10 @@ describe('stripe Sync Service (Theo Pattern)', () => {
 
     it('defines correct type for no subscription', () => {
       const noSubscription: SyncedSubscriptionState = {
-        status: 'none',
+        status: SyncedSubscriptionStatuses.NONE,
       };
 
-      expect(noSubscription.status).toBe('none');
+      expect(noSubscription.status).toBe(SyncedSubscriptionStatuses.NONE);
       // Should NOT have other properties when status is 'none'
       expect(noSubscription).not.toHaveProperty('subscriptionId');
     });
@@ -78,7 +59,7 @@ describe('stripe Sync Service (Theo Pattern)', () => {
       // - currentPeriodStart, currentPeriodEnd
       // - cancelAtPeriodEnd
       // - paymentMethod: { brand, last4 }
-      // OR { status: 'none' }
+      // OR { status: SyncedSubscriptionStatuses.NONE }
 
       const theoCacheFields = [
         'subscriptionId',

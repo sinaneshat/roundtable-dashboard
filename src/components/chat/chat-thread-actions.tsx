@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { ComponentSizes, ComponentVariants } from '@/api/core/enums';
+import { ComponentSizes, ComponentVariants, MessageStatuses } from '@/api/core/enums';
 import type { ChatThread, ChatThreadFlexible } from '@/api/routes/chat/schema';
 import { ChatRenameDialog } from '@/components/chat/chat-rename-dialog';
 import { ChatThreadMenuItems } from '@/components/chat/chat-thread-menu-items';
@@ -57,7 +57,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       || s.waitingToStartStreaming
       || s.isCreatingThread
       || s.streamingRoundNumber !== null
-      || s.preSearches.some(ps => ps.status === 'pending' || ps.status === 'streaming'),
+      || s.preSearches.some(ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING),
   })));
   const currentTitle = (storeThreadTitle && thread.id === storeThreadId)
     ? storeThreadTitle

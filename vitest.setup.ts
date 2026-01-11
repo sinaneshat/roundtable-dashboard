@@ -1,6 +1,3 @@
-// Learn more: https://vitest.dev/guide/
-
-// Include Cloudflare Workers types for tests (R2Bucket, KVNamespace, D1Database, etc.)
 /// <reference path="./cloudflare-env.d.ts" />
 
 import '@testing-library/jest-dom/vitest';
@@ -10,34 +7,26 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TextDecoder as NodeTextDecoder, TextEncoder as NodeTextEncoder } from 'node:util';
 
-import { vi } from 'vitest';
+import { afterAll, afterEach, vi } from 'vitest';
 
-// ✅ Enable require() in ES modules for orchestrator-factory dynamic imports
-// This allows the orchestrator to use require() to avoid circular dependencies
 if (typeof globalThis.require === 'undefined') {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const nodeRequire = createRequire(import.meta.url);
 
-  // Wrap nodeRequire to handle @/ path alias
   const customRequire = (id: string) => {
     if (id.startsWith('@/')) {
-      // Convert @/ alias to absolute path based on project root
-      const relativePath = id.substring(2); // Remove '@/'
+      const relativePath = id.substring(2);
       const absolutePath = path.resolve(__dirname, 'src', relativePath);
-
-      // Try different extensions if base path doesn't exist
       const extensions = ['.tsx', '.ts', '.jsx', '.js', '/index.tsx', '/index.ts'];
+
       for (const ext of extensions) {
         try {
-          const testPath = absolutePath + ext;
-          return nodeRequire(testPath);
+          return nodeRequire(absolutePath + ext);
         } catch {
-          // Try next extension
+          continue;
         }
       }
 
-      // If no extension works, try the original path
       return nodeRequire(absolutePath);
     }
     return nodeRequire(id);
@@ -50,16 +39,10 @@ if (typeof globalThis.require === 'undefined') {
   });
 }
 
-// Mock CSS imports (CSS modules, regular CSS, etc.)
 vi.mock('*.css', () => ({}));
 vi.mock('*.scss', () => ({}));
-
-// Mock server-only - prevents "This module cannot be imported from a Client Component" error in tests
 vi.mock('server-only', () => ({}));
 
-// Polyfill TextDecoder/TextEncoder for streaming tests
-// Node.js and DOM types are compatible at runtime but slightly different in TypeScript
-// Using Object.defineProperty to avoid type mismatch while maintaining runtime compatibility
 Object.defineProperty(globalThis, 'TextDecoder', {
   value: NodeTextDecoder,
   writable: true,
@@ -72,22 +55,17 @@ Object.defineProperty(globalThis, 'TextEncoder', {
   configurable: true,
 });
 
-// ✅ REMOVED: next-intl mock - using real NextIntlClientProvider from test-providers.tsx
-// The test-providers.tsx provides proper translations via NextIntlClientProvider with full messages
-
-// Mock @opennextjs/cloudflare - ESM-only package
 vi.mock('@opennextjs/cloudflare', () => ({
   getCloudflareContext: () => ({
     env: {},
     cf: {},
     ctx: {
-      waitUntil: () => {},
-      passThroughOnException: () => {},
+      waitUntil: vi.fn(),
+      passThroughOnException: vi.fn(),
     },
   }),
 }));
 
-// Mock better-auth - requires Request API which isn't available in Vitest
 vi.mock('@/lib/auth/client', () => ({
   authClient: {
     signIn: {
@@ -101,7 +79,6 @@ vi.mock('@/lib/auth/client', () => ({
       error: null,
     })),
   },
-  // Export named exports as well for direct imports
   useSession: vi.fn(() => ({
     data: null,
     isPending: false,
@@ -111,7 +88,6 @@ vi.mock('@/lib/auth/client', () => ({
   signIn: vi.fn(),
 }));
 
-// Mock next/navigation - required for Next.js 13+ App Router
 vi.mock('next/navigation', () => ({
   useRouter: vi.fn(() => ({
     push: vi.fn(),
@@ -135,7 +111,6 @@ vi.mock('next/navigation', () => ({
   redirect: vi.fn(),
 }));
 
-// Mock next/headers - required for API client in SSR context
 vi.mock('next/headers', () => ({
   cookies: vi.fn(async () => ({
     get: vi.fn(),
@@ -155,15 +130,13 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-// Mock environment variables for testing
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
 process.env.NEXT_PUBLIC_WEBAPP_ENV = 'local';
 
-// Mock window.matchMedia (only in browser/jsdom environment)
 if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
-    value: vi.fn().mockImplementation(query => ({
+    value: vi.fn((query: string) => ({
       matches: false,
       media: query,
       onchange: null,
@@ -176,87 +149,60 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Mock IntersectionObserver - properly typed implementation
 class MockIntersectionObserver implements IntersectionObserver {
-  readonly root: Element | null = null;
-  readonly rootMargin: string = '';
+  readonly root = null;
+  readonly rootMargin = '';
   readonly thresholds: ReadonlyArray<number> = [];
 
-  constructor(
-    _callback: IntersectionObserverCallback,
-    _options?: IntersectionObserverInit,
-  ) {}
-
   disconnect(): void {}
-  observe(_target: Element): void {}
+
+  observe(): void {}
+
   takeRecords(): IntersectionObserverEntry[] {
     return [];
   }
 
-  unobserve(_target: Element): void {}
+  unobserve(): void {}
 }
 
 globalThis.IntersectionObserver = MockIntersectionObserver;
 
-// Mock ResizeObserver - properly typed implementation
 class MockResizeObserver implements ResizeObserver {
-  constructor(_callback: ResizeObserverCallback) {}
-
   disconnect(): void {}
-  observe(_target: Element, _options?: ResizeObserverOptions): void {}
-  unobserve(_target: Element): void {}
+  observe(): void {}
+  unobserve(): void {}
 }
 
 globalThis.ResizeObserver = MockResizeObserver;
 
-// Mock Element.scrollIntoView for cmdk component (only in browser/jsdom environment)
 if (typeof Element !== 'undefined') {
   Element.prototype.scrollIntoView = vi.fn();
 }
 
-// Mock ReadableStream for streaming tests - defined first as it's used by TransformStream
 if (typeof globalThis.ReadableStream === 'undefined') {
-  class MockReadableStream<R = unknown> implements ReadableStream<R> {
-    readonly locked: boolean = false;
+  class MockReadableStream<R = Uint8Array> implements ReadableStream<R> {
+    readonly locked = false;
 
-    constructor(
-      _underlyingSource?: UnderlyingSource<R> | UnderlyingByteSource,
-      _strategy?: QueuingStrategy<R>,
-    ) {}
-
-    cancel(_reason?: unknown): Promise<void> {
+    cancel(): Promise<void> {
       return Promise.resolve();
     }
 
     getReader(_options?: { mode?: undefined }): ReadableStreamDefaultReader<R>;
-    getReader(options: { mode: 'byob' }): ReadableStreamBYOBReader;
-    getReader(_options?: ReadableStreamGetReaderOptions): ReadableStreamReader<R> {
-      const reader: ReadableStreamDefaultReader<R> = {
-        read: async (): Promise<ReadableStreamReadResult<R>> => {
-          const result: ReadableStreamReadDoneResult<R> = {
-            done: true,
-            value: undefined,
-          };
-          return result;
-        },
+    getReader(_options: { mode: 'byob' }): ReadableStreamBYOBReader;
+    getReader(): ReadableStreamDefaultReader<R> {
+      return {
+        read: async () => ({ done: true, value: undefined }) as ReadableStreamReadDoneResult<R>,
         releaseLock: () => {},
         closed: Promise.resolve(undefined),
         cancel: async () => {},
       };
-      return reader;
     }
 
-    pipeThrough<T>(
-      _transform: ReadableWritablePair<T, R>,
-      _options?: StreamPipeOptions,
-    ): ReadableStream<T> {
+    pipeThrough<T>(): ReadableStream<T> {
       return new MockReadableStream<T>();
     }
 
-    pipeTo(
-      _destination: WritableStream<R>,
-      _options?: StreamPipeOptions,
-    ): Promise<void> {
+    pipeTo(): Promise<void> {
       return Promise.resolve();
     }
 
@@ -264,8 +210,8 @@ if (typeof globalThis.ReadableStream === 'undefined') {
       return [new MockReadableStream<R>(), new MockReadableStream<R>()];
     }
 
-    values(_options?: ReadableStreamIteratorOptions): ReadableStreamAsyncIterator<R> {
-      const iterator: ReadableStreamAsyncIterator<R> = {
+    values(): ReadableStreamAsyncIterator<R> {
+      return {
         next: async () => ({ done: true, value: undefined }) as IteratorResult<R>,
         return: async () => ({ done: true, value: undefined }) as IteratorResult<R>,
         [Symbol.asyncIterator]() {
@@ -273,11 +219,10 @@ if (typeof globalThis.ReadableStream === 'undefined') {
         },
         [Symbol.asyncDispose]: async () => {},
       };
-      return iterator;
     }
 
-    [Symbol.asyncIterator](_options?: ReadableStreamIteratorOptions): ReadableStreamAsyncIterator<R> {
-      return this.values(_options);
+    [Symbol.asyncIterator](): ReadableStreamAsyncIterator<R> {
+      return this.values();
     }
   }
 
@@ -288,14 +233,11 @@ if (typeof globalThis.ReadableStream === 'undefined') {
   });
 }
 
-// Mock WritableStream for TransformStream
 if (typeof globalThis.WritableStream === 'undefined') {
-  class MockWritableStream<W = unknown> implements WritableStream<W> {
-    readonly locked: boolean = false;
+  class MockWritableStream<W = Uint8Array> implements WritableStream<W> {
+    readonly locked = false;
 
-    constructor(_underlyingSink?: UnderlyingSink<W>) {}
-
-    abort(_reason?: unknown): Promise<void> {
+    abort(): Promise<void> {
       return Promise.resolve();
     }
 
@@ -304,7 +246,7 @@ if (typeof globalThis.WritableStream === 'undefined') {
     }
 
     getWriter(): WritableStreamDefaultWriter<W> {
-      const writer: WritableStreamDefaultWriter<W> = {
+      return {
         write: async () => {},
         close: async () => {},
         abort: async () => {},
@@ -313,27 +255,38 @@ if (typeof globalThis.WritableStream === 'undefined') {
         ready: Promise.resolve(undefined),
         releaseLock: () => {},
       };
-      return writer;
     }
   }
 
   globalThis.WritableStream = MockWritableStream;
 }
 
-// Mock TransformStream for AI SDK
 if (typeof globalThis.TransformStream === 'undefined') {
-  class MockTransformStream<I = unknown, O = unknown> implements TransformStream<I, O> {
+  class MockTransformStream<I = Uint8Array, O = Uint8Array> implements TransformStream<I, O> {
     readonly readable: ReadableStream<O>;
     readonly writable: WritableStream<I>;
 
     constructor() {
-      const MockReadableStreamClass = globalThis.ReadableStream;
-      const MockWritableStreamClass = globalThis.WritableStream;
-
-      this.readable = new MockReadableStreamClass<O>();
-      this.writable = new MockWritableStreamClass<I>();
+      this.readable = new globalThis.ReadableStream<O>();
+      this.writable = new globalThis.WritableStream<I>();
     }
   }
 
   globalThis.TransformStream = MockTransformStream;
 }
+
+function tryGC() {
+  if (typeof globalThis.gc === 'function') {
+    globalThis.gc();
+  }
+}
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+afterAll(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+  tryGC();
+});

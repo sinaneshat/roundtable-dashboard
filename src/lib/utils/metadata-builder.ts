@@ -57,7 +57,7 @@ export type ParticipantMetadataParams = {
 
   // Optional backend fields
   providerMessage?: string;
-  openRouterError?: Record<string, unknown>;
+  openRouterError?: Record<string, string | number | boolean | null>;
   retryAttempts?: number;
   isEmptyResponse?: boolean;
   statusCode?: number;

@@ -7,7 +7,7 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError } from '@/api/common/error-handling';
 import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from '@/api/core';
 import { isActiveSubscriptionStatus, PlanTypes, PurchaseTypes, StripeBillingReasons, StripeProratioBehaviors, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
-import { getCustomerIdByUserId, getUserCreditBalance, stripeService, syncStripeDataFromStripe } from '@/api/services/billing';
+import { getCustomerIdByUserId, getUserCreditBalance, hasSyncedSubscription, stripeService, syncStripeDataFromStripe } from '@/api/services/billing';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -516,8 +516,8 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
 
       return Responses.ok(c, {
         synced: true,
-        purchaseType: syncedState.status !== 'none' ? PurchaseTypes.SUBSCRIPTION : PurchaseTypes.NONE,
-        subscription: syncedState.status !== 'none'
+        purchaseType: hasSyncedSubscription(syncedState) ? PurchaseTypes.SUBSCRIPTION : PurchaseTypes.NONE,
+        subscription: hasSyncedSubscription(syncedState)
           ? {
               status: syncedState.status,
               subscriptionId: syncedState.subscriptionId,

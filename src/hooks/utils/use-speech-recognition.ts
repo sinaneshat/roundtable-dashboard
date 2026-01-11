@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useIsMounted } from './use-is-mounted';
 
-// Browser speech recognition types
 type SpeechRecognition = {
   continuous: boolean;
   interimResults: boolean;
@@ -44,14 +43,34 @@ type SpeechRecognitionErrorEvent = {
   message: string;
 };
 
-declare global {
-  // eslint-disable-next-line ts/consistent-type-definitions
-  interface Window {
-    SpeechRecognition?: new () => SpeechRecognition;
-    webkitSpeechRecognition?: new () => SpeechRecognition;
-    AudioContext?: new () => AudioContext;
-    webkitAudioContext?: new () => AudioContext;
+type SpeechRecognitionWindow = {
+  SpeechRecognition?: new () => SpeechRecognition;
+  webkitSpeechRecognition?: new () => SpeechRecognition;
+  AudioContext?: new () => AudioContext;
+  webkitAudioContext?: new () => AudioContext;
+};
+
+function getWindowSpeechAPIs(): SpeechRecognitionWindow {
+  if (typeof window === 'undefined') {
+    return {};
   }
+  const win = window as unknown as SpeechRecognitionWindow;
+  return {
+    SpeechRecognition: win.SpeechRecognition,
+    webkitSpeechRecognition: win.webkitSpeechRecognition,
+    AudioContext: win.AudioContext,
+    webkitAudioContext: win.webkitAudioContext,
+  };
+}
+
+function getSpeechRecognitionConstructor(): (new () => SpeechRecognition) | null {
+  const apis = getWindowSpeechAPIs();
+  return apis.SpeechRecognition ?? apis.webkitSpeechRecognition ?? null;
+}
+
+function getAudioContextConstructor(): (new () => AudioContext) | null {
+  const apis = getWindowSpeechAPIs();
+  return apis.AudioContext ?? apis.webkitAudioContext ?? null;
 }
 
 export type UseSpeechRecognitionOptions = {
@@ -77,147 +96,125 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   const isListeningRef = useRef(false);
   const sessionFinalTranscriptRef = useRef('');
 
-  // Check browser support - only after mount to avoid hydration mismatch
-  const isSupported = isMounted
-    && typeof window !== 'undefined'
-    && (Boolean(window.SpeechRecognition) || Boolean(window.webkitSpeechRecognition));
+  const isSupported = isMounted && getSpeechRecognitionConstructor() !== null;
 
-  // Initialize speech recognition
   useEffect(() => {
     if (!isSupported)
       return;
 
-    const SpeechRecognitionAPI
-      = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognitionAPI = getSpeechRecognitionConstructor();
+    if (!SpeechRecognitionAPI)
+      return;
 
-    if (SpeechRecognitionAPI) {
-      const recognition = new SpeechRecognitionAPI();
-      recognition.continuous = continuous;
-      recognition.interimResults = true;
-      recognition.lang = lang;
+    const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = continuous;
+    recognition.interimResults = true;
+    recognition.lang = lang;
 
-      recognition.onresult = (event) => {
-        let interim = '';
+    recognition.onresult = (event) => {
+      let interim = '';
 
-        // ✅ OFFICIAL PATTERN: Process from event.resultIndex onwards
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (!result?.[0])
+          continue;
 
-          // Type guard: Verify result exists
-          if (!result || !result[0]) {
-            continue;
-          }
+        const transcript = result[0].transcript;
 
-          const transcript = result[0].transcript;
-
-          if (result.isFinal) {
-            // Append to session's final transcript
-            if (sessionFinalTranscriptRef.current) {
-              const needsSpace = !sessionFinalTranscriptRef.current.endsWith(' ');
-              sessionFinalTranscriptRef.current = needsSpace
-                ? `${sessionFinalTranscriptRef.current} ${transcript}`
-                : `${sessionFinalTranscriptRef.current}${transcript}`;
-            } else {
-              sessionFinalTranscriptRef.current = transcript;
-            }
-            setFinalTranscript(sessionFinalTranscriptRef.current);
+        if (result.isFinal) {
+          if (sessionFinalTranscriptRef.current) {
+            const needsSpace = !sessionFinalTranscriptRef.current.endsWith(' ');
+            sessionFinalTranscriptRef.current = needsSpace
+              ? `${sessionFinalTranscriptRef.current} ${transcript}`
+              : `${sessionFinalTranscriptRef.current}${transcript}`;
           } else {
-            // Accumulate interim
-            interim += transcript;
+            sessionFinalTranscriptRef.current = transcript;
           }
-        }
-
-        // Update interim
-        setInterimTranscript(interim);
-      };
-
-      recognition.onerror = (event) => {
-        console.error('[Speech Recognition] Error:', event.error, event.message);
-        setError(event.error);
-
-        // Only stop on critical errors
-        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          setIsListening(false);
-          isListeningRef.current = false;
-          setError('Microphone permission denied');
-        } else if (event.error !== 'no-speech' && event.error !== 'audio-capture' && event.error !== 'aborted') {
-          setIsListening(false);
-          isListeningRef.current = false;
-        }
-      };
-
-      recognition.onstart = () => {
-        setError(null);
-        // DON'T reset - let it accumulate across sessions
-        setInterimTranscript('');
-      };
-
-      recognition.onend = () => {
-        // If continuous mode and still listening, restart automatically
-        if (continuous && isListeningRef.current) {
-          try {
-            recognition.start();
-          } catch (err) {
-            console.error('[Speech Recognition] Error restarting:', err);
-          }
+          setFinalTranscript(sessionFinalTranscriptRef.current);
         } else {
-          setIsListening(false);
-          setInterimTranscript('');
+          interim += transcript;
         }
-      };
+      }
 
-      recognitionRef.current = recognition;
-    }
+      setInterimTranscript(interim);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('[Speech Recognition] Error:', event.error, event.message);
+      setError(event.error);
+
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setIsListening(false);
+        isListeningRef.current = false;
+        setError('Microphone permission denied');
+      } else if (event.error !== 'no-speech' && event.error !== 'audio-capture' && event.error !== 'aborted') {
+        setIsListening(false);
+        isListeningRef.current = false;
+      }
+    };
+
+    recognition.onstart = () => {
+      setError(null);
+      setInterimTranscript('');
+    };
+
+    recognition.onend = () => {
+      if (continuous && isListeningRef.current) {
+        try {
+          recognition.start();
+        } catch (err) {
+          console.error('[Speech Recognition] Error restarting:', err);
+        }
+      } else {
+        setIsListening(false);
+        setInterimTranscript('');
+      }
+    };
+
+    recognitionRef.current = recognition;
 
     return () => {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
         } catch {
-          // Ignore errors on cleanup
+          // Ignore cleanup errors
         }
       }
     };
   }, [isSupported, continuous, lang]);
 
-  // Audio visualization using Web Audio API
   useEffect(() => {
-    if (!enableAudioVisualization || !isListening || typeof window === 'undefined') {
+    if (!enableAudioVisualization || !isListening || typeof window === 'undefined')
       return;
-    }
 
     const startAudioVisualization = async () => {
       try {
-        // Get microphone access
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
 
-        // Create audio context and analyser
-        const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextConstructor) {
+        const AudioContextCtor = getAudioContextConstructor();
+        if (!AudioContextCtor) {
           console.error('AudioContext not supported');
           return;
         }
-        const audioContext = new AudioContextConstructor();
+        const audioContext = new AudioContextCtor();
         const analyser = audioContext.createAnalyser();
         const source = audioContext.createMediaStreamSource(stream);
 
-        analyser.fftSize = 128; // Smaller FFT for better performance
+        analyser.fftSize = 128;
         source.connect(analyser);
 
         audioContextRef.current = audioContext;
         analyserRef.current = analyser;
 
-        // Animation loop to update audio levels
         const updateAudioLevels = () => {
-          if (!analyserRef.current || !isListening) {
+          if (!analyserRef.current || !isListening)
             return;
-          }
 
           const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
           analyserRef.current.getByteFrequencyData(dataArray);
 
-          // Convert to percentage and take subset for visualization (40 bars)
           const levels = Array.from(dataArray)
             .slice(0, 40)
             .map(value => (value / 255) * 100);
@@ -235,7 +232,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     startAudioVisualization();
 
     return () => {
-      // Cleanup audio visualization
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
@@ -270,20 +266,16 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     if (!recognitionRef.current || !isListening)
       return;
 
-    // Stop listening flag before calling stop()
     isListeningRef.current = false;
 
     try {
-      // Browser will automatically finalize any pending interim results
       recognitionRef.current.stop();
     } catch (err) {
       console.error('[Speech Recognition] Error stopping:', err);
     }
 
-    // Clear interim display
     setInterimTranscript('');
 
-    // Cleanup audio visualization
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;

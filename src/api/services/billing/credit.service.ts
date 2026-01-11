@@ -50,7 +50,7 @@ const _CreditBalanceInfoSchema = z.object({
   nextRefillAt: z.date().nullable(),
 });
 
-type CreditBalanceInfo = z.infer<typeof _CreditBalanceInfoSchema>;
+export type CreditBalanceInfo = z.infer<typeof _CreditBalanceInfoSchema>;
 
 const _TokenUsageSchema = z.object({
   inputTokens: z.number(),
@@ -61,22 +61,27 @@ const _TokenUsageSchema = z.object({
   modelId: z.string(),
 });
 
-type TokenUsage = z.infer<typeof _TokenUsageSchema>;
+export type TokenUsage = z.infer<typeof _TokenUsageSchema>;
 
 const _EnforceCreditsOptionsSchema = z.object({
   skipRoundCheck: z.boolean().optional(),
 });
 
-type EnforceCreditsOptions = z.infer<typeof _EnforceCreditsOptionsSchema>;
+export type EnforceCreditsOptions = z.infer<typeof _EnforceCreditsOptionsSchema>;
 
 export async function ensureUserCreditRecord(userId: string): Promise<UserCreditBalance> {
   const db = await getDbAsync();
 
+  // ✅ PERF: Add KV cache to credit balance lookup (60s TTL)
   const existingResults = await db
     .select()
     .from(tables.userCreditBalance)
     .where(eq(tables.userCreditBalance.userId, userId))
-    .limit(1);
+    .limit(1)
+    .$withCache({
+      config: { ex: 60 }, // 1 minute cache - balance changes frequently
+      tag: `credit-balance-${userId}`,
+    });
 
   if (existingResults[0]) {
     return existingResults[0];
@@ -212,28 +217,24 @@ export async function enforceCredits(
 async function checkHasActiveSubscription(userId: string): Promise<boolean> {
   const db = await getDbAsync();
 
-  const customerResults = await db
+  const results = await db
     .select()
     .from(tables.stripeCustomer)
-    .where(eq(tables.stripeCustomer.userId, userId))
-    .limit(1);
-
-  const customer = customerResults[0];
-  if (!customer)
-    return false;
-
-  const subscriptionResults = await db
-    .select()
-    .from(tables.stripeSubscription)
-    .where(
+    .innerJoin(
+      tables.stripeSubscription,
       and(
-        eq(tables.stripeSubscription.customerId, customer.id),
+        eq(tables.stripeSubscription.customerId, tables.stripeCustomer.id),
         eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
       ),
     )
-    .limit(1);
+    .where(eq(tables.stripeCustomer.userId, userId))
+    .limit(1)
+    .$withCache({
+      config: { ex: 120 },
+      tag: `has-active-sub-${userId}`,
+    });
 
-  return subscriptionResults.length > 0;
+  return results.length > 0;
 }
 
 export async function checkFreeUserHasCreatedThread(userId: string): Promise<boolean> {
@@ -324,18 +325,12 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
     return false;
   }
 
-  // For multi-participant threads (2+), the moderator must also complete
-  // Moderator provides the round summary - round isn't complete until this finishes
-  // Single-participant threads don't have a moderator, so they complete after participant response
   if (enabledParticipants.length >= 2) {
-    // Moderator message ID format: {threadId}_r{roundNumber}_moderator
     const moderatorMessageId = `${thread.id}_r0_moderator`;
     const moderatorMessage = await db.query.chatMessage.findFirst({
       where: eq(tables.chatMessage.id, moderatorMessageId),
     });
 
-    // Moderator message must exist AND have non-empty content (parts array with text)
-    // Empty parts = moderator created but not streamed yet
     if (!moderatorMessage) {
       return false;
     }
@@ -343,17 +338,15 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
     const hasModeContent = Array.isArray(moderatorMessage.parts)
       && moderatorMessage.parts.length > 0
       && moderatorMessage.parts.some((part) => {
-        // Use Zod safeParse for type-safe validation without casting
         const result = DbTextPartSchema.safeParse(part);
         return result.success && result.data.text.trim().length > 0;
       });
 
     if (!hasModeContent) {
-      return false; // Moderator message exists but hasn't streamed content yet
+      return false;
     }
   }
 
-  // Round is complete when ALL enabled participants AND moderator (if applicable) have finished
   return true;
 }
 
@@ -445,15 +438,15 @@ export async function reserveCredits(
     )
     .returning();
 
-  if (!result[0]) {
-    return reserveCredits(userId, streamId, estimatedCredits);
+  if (result.length === 0) {
+    return reserveCredits(userId, streamId, estimatedCredits, options);
   }
 
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.RESERVATION,
     amount: -estimatedCredits, // Negative to show credits are held
-    balanceAfter: result[0].balance,
+    balanceAfter: result[0]!.balance,
     streamId,
     description: `Reserved ${estimatedCredits} credits for streaming`,
   });
@@ -503,7 +496,7 @@ export async function finalizeCredits(
     )
     .returning();
 
-  if (!result[0]) {
+  if (result.length === 0) {
     return finalizeCredits(userId, streamId, actualUsage);
   }
 
@@ -511,7 +504,7 @@ export async function finalizeCredits(
     userId,
     type: CreditTransactionTypes.DEDUCTION,
     amount: -weightedCredits,
-    balanceAfter: result[0].balance,
+    balanceAfter: result[0]!.balance,
     inputTokens: actualUsage.inputTokens,
     outputTokens: actualUsage.outputTokens,
     totalTokens,
@@ -559,7 +552,7 @@ export async function releaseReservation(
     )
     .returning();
 
-  if (!result[0]) {
+  if (result.length === 0) {
     return releaseReservation(userId, streamId, reservedAmount);
   }
 
@@ -567,7 +560,7 @@ export async function releaseReservation(
     userId,
     type: CreditTransactionTypes.RELEASE,
     amount: reservedAmount,
-    balanceAfter: result[0].balance,
+    balanceAfter: result[0]!.balance,
     streamId,
     description: `Released ${reservedAmount} reserved credits (cancelled/error)`,
   });
@@ -576,7 +569,7 @@ export async function releaseReservation(
 export async function grantCredits(
   userId: string,
   amount: number,
-  type: 'credit_grant' | 'monthly_refill' | 'purchase',
+  type: CreditGrantType,
   description?: string,
 ): Promise<void> {
   const db = await getDbAsync();
@@ -598,7 +591,7 @@ export async function grantCredits(
     )
     .returning();
 
-  if (!result[0]) {
+  if (result.length === 0) {
     return grantCredits(userId, amount, type, description);
   }
 
@@ -612,7 +605,7 @@ export async function grantCredits(
     userId,
     type: getGrantTransactionType(type),
     amount,
-    balanceAfter: result[0].balance,
+    balanceAfter: result[0]!.balance,
     action: actionMap[type],
     description: description || `Granted ${amount} credits`,
   });
@@ -654,7 +647,7 @@ export async function deductCreditsForAction(
     )
     .returning();
 
-  if (!result[0]) {
+  if (result.length === 0) {
     return deductCreditsForAction(userId, action, context);
   }
 
@@ -662,7 +655,7 @@ export async function deductCreditsForAction(
     userId,
     type: CreditTransactionTypes.DEDUCTION,
     amount: -credits,
-    balanceAfter: result[0].balance,
+    balanceAfter: result[0]!.balance,
     creditsUsed: credits,
     threadId: context?.threadId,
     action: ACTION_COST_TO_CREDIT_ACTION_MAP[action],
@@ -705,7 +698,7 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
     )
     .returning();
 
-  if (!result[0]) {
+  if (result.length === 0) {
     return processMonthlyRefill(userId);
   }
 
@@ -713,7 +706,7 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
     userId,
     type: CreditTransactionTypes.MONTHLY_REFILL,
     amount: planConfig.monthlyCredits,
-    balanceAfter: result[0].balance,
+    balanceAfter: result[0]!.balance,
     action: CreditActions.MONTHLY_RENEWAL,
     description: `Monthly refill: ${planConfig.monthlyCredits} credits`,
   });
@@ -724,7 +717,6 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
 
   const record = await ensureUserCreditRecord(userId);
 
-  // Skip if already on paid plan (idempotent)
   if (record.planType === PlanTypes.PAID) {
     return;
   }
@@ -738,7 +730,6 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     .update(tables.userCreditBalance)
     .set({
       planType: PlanTypes.PAID,
-      // SET to monthlyCredits (not ADD) - everyone gets same amount on upgrade
       balance: planConfig.monthlyCredits,
       monthlyCredits: planConfig.monthlyCredits,
       lastRefillAt: now,
@@ -754,7 +745,7 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     )
     .returning();
 
-  if (!result[0]) {
+  if (result.length === 0) {
     return upgradeToPaidPlan(userId);
   }
 
@@ -762,30 +753,34 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     userId,
     type: CreditTransactionTypes.CREDIT_GRANT,
     amount: planConfig.monthlyCredits,
-    balanceAfter: result[0].balance,
+    balanceAfter: result[0]!.balance,
     action: CreditActions.MONTHLY_RENEWAL,
     description: `Upgraded to Pro plan: ${planConfig.monthlyCredits} credits`,
   });
 }
 
-async function recordTransaction(record: {
-  userId: string;
-  type: CreditTransactionType;
-  amount: number;
-  balanceAfter: number;
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-  creditsUsed?: number;
-  threadId?: string;
-  messageId?: string;
-  streamId?: string;
-  action?: CreditAction;
-  modelId?: string;
-  modelPricingInputPerMillion?: number;
-  modelPricingOutputPerMillion?: number;
-  description?: string;
-}): Promise<void> {
+const _RecordTransactionSchema = z.object({
+  userId: z.string(),
+  type: z.custom<CreditTransactionType>(),
+  amount: z.number(),
+  balanceAfter: z.number(),
+  inputTokens: z.number().optional(),
+  outputTokens: z.number().optional(),
+  totalTokens: z.number().optional(),
+  creditsUsed: z.number().optional(),
+  threadId: z.string().optional(),
+  messageId: z.string().optional(),
+  streamId: z.string().optional(),
+  action: z.custom<CreditAction>().optional(),
+  modelId: z.string().optional(),
+  modelPricingInputPerMillion: z.number().optional(),
+  modelPricingOutputPerMillion: z.number().optional(),
+  description: z.string().optional(),
+});
+
+export type RecordTransactionParams = z.infer<typeof _RecordTransactionSchema>;
+
+async function recordTransaction(record: RecordTransactionParams): Promise<void> {
   const db = await getDbAsync();
 
   await db.insert(tables.creditTransaction).values({
@@ -810,10 +805,12 @@ async function recordTransaction(record: {
   });
 }
 
+export type CreditTransactionSelect = typeof tables.creditTransaction.$inferSelect;
+
 export async function getUserTransactionHistory(
   userId: string,
   options: { limit?: number; offset?: number; type?: CreditTransactionType } = {},
-): Promise<{ transactions: Array<typeof tables.creditTransaction.$inferSelect>; total: number }> {
+): Promise<{ transactions: CreditTransactionSelect[]; total: number }> {
   const db = await getDbAsync();
   const { limit = 50, offset = 0, type } = options;
 

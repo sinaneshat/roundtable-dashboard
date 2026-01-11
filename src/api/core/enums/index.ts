@@ -118,6 +118,8 @@ export {
   // Subscription plan type (billing cycle)
   DEFAULT_SUBSCRIPTION_PLAN_TYPE,
   DEFAULT_SUBSCRIPTION_TIER,
+  // Synced subscription status
+  DEFAULT_SYNCED_SUBSCRIPTION_STATUS,
   // Trial state
   DEFAULT_TRIAL_STATE,
   DEFAULT_UI_BILLING_INTERVAL,
@@ -125,6 +127,7 @@ export {
   getGrantTransactionType,
   getModelTierMultiplier,
   getUsageStatusFromPercentage,
+  hasSubscription,
   INVOICE_STATUSES,
   type InvoiceStatus,
   InvoiceStatuses,
@@ -137,6 +140,7 @@ export {
   isPlanType,
   isPurchaseType,
   isSubscriptionPlanType,
+  isSyncedSubscriptionStatus,
   isUIBillingInterval,
   isValidTrialState,
   MODEL_PRICING_TIERS,
@@ -186,6 +190,10 @@ export {
   type SubscriptionTier,
   SubscriptionTiers,
   SubscriptionTierSchema,
+  SYNCED_SUBSCRIPTION_STATUSES,
+  type SyncedSubscriptionStatus,
+  SyncedSubscriptionStatuses,
+  SyncedSubscriptionStatusSchema,
   TRIAL_STATES,
   type TrialState,
   TrialStates,

@@ -6,9 +6,10 @@ import { createHandler, IdParamSchema, Responses, ThreadRoundParamSchema } from 
 import { MessagePartTypes } from '@/api/core/enums';
 import { generateSignedDownloadPath } from '@/api/services/uploads';
 import type { ApiEnv } from '@/api/types';
-import { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { getDbAsync } from '@/db';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
+import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 
 import type {
   getThreadChangelogRoute,
@@ -28,7 +29,8 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     const db = await getDbAsync();
     await verifyThreadOwnership(threadId, user.id, db);
 
-    // Direct database query for thread messages with uploads
+    // Note: Relational queries (db.query.*) don't support $withCache
+    // Use select builder pattern for cacheable queries
     const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [
@@ -46,36 +48,44 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
       },
     });
 
-    // Transform messages to include upload attachments as file parts with signed URLs
     const baseUrl = new URL(c.req.url).origin;
     const messagesWithAttachments = await Promise.all(
       messages.map(async (message) => {
-        // Generate signed URLs for each attachment
-        const attachmentParts: ExtendedFilePart[] = await Promise.all(
-          (message.messageUploads || []).map(async (mu): Promise<ExtendedFilePart> => {
+        const attachmentParts = await Promise.all(
+          (message.messageUploads || []).map(async (mu) => {
             const signedPath = await generateSignedDownloadPath(c, {
               uploadId: mu.upload.id,
               userId: user.id,
               threadId,
-              expirationMs: 60 * 60 * 1000, // 1 hour
+              expirationMs: 60 * 60 * 1000,
             });
 
-            return {
+            const filePartData: ExtendedFilePart = {
               type: MessagePartTypes.FILE,
               url: `${baseUrl}${signedPath}`,
               filename: mu.upload.filename,
               mediaType: mu.upload.mimeType,
-              uploadId: mu.upload.id, // ✅ ExtendedFilePart: uploadId for participant 1+ file loading
+              uploadId: mu.upload.id,
             };
+
+            const parseResult = ExtendedFilePartSchema.safeParse(filePartData);
+            if (!parseResult.success) {
+              throw new Error(
+                `Invalid file part for upload ${mu.upload.id}: ${parseResult.error.message}`,
+              );
+            }
+
+            return parseResult.data;
           }),
         );
 
-        // Filter out existing file parts to prevent duplication, then add new signed ones
         const existingParts = message.parts || [];
-        const nonFileParts = existingParts.filter(p => p.type !== MessagePartTypes.FILE);
+        const nonFileParts = existingParts.filter(
+          (p): p is Exclude<typeof p, { type: 'file' }> =>
+            typeof p === 'object' && p !== null && 'type' in p && p.type !== MessagePartTypes.FILE,
+        );
         const combinedParts = [...nonFileParts, ...attachmentParts];
 
-        // Return message without the messageUploads relation (transformed to parts)
         const { messageUploads: _, ...messageWithoutUploads } = message;
         return {
           ...messageWithoutUploads,

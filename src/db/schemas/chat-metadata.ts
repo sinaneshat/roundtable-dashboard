@@ -82,6 +82,36 @@ export const DbReasoningPartSchema = z.object({
 export type DbReasoningPart = z.infer<typeof DbReasoningPartSchema>;
 
 /**
+ * Tool Call Arguments Schema
+ * Type-safe wrapper for tool call arguments (JSON object)
+ */
+export const DbToolCallArgsSchema = z.record(z.string(), z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+]));
+
+export type DbToolCallArgs = z.infer<typeof DbToolCallArgsSchema>;
+
+/**
+ * Tool Result Value Schema
+ * Type-safe wrapper for tool execution results (JSON-serializable)
+ */
+export const DbToolResultValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+]);
+
+export type DbToolResultValue = z.infer<typeof DbToolResultValueSchema>;
+
+/**
  * Tool Call Part Schema
  * Function invocation by AI model
  */
@@ -89,7 +119,7 @@ export const DbToolCallPartSchema = z.object({
   type: z.literal('tool-call'),
   toolCallId: z.string(),
   toolName: z.string(),
-  args: z.unknown(),
+  args: DbToolCallArgsSchema,
 });
 
 export type DbToolCallPart = z.infer<typeof DbToolCallPartSchema>;
@@ -102,7 +132,7 @@ export const DbToolResultPartSchema = z.object({
   type: z.literal('tool-result'),
   toolCallId: z.string(),
   toolName: z.string(),
-  result: z.unknown(),
+  result: DbToolResultValueSchema,
   isError: z.boolean().optional(),
 });
 
@@ -307,7 +337,12 @@ export const DbAssistantMessageMetadataSchema = z.object({
 
   // Optional backend/debugging fields
   providerMessage: z.string().optional(),
-  openRouterError: z.record(z.string(), z.unknown()).optional(),
+  openRouterError: z.record(z.string(), z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+  ])).optional(),
   retryAttempts: z.number().int().nonnegative().optional(),
   isEmptyResponse: z.boolean().optional(),
   statusCode: z.number().int().optional(),
