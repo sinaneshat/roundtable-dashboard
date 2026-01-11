@@ -23,10 +23,50 @@ import onError from 'stoker/middlewares/on-error';
 
 import type { ApiEnv } from '@/api/types';
 
+// ============================================================================
+// DATABASE ERROR SANITIZATION
+// ============================================================================
+
+/**
+ * Checks if an error message contains raw SQL or database internals.
+ * These patterns indicate D1/Drizzle errors that shouldn't be exposed to clients.
+ */
+function isDatabaseError(message: string): boolean {
+  const sqlPatterns = [
+    'Failed query',
+    'UPDATE "',
+    'INSERT INTO',
+    'SELECT ',
+    'DELETE FROM',
+    'RETURNING ',
+    'params:',
+    'user_credit_balance',
+    'D1_ERROR',
+    'SQLITE_',
+    'drizzle',
+  ];
+
+  const lowerMessage = message.toLowerCase();
+  return sqlPatterns.some(pattern => lowerMessage.includes(pattern.toLowerCase()));
+}
+
+/**
+ * Creates a sanitized error that doesn't expose database internals.
+ * Logs the original error for debugging but returns a safe message to clients.
+ */
+function createSanitizedDatabaseError(originalError: Error): Error {
+  const sanitizedError = new Error('A database operation failed. Please try again later.');
+  sanitizedError.name = 'DatabaseError';
+  // Preserve stack for internal logging but use sanitized message
+  sanitizedError.stack = originalError.stack;
+  return sanitizedError;
+}
+
 /**
  * Global error logging middleware
  *
  * Logs ALL errors as structured JSON for Cloudflare Workers Logs indexing.
+ * Sanitizes database errors to prevent SQL leakage to clients.
  * Then delegates to Stoker's onError for response formatting.
  *
  * Logged Fields (auto-indexed by Cloudflare):
@@ -64,6 +104,7 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
   const cf = c.req.raw.cf;
 
   // Build structured error log (Cloudflare auto-indexes JSON fields)
+  // Always log the ORIGINAL error message for debugging (never sanitized)
   const errorLog = {
     log_type: 'api_error',
     timestamp: new Date().toISOString(),
@@ -72,7 +113,7 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
     status,
     error_type: errorType,
     error_name: err.name,
-    error_message: err.message,
+    error_message: err.message, // Original message for debugging
     error_stack: err.stack,
     // Cloudflare context
     request_id: cfRay,
@@ -87,6 +128,21 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
   // Cloudflare automatically indexes all JSON fields for filtering
   console.error(errorLog);
 
+  // Sanitize database errors before sending to client
+  // This prevents SQL queries and table names from leaking
+  let errorToReturn = err;
+  if (err instanceof Error && isDatabaseError(err.message)) {
+    errorToReturn = createSanitizedDatabaseError(err);
+    // Log that we sanitized this error for debugging
+    console.error({
+      log_type: 'error_sanitized',
+      timestamp: new Date().toISOString(),
+      request_id: cfRay,
+      original_message: err.message,
+      sanitized_message: errorToReturn.message,
+    });
+  }
+
   // Delegate to Stoker's onError for response formatting
-  return onError(err, c);
+  return onError(errorToReturn, c);
 };

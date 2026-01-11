@@ -42,6 +42,86 @@ import {
   getPlanConfig,
 } from './product-logic.service';
 
+// ============================================================================
+// OPTIMISTIC LOCKING CONFIGURATION
+// ============================================================================
+
+const MAX_OPTIMISTIC_LOCK_RETRIES = 5;
+
+/**
+ * Wraps a database operation with optimistic lock retry logic.
+ * Prevents infinite recursion and provides proper error handling.
+ *
+ * @param operation - Async function that performs the DB update and returns result array
+ * @param onRetry - Function to call on retry (for re-fetching fresh version)
+ * @param context - Error context for logging
+ * @param context.operation - Operation name for error messages
+ * @param context.userId - User ID for error context
+ * @param retryCount - Current retry count (internal)
+ */
+async function withOptimisticLockRetry<T>(
+  operation: () => Promise<T[]>,
+  onRetry: () => Promise<void>,
+  context: { operation: string; userId: string },
+  retryCount = 0,
+): Promise<T> {
+  if (retryCount >= MAX_OPTIMISTIC_LOCK_RETRIES) {
+    const errorContext: ErrorContext = {
+      errorType: ErrorContextTypes.DATABASE,
+      operation: DatabaseOperations.UPDATE,
+      table: 'user_credit_balance',
+      userId: context.userId,
+    };
+    throw createError.conflict(
+      `Credit operation failed after ${MAX_OPTIMISTIC_LOCK_RETRIES} retries due to concurrent updates. Please try again.`,
+      errorContext,
+    );
+  }
+
+  try {
+    const result = await operation();
+
+    if (result.length === 0) {
+      // Optimistic lock failure - version mismatch, retry with fresh data
+      await onRetry();
+      return withOptimisticLockRetry(operation, onRetry, context, retryCount + 1);
+    }
+
+    return result[0]!;
+  } catch (error) {
+    // Sanitize database errors - don't expose raw SQL to clients
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Check if this is a D1/Drizzle error (contains "Failed query" or SQL)
+    if (
+      errorMessage.includes('Failed query')
+      || errorMessage.includes('UPDATE')
+      || errorMessage.includes('INSERT')
+      || errorMessage.includes('SELECT')
+    ) {
+      console.error(`[CreditService] Database error in ${context.operation}:`, {
+        userId: context.userId,
+        error: errorMessage,
+        retryCount,
+      });
+
+      const errorContext: ErrorContext = {
+        errorType: ErrorContextTypes.DATABASE,
+        operation: DatabaseOperations.UPDATE,
+        table: 'user_credit_balance',
+        userId: context.userId,
+      };
+      throw createError.database(
+        `Credit operation failed. Please try again later.`,
+        errorContext,
+      );
+    }
+
+    // Re-throw non-database errors as-is
+    throw error;
+  }
+}
+
 const _CreditBalanceInfoSchema = z.object({
   balance: z.number(),
   reserved: z.number(),
@@ -422,32 +502,37 @@ export async function reserveCredits(
 
   await enforceCredits(userId, estimatedCredits, options);
 
-  const record = await ensureUserCreditRecord(userId);
+  // Mutable ref to track current record for retries
+  let currentRecord = await ensureUserCreditRecord(userId);
 
-  const result = await db
-    .update(tables.userCreditBalance)
-    .set({
-      reservedCredits: sql`${tables.userCreditBalance.reservedCredits} + ${estimatedCredits}`,
-      version: sql`${tables.userCreditBalance.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(tables.userCreditBalance.userId, userId),
-        eq(tables.userCreditBalance.version, record.version),
-      ),
-    )
-    .returning();
-
-  if (result.length === 0) {
-    return reserveCredits(userId, streamId, estimatedCredits, options);
-  }
+  const updatedRecord = await withOptimisticLockRetry(
+    () =>
+      db
+        .update(tables.userCreditBalance)
+        .set({
+          reservedCredits: sql`${tables.userCreditBalance.reservedCredits} + ${estimatedCredits}`,
+          version: sql`${tables.userCreditBalance.version} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(tables.userCreditBalance.userId, userId),
+            eq(tables.userCreditBalance.version, currentRecord.version),
+          ),
+        )
+        .returning(),
+    async () => {
+      // Re-fetch fresh record on retry
+      currentRecord = await ensureUserCreditRecord(userId);
+    },
+    { operation: 'reserveCredits', userId },
+  );
 
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.RESERVATION,
     amount: -estimatedCredits, // Negative to show credits are held
-    balanceAfter: result[0]!.balance,
+    balanceAfter: updatedRecord.balance,
     streamId,
     description: `Reserved ${estimatedCredits} credits for streaming`,
   });
@@ -460,7 +545,8 @@ export async function finalizeCredits(
 ): Promise<void> {
   const db = await getDbAsync();
 
-  const record = await ensureUserCreditRecord(userId);
+  // Mutable ref to track current record for retries
+  let currentRecord = await ensureUserCreditRecord(userId);
 
   // Calculate weighted credits based on model pricing tier
   const weightedCredits = calculateWeightedCredits(
@@ -477,35 +563,39 @@ export async function finalizeCredits(
   const inputPricingMicro = model ? Math.round(Number.parseFloat(model.pricing.prompt) * 1_000_000 * 1_000_000) : undefined;
   const outputPricingMicro = model ? Math.round(Number.parseFloat(model.pricing.completion) * 1_000_000 * 1_000_000) : undefined;
 
-  const result = await db
-    .update(tables.userCreditBalance)
-    .set({
-      balance: sql`${tables.userCreditBalance.balance} - ${weightedCredits}`,
-      reservedCredits: sql`CASE
-        WHEN ${tables.userCreditBalance.reservedCredits} >= ${weightedCredits}
-        THEN ${tables.userCreditBalance.reservedCredits} - ${weightedCredits}
-        ELSE 0
-      END`,
-      version: sql`${tables.userCreditBalance.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(tables.userCreditBalance.userId, userId),
-        eq(tables.userCreditBalance.version, record.version),
-      ),
-    )
-    .returning();
-
-  if (result.length === 0) {
-    return finalizeCredits(userId, streamId, actualUsage);
-  }
+  const updatedRecord = await withOptimisticLockRetry(
+    () =>
+      db
+        .update(tables.userCreditBalance)
+        .set({
+          balance: sql`${tables.userCreditBalance.balance} - ${weightedCredits}`,
+          reservedCredits: sql`CASE
+            WHEN ${tables.userCreditBalance.reservedCredits} >= ${weightedCredits}
+            THEN ${tables.userCreditBalance.reservedCredits} - ${weightedCredits}
+            ELSE 0
+          END`,
+          version: sql`${tables.userCreditBalance.version} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(tables.userCreditBalance.userId, userId),
+            eq(tables.userCreditBalance.version, currentRecord.version),
+          ),
+        )
+        .returning(),
+    async () => {
+      // Re-fetch fresh record on retry
+      currentRecord = await ensureUserCreditRecord(userId);
+    },
+    { operation: 'finalizeCredits', userId },
+  );
 
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.DEDUCTION,
     amount: -weightedCredits,
-    balanceAfter: result[0]!.balance,
+    balanceAfter: updatedRecord.balance,
     inputTokens: actualUsage.inputTokens,
     outputTokens: actualUsage.outputTokens,
     totalTokens,
@@ -528,40 +618,45 @@ export async function releaseReservation(
 ): Promise<void> {
   const db = await getDbAsync();
 
-  const record = await ensureUserCreditRecord(userId);
-
   if (reservedAmount === undefined) {
     return;
   }
 
-  const result = await db
-    .update(tables.userCreditBalance)
-    .set({
-      reservedCredits: sql`CASE
-        WHEN ${tables.userCreditBalance.reservedCredits} >= ${reservedAmount}
-        THEN ${tables.userCreditBalance.reservedCredits} - ${reservedAmount}
-        ELSE 0
-      END`,
-      version: sql`${tables.userCreditBalance.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(tables.userCreditBalance.userId, userId),
-        eq(tables.userCreditBalance.version, record.version),
-      ),
-    )
-    .returning();
+  // Mutable ref to track current record for retries
+  let currentRecord = await ensureUserCreditRecord(userId);
 
-  if (result.length === 0) {
-    return releaseReservation(userId, streamId, reservedAmount);
-  }
+  const updatedRecord = await withOptimisticLockRetry(
+    () =>
+      db
+        .update(tables.userCreditBalance)
+        .set({
+          reservedCredits: sql`CASE
+            WHEN ${tables.userCreditBalance.reservedCredits} >= ${reservedAmount}
+            THEN ${tables.userCreditBalance.reservedCredits} - ${reservedAmount}
+            ELSE 0
+          END`,
+          version: sql`${tables.userCreditBalance.version} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(tables.userCreditBalance.userId, userId),
+            eq(tables.userCreditBalance.version, currentRecord.version),
+          ),
+        )
+        .returning(),
+    async () => {
+      // Re-fetch fresh record on retry
+      currentRecord = await ensureUserCreditRecord(userId);
+    },
+    { operation: 'releaseReservation', userId },
+  );
 
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.RELEASE,
     amount: reservedAmount,
-    balanceAfter: result[0]!.balance,
+    balanceAfter: updatedRecord.balance,
     streamId,
     description: `Released ${reservedAmount} reserved credits (cancelled/error)`,
   });
@@ -575,26 +670,31 @@ export async function grantCredits(
 ): Promise<void> {
   const db = await getDbAsync();
 
-  const record = await ensureUserCreditRecord(userId);
+  // Mutable ref to track current record for retries
+  let currentRecord = await ensureUserCreditRecord(userId);
 
-  const result = await db
-    .update(tables.userCreditBalance)
-    .set({
-      balance: sql`${tables.userCreditBalance.balance} + ${amount}`,
-      version: sql`${tables.userCreditBalance.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(tables.userCreditBalance.userId, userId),
-        eq(tables.userCreditBalance.version, record.version),
-      ),
-    )
-    .returning();
-
-  if (result.length === 0) {
-    return grantCredits(userId, amount, type, description);
-  }
+  const updatedRecord = await withOptimisticLockRetry(
+    () =>
+      db
+        .update(tables.userCreditBalance)
+        .set({
+          balance: sql`${tables.userCreditBalance.balance} + ${amount}`,
+          version: sql`${tables.userCreditBalance.version} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(tables.userCreditBalance.userId, userId),
+            eq(tables.userCreditBalance.version, currentRecord.version),
+          ),
+        )
+        .returning(),
+    async () => {
+      // Re-fetch fresh record on retry
+      currentRecord = await ensureUserCreditRecord(userId);
+    },
+    { operation: 'grantCredits', userId },
+  );
 
   const actionMap: Record<CreditGrantType, CreditAction> = {
     credit_grant: CreditActions.SIGNUP_BONUS,
@@ -606,7 +706,7 @@ export async function grantCredits(
     userId,
     type: getGrantTransactionType(type),
     amount,
-    balanceAfter: result[0]!.balance,
+    balanceAfter: updatedRecord.balance,
     action: actionMap[type],
     description: description || `Granted ${amount} credits`,
   });
@@ -631,32 +731,38 @@ export async function deductCreditsForAction(
   await enforceCredits(userId, credits);
 
   const db = await getDbAsync();
-  const record = await ensureUserCreditRecord(userId);
 
-  const result = await db
-    .update(tables.userCreditBalance)
-    .set({
-      balance: sql`${tables.userCreditBalance.balance} - ${credits}`,
-      version: sql`${tables.userCreditBalance.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(tables.userCreditBalance.userId, userId),
-        eq(tables.userCreditBalance.version, record.version),
-      ),
-    )
-    .returning();
+  // Mutable ref to track current record for retries
+  let currentRecord = await ensureUserCreditRecord(userId);
 
-  if (result.length === 0) {
-    return deductCreditsForAction(userId, action, context);
-  }
+  const updatedRecord = await withOptimisticLockRetry(
+    () =>
+      db
+        .update(tables.userCreditBalance)
+        .set({
+          balance: sql`${tables.userCreditBalance.balance} - ${credits}`,
+          version: sql`${tables.userCreditBalance.version} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(tables.userCreditBalance.userId, userId),
+            eq(tables.userCreditBalance.version, currentRecord.version),
+          ),
+        )
+        .returning(),
+    async () => {
+      // Re-fetch fresh record on retry
+      currentRecord = await ensureUserCreditRecord(userId);
+    },
+    { operation: 'deductCreditsForAction', userId },
+  );
 
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.DEDUCTION,
     amount: -credits,
-    balanceAfter: result[0]!.balance,
+    balanceAfter: updatedRecord.balance,
     creditsUsed: credits,
     threadId: context?.threadId,
     action: ACTION_COST_TO_CREDIT_ACTION_MAP[action],
@@ -667,14 +773,15 @@ export async function deductCreditsForAction(
 export async function processMonthlyRefill(userId: string): Promise<void> {
   const db = await getDbAsync();
 
-  const record = await ensureUserCreditRecord(userId);
+  // Mutable ref to track current record for retries
+  let currentRecord = await ensureUserCreditRecord(userId);
 
-  if (record.planType !== PlanTypes.PAID) {
+  if (currentRecord.planType !== PlanTypes.PAID) {
     return;
   }
 
   const now = new Date();
-  if (record.nextRefillAt && record.nextRefillAt > now) {
+  if (currentRecord.nextRefillAt && currentRecord.nextRefillAt > now) {
     return;
   }
 
@@ -682,32 +789,36 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
 
-  const result = await db
-    .update(tables.userCreditBalance)
-    .set({
-      balance: sql`${tables.userCreditBalance.balance} + ${planConfig.monthlyCredits}`,
-      lastRefillAt: now,
-      nextRefillAt: nextRefill,
-      version: sql`${tables.userCreditBalance.version} + 1`,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(tables.userCreditBalance.userId, userId),
-        eq(tables.userCreditBalance.version, record.version),
-      ),
-    )
-    .returning();
-
-  if (result.length === 0) {
-    return processMonthlyRefill(userId);
-  }
+  const updatedRecord = await withOptimisticLockRetry(
+    () =>
+      db
+        .update(tables.userCreditBalance)
+        .set({
+          balance: sql`${tables.userCreditBalance.balance} + ${planConfig.monthlyCredits}`,
+          lastRefillAt: now,
+          nextRefillAt: nextRefill,
+          version: sql`${tables.userCreditBalance.version} + 1`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(tables.userCreditBalance.userId, userId),
+            eq(tables.userCreditBalance.version, currentRecord.version),
+          ),
+        )
+        .returning(),
+    async () => {
+      // Re-fetch fresh record on retry
+      currentRecord = await ensureUserCreditRecord(userId);
+    },
+    { operation: 'processMonthlyRefill', userId },
+  );
 
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.MONTHLY_REFILL,
     amount: planConfig.monthlyCredits,
-    balanceAfter: result[0]!.balance,
+    balanceAfter: updatedRecord.balance,
     action: CreditActions.MONTHLY_RENEWAL,
     description: `Monthly refill: ${planConfig.monthlyCredits} credits`,
   });
@@ -716,9 +827,10 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
 export async function upgradeToPaidPlan(userId: string): Promise<void> {
   const db = await getDbAsync();
 
-  const record = await ensureUserCreditRecord(userId);
+  // Mutable ref to track current record for retries
+  let currentRecord = await ensureUserCreditRecord(userId);
 
-  if (record.planType === PlanTypes.PAID) {
+  if (currentRecord.planType === PlanTypes.PAID) {
     return;
   }
 
@@ -727,34 +839,38 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
 
-  const result = await db
-    .update(tables.userCreditBalance)
-    .set({
-      planType: PlanTypes.PAID,
-      balance: planConfig.monthlyCredits,
-      monthlyCredits: planConfig.monthlyCredits,
-      lastRefillAt: now,
-      nextRefillAt: nextRefill,
-      version: sql`${tables.userCreditBalance.version} + 1`,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(tables.userCreditBalance.userId, userId),
-        eq(tables.userCreditBalance.version, record.version),
-      ),
-    )
-    .returning();
-
-  if (result.length === 0) {
-    return upgradeToPaidPlan(userId);
-  }
+  const updatedRecord = await withOptimisticLockRetry(
+    () =>
+      db
+        .update(tables.userCreditBalance)
+        .set({
+          planType: PlanTypes.PAID,
+          balance: planConfig.monthlyCredits,
+          monthlyCredits: planConfig.monthlyCredits,
+          lastRefillAt: now,
+          nextRefillAt: nextRefill,
+          version: sql`${tables.userCreditBalance.version} + 1`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(tables.userCreditBalance.userId, userId),
+            eq(tables.userCreditBalance.version, currentRecord.version),
+          ),
+        )
+        .returning(),
+    async () => {
+      // Re-fetch fresh record on retry
+      currentRecord = await ensureUserCreditRecord(userId);
+    },
+    { operation: 'upgradeToPaidPlan', userId },
+  );
 
   await recordTransaction({
     userId,
     type: CreditTransactionTypes.CREDIT_GRANT,
     amount: planConfig.monthlyCredits,
-    balanceAfter: result[0]!.balance,
+    balanceAfter: updatedRecord.balance,
     action: CreditActions.MONTHLY_RENEWAL,
     description: `Upgraded to Pro plan: ${planConfig.monthlyCredits} credits`,
   });
