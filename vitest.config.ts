@@ -7,31 +7,22 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [tsconfigPaths(), react()],
-  // ✅ FIX: Explicit path resolution for @/api imports in tests
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // ✅ V4: CSS modules configuration removed - use default behavior
-  // Test environment handles CSS imports automatically
   test: {
-    // Environment
     environment: 'jsdom',
     globals: true,
-
-    // Setup files
     setupFiles: ['./vitest.setup.ts'],
 
-    // ✅ FIX: Add server-side deps configuration for CSS imports and next-intl
     server: {
       deps: {
-        // https://github.com/vercel/next.js/issues/77200
-        inline: [/@.*/, 'next-intl'], // Inline scoped packages and next-intl for ESM support
+        inline: [/@.*/, 'next-intl'],
       },
     },
 
-    // Test file patterns
     include: [
       'src/**/__tests__/**/*.{spec,test}.{js,jsx,ts,tsx}',
       'src/**/*.{spec,test}.{js,jsx,ts,tsx}',
@@ -45,13 +36,10 @@ export default defineConfig({
       '**/__tests__/**/test-types.{js,jsx,ts,tsx}',
     ],
 
-    // Coverage configuration
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      include: [
-        'src/**/*.{js,jsx,ts,tsx}',
-      ],
+      include: ['src/**/*.{js,jsx,ts,tsx}'],
       exclude: [
         'src/**/*.d.ts',
         'src/**/*.stories.{js,jsx,ts,tsx}',
@@ -63,37 +51,36 @@ export default defineConfig({
         functions: 80,
         branches: 80,
         statements: 80,
-        autoUpdate: true, // V4: Automatically maintain coverage standards
+        autoUpdate: true,
       },
     },
 
-    // Execution - V4: Pool options moved to top level
-    pool: 'threads',
-    // singleThread is deprecated in v4, use isolate instead
-    isolate: true, // Each test file runs in isolated environment (default)
-    fileParallelism: true, // V4: Run test files in parallel
-    maxWorkers: undefined, // V4: Auto-detect based on CPU cores
+    pool: 'forks',
+    singleFork: false,
+    maxForks: 2,
+    minForks: 1,
+    execArgv: ['--max-old-space-size=2048', '--expose-gc'],
+    isolate: true,
+    fileParallelism: true,
+    disableConsoleIntercept: true,
 
-    // Timeouts
-    testTimeout: 10000,
-    hookTimeout: 10000,
+    testTimeout: 15000,
+    hookTimeout: 15000,
+    teardownTimeout: 30000,
 
-    // Mock behavior
     clearMocks: true,
     restoreMocks: true,
-    unstubGlobals: true, // V4: Auto-restore global stubs between tests
-    unstubEnvs: true, // V4: Auto-restore env stubs between tests
+    unstubGlobals: true,
+    unstubEnvs: true,
 
-    // Reporters - CI-aware configuration
     reporters: process.env.CI ? ['verbose', 'json'] : ['default'],
     outputFile: process.env.CI ? { json: './test-results.json' } : undefined,
 
-    // Test sequencing - V4: Explicit control over test execution order
     sequence: {
-      shuffle: false, // Predictable test order
-      concurrent: false, // Tests run sequentially by default
-      seed: Date.now(), // Randomization seed
-      hooks: 'stack', // Hook execution order (stack vs list)
+      shuffle: false,
+      concurrent: false,
+      seed: Date.now(),
+      hooks: 'stack',
     },
   },
 });

@@ -327,6 +327,7 @@ CREATE INDEX `chat_thread_slug_idx` ON `chat_thread` (`slug`);--> statement-brea
 CREATE INDEX `chat_thread_previous_slug_idx` ON `chat_thread` (`previous_slug`);--> statement-breakpoint
 CREATE INDEX `chat_thread_favorite_idx` ON `chat_thread` (`is_favorite`);--> statement-breakpoint
 CREATE INDEX `chat_thread_public_idx` ON `chat_thread` (`is_public`);--> statement-breakpoint
+CREATE INDEX `chat_thread_public_status_idx` ON `chat_thread` (`is_public`,`status`);--> statement-breakpoint
 CREATE TABLE `chat_thread_changelog` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,

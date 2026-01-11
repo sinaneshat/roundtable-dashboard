@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "110430ec-c66e-4b58-9c95-4e22ce66c103",
+  "id": "eb4cc284-142d-4305-a006-e20d6942acf6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -2283,6 +2283,14 @@
           "name": "chat_thread_public_idx",
           "columns": [
             "is_public"
+          ],
+          "isUnique": false
+        },
+        "chat_thread_public_status_idx": {
+          "name": "chat_thread_public_status_idx",
+          "columns": [
+            "is_public",
+            "status"
           ],
           "isUnique": false
         }
