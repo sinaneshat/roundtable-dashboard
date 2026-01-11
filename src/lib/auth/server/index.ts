@@ -10,6 +10,7 @@ import { apiKey, magicLink } from 'better-auth/plugins';
 import { db } from '@/db';
 import * as authSchema from '@/db/tables/auth';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
+import { isLegacyPaidUser } from '@/lib/config/legacy-users';
 
 import { isAllowedEmailDomain, isRestrictedEnvironment, validateEmailDomain } from '../utils';
 
@@ -145,6 +146,20 @@ function createAuth() {
             // Validate email domain for all user creation methods
             if (user.email && !isAllowedEmailDomain(user.email)) {
               throw new Error('Access restricted: Only @deadpixel.ai email addresses are allowed in preview environments');
+            }
+          },
+          after: async (user) => {
+            // Check if user is a legacy paid user and activate Pro plan
+            if (user.email && isLegacyPaidUser(user.email)) {
+              try {
+                // Dynamically import to avoid circular dependencies
+                const { activateLegacyUserProPlan } = await import('@/api/services/billing/credit.service');
+                await activateLegacyUserProPlan(user.id, user.email);
+                console.error(`[BetterAuth] Activated legacy user Pro plan for ${user.email}`);
+              } catch (error) {
+                // Log error but don't fail signup - user can still use free tier
+                console.error(`[BetterAuth] Failed to activate legacy user Pro plan for ${user.email}:`, error);
+              }
             }
           },
         },
