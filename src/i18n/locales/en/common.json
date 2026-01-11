@@ -141,6 +141,8 @@
       "configurationDesc": "There is a problem with the server configuration. Please contact support if this persists.",
       "default": "Authentication Error",
       "defaultDesc": "An unexpected error occurred during authentication. Please try again.",
+      "domainRestricted": "Email Domain Not Allowed",
+      "domainRestrictedDesc": "Access is restricted to @deadpixel.ai email addresses in this environment. Please sign in with an authorized email.",
       "emailCreateAccount": "Account Creation Error",
       "emailCreateAccountDesc": "Could not create your account. Please try a different email address.",
       "errorCode": "Error code:",
@@ -1469,8 +1471,8 @@
     "upgrade": "Upgrade",
     "upgradeNow": "Upgrade Now",
     "freeTrial": {
-      "availableDescription": "You have 1 free roundtable with 3 AI models. Upgrade to unlock unlimited access.",
-      "usedDescription": "You've used your free trial. Upgrade to Pro for unlimited conversations.",
+      "availableDescription": "Try 1 free round with 3 models. Upgrade for all 10+ models & unlimited chats.",
+      "usedDescription": "Free trial complete. Go Pro for all 10+ models & unlimited conversations.",
       "upgradeToPro": "Upgrade to Pro"
     },
     "scheduledChange": "Plan Change Scheduled",

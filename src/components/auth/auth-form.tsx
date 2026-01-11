@@ -104,11 +104,11 @@ function AuthFormContent() {
             transition={{ duration: 0.15 }}
             className="flex flex-col gap-4 pt-10"
           >
-            <GoogleButton className="w-full h-12" size="lg" />
+            <GoogleButton className="w-full h-14" size="lg" />
             <Button
               variant="outline"
               size="lg"
-              className="w-full h-12"
+              className="w-full h-14"
               onClick={() => setStep(AuthSteps.EMAIL)}
             >
               {t('auth.continueWithEmail')}
@@ -150,12 +150,12 @@ function AuthFormContent() {
                   fieldType="email"
                   required
                   disabled={isLoading.value}
-                  inputClassName="h-12"
+                  inputClassName="!h-14 sm:!h-14 px-6 text-base"
                 />
                 <Button
                   type="submit"
                   size="lg"
-                  className="w-full h-12"
+                  className="w-full h-14"
                   disabled={isLoading.value}
                   loading={isLoading.value}
                 >
@@ -195,7 +195,7 @@ function AuthFormContent() {
             <Button
               variant="outline"
               size="lg"
-              className="w-full h-12"
+              className="w-full h-14"
               onClick={goBack}
             >
               {t('auth.magicLink.useDifferentEmail')}
@@ -212,8 +212,8 @@ export function AuthForm() {
     <Suspense
       fallback={(
         <div className="flex flex-col gap-4">
-          <div className="h-12 w-full animate-pulse rounded-full bg-muted" />
-          <div className="h-12 w-full animate-pulse rounded-full bg-muted" />
+          <div className="h-14 w-full animate-pulse rounded-full bg-muted" />
+          <div className="h-14 w-full animate-pulse rounded-full bg-muted" />
         </div>
       )}
     >

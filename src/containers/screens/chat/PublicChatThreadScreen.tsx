@@ -20,7 +20,8 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const t = useTranslations();
   const tPublic = useTranslations('chat.public');
 
-  const { data: threadData, isLoading: isLoadingThread, error: threadError } = usePublicThreadQuery(slug);
+  // Use hydrated data from server prefetch - no loading flash with proper HydrationBoundary
+  const { data: threadData, isPending } = usePublicThreadQuery(slug);
   const threadResponse = threadData?.success ? threadData.data : null;
   const thread = threadResponse?.thread || null;
 
@@ -41,14 +42,17 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     preSearches,
   });
 
-  const isStoreReady = !isLoadingThread && messages.length > 0;
+  // isPending is false when data is hydrated from server
+  const isStoreReady = !isPending && messages.length > 0;
 
   useChatScroll({
     messages,
     enableNearBottomDetection: true,
   });
 
-  if (isLoadingThread) {
+  // Show loading only when truly pending (no hydrated data)
+  // With proper server prefetch + HydrationBoundary, this should rarely show
+  if (isPending) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4">
@@ -59,7 +63,9 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     );
   }
 
-  if (threadError || !thread) {
+  // Error cases are handled by the server page (redirects to sign-in)
+  // This is a fallback for edge cases
+  if (!thread) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4 max-w-md mx-auto px-4">

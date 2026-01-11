@@ -20,6 +20,11 @@ import { useMemo } from 'react';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { useModelsQuery } from '@/hooks/queries';
 
+type UseModelLookupOptions = {
+  /** Whether to enable the models query (default: true). Set false for read-only/public pages. */
+  enabled?: boolean;
+};
+
 /**
  * Return value from useModelLookup hook
  */
@@ -60,21 +65,15 @@ export type UseModelLookupReturn = {
  * const { allModels, isLoading } = useModelLookup();
  * ```
  */
-export function useModelLookup(): UseModelLookupReturn {
-  // Query models with Infinity staleTime (never refetch)
-  // Models are cached 24h on server, so client can cache indefinitely
-  const { data: modelsData, isLoading } = useModelsQuery();
+export function useModelLookup(options?: UseModelLookupOptions): UseModelLookupReturn {
+  const { data: modelsData, isLoading } = useModelsQuery({ enabled: options?.enabled ?? true });
 
-  // Extract model list and default ID from response
-  // Memoize allModels to prevent new array creation on every render
   const allModels = useMemo(
     () => modelsData?.data?.items || [],
     [modelsData?.data?.items],
   );
   const defaultModelId = modelsData?.data?.default_model_id;
 
-  // Memoized find function (only recreates when model list changes)
-  // This prevents creating new function references on every render
   const findModel = useMemo(() => {
     return (modelId: string | undefined): EnhancedModelResponse | undefined => {
       if (!modelId) {

@@ -1,7 +1,8 @@
 'use client';
+
 import type { ChatStatus } from 'ai';
 import { useTranslations } from 'next-intl';
-import type { FormEvent } from 'react';
+import type { FormEvent, ReactNode, RefObject } from 'react';
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 
 import type { BorderVariant } from '@/api/core/enums';
@@ -12,22 +13,19 @@ import { FreeTrialAlert } from '@/components/chat/free-trial-alert';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization-lazy';
 import { Icons } from '@/components/icons';
-import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import { Button } from '@/components/ui/button';
 import { STRING_LIMITS } from '@/constants';
-import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
+import { useUsageStatsQuery } from '@/hooks/queries';
 import type { PendingAttachment } from '@/hooks/utils';
 import {
   useAutoResizeTextarea,
   useDragDrop,
+  useFreeTrialState,
   useSpeechRecognition,
 } from '@/hooks/utils';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
-
-const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
-const EMPTY_ATTACHMENTS: PendingAttachment[] = [];
 
 type ChatInputProps = {
   value: string;
@@ -38,7 +36,7 @@ type ChatInputProps = {
   placeholder?: string;
   disabled?: boolean;
   autoFocus?: boolean;
-  toolbar?: React.ReactNode;
+  toolbar?: ReactNode;
   participants?: ParticipantConfig[];
   className?: string;
   enableSpeech?: boolean;
@@ -49,7 +47,7 @@ type ChatInputProps = {
   onAddAttachments?: (files: File[]) => void;
   onRemoveAttachment?: (id: string) => void;
   enableAttachments?: boolean;
-  attachmentClickRef?: React.RefObject<(() => void) | null>;
+  attachmentClickRef?: RefObject<(() => void) | null>;
   isUploading?: boolean;
   isHydrating?: boolean;
   isSubmitting?: boolean;
@@ -58,6 +56,9 @@ type ChatInputProps = {
   hideInternalAlerts?: boolean;
   borderVariant?: BorderVariant;
 };
+
+const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
+const EMPTY_ATTACHMENTS: PendingAttachment[] = [];
 
 export const ChatInput = memo(({
   value,
@@ -93,56 +94,21 @@ export const ChatInput = memo(({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isStreaming = status !== AiSdkStatuses.READY;
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
-  const { data: threadsData } = useThreadsQuery();
-  const messages = useChatStore(state => state.messages);
-  const thread = useChatStore(state => state.thread);
-  const hasLocalMessages = messages.length > 0;
-  const isOnOverviewScreen = !thread;
+  const { isFreeUser, hasUsedTrial } = useFreeTrialState();
 
-  const showUpgradePrompt = useMemo(() => {
-    if (!statsData?.success || !statsData.data) {
-      return false;
-    }
-    const { plan } = statsData.data;
-    return plan?.type !== PlanTypes.PAID;
-  }, [statsData]);
-
-  const freeRoundUsedFromApi = useMemo(() => {
-    if (!statsData?.success || !statsData.data) {
-      return false;
-    }
-    return statsData.data.plan?.freeRoundUsed ?? false;
-  }, [statsData]);
-
-  // User is out of credits - this blocks input (PAID users only)
-  // Free users are blocked by freeRoundUsed flag, not credit balance
   const isQuotaExceeded = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
       return false;
     }
 
     const { credits, plan } = statsData.data;
-    // Free users blocked by freeRoundUsed, not credits
     if (plan?.type !== PlanTypes.PAID) {
       return false;
     }
     return credits.available <= 0;
   }, [statsData]);
 
-  // Check if free user has existing threads (blocks new thread creation from overview)
-  const hasExistingThread = useMemo(() => {
-    if (!threadsData?.pages?.[0]?.success) {
-      return false;
-    }
-    const threads = threadsData.pages[0].data?.items ?? [];
-    return threads.length > 0;
-  }, [threadsData]);
-
-  const hasCompletedRound = freeRoundUsedFromApi || hasExistingThread || hasLocalMessages;
-  const isFreeRoundExhausted = showUpgradePrompt && freeRoundUsedFromApi;
-  const isFreeUserWithExistingThread = showUpgradePrompt && hasExistingThread && isOnOverviewScreen;
-  const isFreeUserRoundStarted = showUpgradePrompt && !isOnOverviewScreen && hasLocalMessages;
-  const isFreeUserBlocked = isFreeRoundExhausted || isFreeUserWithExistingThread || isFreeUserRoundStarted;
+  const isFreeUserBlocked = isFreeUser && hasUsedTrial;
 
   const isInputDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
   const isMicDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
@@ -286,8 +252,8 @@ export const ChatInput = memo(({
           hideInternalAlerts && borderVariant === BorderVariants.WARNING && 'border-amber-500/30',
           hideInternalAlerts && borderVariant === BorderVariants.ERROR && 'border-destructive',
           // When no header, apply borders based on internal state
-          !hideInternalAlerts && (isOverLimit || showNoModelsError || (isQuotaExceeded && !showUpgradePrompt)) && 'border-destructive',
-          !hideInternalAlerts && showUpgradePrompt && !isOverLimit && !showNoModelsError && (hasCompletedRound ? 'border-amber-500/30' : 'border-green-500/30'),
+          !hideInternalAlerts && (isOverLimit || showNoModelsError || (isQuotaExceeded && !isFreeUser)) && 'border-destructive',
+          !hideInternalAlerts && isFreeUser && !isOverLimit && !showNoModelsError && (hasUsedTrial ? 'border-amber-500/30' : 'border-green-500/30'),
           className,
         )}
         {...(enableAttachments ? dragHandlers : {})}
@@ -296,7 +262,7 @@ export const ChatInput = memo(({
 
         <div className="flex flex-col overflow-hidden h-full">
           {showCreditAlert && !hideInternalAlerts && <QuotaAlertExtension hasHeaderToggle={hasHeaderToggle} />}
-          {showUpgradePrompt && !hideInternalAlerts && <FreeTrialAlert hasHeaderToggle={hasHeaderToggle} />}
+          {isFreeUser && !hideInternalAlerts && <FreeTrialAlert hasHeaderToggle={hasHeaderToggle} />}
           {showNoModelsError && (
             <div
               className={cn(
@@ -333,7 +299,7 @@ export const ChatInput = memo(({
             <VoiceVisualization
               isActive={isListening}
               audioLevels={audioLevels}
-              hasAlertAbove={showCreditAlert || showUpgradePrompt || showNoModelsError || isOverLimit}
+              hasAlertAbove={hideInternalAlerts || showCreditAlert || isFreeUser || showNoModelsError || isOverLimit}
             />
           )}
 

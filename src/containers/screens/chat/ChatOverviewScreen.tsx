@@ -13,11 +13,13 @@ import {
   ChatModeSchema,
   ErrorBoundaryContexts,
   MessageStatuses,
+  ScreenModes,
   UploadStatuses,
 } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputHeader } from '@/components/chat/chat-input-header';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
+import { ChatInputUpgradeBanner } from '@/components/chat/chat-input-upgrade-banner';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
@@ -495,16 +497,14 @@ export default function ChatOverviewScreen() {
   );
 
   useScreenInitialization({
-    mode: 'overview',
+    mode: ScreenModes.OVERVIEW,
     thread: shouldInitializeThread ? currentThread : null,
     participants: shouldInitializeThread ? contextParticipants : [],
     chatMode: selectedMode,
-    enableOrchestrator: (
-      !isStreaming
+    enableOrchestrator: !isStreaming
       && !isModeratorStreaming
       && !hasActivePreSearch
-      && shouldInitializeThread
-    ),
+      && shouldInitializeThread,
   });
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
@@ -580,7 +580,6 @@ export default function ChatOverviewScreen() {
           showApiErrorToast('Error sending message', error);
         }
       } else {
-        // New thread creation
         if (!inputValue.trim() || isInitialUIInputBlocked) {
           return;
         }
@@ -589,15 +588,12 @@ export default function ChatOverviewScreen() {
           return;
         }
 
-        // Auto mode: analyze prompt with streaming and configure settings before creating thread
         if (autoMode && inputValue.trim()) {
           setIsAnalyzingPrompt(true);
           try {
-            // Stream config analysis - partial configs will update partialAnalyzeConfig state
             const result = await analyzePromptStream(inputValue.trim());
             if (result) {
               const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;
-              // Update store with AI recommendations
               const newParticipants = participants.map((p: { modelId: string; role: string | null }, index: number) => ({
                 id: p.modelId,
                 modelId: p.modelId,
@@ -608,21 +604,18 @@ export default function ChatOverviewScreen() {
               setModelOrder(newParticipants.map((p: { modelId: string }) => p.modelId));
               setSelectedMode(recommendedMode);
               setEnableWebSearch(recommendedWebSearch);
-              // Persist to preferences
               setPersistedModelIds(newParticipants.map((p: { modelId: string }) => p.modelId));
               setPersistedModelOrder(newParticipants.map((p: { modelId: string }) => p.modelId));
               setPersistedMode(recommendedMode);
               setPersistedWebSearch(recommendedWebSearch);
             }
           } catch {
-            // Continue with current config if analysis fails
             console.error('[ChatOverview] Auto mode analysis failed, using current config');
           } finally {
             setIsAnalyzingPrompt(false);
           }
         }
 
-        // Check participants again after auto mode might have updated them
         const currentParticipants = storeApi.getState().selectedParticipants;
         if (currentParticipants.length === 0) {
           return;
@@ -733,7 +726,7 @@ export default function ChatOverviewScreen() {
     setSelectedMode(preset.mode);
     setPersistedMode(preset.mode);
 
-    const searchEnabled = preset.searchEnabled === 'conditional' || preset.searchEnabled;
+    const searchEnabled = preset.searchEnabled === 'conditional' ? true : preset.searchEnabled;
     setEnableWebSearch(searchEnabled);
     setPersistedWebSearch(searchEnabled);
   }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch, t]);
@@ -776,7 +769,6 @@ export default function ChatOverviewScreen() {
       status,
       placeholder: t('chat.input.placeholder'),
       participants: selectedParticipants,
-      quotaCheckType: 'threads',
       onRemoveParticipant: isInitialUIInputBlocked ? undefined : removeParticipant,
       attachments: chatAttachments.attachments,
       onAddAttachments: chatAttachments.addFiles,
@@ -903,6 +895,7 @@ export default function ChatOverviewScreen() {
                           transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                         >
                           <div className="flex flex-col">
+                            <ChatInputUpgradeBanner />
                             <ChatInputHeader
                               autoMode={autoMode}
                               onAutoModeChange={setAutoMode}
@@ -928,6 +921,7 @@ export default function ChatOverviewScreen() {
                       transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                     >
                       <div className="flex flex-col">
+                        <ChatInputUpgradeBanner />
                         <ChatInputHeader
                           autoMode={autoMode}
                           onAutoModeChange={setAutoMode}
@@ -949,7 +943,7 @@ export default function ChatOverviewScreen() {
                 name: sessionUser?.name || 'You',
                 image: sessionUser?.image || null,
               }}
-              mode="overview"
+              mode={ScreenModes.OVERVIEW}
               onSubmit={handlePromptSubmit}
               chatAttachments={chatAttachments}
               threadId={currentThread?.id || createdThreadId || undefined}

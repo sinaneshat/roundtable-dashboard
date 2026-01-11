@@ -73,8 +73,12 @@ export const AUTH_ERROR_TYPES = [
   'emailcreateaccount',
   'callback',
   'please_restart_the_process',
+  'domain_restricted',
+  'unable_to_create_user',
   'default',
 ] as const;
+
+export const DEFAULT_AUTH_ERROR_TYPE: AuthErrorType = 'default';
 
 export const AuthErrorTypeSchema = z.enum(AUTH_ERROR_TYPES).openapi({
   description: 'Authentication error type code',
@@ -93,6 +97,8 @@ export const AuthErrorTypes = {
   EMAIL_CREATE_ACCOUNT: 'emailcreateaccount' as const,
   CALLBACK: 'callback' as const,
   PLEASE_RESTART_PROCESS: 'please_restart_the_process' as const,
+  DOMAIN_RESTRICTED: 'domain_restricted' as const,
+  UNABLE_TO_CREATE_USER: 'unable_to_create_user' as const,
   DEFAULT: 'default' as const,
 } as const;
 

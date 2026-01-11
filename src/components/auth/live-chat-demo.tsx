@@ -1,13 +1,16 @@
 'use client';
 
-import { Scale } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect -- Animation demo requires setState in intervals/timeouts */
-import { FinishReasons, MessagePartTypes, MessageRoles } from '@/api/core/enums';
-import { AvatarGroup } from '@/components/chat/avatar-group';
+import {
+  FinishReasons,
+  MessagePartTypes,
+  MessageRoles,
+  MODERATOR_NAME,
+  MODERATOR_PARTICIPANT_INDEX,
+} from '@/api/core/enums';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ChatMessage, ChatParticipant } from '@/db/validation/chat';
 import { useThreadTimeline } from '@/hooks/utils';
@@ -26,19 +29,6 @@ const DEMO_PARTICIPANTS_DATA = [
   { modelId: 'openai/gpt-4.1', role: 'Growth Advisor' },
   { modelId: 'google/gemini-2.5-pro', role: 'Operations Expert' },
 ];
-
-const DEMO_MODELS = [
-  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'anthropic' },
-  { id: 'openai/gpt-4.1', name: 'GPT-4.1', provider: 'openai' },
-  { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'google' },
-];
-
-const DEMO_PARTICIPANTS_FOR_AVATAR = DEMO_PARTICIPANTS_DATA.map((p, idx) => ({
-  id: `participant-${idx}`,
-  modelId: p.modelId,
-  role: p.role,
-  priority: idx,
-}));
 
 const DEMO_MODERATOR_SYNTHESIS = `The council agrees on a staged approach: start with **Claude's customer audit**, then run **Gemini's 90-day experiment** before committing resources. **GPT's "Enterprise Lite"** mid-market option emerged as a potential middle path if the experiment shows promise.`;
 
@@ -123,8 +113,8 @@ function createModeratorMessage(text: string): ChatMessage {
       role: MessageRoles.ASSISTANT,
       roundNumber: 1,
       isModerator: true,
-      participantIndex: -99,
-      model: 'Council Moderator',
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
+      model: MODERATOR_NAME,
       finishReason: FinishReasons.STOP,
       hasError: false,
     },
@@ -253,28 +243,9 @@ export function LiveChatDemo() {
   const isDemoActive = activeParticipant >= 0 && activeParticipant <= 3;
 
   return (
-    <div className="flex flex-col h-full min-h-0 relative">
-      <div className="flex items-center justify-between px-6 py-3 border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/80">
-            <span className="text-sm text-muted-foreground">Models</span>
-            <AvatarGroup
-              participants={DEMO_PARTICIPANTS_FOR_AVATAR}
-              allModels={DEMO_MODELS}
-              size="sm"
-              showCount={false}
-              overlap={true}
-            />
-          </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/80">
-            <Scale className="size-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Debating</span>
-          </div>
-        </div>
-        <Badge variant="secondary" className="text-xs">Demo</Badge>
-      </div>
-      <ScrollArea className="h-full min-h-0 flex-1">
-        <div className="w-full px-10 pt-10 pb-4 [&_p]:text-muted-foreground [&_strong]:text-foreground">
+    <div className="h-full min-h-0 overflow-hidden">
+      <ScrollArea className="h-full">
+        <div className="w-full px-10 py-6 [&_p]:text-muted-foreground [&_strong]:text-foreground">
           <ThreadTimeline
             timelineItems={timelineItems}
             user={DEMO_USER}

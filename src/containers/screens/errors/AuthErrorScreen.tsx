@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense } from 'react';
 
-import { AuthErrorTypes, isValidAuthErrorType } from '@/api/core/enums/auth';
+import type { AuthErrorType } from '@/api/core/enums';
+import { AuthErrorTypes, DEFAULT_AUTH_ERROR_TYPE, isValidAuthErrorType } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 
-const AUTH_ERROR_I18N_KEYS = {
+const AUTH_ERROR_I18N_KEYS: Record<AuthErrorType, { title: string; desc: string }> = {
   [AuthErrorTypes.CONFIGURATION]: { title: 'auth.errors.configuration', desc: 'auth.errors.configurationDesc' },
   [AuthErrorTypes.ACCESS_DENIED]: { title: 'auth.errors.accessDenied', desc: 'auth.errors.accessDeniedDesc' },
   [AuthErrorTypes.VERIFICATION]: { title: 'auth.errors.verification', desc: 'auth.errors.verificationDesc' },
@@ -28,14 +29,16 @@ const AUTH_ERROR_I18N_KEYS = {
   [AuthErrorTypes.EMAIL_CREATE_ACCOUNT]: { title: 'auth.errors.emailCreateAccount', desc: 'auth.errors.emailCreateAccountDesc' },
   [AuthErrorTypes.CALLBACK]: { title: 'auth.errors.callback', desc: 'auth.errors.callbackDesc' },
   [AuthErrorTypes.PLEASE_RESTART_PROCESS]: { title: 'auth.errors.restartProcess', desc: 'auth.errors.restartProcessDesc' },
+  [AuthErrorTypes.DOMAIN_RESTRICTED]: { title: 'auth.errors.domainRestricted', desc: 'auth.errors.domainRestrictedDesc' },
+  [AuthErrorTypes.UNABLE_TO_CREATE_USER]: { title: 'auth.errors.domainRestricted', desc: 'auth.errors.domainRestrictedDesc' },
   [AuthErrorTypes.DEFAULT]: { title: 'auth.errors.default', desc: 'auth.errors.defaultDesc' },
-} as const;
+};
 
 function AuthErrorContent() {
   const t = useTranslations();
   const searchParams = useSearchParams();
-  const rawError = searchParams?.get('failed')?.toLowerCase() ?? AuthErrorTypes.DEFAULT;
-  const errorType = isValidAuthErrorType(rawError) ? rawError : AuthErrorTypes.DEFAULT;
+  const rawError = (searchParams?.get('error') || searchParams?.get('failed'))?.toLowerCase() ?? DEFAULT_AUTH_ERROR_TYPE;
+  const errorType = isValidAuthErrorType(rawError) ? rawError : DEFAULT_AUTH_ERROR_TYPE;
 
   const errorKeys = AUTH_ERROR_I18N_KEYS[errorType];
   const errorInfo = {

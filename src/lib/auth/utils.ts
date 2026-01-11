@@ -4,9 +4,10 @@
  * Reusable helper functions for authentication and email domain validation
  */
 
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { APIError } from 'better-auth/api';
 
-import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { isWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 
 /**
  * Better-auth middleware context type (inferred from createAuthMiddleware)
@@ -57,17 +58,22 @@ const EMAIL_DOMAIN_CONFIG = {
   PROTECTED_PATHS: PROTECTED_AUTH_PATHS,
 } as const;
 
-/**
- * Check if the current environment requires email domain restrictions
- *
- * Uses centralized environment detection from base-urls config.
- * @see /src/lib/config/base-urls.ts for environment detection logic
- *
- * @returns {boolean} True if environment is local or preview
- */
 export function isRestrictedEnvironment(): boolean {
-  const webappEnv = getWebappEnv();
-  return webappEnv === WEBAPP_ENVS.LOCAL || webappEnv === WEBAPP_ENVS.PREVIEW;
+  try {
+    const { env } = getCloudflareContext();
+    const cfEnv = env?.NEXT_PUBLIC_WEBAPP_ENV;
+    if (typeof cfEnv === 'string' && isWebappEnv(cfEnv)) {
+      return cfEnv === WEBAPP_ENVS.LOCAL || cfEnv === WEBAPP_ENVS.PREVIEW;
+    }
+  } catch {
+  }
+
+  const processEnv = process.env.NEXT_PUBLIC_WEBAPP_ENV;
+  if (processEnv && isWebappEnv(processEnv)) {
+    return processEnv === WEBAPP_ENVS.LOCAL || processEnv === WEBAPP_ENVS.PREVIEW;
+  }
+
+  return process.env.NODE_ENV === 'development';
 }
 
 /**

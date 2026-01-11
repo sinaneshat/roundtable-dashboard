@@ -62,6 +62,7 @@ export {
   type AuthStep,
   AuthSteps,
   AuthStepSchema,
+  DEFAULT_AUTH_ERROR_TYPE,
   DEFAULT_AUTH_MODE,
   DEFAULT_AUTH_STEP,
   isValidAuthErrorType,

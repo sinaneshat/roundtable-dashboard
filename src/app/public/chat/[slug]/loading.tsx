@@ -40,28 +40,6 @@ export default function PublicChatThreadLoading() {
             </div>
           ))}
 
-          <div className="mt-6">
-            <div className="rounded-lg bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-white/5">
-              <div className="flex items-center gap-2">
-                <Skeleton className="size-4 rounded bg-white/15" />
-                <Skeleton className="h-4 w-32 bg-white/15" />
-                <Skeleton className="h-6 w-20 rounded-full bg-white/10" />
-              </div>
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-24 bg-white/15" />
-                <div className="space-y-1.5">
-                  {[0, 1].map(i => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Skeleton className="h-3 w-6 bg-white/10" />
-                      <Skeleton className="h-3 w-full bg-white/10" />
-                      <Skeleton className="h-3 w-12 bg-white/10" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div className="mt-12 sm:mt-16 mb-6 sm:mb-8">
             <div className="rounded-2xl sm:rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-6 sm:p-8 md:p-10 text-center space-y-4 sm:space-y-6">
               <Skeleton className="size-12 sm:size-14 rounded-full bg-primary/10 mx-auto" />

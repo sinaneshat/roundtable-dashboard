@@ -6,9 +6,10 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
-import { BorderVariants, ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputHeader } from '@/components/chat/chat-input-header';
+import { ChatInputUpgradeBanner } from '@/components/chat/chat-input-upgrade-banner';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
@@ -155,8 +156,7 @@ export function ChatView({
 
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
-  const { borderVariant } = useFreeTrialState();
-  const headerBorderVariant = mode === ScreenModes.OVERVIEW ? borderVariant : BorderVariants.DEFAULT;
+  const { borderVariant, isFreeUser } = useFreeTrialState();
 
   const { data: changelogResponse } = useThreadChangelogQuery(
     effectiveThreadId,
@@ -341,12 +341,10 @@ export function ChatView({
     enableNearBottomDetection: true,
   });
 
-  const isResumptionActive = (
-    preSearchResumption?.status === MessageStatuses.STREAMING
+  const isResumptionActive = preSearchResumption?.status === MessageStatuses.STREAMING
     || preSearchResumption?.status === MessageStatuses.PENDING
     || moderatorResumption?.status === MessageStatuses.STREAMING
-    || moderatorResumption?.status === MessageStatuses.PENDING
-  );
+    || moderatorResumption?.status === MessageStatuses.PENDING;
 
   const isRoundInProgress = streamingRoundNumber !== null;
 
@@ -364,41 +362,30 @@ export function ChatView({
 
   const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming || isAnalyzingPrompt;
 
-  // Auto mode submit handler - analyzes prompt with streaming and applies config before creating thread
   const handleAutoModeSubmit = useCallback(async (e: React.FormEvent) => {
-    // Only run auto mode analysis for new chats (OVERVIEW mode)
     if (mode === ScreenModes.OVERVIEW && autoMode && inputValue.trim()) {
       setIsAnalyzingPrompt(true);
 
       try {
-        // Stream config analysis - partial configs will update in real-time
         const result = await analyzePromptStream(inputValue.trim());
-
         if (result) {
-          // Apply recommended config
           const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;
-
-          // Map to participant config format
           const newParticipants = participants.map((p: { modelId: string; role: string | null }, index: number) => ({
             id: p.modelId,
             modelId: p.modelId,
             role: p.role || '',
             priority: index,
           }));
-
           setSelectedParticipants(newParticipants);
           setModelOrder(newParticipants.map((p: { modelId: string }) => p.modelId));
           setSelectedMode(recommendedMode);
           setEnableWebSearch(recommendedWebSearch);
         }
       } catch {
-        // Continue with current config on error
       } finally {
         setIsAnalyzingPrompt(false);
       }
     }
-
-    // Continue with normal submit flow
     await onSubmit(e);
   }, [
     mode,
@@ -568,7 +555,7 @@ export function ChatView({
     <>
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div className="flex flex-col relative flex-1 min-h-full">
-          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-4">
+          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-44">
             <ThreadTimeline
               timelineItems={timelineItems}
               user={user}
@@ -593,14 +580,14 @@ export function ChatView({
 
           <div
             ref={inputContainerRef}
-            className="sticky z-30 mt-auto pt-6 relative"
-            style={{ bottom: `${keyboardOffset + 16}px` }}
+            className="fixed inset-x-0 z-30 md:left-[var(--sidebar-width)]"
+            style={{ bottom: `${keyboardOffset}px` }}
           >
-            <div className="absolute inset-0 -bottom-10 bg-gradient-to-t from-background from-90% to-transparent pointer-events-none" />
-            <div className="w-full max-w-4xl mx-auto px-5 md:px-6 relative">
+            <div className="absolute inset-0 -bottom-4 bg-gradient-to-t from-background from-85% to-transparent pointer-events-none" />
+            <div className="w-full max-w-4xl mx-auto px-5 md:px-6 pt-4 pb-4 relative">
               <ChatScrollButton variant="input" />
               <div className="flex flex-col">
-                {/* Auto Mode Header - only visible in new chat mode */}
+                <ChatInputUpgradeBanner />
                 {mode === ScreenModes.OVERVIEW && (
                   <ChatInputHeader
                     autoMode={autoMode}
@@ -610,9 +597,9 @@ export function ChatView({
                   />
                 )}
                 <ChatInput
-                  className={mode === ScreenModes.OVERVIEW ? 'rounded-t-none border-t-0' : undefined}
-                  hideInternalAlerts={mode === ScreenModes.OVERVIEW}
-                  borderVariant={mode === ScreenModes.OVERVIEW ? headerBorderVariant : undefined}
+                  className={(mode === ScreenModes.OVERVIEW || isFreeUser) ? 'rounded-t-none border-t-0' : undefined}
+                  hideInternalAlerts={mode === ScreenModes.OVERVIEW || isFreeUser}
+                  borderVariant={(mode === ScreenModes.OVERVIEW || isFreeUser) ? borderVariant : undefined}
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handleAutoModeSubmit}

@@ -13,6 +13,11 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { listModelsService } from '@/services/api';
 
+type UseModelsQueryOptions = {
+  /** Whether to enable the query (default: true) */
+  enabled?: boolean;
+};
+
 /**
  * Hook to fetch curated AI models
  *
@@ -21,7 +26,7 @@ import { listModelsService } from '@/services/api';
  * ✅ SMART REFETCHING: Refetches when invalidated (e.g., after plan upgrade) but not on focus
  * ✅ TYPE SAFETY: Fully typed response inferred from Zod schemas
  */
-export function useModelsQuery() {
+export function useModelsQuery(options?: UseModelsQueryOptions) {
   return useQuery({
     queryKey: queryKeys.models.list(),
     queryFn: () => listModelsService(),
@@ -31,5 +36,6 @@ export function useModelsQuery() {
     refetchOnMount: false,
     retry: 2,
     throwOnError: false,
+    enabled: options?.enabled ?? true,
   });
 }

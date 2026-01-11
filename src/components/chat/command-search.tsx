@@ -187,7 +187,8 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
       <DialogContent
         ref={modalRef}
         showCloseButton={false}
-        className="!max-w-2xl !w-[calc(100vw-2.5rem)] p-0 gap-0"
+        glass
+        className="!max-w-2xl !w-[calc(100vw-2.5rem)]"
       >
         <DialogHeader className="flex flex-row items-center gap-3 bg-card px-4 sm:px-5 md:px-6 py-4">
           <VisuallyHidden>
@@ -213,7 +214,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
             className="size-9 shrink-0 flex items-center justify-center hover:bg-white/[0.07] rounded-full transition-colors"
             aria-label={t('actions.close')}
           >
-            <Icons.x className="size-4.5 text-muted-foreground" />
+            <Icons.x className="size-5 text-muted-foreground" />
           </button>
         </DialogHeader>
 
@@ -227,7 +228,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                 )
               : threads.length > 0
                 ? (
-                    <div className="flex flex-col px-2 py-2">
+                    <div className="flex flex-col px-3 py-3">
                       {threads.map((thread, index) => (
                         <SearchResultItem
                           key={thread.id}
@@ -254,19 +255,19 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           </ScrollArea>
         </DialogBody>
 
-        <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-t border-border text-xs text-muted-foreground shrink-0 bg-card">
+        <div className="flex items-center gap-4 px-4 sm:px-5 md:px-6 py-4 border-t border-border text-xs text-muted-foreground shrink-0 bg-card">
           <div className="flex items-center gap-1.5">
             <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↑</kbd>
             <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↓</kbd>
-            <span className="ml-0.5 text-white/50">{t('navigation.navigation')}</span>
+            <span className="ml-1.5 text-white/50">{t('navigation.navigation')}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↵</kbd>
-            <span className="ml-0.5 text-white/50">{t('actions.select')}</span>
+            <span className="ml-1.5 text-white/50">{t('actions.select')}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">Esc</kbd>
-            <span className="ml-0.5 text-white/50">{t('actions.close')}</span>
+            <span className="ml-1.5 text-white/50">{t('actions.close')}</span>
           </div>
         </div>
       </DialogContent>

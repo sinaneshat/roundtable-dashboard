@@ -486,6 +486,10 @@ type ChatMessageListProps = {
    * Demo mode - forces all models to be accessible (hides tier badges).
    */
   demoMode?: boolean;
+  /**
+   * Read-only mode - skips models API call. Used for public/shared threads.
+   */
+  isReadOnly?: boolean;
 };
 export const ChatMessageList = memo(
   ({
@@ -508,11 +512,11 @@ export const ChatMessageList = memo(
     isModeratorStreaming = false,
     roundNumber: _roundNumber,
     demoMode = false,
+    isReadOnly = false,
   }: ChatMessageListProps) => {
     const t = useTranslations();
     const tParticipant = useTranslations('chat.participant');
-    // Consolidated model lookup hook
-    const { findModel } = useModelLookup();
+    const { findModel } = useModelLookup({ enabled: !isReadOnly });
     const userInfo = useMemo(() => user || { name: 'User', image: null }, [user]);
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;

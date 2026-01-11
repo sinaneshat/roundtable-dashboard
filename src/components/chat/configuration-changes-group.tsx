@@ -22,7 +22,7 @@ import {
   isWebSearchChange,
   safeParseChangelogData,
 } from '@/db/schemas/chat-metadata';
-import { useModelsQuery } from '@/hooks/queries';
+import { useModelLookup } from '@/hooks/utils/use-model-lookup';
 import { formatRelativeTime } from '@/lib/format';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils';
@@ -44,7 +44,18 @@ const actionConfig: Record<ChangelogType, { icon: typeof Icons.plus; color: stri
     color: 'text-red-500',
   },
 };
-export function ConfigurationChangesGroup({ group, className }: ConfigurationChangesGroupProps) {
+
+type ConfigurationChangesGroupExtendedProps = ConfigurationChangesGroupProps & {
+  /** Skip models API call (for public/read-only pages) */
+  isReadOnly?: boolean;
+};
+
+type ChangeItemProps = {
+  change: ChatThreadChangelogFlexible;
+  isReadOnly?: boolean;
+};
+
+export function ConfigurationChangesGroup({ group, className, isReadOnly }: ConfigurationChangesGroupExtendedProps) {
   const t = useTranslations('chat.configuration');
   const tActionSummary = useTranslations('chat.configuration.actionSummary');
   if (!group.changes || group.changes.length === 0) {
@@ -116,7 +127,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
                   <div className="w-full overflow-x-auto md:overflow-x-auto">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pb-2 pl-6">
                       {changes.map(change => (
-                        <ChangeItem key={change.id} change={change} />
+                        <ChangeItem key={change.id} change={change} isReadOnly={isReadOnly} />
                       ))}
                     </div>
                   </div>
@@ -130,10 +141,9 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
   );
 }
 
-function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
+function ChangeItem({ change, isReadOnly }: ChangeItemProps) {
   const t = useTranslations('chat.configuration');
-  const { data: modelsData } = useModelsQuery();
-  const allModels = modelsData?.data?.items || [];
+  const { findModel } = useModelLookup({ enabled: !isReadOnly });
 
   const changeData: DbChangelogData | undefined = safeParseChangelogData(change.changeData);
 
@@ -151,7 +161,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
   const newMode = isModeChange(changeData) ? changeData.newMode : undefined;
   const enabled = isWebSearchChange(changeData) ? changeData.enabled : undefined;
 
-  const model = modelId ? allModels.find(m => m.id === modelId) : undefined;
+  const model = findModel(modelId);
   const showMissingModelFallback = (change.changeType === ChangelogTypes.ADDED || change.changeType === ChangelogTypes.REMOVED) && modelId && !model;
 
   const isParticipantType = isParticipantChange(changeData);

@@ -87,7 +87,7 @@ export function ThreadTimeline({
     timelineItems,
     estimateSize: 200,
     overscan: 5,
-    paddingEnd: 200,
+    paddingEnd: demoMode ? 24 : 0,
     isDataReady,
     isStreaming: isActivelyStreaming,
     getIsStreamingFromStore,
@@ -158,6 +158,7 @@ export function ThreadTimeline({
                         timestamp: new Date(item.data[0]!.createdAt),
                         changes: item.data,
                       }}
+                      isReadOnly={isReadOnly}
                     />
                   </UnifiedErrorBoundary>
                 </div>
@@ -205,6 +206,7 @@ export function ThreadTimeline({
                       isModeratorStreaming={isModeratorStreaming}
                       roundNumber={item.roundNumber}
                       demoMode={demoMode}
+                      isReadOnly={isReadOnly}
                     />
                   </UnifiedErrorBoundary>
 

@@ -98,7 +98,7 @@ export default async function PublicChatThreadPage({
   const queryClient = getQueryClient();
 
   try {
-    // Prefetch thread data with matching staleTime as usePublicThreadQuery hook
+    // Prefetch thread data - will be hydrated to client via HydrationBoundary
     await queryClient.prefetchQuery({
       queryKey: queryKeys.threads.public(slug),
       queryFn: () => getPublicThreadService({ param: { slug } }),
