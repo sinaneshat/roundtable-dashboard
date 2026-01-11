@@ -1,69 +1,65 @@
 /**
- * Toast Notification Utilities
- * Clean utilities for consistent toast messaging
+ * Toast Notification Utilities - SINGLE SOURCE OF TRUTH
+ *
+ * All application code should import toast functionality from this barrel.
+ *
+ * Architecture:
+ * - `@/hooks/utils/use-toast` - Low-level primitives (internal use by Toaster component only)
+ * - `@/lib/toast` (this file) - Application-facing API (what you should use)
+ *
+ * Key Principles:
+ * 1. For API errors, use showApiErrorToast() - auto-extracts backend error messages
+ * 2. For success messages, use showApiSuccessToast()
+ * 3. For warnings, use showApiWarningToast()
+ * 4. For info messages, use showApiInfoToast()
+ * 5. For loading states, use showApiLoadingToast()
+ * 6. For advanced patterns (undo, retry, progress), use toastManager directly
+ *
+ * @example API Error Handling
+ * ```typescript
+ * import { showApiErrorToast, showApiSuccessToast } from '@/lib/toast';
+ *
+ * try {
+ *   await api.createThread(data);
+ *   showApiSuccessToast('Thread created successfully');
+ * } catch (error) {
+ *   showApiErrorToast('Failed to create thread', error);
+ * }
+ * ```
+ *
+ * @example Advanced toastManager patterns
+ * ```typescript
+ * import { toastManager } from '@/lib/toast';
+ *
+ * // Undo action
+ * toastManager.undo('Item deleted', () => restoreItem());
+ *
+ * // Progress toast
+ * const progress = toastManager.progress({ title: 'Uploading...' });
+ * progress.updateProgress(50);
+ * progress.complete();
+ * ```
  */
 
-import { toast } from '@/components/ui/use-toast';
+// ============================================================================
+// API ERROR TOAST HELPERS - Recommended for most use cases
+// ============================================================================
 
-/**
- * Show success toast with consistent styling
- */
-export function showSuccessToast(message: string, options?: string | { description?: string; [key: string]: unknown }) {
-  const description = typeof options === 'string' ? options : options?.description;
+export {
+  clearAllToasts,
+  showApiErrorToast,
+  showApiErrorWithRetry,
+  showApiInfoToast,
+  showApiLoadingToast,
+  showApiSuccessToast,
+  showApiWarningToast,
+} from './api-error-toast';
 
-  return toast({
-    title: 'Success',
-    description: message,
-    variant: 'default',
-    ...(description && { description }),
-  });
-}
+// ============================================================================
+// TOAST MANAGER - Advanced patterns (undo, retry, progress, promise)
+// ============================================================================
 
-/**
- * Show error toast with consistent styling
- */
-export function showErrorToast(message: string, options?: string | { description?: string; [key: string]: unknown }) {
-  const description = typeof options === 'string' ? options : options?.description;
+export { dismissToast, toastManager } from './toast-manager';
 
-  return toast({
-    title: 'Error',
-    description: message,
-    variant: 'destructive',
-    ...(description && { description }),
-  });
-}
-
-/**
- * Show warning toast with consistent styling
- */
-export function showWarningToast(message: string, description?: string) {
-  return toast({
-    title: 'Warning',
-    description: message,
-    variant: 'default',
-    ...(description && { description }),
-  });
-}
-
-/**
- * Show info toast with consistent styling
- */
-export function showInfoToast(message: string, description?: string) {
-  return toast({
-    title: 'ℹ️ Info',
-    description: message,
-    variant: 'default',
-    ...(description && { description }),
-  });
-}
-
-/**
- * Show loading toast (useful for async operations)
- */
-export function showLoadingToast(message: string = 'Loading...') {
-  return toast({
-    title: '⏳ Loading',
-    description: message,
-    variant: 'default',
-  });
-}
+// Re-export types for consumers who need them
+export type { ProgressToastOptions, ToastOptions } from './toast-manager';

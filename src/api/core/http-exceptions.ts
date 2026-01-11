@@ -18,11 +18,13 @@ import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import type { ErrorCode, ErrorSeverity } from '@/api/common/error-handling';
-import { ERROR_CODES, ERROR_SEVERITY } from '@/api/common/error-handling';
-import type { ErrorContext } from '@/api/core';
+import type { ApiErrorSeverity, ErrorCode } from '@/api/core/enums';
+import { ApiErrorSeverities, ErrorCodes } from '@/api/core/enums';
 
-import { apiLogger } from '../middleware/hono-logger';
+import type { ErrorContext } from './schemas';
+
+const ERROR_SEVERITY = ApiErrorSeverities;
+const ERROR_CODES = ErrorCodes;
 
 // ============================================================================
 // TYPE-SAFE STATUS CODE MAPPING
@@ -88,16 +90,6 @@ function mapStatusCode(stokerStatus: number): ContentfulStatusCode {
     return stokerStatus as ContentfulStatusCode;
   }
 
-  // Log unmapped status code for debugging with structured logging
-
-  apiLogger.warn('Unmapped HTTP status code detected, falling back to 500', {
-    logType: 'api',
-    method: 'GET',
-    path: '/status-mapping',
-    originalStatus: stokerStatus,
-    fallbackStatus: 500,
-  });
-
   // Default fallback for unmapped status codes
   return 500 as const; // INTERNAL_SERVER_ERROR
 }
@@ -121,11 +113,62 @@ function isValidContentfulStatusCode(status: number): status is ContentfulStatus
 
 /**
  * Type guard to check if a number is a valid ContentfulStatusCode
- * Maintained for backward compatibility
  */
 function isContentfulStatusCode(status: number): status is ContentfulStatusCode {
   return isValidContentfulStatusCode(status);
 }
+
+// ============================================================================
+// EXCEPTION DETAILS DISCRIMINATED UNION
+// ============================================================================
+
+/**
+ * Type-safe exception details using discriminated unions
+ */
+export type ExceptionDetails
+  = {
+    detailType: 'validation';
+    validationErrors: Array<{ field: string; message: string; code?: string }>;
+  }
+  | {
+    detailType: 'batch';
+    currentSize?: number;
+    statementCount?: number;
+    originalError?: string;
+  }
+  | {
+    detailType: 'status_mapping';
+    originalStatus: number;
+    mappedStatus: number;
+  }
+  | {
+    detailType: 'rate_limit';
+    limit: number;
+    windowMs: number;
+    resetTime: string;
+  }
+  | {
+    detailType: 'health_check';
+    missingVars?: string[];
+  }
+  | {
+    detailType: 'role_check';
+    requiredRole: string;
+    userId?: string;
+  }
+  | {
+    detailType: 'fetch_error';
+    operation: string;
+    originalStatus: number;
+    errorDetails?: string;
+    attempts?: number;
+    duration?: number;
+  }
+  | {
+    detailType: 'service_error';
+    serviceName: string;
+    originalError?: string;
+  };
 
 // ============================================================================
 // HTTP EXCEPTION FACTORY
@@ -137,11 +180,11 @@ function isContentfulStatusCode(status: number): status is ContentfulStatusCode 
 export type HTTPExceptionFactoryOptions = {
   message: string;
   code?: ErrorCode;
-  severity?: ErrorSeverity;
+  severity?: ApiErrorSeverity;
   context?: ErrorContext;
   correlationId?: string;
   cause?: unknown;
-  details?: Record<string, unknown>;
+  details?: ExceptionDetails;
 };
 
 /**
@@ -149,10 +192,10 @@ export type HTTPExceptionFactoryOptions = {
  */
 export class EnhancedHTTPException extends HTTPException {
   public readonly errorCode?: ErrorCode;
-  public readonly severity?: ErrorSeverity;
+  public readonly severity?: ApiErrorSeverity;
   public readonly context?: ErrorContext;
   public readonly correlationId?: string;
-  public readonly details?: Record<string, unknown>;
+  public readonly details?: ExceptionDetails;
   public readonly timestamp: Date;
 
   constructor(
@@ -232,7 +275,7 @@ export class HTTPExceptionFactory {
     return new EnhancedHTTPException(mapped, {
       ...options,
       details: {
-        ...options.details,
+        detailType: 'status_mapping',
         originalStatus: status,
         mappedStatus: mapped,
       },
@@ -376,12 +419,11 @@ export class HTTPExceptionFactory {
   }
 
   // ============================================================================
-  // MIGRATION AND COMPATIBILITY UTILITIES
+  // GENERIC FACTORY METHODS
   // ============================================================================
 
   /**
-   * Direct replacement for `new HTTPException(HttpStatusCodes.XXX, options)`
-   * This provides a drop-in replacement for existing code without type casting
+   * Create an HTTP exception from stoker status code with simple options
    */
   static create(
     stokerStatus: number,
@@ -414,7 +456,7 @@ export class HTTPExceptionFactory {
       [HttpStatusCodes.SERVICE_UNAVAILABLE]: ERROR_CODES.SERVICE_UNAVAILABLE,
     };
 
-    const severityMap: Record<number, ErrorSeverity> = {
+    const severityMap: Record<number, ApiErrorSeverity> = {
       [HttpStatusCodes.BAD_REQUEST]: ERROR_SEVERITY.LOW,
       [HttpStatusCodes.UNAUTHORIZED]: ERROR_SEVERITY.MEDIUM,
       [HttpStatusCodes.FORBIDDEN]: ERROR_SEVERITY.MEDIUM,
@@ -457,68 +499,6 @@ export class HTTPExceptionFactory {
     return { valid, invalid, mapped };
   }
 }
-
-// ============================================================================
-// MIGRATION HELPERS FOR EXISTING CODE
-// ============================================================================
-
-/**
- * Drop-in replacement function for existing `new HTTPException()` calls
- * Usage: Replace `new HTTPException(status, options)` with `createHTTPException(status, options)`
- */
-export function createHTTPException(
-  status: number,
-  options: { message: string; cause?: unknown } = { message: 'An error occurred' },
-): EnhancedHTTPException {
-  return HTTPExceptionFactory.create(status, options);
-}
-
-/**
- * Type-safe factory method aliases for common patterns
- */
-export const HttpExceptions = {
-  // Direct status code creators
-  badRequest: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.badRequest({ message, context }),
-
-  unauthorized: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.unauthorized({ message, context }),
-
-  forbidden: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.forbidden({ message, context }),
-
-  notFound: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.notFound({ message, context }),
-
-  conflict: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.conflict({ message, context }),
-
-  unprocessableEntity: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.unprocessableEntity({ message, context }),
-
-  tooManyRequests: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.tooManyRequests({ message, context }),
-
-  internalServerError: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.internalServerError({ message, context }),
-
-  badGateway: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.badGateway({ message, context }),
-
-  serviceUnavailable: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.serviceUnavailable({ message, context }),
-
-  gatewayTimeout: (message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.gatewayTimeout({ message, context }),
-
-  // Generic creator with automatic inference
-  create: (status: number, message: string, context?: ErrorContext) =>
-    HTTPExceptionFactory.createWithInferredCode(status, message, context),
-
-  // Direct replacement for existing patterns
-  fromStatusCode: (status: number, message: string, cause?: unknown) =>
-    HTTPExceptionFactory.create(status, { message, cause }),
-} as const;
 
 // ============================================================================
 // EXPORTS

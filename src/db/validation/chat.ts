@@ -1,91 +1,117 @@
+/**
+ * Chat Validation Schemas
+ *
+ * ✅ DATABASE-ONLY: Pure Drizzle-Zod schemas derived from database tables
+ * ❌ NO CUSTOM LOGIC: No business logic validations (e.g., isValidModelId)
+ *
+ * For API-specific validations and business logic, see:
+ * @/api/routes/chat/schema.ts
+ */
+
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 import {
-  chatMemory,
+  DbChangelogDataSchema,
+  DbCustomRoleMetadataSchema,
+  DbMessageMetadataSchema,
+  DbParticipantSettingsSchema,
+  DbThreadMetadataSchema,
+  DbUserPresetMetadataSchema,
+} from '@/db/schemas/chat-metadata';
+import {
+  chatCustomRole,
   chatMessage,
   chatParticipant,
+  chatPreSearch,
+  chatRoundFeedback,
   chatThread,
-  modelConfiguration,
+  chatThreadChangelog,
+  chatUserPreset,
 } from '@/db/tables/chat';
-import type { OpenRouterModelId } from '@/lib/ai/models-config';
-import { ALLOWED_MODEL_IDS } from '@/lib/ai/models-config';
 
 /**
  * Chat Thread Schemas
+ * Note: Field validation applied at API layer
  */
-export const chatThreadSelectSchema = createSelectSchema(chatThread);
-export const chatThreadInsertSchema = createInsertSchema(chatThread, {
-  title: schema => schema.min(1).max(200),
-  mode: () => z.enum(['analyzing', 'brainstorming', 'debating', 'solving']),
+const baseThreadSelectSchema = createSelectSchema(chatThread);
+export const chatThreadSelectSchema = baseThreadSelectSchema.extend({
+  metadata: DbThreadMetadataSchema.nullable().optional(),
 });
-export const chatThreadUpdateSchema = createUpdateSchema(chatThread, {
-  title: schema => schema.min(1).max(200).optional(),
-  mode: () => z.enum(['analyzing', 'brainstorming', 'debating', 'solving']).optional(),
-});
+export const chatThreadInsertSchema = createInsertSchema(chatThread);
+export const chatThreadUpdateSchema = createUpdateSchema(chatThread);
 
 /**
  * Chat Participant Schemas
- * ✅ Validates modelId against AllowedModelId enum
+ * Note: Field validation applied at API layer
  */
-export const chatParticipantSelectSchema = createSelectSchema(chatParticipant);
-export const chatParticipantInsertSchema = createInsertSchema(chatParticipant, {
-  modelId: () => z.enum(ALLOWED_MODEL_IDS as unknown as readonly [OpenRouterModelId, ...OpenRouterModelId[]])
-    .describe('Must be a valid OpenRouter model ID from AllowedModelId enum'),
-  role: schema => schema.min(1).max(100).optional(),
-  priority: schema => schema.min(0).max(100),
+const baseParticipantSelectSchema = createSelectSchema(chatParticipant);
+export const chatParticipantSelectSchema = baseParticipantSelectSchema.extend({
+  settings: DbParticipantSettingsSchema.nullable().optional(),
 });
-export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant, {
-  modelId: () => z.enum(ALLOWED_MODEL_IDS as unknown as readonly [OpenRouterModelId, ...OpenRouterModelId[]])
-    .describe('Must be a valid OpenRouter model ID from AllowedModelId enum')
-    .optional(),
-  role: schema => schema.min(1).max(100).optional(),
-  priority: schema => schema.min(0).max(100).optional(),
-});
+export const chatParticipantInsertSchema = createInsertSchema(chatParticipant);
+export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant);
 
 /**
  * Chat Message Schemas
+ * AI SDK v6 ALIGNMENT: parts[] array replaces content/reasoning fields
+ * Note: Field validation applied at API layer
  */
-export const chatMessageSelectSchema = createSelectSchema(chatMessage);
-export const chatMessageInsertSchema = createInsertSchema(chatMessage, {
-  content: schema => schema.min(1),
-  role: () => z.enum(['user', 'assistant']),
+export const chatMessageSelectSchema = createSelectSchema(chatMessage).extend({
+  metadata: DbMessageMetadataSchema.nullable(),
 });
-export const chatMessageUpdateSchema = createUpdateSchema(chatMessage, {
-  content: schema => schema.min(1).optional(),
-});
+export const chatMessageInsertSchema = createInsertSchema(chatMessage);
+export const chatMessageUpdateSchema = createUpdateSchema(chatMessage);
 
 /**
- * Chat Memory Schemas
+ * Chat Thread Changelog Schemas
+ * Note: Field validation applied at API layer
  */
-export const chatMemorySelectSchema = createSelectSchema(chatMemory);
-export const chatMemoryInsertSchema = createInsertSchema(chatMemory, {
-  title: schema => schema.min(1).max(200),
-  content: schema => schema.min(1),
-  type: () => z.enum(['personal', 'topic', 'instruction', 'fact']),
+export const chatThreadChangelogSelectSchema = createSelectSchema(chatThreadChangelog).extend({
+  changeData: DbChangelogDataSchema,
 });
-export const chatMemoryUpdateSchema = createUpdateSchema(chatMemory, {
-  title: schema => schema.min(1).max(200).optional(),
-  content: schema => schema.min(1).optional(),
-});
+export const chatThreadChangelogInsertSchema = createInsertSchema(chatThreadChangelog);
+export const chatThreadChangelogUpdateSchema = createUpdateSchema(chatThreadChangelog);
 
 /**
- * Model Configuration Schemas
- * ✅ Validates modelId against AllowedModelId enum
+ * Custom Role Schemas
+ * User-defined role templates with system prompts
+ * Note: Field validation applied at API layer
  */
-export const modelConfigurationSelectSchema = createSelectSchema(modelConfiguration);
-export const modelConfigurationInsertSchema = createInsertSchema(modelConfiguration, {
-  modelId: () => z.enum(ALLOWED_MODEL_IDS as unknown as readonly [OpenRouterModelId, ...OpenRouterModelId[]])
-    .describe('Must be a valid OpenRouter model ID from AllowedModelId enum'),
-  name: schema => schema.min(1).max(100),
-  provider: () => z.enum(['openrouter', 'anthropic', 'openai', 'google', 'xai', 'perplexity']),
+export const chatCustomRoleSelectSchema = createSelectSchema(chatCustomRole).extend({
+  metadata: DbCustomRoleMetadataSchema.nullable().optional(),
 });
-export const modelConfigurationUpdateSchema = createUpdateSchema(modelConfiguration, {
-  modelId: () => z.enum(ALLOWED_MODEL_IDS as unknown as readonly [OpenRouterModelId, ...OpenRouterModelId[]])
-    .describe('Must be a valid OpenRouter model ID from AllowedModelId enum')
-    .optional(),
-  name: schema => schema.min(1).max(100).optional(),
+export const chatCustomRoleInsertSchema = createInsertSchema(chatCustomRole);
+export const chatCustomRoleUpdateSchema = createUpdateSchema(chatCustomRole);
+
+/**
+ * Pre-Search Schemas
+ * Web search results executed before participant streaming
+ * Note: Field validation applied at API layer
+ */
+export const chatPreSearchSelectSchema = createSelectSchema(chatPreSearch);
+export const chatPreSearchInsertSchema = createInsertSchema(chatPreSearch);
+export const chatPreSearchUpdateSchema = createUpdateSchema(chatPreSearch);
+
+/**
+ * Round Feedback Schemas
+ * User feedback (like/dislike) for conversation rounds
+ * Note: Field validation applied at API layer
+ */
+export const chatRoundFeedbackSelectSchema = createSelectSchema(chatRoundFeedback);
+export const chatRoundFeedbackInsertSchema = createInsertSchema(chatRoundFeedback);
+export const chatRoundFeedbackUpdateSchema = createUpdateSchema(chatRoundFeedback);
+
+/**
+ * User Preset Schemas
+ * User-saved preset configurations for thread creation
+ * Note: Field validation applied at API layer
+ */
+export const chatUserPresetSelectSchema = createSelectSchema(chatUserPreset).extend({
+  metadata: DbUserPresetMetadataSchema.nullable().optional(),
 });
+export const chatUserPresetInsertSchema = createInsertSchema(chatUserPreset);
+export const chatUserPresetUpdateSchema = createUpdateSchema(chatUserPreset);
 
 /**
  * Type exports
@@ -102,10 +128,22 @@ export type ChatMessage = z.infer<typeof chatMessageSelectSchema>;
 export type ChatMessageInsert = z.infer<typeof chatMessageInsertSchema>;
 export type ChatMessageUpdate = z.infer<typeof chatMessageUpdateSchema>;
 
-export type ChatMemory = z.infer<typeof chatMemorySelectSchema>;
-export type ChatMemoryInsert = z.infer<typeof chatMemoryInsertSchema>;
-export type ChatMemoryUpdate = z.infer<typeof chatMemoryUpdateSchema>;
+export type ChatThreadChangelog = z.infer<typeof chatThreadChangelogSelectSchema>;
+export type ChatThreadChangelogInsert = z.infer<typeof chatThreadChangelogInsertSchema>;
+export type ChatThreadChangelogUpdate = z.infer<typeof chatThreadChangelogUpdateSchema>;
 
-export type ModelConfiguration = z.infer<typeof modelConfigurationSelectSchema>;
-export type ModelConfigurationInsert = z.infer<typeof modelConfigurationInsertSchema>;
-export type ModelConfigurationUpdate = z.infer<typeof modelConfigurationUpdateSchema>;
+export type ChatCustomRole = z.infer<typeof chatCustomRoleSelectSchema>;
+export type ChatCustomRoleInsert = z.infer<typeof chatCustomRoleInsertSchema>;
+export type ChatCustomRoleUpdate = z.infer<typeof chatCustomRoleUpdateSchema>;
+
+export type ChatPreSearch = z.infer<typeof chatPreSearchSelectSchema>;
+export type ChatPreSearchInsert = z.infer<typeof chatPreSearchInsertSchema>;
+export type ChatPreSearchUpdate = z.infer<typeof chatPreSearchUpdateSchema>;
+
+export type ChatRoundFeedback = z.infer<typeof chatRoundFeedbackSelectSchema>;
+export type ChatRoundFeedbackInsert = z.infer<typeof chatRoundFeedbackInsertSchema>;
+export type ChatRoundFeedbackUpdate = z.infer<typeof chatRoundFeedbackUpdateSchema>;
+
+export type ChatUserPreset = z.infer<typeof chatUserPresetSelectSchema>;
+export type ChatUserPresetInsert = z.infer<typeof chatUserPresetInsertSchema>;
+export type ChatUserPresetUpdate = z.infer<typeof chatUserPresetUpdateSchema>;

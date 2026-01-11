@@ -2,7 +2,6 @@
  * Checkout Mutation Hooks
  *
  * TanStack Mutation hooks for Stripe checkout operations
- * Following patterns from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
  */
 
 'use client';
@@ -10,7 +9,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import { createCheckoutSessionService, syncAfterCheckoutService } from '@/services/api';
+import { createCheckoutSessionService, getUserUsageStatsService, listModelsService, syncAfterCheckoutService } from '@/services/api';
 
 /**
  * Hook to create Stripe checkout session
@@ -26,20 +25,11 @@ export function useCreateCheckoutSessionMutation() {
     onSuccess: () => {
       // Invalidate subscriptions to prepare for post-checkout data
       queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
+
+      // Invalidate usage queries since new subscription will have different quota limits
+      queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to create checkout session', error);
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      // Don't retry on client errors (4xx)
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -52,30 +42,61 @@ export function useCreateCheckoutSessionMutation() {
  * Eagerly syncs subscription data from Stripe API immediately after checkout
  * to prevent race conditions with webhooks
  *
- * Invalidates all billing-related queries on success
+ * Invalidates and refetches all billing-related queries on success
  */
 export function useSyncAfterCheckoutMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: syncAfterCheckoutService,
-    onSuccess: () => {
-      // Invalidate all billing queries to refetch fresh data
-      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to sync after checkout', error);
+    onSuccess: async () => {
+      // Invalidate all billing queries and force immediate refetch
+      // Using refetchType: 'all' to refetch both active and inactive queries
+      // This ensures queries on the success page refetch even if not yet active
+
+      // Subscription queries - critical for success page
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.subscriptions.all,
+        refetchType: 'all', // Refetch all queries, not just active
+      });
+
+      // Product queries
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.all,
+        refetchType: 'all',
+      });
+
+      // Usage queries - reflect new quota limits from subscription
+      // ⚠️ CRITICAL: Usage stats API has HTTP caching (2min browser)
+      // Must bypass cache to get fresh data with updated quota limits
+      try {
+        const freshUsageData = await getUserUsageStatsService({ bypassCache: true });
+        queryClient.setQueryData(queryKeys.usage.stats(), freshUsageData);
+      } catch (error) {
+        console.error('[Checkout] Failed to refresh usage stats after checkout:', error);
+        // Fallback: invalidate and let normal refetch handle it
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.usage.all,
+          refetchType: 'all',
+        });
+      }
+
+      // Models query - tier-based access needs immediate refresh
+      // ⚠️ CRITICAL: Models API has aggressive HTTP caching (1hr browser, 24hr CDN)
+      // Must bypass cache to get fresh data with updated tier restrictions
+      try {
+        const freshModelsData = await listModelsService({ bypassCache: true });
+        queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
+      } catch (error) {
+        console.error('[Checkout] Failed to refresh models after checkout:', error);
+        // Fallback: invalidate and let normal refetch handle it
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.models.all,
+          refetchType: 'all',
+        });
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 1; // Only retry once for sync operations
-    },
+    retry: false,
     throwOnError: false,
   });
 }

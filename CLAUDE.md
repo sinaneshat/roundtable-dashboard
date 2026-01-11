@@ -1,8 +1,16 @@
 # CLAUDE.md
 
-Project guidance for Claude Code specialized agents working on roundtable.now - a collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.
+- In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision. 
+
+Project guidance for Claude Code specialized agents working on Roundtable - a collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.
 
 ## 🚨 DOCUMENTATION HIERARCHY
+
+**TYPE SAFETY & INFERENCE PATTERNS** (ALL AGENTS MUST READ):
+- **🚨 MANDATORY**: `/docs/type-inference-patterns.md`
+- **Defines**: Enum 5-part pattern, metadata type safety chain, query keys, Zod schemas, type inference
+- **Enforces**: Single source of truth, Zod-first pattern, no escape hatches, discriminated unions
+- **ALL agents MUST follow these patterns without deviation**
 
 **BACKEND DEVELOPMENT**:
 - **🚨 SINGLE SOURCE OF TRUTH**: `/docs/backend-patterns.md`
@@ -37,14 +45,21 @@ pnpm db:migrate:local       # Apply migrations locally
 pnpm db:migrate:preview     # Apply migrations to preview
 pnpm db:migrate:prod        # Apply migrations to production
 pnpm db:studio:local        # Open Drizzle Studio
-pnpm db:fresh:quick         # Reset and seed database quickly
-pnpm db:full-reset:local    # Complete database reset
+pnpm db:full-reset:local    # Full reset: wipe all state (D1, R2, KV), migrate, seed
+pnpm local:wipe-state       # Clear all Wrangler state (D1, R2, KV, tmp)
+pnpm local:nuclear-reset    # Nuclear: clear Next.js cache + all Wrangler state + migrate + seed
 
 # Cloudflare Deployment
 pnpm cf-typegen            # Generate CloudflareEnv types
 pnpm preview               # Build and preview worker locally
 pnpm deploy:preview        # Deploy to preview environment
 pnpm deploy:production     # Deploy to production
+
+# Testing
+pnpm test                  # Run all tests
+pnpm test:watch            # Run tests in watch mode
+pnpm test:coverage         # Run tests with coverage
+pnpm test:ci               # Run tests in CI mode
 
 # Testing & Quality
 pnpm i18n:full-check       # Check all i18n translation keys
@@ -75,8 +90,15 @@ src/
 │   └── migrations/        # SQL migration files
 ├── hooks/                 # React Query data fetching
 ├── lib/                   # Utility libraries
-└── i18n/                  # Internationalization (English-only, dynamic keys)
-    └── locales/           # en/common.json translation keys
+├── i18n/                  # Internationalization (English-only, dynamic keys)
+│   └── locales/           # en/common.json translation keys
+├── __tests__/             # Test files
+│   └── README.md          # Testing documentation
+└── lib/
+    └── testing/           # Testing utilities
+        ├── index.ts       # Barrel export
+        ├── render.tsx     # Custom render with providers
+        └── helpers.ts     # Test helpers and utilities
 ```
 
 ## Core Architecture Patterns
@@ -115,6 +137,74 @@ src/
 - TanStack Query hooks in `src/hooks/` for server state
 - All user text through `useTranslations()` - NO hardcoded strings (English-only)
 - Dark theme only (no theme switching)
+
+### State Management Layer (Zustand v5)
+**🚨 MANDATORY**: Use `/store-fix` command for ALL store-related work.
+**Reference**: Context7 MCP `/pmndrs/zustand` for official patterns - fetch latest docs before implementation.
+
+**Ground Rules** (from official Zustand + Next.js docs):
+1. **NO Global Stores**: Factory function (`createChatStore()`) + Context, NOT module-level `create()`
+2. **Vanilla Store**: Use `createStore()` from `zustand/vanilla` for SSR isolation
+3. **Context + useRef**: Provider uses `useRef` to create store once per instance
+4. **RSC Forbidden**: React Server Components cannot read/write store - client only
+5. **StateCreator Chain**: All slices typed with `[['zustand/devtools', never]]` middleware chain
+6. **Action Names**: ALL `set()` calls MUST have third param `set({}, undefined, 'slice/action')`
+7. **useShallow**: Batch object/array selectors - individual selectors cause re-renders
+8. **Middleware at Combined Level**: Never apply devtools/persist inside individual slices
+
+**Store Architecture** (`src/stores/{domain}/`):
+- `store.ts`: Slice implementations + vanilla factory (`createStore()`)
+- `store-schemas.ts`: Zod schemas → type inference (SINGLE SOURCE OF TRUTH)
+- `store-action-types.ts`: Explicit action function type definitions
+- `store-defaults.ts`: Default values + reset state groups
+- `actions/`: Complex action logic extracted (form-actions, thread-actions)
+- `hooks/`: Reusable selector hooks with useShallow batching
+
+**File Structure**:
+```
+src/stores/{domain}/
+├── index.ts              # Public API exports only
+├── store.ts              # Slices + createStore factory + devtools
+├── store-schemas.ts      # Zod schemas + z.infer types
+├── store-action-types.ts # Action type definitions
+├── store-defaults.ts     # Defaults + reset groups (STREAMING_STATE_RESET, etc.)
+├── store-constants.ts    # Enums, animation indices
+├── actions/              # Complex action hooks
+├── hooks/                # Selector hooks (useShallow)
+└── utils/                # Pure utility functions
+```
+
+**Forbidden Patterns** (IMMEDIATE FIX):
+- `create()` hook → use `createStore()` vanilla
+- `set()` without action name → add `'slice/action'` third param
+- `StateCreator<Store>` → add `[['zustand/devtools', never]]` chain
+- Multiple individual selectors → batch with `useShallow`
+- Manual interfaces → use Zod `z.infer<>`
+- `any` or `as Type` casts in store code
+- Global module stores → factory + Context
+- RSC store access → client components only
+
+### Testing Layer (Vitest + React Testing Library)
+**Test Infrastructure** (`vitest.config.ts`, `vitest.setup.ts`):
+- Vitest v4 configured with Vite for Next.js support
+- JSDOM environment for DOM testing
+- Global mocks: `matchMedia`, `IntersectionObserver`, `ResizeObserver`
+- Testing utilities in `src/lib/testing/` following project architecture
+
+**Testing Patterns**:
+- Use `render` from `@/lib/testing` for consistent provider setup
+- Prefer user-centric queries (`getByRole`, `getByLabelText`)
+- Use `userEvent` for realistic user interactions
+- Test behavior, not implementation details
+- Focus on what users see and do
+
+**Test Organization**:
+- `src/__tests__/` - General test files
+- `src/components/{domain}/__tests__/` - Component tests
+- `src/stores/{domain}/__tests__/` - Store tests
+- `src/lib/testing/` - Shared test utilities (render, helpers, etc.)
+
+**Documentation**: See `docs/TESTING_SETUP.md` and `src/__tests__/README.md`
 
 ## Email System
 
@@ -226,9 +316,30 @@ NEXT_PUBLIC_SES_VERIFIED_EMAIL=noreply@your-domain.com
 - **Translation Patterns**: All user-facing text must use `useTranslations()` hooks and `t()` function
 - **Note**: Application is English-only, but translation keys are maintained for consistency and maintainability
 
+### Testing Context (`test-expert`)
+**Primary Context Documents**:
+- **Testing Documentation**: `/docs/TESTING_SETUP.md` - Comprehensive testing setup guide
+  - `/src/__tests__/README.md` - Testing patterns and examples
+- **Configuration Files**:
+  - `/vitest.config.ts` - Vitest v4 configuration with Next.js integration
+  - `/vitest.setup.ts` - Global test setup and mocks
+- **Testing Utilities**: `/src/lib/testing/` - Testing library following project architecture
+  - `index.ts` - Barrel export for all testing utilities
+  - `render.tsx` - Custom render utilities with providers
+  - `helpers.ts` - Mock factories, async utilities, localStorage mocks
+- **Component Tests**: `/src/components/{domain}/__tests__/` - Domain-specific component tests
+- **Store Tests**: `/src/stores/{domain}/__tests__/` - State management tests
+- **Testing Patterns**:
+  - Use `render` from `@/lib/testing` for provider setup
+  - Prefer semantic queries (`getByRole`, `getByLabelText`)
+  - Use `userEvent` for user interactions
+  - Test behavior, not implementation
+  - Focus on user experience
+
 ### Configuration Context (All Agents)
 **Primary Context Documents**:
 - **📋 Project Documentation**: `/docs/` - Essential implementation guides
+  - **🚨 `/docs/type-inference-patterns.md` - MANDATORY for ALL agents - Enum 5-part pattern, metadata type safety, query keys, Zod schemas**
   - **🚨 `/docs/backend-patterns.md` - THE SINGLE SOURCE OF TRUTH for ALL backend development**
   - **🚨 `/docs/frontend-patterns.md` - THE SINGLE SOURCE OF TRUTH for ALL frontend development**
 - **Environment Setup**: `/wrangler.jsonc` - Cloudflare Workers configuration and bindings
@@ -356,24 +467,46 @@ Each agent has domain-specific expertise:
 - API research and integration analysis
 - Best practices research and recommendations (`/src/db/tables/` domain modeling)
 
+**test-expert.md**: Jest + React Testing Library specialist
+- **Must consult**: `/docs/TESTING_SETUP.md`, `src/__tests__/README.md` for testing patterns
+- Write unit and integration tests following RTL best practices
+- Test chat participant behavior, turn-taking, and UI state updates
+- Use custom `render` from `@/lib/testing` for provider setup
+- Focus on user behavior, not implementation details
+- Testing utilities located in `/src/lib/testing/` following project architecture
+- Follow semantic queries (`getByRole`, `getByLabelText`)
+- Use `userEvent` for realistic user interactions
+- Maintain high test coverage without testing implementation
+
 ## Agent Chaining Examples
 
-**Database → Backend → Frontend**:
+**Database → Backend → Frontend → Testing**:
 1. Schema changes trigger migration generation
 2. Backend agent updates API endpoints with new schemas
 3. Frontend agent updates React Query hooks and UI components
+4. Test agent writes tests for new functionality
 
 **Feature Development Workflow**:
 1. Research agent analyzes requirements and APIs
 2. Backend agent implements database schema and API endpoints
 3. Frontend agent creates UI components and data fetching
 4. i18n agent ensures all text uses translation keys (English-only)
+5. Test agent writes comprehensive tests for the feature
 
 **External Integration Pattern**:
 1. Backend agent implements external API integration
 2. Database operations for data tracking and audit trails
 3. Frontend agent creates UI and status handling
-4. Real-time updates via polling or server-sent events
+4. Test agent writes tests with mocked API responses
+5. Real-time updates via polling or server-sent events
+
+**Testing Workflow**:
+1. Test agent reviews component/feature requirements
+2. Examines existing tests for patterns
+3. Creates test utilities and helpers as needed
+4. Writes unit tests for components and stores
+5. Writes integration tests for user flows
+6. Ensures accessibility and error state coverage
 
 ## Advanced Agent Orchestration Patterns
 
@@ -609,3 +742,20 @@ research-analyst findings → backend-pattern-expert implementation → frontend
 - Rate limiting on authentication endpoints
 - No secrets in environment files (use wrangler secrets)
 - Audit trail for all operations via event logging system
+
+**Export Patterns (GROUND RULE)**:
+- **NO RE-EXPORTS except barrel exports (index.ts)**: Code must be exported once from its source file OR re-exported from a barrel (index.ts) file only
+- **Barrel exports are the ONLY valid re-export pattern**: `export { X } from './x'` is only valid in index.ts files
+- **Non-barrel files must NOT re-export**: Don't use `export { X } from './other'` in non-index files
+- **Single source of truth**: Each export should have ONE canonical source - consumers import from there or from the barrel
+- **No aliased re-exports**: Don't rename exports across files (`export { X as Y } from ...`) - use the original name
+- **Migration required**: If you find re-exports, migrate all consumers to import from the single source of truth
+
+**Code Comments (GROUND RULE)**:
+- **Minimal comments**: Code should be self-documenting; only add comments when logic isn't self-evident
+- **No stale/deprecated comments**: Remove outdated comments immediately - stale comments are worse than no comments
+- **No "LEGACY" or "TODO: migrate" comments**: Fix the issue instead of leaving warning comments for later
+- **No redundant comments**: Don't comment what the code already says (e.g., `// Import X` above an import statement)
+- **No backwards-compatibility comments**: Don't leave comments like `// removed`, `// deprecated`, `// available from X` - just delete the code
+- **Update or delete**: When changing code, update related comments or delete them entirely - never leave them stale
+- **JSDoc for public APIs only**: Use JSDoc for exported functions/types that need documentation, not for internal implementation

@@ -1,77 +1,132 @@
 {
-  "1": {
-    "0": {
-      "0": "0"
-    }
-  },
   "accessibility": {
-    "breadcrumb": "breadcrumb",
-    "continueToBankSigning": "Continue to bank for contract signing",
+    "accessibility": "Accessibility",
+    "disableHighContrast": "DisableHighContrast",
+    "disableMotion": "DisableMotion",
+    "enableHighContrast": "EnableHighContrast",
+    "enableMotion": "EnableMotion",
+    "highContrast": "HighContrast",
+    "largeText": "LargeText",
+    "mobileSidebar": {
+      "title": "Navigation",
+      "description": "Main navigation menu"
+    },
     "morePages": "More pages",
     "nextPage": "Go to next page",
-    "notSetAsDefault": "Not set as default",
-    "openFiltersMenu": "Open filters menu",
+    "openSidebar": "Open sidebar",
+    "normalText": "NormalText",
+    "openToolbar": "OpenToolbar",
     "pagination": "pagination",
     "previousPage": "Go to previous page",
+    "reducedMotion": "ReducedMotion",
     "selectAll": "Select all",
     "selectRow": "Select row",
-    "settingUpContract": "Setting up contract...",
-    "setupDirectDebitContract": "Setup direct debit contract",
-    "toggleSidebar": "Toggle Sidebar",
-    "disableHighContrast": "DisableHighContrast",
-    "enableHighContrast": "EnableHighContrast",
-    "highContrast": "HighContrast",
-    "enableMotion": "EnableMotion",
-    "disableMotion": "DisableMotion",
-    "reducedMotion": "ReducedMotion",
-    "normalText": "NormalText",
-    "largeText": "LargeText",
-    "openToolbar": "OpenToolbar",
-    "accessibility": "Accessibility",
-    "settings": "Settings"
+    "settings": "Settings",
+    "toggleSidebar": "Toggle Sidebar"
   },
   "actions": {
-    "add": "Add",
-    "addPaymentMethod": "Add Payment Method",
     "back": "Back",
-    "billingSettings": "Billing Settings",
     "cancel": "Cancel",
-    "changePlan": "Change Plan",
-    "choose": "Choose",
-    "choosePlan": "Choose Plan",
-    "clearSelection": "Clear Selection",
     "close": "Close",
-    "confirm": "Confirm",
-    "continue": "Continue",
-    "create": "Create",
     "delete": "Delete",
-    "downgrade": "Downgrade",
+    "deleting": "Deleting",
+    "done": "Done",
     "download": "Download",
-    "downloadInvoice": "Download Invoice",
-    "edit": "Edit",
-    "finish": "Finish",
-    "getStartedFree": "Get Started Free",
+    "goHome": "Go Home",
     "loading": "Loading...",
-    "manage": "Manage",
-    "more": "More Actions",
     "next": "Next",
     "previous": "Previous",
-    "refresh": "Refresh",
-    "remove": "Remove",
     "retry": "Retry",
     "save": "Save",
+    "scrollToBottom": "Scroll to bottom",
     "select": "Select",
-    "selectPlan": "Select Plan",
-    "skip": "Skip",
-    "submit": "Submit",
     "tryAgain": "Try Again",
-    "update": "Update",
-    "updatePayment": "Update Payment",
-    "upgrade": "Upgrade",
-    "upload": "Upload",
-    "view": "View",
-    "viewAll": "View All",
-    "cancelling": "Cancelling"
+    "updating": "Updating",
+    "toggleSidebar": "Toggle Sidebar",
+    "more": "More"
+  },
+  "apiKeys": {
+    "modal": {
+      "title": "API Keys",
+      "description": "Manage your API keys for programmatic access"
+    },
+    "docs": {
+      "accordion": {
+        "title": "API Documentation",
+        "subtitle": "Explore our API reference and guides",
+        "description": "Access comprehensive documentation to integrate with our API. Choose the format that works best for you."
+      },
+      "links": {
+        "interactive": {
+          "title": "Interactive Documentation",
+          "description": "Browse and test API endpoints with Scalar UI"
+        },
+        "openapi": {
+          "title": "OpenAPI Specification",
+          "description": "Download the complete API spec in JSON format"
+        },
+        "llmText": {
+          "title": "LLM-Friendly Documentation",
+          "description": "Markdown format optimized for AI tools and agents"
+        }
+      }
+    },
+    "tabs": {
+      "list": "My Keys",
+      "create": "Create New"
+    },
+    "form": {
+      "nameLabel": "API Key Name",
+      "namePlaceholder": "e.g., Production API Key",
+      "nameDescription": "A descriptive name to help you identify this key",
+      "expiresInLabel": "Expiration",
+      "expiresInPlaceholder": "Select expiration period",
+      "expiresInDescription": "When this key should expire (optional)",
+      "expiresIn": {
+        "never": "Never expires",
+        "7days": "7 days",
+        "30days": "30 days",
+        "90days": "90 days",
+        "180days": "180 days",
+        "365days": "365 days"
+      },
+      "successTitle": "API Key Created Successfully!",
+      "successMessage": "Your API key has been generated. Make sure to copy it now - you won't be able to see it again.",
+      "generatedKeyLabel": "Your API Key",
+      "copyButton": "Copy",
+      "copied": "Copied!",
+      "copyWarning": "This is your only chance to copy this key. Store it securely - we cannot recover it later.",
+      "createButton": "Create API Key",
+      "doneButton": "Done",
+      "limitReached": {
+        "title": "API Key Limit Reached",
+        "description": "You have reached the maximum limit of 5 API keys. Please delete an existing key before creating a new one."
+      }
+    },
+    "list": {
+      "noKeys": "No API keys yet",
+      "noKeysDescription": "Create your first API key to start using our programmatic API access",
+      "createNew": "Create API Key",
+      "unnamedKey": "Unnamed Key",
+      "createdAt": "Created",
+      "expiresAt": "Expires",
+      "neverExpires": "Never",
+      "expired": "Expired",
+      "status": "Status",
+      "active": "Active",
+      "disabled": "Disabled",
+      "remainingRequests": "Remaining",
+      "rateLimit": "Rate Limit",
+      "day": "day",
+      "delete": "Delete API key",
+      "deleteConfirmTitle": "Delete API Key?",
+      "deleteConfirmDescription": "This action cannot be undone. This API key will immediately stop working.",
+      "deleteButton": "Delete Key",
+      "deleteSuccess": "API key deleted",
+      "deleteSuccessDescription": "The API key has been permanently deleted",
+      "deleteFailed": "Failed to delete API key",
+      "deleteFailedDescription": "An error occurred while deleting the API key"
+    }
   },
   "auth": {
     "email": "Email",
@@ -86,754 +141,954 @@
       "configurationDesc": "There is a problem with the server configuration. Please contact support if this persists.",
       "default": "Authentication Error",
       "defaultDesc": "An unexpected error occurred during authentication. Please try again.",
-      "emailAlreadyExists": "Email already exists",
+      "domainRestricted": "Email Domain Not Allowed",
+      "domainRestrictedDesc": "Access is restricted to @deadpixel.ai email addresses in this environment. Please sign in with an authorized email.",
       "emailCreateAccount": "Account Creation Error",
       "emailCreateAccountDesc": "Could not create your account. Please try a different email address.",
-      "emailNotFound": "Email not found",
       "errorCode": "Error code:",
-      "genericError": "An error occurred. Please try again.",
-      "invalidCredentials": "Invalid email or password",
+      "invalidEmailAddress": "Invalid email address",
+      "googleSignInFailed": "Google sign-in failed. Please try again.",
+      "signInFailed": "Sign-in Failed",
+      "threadNotFound": "Thread Not Found",
+      "threadUnavailable": "Thread Unavailable",
+      "notice": "Notice",
       "oauthCallback": "Authentication Error",
       "oauthCallbackDesc": "There was a problem with the authentication process. Please try signing in again.",
       "oauthCreateAccount": "Account Creation Error",
       "oauthCreateAccountDesc": "Could not create your account. You may already have an account with this email.",
       "oauthSignin": "Sign In Error",
       "oauthSigninDesc": "There was a problem signing in with your social account. Please try again.",
-      "passwordTooWeak": "Password must be at least 8 characters",
       "restartProcess": "Authentication Process Reset Required",
       "restartProcessDesc": "The authentication process needs to be restarted. Please try signing in again from the beginning.",
-      "sessionExpired": "Your session has expired. Please sign in again.",
       "tryAgain": "Try Again",
       "verification": "Verification Required",
       "verificationDesc": "Please check your email to verify your account before signing in."
     },
-    "forgotPassword": {
-      "backToSignIn": "Back to Sign In",
-      "email": "Email",
-      "resetLinkSent": "Reset link sent to your email",
-      "sendResetLink": "Send Reset Link",
-      "subtitle": "Enter your email to reset your password",
-      "title": "Forgot Password"
-    },
-    "form": {
-      "alreadyHaveAccount": "Already have an account?",
-      "checkYourEmail": "Check your email",
-      "connectingGoogle": "Connecting to Google...",
-      "continueWithGoogle": "Continue with Google",
-      "createAccount": "Create Account",
-      "creatingAccount": "Creating Account...",
-      "dontHaveAccount": "Don't have an account?",
-      "email": "Email",
-      "emailExpireMessage": "Click the link in your email to continue. The link will expire in 10 minutes.",
-      "emailPlaceholder": "jane@acme.com",
-      "emailSentMessage": "We sent you a sign in link. Be sure to check your spam too.",
-      "error": "Error",
-      "fullName": "Full Name",
-      "fullNamePlaceholder": "Jane Smith",
-      "getStarted": "Get started with Roundtable",
-      "signIn": "Sign In",
-      "signInLink": "Sign in",
-      "signUpLink": "Sign up",
-      "signingIn": "Signing In...",
-      "somethingWentWrong": "Something went wrong. Please try again.",
-      "useDifferentEmail": "Use a different email",
-      "welcomeBack": "Welcome back to Roundtable"
-    },
     "layout": {
-      "subtitle": "Your AI collaboration platform",
-      "welcomeTo": "Welcome to {brand}"
+      "headline": "Your AI Board of Directors",
+      "subtitle": "Get perspectives from multiple AI models working together to solve your toughest problems"
     },
+    "continueWithEmail": "Continue with Email",
     "magicLink": {
       "emailSentMessage": "We've sent a magic link to {email}. Click the link to sign in.",
+      "error": "Error",
       "sendButton": "Send Magic Link",
       "title": "Check your email",
       "useDifferentEmail": "Use a different email"
     },
-    "resetPassword": {
-      "confirmNewPassword": "Confirm New Password",
-      "newPassword": "New Password",
-      "passwordResetSuccess": "Password reset successfully",
-      "resetButton": "Reset Password",
-      "subtitle": "Enter your new password",
-      "title": "Reset Password"
-    },
-    "secureAuthentication": "Secure authentication with Better Auth",
     "signIn": {
-      "description": "Enter your email for a magic link or sign in with Google",
-      "email": "Email",
-      "forgotPassword": "Forgot password?",
-      "noAccount": "Don't have an account?",
-      "password": "Password",
-      "rememberMe": "Remember me",
-      "signInButton": "Sign In",
-      "signInWithGoogle": "Sign In with Google",
-      "signUpLink": "Sign up here",
-      "subtitle": "Welcome back to Roundtable",
-      "title": "Sign In"
+      "description": "Sign in to your account",
+      "title": "Welcome back"
     },
-    "signInWithGoogle": "Sign in with Google",
     "signUp": {
-      "agreeToTerms": "I agree to the Terms of Service and Privacy Policy",
-      "confirmPassword": "Confirm Password",
-      "email": "Email",
-      "firstName": "First Name",
-      "hasAccount": "Already have an account?",
-      "lastName": "Last Name",
-      "password": "Password",
-      "privacyPolicy": "Privacy Policy",
-      "signInLink": "Sign in here",
-      "signUpButton": "Sign Up",
-      "signUpWithGoogle": "Sign Up with Google",
-      "subtitle": "Create your Roundtable account",
-      "termsOfService": "Terms of Service",
-      "title": "Sign Up"
-    },
-    "signUpWithGoogle": "Sign up with Google",
-    "sso": {
-      "authenticationRequired": "SSO Authentication Required",
-      "contactAdministrator": "Contact support to configure SSO access for this application.",
-      "continueWithRoundtableSSO": "Continue with Roundtable SSO",
-      "continueWithSSO": "Continue with SSO",
-      "onlySupportsSSO": "This application only supports SSO login",
-      "redirectMessage": "You'll be redirected to your organization's sign-in page",
-      "signInThroughOrganization": "Sign in through your organization's Single Sign-On provider"
-    }
-  },
-  "bankSetup": {
-    "authorization": {
-      "cancelContract": "Cancel Contract",
-      "cancelContractDescription": "Cancel the current contract and choose a different bank",
-      "checkingDescription": "Verifying your bank authorization...",
-      "checkingTitle": "Checking Authorization Status",
-      "failedDescription": "The bank authorization process was not completed successfully",
-      "failedTitle": "Authorization Failed",
-      "selectDifferentBank": "Select Different Bank",
-      "verifiedDescription": "Your bank authorization has been successfully completed",
-      "verifiedTitle": "Authorization Verified",
-      "waitingDescription": "Please complete the authorization process in the bank window that opened",
-      "waitingTitle": "Waiting for Bank Authorization"
-    },
-    "bank": {
-      "bankCode": "Bank Code",
-      "continueToAuthorization": "Continue to Bank Authorization",
-      "dailyCount": "Daily Transaction Count",
-      "dailyLimit": "Daily Limit",
-      "description": "Select your bank to proceed with authorization setup",
-      "highLimit": "High Limit",
-      "maxAmount": "Maximum Amount",
-      "perTransaction": "per transaction",
-      "selectLabel": "Choose Your Bank",
-      "selectPlaceholder": "Select a bank...",
-      "transactionsPerDay": "transactions per day",
-      "unlimited": "Unlimited",
-      "unlimitedTransactions": "Unlimited transactions per day"
-    },
-    "completed": {
-      "description": "Your bank authorization is now active and ready for automatic payments",
-      "nextSteps": "You can now use this payment method for subscriptions and automatic billing",
-      "title": "Setup Completed Successfully"
-    },
-    "contact": {
-      "description": "Please provide your contact information for bank verification",
-      "mobileHelper": "Required for bank authorization SMS verification",
-      "mobileLabel": "Mobile Number",
-      "mobilePlaceholder": "09XX XXX XXXX",
-      "nationalCodeHelper": "Optional but recommended for enhanced security",
-      "nationalCodeLabel": "National ID Code",
-      "nationalCodePlaceholder": "10-digit national code",
-      "selectedPlan": "Selected Plan: {planName} - {price}"
-    },
-    "errors": {
-      "authorizationCheckFailed": "Failed to check authorization status",
-      "authorizationFailed": "Bank authorization was cancelled or failed",
-      "contactSubmitFailed": "Failed to submit contact information",
-      "invalidBank": "Selected bank is not valid",
-      "selectBank": "Please select a bank to continue"
-    },
-    "messages": {
-      "authorizationCompleted": "Bank authorization completed successfully",
-      "contactSubmitted": "Contact information submitted successfully",
-      "redirectingToBank": "Redirecting to {bankName} authorization...",
-      "setupCompleted": "Bank authorization setup completed successfully"
-    },
-    "setupBankAuthorization": "Setup Bank Authorization",
-    "setupForPlan": "Setup Payment for Plan",
-    "stepIndicator": "Step {current} of {total}",
-    "steps": {
-      "authorization": {
-        "description": "Bank verification",
-        "title": "Authorization"
-      },
-      "bank": {
-        "description": "Choose your bank",
-        "title": "Bank Selection"
-      },
-      "completed": {
-        "description": "Setup successful",
-        "title": "Completed"
-      },
-      "contact": {
-        "description": "Phone & ID verification",
-        "title": "Contact Info"
+      "title": "Sign Up",
+      "join": "Join",
+      "getStartedFree": "Get Started Free",
+      "features": {
+        "multipleModels": "Multiple AI models collaborate together",
+        "realtimeBrainstorming": "Real-time brainstorming and problem solving",
+        "publicSharing": "Share conversations publicly"
       }
     },
-    "status": {
-      "active": "Active",
-      "current": "Current",
-      "currentPlan": "Current Plan",
-      "noContract": "No direct debit contract set up"
-    },
-    "subtitle": "Set up secure bank authorization for automated payments",
-    "title": "Bank Authorization Setup"
+    "signInWithGoogle": "Continue with Google"
   },
   "billing": {
-    "activeMethod": "active method",
-    "activeMethods": "active methods",
-    "addPaymentMethod": "Add Payment Method",
-    "amount": "Amount",
-    "billingCycle": "Billing Cycle",
-    "billingHistory": "Billing History",
-    "billingSettingsDescription": "Configure your billing preferences",
-    "browseProducts": "Browse Products",
-    "canceledAtPeriodEnd": "This subscription will be canceled at the end of the billing period",
-    "changePlanDescription": "Upgrade or downgrade your subscription",
-    "choosePlan": "Choose Plan",
-    "chooseplanDescription": "Select the perfect plan for your needs",
-    "commonBillingTasks": "Common billing tasks",
-    "configured": "Configured",
-    "currency": "Currency",
-    "currentPlan": "Current Plan",
-    "modal": {
-      "title": "Billing & Subscriptions",
-      "description": "Manage your subscription and view available plans",
-      "viewProfile": "View Profile"
-    },
-    "changePlan": "Change Plan",
-    "cancelSubscription": "Cancel Subscription",
-    "renewsOn": "Renews On",
-    "cancelScheduled": "Cancellation Scheduled",
-    "cancelScheduledDescription": "Your subscription will be canceled on {date}. You will retain access until then.",
-    "cancelDialog": {
-      "title": "Cancel Subscription",
-      "description": "Are you sure you want to cancel your subscription? You will retain access until the end of your billing period.",
-      "confirm": "Yes, Cancel Subscription"
-    },
-    "cancelSubscriptionDetails": {
-      "title": "Cancel Your Subscription?",
-      "warning": "Are you absolutely sure you want to cancel?",
-      "description": "Canceling your subscription will limit your access to premium features. Your subscription will remain active until the end of your current billing period.",
+    "cancelSubscription": {
       "activeUntil": "Active until",
       "confirmButton": "Yes, Cancel Subscription",
-      "whatYouWillLose": "What you'll lose access to:",
+      "description": "Canceling your subscription will limit your access to premium features. Your subscription will remain active until the end of your current billing period.",
       "loss": {
+        "advancedFeatures": "Advanced features and customization options",
         "premiumModels": "Access to premium AI models and advanced capabilities",
-        "unlimitedConversations": "Unlimited conversations and messages",
         "prioritySupport": "Priority customer support and assistance",
-        "advancedFeatures": "Advanced features and customization options"
+        "unlimitedConversations": "Unlimited conversations and messages"
       },
+      "termsNotice": "By confirming, you agree to the cancellation terms. You can reactivate your subscription at any time before it expires.",
       "timeline": {
-        "title": "Cancellation Timeline:",
-        "immediate": "No further charges will be made to your account",
         "accessUntil": "You'll retain full access to all premium features until {date}",
-        "downgrade": "After your subscription ends, your account will automatically downgrade to the free tier"
+        "downgrade": "After your subscription ends, your account will return to the Free plan",
+        "immediate": "No further charges will be made to your account",
+        "title": "Cancellation Timeline:"
       },
-      "termsNotice": "By confirming, you agree to the cancellation terms. You can reactivate your subscription at any time before it expires."
+      "title": "Cancel Your Subscription?",
+      "warning": "Are you absolutely sure you want to cancel?",
+      "whatYouWillLose": "What you'll lose access to:"
     },
-    "currentSubscription": {
-      "description": "Manage your active subscription",
-      "title": "Current Subscription"
-    },
-    "success": {
-      "activatingSubscription": "Activating your subscription...",
-      "confirmingPayment": "Please wait while we confirm your payment",
-      "title": "Payment Successful!",
-      "description": "Your subscription has been activated",
-      "redirecting": "Redirecting in {count} seconds",
-      "viewPlan": "View My Plan"
-    },
+    "currentPlan": "Current Plan",
     "interval": {
-      "monthly": "Monthly",
-      "annual": "Annual",
-      "month": "month",
-      "year": "year"
+      "credits": "Credits",
+      "monthly": "Monthly"
     },
-    "currentUsage": "Current Usage",
-    "default": "Default",
-    "description": "Description",
-    "directDebit": "Direct Debit",
-    "discount": "Discount",
-    "downloadInvoiceDescription": "Get your latest billing statements",
-    "dueDate": "Due Date",
-    "empty": "No billing information yet",
-    "emptyDescription": "Set up your subscription to get started",
-    "expiresOn": "Expires On",
-    "failedPaymentMessage": "There was an issue with your recent payment. Please check your payment method or contact support.",
-    "invoiceDate": "Invoice Date",
     "manageBilling": "Manage Billing",
-    "manageBillingInfo": "Manage your billing information",
-    "manageSubscription": "Manage Subscription",
-    "manageSubscriptionDescription": "Modify or cancel your current plan",
-    "syncSubscription": "Sync Subscription",
-    "syncing": "Syncing...",
-    "monthlyCost": "Monthly Cost",
-    "monthlyPrice": "Monthly Price",
-    "nextBilling": "Next Billing Date",
-    "noActiveSubscription": "You don't have an active subscription. Browse our plans to get started.",
-    "noDescription": "No description available",
     "noPlansForInterval": "No plans available for this billing period",
-    "noPricing": "No pricing information available",
-    "noProducts": "No products available",
-    "noSubscription": "No active subscription",
-    "priceId": "Price ID",
-    "noValidContract": "No valid payment contract found. Please set up your payment method first.",
-    "alreadyOnThisPlan": "You are already on this plan",
-    "alreadyHasActiveSubscription": "You already have an active subscription. Use the switch plan option to change your subscription.",
-    "switchSuccess": "Successfully switched to {planName}",
-    "switchSuccessUpgrade": "Successfully upgraded to {planName}! Charged: ${amount}",
-    "switchSuccessDowngrade": "Successfully downgraded to {planName}! Credit: ${creditAmount}",
-    "switchSuccessEven": "Successfully switched to {planName}! No additional charge.",
-    "switchFailed": "Failed to switch subscription plan",
-    "switchFailedInsufficientFunds": "Plan switch failed due to insufficient funds. Please ensure your account has enough balance and try again.",
-    "noPaymentMethods": "No payment methods added",
-    "noPlan": "No Plan",
-    "notScheduled": "Not scheduled",
-    "overview": {
-      "description": "View your billing summary and subscription status",
-      "title": "Billing Overview"
-    },
-    "paymentHistory": "Payment History",
-    "paymentHistoryEmpty": "No payment history",
-    "paymentHistoryEmptyDescription": "Your payment transactions will appear here once you make your first purchase",
-    "paymentIssue": "Payment Issue Detected",
-    "paymentMethod": "Payment Method",
-    "paymentMethods": "Payment Methods",
-    "paymentSuccess": "Payment Success Rate",
-    "paymentSuccessful": "Payment Success",
-    "plansDescription": "Choose the perfect plan for your needs and upgrade or downgrade anytime.",
-    "plansTitle": "Subscription Plans",
-    "primaryDirectDebit": "Primary • Direct Debit",
     "products": {
       "description": "Browse and subscribe to available products",
       "title": "Available Products"
     },
-    "quickActions": "Quick Actions",
-    "recentTransactions": "Your recent billing transactions",
+    "renewsOn": "Renews On",
     "status": {
-      "label": "Status",
       "canceled": "Canceled",
-      "canceledTooltip": "Your subscription will be canceled on {date}. You'll retain full access to all premium features until then, after which your account will automatically downgrade to the free tier.",
+      "canceledTooltip": "Your subscription will be canceled on {date}. You'll retain full access to all premium features until then, after which your account will return to the Free plan.",
       "endOfPeriod": "the end of your billing period"
     },
-    "subscribe": "Subscribe",
-    "subscription": "Subscription",
-    "subscriptionPlan": "Subscription Plan",
-    "subscriptions": {
-      "description": "Manage your active subscriptions",
-      "title": "My Subscriptions"
+    "success": {
+      "activatingSubscription": "Activating your subscription...",
+      "processingPurchase": "Processing your purchase...",
+      "processingSubscription": "Activating your subscription...",
+      "processingCredits": "Adding credits to your account...",
+      "confirmingPayment": "Please wait while we confirm your payment",
+      "description": "Your subscription has been activated",
+      "autoRedirect": "Redirecting to chat in {seconds} seconds...",
+      "startChat": "Start Your Roundtable",
+      "title": "Payment Successful!",
+      "viewPricing": "View Pricing Plans",
+      "planLimits": {
+        "credits": "Credits",
+        "concurrentModels": "Concurrent Models",
+        "monthlyCredits": "Monthly Credits",
+        "creditsAvailable": "Credits Available",
+        "maxThreads": "Max Threads",
+        "maxMessages": "Max Messages",
+        "maxMemories": "Max Memories",
+        "customRoles": "Custom Roles",
+        "status": "Status",
+        "activeUntilLabel": "Active until",
+        "paidDescription": "Your subscription includes the following features",
+        "defaultDescription": "You have access to the following features",
+        "models": "AI Models",
+        "monthly": "Monthly Refresh",
+        "bonus": "Bonus",
+        "oneTime": "One-time"
+      },
+      "credits": {
+        "title": "Credits Added!",
+        "description": "Your credits have been added to your account",
+        "creditsAdded": "{amount} credits",
+        "amountPaid": "Amount Paid",
+        "currentBalance": "Current Balance",
+        "purchased": "Purchased"
+      }
     },
-    "upcomingBilling": "Upcoming Billing",
-    "setupDirectDebit": "Setup Direct Debit",
-    "setupPayment": "Setup Payment",
-    "started": "Started",
-    "subscriptionBilling": "Subscription Billing",
-    "subscriptionBillingDescription": "View your subscription billing history and automated charges",
-    "subscriptionsDescription": "Manage your active and past subscriptions",
-    "subscriptionsTitle": "Subscriptions",
-    "subtitle": "Manage your subscription and billing information",
-    "subtotal": "Subtotal",
-    "tax": "Tax",
-    "title": "Billing",
-    "total": "Total",
-    "unknownProduct": "Unknown Product",
-    "upcomingBills": "Upcoming Bills",
-    "upcomingBillsEmpty": "No upcoming bills",
-    "upcomingBillsEmptyDescription": "All payments are up to date",
-    "updatePayment": "Update Payment Method",
-    "updatePaymentDescription": "Manage your payment methods",
-    "usageLimit": "Usage Limit",
-    "viewInvoices": "View Invoices",
-    "viewOtherPlans": "View Other Plans",
-    "viewPaymentHistory": "View Payment History",
-    "viewPlans": "View Plans",
-    "welcome": {
-      "description": "Get started by choosing a subscription plan and setting up your payment method for seamless automated billing.",
-      "title": "Welcome to Roundtable"
+    "failure": {
+      "title": "Payment Failed",
+      "description": "We couldn't process your payment. Don't worry, you haven't been charged.",
+      "paymentFailed": "Payment Processing Failed",
+      "paymentFailedDescription": "Your payment could not be processed. This usually happens due to insufficient funds, card decline, or incorrect payment details.",
+      "syncFailed": "Subscription Sync Failed",
+      "syncFailedDescription": "Your payment was successful, but we encountered an issue activating your subscription. Our team has been notified and will resolve this shortly.",
+      "authFailed": "Session Expired",
+      "authFailedDescription": "Your session expired during payment processing. Please sign in and try again.",
+      "unknownError": "Unexpected Error",
+      "unknownErrorDescription": "An unexpected error occurred while processing your payment. Please try again or contact support if the issue persists.",
+      "noPurchaseFound": "No Purchase Found",
+      "noPurchaseFoundDescription": "We couldn't find a recent credit purchase for your account. If you believe this is an error, please contact support.",
+      "technicalDetails": "Technical details",
+      "errorCode": "Error code",
+      "commonReasons": {
+        "title": "Common Reasons for Payment Failure:",
+        "insufficientFunds": "Insufficient funds in your account",
+        "cardDeclined": "Card declined by your bank",
+        "incorrectDetails": "Incorrect card details or billing information",
+        "bankRejection": "Transaction rejected by your bank for security reasons"
+      },
+      "support": {
+        "title": "Need Help?",
+        "description": "If you believe this is an error or if you were charged but still see this message, please contact our support team immediately. We're here to help resolve any billing issues.",
+        "includeInfo": "Please include any error codes shown above when contacting support."
+      },
+      "tryAgain": "Try Again",
+      "returnHome": "Return to Chat"
     },
-    "date": "Date",
-    "${itemType}Downloaded": "${ItemType}Downloaded",
-    "${itemType}DownloadFailed": "${ItemType}DownloadFailed",
-    "${itemType}Deleted": "${ItemType}Deleted",
-    "${itemType}DeleteFailed": "${ItemType}DeleteFailed",
-    "retryInitiated": "RetryInitiated",
-    "retryFailed": "RetryFailed"
-  },
-  "billingActions": {
-    "invoiceDownloadFailed": "Failed to download invoice",
-    "invoiceDownloaded": "Invoice downloaded successfully",
-    "paymentMethodDeleteFailed": "Failed to delete payment method",
-    "paymentMethodDeleted": "Payment method deleted successfully",
-    "receiptDownloadFailed": "Failed to download receipt",
-    "receiptDownloaded": "Receipt downloaded successfully",
-    "retryFailed": "Failed to retry operation",
-    "retryInitiated": "Retry initiated successfully"
+    "errors": {
+      "subscribeFailed": "Subscription Failed",
+      "cancelFailed": "Cancellation Failed",
+      "manageBillingFailed": "Failed to Open Billing Portal"
+    },
+    "subscriptionChanged": {
+      "title": "Subscription Updated!",
+      "upgrade": "Upgrade",
+      "downgrade": "Downgrade",
+      "change": "Change",
+      "upgradeDescription": "Your subscription has been upgraded successfully. You now have access to enhanced features and higher limits.",
+      "downgradeDescription": "Your subscription change has been scheduled. You'll keep your current plan features until the end of your billing period.",
+      "changeDescription": "Your subscription has been updated successfully.",
+      "gracePeriodNotice": "Your current plan will remain active until {date}. After that, your new plan takes effect.",
+      "previousPlan": "Previous Plan",
+      "currentPlan": "Current Plan",
+      "currentPlanNow": "Current Plan (Active Now)",
+      "afterDate": "After {date}",
+      "newPlanDetails": "Your New Plan Details",
+      "noSubscriptionFound": "No Subscription Found",
+      "noSubscriptionFoundDescription": "We couldn't find an active subscription. Please try subscribing to a plan.",
+      "viewPricing": "View Pricing Plans"
+    }
   },
   "brand": {
     "logoAlt": "Company Logo"
   },
-  "common": {
-    "error": "An error occurred",
-    "loading": "Loading...",
-    "optional": "(optional)",
-    "or": "Or",
-    "upTo": "Up to",
-    "errorOccurred": "ErrorOccurred",
-    "cancel": "Cancel"
-  },
-  "confirmDialog": {
-    "cancelAction": "Cancel",
-    "confirmAction": "Confirm",
-    "confirmCancel": "Confirm Cancel",
-    "confirmCancelMessage": "Are you sure you want to cancel? Any unsaved changes will be lost.",
-    "confirmDelete": "Confirm Delete",
-    "confirmDeleteMessage": "This action cannot be undone. Are you sure you want to delete?",
-    "confirmLogout": "Confirm Logout",
-    "confirmLogoutMessage": "Are you sure you want to sign out?",
-    "deleteAction": "Delete",
-    "discardChanges": "Discard Changes",
-    "exitWithoutSaving": "Exit without Saving",
-    "message": "Are you sure you want to continue?",
-    "proceedAction": "Proceed",
-    "saveAndExit": "Save and Exit",
-    "title": "Confirm Action",
-    "undoAction": "Undo"
-  },
-  "currency": {
-    "usd": "USD",
-    "dollar": "Dollar"
-  },
-  "dataFilters": {
-    "advancedFilters": "Advanced filters",
-    "amount": "Amount",
-    "amountMax": "Maximum amount",
-    "amountMin": "Minimum amount",
-    "applyFilters": "Apply filters",
-    "category": "Category",
-    "clearFilters": "Clear filters",
-    "customFilter": "Custom filter",
-    "dateFrom": "From date",
-    "dateRange": "Date range",
-    "dateTo": "To date",
-    "filterBy": "Filter by",
-    "groupBy": "Group by",
-    "lessFilters": "Fewer filters",
-    "loadFilter": "Load filter",
-    "moreFilters": "More filters",
-    "quickFilters": "Quick filters",
-    "resetFilters": "Reset filters",
-    "saveFilter": "Save filter",
-    "searchIn": "Search in",
-    "showActive": "Show active",
-    "showAll": "Show all",
-    "showInactive": "Show inactive",
-    "sortBy": "Sort by",
-    "status": "Status",
-    "type": "Type"
-  },
-  "dataTable": {
-    "columns": "Columns",
-    "dataTable": "Data table",
-    "loadingSubscriptionPlans": "Loading subscription plans...",
-    "noDataFound": "No data found",
-    "noItemsToDisplay": "There are no items to display.",
-    "openFiltersMenu": "Open filters menu",
-    "rowsPerPage": "Rows per page",
-    "rowsSelected": "{selected} of {total} row(s) selected",
-    "selectAll": "Select all",
-    "selectAllRows": "Select all rows",
-    "selectRow": "Select row {id}",
-    "selectRowCheckbox": "Select row"
-  },
-  "datePicker": {
-    "pickDate": "Pick a date"
-  },
-  "description": "Description",
-  "directDebit": {
-    "accountHolderName": "Account Holder Name",
-    "accountNumber": "Account Number",
-    "activationDate": "Activation Date",
-    "active": "Active",
-    "agreeToTerms": "I agree to the direct debit terms and conditions",
-    "amount": "Monthly Amount",
-    "bankAccount": "Bank Account",
-    "bankName": "Bank Name",
-    "bankSelectionDescription": "Please select your bank to sign the direct debit contract. You'll be redirected to your bank's secure website.",
-    "cancel": "Cancel Contract",
-    "cancelConfirmDescription": "Are you sure you want to cancel your direct debit contract? This will stop all automatic payments.",
-    "cancelConfirmTitle": "Cancel Direct Debit",
-    "cancelled": "Cancelled",
-    "continueToBank": "Continue to Bank",
-    "continueToSigningAriaLabel": "Continue to bank for contract signing",
-    "contractCreatedSuccess": "Contract Created Successfully",
-    "contractId": "Contract ID",
-    "contractSetup": "Direct Debit Contract Setup",
-    "contractStatus": "Contract Status",
-    "contractTerms": {
-      "contractDuration": "Contract Duration",
-      "contractDurationValue": "1 Year (auto-renewable)",
-      "dailyTransactionLimit": "Daily Transaction Limit",
-      "dailyTransactionLimitValue": "10 transactions",
-      "maxAmountPerTransaction": "Maximum Amount per Transaction",
-      "maxAmountPerTransactionValue": "$500",
-      "monthlyTransactionLimit": "Monthly Transaction Limit",
-      "monthlyTransactionLimitValue": "100 transactions"
+  "chat": {
+    "dashboard": {
+      "title": "AI Collaboration Hub",
+      "features": {
+        "multipleModels": "Multiple AI Models",
+        "realtimeCollaboration": "Real-time Collaboration",
+        "publicSharing": "Public Sharing"
+      }
     },
-    "contractTermsAndLimits": "Contract Terms & Limits",
-    "contractTermsTitle": "Contract Terms",
-    "dailyLimitLabel": "Daily limit:",
-    "dailyTransactionLimit": "Daily Transaction Limit",
-    "dailyTransactionValue": "10 transactions",
-    "description": "Payment Description",
-    "duration": "Duration",
-    "durationValue": "1 Year (renewable)",
-    "email": "Email",
-    "error": "Failed to create direct debit contract",
-    "expired": "Expired",
-    "frequency": "Payment Frequency",
-    "inactive": "Inactive",
-    "initiateContract": "Initiate Direct Debit",
-    "maximumAmount": "Maximum Amount",
-    "mobileHelperText": "Iranian mobile number (required for contract signing)",
-    "mobileNumberLabel": "Mobile Number *",
-    "modal": {
-      "bankSelection": {
-        "bankCard": {
-          "dailyLimit": "Max daily: {amount}",
-          "transactionLimit": "Max {count} transactions"
+    "actions": {
+      "copy": "Copy message",
+      "messageCopied": "Message copied",
+      "messageCopiedDescription": "Message content copied to clipboard",
+      "scrollToBottom": "Scroll to bottom"
+    },
+    "models": {
+      "aiModels": "AI Models",
+      "models": "Models",
+      "searchModels": "Search AI models...",
+      "noModelsFound": "No models found.",
+      "selectedModels": "Selected Models",
+      "selectedModelsLabel": "Selected Models:",
+      "dragToReorder": "Drag to reorder",
+      "dragDisabled": "Drag disabled",
+      "limitReached": "Limit Reached",
+      "noVision": "No Vision",
+      "noVisionTooltip": "This model cannot process images or PDFs. Remove visual files to enable selection.",
+      "modelsDeselected": "Models Deselected",
+      "modelsDeselectedDescription": "{models} cannot process images/PDFs and were deselected",
+      "presetNoVisionAll": "All models in this preset cannot process images/PDFs. Remove visual files to use this preset.",
+      "presetNoVisionPartial": "{count} model(s) cannot process images/PDFs and will be excluded.",
+      "presetModelsExcluded": "Models Excluded",
+      "presetModelsExcludedDescription": "{count} model(s) without vision were excluded from preset",
+      "cannotSelectModel": "Cannot Select Model",
+      "modelIncompatibleWithFiles": "This model cannot process the uploaded images/PDFs. Remove visual files first.",
+      "presetIncompatible": "Preset Unavailable",
+      "presetIncompatibleDescription": "All models in this preset cannot process your uploaded images/PDFs. Remove visual files first.",
+      "minRequired": "Min 3 required",
+      "yourPlan": "Your Plan",
+      "mostPopular": "Most Popular",
+      "topModels": "Top AI Models",
+      "model": "model",
+      "upgradeToUnlock": "Upgrade to unlock all models",
+      "unlockAllModels": "Unlock All Pro Models",
+      "upgradeToTier": "Upgrade to {tier}",
+      "minimumRequired": {
+        "title": "Model Required",
+        "description": "Select at least {count} model to continue"
+      },
+      "yourModels": "Your Models",
+      "availableModels": "Available Models",
+      "premiumModels": "Premium Models",
+      "addRole": "Add Role",
+      "clearRole": "Clear role",
+      "modal": {
+        "title": "Choose, reorder, and assign roles",
+        "subtitle": "Manage your AI models and their roles",
+        "searchPlaceholder": "Search AI models...",
+        "premium": "Premium",
+        "locked": "Locked",
+        "upgrade": "Upgrade",
+        "back": "Back",
+        "setRoleFor": "Set role for {modelName}",
+        "selectOrEnterRole": "Select a predefined role or create a custom one",
+        "customRolePlaceholder": "Enter custom role name...",
+        "saveRole": "Save",
+        "upgradeRequired": "Upgrade Required",
+        "customRolesUpgradeMessage": "Custom roles are available for paid users only. Upgrade to create custom roles.",
+        "customRolesPaidOnly": "Custom roles are available for paid users",
+        "failedToCreateRole": "Failed to create role",
+        "roleDeleted": "Role deleted",
+        "roleDeletedMessage": "\"{name}\" has been deleted",
+        "failedToDeleteRole": "Failed to delete role",
+        "noModelsSelected": "No models selected",
+        "selectAtLeastOneModel": "Select at least one model to save as a preset",
+        "selectAtLeastOneModelUpdate": "Select at least one model to update the preset"
+      },
+      "presets": {
+        "title": "Presets",
+        "myPresets": "My Presets",
+        "systemPresets": "Presets",
+        "saveAsPreset": "Save as Preset",
+        "saveAsNew": "Save as New",
+        "updatePreset": "Update \"{name}\"",
+        "namePlaceholder": "Preset name...",
+        "cancel": "Cancel",
+        "save": "Save",
+        "done": "Done",
+        "presetSaved": "Preset saved",
+        "presetSavedMessage": "\"{name}\" has been saved to your presets",
+        "presetUpdated": "Preset updated",
+        "presetUpdatedMessage": "\"{name}\" has been updated",
+        "presetDeleted": "Preset deleted",
+        "presetDeletedMessage": "Your preset has been removed",
+        "failedToSave": "Failed to save preset",
+        "failedToUpdate": "Failed to update preset",
+        "failedToDelete": "Failed to delete preset",
+        "saving": "Saving...",
+        "updating": "Updating...",
+        "rolesRequired": "{count, plural, =1 {1 model needs a role} other {# models need roles}}",
+        "cannotSave": "Cannot save preset",
+        "nameRequired": "Please enter a preset name",
+        "update": "Update"
+      },
+      "buildCustom": {
+        "title": "Build Custom"
+      }
+    },
+    "roles": {
+      "addRole": "Add Role",
+      "searchOrCreateRole": "Search or create role...",
+      "createCustomRole": "Create Custom Role",
+      "defaultRoles": "Default Roles",
+      "customRoles": "Custom Roles",
+      "create": "Create",
+      "creating": "Creating...",
+      "noRolesFound": "No roles found.",
+      "deleteCustomRole": "Delete custom role",
+      "panel": {
+        "title": "Set Role for {model}",
+        "subtitle": "Select a role or enter a custom one",
+        "back": "Back",
+        "close": "Close",
+        "currentRole": "Current Role",
+        "clear": "Clear",
+        "predefinedRoles": "Predefined Roles",
+        "customRoles": "Custom Roles",
+        "customRoleInput": "Custom Role",
+        "customRolePlaceholder": "Enter custom role name...",
+        "customRoleHint": "Press Enter or click Save to assign",
+        "save": "Save"
+      }
+    },
+    "modes": {
+      "mode": "Mode",
+      "currentMode": "Current Mode:",
+      "chatModes": "Chat Modes",
+      "modal": {
+        "title": "Conversation Mode",
+        "subtitle": "Choose how AI models interact with your query",
+        "debating": {
+          "title": "Debating",
+          "description": "Explore different perspectives through structured debate"
         },
-        "description": "Choose your preferred bank for contract signing",
-        "error": "Error loading bank list",
-        "errorDescription": "Failed to load bank list. Please try again.",
-        "loading": "Loading banks...",
-        "retryButton": "Retry",
-        "title": "Select Bank"
-      },
-      "completed": {
-        "description": "Direct debit contract has been successfully setup. You can now purchase your subscriptions.",
-        "planMessage": "You can now purchase the {planName} plan.",
-        "title": "Congratulations!"
-      },
-      "description": "Setup direct debit contract for subscription billing",
-      "errors": {
-        "contractCancelled": "Contract was cancelled or is in invalid state",
-        "contractError": "Error checking contract status",
-        "contractTimeout": "Verification timeout reached",
-        "contractTimeoutMessage": "Process took too long. You can check the status later.",
-        "networkError": "Network error occurred",
-        "retryExhausted": "Maximum retry attempts reached"
-      },
-      "intro": {
-        "description": "With direct debit setup, you can renew your subscriptions without entering card details.",
-        "features": {
-          "easy": {
-            "description": "One-time setup",
-            "title": "Easy & Fast"
-          },
-          "secure": {
-            "description": "Supervised by Central Bank",
-            "title": "Secure & Reliable"
-          }
+        "brainstorming": {
+          "title": "Brainstorming",
+          "description": "Generate creative ideas collaboratively"
         },
-        "planDescription": "To purchase the {planName} plan, you first need to setup a direct debit contract.",
-        "startButton": "Start Setup",
-        "title": "Setup Direct Debit Payment"
-      },
-      "mobile": {
-        "continueButton": "Continue",
-        "description": "Enter your mobile number to setup the contract",
-        "helperText": "This number will be used for contract information and payment confirmations.",
-        "label": "Mobile Number",
-        "placeholder": "09123456789",
-        "retryButton": "Retry ({count}/3)",
-        "title": "Mobile Number"
-      },
-      "planTitle": "Purchase {planName} Plan",
-      "redirect": {
-        "description": "Redirecting you to {bankName} contract signing page...",
-        "helperText": "A new page will open. After completing the signing process, return to this page.",
-        "title": "Redirecting to Bank"
+        "problemSolving": {
+          "title": "Problem Solving",
+          "description": "Work together to find practical solutions"
+        },
+        "analyzing": {
+          "title": "Analyzing",
+          "description": "Deep analysis from multiple expert viewpoints"
+        }
+      }
+    },
+    "webSearch": {
+      "title": "Web Search",
+      "toggle": "Web Search",
+      "enabled": "Search On",
+      "disabled": "Search Off",
+      "description": {
+        "enabled": "Participants can browse the web for information",
+        "disabled": "Click to enable web browsing for participants"
+      }
+    },
+    "autoMode": {
+      "label": "Auto",
+      "manualLabel": "Manual",
+      "analyzing": "Analyzing...",
+      "tooltip": "AI automatically selects the best models and settings for your prompt"
+    },
+    "toolbar": {
+      "options": "Options",
+      "selected": "selected",
+      "tooltips": {
+        "models": "Select AI models",
+        "mode": "Set conversation mode",
+        "attach": "Attach files",
+        "attachDisabled": "Attachments unavailable",
+        "webSearch": "Enable web search",
+        "webSearchEnabled": "Web search enabled",
+        "microphone": "Voice input",
+        "stopRecording": "Stop recording"
+      }
+    },
+    "attachments": {
+      "defaultName": "Attachment",
+      "loadingPreview": "Loading preview...",
+      "previewUnavailable": "Preview unavailable",
+      "defaultFileType": "File",
+      "dropHere": "Drop files here",
+      "dropDescription": "Upload files to include in your message"
+    },
+    "loading": {
+      "creatingConversation": "Creating conversation",
+      "openingConversation": "Opening conversation",
+      "searching": "Searching",
+      "thinking": "Thinking",
+      "observing": "Observing"
+    },
+    "preSearch": {
+      "title": "Web Research",
+      "searching": "Searching",
+      "pendingSearch": "Searching the web...",
+      "autoRetryingSearch": "Search in progress, auto-retrying...",
+      "error": "Error",
+      "retry": "Retry",
+      "source": "source",
+      "sources": "sources",
+      "searchedSources": "Searched {count} sources",
+      "searchDepth": {
+        "basic": "basic",
+        "advanced": "advanced"
       },
       "steps": {
-        "bankSelection": "Bank Selection",
-        "intro": "Start",
-        "mobile": "Mobile Number",
-        "verification": "Verification"
+        "understanding": "Understanding query",
+        "query": "Query",
+        "searchingTheWeb": "Searching the web",
+        "synthesizingAnswer": "Synthesizing answer",
+        "foundImages": "Found images",
+        "answer": "Answer",
+        "searching": "Searching web sources",
+        "searchComplete": "Web sources found",
+        "searchingDesc": "Finding relevant sources...",
+        "results": "Analysis & Results",
+        "sources": "Sources",
+        "generatingPlan": "Generating search plan...",
+        "generatingQueries": "Creating search queries...",
+        "executingSearch": "Searching web...",
+        "extractingContent": "Extracting content...",
+        "generatingAnswer": "Generating answer summary...",
+        "queryProgress": "Query {current} of {total}"
       },
-      "title": "Setup Direct Debit Payment",
-      "verification": {
-        "checkStatusButton": "Check Status",
-        "checkingButton": "Checking...",
-        "closeButton": "Close",
-        "description": "Your contract has been signed at the bank. Awaiting final verification...",
-        "descriptionChecking": "Checking contract status from server...",
-        "helperText": "This process usually takes a few minutes. You can close this page.",
-        "title": "Awaiting Verification",
-        "titleChecking": "Checking Status..."
+      "plan": {
+        "title": "Search Plan",
+        "show": "Show search plan",
+        "hide": "Hide search plan"
+      },
+      "config": {
+        "title": "Search Configuration",
+        "numResults": "Number of results",
+        "searchDepth": "Search depth",
+        "numQueries": "Number of queries",
+        "configure": "Configure search"
       }
     },
-    "modify": "Modify Contract",
-    "monthlyTransactionLimit": "Monthly Transaction Limit",
-    "monthlyTransactionValue": "100 transactions",
-    "nationalId": "National ID",
-    "nationalIdHelperText": "Optional but recommended for enhanced security",
-    "nationalIdLabel": "National ID",
-    "nextPaymentDate": "Next Payment Date",
-    "pause": "Pause Payments",
-    "pending": "Pending Activation",
-    "perTransaction": "per transaction",
-    "phoneNumber": "Phone Number",
-    "placeholders": {
-      "chooseBank": "Choose your bank...",
-      "mobile": "0912 123 4567",
-      "nationalId": "1234567890"
-    },
-    "redirectingDescription": "Please wait while we redirect you to your bank's secure website to sign the contract.",
-    "redirectingMessage": "Please wait while we redirect you to your bank's secure website to complete the contract signing process.",
-    "redirectingTitle": "Redirecting to Bank",
-    "redirectingToBank": "Redirecting to Bank",
-    "resume": "Resume Payments",
-    "secureDescription": "This process creates a secure contract that allows automatic billing for your subscriptions. Your banking information is handled directly by your bank and payment provider.",
-    "secureTitle": "Secure Direct Debit",
-    "selectBank": "Select Your Bank",
-    "settingUp": "Setting up...",
-    "setupContract": "Setup Contract",
-    "setupDescription": "Set up automatic billing with secure direct debit system",
-    "setupDirectDebit": "Setup Direct Debit",
-    "setupSteps": {
-      "step1": {
-        "description": "Setup a secure direct debit contract with your mobile number and national ID",
-        "title": "1. Create Contract"
-      },
-      "step2": {
-        "description": "Select your bank and sign the contract directly on your bank's secure website",
-        "title": "2. Sign with Bank"
-      },
-      "step3": {
-        "description": "Your subscriptions will automatically renew using the secure signed contract",
-        "title": "3. Auto-billing Active"
+    "tools": {
+      "webSearch": {
+        "title": "Web Search Results",
+        "source": {
+          "singular": "source",
+          "plural": "sources"
+        },
+        "failed": "failed",
+        "show": "Show",
+        "hide": "Hide",
+        "details": "details",
+        "relevanceLabel": "Relevance",
+        "relevanceTooltip": "This result is {score}% relevant to your query",
+        "keyPoints": "Key Points",
+        "searching": "Searching",
+        "loading": "Loading",
+        "cached": "Cached",
+        "wordsExtracted": "words extracted",
+        "requestId": "Request ID",
+        "llmAnswer": {
+          "title": "AI-Generated Summary",
+          "generating": "Generating"
+        },
+        "images": {
+          "title": "Related Images",
+          "count": "{count, plural, =0 {No images} =1 {1 image} other {# images}}",
+          "viewFull": "View full size",
+          "openSource": "View source page",
+          "copyUrl": "Copy image URL",
+          "loadError": "Failed to load image",
+          "noImages": "No images found",
+          "aiAnalysis": "AI Analysis",
+          "visionApi": "Vision API",
+          "author": "Author",
+          "published": "Published",
+          "viewSource": "View Source",
+          "urlCopied": "Image URL copied",
+          "urlCopiedDescription": "Image URL has been copied to clipboard"
+        },
+        "relevance": {
+          "high": "Highly relevant to your query",
+          "medium": "Moderately relevant to your query",
+          "low": "Somewhat relevant to your query"
+        },
+        "metadata": {
+          "minRead": "min read",
+          "words": "words"
+        },
+        "contentType": {
+          "news": "News",
+          "article": "Article",
+          "research": "Research",
+          "blog": "Blog",
+          "general": "Web Page"
+        },
+        "error": {
+          "failedToLoad": "{count, plural, =1 {# page could not be loaded} other {# pages could not be loaded}}"
+        },
+        "parameters": {
+          "title": "Search Parameters",
+          "query": "Search Query",
+          "autoDetected": "Auto-detected Parameters",
+          "depth": {
+            "label": "Search Depth",
+            "basic": "Basic",
+            "advanced": "Advanced"
+          },
+          "topic": {
+            "label": "Topic"
+          },
+          "timeRange": {
+            "label": "Time Range"
+          },
+          "reasoning": "AI Reasoning"
+        },
+        "statistics": {
+          "title": "Search Statistics",
+          "totalResults": "Total Results",
+          "totalResultsDesc": "Total number of sources found",
+          "fullContent": "Full Content",
+          "totalWords": "Total Words",
+          "totalImages": "Images",
+          "avgReadTime": "Avg. Read Time",
+          "responseTime": "Response Time",
+          "qualityMetrics": "Quality Metrics",
+          "avgRelevance": "Avg. Relevance"
+        },
+        "configuration": {
+          "title": "Search Configuration",
+          "queries": "Queries",
+          "generatedQueries": "Generated Queries",
+          "results": "Results",
+          "searchTime": "Search Time",
+          "successRate": "Success Rate",
+          "successful": "Successful",
+          "failed": "Failed",
+          "totalTime": "Total Time",
+          "avgTime": "Avg. Time",
+          "performance": "Performance Metrics",
+          "queryDetails": "Query Details",
+          "rationale": "Rationale",
+          "complexity": {
+            "label": "Complexity",
+            "simple": "Simple",
+            "moderate": "Moderate",
+            "complex": "Complex"
+          },
+          "sources": "Sources",
+          "depth": "Search Depth",
+          "autoDetectedParams": "AI-Detected Parameters",
+          "queriesGenerated": "queries generated",
+          "perQuery": "per query",
+          "searchDepth": {
+            "basic": "Basic",
+            "advanced": "Advanced"
+          },
+          "sourceCount": {
+            "optimal": "{count, plural, =1 {1 source optimal} other {# sources optimal}}",
+            "label": "Recommended Sources"
+          }
+        },
+        "contentPreview": {
+          "title": "Full Content",
+          "copy": "Copy content",
+          "copied": "Copied!",
+          "openSource": "Open source",
+          "tableOfContents": "Table of Contents"
+        }
       }
     },
-    "subtitle": "Set up automatic payments",
-    "success": "Direct debit contract created successfully",
-    "successMessages": {
-      "contractInitiated": "Contract setup initiated! Please select your bank.",
-      "redirectingToBank": "Redirecting to {bankName} for contract signing..."
+    "messages": {
+      "tokens": "tokens",
+      "error": "Error",
+      "complete": "Complete",
+      "processing": "Processing..."
     },
-    "suspended": "Suspended",
-    "terms": "Terms and Conditions",
-    "title": "Direct Debit Setup",
-    "validation": {
-      "contractInitiateFailed": "Failed to initiate direct debit contract",
-      "invalidBank": "Invalid bank selection",
-      "invalidMobile": "Please enter a valid Iranian mobile number (09xxxxxxxxx)",
-      "mobileRequired": "Mobile number is required",
-      "selectBank": "Please select a bank"
+    "configuration": {
+      "configurationChanged": "Configuration changed",
+      "added": "Added",
+      "modified": "Modified",
+      "removed": "Removed",
+      "webSearchEnabled": "Web search enabled",
+      "webSearchDisabled": "Web search disabled",
+      "actionSummary": {
+        "added": "added",
+        "modified": "modified",
+        "removed": "removed"
+      },
+      "errorBoundary": {
+        "title": "Unable to display configuration changes",
+        "description": "There was an error loading the configuration history. The conversation content is still available.",
+        "retry": "Try Again"
+      }
+    },
+    "errors": {
+      "streamError": "AI Model Failed to Respond",
+      "retry": "Retry",
+      "retryRound": "Retry this round of conversation",
+      "retryHint": "The AI model failed after multiple retries. Click Retry to try again with all participants.",
+      "unknownModel": "Unknown model",
+      "generationCancelled": "Generation cancelled",
+      "rateLimitReached": "Rate limit reached",
+      "contextTooLong": "Context too long",
+      "apiError": "API error",
+      "networkError": "Network error",
+      "requestTimeout": "Request timeout",
+      "validationError": "Invalid request",
+      "modelNotFound": "Model not available",
+      "contentFiltered": "Content filtered",
+      "authenticationError": "Authentication failed",
+      "emptyResponse": "No response generated",
+      "tryDifferentModel": "Try a different AI model",
+      "tryDifferentPrompt": "Try rephrasing your prompt",
+      "validationHint": "The file or input may not be supported by this model",
+      "modelNotFoundHint": "This model may be temporarily unavailable. Try selecting a different model.",
+      "contentFilterHint": "Try rephrasing your message to avoid content that may be filtered",
+      "generationFailed": "Generation failed",
+      "hideDetails": "− Hide details",
+      "showDetails": "+ Show details",
+      "errorType": "Error Type:",
+      "model": "Model:",
+      "participant": "Participant:",
+      "statusCode": "Status code:",
+      "providerMessage": "Provider message:",
+      "status": "Status:",
+      "requestAborted": "Request was aborted",
+      "responseFromProvider": "Response from AI provider:",
+      "whatToDo": "💡 What to do:",
+      "waitAndRegenerate": "Wait a few moments and use the regenerate button below",
+      "addOwnApiKey": "Or add your own API key to avoid rate limits",
+      "shortenMessage": "💡 Try shortening your message or starting a new chat",
+      "checkConnection": "💡 Check your connection and use regenerate button below",
+      "requestTookTooLong": "💡 Request took too long - use regenerate button below to retry",
+      "useRegenerateButton": "💡 Use regenerate button below to retry this round",
+      "fullMetadata": "Full metadata (dev only)",
+      "rateLimitTitle": "Rate Limit Exceeded",
+      "rateLimitSolution": "This model is experiencing high demand. Wait a moment and try again, or select a different model.",
+      "modelUnavailableTitle": "Model Unavailable",
+      "modelUnavailableSolution": "This model is temporarily unavailable. Retrying automatically or try selecting a different model.",
+      "timeoutTitle": "Request Timeout",
+      "timeoutSolution": "The request took too long. This might be a temporary issue. Try again or use a different model.",
+      "networkTitle": "Network Error",
+      "networkSolution": "Check your internet connection and try again.",
+      "emptyResponseTitle": "No Response",
+      "emptyResponseSolution": "The model didn't generate any content. This is usually temporary. Try regenerating the response.",
+      "modelErrorTitle": "Model Error",
+      "modelErrorSolution": "The model encountered an error processing your request. This may be due to content filters or input length limits.",
+      "invalidRequestTitle": "Invalid Request",
+      "invalidRequestSolution": "The request couldn't be processed. Check your input and try again.",
+      "authenticationTitle": "Authentication Error",
+      "authenticationSolution": "There's an issue with the API authentication. Please contact support.",
+      "unknownTitle": "Unexpected Error",
+      "unknownSolution": "An unexpected error occurred. Try again, and contact support if the issue persists.",
+      "defaultDescription": "The AI model encountered an error while processing your request.",
+      "retryAction": "Retry",
+      "nonRetryableHint": "This error cannot be automatically retried. Please try a different approach.",
+      "modelLabel": "Model",
+      "technicalDetails": "Technical Details",
+      "howToFix": "How to fix",
+      "messageList": {
+        "title": "Unable to Display Messages",
+        "description": "There was an error rendering the conversation messages. Your conversation is safe and can be recovered.",
+        "whatToDo": "What you can do:",
+        "tryRefresh": "Click the Retry button to attempt re-rendering messages",
+        "continueConversation": "You can still continue the conversation with new messages",
+        "contactSupport": "Contact support if this issue persists",
+        "retry": "Retry Rendering",
+        "refreshPage": "Refresh Page"
+      }
+    },
+    "pin": "Pin",
+    "pinning": "Pinning...",
+    "pinned": "Pinned",
+    "pinnedDescription": "Thread has been pinned",
+    "unpin": "Unpin",
+    "unpinning": "Unpinning...",
+    "unpinned": "Unpinned",
+    "unpinnedDescription": "Thread has been unpinned",
+    "pinFailed": "Failed to update pin",
+    "pinFailedDescription": "Could not update pin status. Please try again.",
+    "copyFailed": "Failed to copy link",
+    "copyFailedDescription": "Could not copy link to clipboard. Please try again.",
+    "copyLink": "Copy link",
+    "deleteChat": "Delete Chat",
+    "deleteThread": "Delete Thread",
+    "deleteThreadConfirmDescription": "This action cannot be undone. The thread and all its messages will be permanently deleted.",
+    "deleteThreadConfirmTitle": "Delete this thread?",
+    "error": {
+      "generic": "An error occurred. Please try again."
+    },
+    "public": {
+      "threadNotFound": "Thread Not Found",
+      "threadNotFoundDescription": "This public chat thread doesn't exist or has been made private.",
+      "noMessagesYet": "No messages yet",
+      "noMessagesDescription": "This conversation hasn't started yet. Create your own multi-AI chat!",
+      "learnMore": "Learn More",
+      "tryNow": "Try Now",
+      "tryFree": "Try Free",
+      "tryRoundtable": "Try Roundtable",
+      "ctaHeadline": "Ready to start your own AI conversation?",
+      "ctaDescription": "Get diverse perspectives from multiple AI models working together.",
+      "getStartedFree": "Get Started Free",
+      "description": "lets you chat with multiple AI models simultaneously for deeper insights and better solutions.",
+      "loadingPublicChat": "Loading public chat...",
+      "privateChat": "Private Chat",
+      "privateChatDescription": "This chat is private and cannot be viewed publicly.",
+      "goHome": "Go Home",
+      "experiencePower": "Experience the power of multi-AI collaboration."
+    },
+    "trending": "Trending",
+    "comingSoon": "Coming soon",
+    "input": {
+      "placeholder": "Message Roundtable...",
+      "placeholderStreaming": "AI participants are responding...",
+      "streamingPlaceholder": "Waiting for AI response...",
+      "placeholderQuotaExceeded": "Message quota reached - upgrade to continue...",
+      "placeholderThreadQuotaExceeded": "Thread quota reached - upgrade to create more threads...",
+      "placeholderCreditsExhausted": "Credits exhausted - add credits to continue...",
+      "submit": "Send message",
+      "threadPlaceholder": "Continue the conversation...",
+      "voiceInput": "Voice input",
+      "stopRecording": "Stop recording",
+      "listeningPlaceholder": "Listening... speak now",
+      "label": "Message input",
+      "streamingLabel": "Message input (disabled while AI responds)",
+      "stopStreaming": "Stop streaming",
+      "attachFiles": "Attach files",
+      "attach": "Attach",
+      "dropFilesHere": "Drop files here",
+      "uploadFilesDescription": "Upload files to include in your message",
+      "removeAttachment": "Remove attachment",
+      "attachmentUploadFailed": "Upload failed",
+      "noModelsSelected": "Select at least 1 model to send a message",
+      "messageTooLong": "Message too long. Please shorten to send.",
+      "send": "Send message",
+      "submitting": "Sending...",
+      "recording": "Recording",
+      "clickMicToStop": "Click mic to stop"
+    },
+    "disclaimer": "AI can make mistakes. Please double-check responses.",
+    "sources": {
+      "title": "Sources",
+      "document": "Document"
+    },
+    "linkCopied": "Link copied",
+    "linkCopiedDescription": "Share link copied to clipboard",
+    "madePrivate": "Thread is now private",
+    "madePrivateDescription": "Only you can view this thread",
+    "madePublic": "Thread is now public",
+    "madePublicDescription": "Anyone with the link can now view this thread",
+    "makePrivate": "Make Private",
+    "makingPrivate": "Making private...",
+    "makePublic": "Make Public",
+    "makingPublic": "Making public...",
+    "makePublicAndShare": "Make public and share",
+    "makePublicFirstDescription": "Make this thread public to share it with others",
+    "makePublicConfirmDescription": "This conversation will no longer be private. Anyone with the link can view it.",
+    "makePublicConfirmTitle": "Make this conversation public?",
+    "makePublicConfirmAction": "Make Public",
+    "moreOptions": "More options",
+    "noMessages": "No messages",
+    "noMoreThreads": "That's all your chats for now",
+    "noResults": "No chats found",
+    "noResultsDescription": "Try a different search term",
+    "older": "Older",
+    "previous30Days": "Previous 30 Days",
+    "previous7Days": "Previous 7 Days",
+    "publicToggleFailed": "Failed to update visibility",
+    "publicToggleFailedDescription": "Could not update thread visibility. Please try again.",
+    "quickStart": {
+      "brainstorm": {
+        "description": "AI models spark off each other to generate unexpected angles",
+        "prompt": "What are the trade-offs between async-first and sync-heavy remote work cultures?",
+        "title": "Brainstorm Ideas"
+      },
+      "debate": {
+        "description": "Models surface genuine disagreement and explain why",
+        "prompt": "Should AI systems be allowed to make life-or-death medical decisions without human override?",
+        "title": "Debate Topics"
+      },
+      "solve": {
+        "description": "Models build on each other's proposals toward action",
+        "prompt": "I'm choosing between a monolith and microservices for a 10-person startup. What factors should I weigh?",
+        "title": "Solve Problems"
+      }
+    },
+    "rename": "Rename",
+    "renameConversation": "Rename conversation",
+    "delete": "Delete",
+    "share": "Share",
+    "waitForStreamingToComplete": "Wait for response to complete",
+    "scrollToBottom": "Scroll to bottom",
+    "searchChats": "Search chats...",
+    "searchChatsDescription": "Search and navigate through your chat conversations",
+    "noChatsYet": "No chats yet",
+    "noChatsDescription": "Start a new conversation to begin collaborating with AI participants",
+    "emptyStateHint": "Start a conversation",
+    "emptyStateTitle": "Start your first conversation",
+    "emptyStateSubtext": "Your chats will appear here",
+    "status": {
+      "streaming": "AI is thinking...",
+      "navigating": "Navigating to conversation..."
+    },
+    "shareConversation": "Share Conversation",
+    "shareThread": "Share Thread",
+    "shareThreadDescription": "Share this link with anyone to give them access to this thread",
+    "shareDialog": {
+      "publicStatus": "Public",
+      "shareOn": "Share on",
+      "privateWarningTitle": "This will revoke public access",
+      "privateWarningDescription": "Anyone with the existing link will no longer be able to view this thread.",
+      "previewLabel": "Preview",
+      "copyLinkLabel": "Share Link",
+      "shareOnSocialLabel": "Share on Social",
+      "embedOptionsLabel": "Embed Options",
+      "embedOptionsDescription": "HTML and Markdown snippets",
+      "embedFormat": {
+        "html": "HTML",
+        "markdown": "Markdown"
+      }
+    },
+    "streaming": {
+      "remaining": "remaining",
+      "responding": "responding",
+      "waiting": "waiting"
+    },
+    "chainOfThought": {
+      "viewReasoning": "View reasoning process",
+      "modelReasoning": "Model Reasoning",
+      "reasoningDescription": "Internal thinking process used to generate this response"
+    },
+    "changelog": {
+      "modeChange": "Mode Change",
+      "participantAdded": "Participant Added",
+      "participantRemoved": "Participant Removed",
+      "participantUpdated": "Participant Updated",
+      "configurationChange": "Configuration Change"
+    },
+    "variants": {
+      "label": "Variant",
+      "previousVariant": "Previous variant",
+      "nextVariant": "Next variant",
+      "branchedConversation": "Branched conversation",
+      "loading": "Loading variants...",
+      "switchingVariant": "Switching variant..."
+    },
+    "user": {
+      "defaultName": "You"
+    },
+    "participant": {
+      "waiting": "Thinking...",
+      "waitingNamed": "Thinking...",
+      "generating": "Thinking...",
+      "gatheringThoughts": "Thinking...",
+      "waitingForWebResults": "Searching...",
+      "moderatorObserving": "Observing...",
+      "waitingToSynthesize": "Synthesizing...",
+      "emptyResponse": "No visible response from {model}",
+      "reasoningOnlyResponse": "{model} used reasoning but produced no text output",
+      "tierRequired": "{tier} required"
+    },
+    "streamingTimeout": "Streaming Timeout",
+    "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
+    "threadCreated": "Chat thread created successfully",
+    "threadCreationFailed": "Failed to create chat thread. Please try again.",
+    "threadDeleteFailed": "Failed to delete thread",
+    "threadDeleteFailedDescription": "Could not delete the chat thread. Please try again.",
+    "threadDeleted": "Thread deleted",
+    "threadDeletedDescription": "The chat thread has been successfully deleted",
+    "threadNotFound": "Thread not found",
+    "threadNotFoundDescription": "The chat thread you're looking for doesn't exist",
+    "today": "Today",
+    "updateFailed": "Failed to update thread",
+    "updateFailedDescription": "Could not update the thread. Please try again.",
+    "yesterday": "Yesterday",
+    "feedback": {
+      "like": "This round was helpful",
+      "dislike": "This round was not helpful"
+    },
+    "roundActions": {
+      "copySummary": "Copy summary",
+      "copyRound": "Copy round",
+      "copyThread": "Copy thread",
+      "copySuccess": "Summary copied",
+      "copySuccessDescription": "Summary copied to clipboard",
+      "copyThreadSuccess": "Thread copied",
+      "copyThreadSuccessDescription": "Full thread copied to clipboard as markdown",
+      "copyError": "Copy failed",
+      "copyErrorDescription": "Failed to copy to clipboard",
+      "share": "Share thread"
+    },
+    "messageActions": {
+      "copy": "Copy response",
+      "copySuccess": "Response copied",
+      "copySuccessDescription": "Response copied to clipboard",
+      "copyError": "Copy failed",
+      "copyErrorDescription": "Failed to copy response to clipboard"
+    },
+    "quota": {
+      "messageQuotaExceeded": "Message Quota Reached",
+      "quotaExceededDescription": "You've used {current} of {limit} messages this month.",
+      "threadQuotaExceeded": "Thread Quota Reached",
+      "threadQuotaExceededDescription": "You've used {current} of {limit} threads this month.",
+      "limitReached": "Usage limit reached",
+      "threadLimitReached": "Thread limit reached ({current}/{limit})",
+      "messageLimitReached": "Message limit reached ({current}/{limit})",
+      "summaryLimitReached": "Summary limit reached ({current}/{limit})",
+      "resetsOn": "Quota resets on {date}."
+    },
+    "credits": {
+      "exhausted": "Credits Exhausted",
+      "exhaustedDescription": "You've used all your available credits.",
+      "lowBalance": "Low Credit Balance",
+      "lowBalanceDescription": "You have {remaining} credits remaining.",
+      "balance": "{balance} credits",
+      "available": "{available} credits available",
+      "reserved": "{reserved} credits reserved",
+      "addCredits": "Add Credits",
+      "buyCredits": "Buy Credits",
+      "monthlyRefill": "Credits refill on {date}"
     }
   },
-  "errors": {
-    "button": {
-      "saveDocument": "Save Document",
-      "saving": "Saving..."
-    },
-    "email": {
-      "magicLinkInstructions": "Sign in to {brand} using this link: {magicLink}",
-      "verificationInstructions": "Please verify your email by visiting: {verificationUrl}",
-      "welcomeSubject": "Welcome to {brand}, {userName}!"
-    },
-    "generic": {
-      "componentError": "Component Error",
-      "componentUnavailable": "Component unavailable",
-      "copyErrorDetails": "Copy Error Details",
-      "description": "A critical error occurred. Please refresh the page.",
-      "errorDetailsCopied": "Error details copied to clipboard",
-      "errorDetailsCopyFailed": "Failed to copy error details",
-      "goHome": "Go Home",
-      "message": "An error occurred",
-      "pageDescription": "Something went wrong. The application encountered an unexpected error.",
-      "pageTitle": "Application Error",
-      "refreshPage": "Refresh Page",
-      "refreshing": "Refreshing...",
-      "retry": "Retry",
-      "retrying": "Retrying...",
-      "sectionDescription": "This section encountered an error and couldn't load properly.",
-      "sectionMessage": "Part of the page encountered an error.",
-      "sectionTitle": "Section Error",
-      "sectionUnavailable": "Section Unavailable",
-      "title": "Application Error"
-    },
-    "payment": {
-      "setupDirectDebitFailed": "Failed to setup direct debit contract. Please try again.",
-      "signInRequired": "Please sign in again to continue with the setup.",
-      "unknownError": "An unexpected error occurred. Please try again or contact support."
-    }
+  "common": {
+    "backToHome": "Back to Home",
+    "error": "An error occurred",
+    "loading": "Loading...",
+    "logo": "Logo",
+    "more": "More",
+    "none": "None",
+    "or": "Or",
+    "statusLabel": "Status: {status}"
   },
   "forms": {
-    "allowedFormats": "Allowed formats: {formats}",
-    "category": "Category",
-    "chooseFile": "Choose File",
-    "color": "Color",
-    "confirmPassword": "Confirm Password",
-    "currency": "Currency",
-    "currentPassword": "Current Password",
-    "description": "Description",
-    "dragAndDrop": "Drag and drop files here",
-    "dueDate": "Due Date",
-    "email": "Email Address",
-    "endDate": "End Date",
-    "fullName": "Full Name",
-    "hidePassword": "Hide Password",
-    "maxFileSize": "Maximum file size: {size}",
-    "message": "Message",
-    "name": "Name",
-    "newPassword": "New Password",
-    "optional": "Optional",
-    "password": "Password",
-    "phone": "Phone Number",
-    "placeholder": "Enter {field}...",
-    "price": "Price",
-    "priority": "Priority",
-    "quantity": "Quantity",
-    "required": "Required",
-    "searchPlaceholder": "Search...",
-    "selectMultiple": "Select multiple options",
-    "selectOption": "Select an option",
-    "showPassword": "Show Password",
-    "size": "Size",
-    "startDate": "Start Date",
-    "status": "Status",
-    "subject": "Subject",
-    "tags": "Tags",
-    "timezone": "Timezone",
-    "title": "Title",
-    "type": "Type",
-    "uploadFile": "Upload File",
-    "pickDate": "PickDate",
-    "noResultsFound": "NoResultsFound",
+    "loading": "Loading",
     "noOptionsAvailable": "NoOptionsAvailable",
-    "loading": "Loading"
-  },
-  "language": {
-    "current": "Current language",
-    "english": "English",
-    "language": "Language",
-    "persian": "Persian",
-    "switch": "Switch language",
-    "switchError": "Failed to switch language. Please try again.",
-    "switchLanguage": "Switch Language",
-    "switchTo": "Switch language",
-    "switching": "Switching language..."
+    "noResultsFound": "NoResultsFound",
+    "pickDate": "PickDate",
+    "searchPlaceholder": "Search...",
+    "selectOption": "Select an option",
+    "hidePassword": "Hide password",
+    "showPassword": "Show password"
   },
   "legal": {
+    "trustBadges": {
+      "secure": "Secure",
+      "protected": "Protected",
+      "transparent": "Transparent",
+      "fairUse": "Fair Use",
+      "legalCompliance": "Legal Compliance",
+      "userRights": "User Rights"
+    },
     "privacy": {
+      "tagline": "Your privacy and data protection matter to us",
+      "lastUpdatedYear": "Last updated: {year}",
       "changes": {
         "content": "We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.",
         "title": "8. Changes to This Policy"
@@ -874,6 +1129,8 @@
       }
     },
     "terms": {
+      "tagline": "Guidelines for using our AI collaboration platform",
+      "effectiveYear": "Effective: {year}",
       "acceptance": {
         "content": "By accessing and using this service, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.",
         "title": "1. Acceptance of Terms"
@@ -910,333 +1167,71 @@
       "title": "Terms of Service"
     }
   },
-  "loadingStates": {
-    "almostDone": "Almost done...",
-    "analyzing": "Analyzing...",
-    "authenticating": "Authenticating...",
-    "backing up": "Backing up...",
-    "calculating": "Calculating...",
-    "canceling": "Canceling...",
-    "closing": "Closing...",
-    "compressing": "Compressing...",
-    "connecting": "Connecting...",
-    "creating": "Creating...",
-    "decompressing": "Decompressing...",
-    "deleting": "Deleting...",
-    "disconnecting": "Disconnecting...",
-    "exporting": "Exporting...",
-    "fetching": "Fetching data...",
-    "filtering": "Filtering...",
-    "finalizing": "Finalizing...",
-    "generating": "Generating...",
-    "importing": "Importing...",
-    "initializing": "Initializing...",
-    "justAMoment": "Just a moment...",
-    "loading": "Loading...",
-    "opening": "Opening...",
-    "pleaseWait": "Please wait...",
-    "preparing": "Preparing...",
-    "processing": "Processing...",
-    "redirecting": "Redirecting...",
-    "restoring": "Restoring...",
-    "retrying": "Retrying...",
-    "searching": "Searching...",
-    "sorting": "Sorting...",
-    "submitting": "Submitting...",
-    "synchronizing": "Synchronizing...",
-    "updating": "Updating...",
-    "validating": "Validating...",
-    "verifying": "Verifying..."
-  },
   "meta": {
-    "legal": {
-      "privacy": {
-        "description": "Privacy Policy for Roundtable",
-        "title": "Privacy Policy - Roundtable"
-      },
-      "terms": {
-        "description": "Terms of Service for Roundtable",
-        "title": "Terms of Service - Roundtable"
-      }
-    },
     "signIn": {
-      "description": "Sign in to your account",
-      "title": "Sign In"
+      "title": "Sign In",
+      "description": "Sign in to your account to access AI collaboration tools and manage your conversations.",
+      "keywords": [
+        "sign in",
+        "login",
+        "authentication"
+      ]
     },
     "signUp": {
-      "description": "Create your account to get started",
-      "title": "Sign Up"
-    }
-  },
-  "modals": {
-    "confirm": "Confirm Action",
-    "confirmDescription": "Are you sure you want to continue?",
-    "deleteConfirm": "Confirm Delete",
-    "deleteConfirmDescription": "This action cannot be undone.",
-    "discardChanges": "Discard Changes",
-    "saveChanges": "Save Changes",
-    "unsavedChanges": "You have unsaved changes. Do you want to save them before leaving?"
-  },
-  "navigation": {
-    "about": "About",
-    "account": "Account",
-    "billing": "Billing",
-    "billingPortal": "Billing Portal",
-    "billingHistory": "Billing History",
-    "contact": "Contact",
-    "chat": "Chat",
-    "navigation": "Navigation",
-    "chats": "Chats",
-    "newChat": "New Chat",
-    "notifications": "Notifications",
-    "paymentHistory": "Payment History",
-    "paymentMethods": "Payment Methods",
-    "plans": "Plans",
-    "pricing": "Pricing",
-    "profile": "Profile",
-    "security": "Security",
-    "settings": "Settings",
-    "signIn": "Sign In",
-    "signOut": "Sign Out",
-    "signUp": "Sign Up",
-    "subscriptions": "Subscriptions"
-  },
-  "chat": {
-    "title": "Chats",
-    "description": "Manage your conversations and chat history",
-    "actions": {
-      "copy": "Copy message",
-      "regenerate": "Regenerate response",
-      "edit": "Edit and regenerate",
-      "messageCopied": "Message copied",
-      "messageCopiedDescription": "Message content copied to clipboard"
+      "title": "Sign Up",
+      "description": "Create an account to start collaborating with multiple AI models in real-time conversations.",
+      "keywords": [
+        "sign up",
+        "register"
+      ]
     },
-    "editMessage": {
-      "title": "Edit Message",
-      "description": "Edit your message and regenerate AI responses based on the new prompt",
-      "saveAndRegenerate": "Save & Regenerate"
-    },
-    "error": {
-      "generic": "An error occurred. Please try again."
-    },
-    "streaming": {
-      "responding": "responding",
-      "waiting": "waiting",
-      "remaining": "remaining",
-      "nextUp": "Next up",
-      "completed": "completed"
-    },
-    "hero": {
-      "staticText": "Collaborate with",
-      "rotatingWords": {
-        "multipleAI": "Multiple AI Models",
-        "expertSystems": "Expert Systems",
-        "smartAssistants": "Smart Assistants",
-        "aiThinkTanks": "AI Think Tanks"
+    "legal": {
+      "privacy": {
+        "title": "Privacy Policy",
+        "description": "Learn how we collect, use, and protect your personal information when you use our AI collaboration platform.",
+        "keywords": [
+          "privacy",
+          "user data"
+        ]
       },
-      "subtitle": "Where multiple AI models brainstorm together to solve complex problems"
-    },
-    "input": {
-      "placeholder": "Message Roundtable...",
-      "threadPlaceholder": "Continue the conversation...",
-      "streamingPlaceholder": "Waiting for AI response...",
-      "submit": "Send message",
-      "helperText": "Press Enter to send, Shift + Enter for new line",
-      "streamingHelperText": "AI is responding... Click stop button to interrupt"
-    },
-    "threadCreated": "Chat thread created successfully",
-    "threadCreationFailed": "Failed to create chat thread. Please try again.",
-    "messageSentSuccess": "Message sent successfully",
-    "messageSendFailed": "Failed to send message. Please try again.",
-    "newChat": "New Chat",
-    "newChatDescription": "Start a new conversation",
-    "noChatSelected": "No chat selected",
-    "selectOrCreate": "Select a chat or create a new one",
-    "today": "Today",
-    "yesterday": "Yesterday",
-    "previous7Days": "Previous 7 Days",
-    "previous30Days": "Previous 30 Days",
-    "older": "Older",
-    "deleteChat": "Delete Chat",
-    "deleteChatConfirm": "Are you sure you want to delete this chat?",
-    "renameChat": "Rename Chat",
-    "searchChats": "Search chats...",
-    "noChats": "No chats yet",
-    "noChatsDescription": "Start a new chat to get started",
-    "chatHistory": "Chat History",
-    "favorites": "Favorites",
-    "addToFavorites": "Add to favorites",
-    "removeFromFavorites": "Remove from favorites",
-    "noFavorites": "No favorite chats yet",
-    "noResults": "No chats found",
-    "noResultsDescription": "Try a different search term",
-    "noMessages": "No messages",
-    "threadNotFound": "Thread not found",
-    "threadNotFoundDescription": "The chat thread you're looking for doesn't exist",
-    "you": "You",
-    "threadDeleted": "Thread deleted",
-    "threadDeletedDescription": "The chat thread has been successfully deleted",
-    "threadDeleteFailed": "Failed to delete thread",
-    "threadDeleteFailedDescription": "Could not delete the chat thread. Please try again.",
-    "deleteThreadConfirmTitle": "Delete this thread?",
-    "deleteThreadConfirmDescription": "This action cannot be undone. The thread and all its messages will be permanently deleted.",
-    "addedToFavorites": "Added to favorites",
-    "addedToFavoritesDescription": "Thread has been added to your favorites",
-    "removedFromFavorites": "Removed from favorites",
-    "removedFromFavoritesDescription": "Thread has been removed from your favorites",
-    "favoriteFailed": "Failed to update favorite",
-    "favoriteFailedDescription": "Could not update favorite status. Please try again.",
-    "makePublic": "Make Public",
-    "makePrivate": "Make Private",
-    "makePublicConfirmTitle": "Make this thread public?",
-    "makePublicConfirmDescription": "Anyone with the link will be able to view this thread and its messages.",
-    "shareThread": "Share Thread",
-    "shareThreadDescription": "Share this link with anyone to give them access to this thread",
-    "deleteThread": "Delete Thread",
-    "madePublic": "Thread is now public",
-    "madePublicDescription": "Anyone with the link can now view this thread",
-    "madePrivate": "Thread is now private",
-    "madePrivateDescription": "Only you can view this thread",
-    "linkCopied": "Link copied",
-    "linkCopiedDescription": "Share link copied to clipboard",
-    "copyFailed": "Failed to copy link",
-    "copyFailedDescription": "Could not copy link to clipboard. Please try again.",
-    "scrollToBottom": "Scroll to bottom",
-    "copyLink": "Copy link",
-    "publicToggleFailed": "Failed to update visibility",
-    "publicToggleFailedDescription": "Could not update thread visibility. Please try again.",
-    "updateFailed": "Failed to update thread",
-    "updateFailedDescription": "Could not update the thread. Please try again.",
-    "generatingTitle": "Generating title from your message...",
-    "creatingThread": "Creating collaborative discussion...",
-    "startingCollaboration": "Starting AI collaboration...",
-    "collaborativeDiscussion": "Collaborative AI Discussion",
-    "multiAISession": "Multi-AI Brainstorming Session",
-    "aiParticipants": "AI Participants",
-    "roundBasedDiscussion": "Round-based discussion mode active",
-    "participantsAware": "All AI participants are aware of each other",
-    "initiatingStream": "Initiating AI responses...",
-    "quickStart": {
-      "heading": "Quick Start Ideas",
-      "subheading": "Choose a conversation starter to begin",
-      "brainstorm": {
-        "title": "Brainstorm Ideas",
-        "description": "Generate creative solutions with multiple AI perspectives",
-        "prompt": "Help me brainstorm innovative ideas for improving team collaboration in remote work environments"
-      },
-      "analyze": {
-        "title": "Analyze & Research",
-        "description": "Deep analysis from multiple AI viewpoints",
-        "prompt": "Analyze the pros and cons of implementing AI automation in customer service departments"
-      },
-      "debate": {
-        "title": "Debate Topics",
-        "description": "Explore different perspectives on complex issues",
-        "prompt": "Debate the ethical implications of AI in healthcare decision-making"
-      },
-      "solve": {
-        "title": "Solve Problems",
-        "description": "Collaborative problem-solving with AI models",
-        "prompt": "Help me solve technical challenges in building a scalable microservices architecture"
+      "terms": {
+        "title": "Terms of Service",
+        "description": "Read our terms and conditions for using the AI collaboration platform and managing your account.",
+        "keywords": [
+          "legal",
+          "compliance"
+        ]
       }
     }
+  },
+  "moderator": {
+    "mode": {
+      "analyzing": "Analyzing",
+      "brainstorming": "Brainstorming",
+      "debating": "Debating",
+      "solving": "Problem Solving"
+    }
+  },
+  "navigation": {
+    "chat": "Chat",
+    "chats": "Chats",
+    "dashboard": "Home",
+    "debates": "Debates",
+    "features": "Features",
+    "messages": "Messages",
+    "navigation": "Navigation",
+    "newChat": "New Chat",
+    "pricing": "Pricing",
+    "searchChats": "Search chats",
+    "signOut": "Sign Out",
+    "upgrade": "Upgrade",
+    "upgradeDescription": "Unlock more features",
+    "managePlan": "Manage your plan"
   },
   "networkStatus": {
     "connectionError": "Connection Error",
     "offline": "Offline",
     "timeout": "Timeout"
-  },
-  "notifications": {
-    "error": {
-      "actionFailed": "Action failed to complete",
-      "connectionFailed": "Failed to establish connection",
-      "copyFailed": "Failed to copy to clipboard",
-      "createFailed": "Failed to create item",
-      "deleteFailed": "Failed to delete item",
-      "messageFailed": "Failed to send message",
-      "downloadFailed": "Failed to download file",
-      "forbiddenError": "Access forbidden",
-      "invitationFailed": "Failed to send invitation",
-      "loginFailed": "Sign in failed",
-      "logoutFailed": "Sign out failed",
-      "maintenanceError": "System under maintenance",
-      "networkError": "Network connection error",
-      "notFoundError": "Resource not found",
-      "passwordChangeFailed": "Failed to change password",
-      "paymentFailed": "Payment processing failed",
-      "profileUpdateFailed": "Failed to update profile",
-      "rateLimitError": "Too many requests",
-      "refundFailed": "Refund processing failed",
-      "saveFailed": "Failed to save changes",
-      "sendFailed": "Failed to send message",
-      "serverError": "Server error occurred",
-      "settingsSaveFailed": "Failed to save settings",
-      "somethingWentWrong": "Something went wrong",
-      "subscriptionFailed": "Subscription activation failed",
-      "syncFailed": "Failed to synchronize data",
-      "timeoutError": "Request timed out",
-      "title": "Error",
-      "unauthorizedError": "Unauthorized access",
-      "updateFailed": "Failed to update item",
-      "uploadFailed": "Failed to upload file",
-      "validationError": "Validation error",
-      "verificationFailed": "Verification failed"
-    },
-    "info": {
-      "backupCompleted": "Backup completed",
-      "cacheCleared": "Cache has been cleared",
-      "dataExported": "Data has been exported",
-      "dataImported": "Data has been imported",
-      "integrationActive": "Integration is now active",
-      "migrationCompleted": "Data migration completed",
-      "newFeature": "New feature available",
-      "offlineMode": "Working in offline mode",
-      "onlineMode": "Connection restored",
-      "settingsReset": "Settings have been reset to default",
-      "systemMaintenance": "System maintenance in progress",
-      "title": "Information",
-      "updateAvailable": "Update available"
-    },
-    "success": {
-      "actionCompleted": "Action completed successfully",
-      "connected": "Connection established",
-      "copied": "Copied to clipboard",
-      "created": "Item created successfully",
-      "createSuccess": "Item created successfully",
-      "deleted": "Item deleted successfully",
-      "messageSent": "Message sent successfully",
-      "downloaded": "File downloaded successfully",
-      "invitationSent": "Invitation sent successfully",
-      "loggedIn": "Signed in successfully",
-      "loggedOut": "Signed out successfully",
-      "passwordChanged": "Password changed successfully",
-      "paymentProcessed": "Payment processed successfully",
-      "profileUpdated": "Profile updated successfully",
-      "refundIssued": "Refund issued successfully",
-      "saved": "Changes saved successfully",
-      "sent": "Message sent successfully",
-      "settingsSaved": "Settings saved successfully",
-      "subscriptionActivated": "Subscription activated successfully",
-      "synchronized": "Data synchronized successfully",
-      "title": "Success",
-      "updated": "Item updated successfully",
-      "uploaded": "File uploaded successfully",
-      "verified": "Verification completed"
-    },
-    "warning": {
-      "browserOutdated": "Your browser may be outdated",
-      "dataLoss": "Data may be lost if you continue",
-      "duplicateEntry": "Duplicate entry detected",
-      "featureDeprecated": "This feature will be deprecated",
-      "lowStorage": "Storage space is running low",
-      "maintenanceScheduled": "Scheduled maintenance upcoming",
-      "quotaExceeding": "You are approaching your quota limit",
-      "securityAlert": "Security alert",
-      "sessionExpiring": "Your session is expiring soon",
-      "title": "Warning",
-      "unsavedChanges": "You have unsaved changes",
-      "weakPassword": "Password strength is weak"
-    }
   },
   "pages": {
     "notFound": {
@@ -1245,571 +1240,195 @@
       "title": "Oops, page not found!"
     }
   },
-  "payment": {
-    "amount": "Amount",
-    "date": "Payment Date",
-    "directDebitUsed": "Direct Debit",
-    "paymentMethod": "Payment Method",
-    "referenceId": "Reference ID",
-    "unknownProduct": "Unknown Product",
-    "callback": {
-      "chooseAnotherPlan": "Choose Another Plan",
-      "contractInfoNotFound": "Contract information not found. Please try setting up direct debit again.",
-      "contractVerificationFailed": "Contract verification failed",
-      "directDebitSuccess": "Your direct debit contract has been successfully set up and your payment method is now active.",
-      "failedToVerifyContract": "Failed to verify direct debit contract",
-      "invalidContractInfo": "Invalid contract information. Please try setting up direct debit again.",
-      "invalidPaymentParameters": "Invalid payment parameters",
-      "loading": "Loading...",
-      "missingPaymentStatus": "Missing payment status",
-      "paymentFailed": "Payment Failed",
-      "paymentNotCompleted": "Payment was not completed successfully",
-      "paymentProcessingError": "Payment processing error",
-      "paymentSuccessful": "Payment Successful",
-      "processingPayment": "Processing payment...",
-      "referenceId": "Reference ID:",
-      "returnToChat": "Return to Chat",
-      "setupNotCompleted": "Unfortunately the setup was not completed.",
-      "viewBilling": "View Billing"
-    },
-    "paymentGateway": "Payment Gateway"
-  },
-  "paymentMethods": {
-    "title": "Payment Methods",
-    "subtitle": "Manage your bank authorizations and direct debit contracts",
-    "empty": "No payment methods",
-    "emptyDescription": "Add a payment method to enable automatic billing",
-    "addPaymentMethod": "Add Payment Method",
-    "createFirstContract": "Setup Your First Bank Authorization",
-    "setAsDefault": "Set as Default",
-    "primary": "Primary",
-    "primaryDescription": "Your default payment method for automatic billing",
-    "defaultMethod": "Default Payment Method",
-    "directDebit": {
-      "contractDetails": "Contract Details",
-      "bankVerified": "Bank Verified",
-      "signatureStored": "Signature Stored",
-      "readyForPayments": "Ready for automatic payments",
-      "referenceCode": "Reference Code"
-    },
-    "directDebitContract": "Direct Debit Contract",
-    "bank": "Bank",
-    "mobile": "Mobile",
-    "phoneNumber": "Phone Number",
-    "contractId": "Contract ID",
-    "reference": "Reference",
-    "duration": "Duration",
-    "validity": "Validity",
-    "expiryDate": "Expiry Date",
-    "usage": "Usage Status",
-    "established": "Established",
-    "verified": "Bank Verified",
-    "contractDuration": "Contract Duration",
-    "days": "days",
-    "expiringIn": "Expiring in",
-    "validFor": "Valid for",
-    "expired": "Expired",
-    "contractExpired": "Contract has expired",
-    "expiresInDays": "Expires in {days} days",
-    "daysRemaining": "{days} days remaining",
-    "neverUsed": "Never used",
-    "usedToday": "Used today",
-    "usedYesterday": "Used yesterday",
-    "usedDaysAgo": "Used {days} days ago",
-    "usedWeeksAgo": "Used {weeks} week(s) ago",
-    "usedMonthsAgo": "Used {months} month(s) ago",
-    "usedOverYearAgo": "Used over a year ago",
-    "perTransactionLimit": "Per Transaction Limit",
-    "dailyLimit": "Daily Limit",
-    "dailyTransactions": "Daily Transactions",
-    "monthlyTransactions": "Monthly Transactions",
-    "maxTransactionAmount": "Max Transaction Amount",
-    "maxDailyAmount": "Max Daily Amount",
-    "maxDailyCount": "Max Daily Count",
-    "maxMonthlyCount": "Max Monthly Count",
-    "limits": "Transaction Limits",
-    "transactionLimits": "Transaction Limits",
-    "status": {
-      "active": "Active",
-      "activeDescription": "Ready for automatic payments",
-      "pendingSignature": "Pending Signature",
-      "pendingDescription": "Awaiting bank authorization",
-      "cancelled": "Cancelled",
-      "cancelledDescription": "Contract cancelled by user",
-      "verificationFailed": "Verification Failed",
-      "verificationFailedDescription": "Bank verification failed",
-      "expired": "Expired",
-      "expiredDescription": "Contract has expired and needs renewal"
-    },
-    "successMessages": {
-      "contractCancelled": "Payment method removed successfully",
-      "defaultMethodSet": "Default payment method updated",
-      "contractSetup": "Bank authorization setup successfully"
-    },
-    "errorMessages": {
-      "failedToCancelContract": "Failed to remove payment method",
-      "failedToSetDefault": "Failed to set default payment method",
-      "failedToSetupContract": "Failed to setup bank authorization"
-    },
-    "contractExpirationInfo": "You will need to renew before this date",
-    "expires": "Expires {date}",
-    "addedOn": "Added on {date}",
-    "table": {
-      "lastUsed": "Last Used"
-    }
-  },
-  "paymentWizard": {
-    "allReady": "Everything is ready!",
-    "allReadyDescription": "Your direct payment has been successfully set up. You can now activate your subscription.",
-    "currency": "USD",
-    "features": {
-      "cancelAnytime": "Cancel anytime",
-      "moneyBackGuarantee": "14-day money back guarantee",
-      "securePayment": "Secure payment processing",
-      "support247": "24/7 support"
-    },
-    "monthlyPrice": "Monthly price:",
-    "paymentMethod": "Payment method:",
-    "paymentSetupDescription": "Setup direct payment for easier service usage",
-    "paymentSetupSuccess": "Direct payment setup successfully",
-    "paymentSetupSuccessDescription": "You can now proceed to the next step and activate your subscription.",
-    "paymentSetupTitle": "Setup Direct Payment",
-    "perMonth": "/month",
-    "security": {
-      "description": "All payments are processed using high security protocols.",
-      "title": "High Security Payment Processing"
-    },
-    "selectedPlan": "Selected plan:",
-    "stepIndicator": "Step {current} of {total}",
-    "steps": {
-      "completion": {
-        "description": "Final confirmation and subscription activation",
-        "title": "Complete Process"
-      },
-      "paymentSetup": {
-        "description": "Connect to payment gateway and setup direct payment",
-        "title": "Payment Setup"
-      },
-      "planConfirmation": {
-        "description": "Review details of selected plan",
-        "title": "Confirm Selected Plan"
-      }
-    },
-    "directPayment": "Direct Payment"
-  },
-  "payments": "Payments",
-  "placeholders": {
-    "chooseFile": "Choose file",
-    "enterAmount": "Enter amount",
-    "enterDescription": "Enter description",
-    "enterEmail": "Enter your email",
-    "enterName": "Enter your name",
-    "enterPassword": "Enter your password",
-    "enterPhoneNumber": "Enter phone number",
-    "optional": "Optional",
-    "required": "Required",
-    "search": "Search...",
-    "searchMethods": "Search payment methods...",
-    "searchPayments": "Search payments...",
-    "searchPlans": "Search plans...",
-    "searchSubscriptions": "Search subscriptions...",
-    "searchTransactions": "Search transactions...",
-    "selectDate": "Select date",
-    "selectOption": "Select an option",
-    "selectTime": "Select time",
-    "typeHere": "Type here..."
-  },
   "plans": {
-    "advancedAnalytics": "Advanced analytics",
-    "advancedAnalyticsFeature": "Advanced analytics",
-    "aiModels": "Up to {count} AI models",
-    "aiModelsText": "AI models",
-    "allFeaturesIncluded": "All features included",
-    "allPlansInclude": "All plans include our core features and 24/7 customer support.",
-    "apiAccess": "API access",
-    "basicFeatures": "Basic features",
-    "bestValue": "Best Value",
-    "business": "Business",
-    "checkBackLater": "Please check back later for available subscription plans.",
-    "chooseDescription": "Choose this plan for your needs",
-    "choosePerfectPlan": "Choose the perfect plan for your needs",
-    "choosePlan": "Choose Plan",
-    "choosePlanTitle": "Choose Your Plan",
-    "chooseYourPlan": "Choose your plan",
-    "communitySupport": "Community support",
-    "confirm": "Confirm",
-    "confirmSelectedPlan": "Confirm Selected Plan",
-    "congratulations": "Congratulations!",
-    "contactSales": "Contact Sales",
-    "conversationsMonth": "conversations/month",
-    "conversationsPerMonth": "{count} conversations/month",
-    "currentPlan": "Current Plan",
-    "custom": "Custom",
-    "customIntegration": "Custom integration",
-    "dedicatedSupport": "Dedicated support",
-    "downgrade": "Downgrade",
-    "empty": "No plans available",
-    "emptyDescription": "No subscription plans are currently available. Please check back later.",
     "errorDescription": "There was an error loading subscription plans. Please try again.",
-    "failedToLoad": "Failed to load plans",
-    "features": "Features",
-    "free": "Free",
-    "getStarted": "Get Started",
-    "getStartedFree": "Get Started Free",
-    "goToChat": "Go to Chat",
-    "limitedUsage": "Limited usage",
-    "limits": "Limits:",
-    "liveRatesNote": "All prices calculated with live exchange rates",
-    "loadingMessage": "Loading subscription plans...",
-    "messagesMonth": "messages/month",
-    "messagesPerMonth": "{count} messages/month",
-    "modelsText": "models",
-    "moreFeatures": "{count} more features",
-    "mostPopular": "Most Popular",
-    "noPlansAvailable": "No Plans Available",
-    "payment": "Payment",
-    "perMonth": "per month",
-    "perfectSolution": "Perfect {name} solution for your needs",
-    "plans": "Plans",
-    "popular": "Popular",
-    "pricesInUSD": "Prices shown in USD. Secure payment processing.",
     "pricing": {
       "free": {
-        "buttonText": "Get started",
-        "description": "Get started with basic features",
+        "description": "Try with 1 free roundtable",
         "features": {
-          "aiModels": "Up to 5 AI models",
+          "aiModels": "3 AI models for 1 free round",
           "basicSupport": "Basic support",
-          "conversationsPerMonth": "2 conversations per month",
-          "messagesPerMonth": "20 messages per month"
+          "freeRound": "1 free roundtable conversation",
+          "upgradeRequired": "Upgrade to Pro for unlimited"
         },
         "name": "Free"
       },
-      "power": {
-        "buttonText": "Choose plan",
-        "description": "Maximum power, minimal limits.",
-        "features": {
-          "aiModels": "Up to 15 AI models",
-          "conversationsPerMonth": "300 conversations per month",
-          "messagesPerMonth": "1800 messages per month",
-          "premiumModels": "Premium AI models",
-          "prioritySupport": "24/7 priority support"
-        },
-        "name": "Power"
-      },
       "pro": {
-        "buttonText": "Choose plan",
-        "description": "For those who think big and often.",
+        "description": "Full access with monthly credits",
         "features": {
-          "aiModels": "Up to 7 AI models",
-          "conversationsPerMonth": "75 conversations per month",
-          "messagesPerMonth": "400 messages per month",
-          "premiumModels": "Premium AI models",
-          "prioritySupport": "Priority support"
+          "aiModels": "Unlimited AI models",
+          "prioritySupport": "Priority support",
+          "monthlyCredits": "100,000 credits/month",
+          "autoRenewal": "Automatic credit renewal"
         },
         "name": "Pro"
-      },
-      "starter": {
-        "buttonText": "Choose plan",
-        "description": "Affordable entry for creators and thinkers.",
-        "features": {
-          "aiModels": "Up to 5 AI models",
-          "conversationsPerMonth": "30 conversations per month",
-          "emailSupport": "Email support",
-          "messagesPerMonth": "150 messages per month",
-          "premiumModels": "Premium AI models"
-        },
-        "name": "Starter"
-      },
-      "${isFree ? ": "${IsFree ? "
-    },
-    "pricingDescription": "All prices calculated with live exchange rates. Start free and upgrade as you grow.",
-    "pricingLabel": "Pricing",
-    "prioritySupport": "Priority support",
-    "professional": "Professional",
-    "recommended": "Recommended",
-    "regularUpdates": "Regular updates",
-    "selectPerfectPlanDescription": "Select the perfect plan for your needs. All prices are calculated with live exchange rates.",
-    "selectPlan": "Select Plan",
-    "ssoIntegration": "SSO integration",
-    "starter": "Starter",
-    "subscriptionActivated": "Your subscription has been activated successfully.",
-    "subscriptionPlans": "Subscription Plans",
-    "subtitle": "All prices calculated with live exchange rates. Start free and upgrade as you grow.",
-    "title": "Choose your plan",
-    "unlimitedConversations": "Unlimited conversations",
-    "unlimitedMessages": "Unlimited messages",
-    "upToModels": "Up to {count} AI models",
-    "upgrade": "Upgrade",
-    "usageLimits": "Usage limits:",
-    "whatsIncluded": "What's included:"
-  },
-  "pricing": {
-    "currency": "USD",
-    "modal": {
-      "title": "Pricing & Plans",
-      "description": "Choose the perfect plan for your needs"
-    },
-    "guarantees": {
-      "cancelAnytime": "Easy cancellation anytime",
-      "freeUpdates": "Free updates",
-      "moneyBack": "14-day money back guarantee"
-    },
-    "perMonth": "/month",
-    "trust": {
-      "liveRates": "Prices with live exchange rates",
-      "securePayment": "Secure payment processing",
-      "support247": "24/7 support"
-    },
-    "usage": {
-      "aiModels": "AI Models:",
-      "conversations": "Conversations:",
-      "messages": "Messages:",
-      "models": "models"
-    },
-    "card": {
-      "mostPopular": "Most Popular",
-      "currentPlan": "Current Plan",
-      "daysFreeTrial": "days free trial",
-      "saveAnnually": "Save {percent}% annually",
-      "manageBilling": "Manage Billing",
-      "subscribe": "Subscribe",
-      "cancelSubscription": "Cancel Subscription",
-      "switchPlan": "Switch to This Plan",
-      "processing": "Processing...",
-      "active": "Active",
-      "annual": "Annual Plan",
-      "monthly": "Monthly Plan",
-      "upgradeToPro": "Upgrade to Pro"
-    },
-    "free": {
-      "alwaysActive": "Always Active",
-      "luxuryTier": "Premium Gift - Included Free",
-      "activatedByDefault": "Activated by default for you"
+      }
     }
   },
-  "product": {
-    "unknown": "Unknown Product"
-  },
-  "products": "Products",
-  "screenReader": {
-    "alert": "Alert",
-    "currentPage": "Current page {page} of {total}",
-    "dialog": "Dialog",
-    "downloadLink": "Download link",
-    "externalLink": "External link",
-    "filtered": "Filtered results",
-    "listItem": "Item {current} of {total}",
-    "menu": "Menu",
-    "newWindow": "Opens in new window",
-    "noResults": "No results found",
-    "progress": "Progress: {percent} percent",
-    "searchResults": "{count} search results found",
-    "sorted": "Sorted results",
-    "sortedAscending": "Sorted in ascending order",
-    "sortedDescending": "Sorted in descending order",
-    "status": "Status",
-    "submenu": "Submenu",
-    "tab": "Tab {current} of {total}"
-  },
-  "profile": {
-    "title": "Profile",
-    "description": "View your account information",
-    "userId": "User ID",
-    "memberSince": "Member Since",
-    "fullName": "Full Name",
-    "email": "Email Address",
-    "image": "Profile Picture"
-  },
-  "settings": {
-    "accessibility": {
-      "breadcrumb": "breadcrumb",
-      "continueToBankSigning": "Continue to bank for contract signing",
-      "nextPage": "Go to next page",
-      "notSetAsDefault": "Not set as default",
-      "openFiltersMenu": "Open filters menu",
-      "pagination": "pagination",
-      "previousPage": "Go to previous page",
-      "selectAll": "Select all",
-      "selectAllRows": "Select all rows",
-      "selectRow": "Select row",
-      "settingUpContract": "Setting up contract...",
-      "setupDirectDebitContract": "Setup direct debit contract",
-      "toggleSidebar": "Toggle Sidebar"
-    },
-    "description": "Customize your dashboard preferences and account settings",
-    "language": {
-      "current": "Current language",
-      "description": "Change your display language",
-      "title": "Language"
-    },
-    "theme": {
-      "description": "Toggle between light and dark themes",
-      "mode": "Theme mode",
-      "title": "Theme"
-    },
-    "title": "Settings",
-    "password": {
-      "title": "Change Password",
-      "description": "Update your password to keep your account secure",
-      "currentPassword": "Current Password",
-      "newPassword": "New Password",
-      "confirmPassword": "Confirm New Password",
-      "updateButton": "Update Password",
-      "cancelButton": "Cancel",
-      "success": "Password updated successfully",
-      "error": "Failed to update password"
-    },
-    "twoFactor": {
-      "title": "Two-Factor Authentication",
-      "description": "Add an extra layer of security to your account",
-      "enabled": "Two-factor authentication is enabled",
-      "disabled": "Two-factor authentication is disabled",
-      "enableButton": "Enable 2FA",
-      "disableButton": "Disable 2FA",
-      "qrCode": "Scan this QR code with your authenticator app",
-      "backupCodes": "Backup Codes",
-      "saveBackupCodes": "Save these backup codes in a safe place"
-    },
-    "sessions": {
-      "title": "Active Sessions",
-      "description": "Manage your active sessions across devices",
-      "currentSession": "Current Session",
-      "device": "Device",
-      "location": "Location",
-      "lastActive": "Last Active",
-      "revokeButton": "Revoke",
-      "revokeAllButton": "Revoke All Other Sessions",
-      "revokeSuccess": "Session revoked successfully",
-      "revokeError": "Failed to revoke session"
-    },
-    "email": {
-      "title": "Email Notifications",
-      "description": "Manage your email notification preferences",
-      "marketing": {
-        "label": "Marketing emails",
-        "description": "Receive emails about new features, products, and offers"
-      },
-      "updates": {
-        "label": "Product updates",
-        "description": "Receive emails about product updates and new features"
-      },
-      "billing": {
-        "label": "Billing notifications",
-        "description": "Receive emails about billing, invoices, and payments"
-      },
-      "security": {
-        "label": "Security alerts",
-        "description": "Receive emails about security events and account activity"
+  "pricing": {
+    "alreadyHaveAccount": "Already have an account?",
+    "card": {
+      "cancelSubscription": "Cancel Subscription",
+      "credits": "credits",
+      "currentPlan": "Current Plan",
+      "daysFreeTrial": "days free trial",
+      "getStarted": "Get Started",
+      "manageBilling": "Manage Billing",
+      "monthly": "Monthly Plan",
+      "mostPopular": "Most Popular",
+      "oneTime": "one-time",
+      "processing": "Processing...",
+      "purchase": "Purchase",
+      "startFreeTrial": "Start Free Trial",
+      "subscribe": "Subscribe",
+      "switchPlan": "Switch to This Plan",
+      "upgradePlan": "Upgrade plan",
+      "upgradeDescription": "Unlock all AI models & features",
+      "upgradeToPro": "Upgrade to Pro",
+      "valueProps": {
+        "allModels": {
+          "title": "All AI Models",
+          "description": "Access GPT, Claude, Gemini & more"
+        },
+        "presets": {
+          "title": "Presets & Custom",
+          "description": "Use ready-made presets or create your own"
+        },
+        "unlimited": {
+          "title": "Unlimited Messages",
+          "description": "No caps, no limits, just chat"
+        },
+        "councilSummary": {
+          "title": "Council Summary",
+          "description": "AI-generated summary of all discussions"
+        }
       }
     },
-    "push": {
-      "title": "Push Notifications",
-      "description": "Manage your push notification preferences",
-      "enabled": "Push notifications enabled",
-      "disabled": "Push notifications disabled",
-      "enableButton": "Enable Push Notifications",
-      "disableButton": "Disable Push Notifications",
-      "mentions": {
-        "label": "Mentions",
-        "description": "Get notified when someone mentions you"
-      },
-      "messages": {
-        "label": "New messages",
-        "description": "Get notified about new messages"
-      },
-      "updates": {
-        "label": "System updates",
-        "description": "Get notified about important system updates"
+    "default": {
+      "alwaysActive": "Always Active",
+      "activatedByDefault": "Activated by default for you"
+    },
+    "error": {
+      "title": "Unable to Load Pricing",
+      "description": "We couldn't load the pricing information. Please try again later."
+    },
+    "page": {
+      "description": "Choose the perfect plan for your needs",
+      "title": "Pricing & Plans"
+    },
+    "questionsContact": "Have questions? Contact us at"
+  },
+  "pwa": {
+    "dismiss": "Dismiss update notification",
+    "later": "Later",
+    "newVersionAvailable": "Update available",
+    "updateDescription": "A new version is ready. Update now for the latest features and improvements.",
+    "updateNow": "Update"
+  },
+  "privacy": {
+    "description": "Description",
+    "title": "Title"
+  },
+  "processing": "Processing",
+  "seo": {
+    "keywords": {
+      "aiCollaboration": "AI collaboration",
+      "multipleAiModels": "multiple AI models",
+      "brainstorming": "AI brainstorming tool",
+      "chatgpt": "ChatGPT",
+      "claude": "Claude AI",
+      "gemini": "Google Gemini",
+      "gpt4": "GPT-4",
+      "collaborativeAi": "collaborative AI",
+      "teamProductivity": "team productivity",
+      "artificialIntelligence": "artificial intelligence",
+      "aiChat": "AI chat",
+      "compareAi": "compare AI models",
+      "multiModelChat": "multi-model AI chat",
+      "aiDebate": "AI debate",
+      "aiProblemSolving": "AI problem solving",
+      "bestAiChat": "best AI chat app",
+      "aiAssistant": "AI assistant",
+      "chatWithMultipleAi": "chat with multiple AI",
+      "aiComparisonTool": "AI comparison tool",
+      "createAccount": "create account",
+      "privacyPolicy": "privacy policy",
+      "dataProtection": "data protection",
+      "gdpr": "GDPR",
+      "termsOfService": "terms of service",
+      "termsAndConditions": "terms and conditions",
+      "userAgreement": "user agreement"
+    },
+    "aeo": {
+      "primaryQuestion": "What is {brand}?",
+      "primaryAnswer": "Roundtable is an AI collaboration platform where multiple AI models like ChatGPT, Claude, and Gemini work together in real-time to brainstorm ideas, debate topics, and solve complex problems.",
+      "contentType": "guide",
+      "relatedQuestions": {
+        "howItWorks": "How does multi-AI collaboration work?",
+        "benefits": "Why use multiple AI models together?",
+        "howToUse": "How to brainstorm with ChatGPT, Claude, and Gemini at once?",
+        "comparison": "How to compare AI model responses side by side?"
       }
     },
-    "overview": {
-      "title": "Billing Overview",
-      "description": "View your billing summary and subscription status"
-    },
-    "subscription": {
-      "title": "Subscription Management",
-      "description": "Manage your active subscription"
-    },
-    "products": {
-      "title": "Products",
-      "description": "Browse available products and plans"
+    "features": {
+      "multiModelCollaboration": "Multi-model AI collaboration with ChatGPT, Claude, Gemini",
+      "realtimeChat": "Real-time AI chat interface",
+      "sessionManagement": "Conversation session management",
+      "publicSharing": "Share AI conversations publicly",
+      "usageTracking": "Usage tracking and analytics",
+      "multipleParticipants": "Multiple AI models responding to one prompt"
     }
   },
   "states": {
     "empty": {
-      "bills": "No upcoming bills",
-      "billsDescription": "All payments are up to date",
       "default": "No data found",
-      "description": "There is no data to display at the moment.",
-      "methods": "No payment methods",
-      "methodsDescription": "Add a payment method to enable automatic billing for your subscriptions.",
-      "noItemsDescription": "There are no items to display at the moment",
-      "noItemsFound": "No items found",
-      "paymentHistory": "No payment history",
-      "paymentHistoryDescription": "Your payment transactions will appear here once you make your first purchase",
-      "payments": "No payment history found",
-      "paymentsDescription": "Your payment transactions will appear here once you make your first purchase.",
-      "plans": "No plans available",
-      "plansDescription": "Choose the perfect plan for your needs and upgrade or downgrade anytime.",
-      "plansTitle": "Subscription Plans",
-      "subscriptions": "No subscriptions found",
-      "subscriptionsDescription": "You don't have any active subscriptions yet. Browse our plans to get started."
+      "description": "There is no data to display at the moment."
     },
     "error": {
       "boundary": "Something went wrong",
       "boundaryDescription": "An unexpected error occurred while loading this content.",
       "default": "Something went wrong",
       "description": "There was an error processing your request.",
-      "forbidden": "Access Forbidden",
-      "forbiddenDescription": "You don't have permission to perform this action.",
-      "loadPaymentHistory": "Failed to load payment history",
-      "loadPaymentHistoryDescription": "There was an error loading your billing history. Please try again.",
       "network": "Connection Issue",
       "networkDescription": "Unable to connect to the server. Please try again.",
-      "notFound": "Page Not Found",
-      "notFoundDescription": "The page you're looking for doesn't exist.",
       "offline": "No Internet Connection",
       "offlineDescription": "Please check your internet connection and try again.",
-      "paymentFailed": "Payment failed",
       "retry": "Retry",
-      "serverError": "Server Error",
-      "serverErrorDescription": "An internal server error occurred. Please try again later.",
       "timeout": "Request Timed Out",
       "timeoutDescription": "The request took too long to complete. Please try again.",
       "tryAgain": "Try again",
-      "unauthorized": "Unauthorized Access",
-      "unauthorizedDescription": "You don't have permission to access this resource.",
       "unexpectedError": "An unexpected error occurred. Please try again.",
-      "loadPaymentMethods": "LoadPaymentMethods",
-      "loadPaymentMethodsDescription": "LoadPaymentMethodsDescription"
+      "detailsTitle": "Error Details (dev/preview only)",
+      "digest": "Digest:",
+      "errorLabel": "Error:",
+      "stackTrace": "Stack Trace:"
     },
     "loading": {
       "default": "Loading...",
-      "paymentHistory": "Loading payment history...",
-      "payment_history": "Loading payment history...",
-      "payment_methods": "Loading payment methods...",
       "please_wait": "Please wait while we fetch your data...",
-      "products": "Loading plans...",
-      "subscriptions": "Loading subscriptions...",
-      "upcoming_bills": "Loading upcoming bills...",
-      "paymentMethods": "PaymentMethods"
-    },
-    "success": {
-      "created": "Created successfully",
-      "default": "Success",
-      "deleted": "Deleted successfully",
-      "description": "Your action has been completed successfully",
-      "downloaded": "Downloaded successfully",
-      "processed": "Processed successfully",
-      "saved": "Saved successfully",
-      "sent": "Sent successfully",
-      "updated": "Updated successfully",
-      "uploaded": "Uploaded successfully"
+      "authentication": "Loading authentication...",
+      "errorDetails": "Loading error details..."
     }
   },
-  "status": "Status",
-  "subscription": "Subscription",
+  "status": {
+    "info": "Information",
+    "warning": "Warning"
+  },
+  "subscription": {
+    "label": "Subscription",
+    "changingTo": "Changing to",
+    "planChangeInfo": "Upgrades apply instantly. Downgrades take effect at period end.",
+    "tiers": {
+      "free": {
+        "name": "Free",
+        "description": "1 free roundtable to get started"
+      },
+      "pro": {
+        "name": "Pro",
+        "description": "100,000 credits/month with unlimited AI models and priority support"
+      }
+    }
+  },
   "table": {
     "columns": "Columns",
     "dataTable": "Data table",
@@ -1822,414 +1441,168 @@
     "selectAllRows": "Select all rows",
     "selectRow": "Select row {id}"
   },
-  "theme": {
-    "dark": "Dark",
-    "light": "Light",
-    "system": "System",
-    "toggle": "Toggle theme"
+  "terms": {
+    "description": "Description",
+    "title": "Title"
   },
   "time": {
-    "ago": "{time} ago",
-    "annually": "Annually",
-    "day": "{count} day",
-    "day_other": "{count} days",
-    "forever": "Forever",
-    "hour": "{count} hour",
-    "hour_other": "{count} hours",
-    "in": "In {time}",
-    "minute": "{count} minute",
-    "minute_other": "{count} minutes",
-    "month": "{count} month",
-    "month_other": "{count} months",
-    "monthly": "Monthly",
-    "perMonth": "per month",
-    "perYear": "per year",
-    "perDay": "per day",
-    "days": "days",
     "today": "Today",
-    "tomorrow": "Tomorrow",
-    "week": "{count} week",
-    "week_other": "{count} weeks",
-    "year": "{count} year",
-    "year_other": "{count} years",
-    "yearly": "Yearly"
-  },
-  "title": "Title",
-  "toast": {
-    "genericError": "An error occurred"
+    "yesterday": "Yesterday",
+    "daysAgo": "{count} days ago",
+    "oneWeekAgo": "1 week ago",
+    "weeksAgo": "{count} weeks ago"
   },
   "usage": {
-    "threads": "Threads",
-    "messages": "Messages",
-    "threadsRemaining": "threads remaining",
-    "messagesRemaining": "messages remaining",
-    "plan": "Plan",
+    "active": "Active",
+    "credits": "Credits",
+    "creditsAvailable": "credits available",
     "daysLeft": "days left",
     "errorLoading": "Unable to load usage data",
-    "upgradeHint": "Upgrade for more",
-    "upgradeNow": "Upgrade Now"
+    "freePlan": "Free",
+    "freeRound": "1 Free",
+    "messages": "Messages",
+    "messagesRemaining": "messages remaining",
+    "summary": "Summary",
+    "summaryRemaining": "summaries remaining",
+    "plan": "Plan",
+    "planUsage": "Credits",
+    "threads": "Threads",
+    "threadsRemaining": "threads remaining",
+    "upgrade": "Upgrade",
+    "upgradeNow": "Upgrade Now",
+    "freeTrial": {
+      "availableDescription": "Try 1 free round with 3 models. Upgrade for all 10+ models & unlimited chats.",
+      "usedDescription": "Free trial complete. Go Pro for all 10+ models & unlimited conversations.",
+      "upgradeToPro": "Upgrade to Pro"
+    },
+    "scheduledChange": "Plan Change Scheduled",
+    "changingTo": "Switching to",
+    "onPeriodEnd": "at period end",
+    "keepAccessUntil": "Keep current access until",
+    "gracePeriod": "You're on {currentPlan} until {date}. After that, you'll switch to {newPlan}.",
+    "remaining": "left",
+    "of": "of",
+    "used": "used",
+    "currentPeriod": "Current Period",
+    "resetsOn": "Resets on {date}",
+    "status": {
+      "healthy": "Healthy usage",
+      "warning": "Approaching limit",
+      "critical": "Limit reached",
+      "nearLimit": "Getting close to limit"
+    },
+    "quotaAlert": {
+      "message": "You've run out of credits. Upgrade to Pro to continue chatting.",
+      "action": "Upgrade",
+      "paidUserMessage": "You've run out of credits for this billing period."
+    },
+    "viewDetails": "View usage details",
+    "managePlan": "Manage Plan",
+    "available": "available",
+    "moderator": "Analyses"
   },
   "user": {
     "defaultName": "User"
   },
-  "validation": {
-    "agreeRequired": "You must agree to continue",
-    "alphabeticOnly": "Only letters are allowed",
-    "alphanumericOnly": "Only letters and numbers are allowed",
-    "auth": {
-      "confirmPasswordRequired": "Please confirm your password",
-      "emailInvalid": "Please enter a valid email address",
-      "emailRequired": "Email address is required",
-      "nameMinLength": "Name must be at least 2 characters long",
-      "nameRequired": "Full name is required",
-      "passwordRequired": "Password is required",
-      "passwordTooShort": "Password must be at least 8 characters long",
-      "passwordTooWeak": "Password must contain uppercase, lowercase, number, and special character",
-      "passwordsMustMatch": "Passwords must match",
-      "privacyRequired": "You must accept the privacy policy",
-      "termsRequired": "You must accept the terms and conditions"
-    },
-    "billing": {
-      "amountMustBePositive": "Amount must be greater than zero",
-      "amountRequired": "Amount is required",
-      "amountTooLarge": "Maximum amount is {max}",
-      "amountTooSmall": "Minimum amount is {min}",
-      "bankAccountInvalid": "Please enter a valid bank account number",
-      "bankAccountRequired": "Bank account number is required",
-      "cardHolderRequired": "Cardholder name is required",
-      "cardNumberInvalid": "Please enter a valid card number",
-      "cardNumberRequired": "Card number is required",
-      "cvvInvalid": "Please enter a valid 3 or 4 digit CVV",
-      "cvvRequired": "CVV is required",
-      "expiryDateInvalid": "Please enter a valid expiry date (MM/YY)",
-      "expiryDatePast": "Card has expired",
-      "expiryDateRequired": "Expiry date is required",
-      "ibanInvalid": "Please enter a valid IBAN",
-      "ibanRequired": "IBAN is required",
-      "routingNumberInvalid": "Please enter a valid routing number",
-      "routingNumberRequired": "Routing number is required"
-    },
-    "captchaRequired": "Please complete the captcha",
-    "creditCardNumber": "Please enter a valid credit card number",
-    "exactLength": "Must be exactly {length} characters",
-    "fileSize": "File size must be less than {size}",
-    "fileType": "Only {types} files are allowed",
-    "futureDate": "Date must be in the future",
-    "general": {
-      "dateInFuture": "Date cannot be in the future",
-      "dateInPast": "Date cannot be in the past",
-      "fileTooLarge": "File size exceeds {maxSize}",
-      "fileTypeNotAllowed": "File type not allowed. Allowed types: {allowedTypes}",
-      "invalidDate": "Invalid date format",
-      "invalidEmail": "Invalid email address format",
-      "invalidFormat": "Invalid format",
-      "invalidUrl": "Invalid URL format",
-      "mustBeInteger": "Must be a whole number",
-      "mustBeNegative": "Must be a negative number",
-      "mustBeNumber": "Must be a valid number",
-      "mustBePositive": "Must be a positive number",
-      "outOfRange": "Value must be between {min} and {max}",
-      "required": "This field is required",
-      "tooLong": "Too long (maximum {max} characters)",
-      "tooManyFiles": "Too many files. Maximum allowed: {maxFiles}",
-      "tooShort": "Too short (minimum {min} characters)"
-    },
-    "invalid": "Invalid value",
-    "invalidDate": "Invalid date",
-    "invalidEmail": "Invalid email address",
-    "invalidFormat": "Invalid format",
-    "iranianBankAccount": "Please enter a valid Iranian bank account",
-    "iranianMobile": "Please enter a valid Iranian mobile number (09xxxxxxxxx)",
-    "iranianNationalCode": "Please enter a valid 10-digit Iranian national code",
-    "iranianPostalCode": "Please enter a valid Iranian postal code",
-    "matchField": "Must match {field}",
-    "maxLength": "Must not exceed {max} characters",
-    "maxValue": "Value must not exceed {max}",
-    "minLength": "Must be at least {min} characters",
-    "minValue": "Value must be at least {min}",
-    "mustBeNumber": "Must be a number",
-    "mustBePositive": "Must be positive",
-    "network": {
-      "conflictError": "A conflict occurred. Please refresh and try again.",
-      "connectionError": "Connection error. Please check your internet connection.",
-      "forbiddenError": "Access to this resource is forbidden.",
-      "maintenanceError": "The system is currently under maintenance. Please try again later.",
-      "notFoundError": "The requested resource was not found.",
-      "rateLimitError": "Too many requests. Please wait before trying again.",
-      "serverError": "Server error occurred. Please try again later.",
-      "timeoutError": "Request timed out. Please try again.",
-      "unauthorizedError": "You are not authorized to perform this action."
-    },
-    "notEmpty": "Field cannot be empty",
-    "numericOnly": "Only numbers are allowed",
-    "passwordMaxLength": "Password must not exceed 128 characters",
-    "passwordMinLength": "Password must be at least 8 characters long",
-    "passwordMismatch": "Passwords do not match",
-    "pastDate": "Date must be in the past",
-    "phoneFormat": "Please enter a valid phone number",
-    "profile": {
-      "addressRequired": "Address is required",
-      "cityRequired": "City is required",
-      "countryRequired": "Country is required",
-      "dobInvalid": "Please enter a valid date of birth",
-      "dobRequired": "Date of birth is required",
-      "dobTooOld": "Please enter a valid date of birth",
-      "dobTooYoung": "You must be at least 18 years old",
-      "genderRequired": "Gender is required",
-      "phoneInvalid": "Please enter a valid phone number",
-      "phoneRequired": "Phone number is required",
-      "stateRequired": "State is required",
-      "zipCodeInvalid": "Please enter a valid ZIP/Postal code",
-      "zipCodeRequired": "ZIP/Postal code is required"
-    },
-    "required": "This field is required",
-    "security": {
-      "accountDisabled": "Your account has been disabled. Please contact support.",
-      "accountLocked": "Your account has been temporarily locked due to too many failed attempts.",
-      "accountNotVerified": "Please verify your account before signing in.",
-      "invalidCredentials": "Invalid email or password.",
-      "invalidTwoFactorCode": "Invalid two-factor authentication code.",
-      "passwordChangeRequired": "You must change your password before continuing.",
-      "securityCheckFailed": "Security check failed. Please try again.",
-      "sessionExpired": "Your session has expired. Please sign in again.",
-      "suspiciousActivity": "Suspicious activity detected. Please verify your identity.",
-      "twoFactorRequired": "Two-factor authentication is required."
-    },
-    "selectRequired": "Please select an option",
-    "strongPassword": "Password must contain at least one uppercase letter, lowercase letter, number, and special character",
-    "subscription": {
-      "agreementRequired": "You must agree to the subscription terms",
-      "paymentMethodRequired": "Payment method is required",
-      "planRequired": "Please select a subscription plan",
-      "startDateInvalid": "Please select a valid start date",
-      "startDatePast": "Start date cannot be in the past",
-      "startDateRequired": "Start date is required"
-    },
-    "tooLong": "Too long",
-    "tooShort": "Too short",
-    "uniqueValue": "This value is already taken",
-    "urlFormat": "Please enter a valid URL",
-    "weakPassword": "Password is too weak"
+  "userMenu": {
+    "proPlan": "Pro Plan",
+    "manageBilling": "Manage billing",
+    "upgradeToPro": "Upgrade to Pro",
+    "upgradeDescription": "Unlock all AI models & unlimited messages",
+    "sendFeedback": "Send Feedback",
+    "feedbackDescription": "Help us improve Roundtable"
   },
-  "paymentGateway": "Payment Gateway",
-  "@/api/common/storage-keys": "@/Api/Common/Storage-Keys",
-  "NEXT_LOCALE": "NEXT LOCALE",
-  "": {
-    "/locales/${locale}/common": {
-      "json": "Json"
+  "feedback": {
+    "title": "Send Feedback",
+    "description": "Share your thoughts, report bugs, or request features",
+    "typeLabel": "Feedback Type",
+    "types": {
+      "bug": "Bug Report",
+      "feature_request": "Feature Request",
+      "general": "General Feedback",
+      "other": "Other"
     },
-    "/locales/${requestLocale}/common": {
-      "json": "Json"
+    "messageLabel": "Your Message",
+    "messagePlaceholder": "Tell us what's on your mind...",
+    "submit": "Submit Feedback",
+    "submitting": "Submitting...",
+    "success": {
+      "title": "Thank you!",
+      "message": "Your feedback has been submitted successfully."
     },
-    "/scheduled/monthly-billing": "/Scheduled/Monthly-Billing",
-    "/unified": "/Unified",
-    "/local": {
-      "db": "Db"
+    "error": {
+      "title": "Error",
+      "message": "Failed to submit feedback. Please try again."
     },
-    "/src/db/migrations": "/Src/Db/Migrations",
-    "": ""
-  },
-  "metadata": "Metadata",
-  "en-US": "En-US",
-  "/dashboard": "/Dashboard",
-  "/auth/sign-in": "/Auth/Sign-In",
-  "Payload Too Large": "Payload Too Large",
-  "/openapi": {
-    "json": "Json"
-  },
-  "/api/v1/doc": "/Api/V1/Doc",
-  "/scalar": "/Scalar",
-  "/llms": {
-    "txt": "Txt"
-  },
-  "LLMs document unavailable": "LLMs Document Unavailable",
-  "@": "@",
-  "+": "+",
-  "@/emails/templates": "@/Emails/Templates",
-  "organizations": "Organizations",
-  "users": "Users",
-  "subscriptions": "Subscriptions",
-  "id": "Id",
-  "name": "Name",
-  "url": "Url",
-  "secret_key": "Secret Key",
-  "enabled_events": "Enabled Events",
-  "[": "[",
-  "endpoint_id": "Endpoint Id",
-  "response_body": "Response Body",
-  "response_headers": "Response Headers",
-  "error_message": "Error Message",
-  "error_type": "Error Type",
-  "billing_period": "Billing Period",
-  "one_time": "One Time",
-  "roundtable_id": "Roundtable Id",
-  "features": "Features",
-  "stripe_product_id": "Stripe Product Id",
-  "stripe_price_id": "Stripe Price Id",
-  "usage_type": "Usage Type",
-  "system_prompt_id": "System Prompt Id",
-  "user_id": "User Id",
-  "contract_type": "Contract Type",
-  "pending_contract": "Pending Contract",
-  "contract_signature_encrypted": "Contract Signature Encrypted",
-  "contract_signature_hash": "Contract Signature Hash",
-  "contract_status": "Contract Status",
-  "pending_signature": "Pending Signature",
-  "payment_authority": "Payment Authority",
-  "contract_display_name": "Contract Display Name",
-  "Direct Debit Contract": "Direct Debit Contract",
-  "contract_mobile": "Contract Mobile",
-  "contract_ssn": "Contract Ssn",
-  "bank_code": "Bank Code",
-  "product_id": "Product Id",
-  "pending": "Pending",
-  "payment_method_id": "Payment Method Id",
-  "cancellation_reason": "Cancellation Reason",
-  "subscription_id": "Subscription Id",
-  "USD": "USD",
-  "payment_method": "Payment Method",
-  "payment_gateway_authority": "Payment Gateway Authority",
-  "payment_gateway_ref_id": "Payment Gateway Ref Id",
-  "payment_gateway_card_hash": "Payment Gateway Card Hash",
-  "failure_reason": "Failure Reason",
-  "payment_id": "Payment Id",
-  "event_type": "Event Type",
-  "event_data": "Event Data",
-  "severity": "Severity",
-  "info": "Info",
-  "source": "Source",
-  "raw_payload": "Raw Payload",
-  "processing_error": "Processing Error",
-  "forwarding_error": "Forwarding Error",
-  "email": "Email",
-  "image": "Image",
-  "role": "Role",
-  "ban_reason": "Ban Reason",
-  "token": "Token",
-  "ip_address": "Ip Address",
-  "user_agent": "User Agent",
-  "impersonated_by": "Impersonated By",
-  "account_id": "Account Id",
-  "provider_id": "Provider Id",
-  "access_token": "Access Token",
-  "refresh_token": "Refresh Token",
-  "id_token": "Id Token",
-  "scope": "Scope",
-  "password": "Password",
-  "identifier": "Identifier",
-  "value": "Value",
-  "terms": {
-    "title": "Title",
-    "description": "Description"
-  },
-  "privacy": {
-    "title": "Title",
-    "description": "Description"
-  },
-  "toggle": "Toggle",
-  "light": "Light",
-  "dark": "Dark",
-  "system": "System",
-  "priority": {
-    "${priority}": "${Priority}"
-  },
-  "roles": {
-    "${role}": "${Role}"
-  },
-  "sectionTitle": "SectionTitle",
-  "sectionMessage": "SectionMessage",
-  "sectionUnavailable": "SectionUnavailable",
-  "sectionDescription": "SectionDescription",
-  "componentError": "ComponentError",
-  "componentUnavailable": "ComponentUnavailable",
-  "pageTitle": "PageTitle",
-  "pageDescription": "PageDescription",
-  "copyErrorDetails": "CopyErrorDetails",
-  "errorDetailsCopied": "ErrorDetailsCopied",
-  "errorDetailsCopyFailed": "ErrorDetailsCopyFailed",
-  "refreshPage": "RefreshPage",
-  "refreshing": "Refreshing",
-  "goHome": "GoHome",
-  "retrying": "Retrying",
-  "retry": "Retry",
-  " ": " ",
-  "empty": {
-    "plansDescription": "PlansDescription"
-  },
-  "SHA-256": "SHA-256",
-  "desc": "Desc",
-  "session": "Session",
-  "content-type": "Content-Type",
-  "content-length": "Content-Length",
-  "fileSize": "FileSize",
-  "@opennextjs/cloudflare": "@Opennextjs/Cloudflare",
-  "retry-after": "Retry-After",
-  "@/db": "@/Db",
-  "requestId": "RequestId",
-  "Retry-After": "Retry-After",
-  "X-Error-ID": "X-Error-ID",
-  "X-Error-Category": "X-Error-Category",
-  "Amount must be a whole number": "Amount Must Be A Whole Number",
-  "startTime": "StartTime",
-  "correlationId": "CorrelationId",
-  "@/lib/auth/server": "@/Lib/Auth/Server",
-  "development": "Development",
-  "Roundtable": "Roundtable",
-  "/api": "/Api",
-  "v1": "V1",
-  "roundtable-session": "Roundtable-Session",
-  "v4": "V4",
-  "resend": "Resend",
-  "image/*,application/pdf": "Image/*,Application/Pdf",
-  "json": "Json",
-  "x-correlation-id": "X-Correlation-Id",
-  "next/headers": "Next/Headers",
-  "@/lib/email/ses-service": "@/Lib/Email/Ses-Service",
-  "error": "Error",
-  "${baseKey}": {
-    "features": {
-      "messagesPerMonth": "MessagesPerMonth",
-      "aiModels": "AiModels",
-      "conversationsPerMonth": "ConversationsPerMonth",
-      "basicSupport": "BasicSupport",
-      "premiumModels": "PremiumModels"
+    "validation": {
+      "messageMin": "Message must be at least 10 characters",
+      "messageMax": "Message must be less than 5000 characters"
     }
   },
-  "today": "Today",
-  "daysAgo": "days ago",
-  "transactions": "transactions",
-  "days": "days",
-  "hex": "Hex",
-  "Webhook rate limit exceeded": "Webhook Rate Limit Exceeded",
-  "@/db/tables/auth": "@/Db/Tables/Auth",
-  "Dollar amounts must be valid": "Dollar Amounts Must Be Valid",
-  "Payment method is not active": "Payment Method Is Not Active",
-  "Payment method contract is not active": "Payment Method Contract Is Not Active",
-  "Payment method contract signature is invalid": "Payment Method Contract Signature Is Invalid",
-  "Failed to get banks list": "Failed To Get Banks List",
-  "Failed to create payment contract": "Failed To Create Payment Contract",
-  "Contract signing was not successful": "Contract Signing Was Not Successful",
-  "Failed to verify contract signature": "Failed To Verify Contract Signature",
-  "Not a direct debit contract": "Not A Direct Debit Contract",
-  "Cannot delete payment method: active subscriptions exist": "Cannot Delete Payment Method: Active Subscriptions Exist",
-  ";": ";",
-  "=": "=",
-  "direct-debit-contract": "Direct-Debit-Contract",
-  "immediate": "Immediate",
-  "@/api/services/payment-direct-debit": "@/Api/Services/Payment-Direct-Debit",
-  "@/api/utils/crypto": "@/Api/Utils/Crypto",
-  "Invalid payment method": {
-    " Only direct-debit-contract is supported": {
-      "": ""
+  "webSearch": {
+    "images": {
+      "title": "Images from Search",
+      "count": "{count, plural, =0 {No images} =1 {1 image} other {# images}}",
+      "viewFull": "View full size",
+      "openSource": "View source page",
+      "copyUrl": "Copy image URL",
+      "copiedUrl": "Image URL copied!",
+      "loadError": "Failed to load image",
+      "noImages": "No images found",
+      "from": "From {source}"
+    },
+    "result": {
+      "author": "By {name}",
+      "publishedDate": "Published {date}",
+      "readingTime": "{minutes} min read",
+      "wordCount": "{count, plural, =1 {1 word} other {# words}}",
+      "showFullContent": "Show full content",
+      "showLess": "Show less",
+      "expandMore": "More",
+      "collapseLess": "Less",
+      "keyPoints": "Key Points",
+      "relevanceScore": "Relevance: {score}%",
+      "openExternal": "Open in new tab",
+      "copyLink": "Copy link",
+      "relevance": "relevant",
+      "minRead": " min",
+      "words": "words",
+      "morePoints": "more"
+    },
+    "config": {
+      "title": "Search Configuration",
+      "queries": "Queries",
+      "results": "Results",
+      "time": "Search Time",
+      "avgTime": "Avg Response Time",
+      "successRate": "Success Rate",
+      "successful": "Successful",
+      "failed": "Failed",
+      "totalResults": "Total Results",
+      "autoDetected": "AI-Detected Parameters",
+      "generatedQueries": "Generated Queries",
+      "rationale": "Rationale",
+      "complexity": "Complexity",
+      "sources": "Sources requested",
+      "searchDepth": "Search Depth",
+      "topic": "Topic",
+      "timeRange": "Time Range",
+      "showConfig": "Show search details",
+      "hideConfig": "Hide search details"
+    },
+    "content": {
+      "preview": "Content Preview",
+      "full": "Full Content",
+      "copied": "Content copied!",
+      "copyContent": "Copy content",
+      "noContent": "No content available",
+      "tableOfContents": "Table of Contents"
+    },
+    "status": {
+      "searching": "Searching...",
+      "complete": "Search complete",
+      "failed": "Search failed",
+      "cached": "From cache"
     }
-  },
-  "Cannot switch to the same product": "Cannot Switch To The Same Product",
-  "Payment method has no valid contract signature": "Payment Method Has No Valid Contract Signature",
-  "cookie": "Cookie",
-  "next": "Next",
-  "previous": "Previous",
-  "productId": "ProductId",
-  "productName": "ProductName",
-  "productPrice": "ProductPrice",
-  "yesterday": "Yesterday"
+  }
 }

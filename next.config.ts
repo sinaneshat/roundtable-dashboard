@@ -2,147 +2,173 @@ import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 
-// Initialize OpenNext Cloudflare for development - must be called before any other code
-if (process.env.NODE_ENV === 'development') {
+const isDev = process.env.NODE_ENV === 'development';
+const isProd = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'prod';
+
+if (isDev && process.env.CLOUDFLARE_API_TOKEN) {
   initOpenNextCloudflareForDev();
 }
 
 const nextConfig: NextConfig = {
-  // Required for OpenNext deployment
   output: 'standalone',
 
-  // Compiler optimizations
   compiler: {
-    // Remove console in production
-    removeConsole: process.env.NEXT_PUBLIC_WEBAPP_ENV === 'prod',
+    removeConsole: isProd,
   },
 
-  // Cache optimization headers
+  poweredByHeader: false,
+  productionBrowserSourceMaps: !isProd,
+  experimental: {
+    optimizePackageImports: [
+      'lucide-react',
+      'recharts',
+      'date-fns',
+      '@radix-ui/react-icons',
+      'motion',
+      'ai',
+      '@ai-sdk/react',
+    ],
+  },
+
+  reactStrictMode: true,
+  // cacheComponents disabled - opennextjs-cloudflare v1.14.7 not fully compatible
+  // Causes Math.random() / Suspense boundary issues with client components
+  // Using traditional ISR with export const revalidate instead
+  // cacheComponents: true,
+
+  serverExternalPackages: [
+    // React Email - prevent bundling email rendering (~1.4MB)
+    '@react-email/components',
+    '@react-email/html',
+    '@react-email/render',
+    '@react-email/code-block',
+    '@react-email/tailwind',
+    'react-email',
+    // Auth
+    'jose',
+    // Puppeteer - massive packages (~8MB with typescript)
+    // Local dev uses puppeteer, Cloudflare uses Browser binding
+    'puppeteer',
+    'puppeteer-core',
+    '@cloudflare/puppeteer',
+    // Puppeteer dependencies that pull in typescript
+    'cosmiconfig',
+    'cosmiconfig-typescript-loader',
+    // Shiki syntax highlighting (~2MB)
+    'shiki',
+    '@shikijs/core',
+    '@shikijs/langs',
+    '@shikijs/themes',
+    '@shikijs/engine-oniguruma',
+  ],
+
+  async rewrites() {
+    if (isDev) {
+      return {
+        beforeFiles: [
+          {
+            source: '/sw.js',
+            destination: '/_dev-sw-blocked',
+          },
+        ],
+        afterFiles: [],
+        fallback: [],
+      };
+    }
+    return { beforeFiles: [], afterFiles: [], fallback: [] };
+  },
+
   async headers() {
     return [
       {
-        // Static assets cache optimization
         source: '/_next/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable', // 1 year
-          },
-          {
-            key: 'X-Cache-Type',
-            value: 'static-asset',
-          },
-        ],
+        headers: isDev
+          ? [
+              { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+              { key: 'Pragma', value: 'no-cache' },
+              { key: 'Expires', value: '0' },
+            ]
+          : [
+              { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+              { key: 'X-Cache-Type', value: 'static-asset' },
+            ],
       },
       {
-        // Image optimization
         source: '/_next/image',
         headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=86400, s-maxage=604800', // 1 day browser, 1 week edge
-          },
-          {
-            key: 'X-Cache-Type',
-            value: 'optimized-image',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'no-referrer-when-downgrade',
-          },
-          {
-            key: 'Cross-Origin-Resource-Policy',
-            value: 'cross-origin',
-          },
+          { key: 'Cache-Control', value: 'public, max-age=86400, s-maxage=604800' },
+          { key: 'X-Cache-Type', value: 'optimized-image' },
+          { key: 'Referrer-Policy', value: 'no-referrer-when-downgrade' },
+          { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
         ],
       },
       {
-        // Public assets
         source: '/favicon.ico',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=604800', // 1 week
-          },
-        ],
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=604800' }],
       },
       {
-        // Public assets folder
-        source: '/(robots.txt|sitemap.xml|manifest.json)',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=86400', // 1 day
-          },
-        ],
+        source: '/(robots.txt|sitemap.xml)',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=86400' }],
       },
+      ...(isDev
+        ? [
+            {
+              source: '/sw.js',
+              headers: [
+                { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+                { key: 'Pragma', value: 'no-cache' },
+                { key: 'Expires', value: '0' },
+              ],
+            },
+          ]
+        : []),
       {
-        // Scalar API documentation - needs permissive CSP
-        source: '/api/v1/scalar',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              'default-src \'self\' \'unsafe-inline\' \'unsafe-eval\' data: blob:',
-              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com',
-              'style-src \'self\' \'unsafe-inline\' https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com',
-              'font-src \'self\' https://fonts.gstatic.com https://cdn.jsdelivr.net',
-              'img-src \'self\' data: blob: https:',
-              'connect-src \'self\' https: wss: ws:',
-              'worker-src \'self\' blob:',
-              'child-src \'self\' blob:',
-              'frame-ancestors \'none\'',
-              'base-uri \'self\'',
-              'form-action \'self\'',
-            ].join('; '),
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-        ],
-      },
-      {
-        // API routes - no cache by default (handled by middleware)
         source: '/api/:path*',
-        headers: [
-          {
-            key: 'X-API-Cache',
-            value: 'controlled-by-middleware',
-          },
-        ],
+        headers: [{ key: 'X-API-Cache', value: 'controlled-by-middleware' }],
       },
       {
-        // Basic security headers for all routes except Scalar
-        source: '/((?!api/v1/scalar).*)',
+        source: '/public/chat/:path*/embed',
         headers: [
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin',
-          },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
             value: [
               'default-src \'self\'',
-              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\'',
-              'style-src \'self\' \'unsafe-inline\'',
-              'img-src \'self\' data: https://lh3.googleusercontent.com https://lh4.googleusercontent.com https://lh5.googleusercontent.com https://lh6.googleusercontent.com https://googleusercontent.com',
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}`,
+              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'img-src * data: blob:',
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https: wss://*.posthog.com wss://us.posthog.com wss://eu.posthog.com`,
+              'worker-src \'self\' blob: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
+              'font-src \'self\' data: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'frame-src \'self\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
+              'frame-ancestors *',
+              'base-uri \'self\'',
+              'form-action \'self\' https://accounts.google.com',
+            ].join('; '),
+          },
+        ],
+      },
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              'default-src \'self\'',
+              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'img-src * data: blob:',
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https: wss://*.posthog.com wss://us.posthog.com wss://eu.posthog.com`,
+              'worker-src \'self\' blob: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
+              'font-src \'self\' data: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'frame-src \'self\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
               'frame-ancestors \'none\'',
               'base-uri \'self\'',
-              'form-action \'self\'',
+              'form-action \'self\' https://accounts.google.com',
             ].join('; '),
           },
         ],
@@ -150,13 +176,11 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Optimize images
   images: {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     remotePatterns: [
-      // Dynamic hostname based on environment
       ...(process.env.NEXT_PUBLIC_APP_URL
         ? [{
             protocol: new URL(process.env.NEXT_PUBLIC_APP_URL).protocol.slice(0, -1) as 'http' | 'https',
@@ -169,30 +193,25 @@ const nextConfig: NextConfig = {
             port: '3000',
           }]
       ),
-      {
-        protocol: 'https',
-        hostname: 'lh3.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'lh4.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'lh5.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'lh6.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'googleusercontent.com',
-      },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+      { protocol: 'https', hostname: 'lh4.googleusercontent.com' },
+      { protocol: 'https', hostname: 'lh5.googleusercontent.com' },
+      { protocol: 'https', hostname: 'lh6.googleusercontent.com' },
+      { protocol: 'https', hostname: 'googleusercontent.com' },
+      { protocol: 'https', hostname: 'www.google.com', pathname: '/s2/favicons**' },
     ],
   },
 
+  webpack: (config, { isServer }) => {
+    if (!isServer && !isProd && process.env.DEBUG_MINIFY === 'true') {
+      config.optimization.minimize = false;
+      config.optimization.moduleIds = 'named';
+      config.optimization.chunkIds = 'named';
+    }
+    return config;
+  },
 };
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
+
 export default withNextIntl(nextConfig);

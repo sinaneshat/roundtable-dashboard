@@ -7,10 +7,3 @@
 export {
   emailService,
 } from './ses-service';
-
-// Validation utilities
-export {
-  isDisposableEmail,
-  isValidEmail,
-  normalizeEmail,
-} from './validation';

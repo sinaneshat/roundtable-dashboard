@@ -4,25 +4,34 @@ import { redirect } from 'next/navigation';
 
 import { BRAND } from '@/constants';
 import { auth } from '@/lib/auth';
-import { createMetadata } from '@/utils/metadata';
+import { createMetadata } from '@/utils';
 
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: BRAND.tagline,
     description: BRAND.description,
+    url: '/',
+    canonicalUrl: '/',
   });
 }
 
+/**
+ * Home Page - Auth-based redirect
+ *
+ * Checks session server-side and redirects:
+ * - Authenticated → /chat
+ * - Unauthenticated → /auth/sign-in
+ *
+ * @see https://www.better-auth.com/docs/integrations/next
+ */
 export default async function Home() {
-  // Check if user is authenticated
-  const headersList = await headers();
-  const session = await auth.api.getSession({ headers: headersList });
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
 
   if (session?.user) {
-    // User is authenticated, redirect to chat
     redirect('/chat');
-  } else {
-    // User is not authenticated, redirect to sign-in
-    redirect('/auth/sign-in');
   }
+
+  redirect('/auth/sign-in');
 }

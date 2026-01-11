@@ -1,22 +1,27 @@
 import { Container } from '@react-email/components';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+
+import { borderRadius, colors, spacing } from '@/emails/design-tokens';
 
 type EmailContainerProps = {
   children: ReactNode;
-  className?: string;
   maxWidth?: number;
+  style?: CSSProperties;
 };
 
 export function EmailContainer({
   children,
-  className = 'mx-auto my-[40px] max-w-[465px] rounded border border-border border-solid p-[20px]',
   maxWidth = 465,
+  style,
 }: EmailContainerProps) {
-  const containerClass = className || `mx-auto my-[40px] max-w-[${maxWidth}px] rounded border border-border border-solid p-[20px]`;
+  const containerStyle: CSSProperties = {
+    margin: '40px auto',
+    maxWidth: `${maxWidth}px`,
+    borderRadius: borderRadius.md,
+    border: `1px solid ${colors.border}`,
+    padding: spacing[5],
+    ...style,
+  };
 
-  return (
-    <Container className={containerClass}>
-      {children}
-    </Container>
-  );
+  return <Container style={containerStyle}>{children}</Container>;
 }

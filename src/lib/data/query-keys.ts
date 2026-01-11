@@ -53,14 +53,15 @@ export const queryKeys = {
     all: QueryKeyFactory.base('usage'),
     stats: () => QueryKeyFactory.action('usage', 'stats'),
     quotas: () => [...queryKeys.usage.all, 'quotas'] as const,
-    threadQuota: () => QueryKeyFactory.action('usage', 'quota', 'threads'),
-    messageQuota: () => QueryKeyFactory.action('usage', 'quota', 'messages'),
   },
 
   // Chat Threads
   threads: {
     all: QueryKeyFactory.base('threads'),
-    lists: () => [...queryKeys.threads.all, 'list'] as const,
+    lists: (search?: string) =>
+      search
+        ? [...queryKeys.threads.all, 'list', 'search', search] as const
+        : [...queryKeys.threads.all, 'list'] as const,
     list: (cursor?: string) =>
       cursor
         ? QueryKeyFactory.action('threads', 'list', cursor)
@@ -68,19 +69,15 @@ export const queryKeys = {
     details: () => [...queryKeys.threads.all, 'detail'] as const,
     detail: (id: string) => QueryKeyFactory.detail('threads', id),
     public: (slug: string) => QueryKeyFactory.action('threads', 'public', slug),
+    publicSlugs: () => QueryKeyFactory.action('threads', 'public', 'slugs'),
     bySlug: (slug: string) => QueryKeyFactory.action('threads', 'slug', slug),
-  },
-
-  // Chat Memories
-  memories: {
-    all: QueryKeyFactory.base('memories'),
-    lists: () => [...queryKeys.memories.all, 'list'] as const,
-    list: (cursor?: string) =>
-      cursor
-        ? QueryKeyFactory.action('memories', 'list', cursor)
-        : QueryKeyFactory.list('memories'),
-    details: () => [...queryKeys.memories.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('memories', id),
+    slugStatus: (id: string) => QueryKeyFactory.action('threads', 'slug-status', id),
+    messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
+    changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
+    roundChangelog: (id: string, roundNumber: number) =>
+      QueryKeyFactory.action('threads', 'changelog', id, 'round', String(roundNumber)),
+    preSearches: (id: string) => QueryKeyFactory.action('threads', 'pre-searches', id),
+    feedback: (id: string) => QueryKeyFactory.action('threads', 'feedback', id),
   },
 
   // Chat Custom Roles
@@ -93,6 +90,65 @@ export const queryKeys = {
         : QueryKeyFactory.list('customRoles'),
     details: () => [...queryKeys.customRoles.all, 'detail'] as const,
     detail: (id: string) => QueryKeyFactory.detail('customRoles', id),
+  },
+
+  // User Presets (saved model+role configurations)
+  userPresets: {
+    all: QueryKeyFactory.base('userPresets'),
+    lists: () => [...queryKeys.userPresets.all, 'list'] as const,
+    list: (cursor?: string) =>
+      cursor
+        ? QueryKeyFactory.action('userPresets', 'list', cursor)
+        : QueryKeyFactory.list('userPresets'),
+    details: () => [...queryKeys.userPresets.all, 'detail'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('userPresets', id),
+  },
+
+  // API Keys
+  apiKeys: {
+    all: QueryKeyFactory.base('apiKeys'),
+    lists: () => [...queryKeys.apiKeys.all, 'list'] as const,
+    list: () => QueryKeyFactory.list('apiKeys'),
+    details: () => [...queryKeys.apiKeys.all, 'detail'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('apiKeys', id),
+  },
+
+  // OpenRouter Models
+  models: {
+    all: QueryKeyFactory.base('models'),
+    list: () => QueryKeyFactory.list('models'),
+  },
+
+  // Projects
+  projects: {
+    all: QueryKeyFactory.base('projects'),
+    lists: (search?: string) =>
+      search
+        ? [...queryKeys.projects.all, 'list', 'search', search] as const
+        : [...queryKeys.projects.all, 'list'] as const,
+    list: (cursor?: string) =>
+      cursor
+        ? QueryKeyFactory.action('projects', 'list', cursor)
+        : QueryKeyFactory.list('projects'),
+    details: () => [...queryKeys.projects.all, 'detail'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('projects', id),
+    attachments: (id: string) => QueryKeyFactory.action('projects', 'attachments', id),
+    memories: (id: string) => QueryKeyFactory.action('projects', 'memories', id),
+    context: (id: string) => QueryKeyFactory.action('projects', 'context', id),
+  },
+
+  // Uploads (Centralized file storage)
+  // Note: Thread/message associations are via junction tables, not direct queries
+  uploads: {
+    all: QueryKeyFactory.base('uploads'),
+    lists: () => [...queryKeys.uploads.all, 'list'] as const,
+    list: (cursor?: string) =>
+      cursor
+        ? QueryKeyFactory.action('uploads', 'list', cursor)
+        : QueryKeyFactory.list('uploads'),
+    details: () => [...queryKeys.uploads.all, 'detail'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('uploads', id),
+    downloadUrl: (id: string) => QueryKeyFactory.action('uploads', 'downloadUrl', id),
   },
 } as const;
 
@@ -110,21 +166,27 @@ export const invalidationPatterns = {
   ],
 
   // Subscription operations
+  // IMPORTANT: Always invalidate usage queries with subscriptions since quotas are tied to subscription tier
   subscriptions: [
     queryKeys.subscriptions.lists(),
     queryKeys.subscriptions.current(),
+    queryKeys.usage.all,
+    queryKeys.models.all,
   ],
 
   subscriptionDetail: (subscriptionId: string) => [
     queryKeys.subscriptions.detail(subscriptionId),
     queryKeys.subscriptions.lists(),
     queryKeys.subscriptions.current(),
+    queryKeys.usage.all,
+    queryKeys.models.all,
   ],
 
-  // After checkout - invalidate everything billing related
   afterCheckout: [
     queryKeys.subscriptions.all,
     queryKeys.products.all,
+    queryKeys.usage.all,
+    queryKeys.models.all,
   ],
 
   // Usage operations - invalidate after chat operations
@@ -136,39 +198,26 @@ export const invalidationPatterns = {
   // After chat operations - invalidate usage stats
   afterChatOperation: [
     queryKeys.usage.stats(),
-    queryKeys.usage.threadQuota(),
-    queryKeys.usage.messageQuota(),
   ],
 
-  // Thread operations
+  // Thread operations - only invalidate thread list and stats
+  // Stats are only updated when messages are sent (actual usage), not when threads are created/deleted
   threads: [
     queryKeys.threads.lists(),
-    queryKeys.usage.stats(),
-    queryKeys.usage.threadQuota(),
+    queryKeys.usage.stats(), // Invalidate stats to refresh quota
   ],
 
   threadDetail: (threadId: string) => [
     queryKeys.threads.detail(threadId),
     queryKeys.threads.lists(),
+    queryKeys.threads.changelog(threadId),
   ],
 
-  // After thread message - invalidate thread detail and usage
+  // After thread message - invalidate thread detail and usage stats
   afterThreadMessage: (threadId: string) => [
     queryKeys.threads.detail(threadId),
     queryKeys.threads.lists(),
     queryKeys.usage.stats(),
-    queryKeys.usage.messageQuota(),
-  ],
-
-  // Memory operations
-  memories: [
-    queryKeys.memories.lists(),
-    queryKeys.usage.stats(),
-  ],
-
-  memoryDetail: (memoryId: string) => [
-    queryKeys.memories.detail(memoryId),
-    queryKeys.memories.lists(),
   ],
 
   // Custom role operations
@@ -180,5 +229,64 @@ export const invalidationPatterns = {
   customRoleDetail: (roleId: string) => [
     queryKeys.customRoles.detail(roleId),
     queryKeys.customRoles.lists(),
+  ],
+
+  // User preset operations
+  userPresets: [
+    queryKeys.userPresets.lists(),
+  ],
+
+  userPresetDetail: (presetId: string) => [
+    queryKeys.userPresets.detail(presetId),
+    queryKeys.userPresets.lists(),
+  ],
+
+  // API Key operations
+  apiKeys: [
+    queryKeys.apiKeys.lists(),
+  ],
+
+  apiKeyDetail: (keyId: string) => [
+    queryKeys.apiKeys.detail(keyId),
+    queryKeys.apiKeys.lists(),
+  ],
+
+  // Project operations
+  projects: [
+    queryKeys.projects.lists(),
+  ],
+
+  projectDetail: (projectId: string) => [
+    queryKeys.projects.detail(projectId),
+    queryKeys.projects.lists(),
+    queryKeys.projects.attachments(projectId),
+    queryKeys.projects.memories(projectId),
+  ],
+
+  // Project attachment operations
+  projectAttachments: (projectId: string) => [
+    queryKeys.projects.attachments(projectId),
+    queryKeys.projects.detail(projectId), // Update attachment counts
+  ],
+
+  // Project memory operations
+  projectMemories: (projectId: string) => [
+    queryKeys.projects.memories(projectId),
+    queryKeys.projects.detail(projectId),
+  ],
+
+  // Upload (attachment) operations
+  uploads: [
+    queryKeys.uploads.lists(),
+  ],
+
+  uploadDetail: (uploadId: string) => [
+    queryKeys.uploads.detail(uploadId),
+    queryKeys.uploads.lists(),
+  ],
+
+  // After upload - invalidate upload list
+  afterUpload: () => [
+    queryKeys.uploads.lists(),
   ],
 } as const;

@@ -1,42 +1,52 @@
 import { Text } from '@react-email/components';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+
+import type { EmailColor, EmailTextWeight, TextAlignment } from '@/api/core/enums';
+import { colors, typography } from '@/emails/design-tokens';
 
 type EmailTextProps = {
   children: ReactNode;
   size?: 'sm' | 'base' | 'lg';
-  weight?: 'normal' | 'medium' | 'semibold' | 'bold';
-  color?: 'primary' | 'secondary' | 'muted' | 'white' | 'error' | 'warning';
-  className?: string;
-  align?: 'left' | 'center' | 'right';
-  style?: React.CSSProperties;
+  weight?: EmailTextWeight;
+  color?: EmailColor;
+  align?: TextAlignment;
+  style?: CSSProperties;
 };
 
-const sizeStyles = {
-  sm: 'text-[12px] leading-[16px]',
-  base: 'text-[14px] leading-[24px]',
-  lg: 'text-[16px] leading-[26px]',
+const sizeStyles: Record<string, CSSProperties> = {
+  sm: {
+    fontSize: typography.fontSize.xs,
+    lineHeight: '16px',
+  },
+  base: {
+    fontSize: typography.fontSize.sm,
+    lineHeight: '24px',
+  },
+  lg: {
+    fontSize: typography.fontSize.base,
+    lineHeight: '26px',
+  },
 };
 
-const weightStyles = {
-  normal: 'font-normal',
-  medium: 'font-medium',
-  semibold: 'font-semibold',
-  bold: 'font-bold',
+const weightStyles: Record<string, CSSProperties> = {
+  normal: { fontWeight: typography.fontWeight.normal },
+  medium: { fontWeight: typography.fontWeight.medium },
+  semibold: { fontWeight: typography.fontWeight.semibold },
+  bold: { fontWeight: typography.fontWeight.bold },
 };
 
-const colorStyles = {
-  primary: 'text-foreground',
-  secondary: 'text-muted-foreground',
-  muted: 'text-muted-foreground/70',
-  white: 'text-white',
-  error: 'text-destructive',
-  warning: 'text-yellow-600',
+const colorStyles: Record<string, CSSProperties> = {
+  primary: { color: colors.foreground },
+  secondary: { color: colors.mutedForeground },
+  muted: { color: colors.textMuted },
+  white: { color: colors.white },
+  error: { color: colors.destructive },
 };
 
-const alignStyles = {
-  left: 'text-start',
-  center: 'text-center',
-  right: 'text-end',
+const alignStyles: Record<string, CSSProperties> = {
+  left: { textAlign: 'left' },
+  center: { textAlign: 'center' },
+  right: { textAlign: 'right' },
 };
 
 export function EmailText({
@@ -44,18 +54,20 @@ export function EmailText({
   size = 'base',
   weight = 'normal',
   color = 'primary',
-  className,
   align = 'left',
   style,
 }: EmailTextProps) {
-  const baseClass = `${sizeStyles[size]} ${weightStyles[weight]} ${colorStyles[color]} ${alignStyles[align]}`;
-  const finalClass = className || baseClass;
+  const combinedStyle: CSSProperties = {
+    margin: '0',
+    fontFamily: typography.fontFamily,
+    ...sizeStyles[size],
+    ...weightStyles[weight],
+    ...colorStyles[color],
+    ...alignStyles[align],
+    ...style,
+  };
 
-  return (
-    <Text className={finalClass} style={style}>
-      {children}
-    </Text>
-  );
+  return <Text style={combinedStyle}>{children}</Text>;
 }
 
 export default EmailText;

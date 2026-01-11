@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ea34a807-e694-487e-a43f-3cf85f80b78c",
+  "id": "eb4cc284-142d-4305-a006-e20d6942acf6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -105,6 +105,182 @@
         "account_user_id_user_id_fk": {
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "api_key": {
+      "name": "api_key",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "start": {
+          "name": "start",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "prefix": {
+          "name": "prefix",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "refill_interval": {
+          "name": "refill_interval",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refill_amount": {
+          "name": "refill_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_refill_at": {
+          "name": "last_refill_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "remaining": {
+          "name": "remaining",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rate_limit_enabled": {
+          "name": "rate_limit_enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "rate_limit_time_window": {
+          "name": "rate_limit_time_window",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rate_limit_max": {
+          "name": "rate_limit_max",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "request_count": {
+          "name": "request_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_request": {
+          "name": "last_request",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        },
+        "permissions": {
+          "name": "permissions",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "api_key_user_id_user_id_fk": {
+          "name": "api_key_user_id_user_id_fk",
+          "tableFrom": "api_key",
           "tableTo": "user",
           "columnsFrom": [
             "user_id"
@@ -1095,6 +1271,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1136,6 +1320,14 @@
           "name": "stripe_subscription_price_idx",
           "columns": [
             "price_id"
+          ],
+          "isUnique": false
+        },
+        "stripe_subscription_user_status_idx": {
+          "name": "stripe_subscription_user_status_idx",
+          "columns": [
+            "user_id",
+            "status"
           ],
           "isUnique": false
         }
@@ -1302,7 +1494,7 @@
           "name": "system_prompt",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "metadata": {
@@ -1364,146 +1556,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "chat_memory": {
-      "name": "chat_memory",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "thread_id": {
-          "name": "thread_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'topic'"
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "content": {
-          "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "is_global": {
-          "name": "is_global",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "metadata": {
-          "name": "metadata",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
-        }
-      },
-      "indexes": {
-        "chat_memory_user_idx": {
-          "name": "chat_memory_user_idx",
-          "columns": [
-            "user_id"
-          ],
-          "isUnique": false
-        },
-        "chat_memory_thread_idx": {
-          "name": "chat_memory_thread_idx",
-          "columns": [
-            "thread_id"
-          ],
-          "isUnique": false
-        },
-        "chat_memory_global_idx": {
-          "name": "chat_memory_global_idx",
-          "columns": [
-            "is_global"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "chat_memory_user_id_user_id_fk": {
-          "name": "chat_memory_user_id_user_id_fk",
-          "tableFrom": "chat_memory",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "chat_memory_thread_id_chat_thread_id_fk": {
-          "name": "chat_memory_thread_id_chat_thread_id_fk",
-          "tableFrom": "chat_memory",
-          "tableTo": "chat_thread",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "chat_message": {
       "name": "chat_message",
       "columns": {
@@ -1536,19 +1588,20 @@
           "autoincrement": false,
           "default": "'assistant'"
         },
-        "content": {
-          "name": "content",
+        "parts": {
+          "name": "parts",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "reasoning": {
-          "name": "reasoning",
-          "type": "text",
+        "round_number": {
+          "name": "round_number",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "tool_calls": {
           "name": "tool_calls",
@@ -1559,13 +1612,6 @@
         },
         "metadata": {
           "name": "metadata",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "parent_message_id": {
-          "name": "parent_message_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -1601,6 +1647,29 @@
             "participant_id"
           ],
           "isUnique": false
+        },
+        "chat_message_role_idx": {
+          "name": "chat_message_role_idx",
+          "columns": [
+            "role"
+          ],
+          "isUnique": false
+        },
+        "chat_message_thread_created_idx": {
+          "name": "chat_message_thread_created_idx",
+          "columns": [
+            "thread_id",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "chat_message_thread_round_idx": {
+          "name": "chat_message_thread_round_idx",
+          "columns": [
+            "thread_id",
+            "round_number"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -1623,19 +1692,6 @@
           "tableTo": "chat_participant",
           "columnsFrom": [
             "participant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "chat_message_parent_message_id_chat_message_id_fk": {
-          "name": "chat_message_parent_message_id_chat_message_id_fk",
-          "tableFrom": "chat_message",
-          "tableTo": "chat_message",
-          "columnsFrom": [
-            "parent_message_id"
           ],
           "columnsTo": [
             "id"
@@ -1747,6 +1803,14 @@
             "custom_role_id"
           ],
           "isUnique": false
+        },
+        "chat_participant_thread_model_unique": {
+          "name": "chat_participant_thread_model_unique",
+          "columns": [
+            "thread_id",
+            "model_id"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -1779,6 +1843,251 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "checkConstraints": {
+        "check_priority_non_negative": {
+          "name": "check_priority_non_negative",
+          "value": "\"chat_participant\".\"priority\" >= 0"
+        }
+      }
+    },
+    "chat_pre_search": {
+      "name": "chat_pre_search",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "round_number": {
+          "name": "round_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_query": {
+          "name": "user_query",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "search_data": {
+          "name": "search_data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "chat_pre_search_thread_idx": {
+          "name": "chat_pre_search_thread_idx",
+          "columns": [
+            "thread_id"
+          ],
+          "isUnique": false
+        },
+        "chat_pre_search_round_idx": {
+          "name": "chat_pre_search_round_idx",
+          "columns": [
+            "thread_id",
+            "round_number"
+          ],
+          "isUnique": false
+        },
+        "chat_pre_search_created_idx": {
+          "name": "chat_pre_search_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "chat_pre_search_status_idx": {
+          "name": "chat_pre_search_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "chat_pre_search_thread_round_unique": {
+          "name": "chat_pre_search_thread_round_unique",
+          "columns": [
+            "thread_id",
+            "round_number"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "chat_pre_search_thread_id_chat_thread_id_fk": {
+          "name": "chat_pre_search_thread_id_chat_thread_id_fk",
+          "tableFrom": "chat_pre_search",
+          "tableTo": "chat_thread",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "chat_round_feedback": {
+      "name": "chat_round_feedback",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "round_number": {
+          "name": "round_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "feedback_type": {
+          "name": "feedback_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "chat_round_feedback_unique_idx": {
+          "name": "chat_round_feedback_unique_idx",
+          "columns": [
+            "thread_id",
+            "user_id",
+            "round_number"
+          ],
+          "isUnique": false
+        },
+        "chat_round_feedback_thread_idx": {
+          "name": "chat_round_feedback_thread_idx",
+          "columns": [
+            "thread_id"
+          ],
+          "isUnique": false
+        },
+        "chat_round_feedback_round_idx": {
+          "name": "chat_round_feedback_round_idx",
+          "columns": [
+            "thread_id",
+            "round_number"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "chat_round_feedback_thread_id_chat_thread_id_fk": {
+          "name": "chat_round_feedback_thread_id_chat_thread_id_fk",
+          "tableFrom": "chat_round_feedback",
+          "tableTo": "chat_thread",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chat_round_feedback_user_id_user_id_fk": {
+          "name": "chat_round_feedback_user_id_user_id_fk",
+          "tableFrom": "chat_round_feedback",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "checkConstraints": {}
     },
     "chat_thread": {
@@ -1798,6 +2107,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "title": {
           "name": "title",
           "type": "text",
@@ -1812,13 +2128,20 @@
           "notNull": true,
           "autoincrement": false
         },
+        "previous_slug": {
+          "name": "previous_slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "mode": {
           "name": "mode",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'brainstorming'"
+          "default": "'debating'"
         },
         "status": {
           "name": "status",
@@ -1844,12 +2167,36 @@
           "autoincrement": false,
           "default": false
         },
+        "is_ai_generated_title": {
+          "name": "is_ai_generated_title",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "enable_web_search": {
+          "name": "enable_web_search",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "metadata": {
           "name": "metadata",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
         },
         "created_at": {
           "name": "created_at",
@@ -1890,6 +2237,13 @@
           ],
           "isUnique": false
         },
+        "chat_thread_project_idx": {
+          "name": "chat_thread_project_idx",
+          "columns": [
+            "project_id"
+          ],
+          "isUnique": false
+        },
         "chat_thread_status_idx": {
           "name": "chat_thread_status_idx",
           "columns": [
@@ -1911,6 +2265,13 @@
           ],
           "isUnique": false
         },
+        "chat_thread_previous_slug_idx": {
+          "name": "chat_thread_previous_slug_idx",
+          "columns": [
+            "previous_slug"
+          ],
+          "isUnique": false
+        },
         "chat_thread_favorite_idx": {
           "name": "chat_thread_favorite_idx",
           "columns": [
@@ -1922,6 +2283,14 @@
           "name": "chat_thread_public_idx",
           "columns": [
             "is_public"
+          ],
+          "isUnique": false
+        },
+        "chat_thread_public_status_idx": {
+          "name": "chat_thread_public_status_idx",
+          "columns": [
+            "is_public",
+            "status"
           ],
           "isUnique": false
         }
@@ -1939,14 +2308,27 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "chat_thread_project_id_chat_project_id_fk": {
+          "name": "chat_thread_project_id_chat_project_id_fk",
+          "tableFrom": "chat_thread",
+          "tableTo": "chat_project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "chat_thread_memory": {
-      "name": "chat_thread_memory",
+    "chat_thread_changelog": {
+      "name": "chat_thread_changelog",
       "columns": {
         "id": {
           "name": "id",
@@ -1962,15 +2344,37 @@
           "notNull": true,
           "autoincrement": false
         },
-        "memory_id": {
-          "name": "memory_id",
+        "round_number": {
+          "name": "round_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "change_type": {
+          "name": "change_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "attached_at": {
-          "name": "attached_at",
+        "change_summary": {
+          "name": "change_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "change_data": {
+          "name": "change_data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -1979,49 +2383,43 @@
         }
       },
       "indexes": {
-        "chat_thread_memory_thread_idx": {
-          "name": "chat_thread_memory_thread_idx",
+        "chat_thread_changelog_thread_idx": {
+          "name": "chat_thread_changelog_thread_idx",
           "columns": [
             "thread_id"
           ],
           "isUnique": false
         },
-        "chat_thread_memory_memory_idx": {
-          "name": "chat_thread_memory_memory_idx",
+        "chat_thread_changelog_type_idx": {
+          "name": "chat_thread_changelog_type_idx",
           "columns": [
-            "memory_id"
+            "change_type"
           ],
           "isUnique": false
         },
-        "chat_thread_memory_unique_idx": {
-          "name": "chat_thread_memory_unique_idx",
+        "chat_thread_changelog_created_idx": {
+          "name": "chat_thread_changelog_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "chat_thread_changelog_thread_round_idx": {
+          "name": "chat_thread_changelog_thread_round_idx",
           "columns": [
             "thread_id",
-            "memory_id"
+            "round_number"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "chat_thread_memory_thread_id_chat_thread_id_fk": {
-          "name": "chat_thread_memory_thread_id_chat_thread_id_fk",
-          "tableFrom": "chat_thread_memory",
+        "chat_thread_changelog_thread_id_chat_thread_id_fk": {
+          "name": "chat_thread_changelog_thread_id_chat_thread_id_fk",
+          "tableFrom": "chat_thread_changelog",
           "tableTo": "chat_thread",
           "columnsFrom": [
             "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "chat_thread_memory_memory_id_chat_memory_id_fk": {
-          "name": "chat_thread_memory_memory_id_chat_memory_id_fk",
-          "tableFrom": "chat_thread_memory",
-          "tableTo": "chat_memory",
-          "columnsFrom": [
-            "memory_id"
           ],
           "columnsTo": [
             "id"
@@ -2034,8 +2432,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "model_configuration": {
-      "name": "model_configuration",
+    "chat_user_preset": {
+      "name": "chat_user_preset",
       "columns": {
         "id": {
           "name": "id",
@@ -2044,15 +2442,480 @@
           "notNull": true,
           "autoincrement": false
         },
-        "provider": {
-          "name": "provider",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'debating'"
+        },
+        "model_roles": {
+          "name": "model_roles",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "chat_user_preset_user_idx": {
+          "name": "chat_user_preset_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        },
+        "chat_user_preset_name_idx": {
+          "name": "chat_user_preset_name_idx",
+          "columns": [
+            "name"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "chat_user_preset_user_id_user_id_fk": {
+          "name": "chat_user_preset_user_id_user_id_fk",
+          "tableFrom": "chat_user_preset",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "credit_transaction": {
+      "name": "credit_transaction",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "balance_after": {
+          "name": "balance_after",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "input_tokens": {
+          "name": "input_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "output_tokens": {
+          "name": "output_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "total_tokens": {
+          "name": "total_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "credits_used": {
+          "name": "credits_used",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "stream_id": {
+          "name": "stream_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "model_id": {
           "name": "model_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "model_pricing_input_per_million": {
+          "name": "model_pricing_input_per_million",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "model_pricing_output_per_million": {
+          "name": "model_pricing_output_per_million",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "credit_tx_user_idx": {
+          "name": "credit_tx_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        },
+        "credit_tx_type_idx": {
+          "name": "credit_tx_type_idx",
+          "columns": [
+            "type"
+          ],
+          "isUnique": false
+        },
+        "credit_tx_created_idx": {
+          "name": "credit_tx_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "credit_tx_thread_idx": {
+          "name": "credit_tx_thread_idx",
+          "columns": [
+            "thread_id"
+          ],
+          "isUnique": false
+        },
+        "credit_tx_stream_idx": {
+          "name": "credit_tx_stream_idx",
+          "columns": [
+            "stream_id"
+          ],
+          "isUnique": false
+        },
+        "credit_tx_action_idx": {
+          "name": "credit_tx_action_idx",
+          "columns": [
+            "action"
+          ],
+          "isUnique": false
+        },
+        "credit_tx_user_created_idx": {
+          "name": "credit_tx_user_created_idx",
+          "columns": [
+            "user_id",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "credit_tx_user_type_idx": {
+          "name": "credit_tx_user_type_idx",
+          "columns": [
+            "user_id",
+            "type"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "credit_transaction_user_id_user_id_fk": {
+          "name": "credit_transaction_user_id_user_id_fk",
+          "tableFrom": "credit_transaction",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "credit_transaction_thread_id_chat_thread_id_fk": {
+          "name": "credit_transaction_thread_id_chat_thread_id_fk",
+          "tableFrom": "credit_transaction",
+          "tableTo": "chat_thread",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "user_credit_balance": {
+      "name": "user_credit_balance",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "balance": {
+          "name": "balance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "reserved_credits": {
+          "name": "reserved_credits",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "plan_type": {
+          "name": "plan_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'free'"
+        },
+        "monthly_credits": {
+          "name": "monthly_credits",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_refill_at": {
+          "name": "last_refill_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "next_refill_at": {
+          "name": "next_refill_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "user_credit_balance_user_id_unique": {
+          "name": "user_credit_balance_user_id_unique",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": true
+        },
+        "user_credit_balance_user_idx": {
+          "name": "user_credit_balance_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        },
+        "user_credit_balance_next_refill_idx": {
+          "name": "user_credit_balance_next_refill_idx",
+          "columns": [
+            "next_refill_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "user_credit_balance_user_id_user_id_fk": {
+          "name": "user_credit_balance_user_id_user_id_fk",
+          "tableFrom": "user_credit_balance",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "check_balance_non_negative": {
+          "name": "check_balance_non_negative",
+          "value": "\"user_credit_balance\".\"balance\" >= 0"
+        },
+        "check_reserved_non_negative": {
+          "name": "check_reserved_non_negative",
+          "value": "\"user_credit_balance\".\"reserved_credits\" >= 0"
+        },
+        "check_monthly_credits_non_negative": {
+          "name": "check_monthly_credits_non_negative",
+          "value": "\"user_credit_balance\".\"monthly_credits\" >= 0"
+        },
+        "check_version_positive": {
+          "name": "check_version_positive",
+          "value": "\"user_credit_balance\".\"version\" > 0"
+        }
+      }
+    },
+    "chat_project": {
+      "name": "chat_project",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -2072,35 +2935,41 @@
           "notNull": false,
           "autoincrement": false
         },
-        "capabilities": {
-          "name": "capabilities",
+        "color": {
+          "name": "color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'blue'"
+        },
+        "custom_instructions": {
+          "name": "custom_instructions",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "default_settings": {
-          "name": "default_settings",
+        "autorag_instance_id": {
+          "name": "autorag_instance_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "is_enabled": {
-          "name": "is_enabled",
-          "type": "integer",
+        "r2_folder_prefix": {
+          "name": "r2_folder_prefix",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": true
+          "autoincrement": false
         },
-        "order": {
-          "name": "order",
-          "type": "integer",
+        "settings": {
+          "name": "settings",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
+          "notNull": false,
+          "autoincrement": false
         },
         "metadata": {
           "name": "metadata",
@@ -2127,35 +2996,49 @@
         }
       },
       "indexes": {
-        "model_configuration_model_id_unique": {
-          "name": "model_configuration_model_id_unique",
+        "chat_project_user_idx": {
+          "name": "chat_project_user_idx",
           "columns": [
-            "model_id"
-          ],
-          "isUnique": true
-        },
-        "model_configuration_provider_idx": {
-          "name": "model_configuration_provider_idx",
-          "columns": [
-            "provider"
+            "user_id"
           ],
           "isUnique": false
         },
-        "model_configuration_enabled_idx": {
-          "name": "model_configuration_enabled_idx",
+        "chat_project_created_idx": {
+          "name": "chat_project_created_idx",
           "columns": [
-            "is_enabled"
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "chat_project_name_idx": {
+          "name": "chat_project_name_idx",
+          "columns": [
+            "name"
           ],
           "isUnique": false
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "chat_project_user_id_user_id_fk": {
+          "name": "chat_project_user_id_user_id_fk",
+          "tableFrom": "chat_project",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "subscription_tier_quotas": {
-      "name": "subscription_tier_quotas",
+    "project_attachment": {
+      "name": "project_attachment",
       "columns": {
         "id": {
           "name": "id",
@@ -2164,82 +3047,606 @@
           "notNull": true,
           "autoincrement": false
         },
-        "tier": {
-          "name": "tier",
+        "project_id": {
+          "name": "project_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "is_annual": {
-          "name": "is_annual",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "threads_per_month": {
-          "name": "threads_per_month",
-          "type": "integer",
+        "upload_id": {
+          "name": "upload_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "messages_per_month": {
-          "name": "messages_per_month",
-          "type": "integer",
+        "index_status": {
+          "name": "index_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "rag_metadata": {
+          "name": "rag_metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "added_by": {
+          "name": "added_by",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "memories_per_month": {
-          "name": "memories_per_month",
+        "created_at": {
+          "name": "created_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": 0
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
         },
-        "custom_roles_per_month": {
-          "name": "custom_roles_per_month",
+        "updated_at": {
+          "name": "updated_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": 0
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "project_attachment_project_idx": {
+          "name": "project_attachment_project_idx",
+          "columns": [
+            "project_id"
+          ],
+          "isUnique": false
         },
-        "max_ai_models": {
-          "name": "max_ai_models",
+        "project_attachment_upload_idx": {
+          "name": "project_attachment_upload_idx",
+          "columns": [
+            "upload_id"
+          ],
+          "isUnique": false
+        },
+        "project_attachment_status_idx": {
+          "name": "project_attachment_status_idx",
+          "columns": [
+            "index_status"
+          ],
+          "isUnique": false
+        },
+        "project_attachment_added_by_idx": {
+          "name": "project_attachment_added_by_idx",
+          "columns": [
+            "added_by"
+          ],
+          "isUnique": false
+        },
+        "project_attachment_created_idx": {
+          "name": "project_attachment_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "project_attachment_unique_idx": {
+          "name": "project_attachment_unique_idx",
+          "columns": [
+            "project_id",
+            "upload_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "project_attachment_project_id_chat_project_id_fk": {
+          "name": "project_attachment_project_id_chat_project_id_fk",
+          "tableFrom": "project_attachment",
+          "tableTo": "chat_project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "project_attachment_upload_id_upload_id_fk": {
+          "name": "project_attachment_upload_id_upload_id_fk",
+          "tableFrom": "project_attachment",
+          "tableTo": "upload",
+          "columnsFrom": [
+            "upload_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "project_attachment_added_by_user_id_fk": {
+          "name": "project_attachment_added_by_user_id_fk",
+          "tableFrom": "project_attachment",
+          "tableTo": "user",
+          "columnsFrom": [
+            "added_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "project_memory": {
+      "name": "project_memory",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'chat'"
+        },
+        "source_thread_id": {
+          "name": "source_thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source_round_number": {
+          "name": "source_round_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "importance": {
+          "name": "importance",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 5
         },
-        "allow_custom_roles": {
-          "name": "allow_custom_roles",
+        "is_active": {
+          "name": "is_active",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": false
+          "default": true
         },
-        "allow_memories": {
-          "name": "allow_memories",
-          "type": "integer",
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
+          "notNull": false,
+          "autoincrement": false
         },
-        "allow_thread_export": {
-          "name": "allow_thread_export",
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": false
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "project_memory_project_idx": {
+          "name": "project_memory_project_idx",
+          "columns": [
+            "project_id"
+          ],
+          "isUnique": false
+        },
+        "project_memory_source_idx": {
+          "name": "project_memory_source_idx",
+          "columns": [
+            "source"
+          ],
+          "isUnique": false
+        },
+        "project_memory_thread_idx": {
+          "name": "project_memory_thread_idx",
+          "columns": [
+            "source_thread_id"
+          ],
+          "isUnique": false
+        },
+        "project_memory_active_idx": {
+          "name": "project_memory_active_idx",
+          "columns": [
+            "is_active"
+          ],
+          "isUnique": false
+        },
+        "project_memory_importance_idx": {
+          "name": "project_memory_importance_idx",
+          "columns": [
+            "importance"
+          ],
+          "isUnique": false
+        },
+        "project_memory_created_idx": {
+          "name": "project_memory_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "project_memory_project_active_importance_idx": {
+          "name": "project_memory_project_active_importance_idx",
+          "columns": [
+            "project_id",
+            "is_active",
+            "importance"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "project_memory_project_id_chat_project_id_fk": {
+          "name": "project_memory_project_id_chat_project_id_fk",
+          "tableFrom": "project_memory",
+          "tableTo": "chat_project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "project_memory_source_thread_id_chat_thread_id_fk": {
+          "name": "project_memory_source_thread_id_chat_thread_id_fk",
+          "tableFrom": "project_memory",
+          "tableTo": "chat_thread",
+          "columnsFrom": [
+            "source_thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "project_memory_created_by_user_id_fk": {
+          "name": "project_memory_created_by_user_id_fk",
+          "tableFrom": "project_memory",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "message_upload": {
+      "name": "message_upload",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upload_id": {
+          "name": "upload_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "message_upload_message_idx": {
+          "name": "message_upload_message_idx",
+          "columns": [
+            "message_id"
+          ],
+          "isUnique": false
+        },
+        "message_upload_upload_idx": {
+          "name": "message_upload_upload_idx",
+          "columns": [
+            "upload_id"
+          ],
+          "isUnique": false
+        },
+        "message_upload_created_idx": {
+          "name": "message_upload_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "message_upload_unique_idx": {
+          "name": "message_upload_unique_idx",
+          "columns": [
+            "message_id",
+            "upload_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "message_upload_message_id_chat_message_id_fk": {
+          "name": "message_upload_message_id_chat_message_id_fk",
+          "tableFrom": "message_upload",
+          "tableTo": "chat_message",
+          "columnsFrom": [
+            "message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "message_upload_upload_id_upload_id_fk": {
+          "name": "message_upload_upload_id_upload_id_fk",
+          "tableFrom": "message_upload",
+          "tableTo": "upload",
+          "columnsFrom": [
+            "upload_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "thread_upload": {
+      "name": "thread_upload",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upload_id": {
+          "name": "upload_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "context": {
+          "name": "context",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "thread_upload_thread_idx": {
+          "name": "thread_upload_thread_idx",
+          "columns": [
+            "thread_id"
+          ],
+          "isUnique": false
+        },
+        "thread_upload_upload_idx": {
+          "name": "thread_upload_upload_idx",
+          "columns": [
+            "upload_id"
+          ],
+          "isUnique": false
+        },
+        "thread_upload_created_idx": {
+          "name": "thread_upload_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "thread_upload_unique_idx": {
+          "name": "thread_upload_unique_idx",
+          "columns": [
+            "thread_id",
+            "upload_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "thread_upload_thread_id_chat_thread_id_fk": {
+          "name": "thread_upload_thread_id_chat_thread_id_fk",
+          "tableFrom": "thread_upload",
+          "tableTo": "chat_thread",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "thread_upload_upload_id_upload_id_fk": {
+          "name": "thread_upload_upload_id_upload_id_fk",
+          "tableFrom": "thread_upload",
+          "tableTo": "upload",
+          "columnsFrom": [
+            "upload_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "upload": {
+      "name": "upload",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "filename": {
+          "name": "filename",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "r2_key": {
+          "name": "r2_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "file_size": {
+          "name": "file_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mime_type": {
+          "name": "mime_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'uploaded'"
         },
         "metadata": {
           "name": "metadata",
@@ -2253,41 +3660,77 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
         },
         "updated_at": {
           "name": "updated_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
         }
       },
       "indexes": {
-        "subscription_tier_quotas_tier_idx": {
-          "name": "subscription_tier_quotas_tier_idx",
+        "upload_r2_key_unique": {
+          "name": "upload_r2_key_unique",
           "columns": [
-            "tier"
+            "r2_key"
+          ],
+          "isUnique": true
+        },
+        "upload_user_idx": {
+          "name": "upload_user_idx",
+          "columns": [
+            "user_id"
           ],
           "isUnique": false
         },
-        "subscription_tier_quotas_annual_idx": {
-          "name": "subscription_tier_quotas_annual_idx",
+        "upload_status_idx": {
+          "name": "upload_status_idx",
           "columns": [
-            "is_annual"
+            "status"
           ],
           "isUnique": false
         },
-        "subscription_tier_quotas_tier_annual_unique_idx": {
-          "name": "subscription_tier_quotas_tier_annual_unique_idx",
+        "upload_created_idx": {
+          "name": "upload_created_idx",
           "columns": [
-            "tier",
-            "is_annual"
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "upload_r2_key_idx": {
+          "name": "upload_r2_key_idx",
+          "columns": [
+            "r2_key"
+          ],
+          "isUnique": false
+        },
+        "upload_mime_type_idx": {
+          "name": "upload_mime_type_idx",
+          "columns": [
+            "mime_type"
           ],
           "isUnique": false
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "upload_user_id_user_id_fk": {
+          "name": "upload_user_id_user_id_fk",
+          "tableFrom": "upload",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -2331,13 +3774,6 @@
           "autoincrement": false,
           "default": 0
         },
-        "threads_limit": {
-          "name": "threads_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "messages_created": {
           "name": "messages_created",
           "type": "integer",
@@ -2345,28 +3781,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
-        },
-        "messages_limit": {
-          "name": "messages_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "memories_created": {
-          "name": "memories_created",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "memories_limit": {
-          "name": "memories_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
         },
         "custom_roles_created": {
           "name": "custom_roles_created",
@@ -2376,12 +3790,13 @@
           "autoincrement": false,
           "default": 0
         },
-        "custom_roles_limit": {
-          "name": "custom_roles_limit",
+        "analysis_generated": {
+          "name": "analysis_generated",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": 0
         },
         "subscription_tier": {
           "name": "subscription_tier",
@@ -2398,6 +3813,28 @@
           "notNull": true,
           "autoincrement": false,
           "default": false
+        },
+        "pending_tier_change": {
+          "name": "pending_tier_change",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "pending_tier_is_annual": {
+          "name": "pending_tier_is_annual",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
         },
         "created_at": {
           "name": "created_at",
@@ -2454,7 +3891,32 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "check_threads_non_negative": {
+          "name": "check_threads_non_negative",
+          "value": "\"user_chat_usage\".\"threads_created\" >= 0"
+        },
+        "check_messages_non_negative": {
+          "name": "check_messages_non_negative",
+          "value": "\"user_chat_usage\".\"messages_created\" >= 0"
+        },
+        "check_custom_roles_non_negative": {
+          "name": "check_custom_roles_non_negative",
+          "value": "\"user_chat_usage\".\"custom_roles_created\" >= 0"
+        },
+        "check_analysis_non_negative": {
+          "name": "check_analysis_non_negative",
+          "value": "\"user_chat_usage\".\"analysis_generated\" >= 0"
+        },
+        "check_version_positive": {
+          "name": "check_version_positive",
+          "value": "\"user_chat_usage\".\"version\" > 0"
+        },
+        "check_period_order": {
+          "name": "check_period_order",
+          "value": "\"user_chat_usage\".\"current_period_end\" > \"user_chat_usage\".\"current_period_start\""
+        }
+      }
     },
     "user_chat_usage_history": {
       "name": "user_chat_usage_history",
@@ -2495,13 +3957,6 @@
           "autoincrement": false,
           "default": 0
         },
-        "threads_limit": {
-          "name": "threads_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "messages_created": {
           "name": "messages_created",
           "type": "integer",
@@ -2509,28 +3964,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
-        },
-        "messages_limit": {
-          "name": "messages_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "memories_created": {
-          "name": "memories_created",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "memories_limit": {
-          "name": "memories_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
         },
         "custom_roles_created": {
           "name": "custom_roles_created",
@@ -2540,12 +3973,13 @@
           "autoincrement": false,
           "default": 0
         },
-        "custom_roles_limit": {
-          "name": "custom_roles_limit",
+        "analysis_generated": {
+          "name": "analysis_generated",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": 0
         },
         "subscription_tier": {
           "name": "subscription_tier",
@@ -2604,7 +4038,28 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "check_history_threads_non_negative": {
+          "name": "check_history_threads_non_negative",
+          "value": "\"user_chat_usage_history\".\"threads_created\" >= 0"
+        },
+        "check_history_messages_non_negative": {
+          "name": "check_history_messages_non_negative",
+          "value": "\"user_chat_usage_history\".\"messages_created\" >= 0"
+        },
+        "check_history_custom_roles_non_negative": {
+          "name": "check_history_custom_roles_non_negative",
+          "value": "\"user_chat_usage_history\".\"custom_roles_created\" >= 0"
+        },
+        "check_history_analysis_non_negative": {
+          "name": "check_history_analysis_non_negative",
+          "value": "\"user_chat_usage_history\".\"analysis_generated\" >= 0"
+        },
+        "check_history_period_order": {
+          "name": "check_history_period_order",
+          "value": "\"user_chat_usage_history\".\"period_end\" > \"user_chat_usage_history\".\"period_start\""
+        }
+      }
     }
   },
   "views": {},

@@ -1,14 +1,16 @@
 /**
- * Formatting Utilities Barrel Export
- * Clean exports for all formatting functions
+ * Format Utilities Barrel Export
+ *
+ * Date, number, and file size formatting utilities.
  */
 
-// Date/time formatting
 export {
   formatBillingDate,
+  formatDate,
   formatNextBillingDate,
   formatRelativeTime,
   getDaysUntil,
   isOverdue,
   isValidDate,
 } from './date';
+export { formatFileSize } from './file-size';

@@ -1,3 +1,5 @@
+import { BRAND } from '@/constants';
+
 import { EmailLink } from '../content/email-link';
 import { EmailSection } from '../content/email-section';
 import { EmailText } from '../content/email-text';
@@ -9,21 +11,19 @@ type EmailFooterProps = {
   privacyUrl?: string;
   termsUrl?: string;
   contactEmail?: string;
-  className?: string;
 };
 
 export function EmailFooter({
-  companyName = 'Roundtable',
+  companyName = BRAND.displayName,
   unsubscribeUrl,
   privacyUrl,
   termsUrl,
-  contactEmail = 'support@roundtable.now',
-  className,
+  contactEmail = BRAND.support,
 }: EmailFooterProps) {
   return (
     <>
       <EmailDivider />
-      <EmailSection className={className} align="center" spacing="md">
+      <EmailSection align="center" spacing="md">
         <EmailText size="sm" color="muted" align="center">
           © 2025
           {' '}

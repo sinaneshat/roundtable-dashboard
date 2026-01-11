@@ -1,14 +1,16 @@
 import { Column, Row, Section } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
-import { assets, spacing } from '@/emails/design-tokens';
+import type { EmailSpacing } from '@/api/core/enums';
+import { spacing } from '@/emails/design-tokens';
+
+import { Logo } from './logo';
 
 type EmailBrandHeaderProps = {
   children?: ReactNode;
   showLogo?: boolean;
-  logoWidth?: number;
-  logoHeight?: number;
-  padding?: 'sm' | 'md' | 'lg';
+  logoSize?: number;
+  padding?: EmailSpacing;
   style?: CSSProperties;
 };
 
@@ -29,8 +31,7 @@ const paddingStyles: Record<string, CSSProperties> = {
 export function EmailBrandHeader({
   children,
   showLogo = true,
-  logoWidth = 120,
-  logoHeight = 40,
+  logoSize = 60,
   padding = 'md',
   style,
 }: EmailBrandHeaderProps) {
@@ -41,22 +42,13 @@ export function EmailBrandHeader({
     ...style,
   };
 
-  const logoSrc = assets.logo;
-
   return (
     <Section style={baseStyle}>
       <Row>
         <Column align="center">
           {showLogo && (
             <div style={{ marginBottom: children ? spacing[4] : '0' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={logoSrc}
-                width={logoWidth}
-                height={logoHeight}
-                alt="Roundtable"
-                style={{ display: 'block', margin: '0 auto' }}
-              />
+              <Logo size={logoSize} />
             </div>
           )}
           {children}

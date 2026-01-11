@@ -1,16 +1,19 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
+import { z } from 'zod';
 
-import { AppError, createError, normalizeError } from '@/api/common/error-handling';
-import type { ErrorContext } from '@/api/core';
-import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
-import { apiLogger } from '@/api/middleware/hono-logger';
-import { stripeService } from '@/api/services/stripe.service';
-import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
+import { ErrorContextBuilders } from '@/api/common/error-contexts';
+import { AppError, createError } from '@/api/common/error-handling';
+import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from '@/api/core';
+import { isActiveSubscriptionStatus, PlanTypes, PurchaseTypes, StripeBillingReasons, StripeProratioBehaviors, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
+import { getCustomerIdByUserId, getUserCreditBalance, hasSyncedSubscription, stripeService, syncStripeDataFromStripe } from '@/api/services/billing';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
+import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
+import { revenueTracking } from '@/lib/analytics';
+import { isObject } from '@/lib/utils';
 
 import type {
   cancelSubscriptionRoute,
@@ -23,128 +26,15 @@ import type {
   listSubscriptionsRoute,
   switchSubscriptionRoute,
   syncAfterCheckoutRoute,
+  syncCreditsAfterCheckoutRoute,
 } from './route';
-import type { SubscriptionResponsePayload } from './schema';
 import {
   CancelSubscriptionRequestSchema,
   CheckoutRequestSchema,
   CustomerPortalRequestSchema,
-  ProductIdParamSchema,
-  SubscriptionIdParamSchema,
   SwitchSubscriptionRequestSchema,
 } from './schema';
 
-// ============================================================================
-// Internal Helper Functions (Following 3-file pattern: handler, route, schema)
-// ============================================================================
-
-/**
- * Error Context Builders - Following src/api/core/responses.ts patterns
- */
-function createAuthErrorContext(operation?: string): ErrorContext {
-  return {
-    errorType: 'authentication',
-    operation: operation || 'session_required',
-  };
-}
-
-function createResourceNotFoundContext(
-  resource: string,
-  resourceId?: string,
-  _userId?: string,
-): ErrorContext {
-  return {
-    errorType: 'resource',
-    resource,
-    resourceId,
-  };
-}
-
-function createAuthorizationErrorContext(
-  resource: string,
-  resourceId?: string,
-  _userId?: string,
-): ErrorContext {
-  return {
-    errorType: 'authorization',
-    resource,
-    resourceId,
-  };
-}
-
-function createValidationErrorContext(field?: string): ErrorContext {
-  return {
-    errorType: 'validation',
-    field,
-  };
-}
-
-function createStripeErrorContext(
-  operation?: string,
-  resourceId?: string,
-): ErrorContext {
-  return {
-    errorType: 'external_service',
-    service: 'stripe',
-    operation,
-    resourceId,
-  };
-}
-
-function createDatabaseErrorContext(
-  operation: 'select' | 'insert' | 'update' | 'delete' | 'batch',
-  table?: string,
-): ErrorContext {
-  return {
-    errorType: 'database',
-    operation,
-    table,
-  };
-}
-
-/**
- * Subscription Response Builder - Type-Safe Transformation
- * Uses official Stripe.Subscription.Status type from SDK
- */
-type DatabaseSubscription = {
-  id: string;
-  status: string; // Will be validated as Stripe.Subscription.Status
-  priceId: string;
-  price: {
-    productId: string;
-  };
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  cancelAtPeriodEnd: boolean;
-  canceledAt: Date | null;
-  trialStart: Date | null;
-  trialEnd: Date | null;
-};
-
-/**
- * Build subscription response using official Stripe SDK types
- * Status is typed as Stripe.Subscription.Status - no hardcoded validation needed
- */
-function buildSubscriptionResponse(
-  subscription: DatabaseSubscription,
-): SubscriptionResponsePayload {
-  return {
-    id: subscription.id,
-    status: subscription.status as Stripe.Subscription.Status,
-    priceId: subscription.priceId,
-    productId: subscription.price.productId,
-    currentPeriodStart: subscription.currentPeriodStart.toISOString(),
-    currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
-    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-    canceledAt: subscription.canceledAt?.toISOString() || null,
-    trialStart: subscription.trialStart?.toISOString() || null,
-    trialEnd: subscription.trialEnd?.toISOString() || null,
-  };
-}
-
-/**
- * Subscription Validation Utilities
- */
 function validateSubscriptionOwnership(
   subscription: { userId: string },
   user: { id: string },
@@ -152,9 +42,47 @@ function validateSubscriptionOwnership(
   return subscription.userId === user.id;
 }
 
-// ============================================================================
-// Product Handlers
-// ============================================================================
+type SerializableSubscriptionDates = {
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  canceledAt: Date | null;
+  trialStart: Date | null;
+  trialEnd: Date | null;
+};
+
+function serializeSubscriptionDates<T extends SerializableSubscriptionDates>(subscription: T) {
+  return {
+    ...subscription,
+    currentPeriodStart: subscription.currentPeriodStart.toISOString(),
+    currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
+    canceledAt: subscription.canceledAt?.toISOString() ?? null,
+    trialStart: subscription.trialStart?.toISOString() ?? null,
+    trialEnd: subscription.trialEnd?.toISOString() ?? null,
+  };
+}
+
+async function fetchRefreshedSubscription(
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+  subscriptionId: string,
+) {
+  const subscription = await db.query.stripeSubscription.findFirst({
+    where: eq(tables.stripeSubscription.id, subscriptionId),
+    with: {
+      price: {
+        columns: { productId: true },
+      },
+    },
+  });
+
+  if (!subscription) {
+    throw createError.internal(
+      'Failed to fetch updated subscription',
+      ErrorContextBuilders.database('select', 'stripeSubscription'),
+    );
+  }
+
+  return subscription;
+}
 
 export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv> = createHandler(
   {
@@ -162,72 +90,65 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
     operationName: 'listProducts',
   },
   async (c) => {
-    // Operation start logging
-    c.logger.info('Listing all products', {
-      logType: 'operation',
-      operationName: 'listProducts',
-    });
-
     try {
       const db = await getDbAsync();
 
-      // Use Drizzle relational query to get products with prices
-      const dbProducts = await db.query.stripeProduct.findMany({
-        where: eq(tables.stripeProduct.active, true),
-        with: {
-          prices: {
-            where: eq(tables.stripePrice.active, true),
-          },
-        },
+      // ✅ CACHING ENABLED: Query builder API with 5-minute TTL for product catalog
+      // Products change infrequently (admin updates), but read on every pricing page visit
+      // Cache automatically invalidates when products or prices are updated
+      // @see https://orm.drizzle.team/docs/cache
+
+      // Step 1: Fetch active products (cacheable)
+      const dbProducts = await db
+        .select()
+        .from(tables.stripeProduct)
+        .where(eq(tables.stripeProduct.active, true))
+        .$withCache({
+          config: { ex: 300 }, // 5 minutes
+          tag: STATIC_CACHE_TAGS.ACTIVE_PRODUCTS,
+        });
+
+      // Step 2: Fetch active prices (cacheable)
+      const allPrices = await db
+        .select()
+        .from(tables.stripePrice)
+        .where(eq(tables.stripePrice.active, true))
+        .$withCache({
+          config: { ex: 300 }, // 5 minutes
+          tag: STATIC_CACHE_TAGS.ACTIVE_PRICES,
+        });
+
+      // Filter to only show Pro plan product (by metadata.planType from seeded data)
+      const filteredProducts = dbProducts.filter((p) => {
+        try {
+          const metadata = typeof p.metadata === 'string' ? JSON.parse(p.metadata) : p.metadata;
+          return metadata?.planType === PlanTypes.PAID;
+        } catch {
+          return false;
+        }
       });
 
-      const products = dbProducts
-        .map(product => ({
-          id: product.id,
-          name: product.name,
-          description: product.description,
-          features: product.features,
-          active: product.active,
-          prices: product.prices
-            .map(price => ({
-              id: price.id,
-              productId: price.productId,
-              unitAmount: price.unitAmount || 0,
-              currency: price.currency,
-              interval: (price.interval || 'month') as 'month' | 'year',
-              trialPeriodDays: price.trialPeriodDays,
-              active: price.active,
-            }))
-            .sort((a, b) => a.unitAmount - b.unitAmount), // Sort prices by amount (low to high)
-        }))
+      // Step 3: Join products with their prices and sort - minimal transformation
+      const products = filteredProducts
+        .map((product) => {
+          const productPrices = allPrices
+            .filter(price => price.productId === product.id)
+            .sort((a, b) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0));
+
+          return {
+            ...product,
+            prices: productPrices,
+          };
+        })
         .sort((a, b) => {
-          // Sort products by their lowest price (low to high)
           const lowestPriceA = a.prices[0]?.unitAmount ?? 0;
           const lowestPriceB = b.prices[0]?.unitAmount ?? 0;
           return lowestPriceA - lowestPriceB;
         });
 
-      // Success logging with resource count
-      c.logger.info('Products retrieved successfully', {
-        logType: 'operation',
-        operationName: 'listProducts',
-        resource: `products[${products.length}]`,
-      });
-
-      return Responses.ok(c, {
-        products,
-        count: products.length,
-      });
-    } catch (error) {
-      // Error logging with proper Error instance
-      c.logger.error('Failed to list products', normalizeError(error));
-
-      const context: ErrorContext = {
-        errorType: 'database',
-        operation: 'select',
-        table: 'stripeProduct',
-      };
-      throw createError.internal('Failed to retrieve products', context);
+      return Responses.collection(c, products);
+    } catch {
+      throw createError.internal('Failed to retrieve products', ErrorContextBuilders.database('select', 'stripeProduct'));
     }
   },
 );
@@ -235,83 +156,65 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
 export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = createHandler(
   {
     auth: 'public',
-    validateParams: ProductIdParamSchema,
+    validateParams: IdParamSchema,
     operationName: 'getProduct',
   },
   async (c) => {
     const { id } = c.validated.params;
 
-    c.logger.info('Fetching product details', {
-      logType: 'operation',
-      operationName: 'getProduct',
-      resource: id,
-    });
-
     try {
       const db = await getDbAsync();
 
-      // Use Drizzle relational query
-      const dbProduct = await db.query.stripeProduct.findFirst({
-        where: eq(tables.stripeProduct.id, id),
-        with: {
-          prices: {
-            where: eq(tables.stripePrice.active, true),
-          },
-        },
-      });
+      // ✅ CACHING ENABLED: Query builder API with 10-minute TTL for single product details
+      // Products change infrequently (admin updates), cached to reduce DB load on product pages
+      // Cache automatically invalidates when product or prices are updated
+      // @see https://orm.drizzle.team/docs/cache
+
+      // Step 1: Fetch single product (cacheable)
+      const productResults = await db
+        .select()
+        .from(tables.stripeProduct)
+        .where(eq(tables.stripeProduct.id, id))
+        .limit(1)
+        .$withCache({
+          config: { ex: 600 }, // 10 minutes - product details stable
+          tag: ProductCacheTags.single(id),
+        });
+
+      const dbProduct = productResults[0];
 
       if (!dbProduct) {
-        c.logger.warn('Product not found', {
-          logType: 'operation',
-          operationName: 'getProduct',
-          resource: id,
-        });
-        const context: ErrorContext = {
-          errorType: 'resource',
-          resource: 'product',
-          resourceId: id,
-        };
-        throw createError.notFound(`Product ${id} not found`, context);
+        throw createError.notFound(`Product ${id} not found`, ErrorContextBuilders.resourceNotFound('product', id));
       }
 
-      c.logger.info('Product retrieved successfully', {
-        logType: 'operation',
-        operationName: 'getProduct',
-        resource: id,
-      });
+      // Step 2: Fetch active prices for this product (cacheable)
+      const dbPrices = await db
+        .select()
+        .from(tables.stripePrice)
+        .where(
+          and(
+            eq(tables.stripePrice.productId, id),
+            eq(tables.stripePrice.active, true),
+          ),
+        )
+        .$withCache({
+          config: { ex: 600 }, // 10 minutes - prices stable
+          tag: PriceCacheTags.byProduct(id),
+        });
+
+      const productPrices = dbPrices.sort((a, b) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0));
 
       return Responses.ok(c, {
         product: {
-          id: dbProduct.id,
-          name: dbProduct.name,
-          description: dbProduct.description,
-          features: dbProduct.features,
-          active: dbProduct.active,
-          prices: dbProduct.prices
-            .map(price => ({
-              id: price.id,
-              productId: price.productId,
-              unitAmount: price.unitAmount || 0,
-              currency: price.currency,
-              interval: (price.interval || 'month') as 'month' | 'year',
-              trialPeriodDays: price.trialPeriodDays,
-              active: price.active,
-            }))
-            .sort((a, b) => a.unitAmount - b.unitAmount), // Sort prices by amount (low to high)
+          ...dbProduct,
+          prices: productPrices,
         },
       });
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
       }
-      c.logger.error('Failed to get product', normalizeError(error));
-      const context: ErrorContext = {
-        errorType: 'database',
-        operation: 'select',
-        table: 'stripeProduct',
-        resourceId: id,
-      };
-      throw createError.internal('Failed to retrieve product', context);
+      throw createError.internal('Failed to retrieve product', ErrorContextBuilders.database('select', 'stripeProduct'));
     }
   },
 );
@@ -322,21 +225,7 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
 
 /**
  * Create Checkout Session
- *
- * Following Theo's "Stay Sane with Stripe" pattern:
- * - Creates Stripe Checkout session for subscription purchase
- * - Success URL redirects to /chat/billing/success (WITHOUT session_id parameter)
- * - Success page auto-triggers eager sync from Stripe API
- * - This prevents race condition where UI loads before webhooks arrive
- * - Webhooks still run in background but UI doesn't depend on them
- *
- * Flow:
- * 1. User clicks "Subscribe" → This endpoint creates checkout session
- * 2. User completes payment on Stripe
- * 3. Stripe redirects to success URL
- * 4. Success page calls /sync-after-checkout endpoint
- * 5. Sync endpoint fetches fresh data from Stripe API
- * 6. User sees updated subscription status immediately
+ * Theo's pattern: eager sync after checkout prevents race condition
  */
 export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSessionRoute, ApiEnv> = createHandlerWithBatch(
   {
@@ -345,57 +234,25 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
     operationName: 'createCheckoutSession',
   },
   async (c, batch) => {
-    const user = c.get('user');
+    const { user } = c.auth();
     const body = c.validated.body;
 
-    if (!user) {
-      const context: ErrorContext = {
-        errorType: 'authentication',
-        operation: 'session_required',
-      };
-      throw createError.unauthenticated('Valid session required for checkout', context);
-    }
-
-    // Operation start logging with user and resource
-    c.logger.info('Creating checkout session', {
-      logType: 'operation',
-      operationName: 'createCheckoutSession',
-      userId: user.id,
-      resource: body.priceId,
-    });
-
     try {
-      // Theo's Pattern: "ENABLE 'Limit customers to one subscription'"
-      // Prevent multiple subscriptions - check if user already has an active subscription
-      // Exclude subscriptions that are canceled at period end (cancelAtPeriodEnd: true)
-      // because those are effectively canceled even though status is still 'active'
       const existingSubscriptions = await batch.db.query.stripeSubscription.findMany({
         where: eq(tables.stripeSubscription.userId, user.id),
       });
 
-      const activeSubscription = existingSubscriptions.find(sub =>
-        (sub.status === 'active' || sub.status === 'trialing' || sub.status === 'past_due')
-        && !sub.cancelAtPeriodEnd,
+      const activeSubscription = existingSubscriptions.find(
+        sub => isActiveSubscriptionStatus(sub.status) && !sub.cancelAtPeriodEnd,
       );
 
       if (activeSubscription) {
-        c.logger.warn('User already has an active subscription', {
-          logType: 'operation',
-          operationName: 'createCheckoutSession',
-          userId: user.id,
-          resource: activeSubscription.id,
-        });
-        const context: ErrorContext = {
-          errorType: 'validation',
-          field: 'subscription',
-        };
         throw createError.badRequest(
           'You already have an active subscription. Please cancel or modify your existing subscription instead of creating a new one.',
-          context,
+          ErrorContextBuilders.validation('subscription'),
         );
       }
 
-      // Get or create Stripe customer (using batch.db for consistency)
       const stripeCustomer = await batch.db.query.stripeCustomer.findFirst({
         where: eq(tables.stripeCustomer.userId, user.id),
       });
@@ -409,7 +266,6 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
           metadata: { userId: user.id },
         });
 
-        // Insert using batch.db for atomic operation
         const [insertedCustomer] = await batch.db.insert(tables.stripeCustomer).values({
           id: customer.id,
           userId: user.id,
@@ -420,39 +276,18 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
         }).returning();
 
         if (!insertedCustomer) {
-          throw createError.internal('Failed to create customer record', {
-            errorType: 'database',
-            operation: 'insert',
-            table: 'stripeCustomer',
-          });
+          throw createError.internal('Failed to create customer record', ErrorContextBuilders.database('insert', 'stripeCustomer'));
         }
 
         customerId = insertedCustomer.id;
-
-        // Log customer creation
-        c.logger.info('Created new Stripe customer', {
-          logType: 'operation',
-          operationName: 'createCheckoutSession',
-          userId: user.id,
-          resource: customerId,
-        });
       } else {
         customerId = stripeCustomer.id;
-
-        // Log using existing customer
-        c.logger.info('Using existing Stripe customer', {
-          logType: 'operation',
-          operationName: 'createCheckoutSession',
-          userId: user.id,
-          resource: customerId,
-        });
       }
 
       const appUrl = c.env.NEXT_PUBLIC_APP_URL;
-      // Theo's pattern: Do NOT use CHECKOUT_SESSION_ID (ignore it)
-      // Success page will eagerly sync fresh data from Stripe API
-      const successUrl = body.successUrl || `${appUrl}/chat/billing/success`;
-      const cancelUrl = body.cancelUrl || `${appUrl}/chat/billing`;
+      const defaultSuccessUrl = `${appUrl}/chat/billing/subscription-success`;
+      const successUrl = body.successUrl || defaultSuccessUrl;
+      const cancelUrl = body.cancelUrl || `${appUrl}/chat/pricing`;
 
       const session = await stripeService.createCheckoutSession({
         priceId: body.priceId,
@@ -463,37 +298,19 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
       });
 
       if (!session.url) {
-        const context: ErrorContext = {
-          errorType: 'external_service',
-          service: 'stripe',
-          operation: 'create_checkout_session',
-          userId: user.id,
-        };
-        throw createError.internal('Checkout session created but URL is missing', context);
+        throw createError.internal('Checkout session created but URL is missing', ErrorContextBuilders.stripe('create_checkout_session'));
       }
-
-      // Success logging with session ID
-      c.logger.info('Checkout session created successfully', {
-        logType: 'operation',
-        operationName: 'createCheckoutSession',
-        userId: user.id,
-        resource: session.id,
-      });
 
       return Responses.ok(c, {
         sessionId: session.id,
         url: session.url,
       });
     } catch (error) {
-      // Error logging with proper Error instance
-      c.logger.error('Failed to create checkout session', normalizeError(error));
-      const context: ErrorContext = {
-        errorType: 'external_service',
-        service: 'stripe',
-        operation: 'create_checkout_session',
-        userId: user.id,
-      };
-      throw createError.internal('Failed to create checkout session', context);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      console.error('[Billing] Checkout session error:', error);
+      throw createError.internal('Failed to create checkout session', ErrorContextBuilders.stripe('create_checkout_session'));
     }
   },
 );
@@ -515,35 +332,15 @@ export const createCustomerPortalSessionHandler: RouteHandler<typeof createCusto
     operationName: 'createCustomerPortalSession',
   },
   async (c) => {
-    const user = c.get('user');
+    const { user } = c.auth();
     const body = c.validated.body;
-
-    if (!user) {
-      const context: ErrorContext = {
-        errorType: 'authentication',
-        operation: 'session_required',
-      };
-      throw createError.unauthenticated('Valid session required for customer portal', context);
-    }
-
-    // Operation start logging
-    c.logger.info('Creating customer portal session', {
-      logType: 'operation',
-      operationName: 'createCustomerPortalSession',
-      userId: user.id,
-    });
 
     try {
       // Get customer ID from database
       const customerId = await getCustomerIdByUserId(user.id);
 
       if (!customerId) {
-        const context: ErrorContext = {
-          errorType: 'resource',
-          resource: 'customer',
-          userId: user.id,
-        };
-        throw createError.badRequest('No Stripe customer found for this user. Please create a subscription first.', context);
+        throw createError.badRequest('No Stripe customer found for this user. Please create a subscription first.', ErrorContextBuilders.resourceNotFound('customer', undefined, user.id));
       }
 
       const appUrl = c.env.NEXT_PUBLIC_APP_URL;
@@ -555,22 +352,8 @@ export const createCustomerPortalSessionHandler: RouteHandler<typeof createCusto
       });
 
       if (!session.url) {
-        const context: ErrorContext = {
-          errorType: 'external_service',
-          service: 'stripe',
-          operation: 'create_portal_session',
-          userId: user.id,
-        };
-        throw createError.internal('Portal session created but URL is missing', context);
+        throw createError.internal('Portal session created but URL is missing', ErrorContextBuilders.stripe('create_portal_session'));
       }
-
-      // Success logging
-      c.logger.info('Customer portal session created successfully', {
-        logType: 'operation',
-        operationName: 'createCustomerPortalSession',
-        userId: user.id,
-        resource: customerId,
-      });
 
       return Responses.ok(c, {
         url: session.url,
@@ -581,15 +364,7 @@ export const createCustomerPortalSessionHandler: RouteHandler<typeof createCusto
         throw error;
       }
 
-      // Error logging with proper Error instance
-      c.logger.error('Failed to create customer portal session', normalizeError(error));
-      const context: ErrorContext = {
-        errorType: 'external_service',
-        service: 'stripe',
-        operation: 'create_portal_session',
-        userId: user.id,
-      };
-      throw createError.internal('Failed to create customer portal session', context);
+      throw createError.internal('Failed to create customer portal session', ErrorContextBuilders.stripe('create_portal_session'));
     }
   },
 );
@@ -604,73 +379,32 @@ export const listSubscriptionsHandler: RouteHandler<typeof listSubscriptionsRout
     operationName: 'listSubscriptions',
   },
   async (c) => {
-    const user = c.get('user');
-
-    if (!user) {
-      const context: ErrorContext = {
-        errorType: 'authentication',
-        operation: 'session_required',
-      };
-      throw createError.unauthenticated('Valid session required to list subscriptions', context);
-    }
-
-    // Operation start logging
-    c.logger.info('Listing user subscriptions', {
-      logType: 'operation',
-      operationName: 'listSubscriptions',
-      userId: user.id,
-    });
+    const { user } = c.auth();
 
     try {
       const db = await getDbAsync();
 
-      // Use Drizzle relational query with nested relations
-      const dbSubscriptions = await db.query.stripeSubscription.findMany({
+      // ✅ CACHING ENABLED: Relational query with 2-minute TTL for user subscriptions
+      // User-specific data with short cache to balance freshness and performance
+      // Cache automatically invalidates when subscriptions, prices, or products are updated
+      // @see https://orm.drizzle.team/docs/cache
+
+      // Fetch user subscriptions with nested price data via Drizzle relations
+      const subscriptions = await db.query.stripeSubscription.findMany({
         where: eq(tables.stripeSubscription.userId, user.id),
         with: {
           price: {
-            with: {
-              product: true,
-            },
+            columns: { productId: true },
           },
         },
       });
 
-      const subscriptions = dbSubscriptions.map(subscription => ({
-        id: subscription.id,
-        status: subscription.status as 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'paused',
-        priceId: subscription.priceId,
-        productId: subscription.price.productId,
-        currentPeriodStart: subscription.currentPeriodStart.toISOString(),
-        currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
-        cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-        canceledAt: subscription.canceledAt?.toISOString() || null,
-        trialStart: subscription.trialStart?.toISOString() || null,
-        trialEnd: subscription.trialEnd?.toISOString() || null,
-      }));
+      // ✅ DATE SERIALIZATION: Use helper to convert Date objects to ISO strings
+      const serializedSubscriptions = subscriptions.map(serializeSubscriptionDates);
 
-      // Success logging with resource count
-      c.logger.info('Subscriptions retrieved successfully', {
-        logType: 'operation',
-        operationName: 'listSubscriptions',
-        userId: user.id,
-        resource: `subscriptions[${subscriptions.length}]`,
-      });
-
-      return Responses.ok(c, {
-        subscriptions,
-        count: subscriptions.length,
-      });
-    } catch (error) {
-      // Error logging with proper Error instance
-      c.logger.error('Failed to list subscriptions', normalizeError(error));
-      const context: ErrorContext = {
-        errorType: 'database',
-        operation: 'select',
-        table: 'stripeSubscription',
-        userId: user.id,
-      };
-      throw createError.internal('Failed to retrieve subscriptions', context);
+      return Responses.collection(c, serializedSubscriptions);
+    } catch {
+      throw createError.internal('Failed to retrieve subscriptions', ErrorContextBuilders.database('select', 'stripeSubscription'));
     }
   },
 );
@@ -678,111 +412,46 @@ export const listSubscriptionsHandler: RouteHandler<typeof listSubscriptionsRout
 export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: SubscriptionIdParamSchema,
+    validateParams: IdParamSchema,
     operationName: 'getSubscription',
   },
   async (c) => {
-    const user = c.get('user');
+    const { user } = c.auth();
     const { id } = c.validated.params;
-
-    if (!user) {
-      const context: ErrorContext = {
-        errorType: 'authentication',
-        operation: 'session_required',
-      };
-      throw createError.unauthenticated('Valid session required to view subscription', context);
-    }
-
-    c.logger.info('Fetching subscription details', {
-      logType: 'operation',
-      operationName: 'getSubscription',
-      userId: user.id,
-      resource: id,
-    });
 
     const db = await getDbAsync();
 
     try {
-      // Use Drizzle relational query with nested relations
+      // ✅ CACHING ENABLED: Relational query with 2-minute TTL for single subscription
+      // User-specific data with short cache to balance freshness and performance
+      // Cache automatically invalidates when subscription, price, or product is updated
+      // @see https://orm.drizzle.team/docs/cache
+
+      // Fetch single subscription with nested price data via Drizzle relations
       const subscription = await db.query.stripeSubscription.findFirst({
         where: eq(tables.stripeSubscription.id, id),
         with: {
           price: {
-            with: {
-              product: true,
-            },
+            columns: { productId: true },
           },
         },
       });
 
       if (!subscription) {
-        // Warning log before throwing not found error
-        c.logger.warn('Subscription not found', {
-          logType: 'operation',
-          operationName: 'getSubscription',
-          userId: user.id,
-          resource: id,
-        });
-        const context: ErrorContext = {
-          errorType: 'resource',
-          resource: 'subscription',
-          resourceId: id,
-          userId: user.id,
-        };
-        throw createError.notFound(`Subscription ${id} not found`, context);
+        throw createError.notFound(`Subscription ${id} not found`, ErrorContextBuilders.resourceNotFound('subscription', id, user.id));
       }
 
-      if (subscription.userId !== user.id) {
-        // Warning log before throwing unauthorized error
-        c.logger.warn('Unauthorized subscription access attempt', {
-          logType: 'operation',
-          operationName: 'getSubscription',
-          userId: user.id,
-          resource: id,
-        });
-        const context: ErrorContext = {
-          errorType: 'authorization',
-          resource: 'subscription',
-          resourceId: id,
-          userId: user.id,
-        };
-        throw createError.unauthorized('You do not have access to this subscription', context);
+      if (!validateSubscriptionOwnership(subscription, user)) {
+        throw createError.unauthorized('You do not have access to this subscription', ErrorContextBuilders.authorization('subscription', id, user.id));
       }
 
-      c.logger.info('Subscription retrieved successfully', {
-        logType: 'operation',
-        operationName: 'getSubscription',
-        userId: user.id,
-        resource: id,
-      });
-
-      return Responses.ok(c, {
-        subscription: {
-          id: subscription.id,
-          status: subscription.status as 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'paused',
-          priceId: subscription.priceId,
-          productId: subscription.price.productId,
-          currentPeriodStart: subscription.currentPeriodStart.toISOString(),
-          currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
-          cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-          canceledAt: subscription.canceledAt?.toISOString() || null,
-          trialStart: subscription.trialStart?.toISOString() || null,
-          trialEnd: subscription.trialEnd?.toISOString() || null,
-        },
-      });
+      // ✅ DATE SERIALIZATION: Use helper to convert Date objects to ISO strings
+      return Responses.ok(c, { subscription: serializeSubscriptionDates(subscription) });
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
       }
-      c.logger.error('Failed to get subscription', normalizeError(error));
-      const context: ErrorContext = {
-        errorType: 'database',
-        operation: 'select',
-        table: 'stripeSubscription',
-        resourceId: id,
-        userId: user.id,
-      };
-      throw createError.internal('Failed to retrieve subscription', context);
+      throw createError.internal('Failed to retrieve subscription', ErrorContextBuilders.database('select', 'stripeSubscription'));
     }
   },
 );
@@ -792,13 +461,8 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
 // ============================================================================
 
 /**
- * Sync Stripe Data After Checkout
- *
- * Following Theo's "Stay Sane with Stripe" pattern:
- * - Called immediately after user returns from Stripe Checkout
- * - Prevents race condition where user sees page before webhooks arrive
- * - Fetches fresh data from Stripe API (not webhook payload)
- * - Returns synced subscription state
+ * Sync Stripe Subscription Data After Checkout
+ * Fetches fresh data from Stripe API to prevent race condition
  */
 export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRoute, ApiEnv> = createHandler(
   {
@@ -806,69 +470,83 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
     operationName: 'syncAfterCheckout',
   },
   async (c) => {
-    const user = c.get('user');
-
-    if (!user) {
-      const context: ErrorContext = {
-        errorType: 'authentication',
-        operation: 'session_required',
-      };
-      throw createError.unauthenticated('Valid session required for sync', context);
-    }
-
-    c.logger.info('Syncing Stripe data after checkout', {
-      logType: 'operation',
-      operationName: 'syncAfterCheckout',
-      userId: user.id,
-    });
+    const { user } = c.auth();
 
     try {
-      // Get customer ID from user ID
-      const customerId = await getCustomerIdByUserId(user.id);
+      const db = await getDbAsync();
+
+      const customerResults = await db
+        .select()
+        .from(tables.stripeCustomer)
+        .where(eq(tables.stripeCustomer.userId, user.id))
+        .limit(1);
+
+      const customerId = customerResults[0]?.id;
 
       if (!customerId) {
-        c.logger.warn('No Stripe customer found for user', {
-          logType: 'operation',
-          operationName: 'syncAfterCheckout',
-          userId: user.id,
+        const balance = await getUserCreditBalance(user.id);
+        return Responses.ok(c, {
+          synced: false,
+          purchaseType: PurchaseTypes.NONE,
+          subscription: null,
+          creditPurchase: null,
+          tierChange: {
+            previousTier: SubscriptionTiers.FREE,
+            newTier: SubscriptionTiers.FREE,
+            previousPriceId: null,
+            newPriceId: null,
+          },
+          creditsBalance: balance.available,
         });
-
-        const context: ErrorContext = {
-          errorType: 'resource',
-          resource: 'customer',
-          userId: user.id,
-        };
-        throw createError.notFound('No Stripe customer found for user', context);
       }
 
-      // Eagerly sync data from Stripe API (Theo's pattern)
+      const previousUsage = await db.query.userChatUsage.findFirst({
+        where: eq(tables.userChatUsage.userId, user.id),
+      });
+      const previousTier = previousUsage?.subscriptionTier || SubscriptionTiers.FREE;
+
       const syncedState = await syncStripeDataFromStripe(customerId);
 
-      c.logger.info('Stripe data synced successfully', {
-        logType: 'operation',
-        operationName: 'syncAfterCheckout',
-        userId: user.id,
-        resource: syncedState.status !== 'none' ? syncedState.subscriptionId : 'none',
+      const newUsage = await db.query.userChatUsage.findFirst({
+        where: eq(tables.userChatUsage.userId, user.id),
       });
+      const newTier = newUsage?.subscriptionTier || SubscriptionTiers.FREE;
+
+      const balance = await getUserCreditBalance(user.id);
 
       return Responses.ok(c, {
         synced: true,
-        subscription: syncedState.status !== 'none'
+        purchaseType: hasSyncedSubscription(syncedState) ? PurchaseTypes.SUBSCRIPTION : PurchaseTypes.NONE,
+        subscription: hasSyncedSubscription(syncedState)
           ? {
               status: syncedState.status,
               subscriptionId: syncedState.subscriptionId,
             }
           : null,
+        creditPurchase: null,
+        tierChange: {
+          previousTier,
+          newTier,
+          previousPriceId: null,
+          newPriceId: null,
+        },
+        creditsBalance: balance.available,
       });
-    } catch (error) {
-      c.logger.error('Failed to sync Stripe data', normalizeError(error));
-      const context: ErrorContext = {
-        errorType: 'external_service',
-        service: 'stripe',
-        operation: 'sync_data',
-        userId: user.id,
-      };
-      throw createError.internal('Failed to sync Stripe data', context);
+    } catch {
+      const balance = await getUserCreditBalance(user.id).catch(() => ({ available: 0 }));
+      return Responses.ok(c, {
+        synced: false,
+        purchaseType: PurchaseTypes.NONE,
+        subscription: null,
+        creditPurchase: null,
+        tierChange: {
+          previousTier: SubscriptionTiers.FREE,
+          newTier: SubscriptionTiers.FREE,
+          previousPriceId: null,
+          newPriceId: null,
+        },
+        creditsBalance: balance.available,
+      });
     }
   },
 );
@@ -879,34 +557,19 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
 
 /**
  * Switch Subscription Handler
- *
- * Switches the user to a different price plan.
- * - Updates subscription to new price using Stripe API
- * - Uses 'create_prorations' - Stripe handles billing automatically
- * - Syncs fresh data from Stripe API after update
+ * Updates subscription to new price with prorations
  */
 export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: SubscriptionIdParamSchema,
+    validateParams: IdParamSchema,
     validateBody: SwitchSubscriptionRequestSchema,
     operationName: 'switchSubscription',
   },
   async (c) => {
-    const user = c.get('user');
+    const { user } = c.auth();
     const { id: subscriptionId } = c.validated.params;
     const { newPriceId } = c.validated.body;
-
-    if (!user) {
-      throw createError.unauthenticated('Valid session required to switch subscription', createAuthErrorContext());
-    }
-
-    c.logger.info('Switching subscription', {
-      logType: 'operation',
-      operationName: 'switchSubscription',
-      userId: user.id,
-      resource: subscriptionId,
-    });
 
     try {
       const db = await getDbAsync();
@@ -919,18 +582,18 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       if (!subscription) {
         throw createError.notFound(
           `Subscription ${subscriptionId} not found`,
-          createResourceNotFoundContext('subscription', subscriptionId, user.id),
+          ErrorContextBuilders.resourceNotFound('subscription', subscriptionId, user.id),
         );
       }
 
       if (!validateSubscriptionOwnership(subscription, user)) {
         throw createError.unauthorized(
           'You do not have access to this subscription',
-          createAuthorizationErrorContext('subscription', subscriptionId, user.id),
+          ErrorContextBuilders.authorization('subscription', subscriptionId, user.id),
         );
       }
 
-      // Verify new price exists
+      // Verify new price exists and get current price for comparison
       const newPrice = await db.query.stripePrice.findFirst({
         where: eq(tables.stripePrice.id, newPriceId),
       });
@@ -938,7 +601,18 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       if (!newPrice) {
         throw createError.badRequest(
           `Price ${newPriceId} not found`,
-          createResourceNotFoundContext('price', newPriceId),
+          ErrorContextBuilders.resourceNotFound('price', newPriceId),
+        );
+      }
+
+      const currentPrice = await db.query.stripePrice.findFirst({
+        where: eq(tables.stripePrice.id, subscription.priceId),
+      });
+
+      if (!currentPrice) {
+        throw createError.internal(
+          'Current subscription price not found',
+          ErrorContextBuilders.resourceNotFound('price', subscription.priceId),
         );
       }
 
@@ -950,62 +624,70 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       if (!subscriptionItemId) {
         throw createError.internal(
           'Subscription has no items',
-          createStripeErrorContext('retrieve_subscription', subscriptionId),
+          ErrorContextBuilders.stripe('retrieve_subscription', subscriptionId),
         );
       }
 
-      // Update subscription with automatic proration
-      await stripeService.updateSubscription(subscriptionId, {
-        items: [
-          {
-            id: subscriptionItemId,
-            price: newPriceId,
-          },
-        ],
-        proration_behavior: 'create_prorations', // Let Stripe handle billing automatically
-      });
+      // Determine if this is an upgrade or downgrade based on price amount
+      const currentAmount = currentPrice.unitAmount || 0;
+      const newAmount = newPrice.unitAmount || 0;
+      const isUpgrade = newAmount > currentAmount;
+      const isDowngrade = newAmount < currentAmount;
 
-      // Sync fresh data from Stripe API
+      if (isUpgrade) {
+        await stripeService.updateSubscription(subscriptionId, {
+          items: [
+            {
+              id: subscriptionItemId,
+              price: newPriceId,
+            },
+          ],
+          proration_behavior: StripeProratioBehaviors.CREATE_PRORATIONS,
+        });
+      } else if (isDowngrade) {
+        await stripeService.updateSubscription(subscriptionId, {
+          items: [
+            {
+              id: subscriptionItemId,
+              price: newPriceId,
+            },
+          ],
+          proration_behavior: StripeProratioBehaviors.NONE,
+          billing_cycle_anchor: 'unchanged',
+        });
+      } else {
+        await stripeService.updateSubscription(subscriptionId, {
+          items: [
+            {
+              id: subscriptionItemId,
+              price: newPriceId,
+            },
+          ],
+          proration_behavior: StripeProratioBehaviors.CREATE_PRORATIONS,
+        });
+      }
+
       await syncStripeDataFromStripe(subscription.customerId);
 
-      // Fetch updated subscription from database
-      const refreshedSubscription = await db.query.stripeSubscription.findFirst({
-        where: eq(tables.stripeSubscription.id, subscriptionId),
-        with: {
-          price: {
-            with: {
-              product: true,
-            },
-          },
-        },
-      });
-
-      if (!refreshedSubscription) {
-        throw createError.internal(
-          'Failed to fetch updated subscription',
-          createDatabaseErrorContext('select', 'stripeSubscription'),
-        );
-      }
-
-      c.logger.info('Subscription updated successfully', {
-        logType: 'operation',
-        operationName: 'switchSubscription',
-        userId: user.id,
-        resource: subscriptionId,
-      });
+      const refreshedSubscription = await fetchRefreshedSubscription(db, subscriptionId);
 
       return Responses.ok(c, {
-        subscription: buildSubscriptionResponse(refreshedSubscription),
+        subscription: serializeSubscriptionDates(refreshedSubscription),
         message: 'Subscription updated successfully',
+        changeDetails: {
+          oldPrice: currentPrice,
+          newPrice,
+          isUpgrade,
+          isDowngrade,
+        },
       });
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
       }
-      c.logger.error('Failed to switch subscription', normalizeError(error));
       throw createError.internal(
         'Failed to switch subscription',
-        createStripeErrorContext('update_subscription', subscriptionId),
+        ErrorContextBuilders.stripe('update_subscription', subscriptionId),
       );
     }
   },
@@ -1013,33 +695,18 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
 
 /**
  * Cancel Subscription Handler
- *
- * Cancels the user's subscription.
- * - Default: Cancel at period end (user retains access until then)
- * - Optional: Cancel immediately (user loses access now)
  */
 export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: SubscriptionIdParamSchema,
+    validateParams: IdParamSchema,
     validateBody: CancelSubscriptionRequestSchema,
     operationName: 'cancelSubscription',
   },
   async (c) => {
-    const user = c.get('user');
+    const { user } = c.auth();
     const { id: subscriptionId } = c.validated.params;
     const { immediately = false } = c.validated.body;
-
-    if (!user) {
-      throw createError.unauthenticated('Valid session required to cancel subscription', createAuthErrorContext());
-    }
-
-    c.logger.info(`Canceling subscription${immediately ? ' immediately' : ' at period end'}`, {
-      logType: 'operation',
-      operationName: 'cancelSubscription',
-      userId: user.id,
-      resource: subscriptionId,
-    });
 
     try {
       const db = await getDbAsync();
@@ -1052,73 +719,46 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
       if (!subscription) {
         throw createError.notFound(
           `Subscription ${subscriptionId} not found`,
-          createResourceNotFoundContext('subscription', subscriptionId, user.id),
+          ErrorContextBuilders.resourceNotFound('subscription', subscriptionId, user.id),
         );
       }
 
       if (!validateSubscriptionOwnership(subscription, user)) {
         throw createError.unauthorized(
           'You do not have access to this subscription',
-          createAuthorizationErrorContext('subscription', subscriptionId, user.id),
+          ErrorContextBuilders.authorization('subscription', subscriptionId, user.id),
         );
       }
 
       // Check if subscription is already canceled
-      if (subscription.status === 'canceled') {
+      if (subscription.status === StripeSubscriptionStatuses.CANCELED) {
         throw createError.badRequest(
           'Subscription is already canceled',
-          createValidationErrorContext('subscription'),
+          ErrorContextBuilders.validation('subscription'),
         );
       }
 
-      // Cancel subscription in Stripe
       await stripeService.cancelSubscription(subscriptionId, !immediately);
 
-      // Sync fresh data from Stripe API
       await syncStripeDataFromStripe(subscription.customerId);
 
-      // Fetch updated subscription from database
-      const refreshedSubscription = await db.query.stripeSubscription.findFirst({
-        where: eq(tables.stripeSubscription.id, subscriptionId),
-        with: {
-          price: {
-            with: {
-              product: true,
-            },
-          },
-        },
-      });
-
-      if (!refreshedSubscription) {
-        throw createError.internal(
-          'Failed to fetch updated subscription',
-          createDatabaseErrorContext('select', 'stripeSubscription'),
-        );
-      }
+      const refreshedSubscription = await fetchRefreshedSubscription(db, subscriptionId);
 
       const message = immediately
         ? 'Subscription canceled immediately. You no longer have access.'
         : `Subscription will be canceled at the end of the current billing period (${refreshedSubscription.currentPeriodEnd.toLocaleDateString()}). You retain access until then.`;
 
-      c.logger.info(`Subscription canceled successfully${immediately ? ' immediately' : ' at period end'}`, {
-        logType: 'operation',
-        operationName: 'cancelSubscription',
-        userId: user.id,
-        resource: subscriptionId,
-      });
-
       return Responses.ok(c, {
-        subscription: buildSubscriptionResponse(refreshedSubscription),
+        subscription: serializeSubscriptionDates(refreshedSubscription),
         message,
       });
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
       }
-      c.logger.error('Failed to cancel subscription', normalizeError(error));
       throw createError.internal(
         'Failed to cancel subscription',
-        createStripeErrorContext('cancel_subscription', subscriptionId),
+        ErrorContextBuilders.stripe('cancel_subscription', subscriptionId),
       );
     }
   },
@@ -1130,28 +770,7 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
 
 /**
  * Stripe Webhook Handler
- *
- * Following Theo's "Stay Sane with Stripe" pattern:
- * - Verifies webhook signature from Stripe
- * - ALWAYS returns 200 OK (even on processing errors) to prevent retry storms
- * - Extracts only customerId from webhook payload (never trust full payload data)
- * - Fetches fresh data from Stripe API (single source of truth)
- * - Processes asynchronously using Cloudflare Workers waitUntil (production)
- * - Falls back to synchronous processing (local development)
- * - Implements idempotency check to prevent duplicate processing
- *
- * Architecture:
- * 1. Verify signature → Return 400 if invalid (Stripe will not retry)
- * 2. Check idempotency → Return 200 if already processed
- * 3. Insert webhook event record (processed: false)
- * 4. Return 200 immediately
- * 5. Process webhook in background (extract customerId, sync from Stripe API)
- * 6. Update webhook event record (processed: true)
- *
- * Error Handling:
- * - Signature errors → 400 Bad Request (not 401)
- * - Processing errors → Log and return 200 (prevents Stripe retry storms)
- * - Background errors → Logged for manual investigation/retry
+ * Always returns 200 to prevent retry storms, processes async
  */
 export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEnv> = createHandlerWithBatch(
   {
@@ -1162,34 +781,12 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
     const signature = c.req.header('stripe-signature');
 
     if (!signature) {
-      // Log missing signature attempt
-      c.logger.warn('Webhook request missing stripe-signature header', {
-        logType: 'operation',
-        operationName: 'handleStripeWebhook',
-      });
-      const context: ErrorContext = {
-        errorType: 'validation',
-        field: 'stripe-signature',
-      };
-      throw createError.badRequest('Missing stripe-signature header', context);
+      throw createError.badRequest('Missing stripe-signature header', ErrorContextBuilders.validation('stripe-signature'));
     }
-
-    // Operation start logging
-    c.logger.info('Processing Stripe webhook', {
-      logType: 'operation',
-      operationName: 'handleStripeWebhook',
-    });
 
     try {
       const rawBody = await c.req.text();
       const event = stripeService.constructWebhookEvent(rawBody, signature);
-
-      // Log successful signature verification
-      c.logger.info('Webhook signature verified', {
-        logType: 'operation',
-        operationName: 'handleStripeWebhook',
-        resource: `${event.type}-${event.id}`,
-      });
 
       // Check for existing event using batch.db for consistency
       const existingEvent = await batch.db.query.stripeWebhookEvent.findFirst({
@@ -1197,13 +794,6 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
       });
 
       if (existingEvent?.processed) {
-        // Log idempotent webhook (already processed)
-        c.logger.info('Webhook event already processed (idempotent)', {
-          logType: 'operation',
-          operationName: 'handleStripeWebhook',
-          resource: event.id,
-        });
-
         return Responses.ok(c, {
           received: true,
           event: {
@@ -1214,44 +804,26 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
         });
       }
 
-      // Insert webhook event using batch.db for atomic operation
+      const eventData = isObject(event.data.object) ? event.data.object : {};
+
       await batch.db.insert(tables.stripeWebhookEvent).values({
         id: event.id,
         type: event.type,
-        data: event.data.object as unknown as Record<string, unknown>,
+        data: eventData,
         processed: false,
         createdAt: new Date(event.created * 1000),
       }).onConflictDoNothing();
 
-      // Async webhook processing pattern for Cloudflare Workers
-      // Return 200 immediately, process webhook in background
       const processAsync = async () => {
         try {
-          // Process webhook event using batch.db
           await processWebhookEvent(event, batch.db);
 
-          // Update webhook event as processed using batch.db
           await batch.db.update(tables.stripeWebhookEvent)
             .set({ processed: true })
             .where(eq(tables.stripeWebhookEvent.id, event.id));
-
-          // Success logging with event type and ID
-          c.logger.info('Webhook processed successfully', {
-            logType: 'operation',
-            operationName: 'handleStripeWebhook',
-            resource: `${event.type}-${event.id}`,
-          });
-        } catch (error) {
-          // Background processing error - log but don't fail the response
-          c.logger.error(
-            `Background webhook processing failed for event ${event.type} (${event.id})`,
-            normalizeError(error),
-          );
-        }
+        } catch {}
       };
 
-      // Use Cloudflare Workers async processing if available (production)
-      // Otherwise process synchronously (local development)
       if (c.executionCtx) {
         c.executionCtx.waitUntil(processAsync());
       } else {
@@ -1266,13 +838,7 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
           processed: true,
         },
       });
-    } catch (error) {
-      // Error logging with proper Error instance
-      c.logger.error('Webhook processing failed', normalizeError(error));
-
-      // CRITICAL (Theo's Pattern): ALWAYS return 200 to Stripe even on errors
-      // This prevents webhook retry storms. Stripe will mark webhook as delivered.
-      // Failed processing is logged for investigation and manual retry if needed.
+    } catch {
       return Responses.ok(c, {
         received: true,
         event: {
@@ -1291,54 +857,11 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
 // ============================================================================
 
 /**
- * Tracked Webhook Events (Following Theo's "Stay Sane with Stripe" Pattern)
- *
- * Source: https://github.com/t3dotgg/stay-sane-with-stripe
- *
- * Philosophy:
- * - ALL events trigger the SAME sync function (syncStripeDataFromStripe)
- * - NO event-specific logic needed
- * - Extract customerId → Fetch fresh data from Stripe API → Upsert to database
- * - Never trust webhook payloads, always fetch fresh from Stripe API
- *
- * This is Theo's EXACT event list from his implementation.
- * While some events may seem redundant (e.g., customer.subscription.paused is also
- * fired as customer.subscription.updated), tracking them explicitly ensures we never
- * miss critical subscription state changes due to Stripe's eventual consistency model.
- *
- * Event Categories:
- *
- * 1. CHECKOUT EVENTS:
- *    - checkout.session.completed: User completes checkout
- *
- * 2. SUBSCRIPTION LIFECYCLE:
- *    - customer.subscription.created: New subscription
- *    - customer.subscription.updated: Subscription changed
- *    - customer.subscription.deleted: Subscription canceled
- *    - customer.subscription.paused: Subscription paused
- *    - customer.subscription.resumed: Subscription resumed
- *    - customer.subscription.pending_update_applied: Scheduled update applied
- *    - customer.subscription.pending_update_expired: Scheduled update expired
- *    - customer.subscription.trial_will_end: Trial ending (3 days before)
- *
- * 3. INVOICE & PAYMENT EVENTS:
- *    - invoice.paid: Invoice successfully paid
- *    - invoice.payment_failed: Payment failed
- *    - invoice.payment_action_required: 3D Secure/SCA required
- *    - invoice.upcoming: Invoice upcoming (7 days before)
- *    - invoice.marked_uncollectible: Invoice uncollectible after retries
- *    - invoice.payment_succeeded: Payment succeeded (safety duplicate)
- *    - payment_intent.succeeded: Payment intent succeeded
- *    - payment_intent.payment_failed: Payment intent failed
- *    - payment_intent.canceled: Payment intent canceled
- *
- * Total Events: 18 (Theo's exact specification)
+ * Tracked Webhook Events
+ * All events trigger sync from Stripe API
  */
 const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [
-  // Checkout
   'checkout.session.completed',
-
-  // Subscription lifecycle
   'customer.subscription.created',
   'customer.subscription.updated',
   'customer.subscription.deleted',
@@ -1347,8 +870,6 @@ const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [
   'customer.subscription.pending_update_applied',
   'customer.subscription.pending_update_expired',
   'customer.subscription.trial_will_end',
-
-  // Invoice and payment events
   'invoice.paid',
   'invoice.payment_failed',
   'invoice.payment_action_required',
@@ -1360,95 +881,240 @@ const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [
   'payment_intent.canceled',
 ];
 
-/**
- * Extract customer ID from webhook event
- * All tracked events have a customer property
- *
- * Theo's Pattern: Type-check customerId is string (throw if not)
- */
+const StripeInvoiceSchema = z.object({
+  id: z.string(),
+  amount_paid: z.number(),
+  currency: z.string(),
+  subscription: z.union([z.string(), z.object({ id: z.string() }), z.null()]).optional(),
+  billing_reason: z.string().optional(),
+  lines: z.object({
+    data: z.array(z.object({
+      description: z.string().optional(),
+    })),
+  }).optional(),
+  last_finalization_error: z.object({
+    message: z.string().optional(),
+  }).optional(),
+});
+
+const StripeSubscriptionSchema = z.object({
+  id: z.string(),
+  currency: z.string().optional(),
+  items: z.object({
+    data: z.array(z.object({
+      price: z.object({
+        unit_amount: z.number().optional(),
+        nickname: z.string().optional(),
+      }).optional(),
+    })),
+  }).optional(),
+});
+
+async function trackRevenueFromWebhook(
+  event: Stripe.Event,
+  userId: string,
+): Promise<void> {
+  const obj = event.data.object;
+  if (!isObject(obj))
+    return;
+
+  try {
+    switch (event.type) {
+      case 'invoice.paid': {
+        const invoiceResult = StripeInvoiceSchema.safeParse(obj);
+        if (!invoiceResult.success)
+          return;
+        const invoice = invoiceResult.data;
+        if (!invoice.amount_paid || invoice.amount_paid <= 0)
+          return;
+
+        const subscriptionData = 'subscription' in invoice ? invoice.subscription : null;
+        const subscriptionId = typeof subscriptionData === 'string'
+          ? subscriptionData
+          : (isObject(subscriptionData) && 'id' in subscriptionData ? String(subscriptionData.id) : undefined);
+
+        if (!subscriptionId) {
+          return;
+        }
+
+        const isFirstInvoice = invoice.billing_reason === StripeBillingReasons.SUBSCRIPTION_CREATE;
+
+        if (isFirstInvoice) {
+          await revenueTracking.subscriptionStarted({
+            revenue: invoice.amount_paid,
+            currency: invoice.currency.toUpperCase(),
+            product: invoice.lines?.data[0]?.description ?? undefined,
+            subscription_id: subscriptionId,
+            invoice_id: invoice.id,
+          }, { userId });
+        } else {
+          await revenueTracking.subscriptionRenewed({
+            revenue: invoice.amount_paid,
+            currency: invoice.currency.toUpperCase(),
+            product: invoice.lines?.data[0]?.description ?? undefined,
+            subscription_id: subscriptionId,
+            invoice_id: invoice.id,
+          }, { userId });
+        }
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const invoiceResult = StripeInvoiceSchema.safeParse(obj);
+        if (!invoiceResult.success)
+          return;
+        const invoice = invoiceResult.data;
+        const subscriptionData = 'subscription' in invoice ? invoice.subscription : null;
+        const subscriptionId = typeof subscriptionData === 'string'
+          ? subscriptionData
+          : (isObject(subscriptionData) && 'id' in subscriptionData ? String(subscriptionData.id) : undefined);
+
+        await revenueTracking.paymentFailed({
+          subscription_id: subscriptionId,
+          invoice_id: invoice.id,
+          error_message: invoice.last_finalization_error?.message,
+        }, { userId });
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const subscriptionResult = StripeSubscriptionSchema.safeParse(obj);
+        if (!subscriptionResult.success)
+          return;
+        const subscription = subscriptionResult.data;
+        await revenueTracking.subscriptionCanceled({
+          subscription_id: subscription.id,
+          product: subscription.items?.data[0]?.price?.nickname ?? undefined,
+        }, { userId });
+        break;
+      }
+
+      case 'customer.subscription.updated': {
+        const subscriptionResult = StripeSubscriptionSchema.safeParse(obj);
+        if (!subscriptionResult.success)
+          return;
+        const subscription = subscriptionResult.data;
+        const previousAttributes = event.data.previous_attributes;
+
+        if (isObject(previousAttributes) && 'items' in previousAttributes) {
+          const currentAmount = subscription.items?.data[0]?.price?.unit_amount ?? 0;
+          const previousItems = previousAttributes.items;
+
+          let previousAmount = 0;
+          if (
+            isObject(previousItems)
+            && 'data' in previousItems
+            && Array.isArray(previousItems.data)
+            && previousItems.data.length > 0
+            && isObject(previousItems.data[0])
+            && 'price' in previousItems.data[0]
+            && isObject(previousItems.data[0].price)
+            && 'unit_amount' in previousItems.data[0].price
+            && typeof previousItems.data[0].price.unit_amount === 'number'
+          ) {
+            previousAmount = previousItems.data[0].price.unit_amount;
+          }
+
+          if (currentAmount > previousAmount) {
+            await revenueTracking.subscriptionUpgraded({
+              revenue: currentAmount,
+              currency: (subscription.currency ?? 'usd').toUpperCase(),
+              subscription_id: subscription.id,
+              product: subscription.items?.data[0]?.price?.nickname ?? undefined,
+            }, { userId });
+          } else if (currentAmount < previousAmount) {
+            await revenueTracking.subscriptionDowngraded({
+              revenue: currentAmount,
+              currency: (subscription.currency ?? 'usd').toUpperCase(),
+              subscription_id: subscription.id,
+              product: subscription.items?.data[0]?.price?.nickname ?? undefined,
+            }, { userId });
+          }
+        }
+        break;
+      }
+    }
+  } catch {}
+}
+
 function extractCustomerId(event: Stripe.Event): string | null {
-  const obj = event.data.object as { customer?: string | { id: string } };
-
-  if (!obj.customer)
+  const obj = event.data.object;
+  if (!isObject(obj) || !('customer' in obj)) {
     return null;
-
-  // Type guard: string customer ID
-  if (typeof obj.customer === 'string') {
-    return obj.customer;
   }
 
-  // Type guard: expanded customer object with id
-  if (typeof obj.customer === 'object' && typeof obj.customer.id === 'string') {
-    return obj.customer.id;
+  const customer = obj.customer;
+
+  if (!customer) {
+    return null;
   }
 
-  // Throw on invalid type (Theo's requirement: "Type-check customerId is string (throw if not)")
-  const context: ErrorContext = {
-    errorType: 'external_service',
-    service: 'stripe',
-    operation: 'webhook_processing',
-  };
+  if (typeof customer === 'string') {
+    return customer;
+  }
+
+  if (isObject(customer) && typeof customer.id === 'string') {
+    return customer.id;
+  }
+
   throw createError.badRequest(
-    `Invalid customer type in webhook event: expected string or object with id, got ${typeof obj.customer}`,
-    context,
+    `Invalid customer type in webhook event: expected string or object with id, got ${typeof customer}`,
+    ErrorContextBuilders.stripe('webhook_processing'),
   );
 }
 
-/**
- * Process Webhook Event (Theo's Simplified Pattern)
- *
- * Philosophy:
- * - Don't trust webhook payloads (can be stale or incomplete)
- * - Extract customerId only
- * - Call single sync function that fetches fresh data from Stripe API
- * - No event-specific logic needed
- */
 async function processWebhookEvent(
   event: Stripe.Event,
   db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<void> {
-  // Skip if event type not tracked
   if (!TRACKED_WEBHOOK_EVENTS.includes(event.type)) {
-    apiLogger.info('Skipping untracked webhook event', {
-      logType: 'operation',
-      operationName: 'webhookSkipped',
-      resource: `${event.type}-${event.id}`,
-    });
     return;
   }
 
-  // Extract customer ID
   const customerId = extractCustomerId(event);
 
   if (!customerId) {
-    apiLogger.warn('Webhook event missing customer ID', {
-      logType: 'operation',
-      operationName: 'webhookMissingCustomer',
-      resource: `${event.type}-${event.id}`,
-    });
     return;
   }
 
-  // Verify customer exists in our database
   const customer = await db.query.stripeCustomer.findFirst({
     where: eq(tables.stripeCustomer.id, customerId),
   });
 
   if (!customer) {
-    apiLogger.warn('Webhook event for unknown customer', {
-      logType: 'operation',
-      operationName: 'webhookUnknownCustomer',
-      resource: `${event.type}-${customerId}`,
-    });
     return;
   }
 
-  // Single sync function - fetches fresh data from Stripe API (Theo's pattern)
-  await syncStripeDataFromStripe(customerId);
+  await trackRevenueFromWebhook(event, customer.userId);
 
-  apiLogger.info('Webhook event processed via sync', {
-    logType: 'operation',
-    operationName: 'webhookSynced',
-    resource: `${event.type}-${customerId}`,
-  });
+  await syncStripeDataFromStripe(customerId);
 }
+
+// ============================================================================
+// Credits Sync Handler
+// ============================================================================
+export const syncCreditsAfterCheckoutHandler: RouteHandler<typeof syncCreditsAfterCheckoutRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    operationName: 'syncCreditsAfterCheckout',
+  },
+  async (c) => {
+    const { user } = c.auth();
+
+    try {
+      const balance = await getUserCreditBalance(user.id);
+      return Responses.ok(c, {
+        synced: true,
+        creditPurchase: null,
+        creditsBalance: balance.available,
+      });
+    } catch {
+      const balance = await getUserCreditBalance(user.id).catch(() => ({ available: 0 }));
+      return Responses.ok(c, {
+        synced: false,
+        creditPurchase: null,
+        creditsBalance: balance.available,
+      });
+    }
+  },
+);

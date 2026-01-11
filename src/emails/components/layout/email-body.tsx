@@ -1,18 +1,21 @@
 import { Body } from '@react-email/components';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+
+import { colors, spacing, typography } from '@/emails/design-tokens';
 
 type EmailBodyProps = {
   children: ReactNode;
-  className?: string;
+  style?: CSSProperties;
 };
 
-export function EmailBody({
-  children,
-  className = 'mx-auto my-auto bg-white px-2 font-system',
-}: EmailBodyProps) {
-  return (
-    <Body className={className}>
-      {children}
-    </Body>
-  );
+export function EmailBody({ children, style }: EmailBodyProps) {
+  const bodyStyle: CSSProperties = {
+    margin: '0 auto',
+    backgroundColor: colors.white,
+    padding: spacing[2],
+    fontFamily: typography.fontFamily,
+    ...style,
+  };
+
+  return <Body style={bodyStyle}>{children}</Body>;
 }

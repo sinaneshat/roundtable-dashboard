@@ -1,11 +1,12 @@
 import type { CSSProperties, ReactNode } from 'react';
 
+import type { EmailTextWeight } from '@/api/core/enums';
 import { colors, typography } from '@/emails/design-tokens';
 
 type EmailHighlightProps = {
   children: ReactNode;
   color?: 'brand' | 'accent' | 'destructive' | 'secondary';
-  weight?: 'medium' | 'semibold' | 'bold';
+  weight?: Exclude<EmailTextWeight, 'normal'>;
   style?: CSSProperties;
 };
 

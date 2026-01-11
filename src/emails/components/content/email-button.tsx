@@ -1,13 +1,14 @@
 import { Button } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
+import type { ComponentSize } from '@/api/core/enums';
 import { borderRadius, colors, spacing, typography } from '@/emails/design-tokens';
 
 type EmailButtonProps = {
   children: ReactNode;
   href: string;
   variant?: 'primary' | 'secondary' | 'outline';
-  size?: 'sm' | 'md' | 'lg';
+  size?: Extract<ComponentSize, 'sm' | 'md' | 'lg'>;
   style?: CSSProperties;
   target?: '_blank' | '_self';
 };

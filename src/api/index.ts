@@ -21,15 +21,27 @@ import { timeout } from 'hono/timeout';
 import { timing } from 'hono/timing';
 import { trimTrailingSlash } from 'hono/trailing-slash';
 import notFound from 'stoker/middlewares/not-found';
-import onError from 'stoker/middlewares/on-error';
 
-import { createOpenApiApp } from './factory';
-import { attachSession, csrfProtection, protectMutations, requireSession } from './middleware';
-import { errorLoggerMiddleware, honoLoggerMiddleware } from './middleware/hono-logger';
-import { ensureOpenRouterInitialized } from './middleware/openrouter';
-import { RateLimiterFactory } from './middleware/rate-limiter-factory';
-import { ensureStripeInitialized } from './middleware/stripe';
-// Import routes and handlers directly for proper RPC type inference
+import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
+
+import { createOpenApiApp } from './core/app';
+import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, protectMutations, RateLimiterFactory, requireSession } from './middleware';
+// API Keys routes
+import {
+  createApiKeyHandler,
+  deleteApiKeyHandler,
+  getApiKeyHandler,
+  listApiKeysHandler,
+  updateApiKeyHandler,
+} from './routes/api-keys/handler';
+import {
+  createApiKeyRoute,
+  deleteApiKeyRoute,
+  getApiKeyRoute,
+  listApiKeysRoute,
+  updateApiKeyRoute,
+} from './routes/api-keys/route';
+// Auth routes
 import { secureMeHandler } from './routes/auth/handler';
 import { secureMeRoute } from './routes/auth/route';
 // Billing routes
@@ -44,6 +56,7 @@ import {
   listSubscriptionsHandler,
   switchSubscriptionHandler,
   syncAfterCheckoutHandler,
+  syncCreditsAfterCheckoutHandler,
 } from './routes/billing/handler';
 import {
   cancelSubscriptionRoute,
@@ -56,76 +69,202 @@ import {
   listSubscriptionsRoute,
   switchSubscriptionRoute,
   syncAfterCheckoutRoute,
+  syncCreditsAfterCheckoutRoute,
 } from './routes/billing/route';
-// Chat routes - Core endpoints only (ChatGPT pattern)
+// Chat routes
 import {
   addParticipantHandler,
+  analyzePromptHandler,
+  councilModeratorRoundHandler,
   createCustomRoleHandler,
-  createMemoryHandler,
   createThreadHandler,
+  createUserPresetHandler,
   deleteCustomRoleHandler,
-  deleteMemoryHandler,
   deleteParticipantHandler,
   deleteThreadHandler,
+  deleteUserPresetHandler,
+  executePreSearchHandler,
   getCustomRoleHandler,
-  getMemoryHandler,
   getPublicThreadHandler,
   getThreadBySlugHandler,
+  getThreadChangelogHandler,
+  getThreadFeedbackHandler,
   getThreadHandler,
+  getThreadMessagesHandler,
+  getThreadPreSearchesHandler,
+  getThreadRoundChangelogHandler,
+  getThreadSlugStatusHandler,
+  getThreadStreamResumptionStateHandler,
+  getUserPresetHandler,
   listCustomRolesHandler,
-  listMemoriesHandler,
+  listPublicThreadSlugsHandler,
   listThreadsHandler,
+  listUserPresetsHandler,
+  resumeThreadStreamHandler,
+  setRoundFeedbackHandler,
   streamChatHandler,
   updateCustomRoleHandler,
-  updateMemoryHandler,
   updateParticipantHandler,
   updateThreadHandler,
-} from './routes/chat/handler';
+  updateUserPresetHandler,
+} from './routes/chat';
 import {
   addParticipantRoute,
+  analyzePromptRoute,
+  councilModeratorRoundRoute,
   createCustomRoleRoute,
-  createMemoryRoute,
   createThreadRoute,
+  createUserPresetRoute,
   deleteCustomRoleRoute,
-  deleteMemoryRoute,
   deleteParticipantRoute,
   deleteThreadRoute,
+  deleteUserPresetRoute,
+  executePreSearchRoute,
   getCustomRoleRoute,
-  getMemoryRoute,
   getPublicThreadRoute,
   getThreadBySlugRoute,
+  getThreadChangelogRoute,
+  getThreadFeedbackRoute,
+  getThreadMessagesRoute,
+  getThreadPreSearchesRoute,
+  getThreadRoundChangelogRoute,
   getThreadRoute,
+  getThreadSlugStatusRoute,
+  getThreadStreamResumptionStateRoute,
+  getUserPresetRoute,
   listCustomRolesRoute,
-  listMemoriesRoute,
+  listPublicThreadSlugsRoute,
   listThreadsRoute,
+  listUserPresetsRoute,
+  resumeThreadStreamRoute,
+  setRoundFeedbackRoute,
   streamChatRoute,
   updateCustomRoleRoute,
-  updateMemoryRoute,
   updateParticipantRoute,
   updateThreadRoute,
+  updateUserPresetRoute,
 } from './routes/chat/route';
+// Credits routes
+import {
+  estimateCreditCostHandler,
+  getCreditBalanceHandler,
+  getCreditTransactionsHandler,
+} from './routes/credits/handler';
+import {
+  estimateCreditCostRoute,
+  getCreditBalanceRoute,
+  getCreditTransactionsRoute,
+} from './routes/credits/route';
+// MCP (Model Context Protocol) routes - Consolidated JSON-RPC + REST endpoints
+import {
+  callToolHandler,
+  listResourcesHandler,
+  listToolsHandler,
+  mcpJsonRpcHandler,
+  openAIFunctionsHandler,
+} from './routes/mcp/handler';
+import {
+  callToolRoute,
+  listResourcesRoute,
+  listToolsRoute,
+  mcpJsonRpcRoute,
+  openAIFunctionsRoute,
+} from './routes/mcp/route';
+// Models routes (dynamic OpenRouter models)
+import { listModelsHandler } from './routes/models/handler';
+import { listModelsRoute } from './routes/models/route';
+// Project routes
+import {
+  addAttachmentToProjectHandler,
+  createProjectHandler,
+  createProjectMemoryHandler,
+  deleteProjectHandler,
+  deleteProjectMemoryHandler,
+  getProjectAttachmentHandler,
+  getProjectContextHandler,
+  getProjectHandler,
+  getProjectMemoryHandler,
+  listProjectAttachmentsHandler,
+  listProjectMemoriesHandler,
+  listProjectsHandler,
+  removeAttachmentFromProjectHandler,
+  updateProjectAttachmentHandler,
+  updateProjectHandler,
+  updateProjectMemoryHandler,
+} from './routes/project/handler';
+import {
+  addAttachmentToProjectRoute,
+  createProjectMemoryRoute,
+  createProjectRoute,
+  deleteProjectMemoryRoute,
+  deleteProjectRoute,
+  getProjectAttachmentRoute,
+  getProjectContextRoute,
+  getProjectMemoryRoute,
+  getProjectRoute,
+  listProjectAttachmentsRoute,
+  listProjectMemoriesRoute,
+  listProjectsRoute,
+  removeAttachmentFromProjectRoute,
+  updateProjectAttachmentRoute,
+  updateProjectMemoryRoute,
+  updateProjectRoute,
+} from './routes/project/route';
+// ============================================================================
+// Route and Handler Imports (organized to match registration order below)
+// ============================================================================
 // System/health routes
 import {
+  clearCacheHandler,
   detailedHealthHandler,
   healthHandler,
 } from './routes/system/handler';
 import {
+  clearCacheRoute,
   detailedHealthRoute,
   healthRoute,
 } from './routes/system/route';
+// Test routes (development/test only)
+import {
+  setUserCreditsHandler,
+} from './routes/test/handler';
+import {
+  setUserCreditsRoute,
+} from './routes/test/route';
+// Upload routes (R2 file uploads - secure ticket-based pattern)
+import {
+  abortMultipartUploadHandler,
+  completeMultipartUploadHandler,
+  createMultipartUploadHandler,
+  deleteUploadHandler,
+  downloadUploadHandler,
+  getDownloadUrlHandler,
+  getUploadHandler,
+  listUploadsHandler,
+  requestUploadTicketHandler,
+  updateUploadHandler,
+  uploadPartHandler,
+  uploadWithTicketHandler,
+} from './routes/uploads/handler';
+import {
+  abortMultipartUploadRoute,
+  completeMultipartUploadRoute,
+  createMultipartUploadRoute,
+  deleteUploadRoute,
+  downloadUploadRoute,
+  getDownloadUrlRoute,
+  getUploadRoute,
+  listUploadsRoute,
+  requestUploadTicketRoute,
+  updateUploadRoute,
+  uploadPartRoute,
+  uploadWithTicketRoute,
+} from './routes/uploads/route';
 // Usage tracking routes
 import {
-  checkCustomRoleQuotaHandler,
-  checkMemoryQuotaHandler,
-  checkMessageQuotaHandler,
-  checkThreadQuotaHandler,
   getUserUsageStatsHandler,
 } from './routes/usage/handler';
 import {
-  checkCustomRoleQuotaRoute,
-  checkMemoryQuotaRoute,
-  checkMessageQuotaRoute,
-  checkThreadQuotaRoute,
   getUserUsageStatsRoute,
 } from './routes/usage/route';
 
@@ -139,15 +278,84 @@ const app = createOpenApiApp();
 // Step 2: Apply global middleware (following Hono patterns)
 // ============================================================================
 
-// Logging and formatting
+// 🔍 DEBUG: Log ALL requests (especially POST) to diagnose 400 errors
+// Enable with DEBUG_REQUESTS=true to avoid MaxListenersExceeded warnings
+// from parallel console.error() calls during high-concurrency development
+if (process.env.DEBUG_REQUESTS === 'true') {
+  app.use('*', async (c, next) => {
+    const startTime = Date.now();
+    const method = c.req.method;
+    const path = c.req.path;
+
+    // Log ALL POST requests to catch the 400 source
+    if (method === 'POST') {
+      try {
+        const clonedRequest = c.req.raw.clone();
+        const bodyText = await clonedRequest.text();
+        const contentLength = c.req.header('content-length');
+        const contentType = c.req.header('content-type');
+
+        console.error(`[REQUEST-DEBUG] ${method} ${path}:`, {
+          contentLength,
+          contentType,
+          bodyLength: bodyText.length,
+          bodyPreview: bodyText.slice(0, 300),
+          isValidJson: (() => {
+            try {
+              JSON.parse(bodyText);
+              return true;
+            } catch (e) {
+              return `Invalid: ${e instanceof Error ? e.message : String(e)}`;
+            }
+          })(),
+        });
+      } catch (err) {
+        console.error(`[REQUEST-DEBUG] Error reading ${method} ${path} body:`, err);
+      }
+    }
+
+    await next();
+
+    // Log response status for all 4xx/5xx errors
+    const status = c.res.status;
+    if (status >= 400) {
+      const duration = Date.now() - startTime;
+      console.error(`[RESPONSE-DEBUG] ${method} ${path} -> ${status} in ${duration}ms`);
+    }
+  });
+}
+
+// Formatting
 app.use('*', prettyJSON());
-app.use('*', honoLoggerMiddleware);
-app.use('*', errorLoggerMiddleware);
 app.use('*', trimTrailingSlash());
 
 // Core middleware
 app.use('*', contextStorage());
-app.use('*', secureHeaders()); // Use default secure headers - much simpler
+
+// Security headers configuration
+// ============================================================================
+// ⚠️ IMPORTANT: Content-Security-Policy (CSP) Architecture
+//
+// CSP is DISABLED for API routes because they return JSON, not HTML.
+// Only the /scalar route has CSP because it returns an HTML page.
+//
+// 📍 API Routes (/api/*): No CSP needed (JSON responses)
+// 📍 Scalar Route (/api/v1/scalar): Permissive CSP for docs UI (see below)
+// 📍 Next.js Pages: next.config.ts handles CSP
+//
+// ✅ What Hono's secureHeaders() provides (with CSP disabled):
+//   - X-Content-Type-Options: nosniff
+//   - X-Frame-Options: DENY
+//   - X-XSS-Protection: 1; mode=block
+//   - Referrer-Policy: no-referrer
+//   - Strict-Transport-Security (when HTTPS)
+//
+// 🔧 To modify Scalar CSP: Edit the /scalar middleware below
+// ============================================================================
+app.use('*', secureHeaders({
+  contentSecurityPolicy: {}, // Empty object disables CSP - not needed for JSON APIs
+}));
+
 app.use('*', requestId());
 // IMPORTANT: Compression handled natively by Cloudflare Workers
 // Using Hono's compress() middleware causes binary corruption in OpenNext.js
@@ -155,38 +363,37 @@ app.use('*', requestId());
 app.use('*', timing());
 // Apply timeout to all routes except streaming endpoints
 app.use('*', async (c, next) => {
-  // Skip timeout for streaming endpoints
-  if (c.req.path.includes('/stream')) {
+  // Skip timeout for streaming endpoints (chat streaming and round summary)
+  // AI SDK v6 PATTERN: Reasoning models (DeepSeek-R1, Claude 4, etc.) need 10+ minutes
+  // Reference: https://sdk.vercel.ai/docs/providers/community-providers/claude-code#extended-thinking
+  if (c.req.path.includes('/stream') || c.req.path.includes('/moderator') || c.req.path.includes('/chat')) {
     return next();
   }
   return timeout(15000)(c, next);
 });
 
-// Body limit
-app.use('*', bodyLimit({
-  maxSize: 5 * 1024 * 1024,
-  onError: c => c.text('Payload Too Large', 413),
+// Body limit - default 5MB for most routes
+// Upload routes get their own higher limit below
+app.use('*', async (c, next) => {
+  // Skip body limit for upload routes - they have their own higher limits
+  if (c.req.path.startsWith('/uploads')) {
+    return next();
+  }
+  return bodyLimit({
+    maxSize: 5 * 1024 * 1024,
+    onError: c => c.text('Payload Too Large', 413),
+  })(c, next);
+});
+
+// Higher body limit for file upload routes (100MB for single uploads)
+app.use('/uploads', bodyLimit({
+  maxSize: 100 * 1024 * 1024,
+  onError: c => c.text('Payload Too Large - max 100MB for uploads', 413),
 }));
 
-// CORS configuration - Use environment variables for dynamic origin configuration
-app.use('*', (c, next) => {
-  // Get the current environment's allowed origin from NEXT_PUBLIC_APP_URL
-  const appUrl = c.env.NEXT_PUBLIC_APP_URL;
-  const webappEnv = c.env.NEXT_PUBLIC_WEBAPP_ENV || 'local';
-  const isDevelopment = webappEnv === 'local' || c.env.NODE_ENV === 'development';
-
-  // Build allowed origins dynamically based on environment
-  const allowedOrigins: string[] = [];
-
-  // Only allow localhost in development environment
-  if (isDevelopment) {
-    allowedOrigins.push('http://localhost:3000', 'http://127.0.0.1:3000');
-  }
-
-  // Add current environment URL if available and not localhost
-  if (appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1')) {
-    allowedOrigins.push(appUrl);
-  }
+// CORS configuration - Uses centralized URL config from base-urls.ts
+app.use('*', async (c, next) => {
+  const allowedOrigins = getAllowedOriginsFromContext(c);
 
   const middleware = cors({
     origin: (origin) => {
@@ -207,14 +414,30 @@ app.use('*', (c, next) => {
 // ETag support - Skip for streaming endpoints to avoid buffering
 app.use('*', async (c, next) => {
   // Skip ETag for streaming endpoints as it buffers the entire response
-  if (c.req.path.includes('/stream')) {
+  // Must skip for /chat (AI streaming), /stream, and /moderator (round summary streaming)
+  if (c.req.path.includes('/stream') || c.req.path.includes('/chat') || c.req.path.includes('/moderator')) {
     return next();
   }
   return etag()(c, next);
 });
 
-// Session attachment
-app.use('*', attachSession);
+// Session attachment - skip for public endpoints that don't need auth
+// This avoids expensive database queries on every public request
+app.use('*', async (c, next) => {
+  const path = c.req.path;
+  // Skip session for truly public endpoints - handlers use requireOptionalSession if needed
+  if (
+    path.startsWith('/chat/public/')
+    || path.startsWith('/system/')
+    || path === '/health'
+    || path === '/api/v1/health'
+  ) {
+    c.set('session', null);
+    c.set('user', null);
+    return next();
+  }
+  return attachSession(c, next);
+});
 
 // Stripe initialization for all billing routes and webhooks
 // Using wildcard pattern to apply middleware to all /billing/* routes
@@ -225,6 +448,14 @@ app.use('/webhooks/stripe', ensureStripeInitialized);
 // Using wildcard pattern to apply middleware to all /chat/* routes
 app.use('/chat/*', ensureOpenRouterInitialized);
 
+// OpenRouter initialization for MCP routes (uses models and chat functionality)
+app.use('/mcp/*', ensureOpenRouterInitialized);
+
+// ✅ PERF: Edge cache for public thread endpoints
+// NOTE: Edge caching disabled - incompatible with OpenNext/Cloudflare architecture
+// Next.js ISR + KV cache handles caching with proper tag-based invalidation
+// Cloudflare Cache API conflicts with OpenNext's caching strategy
+
 // Global rate limiting
 app.use('*', RateLimiterFactory.create('api'));
 
@@ -232,7 +463,10 @@ app.use('*', RateLimiterFactory.create('api'));
 // Step 3: Configure error and not-found handlers
 // ============================================================================
 
-app.onError(onError);
+// ✅ GLOBAL ERROR LOGGING: Catches ALL errors across ALL endpoints
+// errorLogger wraps Stoker's onError with comprehensive error logging
+// All errors are automatically logged - no need for try/catch in handlers
+app.onError(errorLogger);
 app.notFound(notFound);
 
 // ============================================================================
@@ -244,18 +478,33 @@ app.notFound(notFound);
 // Following Hono best practices: apply CSRF only to authenticated routes
 app.use('/auth/me', csrfProtection, requireSession);
 
+// Protected API keys endpoints
+app.use('/auth/api-keys', csrfProtection, requireSession);
+
 // Protected billing endpoints (checkout, portal, sync, subscriptions)
 app.use('/billing/checkout', csrfProtection, requireSession);
 app.use('/billing/portal', csrfProtection, requireSession);
 app.use('/billing/sync-after-checkout', csrfProtection, requireSession);
+app.use('/billing/sync-credits-after-checkout', csrfProtection, requireSession);
 app.use('/billing/subscriptions', csrfProtection, requireSession);
 app.use('/billing/subscriptions/:id', csrfProtection, requireSession);
 app.use('/billing/subscriptions/:id/switch', csrfProtection, requireSession);
 app.use('/billing/subscriptions/:id/cancel', csrfProtection, requireSession);
 
+// Test endpoints (development/test only)
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/test/*', csrfProtection, requireSession);
+}
+
 // Protected chat endpoints (ChatGPT pattern with smart access control)
 // POST /chat/threads - create thread (requires auth + CSRF)
-app.use('/chat/threads', csrfProtection, requireSession);
+// GET /chat/threads - list threads (requires auth, no CSRF for safe method)
+app.on('POST', '/chat/threads', csrfProtection, requireSession);
+app.on('GET', '/chat/threads', requireSession);
+
+// POST /chat - stream AI response (AI SDK v6 pattern - requires auth + CSRF)
+// This is the OFFICIAL AI SDK endpoint for streaming chat responses
+app.on('POST', '/chat', csrfProtection, requireSession);
 
 // /chat/threads/:id - mixed access pattern
 // GET: public access for public threads (handler checks ownership/public status)
@@ -265,79 +514,235 @@ app.use('/chat/threads/:id', protectMutations);
 // GET /chat/threads/slug/:slug - get thread by slug (requires auth)
 app.use('/chat/threads/slug/:slug', requireSession);
 
-// POST /chat/threads/:id/messages - send message (requires auth + CSRF)
-app.use('/chat/threads/:id/messages', csrfProtection, requireSession);
+// GET /chat/threads/:id/messages - get messages (requires auth)
+app.use('/chat/threads/:id/messages', requireSession);
 
-// POST /chat/threads/:id/stream - stream AI response (requires auth + CSRF)
-app.use('/chat/threads/:id/stream', csrfProtection, requireSession);
+// GET /chat/threads/:id/changelog - get thread configuration changelog (requires auth)
+app.use('/chat/threads/:id/changelog', requireSession);
+
+// GET /chat/threads/:id/slug-status - poll for slug updates (requires auth)
+app.use('/chat/threads/:id/slug-status', requireSession);
 
 // Participant management routes (protected)
 app.use('/chat/threads/:id/participants', csrfProtection, requireSession);
 app.use('/chat/participants/:id', csrfProtection, requireSession);
 
-// Memory system routes (protected)
-app.use('/chat/memories', csrfProtection, requireSession);
-app.use('/chat/memories/:id', csrfProtection, requireSession);
-
 // Custom role routes (protected)
 app.use('/chat/custom-roles', csrfProtection, requireSession);
 app.use('/chat/custom-roles/:id', csrfProtection, requireSession);
 
+// Pre-search routes (protected)
+app.use('/chat/threads/:threadId/rounds/:roundNumber/pre-search', csrfProtection, requireSession);
+app.use('/chat/threads/:id/pre-searches', requireSession); // GET pre-searches for thread
+
+// Round summary routes (protected)
+app.use('/chat/threads/:threadId/rounds/:roundNumber/moderator', csrfProtection, requireSession);
+app.use('/chat/threads/:threadId/rounds/:roundNumber/moderator/resume', requireSession); // GET resume (no CSRF for safe method)
+app.use('/chat/threads/:id/summaries', requireSession); // GET summaries for thread
+
+// Round feedback routes (protected)
+app.use('/chat/threads/:threadId/rounds/:roundNumber/feedback', csrfProtection, requireSession);
+app.use('/chat/threads/:id/feedback', requireSession); // GET feedback for thread
+
+// Project routes (protected)
+app.use('/projects', csrfProtection, requireSession);
+app.use('/projects/:id', protectMutations);
+app.use('/projects/:id/knowledge', csrfProtection, requireSession);
+app.use('/projects/:id/knowledge/:fileId', csrfProtection, requireSession);
+
+// Upload routes (protected - file attachments for chat)
+// NOTE: Download routes have separate rate limiting - don't apply upload rate limiter to them
+app.use('/uploads', async (c, next) => {
+  // Skip rate limiting for download routes - they have their own rate limiter
+  if (c.req.path.includes('/download')) {
+    return next();
+  }
+  return RateLimiterFactory.create('upload')(c, next);
+}, csrfProtection, async (c, next) => {
+  // Skip session requirement for download routes - they use signed URLs
+  if (c.req.path.includes('/download')) {
+    return next();
+  }
+  return requireSession(c, next);
+});
+app.use('/uploads/ticket', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+app.use('/uploads/ticket/upload', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+app.use('/uploads/:id', protectMutations);
+app.use('/uploads/:id/download', RateLimiterFactory.create('download')); // Download has its own rate limit + session-optional auth
+app.use('/uploads/:id/download-url', RateLimiterFactory.create('download'), requireSession);
+app.use('/uploads/multipart', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+app.use('/uploads/multipart/:id', protectMutations);
+app.use('/uploads/multipart/:id/parts', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+
 // Register all routes directly on the app
 const appRoutes = app
-  // System/health routes
-  .openapi(healthRoute, healthHandler)
-  .openapi(detailedHealthRoute, detailedHealthHandler)
-  // Auth routes
-  .openapi(secureMeRoute, secureMeHandler)
-  // Billing routes - Products (public)
-  .openapi(listProductsRoute, listProductsHandler)
-  .openapi(getProductRoute, getProductHandler)
-  // Billing routes - Checkout (protected)
-  .openapi(createCheckoutSessionRoute, createCheckoutSessionHandler)
-  // Billing routes - Customer Portal (protected)
-  .openapi(createCustomerPortalSessionRoute, createCustomerPortalSessionHandler)
-  // Billing routes - Sync (protected)
-  .openapi(syncAfterCheckoutRoute, syncAfterCheckoutHandler)
-  // Billing routes - Subscriptions (protected)
-  .openapi(listSubscriptionsRoute, listSubscriptionsHandler)
-  .openapi(getSubscriptionRoute, getSubscriptionHandler)
-  // Billing routes - Subscription Management (protected)
-  .openapi(switchSubscriptionRoute, switchSubscriptionHandler)
-  .openapi(cancelSubscriptionRoute, cancelSubscriptionHandler)
-  // Billing routes - Webhooks (public with signature verification)
-  .openapi(handleWebhookRoute, handleWebhookHandler)
-  // Chat routes - Core endpoints only (ChatGPT pattern)
-  .openapi(listThreadsRoute, listThreadsHandler) // List threads with pagination
-  .openapi(createThreadRoute, createThreadHandler) // Create thread with participants + first message
-  .openapi(getThreadRoute, getThreadHandler) // Get thread with participants + messages
+  // ============================================================================
+  // System Routes - Health monitoring and diagnostics
+  // ============================================================================
+  .openapi(healthRoute, healthHandler) // Basic health check for monitoring
+  .openapi(detailedHealthRoute, detailedHealthHandler) // Detailed health check with environment and dependencies
+  .openapi(clearCacheRoute, clearCacheHandler) // Clear all backend caches
+
+  // ============================================================================
+  // Auth Routes - User authentication and session management (protected)
+  // ============================================================================
+  .openapi(secureMeRoute, secureMeHandler) // Get current authenticated user
+
+  // ============================================================================
+  // API Keys Routes - API key management and authentication (protected)
+  // ============================================================================
+  .openapi(listApiKeysRoute, listApiKeysHandler) // List user API keys (without key values)
+  .openapi(getApiKeyRoute, getApiKeyHandler) // Get API key details (without key value)
+  .openapi(createApiKeyRoute, createApiKeyHandler) // Create new API key (returns key value once)
+  .openapi(updateApiKeyRoute, updateApiKeyHandler) // Update API key settings
+  .openapi(deleteApiKeyRoute, deleteApiKeyHandler) // Delete API key
+
+  // ============================================================================
+  // Billing Routes - Stripe billing, subscriptions, and payments
+  // ============================================================================
+  // Products (public)
+  .openapi(listProductsRoute, listProductsHandler) // List all active products with pricing
+  .openapi(getProductRoute, getProductHandler) // Get specific product with all pricing plans
+  // Checkout (protected)
+  .openapi(createCheckoutSessionRoute, createCheckoutSessionHandler) // Create Stripe checkout session
+  // Customer Portal (protected)
+  .openapi(createCustomerPortalSessionRoute, createCustomerPortalSessionHandler) // Create customer portal session
+  // Sync (protected)
+  .openapi(syncAfterCheckoutRoute, syncAfterCheckoutHandler) // Sync Stripe subscription data after checkout
+  .openapi(syncCreditsAfterCheckoutRoute, syncCreditsAfterCheckoutHandler) // Sync credit purchase after checkout (Theo's pattern: separate from subscriptions)
+  // Subscriptions (protected)
+  .openapi(listSubscriptionsRoute, listSubscriptionsHandler) // List user subscriptions
+  .openapi(getSubscriptionRoute, getSubscriptionHandler) // Get subscription details
+  // Subscription Management (protected)
+  .openapi(switchSubscriptionRoute, switchSubscriptionHandler) // Switch subscription plan
+  .openapi(cancelSubscriptionRoute, cancelSubscriptionHandler) // Cancel subscription
+  // Webhooks (public with signature verification)
+  .openapi(handleWebhookRoute, handleWebhookHandler) // Handle Stripe webhook events
+
+  // ============================================================================
+  // Chat Routes - Multi-model AI conversations (ChatGPT pattern)
+  // ============================================================================
+  // Thread Management
+  .openapi(listThreadsRoute, listThreadsHandler) // List threads with cursor pagination
+  .openapi(createThreadRoute, createThreadHandler) // Create thread with mode and configuration
+  .openapi(getThreadRoute, getThreadHandler) // Get thread details with participants
   .openapi(getThreadBySlugRoute, getThreadBySlugHandler) // Get thread by slug (authenticated)
-  .openapi(updateThreadRoute, updateThreadHandler) // Update thread (title, favorite, public, etc.)
-  .openapi(deleteThreadRoute, deleteThreadHandler) // Delete thread
-  .openapi(streamChatRoute, streamChatHandler) // Stream AI response via SSE (replaces sendMessage)
+  .openapi(getThreadSlugStatusRoute, getThreadSlugStatusHandler) // Poll for AI-generated slug updates
+  .openapi(updateThreadRoute, updateThreadHandler) // Update thread (title, mode, status, metadata)
+  .openapi(deleteThreadRoute, deleteThreadHandler) // Delete thread (soft delete)
   .openapi(getPublicThreadRoute, getPublicThreadHandler) // Get public thread by slug (no auth)
-  // Chat routes - Participant management
-  .openapi(addParticipantRoute, addParticipantHandler) // Add model to thread
+  .openapi(listPublicThreadSlugsRoute, listPublicThreadSlugsHandler) // List public thread slugs for SSG (no auth)
+  // Message Management
+  .openapi(getThreadMessagesRoute, getThreadMessagesHandler) // Get thread messages
+  .openapi(getThreadChangelogRoute, getThreadChangelogHandler) // Get configuration changelog
+  .openapi(getThreadRoundChangelogRoute, getThreadRoundChangelogHandler) // Get changelog for specific round (efficient)
+  .openapi(streamChatRoute, streamChatHandler) // Stream AI responses via SSE
+  .openapi(resumeThreadStreamRoute, resumeThreadStreamHandler) // Resume active thread stream (AI SDK pattern)
+  .openapi(getThreadStreamResumptionStateRoute, getThreadStreamResumptionStateHandler) // Get stream resumption state for server-side prefetching
+  // Participant Management (protected)
+  .openapi(addParticipantRoute, addParticipantHandler) // Add AI model participant to thread
   .openapi(updateParticipantRoute, updateParticipantHandler) // Update participant role/priority/settings
   .openapi(deleteParticipantRoute, deleteParticipantHandler) // Remove participant from thread
-  // Chat routes - Memory system
-  .openapi(listMemoriesRoute, listMemoriesHandler) // List user memories
-  .openapi(createMemoryRoute, createMemoryHandler) // Create memory/preset
-  .openapi(getMemoryRoute, getMemoryHandler) // Get memory details
-  .openapi(updateMemoryRoute, updateMemoryHandler) // Update memory
-  .openapi(deleteMemoryRoute, deleteMemoryHandler) // Delete memory
-  // Chat routes - Custom Role system
-  .openapi(listCustomRolesRoute, listCustomRolesHandler) // List user custom roles
+  // Auto Mode (protected)
+  .openapi(analyzePromptRoute, analyzePromptHandler) // Analyze prompt for auto mode configuration
+  // Custom Role System (protected)
+  .openapi(listCustomRolesRoute, listCustomRolesHandler) // List user custom role templates
   .openapi(createCustomRoleRoute, createCustomRoleHandler) // Create custom role template
   .openapi(getCustomRoleRoute, getCustomRoleHandler) // Get custom role details
-  .openapi(updateCustomRoleRoute, updateCustomRoleHandler) // Update custom role
-  .openapi(deleteCustomRoleRoute, deleteCustomRoleHandler) // Delete custom role
-  // Usage tracking routes (protected)
-  .openapi(getUserUsageStatsRoute, getUserUsageStatsHandler)
-  .openapi(checkThreadQuotaRoute, checkThreadQuotaHandler)
-  .openapi(checkMessageQuotaRoute, checkMessageQuotaHandler)
-  .openapi(checkMemoryQuotaRoute, checkMemoryQuotaHandler)
-  .openapi(checkCustomRoleQuotaRoute, checkCustomRoleQuotaHandler)
+  .openapi(updateCustomRoleRoute, updateCustomRoleHandler) // Update custom role template
+  .openapi(deleteCustomRoleRoute, deleteCustomRoleHandler) // Delete custom role template
+  // User Presets (protected, localStorage-based)
+  .openapi(listUserPresetsRoute, listUserPresetsHandler) // List user presets
+  .openapi(createUserPresetRoute, createUserPresetHandler) // Create user preset
+  .openapi(getUserPresetRoute, getUserPresetHandler) // Get user preset details
+  .openapi(updateUserPresetRoute, updateUserPresetHandler) // Update user preset
+  .openapi(deleteUserPresetRoute, deleteUserPresetHandler) // Delete user preset
+  // Pre-search (protected, web search results) - execute auto-creates DB record
+  .openapi(getThreadPreSearchesRoute, getThreadPreSearchesHandler) // Get all pre-search results for thread
+  .openapi(executePreSearchRoute, executePreSearchHandler) // Stream pre-search execution (auto-creates)
+  // Council Moderator (protected, backend-triggered only)
+  .openapi(councilModeratorRoundRoute, councilModeratorRoundHandler) // Stream council moderator generation (text streaming like participants)
+  // Round Feedback (protected)
+  .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler) // Set/update round feedback (like/dislike)
+  .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler) // Get all round feedback for a thread
+
+  // ============================================================================
+  // Project Routes - Project-based knowledge base management (protected)
+  // ============================================================================
+  // Project CRUD
+  .openapi(listProjectsRoute, listProjectsHandler) // List user projects with search
+  .openapi(createProjectRoute, createProjectHandler) // Create new project
+  .openapi(getProjectRoute, getProjectHandler) // Get project details
+  .openapi(updateProjectRoute, updateProjectHandler) // Update project name/description/settings
+  .openapi(deleteProjectRoute, deleteProjectHandler) // Delete project (CASCADE)
+  // Project Attachments (reference-based, S3/R2 best practice)
+  .openapi(listProjectAttachmentsRoute, listProjectAttachmentsHandler) // List project attachments
+  .openapi(addAttachmentToProjectRoute, addAttachmentToProjectHandler) // Add existing attachment to project
+  .openapi(getProjectAttachmentRoute, getProjectAttachmentHandler) // Get single attachment
+  .openapi(updateProjectAttachmentRoute, updateProjectAttachmentHandler) // Update attachment metadata
+  .openapi(removeAttachmentFromProjectRoute, removeAttachmentFromProjectHandler) // Remove attachment reference
+  // Project Memories
+  .openapi(listProjectMemoriesRoute, listProjectMemoriesHandler) // List project memories
+  .openapi(createProjectMemoryRoute, createProjectMemoryHandler) // Create memory
+  .openapi(getProjectMemoryRoute, getProjectMemoryHandler) // Get single memory
+  .openapi(updateProjectMemoryRoute, updateProjectMemoryHandler) // Update memory
+  .openapi(deleteProjectMemoryRoute, deleteProjectMemoryHandler) // Delete memory
+  // Project Context (RAG aggregation)
+  .openapi(getProjectContextRoute, getProjectContextHandler) // Get aggregated project context
+
+  // ============================================================================
+  // Usage Routes - Single source of truth for usage and quota (protected)
+  // ============================================================================
+  .openapi(getUserUsageStatsRoute, getUserUsageStatsHandler) // Get all usage statistics and quota info
+
+  // ============================================================================
+  // Credits Routes - Credit balance and transaction management (protected)
+  // ============================================================================
+  .openapi(getCreditBalanceRoute, getCreditBalanceHandler) // Get credit balance and plan info
+  .openapi(getCreditTransactionsRoute, getCreditTransactionsHandler) // Get credit transaction history
+  .openapi(estimateCreditCostRoute, estimateCreditCostHandler) // Estimate credit cost for action
+
+  // ============================================================================
+  // Test Routes - Development/test only utilities (protected)
+  // ============================================================================
+  .openapi(setUserCreditsRoute, setUserCreditsHandler) // Set user credits (test only)
+
+  // ============================================================================
+  // Models Routes - Simplified OpenRouter models endpoint (public)
+  // ============================================================================
+  .openapi(listModelsRoute, listModelsHandler) // List all available OpenRouter models
+
+  // ============================================================================
+  // MCP Routes - Model Context Protocol server (JSON-RPC 2.0 + REST convenience)
+  // Following official MCP spec: https://modelcontextprotocol.io/specification
+  // ============================================================================
+  // JSON-RPC endpoint - Main MCP protocol transport
+  .openapi(mcpJsonRpcRoute, mcpJsonRpcHandler) // POST /mcp - JSON-RPC 2.0 (tools/list, tools/call, etc.)
+  // REST convenience endpoints - For HTTP integrations like n8n
+  .openapi(listToolsRoute, listToolsHandler) // GET /mcp/tools - List tools (REST)
+  .openapi(listResourcesRoute, listResourcesHandler) // GET /mcp/resources - List resources (REST)
+  .openapi(callToolRoute, callToolHandler) // POST /mcp/tools/call - Execute tool (REST)
+  .openapi(openAIFunctionsRoute, openAIFunctionsHandler) // GET /mcp/openai/functions - OpenAI format
+
+  // ============================================================================
+  // Upload Routes - R2 file uploads (secure ticket-based pattern)
+  // ============================================================================
+  // Upload management endpoints
+  .openapi(listUploadsRoute, listUploadsHandler) // GET /uploads - List uploads
+  .openapi(getUploadRoute, getUploadHandler) // GET /uploads/:id - Get upload
+  .openapi(getDownloadUrlRoute, getDownloadUrlHandler) // GET /uploads/:id/download-url - Get signed URL
+  .openapi(downloadUploadRoute, downloadUploadHandler) // GET /uploads/:id/download - Download
+  .openapi(updateUploadRoute, updateUploadHandler) // PATCH /uploads/:id - Update metadata
+  .openapi(deleteUploadRoute, deleteUploadHandler) // DELETE /uploads/:id - Delete upload
+  // Secure ticket-based uploads (S3 presigned URL pattern)
+  .openapi(requestUploadTicketRoute, requestUploadTicketHandler) // POST /uploads/ticket - Request upload ticket
+  .openapi(uploadWithTicketRoute, uploadWithTicketHandler) // POST /uploads/ticket/upload - Upload with ticket
+  // Multipart uploads (for large files > 100MB) - secure, requires auth
+  .openapi(createMultipartUploadRoute, createMultipartUploadHandler) // POST /uploads/multipart - Initiate
+  .openapi(uploadPartRoute, uploadPartHandler) // PUT /uploads/multipart/:id/parts - Upload part
+  .openapi(completeMultipartUploadRoute, completeMultipartUploadHandler) // POST /uploads/multipart/:id/complete
+  .openapi(abortMultipartUploadRoute, abortMultipartUploadHandler) // DELETE /uploads/multipart/:id - Abort
 ;
 
 // ============================================================================
@@ -365,9 +770,17 @@ appRoutes.doc('/doc', c => ({
   tags: [
     { name: 'system', description: 'System health and diagnostics' },
     { name: 'auth', description: 'Authentication and authorization' },
+    { name: 'api-keys', description: 'API key management and authentication' },
     { name: 'billing', description: 'Stripe billing, subscriptions, and payments' },
-    { name: 'chat', description: 'Multi-model AI chat threads, messages, and memories' },
+    { name: 'chat', description: 'Multi-model AI chat threads and messages' },
+    { name: 'Uploads', description: 'File uploads for chat attachments (R2 storage)' },
+    { name: 'Multipart', description: 'Multipart uploads for large files' },
+    { name: 'projects', description: 'Project-based knowledge base management with AutoRAG' },
+    { name: 'knowledge-base', description: 'Knowledge file upload and management' },
     { name: 'usage', description: 'Usage tracking and quota management' },
+    { name: 'models', description: 'Dynamic OpenRouter AI models discovery and management' },
+    { name: 'mcp', description: 'Model Context Protocol server implementation' },
+    { name: 'tools', description: 'MCP tool execution endpoints' },
   ],
   servers: [
     {
@@ -398,6 +811,40 @@ appRoutes.get('/openapi.json', async (c) => {
 // ============================================================================
 
 // Scalar API documentation UI
+// CSP headers set directly in Hono since Next.js headers() don't apply to Hono routes in Cloudflare Workers
+// Middleware to set permissive CSP for Scalar before the response is generated
+appRoutes.use('/scalar', async (c, next) => {
+  await next();
+
+  // Get the response that was set
+  const response = c.res;
+
+  // Permissive CSP for Scalar API documentation
+  const csp = [
+    'default-src \'self\' \'unsafe-inline\' \'unsafe-eval\' data: blob:',
+    'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com',
+    'style-src \'self\' \'unsafe-inline\' https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com',
+    'font-src \'self\' https://fonts.gstatic.com https://cdn.jsdelivr.net',
+    'img-src \'self\' data: blob: https:',
+    'connect-src \'self\' https: wss: ws:',
+    'worker-src \'self\' blob:',
+    'child-src \'self\' blob:',
+    'frame-ancestors \'none\'',
+    'base-uri \'self\'',
+    'form-action \'self\'',
+  ].join('; ');
+
+  // Clone response with new CSP header
+  const newHeaders = new Headers(response.headers);
+  newHeaders.set('Content-Security-Policy', csp);
+
+  c.res = new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
+});
+
 appRoutes.get('/scalar', Scalar({
   url: '/api/v1/doc',
 }));
@@ -425,6 +872,4 @@ appRoutes.get('/llms.txt', async (c) => {
 // Step 8: Export the app (default export for Cloudflare Workers/Bun)
 // ============================================================================
 
-export default {
-  fetch: appRoutes.fetch,
-};
+export default appRoutes;

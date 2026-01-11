@@ -1,6 +1,9 @@
 import { relations } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import { BILLING_INTERVALS, INVOICE_STATUSES, PAYMENT_METHOD_TYPES, PRICE_TYPES, STRIPE_SUBSCRIPTION_STATUSES } from '@/api/core/enums';
+import type { StripeMetadataType, StripeWebhookEventData } from '@/db/validation/billing';
+
 import { user } from './auth';
 
 /**
@@ -15,7 +18,8 @@ export const stripeProduct = sqliteTable(
     description: text('description'),
     active: integer('active', { mode: 'boolean' }).default(true).notNull(),
     defaultPriceId: text('default_price_id'), // Default Stripe price ID
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, string>>(),
+    // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
+    metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
     images: text('images', { mode: 'json' }).$type<string[]>(),
     features: text('features', { mode: 'json' }).$type<string[]>(), // Product features list
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
@@ -40,15 +44,16 @@ export const stripePrice = sqliteTable(
     active: integer('active', { mode: 'boolean' }).default(true).notNull(),
     currency: text('currency').notNull().default('usd'), // ISO currency code
     unitAmount: integer('unit_amount'), // Price in smallest currency unit (cents for USD)
-    type: text('type', { enum: ['one_time', 'recurring'] })
+    type: text('type', { enum: PRICE_TYPES })
       .notNull()
       .default('recurring'),
     interval: text('interval', {
-      enum: ['day', 'week', 'month', 'year'],
+      enum: BILLING_INTERVALS,
     }), // For recurring prices
     intervalCount: integer('interval_count').default(1), // Billing frequency (e.g., every 3 months)
     trialPeriodDays: integer('trial_period_days'), // Free trial duration
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, string>>(),
+    // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
+    metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .$onUpdate(() => new Date())
@@ -75,7 +80,8 @@ export const stripeCustomer = sqliteTable(
     email: text('email').notNull(),
     name: text('name'),
     defaultPaymentMethodId: text('default_payment_method_id'),
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, string>>(),
+    // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
+    metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .$onUpdate(() => new Date())
@@ -99,16 +105,7 @@ export const stripeSubscription = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     status: text('status', {
-      enum: [
-        'incomplete',
-        'incomplete_expired',
-        'trialing',
-        'active',
-        'past_due',
-        'canceled',
-        'unpaid',
-        'paused',
-      ],
+      enum: STRIPE_SUBSCRIPTION_STATUSES,
     }).notNull(),
     priceId: text('price_id')
       .notNull()
@@ -128,7 +125,10 @@ export const stripeSubscription = sqliteTable(
     trialStart: integer('trial_start', { mode: 'timestamp' }),
     trialEnd: integer('trial_end', { mode: 'timestamp' }),
     endedAt: integer('ended_at', { mode: 'timestamp' }),
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, string>>(),
+    // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
+    metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
+    // Optimistic locking - prevents lost updates from webhook races
+    version: integer('version').notNull().default(1),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .$onUpdate(() => new Date())
@@ -139,6 +139,8 @@ export const stripeSubscription = sqliteTable(
     index('stripe_subscription_user_idx').on(table.userId),
     index('stripe_subscription_status_idx').on(table.status),
     index('stripe_subscription_price_idx').on(table.priceId),
+    // ✅ Composite index for efficient active subscription queries
+    index('stripe_subscription_user_status_idx').on(table.userId, table.status),
   ],
 );
 
@@ -153,7 +155,7 @@ export const stripePaymentMethod = sqliteTable(
     customerId: text('customer_id')
       .notNull()
       .references(() => stripeCustomer.id, { onDelete: 'cascade' }),
-    type: text('type', { enum: ['card', 'bank_account', 'sepa_debit'] }).notNull(),
+    type: text('type', { enum: PAYMENT_METHOD_TYPES }).notNull(),
     // Card details
     cardBrand: text('card_brand'), // visa, mastercard, etc.
     cardLast4: text('card_last4'),
@@ -163,7 +165,8 @@ export const stripePaymentMethod = sqliteTable(
     bankName: text('bank_name'),
     bankLast4: text('bank_last4'),
     isDefault: integer('is_default', { mode: 'boolean' }).default(false).notNull(),
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, string>>(),
+    // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
+    metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .$onUpdate(() => new Date())
@@ -191,7 +194,7 @@ export const stripeInvoice = sqliteTable(
       { onDelete: 'set null' },
     ),
     status: text('status', {
-      enum: ['draft', 'open', 'paid', 'uncollectible', 'void'],
+      enum: INVOICE_STATUSES,
     }).notNull(),
     amountDue: integer('amount_due').notNull(), // Amount in smallest currency unit
     amountPaid: integer('amount_paid').notNull(),
@@ -202,7 +205,8 @@ export const stripeInvoice = sqliteTable(
     invoicePdf: text('invoice_pdf'),
     paid: integer('paid', { mode: 'boolean' }).default(false).notNull(),
     attemptCount: integer('attempt_count').default(0).notNull(),
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, string>>(),
+    // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
+    metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .$onUpdate(() => new Date())
@@ -229,7 +233,8 @@ export const stripeWebhookEvent = sqliteTable(
       .default(false)
       .notNull(),
     processingError: text('processing_error'),
-    data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
+    // ✅ TYPE-SAFE: Stripe webhook event data - type inferred from validation schema
+    data: text('data', { mode: 'json' }).$type<StripeWebhookEventData>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     processedAt: integer('processed_at', { mode: 'timestamp' }),
   },

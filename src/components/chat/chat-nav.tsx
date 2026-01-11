@@ -1,278 +1,400 @@
 'use client';
-
-import { Plus, Search } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
+import { SidebarCollapsibles, SidebarVariants } from '@/api/core/enums';
+import type { ChatSidebarItem } from '@/api/routes/chat/schema';
 import { ChatList } from '@/components/chat/chat-list';
+import {
+  ChatSidebarPaginationSkeleton,
+  SidebarThreadSkeletons,
+} from '@/components/chat/chat-sidebar-skeleton';
 import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
-import { UsageMetrics } from '@/components/chat/usage-metrics';
-import { Button } from '@/components/ui/button';
+import { ShareDialog } from '@/components/chat/share-dialog';
+import { Icons } from '@/components/icons';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
-import { useDeleteThreadMutation, useToggleFavoriteMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
-import { useThreadsQuery } from '@/hooks/queries/chat-threads';
-import { toastManager } from '@/lib/toast/toast-manager';
-import type { Chat } from '@/lib/types/chat';
-import { groupChatsByPeriod } from '@/lib/types/chat';
+import { useTogglePublicMutation } from '@/hooks/mutations';
+import { useThreadQuery, useThreadsQuery } from '@/hooks/queries';
+import type { Session, User } from '@/lib/auth/types';
+import { cn } from '@/lib/ui/cn';
+import { useNavigationReset } from '@/stores/chat';
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  /** Server-side session for hydration - prevents mismatch */
+  initialSession?: { session: Session; user: User } | null;
+};
+
+function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isFavoritesCollapsed, setIsFavoritesCollapsed] = useState(false);
+  const [isChatsCollapsed, setIsChatsCollapsed] = useState(false);
+  const sidebarContentRef = useRef<HTMLDivElement>(null);
+  const { isMobile, setOpenMobile } = useSidebar();
+  const handleNavigationReset = useNavigationReset();
+  const { data: threadsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error } = useThreadsQuery();
 
-  // Fetch real threads from API
-  const { data: threadsData } = useThreadsQuery();
+  // Share dialog state - exact same pattern as chat-thread-actions.tsx
+  const [chatToShare, setChatToShare] = useState<ChatSidebarItem | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const togglePublicMutation = useTogglePublicMutation();
 
-  // Mutations
-  const deleteThreadMutation = useDeleteThreadMutation();
-  const toggleFavoriteMutation = useToggleFavoriteMutation();
-  const updateThreadMutation = useUpdateThreadMutation();
+  // Read isPublic from thread detail cache (same pattern as chat-thread-actions.tsx)
+  const { data: threadDetailData } = useThreadQuery(chatToShare?.id ?? '', !!chatToShare);
+  const threadIsPublic = threadDetailData?.success
+    ? threadDetailData.data.thread.isPublic
+    : chatToShare?.isPublic ?? false;
 
-  // Transform threads to Chat type
-  const chats: Chat[] = useMemo(() => {
+  // Derived value: use optimistic mutation value when pending, otherwise use cache
+  const displayIsPublic = togglePublicMutation.isPending && togglePublicMutation.variables
+    ? togglePublicMutation.variables.isPublic
+    : threadIsPublic;
+
+  const chats: ChatSidebarItem[] = useMemo(() => {
     if (!threadsData?.pages)
       return [];
-
     const threads = threadsData.pages.flatMap(page =>
       page.success && page.data?.items ? page.data.items : [],
     );
-
     return threads.map(thread => ({
       id: thread.id,
       title: thread.title,
       slug: thread.slug,
+      previousSlug: thread.previousSlug ?? null,
       createdAt: new Date(thread.createdAt),
       updatedAt: new Date(thread.updatedAt),
-      messages: [], // Messages loaded separately when viewing thread
+      messages: [],
       isFavorite: thread.isFavorite ?? false,
       isPublic: thread.isPublic ?? false,
     }));
   }, [threadsData]);
 
-  // Keyboard shortcut to open search (Cmd+K / Ctrl+K)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsSearchOpen(true);
+  const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      setIsSearchOpen(true);
+      if (isMobile) {
+        setOpenMobile(false);
       }
-    };
+    }
+  });
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+  useEffect(() => {
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+  const handleNavLinkClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    handleNavigationReset();
+    router.push('/chat');
+
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [handleNavigationReset, router, isMobile, setOpenMobile]);
+
+  const favorites = useMemo(() => chats.filter(chat => chat.isFavorite), [chats]);
+  const nonFavoriteChats = useMemo(() => chats.filter(chat => !chat.isFavorite), [chats]);
+
+  const handleScroll = useCallback(() => {
+    if (!sidebarContentRef.current || !hasNextPage || isFetchingNextPage)
+      return;
+    const { scrollTop, scrollHeight, clientHeight } = sidebarContentRef.current;
+    const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+    if (scrollPercentage > 0.8) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  useEffect(() => {
+    const viewport = sidebarContentRef.current;
+    if (!viewport)
+      return;
+    viewport.addEventListener('scroll', handleScroll);
+    return () => viewport.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
+  const prevPathnameRef = useRef(pathname);
+  useEffect(() => {
+    if (isMobile && pathname !== prevPathnameRef.current) {
+      setOpenMobile(false);
+    }
+    prevPathnameRef.current = pathname;
+  }, [pathname, isMobile, setOpenMobile]);
+
+  // Share dialog handlers (same pattern as chat-thread-actions.tsx)
+  const handleShareClick = useCallback((chat: ChatSidebarItem) => {
+    setChatToShare(chat);
+    setIsShareDialogOpen(true);
   }, []);
 
-  const handleNewChat = () => {
-    router.push('/chat');
-  };
+  const handleShareDialogOpenChange = useCallback((open: boolean) => {
+    if (!open && togglePublicMutation.isPending) {
+      return;
+    }
+    setIsShareDialogOpen(open);
+  }, [togglePublicMutation.isPending]);
 
-  const handleDeleteChat = (chatId: string) => {
-    // Find the chat being deleted to get its slug
-    const chat = chats.find(c => c.id === chatId);
-    const chatSlug = chat?.slug;
+  const handleMakePublic = useCallback(() => {
+    if (!chatToShare || threadIsPublic || togglePublicMutation.isPending) {
+      return;
+    }
+    togglePublicMutation.mutate({ threadId: chatToShare.id, isPublic: true, slug: chatToShare.slug });
+  }, [chatToShare, threadIsPublic, togglePublicMutation]);
 
-    deleteThreadMutation.mutate(chatId, {
-      onSuccess: () => {
-        toastManager.success(
-          t('chat.threadDeleted'),
-          t('chat.threadDeletedDescription'),
-        );
-
-        // If deleting the currently viewed thread, redirect to /chat
-        if (chatSlug) {
-          const currentPath = window.location.pathname;
-          if (currentPath.includes(`/chat/${chatSlug}`)) {
-            router.push('/chat');
-          }
-        }
-      },
-      onError: () => {
-        toastManager.error(
-          t('chat.threadDeleteFailed'),
-          t('chat.threadDeleteFailedDescription'),
-        );
-      },
-    });
-  };
-
-  const handleToggleFavorite = (chatId: string) => {
-    // Find the current favorite status
-    const chat = chats.find(c => c.id === chatId);
-    const currentFavoriteStatus = chat?.isFavorite ?? false;
-    const newFavoriteStatus = !currentFavoriteStatus;
-
-    toggleFavoriteMutation.mutate(
-      { threadId: chatId, isFavorite: newFavoriteStatus },
-      {
-        onSuccess: () => {
-          toastManager.success(
-            newFavoriteStatus
-              ? t('chat.addedToFavorites')
-              : t('chat.removedFromFavorites'),
-            newFavoriteStatus
-              ? t('chat.addedToFavoritesDescription')
-              : t('chat.removedFromFavoritesDescription'),
-          );
-        },
-        onError: () => {
-          toastManager.error(
-            t('chat.favoriteFailed'),
-            t('chat.favoriteFailedDescription'),
-          );
-        },
-      },
-    );
-  };
-
-  const handleTogglePublic = (chatId: string) => {
-    // Find the current public status
-    const chat = chats.find(c => c.id === chatId);
-    const currentPublicStatus = chat?.isPublic ?? false;
-    const newPublicStatus = !currentPublicStatus;
-
-    updateThreadMutation.mutate(
-      {
-        threadId: chatId,
-        data: { json: { isPublic: newPublicStatus } },
-      },
-      {
-        onSuccess: () => {
-          toastManager.success(
-            newPublicStatus
-              ? t('chat.madePublic')
-              : t('chat.madePrivate'),
-            newPublicStatus
-              ? t('chat.madePublicDescription')
-              : t('chat.madePrivateDescription'),
-          );
-        },
-        onError: () => {
-          toastManager.error(
-            t('chat.updateFailed'),
-            t('chat.updateFailedDescription'),
-          );
-        },
-      },
-    );
-  };
-
-  // Get favorites from chats
-  const favorites = useMemo(() =>
-    chats.filter(chat => chat.isFavorite), [chats]);
-
-  // Get non-favorite chats for grouping
-  const nonFavoriteChats = useMemo(() =>
-    chats.filter(chat => !chat.isFavorite), [chats]);
-
-  const chatGroups = groupChatsByPeriod(nonFavoriteChats);
-
-  // Extract loading states from mutations
-  const deletingChatId = deleteThreadMutation.isPending ? deleteThreadMutation.variables : null;
-  const favoritingChatId = toggleFavoriteMutation.isPending ? toggleFavoriteMutation.variables?.threadId : null;
-  const updatingPublicChatId = updateThreadMutation.isPending ? updateThreadMutation.variables?.threadId : null;
+  const handleMakePrivate = useCallback(() => {
+    if (!chatToShare || !threadIsPublic || togglePublicMutation.isPending) {
+      setIsShareDialogOpen(false);
+      return;
+    }
+    setIsShareDialogOpen(false);
+    togglePublicMutation.mutate({ threadId: chatToShare.id, isPublic: false, slug: chatToShare.slug });
+  }, [chatToShare, threadIsPublic, togglePublicMutation]);
 
   return (
     <>
       <TooltipProvider>
-        <Sidebar collapsible="icon" {...props}>
+        <Sidebar collapsible={SidebarCollapsibles.ICON} variant={SidebarVariants.FLOATING} {...props}>
           <SidebarHeader>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton size="lg" asChild>
-                  <Link href="/chat">
-                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-                      <Image
-                        src="/static/logo.png"
-                        alt={t('brand.logoAlt')}
-                        width={32}
-                        height={32}
-                        className="size-6 object-contain"
-                      />
-                    </div>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{BRAND.name}</span>
-                      <span className="truncate text-xs">{BRAND.tagline}</span>
-                    </div>
+            <div className="flex h-9 mb-2 items-center justify-between group-data-[collapsible=icon]:hidden">
+              <Link
+                href="/chat"
+                onClick={handleNavLinkClick}
+                className="flex h-9 items-center rounded-md ps-3 pe-2 hover:opacity-80 transition-opacity"
+              >
+                <Image
+                  src={BRAND.logos.main}
+                  alt={`${BRAND.name} Logo`}
+                  className="size-6 object-contain shrink-0"
+                  width={24}
+                  height={24}
+                />
+              </Link>
+              <SidebarTrigger className="size-9 shrink-0" />
+            </div>
+
+            <div className="hidden h-10 mb-2 group-data-[collapsible=icon]:flex items-center justify-center relative">
+              <Link
+                href="/chat"
+                onClick={handleNavLinkClick}
+                className="flex size-10 items-center justify-center group-hover:opacity-0 group-hover:pointer-events-none transition-opacity duration-150"
+              >
+                <Image
+                  src={BRAND.logos.main}
+                  alt={`${BRAND.name} Logo`}
+                  className="size-6 object-contain shrink-0"
+                  width={24}
+                  height={24}
+                />
+              </Link>
+              <SidebarTrigger
+                className="size-10 absolute opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                iconClassName="size-4"
+              />
+            </div>
+
+            <SidebarMenu className="gap-1">
+              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
+                <SidebarMenuButton asChild isActive={pathname === '/chat'}>
+                  <Link href="/chat" onClick={handleNavLinkClick}>
+                    <Icons.plus className="size-4 shrink-0" />
+                    <span
+                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                      style={{ maxWidth: '12rem' }}
+                    >
+                      {t('navigation.newChat')}
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* New Chat Button - Visible in both expanded and collapsed states */}
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleNewChat} tooltip={t('navigation.newChat')}>
-                  <Plus className="size-4" />
-                  <span>{t('navigation.newChat')}</span>
+              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
+                <SidebarMenuButton
+                  onClick={() => {
+                    setIsSearchOpen(true);
+                    if (isMobile) {
+                      setOpenMobile(false);
+                    }
+                  }}
+                >
+                  <Icons.search className="size-4 shrink-0" />
+                  <span
+                    className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                    style={{ maxWidth: '12rem' }}
+                  >
+                    {t('navigation.searchChats')}
+                  </span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
+                <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
+                  <Link href="/chat" onClick={handleNavLinkClick}>
+                    <Icons.plus />
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
+                <SidebarMenuButton
+                  onClick={() => {
+                    setIsSearchOpen(true);
+                    if (isMobile) {
+                      setOpenMobile(false);
+                    }
+                  }}
+                  tooltip={t('navigation.searchChats')}
+                >
+                  <Icons.search />
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
-
-            {/* Search Button - Only visible when expanded */}
-            <SidebarGroup className="py-0 group-data-[collapsible=icon]:hidden">
-              <Button
-                variant="outline"
-                className="w-full justify-start text-sm text-muted-foreground h-9"
-                onClick={() => setIsSearchOpen(true)}
-              >
-                <Search className="size-4 mr-2" />
-                <span className="flex-1 text-left">{t('chat.searchChats')}</span>
-                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
-                  <span className="text-xs">⌘</span>
-                  K
-                </kbd>
-              </Button>
-            </SidebarGroup>
           </SidebarHeader>
+          <SidebarContent className="p-0 w-full min-w-0">
+            <ScrollArea ref={sidebarContentRef} className="w-full h-full">
+              <div className="flex flex-col w-full px-0.5">
+                {!isLoading && !isError && favorites.length > 0 && (
+                  <SidebarGroup className="group/favorites pt-4 group-data-[collapsible=icon]:hidden">
+                    <SidebarGroupLabel
+                      className="flex items-center gap-0.5 px-4 cursor-pointer"
+                      onClick={() => setIsFavoritesCollapsed(!isFavoritesCollapsed)}
+                    >
+                      <span className="text-sm font-medium truncate">
+                        {t('chat.pinned')}
+                      </span>
+                      <Icons.chevronRight className={cn(
+                        'size-3 shrink-0 transition-all duration-200',
+                        !isFavoritesCollapsed && 'rotate-90',
+                        !isFavoritesCollapsed && 'opacity-0 group-hover/favorites:opacity-100',
+                      )}
+                      />
+                    </SidebarGroupLabel>
+                    {!isFavoritesCollapsed && (
+                      <ChatList chats={favorites} onShareClick={handleShareClick} />
+                    )}
+                  </SidebarGroup>
+                )}
 
-          <SidebarContent className="p-0">
-            <ScrollArea className="h-full w-full">
-              <div className="px-2 py-2">
-                <ChatList
-                  chatGroups={chatGroups}
-                  favorites={favorites}
-                  onDeleteChat={handleDeleteChat}
-                  onToggleFavorite={handleToggleFavorite}
-                  onTogglePublic={handleTogglePublic}
-                  searchTerm=""
-                  deletingChatId={deletingChatId}
-                  favoritingChatId={favoritingChatId}
-                  updatingPublicChatId={updatingPublicChatId}
-                />
+                {isLoading && (
+                  <SidebarGroup className="pt-4 group-data-[collapsible=icon]:hidden">
+                    <SidebarGroupLabel className="px-4">
+                      <span className="text-sm font-medium truncate">
+                        {t('navigation.chats')}
+                      </span>
+                    </SidebarGroupLabel>
+                    <SidebarThreadSkeletons count={10} animated />
+                  </SidebarGroup>
+                )}
+
+                {isError && (
+                  <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+                    <div className="py-6 text-center">
+                      <p className="text-sm font-medium text-destructive mb-1">
+                        {t('states.error.default')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {error?.message || t('states.error.description')}
+                      </p>
+                    </div>
+                  </SidebarGroup>
+                )}
+
+                {!isLoading && !isError && chats.length === 0 && (
+                  <SidebarGroup className="pt-4 group-data-[collapsible=icon]:hidden">
+                    <SidebarGroupLabel className="px-4">
+                      <span className="text-sm font-medium truncate">
+                        {t('navigation.chats')}
+                      </span>
+                    </SidebarGroupLabel>
+                    <div className="px-4 pb-3 pt-2">
+                      <p className="text-xs text-muted-foreground">
+                        {t('chat.emptyStateSubtext')}
+                        ,
+                        <br />
+                        {t('chat.emptyStateTitle')}
+                      </p>
+                    </div>
+                    <SidebarThreadSkeletons count={7} />
+                  </SidebarGroup>
+                )}
+
+                {!isLoading && !isError && nonFavoriteChats.length > 0 && (
+                  <SidebarGroup className="group/chats pt-4 group-data-[collapsible=icon]:hidden">
+                    <SidebarGroupLabel
+                      className="flex items-center gap-0.5 px-4 cursor-pointer"
+                      onClick={() => setIsChatsCollapsed(!isChatsCollapsed)}
+                    >
+                      <span className="text-sm font-medium truncate">
+                        {t('navigation.chats')}
+                      </span>
+                      <Icons.chevronRight className={cn(
+                        'size-3 shrink-0 transition-all duration-200',
+                        !isChatsCollapsed && 'rotate-90',
+                        !isChatsCollapsed && 'opacity-0 group-hover/chats:opacity-100',
+                      )}
+                      />
+                    </SidebarGroupLabel>
+                    {!isChatsCollapsed && (
+                      <>
+                        <ChatList chats={nonFavoriteChats} onShareClick={handleShareClick} />
+                        {isFetchingNextPage && (
+                          <ChatSidebarPaginationSkeleton count={20} />
+                        )}
+                      </>
+                    )}
+                  </SidebarGroup>
+                )}
               </div>
             </ScrollArea>
           </SidebarContent>
-
-          <SidebarFooter>
-            <UsageMetrics />
-            <NavUser />
+          <SidebarFooter className="gap-2">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <NavUser initialSession={initialSession} />
+              </SidebarMenuItem>
+            </SidebarMenu>
           </SidebarFooter>
-
-          <SidebarRail />
         </Sidebar>
-
-        {/* Command Search Modal */}
         <CommandSearch
-          chats={chats}
           isOpen={isSearchOpen}
           onClose={() => setIsSearchOpen(false)}
         />
       </TooltipProvider>
+
+      {/* ShareDialog rendered outside conditional blocks to survive ChatList remounts */}
+      <ShareDialog
+        open={isShareDialogOpen}
+        onOpenChange={handleShareDialogOpenChange}
+        slug={chatToShare?.slug ?? ''}
+        threadTitle={chatToShare?.title ?? ''}
+        isPublic={displayIsPublic}
+        isLoading={togglePublicMutation.isPending}
+        onMakePublic={handleMakePublic}
+        onMakePrivate={handleMakePrivate}
+      />
     </>
   );
 }
+
+export const AppSidebar = React.memo(AppSidebarComponent);

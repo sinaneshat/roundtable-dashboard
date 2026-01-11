@@ -1,8 +1,8 @@
-// components/TextInput.tsx
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
 
-import type { GeneralFormProps } from '@/types/general';
-
+import type { FieldType } from '@/api/core/enums';
+import { FieldTypes } from '@/api/core/enums';
 import {
   FormControl,
   FormDescription,
@@ -10,26 +10,33 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '../ui/form';
-import { Input } from '../ui/input';
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
 
-type Props = {
-  fieldType?: 'number' | 'text' | 'email' | 'password';
-} & GeneralFormProps;
+type RHFTextFieldProps<TFieldValues extends FieldValues = FieldValues> = {
+  name: FieldPath<TFieldValues>;
+  title?: string;
+  description?: string;
+  placeholder?: string;
+  required?: boolean;
+  disabled?: boolean;
+  className?: string;
+  inputClassName?: string;
+  fieldType?: FieldType;
+};
 
-function RHFTextField({
+export function RHFTextField<TFieldValues extends FieldValues = FieldValues>({
   name,
   title,
   description,
   placeholder,
-  value: externalValue,
-  onChange: externalOnChange,
   required,
   disabled,
-  fieldType = 'text',
+  fieldType = FieldTypes.TEXT,
   className,
-}: Props) {
-  const { control } = useFormContext();
+  inputClassName,
+}: RHFTextFieldProps<TFieldValues>) {
+  const { control } = useFormContext<TFieldValues>();
 
   return (
     <FormField
@@ -37,7 +44,7 @@ function RHFTextField({
       name={name}
       render={({ field }) => (
         <FormItem className={className || 'w-full'}>
-          <FormLabel>{title}</FormLabel>
+          {title && <FormLabel>{title}</FormLabel>}
           <FormControl>
             <Input
               {...field}
@@ -46,21 +53,15 @@ function RHFTextField({
               data-testid={field.name}
               type={fieldType}
               placeholder={placeholder}
+              className={inputClassName}
               onChange={(e) => {
                 const rawValue = e.target.value;
-                const value = fieldType === 'number' && rawValue !== ''
+                const value = fieldType === FieldTypes.NUMBER && rawValue !== ''
                   ? Number(rawValue)
                   : rawValue;
-
-                // Call field.onChange with the processed value
                 field.onChange(value);
-
-                // If there's an external onChange, call it with the event
-                if (externalOnChange) {
-                  externalOnChange(e);
-                }
               }}
-              value={field.value !== undefined ? field.value : externalValue}
+              value={field.value ?? ''}
             />
           </FormControl>
           {description && <FormDescription>{description}</FormDescription>}
@@ -70,5 +71,3 @@ function RHFTextField({
     />
   );
 }
-
-export default RHFTextField;

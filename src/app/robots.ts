@@ -1,11 +1,10 @@
 import type { MetadataRoute } from 'next';
 
-import { getBaseUrl } from '@/utils/helpers';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
 
-  // In development, disallow all crawling
   if (process.env.NEXT_PUBLIC_WEBAPP_ENV !== 'prod') {
     return {
       rules: {
@@ -15,12 +14,17 @@ export default function robots(): MetadataRoute.Robots {
     };
   }
 
-  // In production, allow crawling with some restrictions
   return {
     rules: [
       {
         userAgent: '*',
-        allow: '/',
+        allow: [
+          '/',
+          '/chat/pricing',
+          '/auth/sign-in',
+          '/auth/sign-up',
+          '/public/chat/',
+        ],
         disallow: [
           '/api/',
           '/chat/',

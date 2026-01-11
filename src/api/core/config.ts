@@ -16,19 +16,17 @@
 
 import { z } from 'zod';
 
-// Inline validation utilities to avoid server-side imports on client
-const ValidationUtils = {
-  string: {
-    nonEmpty: () => z.string().min(1),
-    url: () => z.string().url(),
-    email: () => z.string().email(),
-  },
-  environmentValidator: z.enum(['development', 'production', 'test', 'preview', 'local']),
-  apiVersionValidator: z.enum(['v1', 'v2']),
-  number: {
-    percentage: () => z.number().min(0).max(100),
-  },
-};
+import {
+  ApiVersionSchema,
+  DevLogLevelSchema,
+  EmailProviderSchema,
+  EnvironmentSchema,
+  LOG_LEVELS,
+  LogFormatSchema,
+  LogLevels,
+} from '@/api/core/enums';
+
+import type { LogLevel } from './enums';
 
 // ============================================================================
 // ENVIRONMENT VALIDATION SCHEMAS
@@ -36,131 +34,108 @@ const ValidationUtils = {
 
 /**
  * Core application environment schema
+ *
+ * Note: NEXT_PUBLIC_APP_URL and NEXT_PUBLIC_API_URL are optional.
+ * The application uses centralized URL config from @/lib/config/base-urls.ts
+ * which provides static URLs based on NEXT_PUBLIC_WEBAPP_ENV.
  */
 const coreEnvironmentSchema = z.object({
-  // Environment
-  NODE_ENV: ValidationUtils.environmentValidator.default('development'),
-  NEXT_PUBLIC_WEBAPP_ENV: ValidationUtils.environmentValidator.default('development'),
+  NODE_ENV: EnvironmentSchema.default('development'),
+  NEXT_PUBLIC_WEBAPP_ENV: EnvironmentSchema.default('development'),
+  // Optional: URLs are derived from centralized config based on WEBAPP_ENV
+  NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+  NEXT_PUBLIC_API_URL: z.string().url().optional(),
+  NEXT_PUBLIC_APP_NAME: z.string().min(1).default('Roundtable'),
+  NEXT_PUBLIC_APP_VERSION: z.string().min(1).default('1.0.0'),
+  API_BASE_PATH: z.string().min(1).default('/api'),
+  API_VERSION: ApiVersionSchema.default('v1'),
+}).openapi('CoreEnvironmentConfig');
 
-  // Application URLs
-  NEXT_PUBLIC_APP_URL: ValidationUtils.string.url(),
-  NEXT_PUBLIC_API_URL: ValidationUtils.string.url().optional(),
-
-  // Application metadata
-  NEXT_PUBLIC_APP_NAME: ValidationUtils.string.nonEmpty().default('Roundtable Dashboard'),
-  NEXT_PUBLIC_APP_VERSION: ValidationUtils.string.nonEmpty().default('1.0.0'),
-
-  // API Configuration
-  API_BASE_PATH: ValidationUtils.string.nonEmpty().default('/api'),
-  API_VERSION: ValidationUtils.apiVersionValidator.default('v1'),
-});
+export type CoreEnvironmentConfig = z.infer<typeof coreEnvironmentSchema>;
 
 /**
  * Database configuration schema
  */
 const databaseEnvironmentSchema = z.object({
-  // Database configuration (uses D1 bindings, not URL-based)
-  DATABASE_AUTH_TOKEN: ValidationUtils.string.nonEmpty().optional(),
-
-  // Local development database
-  LOCAL_DATABASE_PATH: ValidationUtils.string.nonEmpty().default('./local.db'),
-
-  // Database configuration
+  DATABASE_AUTH_TOKEN: z.string().min(1).optional(),
+  LOCAL_DATABASE_PATH: z.string().min(1).default('./local.db'),
   DATABASE_CONNECTION_LIMIT: z.coerce.number().int().positive().default(10),
-  DATABASE_TIMEOUT: z.coerce.number().int().positive().default(30000), // 30 seconds
-
-  // Migration settings
-  DATABASE_MIGRATION_DIR: ValidationUtils.string.nonEmpty().default('./src/db/migrations'),
+  DATABASE_TIMEOUT: z.coerce.number().int().positive().default(30000),
+  DATABASE_MIGRATION_DIR: z.string().min(1).default('./src/db/migrations'),
   DATABASE_SEED_DATA: z.boolean().default(false),
-});
+}).openapi('DatabaseEnvironmentConfig');
+
+export type DatabaseEnvironmentConfig = z.infer<typeof databaseEnvironmentSchema>;
 
 /**
  * Authentication configuration schema
  */
 const authEnvironmentSchema = z.object({
-  // Better Auth configuration
-  BETTER_AUTH_SECRET: ValidationUtils.string.nonEmpty().optional(),
-  BETTER_AUTH_URL: ValidationUtils.string.url().optional(),
-
-  // Session configuration
-  SESSION_MAX_AGE: z.coerce.number().int().positive().default(30 * 24 * 60 * 60), // 30 days
-  SESSION_COOKIE_NAME: ValidationUtils.string.nonEmpty().default('roundtable-session'),
-
-  // Security settings
-  CSRF_SECRET: ValidationUtils.string.nonEmpty().optional(),
+  BETTER_AUTH_SECRET: z.string().min(1).optional(),
+  BETTER_AUTH_URL: z.string().url().optional(),
+  SESSION_MAX_AGE: z.coerce.number().int().positive().default(30 * 24 * 60 * 60),
+  SESSION_COOKIE_NAME: z.string().min(1).default('roundtable-session'),
+  CSRF_SECRET: z.string().min(1).optional(),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
-  RATE_LIMIT_WINDOW: z.coerce.number().int().positive().default(15 * 60 * 1000), // 15 minutes
-});
+  RATE_LIMIT_WINDOW: z.coerce.number().int().positive().default(15 * 60 * 1000),
+}).openapi('AuthEnvironmentConfig');
+
+export type AuthEnvironmentConfig = z.infer<typeof authEnvironmentSchema>;
 
 /**
  * Email configuration schema
  */
 const emailEnvironmentSchema = z.object({
-  // Email service provider
-  EMAIL_PROVIDER: z.enum(['resend', 'sendgrid', 'ses', 'smtp']).default('resend'),
-
-  // Resend configuration
-  RESEND_API_KEY: ValidationUtils.string.nonEmpty().optional(),
-  RESEND_FROM_EMAIL: ValidationUtils.string.email().optional(),
-
-  // SendGrid configuration
-  SENDGRID_API_KEY: ValidationUtils.string.nonEmpty().optional(),
-  SENDGRID_FROM_EMAIL: ValidationUtils.string.email().optional(),
-
-  // SMTP configuration
-  SMTP_HOST: ValidationUtils.string.nonEmpty().optional(),
+  EMAIL_PROVIDER: EmailProviderSchema.default('resend'),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  RESEND_FROM_EMAIL: z.string().email().optional(),
+  SENDGRID_API_KEY: z.string().min(1).optional(),
+  SENDGRID_FROM_EMAIL: z.string().email().optional(),
+  SMTP_HOST: z.string().min(1).optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),
-  SMTP_USER: ValidationUtils.string.nonEmpty().optional(),
-  SMTP_PASS: ValidationUtils.string.nonEmpty().optional(),
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASS: z.string().min(1).optional(),
   SMTP_SECURE: z.boolean().default(true),
-
-  // Email settings
   EMAIL_ENABLED: z.boolean().default(true),
   EMAIL_QUEUE_ENABLED: z.boolean().default(false),
-});
+}).openapi('EmailEnvironmentConfig');
+
+export type EmailEnvironmentConfig = z.infer<typeof emailEnvironmentSchema>;
 
 /**
  * Storage configuration schema
  */
 const storageEnvironmentSchema = z.object({
-  // Cloudflare R2 configuration
-  R2_ACCOUNT_ID: ValidationUtils.string.nonEmpty().optional(),
-  R2_ACCESS_KEY_ID: ValidationUtils.string.nonEmpty().optional(),
-  R2_SECRET_ACCESS_KEY: ValidationUtils.string.nonEmpty().optional(),
-  R2_BUCKET_NAME: ValidationUtils.string.nonEmpty().optional(),
-  R2_PUBLIC_URL: ValidationUtils.string.url().optional(),
-
-  // File upload limits
-  MAX_FILE_SIZE: z.coerce.number().int().positive().default(10 * 1024 * 1024), // 10MB
-  MAX_IMAGE_SIZE: z.coerce.number().int().positive().default(5 * 1024 * 1024), // 5MB
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  R2_BUCKET_NAME: z.string().min(1).optional(),
+  R2_PUBLIC_URL: z.string().url().optional(),
+  MAX_FILE_SIZE: z.coerce.number().int().positive().default(10 * 1024 * 1024),
+  MAX_IMAGE_SIZE: z.coerce.number().int().positive().default(5 * 1024 * 1024),
   ALLOWED_FILE_TYPES: z.string().default('image/*,application/pdf'),
+  USER_STORAGE_QUOTA: z.coerce.number().int().positive().default(100 * 1024 * 1024),
+}).openapi('StorageEnvironmentConfig');
 
-  // Storage quotas
-  USER_STORAGE_QUOTA: z.coerce.number().int().positive().default(100 * 1024 * 1024), // 100MB
-});
+export type StorageEnvironmentConfig = z.infer<typeof storageEnvironmentSchema>;
 
 /**
  * Monitoring and logging configuration schema
  */
 const monitoringEnvironmentSchema = z.object({
-  // Logging configuration
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-  LOG_FORMAT: z.enum(['json', 'text']).default('json'),
+  LOG_LEVEL: DevLogLevelSchema.default('info'),
+  LOG_FORMAT: LogFormatSchema.default('json'),
   LOG_SENSITIVE_DATA: z.boolean().default(false),
-
-  // Analytics
   ANALYTICS_ENABLED: z.boolean().default(true),
-  GOOGLE_ANALYTICS_ID: ValidationUtils.string.nonEmpty().optional(),
-
-  // Error tracking
-  SENTRY_DSN: ValidationUtils.string.url().optional(),
-  SENTRY_ENVIRONMENT: ValidationUtils.environmentValidator.optional(),
-  SENTRY_TRACES_SAMPLE_RATE: ValidationUtils.number.percentage().default(10),
-
-  // Performance monitoring
+  GOOGLE_ANALYTICS_ID: z.string().min(1).optional(),
+  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_ENVIRONMENT: EnvironmentSchema.optional(),
+  SENTRY_TRACES_SAMPLE_RATE: z.number().min(0).max(100).default(10),
   PERFORMANCE_MONITORING: z.boolean().default(false),
-  METRICS_ENDPOINT: ValidationUtils.string.url().optional(),
-});
+  METRICS_ENDPOINT: z.string().url().optional(),
+}).openapi('MonitoringEnvironmentConfig');
+
+export type MonitoringEnvironmentConfig = z.infer<typeof monitoringEnvironmentSchema>;
 
 /**
  * Development and debugging configuration schema
@@ -169,7 +144,6 @@ const developmentEnvironmentSchema = z.object({
   // Development features
   ENABLE_QUERY_LOGGING: z.boolean().default(false),
   ENABLE_DEBUG_MODE: z.boolean().default(false),
-  // Production ready only - mock functionality disabled
 
   // Development tools
   STORYBOOK_ENABLED: z.boolean().default(false),
@@ -178,7 +152,9 @@ const developmentEnvironmentSchema = z.object({
   // Hot reload and development server
   FAST_REFRESH: z.boolean().default(true),
   TURBO_MODE: z.boolean().default(true),
-});
+}).openapi('DevelopmentEnvironmentConfig');
+
+export type DevelopmentEnvironmentConfig = z.infer<typeof developmentEnvironmentSchema>;
 
 // ============================================================================
 // COMPLETE CONFIGURATION SCHEMA
@@ -193,7 +169,8 @@ const completeConfigurationSchema = coreEnvironmentSchema
   .merge(emailEnvironmentSchema)
   .merge(storageEnvironmentSchema)
   .merge(monitoringEnvironmentSchema)
-  .merge(developmentEnvironmentSchema);
+  .merge(developmentEnvironmentSchema)
+  .openapi('CompleteConfigurationSchema');
 
 // ============================================================================
 // CONFIGURATION PARSING AND VALIDATION
@@ -201,90 +178,102 @@ const completeConfigurationSchema = coreEnvironmentSchema
 
 /**
  * Parse and validate environment variables
+ *
+ * In Cloudflare Workers: Use getCloudflareContext().env for runtime secrets
+ * In local dev: Falls back to process.env
+ *
+ * Note: NEXT_PUBLIC_* vars are build-time inlined, so process.env is acceptable for those
  */
-function parseEnvironment() {
+async function parseEnvironment() {
+  let runtimeEnv: Record<string, string | undefined> = {};
+
+  try {
+    const { getCloudflareContext } = await import('@opennextjs/cloudflare');
+    const cfContext = getCloudflareContext();
+    // CloudflareEnv doesn't have index signature, cast to Record for uniform access
+    runtimeEnv = (cfContext?.env as unknown as Record<string, string | undefined>) || {};
+  } catch {
+    // Local dev: getCloudflareContext() not available, use process.env
+    runtimeEnv = process.env;
+  }
+
   const env = {
-    // Core environment variables
+    // Core environment variables (NEXT_PUBLIC_* are build-time inlined, process.env is acceptable)
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_WEBAPP_ENV: process.env.NEXT_PUBLIC_WEBAPP_ENV,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
     NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
-    API_BASE_PATH: process.env.API_BASE_PATH,
-    API_VERSION: process.env.API_VERSION,
+    API_BASE_PATH: runtimeEnv.API_BASE_PATH,
+    API_VERSION: runtimeEnv.API_VERSION,
 
-    // Database
-    DATABASE_AUTH_TOKEN: process.env.DATABASE_AUTH_TOKEN,
-    LOCAL_DATABASE_PATH: process.env.LOCAL_DATABASE_PATH,
-    DATABASE_CONNECTION_LIMIT: process.env.DATABASE_CONNECTION_LIMIT,
-    DATABASE_TIMEOUT: process.env.DATABASE_TIMEOUT,
-    DATABASE_MIGRATION_DIR: process.env.DATABASE_MIGRATION_DIR,
-    DATABASE_SEED_DATA: process.env.DATABASE_SEED_DATA === 'true',
+    // Database (runtime secrets)
+    DATABASE_AUTH_TOKEN: runtimeEnv.DATABASE_AUTH_TOKEN,
+    LOCAL_DATABASE_PATH: runtimeEnv.LOCAL_DATABASE_PATH,
+    DATABASE_CONNECTION_LIMIT: runtimeEnv.DATABASE_CONNECTION_LIMIT,
+    DATABASE_TIMEOUT: runtimeEnv.DATABASE_TIMEOUT,
+    DATABASE_MIGRATION_DIR: runtimeEnv.DATABASE_MIGRATION_DIR,
+    DATABASE_SEED_DATA: runtimeEnv.DATABASE_SEED_DATA === 'true',
 
-    // Authentication
-    BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
-    BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
-    SESSION_MAX_AGE: process.env.SESSION_MAX_AGE,
-    SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME,
-    CSRF_SECRET: process.env.CSRF_SECRET,
-    RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX,
-    RATE_LIMIT_WINDOW: process.env.RATE_LIMIT_WINDOW,
+    // Authentication (runtime secrets)
+    BETTER_AUTH_SECRET: runtimeEnv.BETTER_AUTH_SECRET,
+    BETTER_AUTH_URL: runtimeEnv.BETTER_AUTH_URL,
+    SESSION_MAX_AGE: runtimeEnv.SESSION_MAX_AGE,
+    SESSION_COOKIE_NAME: runtimeEnv.SESSION_COOKIE_NAME,
+    CSRF_SECRET: runtimeEnv.CSRF_SECRET,
+    RATE_LIMIT_MAX: runtimeEnv.RATE_LIMIT_MAX,
+    RATE_LIMIT_WINDOW: runtimeEnv.RATE_LIMIT_WINDOW,
 
-    // Email
-    EMAIL_PROVIDER: process.env.EMAIL_PROVIDER,
-    RESEND_API_KEY: process.env.RESEND_API_KEY,
-    RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
-    SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
-    SENDGRID_FROM_EMAIL: process.env.SENDGRID_FROM_EMAIL,
-    SMTP_HOST: process.env.SMTP_HOST,
-    SMTP_PORT: process.env.SMTP_PORT,
-    SMTP_USER: process.env.SMTP_USER,
-    SMTP_PASS: process.env.SMTP_PASS,
-    SMTP_SECURE: process.env.SMTP_SECURE !== 'false',
-    EMAIL_ENABLED: process.env.EMAIL_ENABLED !== 'false',
-    EMAIL_QUEUE_ENABLED: process.env.EMAIL_QUEUE_ENABLED === 'true',
+    // Email (runtime secrets)
+    EMAIL_PROVIDER: runtimeEnv.EMAIL_PROVIDER,
+    RESEND_API_KEY: runtimeEnv.RESEND_API_KEY,
+    RESEND_FROM_EMAIL: runtimeEnv.RESEND_FROM_EMAIL,
+    SENDGRID_API_KEY: runtimeEnv.SENDGRID_API_KEY,
+    SENDGRID_FROM_EMAIL: runtimeEnv.SENDGRID_FROM_EMAIL,
+    SMTP_HOST: runtimeEnv.SMTP_HOST,
+    SMTP_PORT: runtimeEnv.SMTP_PORT,
+    SMTP_USER: runtimeEnv.SMTP_USER,
+    SMTP_PASS: runtimeEnv.SMTP_PASS,
+    SMTP_SECURE: runtimeEnv.SMTP_SECURE !== 'false',
+    EMAIL_ENABLED: runtimeEnv.EMAIL_ENABLED !== 'false',
+    EMAIL_QUEUE_ENABLED: runtimeEnv.EMAIL_QUEUE_ENABLED === 'true',
 
-    // Storage
-    R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
-    R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
-    R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
-    R2_BUCKET_NAME: process.env.R2_BUCKET_NAME,
+    // Storage (runtime secrets + NEXT_PUBLIC_*)
+    R2_ACCOUNT_ID: runtimeEnv.R2_ACCOUNT_ID,
+    R2_ACCESS_KEY_ID: runtimeEnv.R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY: runtimeEnv.R2_SECRET_ACCESS_KEY,
+    R2_BUCKET_NAME: runtimeEnv.R2_BUCKET_NAME,
     R2_PUBLIC_URL: process.env.NEXT_PUBLIC_R2_PUBLIC_URL,
-    MAX_FILE_SIZE: process.env.MAX_FILE_SIZE,
-    MAX_IMAGE_SIZE: process.env.MAX_IMAGE_SIZE,
-    ALLOWED_FILE_TYPES: process.env.ALLOWED_FILE_TYPES,
-    USER_STORAGE_QUOTA: process.env.USER_STORAGE_QUOTA,
+    MAX_FILE_SIZE: runtimeEnv.MAX_FILE_SIZE,
+    MAX_IMAGE_SIZE: runtimeEnv.MAX_IMAGE_SIZE,
+    ALLOWED_FILE_TYPES: runtimeEnv.ALLOWED_FILE_TYPES,
+    USER_STORAGE_QUOTA: runtimeEnv.USER_STORAGE_QUOTA,
 
-    // Monitoring
-    LOG_LEVEL: process.env.LOG_LEVEL,
-    LOG_FORMAT: process.env.LOG_FORMAT,
-    LOG_SENSITIVE_DATA: process.env.LOG_SENSITIVE_DATA === 'true',
-    ANALYTICS_ENABLED: process.env.ANALYTICS_ENABLED !== 'false',
-    GOOGLE_ANALYTICS_ID: process.env.GOOGLE_ANALYTICS_ID,
-    SENTRY_DSN: process.env.SENTRY_DSN,
-    SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT,
-    SENTRY_TRACES_SAMPLE_RATE: process.env.SENTRY_TRACES_SAMPLE_RATE,
-    PERFORMANCE_MONITORING: process.env.PERFORMANCE_MONITORING === 'true',
-    METRICS_ENDPOINT: process.env.METRICS_ENDPOINT,
+    // Monitoring (runtime secrets + NEXT_PUBLIC_*)
+    LOG_LEVEL: runtimeEnv.LOG_LEVEL,
+    LOG_FORMAT: runtimeEnv.LOG_FORMAT,
+    LOG_SENSITIVE_DATA: runtimeEnv.LOG_SENSITIVE_DATA === 'true',
+    ANALYTICS_ENABLED: runtimeEnv.ANALYTICS_ENABLED !== 'false',
+    GOOGLE_ANALYTICS_ID: runtimeEnv.GOOGLE_ANALYTICS_ID,
+    SENTRY_DSN: runtimeEnv.SENTRY_DSN,
+    SENTRY_ENVIRONMENT: runtimeEnv.SENTRY_ENVIRONMENT,
+    SENTRY_TRACES_SAMPLE_RATE: runtimeEnv.SENTRY_TRACES_SAMPLE_RATE,
+    PERFORMANCE_MONITORING: runtimeEnv.PERFORMANCE_MONITORING === 'true',
+    METRICS_ENDPOINT: runtimeEnv.METRICS_ENDPOINT,
 
-    // Development
-    ENABLE_QUERY_LOGGING: process.env.ENABLE_QUERY_LOGGING === 'true',
-    ENABLE_DEBUG_MODE: process.env.ENABLE_DEBUG_MODE === 'true',
-    // Production ready only - mock functionality disabled
-    STORYBOOK_ENABLED: process.env.STORYBOOK_ENABLED === 'true',
-    DEVTOOLS_ENABLED: process.env.DEVTOOLS_ENABLED === 'true',
-    FAST_REFRESH: process.env.FAST_REFRESH !== 'false',
-    TURBO_MODE: process.env.TURBO_MODE !== 'false',
+    // Development (runtime config)
+    ENABLE_QUERY_LOGGING: runtimeEnv.ENABLE_QUERY_LOGGING === 'true',
+    ENABLE_DEBUG_MODE: runtimeEnv.ENABLE_DEBUG_MODE === 'true',
+    STORYBOOK_ENABLED: runtimeEnv.STORYBOOK_ENABLED === 'true',
+    DEVTOOLS_ENABLED: runtimeEnv.DEVTOOLS_ENABLED === 'true',
+    FAST_REFRESH: runtimeEnv.FAST_REFRESH !== 'false',
+    TURBO_MODE: runtimeEnv.TURBO_MODE !== 'false',
   };
 
   const result = completeConfigurationSchema.safeParse(env);
 
   if (!result.success) {
-    console.warn('Invalid environment configuration:');
-    result.error.issues.forEach((error) => {
-      console.error(`  ${error.path.join('.')}: ${error.message}`);
-    });
     throw new Error('Invalid environment configuration');
   }
 
@@ -300,17 +289,13 @@ function parseEnvironment() {
  */
 export const APP_CONFIG = {
   // Application metadata
-  NAME: 'Roundtable Dashboard',
+  NAME: 'Roundtable',
   VERSION: '1.0.0',
-  DESCRIPTION: 'AI collaboration platform where multiple minds meet',
+  DESCRIPTION: 'Chat with multiple AI models at once',
 
   // API configuration
   API_BASE_PATH: '/api',
   API_VERSION: 'v1',
-
-  // Pagination defaults
-  DEFAULT_PAGE_SIZE: 20,
-  MAX_PAGE_SIZE: 100,
 
   // File upload limits
   DEFAULT_FILE_SIZE_LIMIT: 10 * 1024 * 1024, // 10MB
@@ -341,8 +326,53 @@ export const FEATURE_FLAGS = {
 
   // Development features
   ENABLE_DEBUG_LOGS: false,
-  // All mock functionality removed for production readiness
   ENABLE_PERFORMANCE_MONITORING: false,
+} as const;
+
+/**
+ * SSE Streaming configuration
+ *
+ * ✅ RESOURCE LIMITS (wrangler.jsonc):
+ * - CPU time: 30,000ms (30s) - actual compute time
+ * - Memory: 128MB - fixed, optimized via O(1) chunk storage
+ *
+ * Timeout protection prevents orphaned streaming records when:
+ * - User navigates away during stream
+ * - Network connection drops
+ * - Browser closes/refreshes during stream
+ *
+ * After timeout, STREAMING records are marked as FAILED to allow new streams
+ *
+ * @see AI_TIMEOUT_CONFIG in product-logic.service.ts for AI provider timeouts
+ * @see stream-buffer.service.ts for O(1) memory-optimized chunk storage
+ */
+export const STREAMING_CONFIG = {
+  /**
+   * Stream timeout in milliseconds (20 seconds)
+   * Applied to: moderator analysis, pre-search execution
+   *
+   * Rationale: SSE connections can get interrupted without backend knowing
+   * After 20s, assume connection lost and mark as failed for recovery
+   */
+  STREAM_TIMEOUT_MS: 20_000,
+
+  /**
+   * Orphan cleanup timeout in milliseconds (2 minutes)
+   * Applied to: cleanup operations in list endpoints
+   *
+   * Rationale: Grace period for legitimate long-running operations
+   * Used by getThreadAnalysesHandler, getThreadPreSearchesHandler
+   */
+  ORPHAN_CLEANUP_TIMEOUT_MS: 2 * 60 * 1000,
+
+  /**
+   * Stale chunk timeout in milliseconds (30 seconds)
+   * Applied to: stream resumption handlers
+   *
+   * Rationale: If no chunks received for 30s, consider stream stale
+   * Matches Cloudflare CPU limit for consistent behavior
+   */
+  STALE_CHUNK_TIMEOUT_MS: 30_000,
 } as const;
 
 // ============================================================================
@@ -353,13 +383,30 @@ export const FEATURE_FLAGS = {
  * Parsed and validated configuration
  */
 let config: z.infer<typeof completeConfigurationSchema> | null = null;
+let configPromise: Promise<z.infer<typeof completeConfigurationSchema>> | null = null;
 
 /**
- * Get the application configuration (lazy initialization)
+ * Get the application configuration (lazy async initialization)
+ * Use this in async contexts (e.g., Hono handlers)
  */
-export function getConfig(): z.infer<typeof completeConfigurationSchema> {
+export async function getConfig(): Promise<z.infer<typeof completeConfigurationSchema>> {
   if (!config) {
-    config = parseEnvironment();
+    if (!configPromise) {
+      configPromise = parseEnvironment();
+    }
+    config = await configPromise;
+  }
+  return config;
+}
+
+/**
+ * Get the application configuration synchronously (for non-async contexts)
+ * WARNING: Only use this after getConfig() has been called at least once
+ * Use getConfig() in async contexts instead
+ */
+export function getConfigSync(): z.infer<typeof completeConfigurationSchema> {
+  if (!config) {
+    throw new Error('Configuration not initialized. Call getConfig() first in async context.');
   }
   return config;
 }
@@ -367,38 +414,135 @@ export function getConfig(): z.infer<typeof completeConfigurationSchema> {
 /**
  * Get a specific configuration value with type safety
  */
-export function getConfigValue<K extends keyof z.infer<typeof completeConfigurationSchema>>(
+export async function getConfigValue<K extends keyof z.infer<typeof completeConfigurationSchema>>(
+  key: K,
+): Promise<z.infer<typeof completeConfigurationSchema>[K]> {
+  const cfg = await getConfig();
+  return cfg[key];
+}
+
+/**
+ * Get a specific configuration value synchronously
+ * WARNING: Only use after getConfig() has been called
+ */
+export function getConfigValueSync<K extends keyof z.infer<typeof completeConfigurationSchema>>(
   key: K,
 ): z.infer<typeof completeConfigurationSchema>[K] {
-  return getConfig()[key];
+  return getConfigSync()[key];
 }
 
 /**
  * Check if we're in development environment
  */
-export function isDevelopment(): boolean {
-  return getConfigValue('NODE_ENV') === 'development';
+export async function isDevelopment(): Promise<boolean> {
+  return (await getConfigValue('NODE_ENV')) === 'development';
 }
 
 /**
  * Check if we're in production environment
  */
-export function isProduction(): boolean {
-  return getConfigValue('NODE_ENV') === 'production';
+export async function isProduction(): Promise<boolean> {
+  return (await getConfigValue('NODE_ENV')) === 'production';
 }
 
 /**
  * Check if we're in preview environment
  */
-export function isPreview(): boolean {
-  return getConfigValue('NEXT_PUBLIC_WEBAPP_ENV') === 'preview';
+export async function isPreview(): Promise<boolean> {
+  return (await getConfigValue('NEXT_PUBLIC_WEBAPP_ENV')) === 'preview';
 }
 
 /**
  * Get the current environment
  */
-export function getEnvironment(): 'development' | 'preview' | 'production' | 'test' | 'local' {
-  return getConfigValue('NEXT_PUBLIC_WEBAPP_ENV');
+export async function getEnvironment() {
+  return await getConfigValue('NEXT_PUBLIC_WEBAPP_ENV');
+}
+
+/**
+ * Check if we're in a non-production environment (local or preview)
+ */
+export async function isNonProduction(): Promise<boolean> {
+  const env = await getEnvironment();
+  return env === 'development' || env === 'local' || env === 'preview';
+}
+
+// ============================================================================
+// LOGGING CONFIGURATION
+// ============================================================================
+
+/**
+ * Logging configuration entry type
+ * Ensures type-safe configuration across all environments
+ */
+type LoggingConfigEntry = {
+  enabled: boolean;
+  levels: readonly LogLevel[];
+  prettyPrint: boolean;
+  includeStack: boolean;
+};
+
+/**
+ * Logging configuration by environment
+ * Automatically adjusts verbosity based on deployment environment
+ */
+export const LOGGING_CONFIG: Record<z.infer<typeof EnvironmentSchema>, LoggingConfigEntry> = {
+  local: {
+    enabled: true,
+    levels: [...LOG_LEVELS],
+    prettyPrint: true,
+    includeStack: true,
+  },
+  development: {
+    enabled: true,
+    levels: [...LOG_LEVELS],
+    prettyPrint: true,
+    includeStack: true,
+  },
+  preview: {
+    enabled: true,
+    levels: [LogLevels.INFO, LogLevels.WARN, LogLevels.ERROR],
+    prettyPrint: false,
+    includeStack: true,
+  },
+  production: {
+    enabled: true,
+    levels: [LogLevels.ERROR],
+    prettyPrint: false,
+    includeStack: false,
+  },
+  test: {
+    enabled: false,
+    levels: [],
+    prettyPrint: false,
+    includeStack: false,
+  },
+};
+
+/**
+ * Get current logging configuration based on environment
+ */
+export async function getLoggingConfig() {
+  const env = await getEnvironment();
+  return LOGGING_CONFIG[env];
+}
+
+/**
+ * Get current logging configuration synchronously
+ * WARNING: Only use after getConfig() has been called
+ */
+export function getLoggingConfigSync() {
+  const env = getConfigValueSync('NEXT_PUBLIC_WEBAPP_ENV');
+  return LOGGING_CONFIG[env];
+}
+
+/**
+ * Check if a specific log level should be logged in current environment
+ * Returns true if the log should be output, false otherwise
+ */
+export async function shouldLog(level: LogLevel): Promise<boolean> {
+  const config = await getLoggingConfig();
+  return config.enabled && config.levels.includes(level);
 }
 
 // ============================================================================
@@ -408,12 +552,10 @@ export function getEnvironment(): 'development' | 'preview' | 'production' | 'te
 /**
  * Validate configuration on startup
  */
-export function validateConfiguration(): void {
+export async function validateConfiguration(): Promise<void> {
   try {
-    const cfg = getConfig();
-    console.warn(`Configuration validated successfully for ${cfg.NODE_ENV} environment`);
-  } catch (error) {
-    console.error('Configuration validation failed:', error);
+    await getConfig();
+  } catch {
     process.exit(1);
   }
 }
@@ -421,8 +563,8 @@ export function validateConfiguration(): void {
 /**
  * Get database configuration
  */
-export function getDatabaseConfig() {
-  const cfg = getConfig();
+export async function getDatabaseConfig() {
+  const cfg = await getConfig();
   return {
     authToken: cfg.DATABASE_AUTH_TOKEN,
     localPath: cfg.LOCAL_DATABASE_PATH,
@@ -436,8 +578,8 @@ export function getDatabaseConfig() {
 /**
  * Get authentication configuration
  */
-export function getAuthConfig() {
-  const cfg = getConfig();
+export async function getAuthConfig() {
+  const cfg = await getConfig();
   return {
     betterAuthSecret: cfg.BETTER_AUTH_SECRET,
     betterAuthUrl: cfg.BETTER_AUTH_URL,
@@ -452,8 +594,8 @@ export function getAuthConfig() {
 /**
  * Get email configuration
  */
-export function getEmailConfig() {
-  const cfg = getConfig();
+export async function getEmailConfig() {
+  const cfg = await getConfig();
   return {
     provider: cfg.EMAIL_PROVIDER,
     enabled: cfg.EMAIL_ENABLED,
@@ -479,8 +621,8 @@ export function getEmailConfig() {
 /**
  * Get storage configuration
  */
-export function getStorageConfig() {
-  const cfg = getConfig();
+export async function getStorageConfig() {
+  const cfg = await getConfig();
   return {
     r2: {
       accountId: cfg.R2_ACCOUNT_ID,

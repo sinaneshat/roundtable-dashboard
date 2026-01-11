@@ -1,10 +1,13 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
+import { HealthStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
+import { STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
 
-import type { detailedHealthRoute, healthRoute } from './route';
+import type { clearCacheRoute, detailedHealthRoute, healthRoute } from './route';
+import type { HealthCheckContext } from './schema';
 
 /**
  * Basic health check handler
@@ -16,24 +19,7 @@ export const healthHandler: RouteHandler<typeof healthRoute, ApiEnv> = createHan
     operationName: 'healthCheck',
   },
   async (c) => {
-    c.logger.info('Basic health check requested', {
-      logType: 'operation',
-      operationName: 'healthCheck',
-    });
-
-    const payload = {
-      ok: true,
-      status: 'healthy' as const,
-      timestamp: new Date().toISOString(),
-    };
-
-    c.logger.info('Basic health check completed successfully', {
-      logType: 'operation',
-      operationName: 'healthCheck',
-      resource: 'healthy',
-    });
-
-    return Responses.ok(c, payload);
+    return Responses.health(c, HealthStatuses.HEALTHY);
   },
 );
 
@@ -47,78 +33,37 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
     operationName: 'detailedHealthCheck',
   },
   async (c) => {
-    c.logger.info('Starting detailed health check', {
-      logType: 'operation',
-      operationName: 'detailedHealthCheck',
-    });
-
     const startTime = Date.now();
 
     // Check database connectivity
-    const dbCheck = await checkDatabase(c);
+    const dbCheck = await checkDatabase({ env: c.env });
 
     // Check environment configuration
-    const envCheck = checkEnvironment(c);
+    const envCheck = checkEnvironment({ env: c.env });
 
-    // Calculate overall status
+    // Build dependencies object
     const dependencies = {
       database: dbCheck,
       environment: envCheck,
     };
 
-    const healthCounts = Object.values(dependencies).reduce(
-      (acc, check) => {
-        acc.total++;
-        if (check.status === 'healthy')
-          acc.healthy++;
-        else if (check.status === 'degraded')
-          acc.degraded++;
-        else acc.unhealthy++;
-        return acc;
-      },
-      { total: 0, healthy: 0, degraded: 0, unhealthy: 0 },
-    );
-
-    const overallStatus = healthCounts.unhealthy > 0
-      ? 'unhealthy'
-      : healthCounts.degraded > 0 ? 'degraded' : 'healthy';
+    // Calculate overall status based on dependency health
+    const overallStatus = Object.values(dependencies).some(dep => dep.status === HealthStatuses.UNHEALTHY)
+      ? HealthStatuses.UNHEALTHY
+      : Object.values(dependencies).some(dep => dep.status === HealthStatuses.DEGRADED)
+        ? HealthStatuses.DEGRADED
+        : HealthStatuses.HEALTHY;
 
     const duration = Date.now() - startTime;
 
-    const payload = {
-      ok: overallStatus === 'healthy',
-      status: overallStatus,
-      timestamp: new Date().toISOString(),
-      duration,
-      env: {
-        runtime: 'cloudflare-workers',
-        version: globalThis.navigator?.userAgent || 'unknown',
-        nodeEnv: c.env.NODE_ENV || 'unknown',
-      },
-      dependencies,
-      summary: healthCounts,
-    };
-
-    c.logger.info('Detailed health check completed', {
-      logType: 'operation',
-      operationName: 'detailedHealthCheck',
-      resource: `status-${overallStatus}`,
-      duration,
-    });
-
-    // For health endpoints, we need to return proper HTTP status codes
-    if (overallStatus === 'healthy') {
-      return Responses.ok(c, payload);
-    } else {
-      return Responses.serviceUnavailable(c, 'System is unhealthy', payload);
-    }
+    return Responses.detailedHealth(c, overallStatus, dependencies, duration);
   },
 );
 
 /**
  * Check database connectivity
  */
-async function checkDatabase(_c: { env: ApiEnv['Bindings'] }) {
+async function checkDatabase(_c: HealthCheckContext) {
   const startTime = Date.now();
 
   try {
@@ -127,13 +72,13 @@ async function checkDatabase(_c: { env: ApiEnv['Bindings'] }) {
     await db.run('SELECT 1');
 
     return {
-      status: 'healthy' as const,
+      status: HealthStatuses.HEALTHY,
       message: 'Database is responsive',
       duration: Date.now() - startTime,
     };
   } catch (error) {
     return {
-      status: 'unhealthy' as const,
+      status: HealthStatuses.UNHEALTHY,
       message: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       duration: Date.now() - startTime,
     };
@@ -143,7 +88,7 @@ async function checkDatabase(_c: { env: ApiEnv['Bindings'] }) {
 /**
  * Check environment configuration
  */
-function checkEnvironment(c: { env: ApiEnv['Bindings'] }) {
+function checkEnvironment(c: HealthCheckContext) {
   try {
     const missingVars: string[] = [];
 
@@ -155,20 +100,70 @@ function checkEnvironment(c: { env: ApiEnv['Bindings'] }) {
 
     if (missingVars.length > 0) {
       return {
-        status: 'degraded' as const,
+        status: HealthStatuses.DEGRADED,
         message: `Missing environment variables: ${missingVars.join(', ')}`,
-        details: { missingVars },
+        details: { detailType: 'health_check', missingVars },
       };
     }
 
     return {
-      status: 'healthy' as const,
+      status: HealthStatuses.HEALTHY,
       message: 'All required environment variables are present',
     };
   } catch (error) {
     return {
-      status: 'unhealthy' as const,
+      status: HealthStatuses.UNHEALTHY,
       message: `Environment check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
 }
+
+/**
+ * Clear all backend caches handler
+ * Invalidates all known cache tags to force fresh data
+ */
+export const clearCacheHandler: RouteHandler<typeof clearCacheRoute, ApiEnv> = createHandler(
+  {
+    auth: 'public',
+    operationName: 'clearCache',
+  },
+  async (c) => {
+    try {
+      const db = await getDbAsync();
+
+      // List of all cache tags that will be cleared
+      const clearedTags: string[] = [];
+
+      // Invalidate all static cache tags
+      if (db.$cache) {
+        // Build list of all known static tags
+        const staticTags = [
+          STATIC_CACHE_TAGS.ACTIVE_PRODUCTS,
+          STATIC_CACHE_TAGS.ACTIVE_PRICES,
+        ];
+
+        await db.$cache.invalidate({
+          tags: staticTags,
+        });
+
+        clearedTags.push(...staticTags);
+        clearedTags.push('all-static-caches-invalidated');
+      } else {
+        // Intentionally empty
+        clearedTags.push('no-cache-configured');
+      }
+
+      return Responses.ok(c, {
+        ok: true,
+        message: 'All backend caches cleared successfully. Note: User-specific caches will be cleared on next mutation.',
+        timestamp: new Date().toISOString(),
+        clearedTags,
+      });
+    } catch (error) {
+      return Responses.internalServerError(
+        c,
+        `Failed to clear caches: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  },
+);

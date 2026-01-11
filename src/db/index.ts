@@ -1,3 +1,5 @@
+import 'server-only';
+
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -7,7 +9,26 @@ import { drizzle as drizzleBetter } from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzleD1 } from 'drizzle-orm/d1';
 import { cache } from 'react';
 
-import * as schema from './schema';
+import { CloudflareKVCache } from './cache/cloudflare-kv-cache';
+// Import all tables directly (single source of truth)
+import * as auth from './tables/auth';
+import * as billing from './tables/billing';
+import * as chat from './tables/chat';
+import * as credits from './tables/credits';
+import * as project from './tables/project';
+import * as upload from './tables/upload';
+import * as usage from './tables/usage';
+
+// Combine all schemas for Drizzle
+const schema = {
+  ...auth,
+  ...billing,
+  ...chat,
+  ...credits,
+  ...project,
+  ...upload,
+  ...usage,
+};
 
 // Database configuration
 const LOCAL_DB_DIR = '.wrangler/state/v3/d1/miniflare-D1DatabaseObject';
@@ -82,9 +103,26 @@ function getD1Binding(): D1Database | null {
 }
 
 /**
+ * Get KV namespace binding for caching
+ */
+function getKVBinding(): KVNamespace | null {
+  try {
+    const { env } = getCloudflareContext();
+    return env.KV || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Create database instance following official OpenNext.js patterns
  * Uses React cache for optimal performance in server components
  * CRITICAL FIX: Added error handling for ExecutionContext availability
+ *
+ * ✅ CACHING: Automatically enabled for D1 in production/preview using Cloudflare KV
+ * - Opt-in caching strategy (use .$withCache() on queries)
+ * - Automatic cache invalidation on mutations
+ * - 5-minute default TTL
  *
  * ⚠️ CLOUDFLARE D1 NOTE: Use batch operations, not transactions.
  * For Cloudflare D1 environments, db.transaction() should NOT be used.
@@ -92,18 +130,29 @@ function getD1Binding(): D1Database | null {
  *
  * @see {@link D1BatchDatabase} for batch operation documentation
  * @see docs/backend-patterns.md#batch-operations for usage examples
+ * @see src/db/cache/cloudflare-kv-cache.ts for cache implementation
  */
 export const getDb = cache(() => {
   try {
     const { env } = getCloudflareContext();
-    return drizzleD1(env.DB, { schema });
-  } catch (error) {
+
+    // Initialize KV cache for D1 (production/preview only)
+    const kvCache = env.KV
+      ? new CloudflareKVCache({
+          kv: env.KV,
+          global: false, // Opt-in caching (use .$withCache())
+          defaultTtl: 300, // 5 minutes
+        })
+      : undefined;
+
+    return drizzleD1(env.DB, {
+      schema,
+      cache: kvCache,
+    });
+  } catch {
     // CRITICAL FIX: Fallback to createDbInstance if ExecutionContext not available
     // This handles the "This context has no ExecutionContext" production error
-    console.warn('[DB] ExecutionContext not available, using fallback database instance', {
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString(),
-    });
+
     return createDbInstance();
   }
 });
@@ -112,27 +161,61 @@ export const getDb = cache(() => {
  * Async version for static routes (ISR/SSG) following OpenNext.js patterns
  * CRITICAL FIX: Added error handling for ExecutionContext availability
  *
+ * ✅ CACHING: Automatically enabled for D1 in production/preview using Cloudflare KV
+ * - Opt-in caching strategy (use .$withCache() on queries)
+ * - Automatic cache invalidation on mutations
+ * - 5-minute default TTL
+ *
  * ⚠️ CLOUDFLARE D1 NOTE: Use batch operations, not transactions.
  * For Cloudflare D1 environments, db.transaction() should NOT be used.
  * Use db.batch() for atomic operations.
  *
  * @see {@link D1BatchDatabase} for batch operation documentation
  * @see docs/backend-patterns.md#batch-operations for usage examples
+ * @see src/db/cache/cloudflare-kv-cache.ts for cache implementation
  */
 export const getDbAsync = cache(async () => {
   try {
     const { env } = await getCloudflareContext({ async: true });
-    return drizzleD1(env.DB, { schema });
-  } catch (error) {
+
+    // Initialize KV cache for D1 (production/preview only)
+    const kvCache = env.KV
+      ? new CloudflareKVCache({
+          kv: env.KV,
+          global: false, // Opt-in caching (use .$withCache())
+          defaultTtl: 300, // 5 minutes
+        })
+      : undefined;
+
+    return drizzleD1(env.DB, {
+      schema,
+      cache: kvCache,
+    });
+  } catch {
     // CRITICAL FIX: Fallback to createDbInstance if ExecutionContext not available
     // This handles the "This context has no ExecutionContext" production error
-    console.warn('[DB] ExecutionContext not available (async), using fallback database instance', {
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString(),
-    });
+
     return createDbInstance();
   }
 });
+
+/**
+ * Detect if running in Cloudflare Workers environment (not Node.js)
+ * Workers don't have Node.js fs/path modules available
+ */
+function isCloudflareWorkersRuntime(): boolean {
+  // Check for Cloudflare Workers runtime indicators
+  // In Workers, globalThis.navigator.userAgent includes 'Cloudflare-Workers'
+  if (typeof navigator !== 'undefined' && navigator.userAgent?.includes('Cloudflare-Workers')) {
+    return true;
+  }
+  // Check if running via opennextjs-cloudflare (preview or production)
+  // The presence of caches global is a Workers indicator
+  if (typeof caches !== 'undefined' && typeof (caches as unknown as { default?: unknown }).default !== 'undefined') {
+    return true;
+  }
+  return false;
+}
 
 /**
  * Create database instance for the global db Proxy
@@ -144,9 +227,38 @@ export const getDbAsync = cache(async () => {
  * 1. Next.js development (npm run dev) → Local SQLite with transactions
  * 2. NEXT_PUBLIC_WEBAPP_ENV=local → Local SQLite with transactions
  * 3. Cloudflare Workers (production/preview) → D1 with batch operations
- * 4. Fallback → Local SQLite
+ * 4. Fallback → Local SQLite (only in Node.js, NOT in Workers)
  */
 function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | ReturnType<typeof drizzleBetter<typeof schema>> {
+  // In Cloudflare Workers, we MUST use D1 - no fallback to local SQLite
+  // because fs module is not available in Workers runtime
+  if (isCloudflareWorkersRuntime()) {
+    const d1Database = getD1Binding();
+    if (d1Database) {
+      const kvBinding = getKVBinding();
+      const kvCache = kvBinding
+        ? new CloudflareKVCache({
+            kv: kvBinding,
+            global: false,
+            defaultTtl: 300,
+          })
+        : undefined;
+
+      return drizzleD1(d1Database, {
+        schema,
+        logger: false, // Disable logging in Workers
+        cache: kvCache,
+      });
+    }
+
+    // In Workers without D1, throw error - cannot fallback to local SQLite
+    throw new Error(
+      'D1 database binding not available in Cloudflare Workers. '
+      + 'Ensure DB binding is configured in wrangler.jsonc',
+    );
+  }
+
+  // Node.js environment (local development)
   // Check if running in Next.js development mode (npm run dev)
   const isNextDev = process.env.NODE_ENV === 'development' && !process.env.CLOUDFLARE_ENV;
   // Check if explicitly set to local environment
@@ -160,13 +272,24 @@ function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | Retur
   // Try to get D1 binding for Cloudflare Workers environment (production/preview)
   const d1Database = getD1Binding();
   if (d1Database) {
+    // Initialize KV cache for D1 if available
+    const kvBinding = getKVBinding();
+    const kvCache = kvBinding
+      ? new CloudflareKVCache({
+          kv: kvBinding,
+          global: false,
+          defaultTtl: 300,
+        })
+      : undefined;
+
     return drizzleD1(d1Database, {
       schema,
       logger: process.env.NODE_ENV !== 'production',
+      cache: kvCache,
     });
   }
 
-  // Final fallback to local SQLite if D1 not available
+  // Final fallback to local SQLite if D1 not available (only in Node.js)
   return initLocalDb();
 }
 
@@ -183,9 +306,9 @@ function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | Retur
  * - Prevents connection reuse while satisfying Better Auth's API requirements
  *
  * OpenNext.js Compliance:
- * - ✅ No connection reuse (new instance per access)
- * - ✅ Works with Cloudflare Workers execution model
- * - ⚠️ Workaround for Better Auth's initialization constraints
+ * - No connection reuse (new instance per access)
+ * - Works with Cloudflare Workers execution model
+ * - Addresses Better Auth's module-load-time initialization constraints
  *
  * For all other use cases, use:
  * - getDb() for dynamic routes and server components
@@ -216,3 +339,11 @@ export { schema };
 
 // Export batch-related types for TypeScript enforcement
 export type { BatchableOperation, BatchResults, D1BatchDatabase } from './d1-types';
+// Re-export all table definitions (barrel pattern)
+export * from './tables/auth';
+export * from './tables/billing';
+export * from './tables/chat';
+export * from './tables/credits';
+export * from './tables/project';
+export * from './tables/upload';
+export * from './tables/usage';

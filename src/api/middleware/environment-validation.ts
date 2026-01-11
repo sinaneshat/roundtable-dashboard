@@ -11,8 +11,21 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/api/common/error-handling';
 import { validateEnvironmentVariables } from '@/api/common/fetch-utilities';
-import { apiLogger } from '@/api/middleware/hono-logger';
-import type { SafeEnvironmentSummary } from '@/api/types/http';
+import type { DatabaseConnectionStatus, HealthStatus, OAuthStatus } from '@/api/core/enums';
+import { DatabaseConnectionStatuses, HealthStatuses, OAuthStatuses } from '@/api/core/enums';
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+export type SafeEnvironmentSummary = {
+  NODE_ENV: string;
+  LOG_LEVEL: string;
+  ENVIRONMENT_VERIFIED: boolean;
+  DATABASE_CONNECTION_STATUS: DatabaseConnectionStatus;
+  OAUTH_STATUS: OAuthStatus;
+  TIMESTAMP: string;
+};
 
 // ============================================================================
 // ENVIRONMENT VARIABLE DEFINITIONS
@@ -171,10 +184,11 @@ export function validateEnvironmentConfiguration(env: CloudflareEnv): {
   }
 
   // Validate boolean environment variables
-  const booleanVars = ['OPEN_NEXT_DEBUG', 'NEXT_PUBLIC_MAINTENANCE'];
+  const booleanVars = ['OPEN_NEXT_DEBUG', 'NEXT_PUBLIC_MAINTENANCE'] as const;
 
   for (const varName of booleanVars) {
-    if (env[varName as keyof CloudflareEnv] && !['true', 'false'].includes(env[varName as keyof CloudflareEnv] as string)) {
+    const value = env[varName];
+    if (value !== undefined && typeof value === 'string' && !['true', 'false'].includes(value)) {
       warnings.push(`${varName} should be 'true' or 'false'`);
     }
   }
@@ -183,6 +197,7 @@ export function validateEnvironmentConfiguration(env: CloudflareEnv): {
   if (!env.DB) {
     errors.push('Missing required Cloudflare D1 database binding (DB) - Better Auth requires database access');
   } else {
+    // Intentionally empty
     // Validate D1 database binding has required methods for Better Auth transactions
     try {
       if (typeof env.DB.prepare !== 'function') {
@@ -229,30 +244,21 @@ export function createEnvironmentValidationMiddleware() {
       const { getCloudflareContext } = await import('@opennextjs/cloudflare');
       const context = getCloudflareContext();
       env = context.env;
-    } catch (error) {
-      // Fallback when Cloudflare context is not available
-      console.warn('[ENV-VALIDATION] Cloudflare context not available, skipping environment validation', {
-        error: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-      });
+    } catch {
+      // Fallback when Cloudflare context is not available - skip validation
       return next();
     }
 
     // Skip validation in test environment
-    if (process.env.NODE_ENV === 'test') {
+    // NODE_ENV is inlined at build time, so process.env is acceptable here
+    if (env.NODE_ENV === 'test' || process.env.NODE_ENV === 'test') {
       return next();
     }
 
     const validation = validateEnvironmentConfiguration(env);
 
-    // Log validation results
+    // Validate results
     if (!validation.isValid) {
-      apiLogger.error('Environment validation failed', {
-        errors: validation.errors,
-        missingCritical: validation.missingCritical,
-        component: 'environment-validation',
-      });
-
       // In production, fail fast on critical errors
       if (env.NODE_ENV === 'production' && validation.missingCritical.length > 0) {
         throw new HTTPException(HttpStatusCodes.INTERNAL_SERVER_ERROR, {
@@ -271,24 +277,6 @@ export function createEnvironmentValidationMiddleware() {
       }
     }
 
-    // Log warnings even if validation passes
-    if (validation.warnings.length > 0) {
-      apiLogger.warn('Environment validation warnings', {
-        warnings: validation.warnings,
-        missingOptional: validation.missingOptional,
-        component: 'environment-validation',
-      });
-    }
-
-    // Log successful validation in debug mode
-    if (validation.isValid) {
-      apiLogger.debug('Environment validation passed', {
-        warningCount: validation.warnings.length,
-        missingOptionalCount: validation.missingOptional.length,
-        component: 'environment-validation',
-      });
-    }
-
     return next();
   };
 }
@@ -300,37 +288,29 @@ export function createEnvironmentValidationMiddleware() {
 export function validateServiceEnvironment(
   env: CloudflareEnv,
   required: readonly (keyof CloudflareEnv)[],
-  serviceName: string,
+  _serviceName: string,
 ): void {
-  try {
-    // Use the original env parameter directly since validateEnvironmentVariables expects CloudflareEnv
-    validateEnvironmentVariables(env, [...required]);
-  } catch (error) {
-    apiLogger.error(`${serviceName} environment validation failed`, {
-      error: error instanceof Error ? error.message : String(error),
-      required,
-      component: 'service-environment-validation',
-    });
-    throw error;
-  }
+  // Use the original env parameter directly since validateEnvironmentVariables expects CloudflareEnv
+  validateEnvironmentVariables(env, [...required]);
 }
 
 /**
  * Health check function that returns environment validation status
  * Can be used by health check endpoints
+ * ✅ ENUM PATTERN: Uses HealthStatus type and HealthStatuses constants
  */
 export function getEnvironmentHealthStatus(env: CloudflareEnv): {
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: HealthStatus;
   validation: ReturnType<typeof validateEnvironmentConfiguration>;
 } {
   const validation = validateEnvironmentConfiguration(env);
 
-  let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+  let status: HealthStatus = HealthStatuses.HEALTHY;
 
   if (validation.errors.length > 0 || validation.missingCritical.length > 0) {
-    status = 'unhealthy';
+    status = HealthStatuses.UNHEALTHY;
   } else if (validation.warnings.length > 0 || validation.missingOptional.length > 3) {
-    status = 'degraded';
+    status = HealthStatuses.DEGRADED;
   }
 
   return { status, validation };
@@ -347,21 +327,20 @@ export function getEnvironmentHealthStatus(env: CloudflareEnv): {
  */
 export function createEnvironmentSummary(env: CloudflareEnv): SafeEnvironmentSummary {
   // Determine database connection status
-  let databaseStatus: 'connected' | 'disconnected' | 'pending' = 'pending';
+  let databaseStatus: DatabaseConnectionStatus = DatabaseConnectionStatuses.PENDING;
   if (env.DB) {
-    // D1 database binding is available
-    databaseStatus = 'connected';
+    databaseStatus = DatabaseConnectionStatuses.CONNECTED;
   } else {
-    databaseStatus = 'disconnected';
+    databaseStatus = DatabaseConnectionStatuses.DISCONNECTED;
   }
 
   // Determine OAuth status
-  let oauthStatus: 'configured' | 'missing' | 'invalid' = 'missing';
+  let oauthStatus: OAuthStatus = OAuthStatuses.MISSING;
   if (env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET) {
     // Basic validation - check if they look like real OAuth credentials
     const hasValidFormat = env.AUTH_GOOGLE_ID.includes('.apps.googleusercontent.com')
       && env.AUTH_GOOGLE_SECRET.startsWith('GOCSPX-');
-    oauthStatus = hasValidFormat ? 'configured' : 'invalid';
+    oauthStatus = hasValidFormat ? OAuthStatuses.CONFIGURED : OAuthStatuses.INVALID;
   }
 
   return {

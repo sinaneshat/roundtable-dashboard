@@ -1,7 +1,15 @@
+/**
+ * System Routes
+ *
+ * Health check and cache management endpoints for system monitoring
+ */
+
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { DetailedHealthResponseSchema, HealthResponseSchema } from './schema';
+import { createPublicRouteResponses } from '@/api/core';
+
+import { ClearCacheResponseSchema, DetailedHealthResponseSchema, HealthResponseSchema } from './schema';
 
 export const healthRoute = createRoute({
   method: 'get',
@@ -16,8 +24,7 @@ export const healthRoute = createRoute({
         'application/json': { schema: HealthResponseSchema },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...createPublicRouteResponses(),
   },
 });
 
@@ -40,7 +47,23 @@ export const detailedHealthRoute = createRoute({
         'application/json': { schema: DetailedHealthResponseSchema },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...createPublicRouteResponses(),
+  },
+});
+
+export const clearCacheRoute = createRoute({
+  method: 'get',
+  path: '/cache/clear',
+  tags: ['system'],
+  summary: 'Clear all backend caches',
+  description: 'Clears all backend API caches including KV cache and all cache tags',
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Cache cleared successfully',
+      content: {
+        'application/json': { schema: ClearCacheResponseSchema },
+      },
+    },
+    ...createPublicRouteResponses(),
   },
 });

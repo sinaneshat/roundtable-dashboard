@@ -1,38 +1,73 @@
-import { SendEmailCommand, SESClient } from '@aws-sdk/client-ses';
+import 'server-only';
+
+// IMPORTANT: Import render directly from @react-email/render, NOT from @react-email/components
+// The barrel export pulls in shiki (9.8MB) and prettier (256KB) which bloats the bundle
 import { render } from '@react-email/render';
+import { AwsClient } from 'aws4fetch';
 
 import { BRAND } from '@/constants';
+import { MagicLink } from '@/emails/templates';
 
-type EmailConfig = {
-  accessKeyId?: string;
-  secretAccessKey?: string;
-  region?: string;
-  fromEmail?: string;
-  replyToEmail?: string;
-};
+/**
+ * Get SES credentials using OpenNext.js pattern
+ * Priority: Cloudflare runtime → process.env fallback
+ */
+async function getSesCredentials(): Promise<{
+  accessKeyId: string | undefined;
+  secretAccessKey: string | undefined;
+  region: string;
+  fromEmail: string;
+  replyToEmail: string;
+}> {
+  // Try Cloudflare runtime context first with dynamic import
+  try {
+    const { getCloudflareContext } = await import('@opennextjs/cloudflare');
+    const { env } = getCloudflareContext();
+    return {
+      // AWS secrets from Cloudflare env (wrangler secrets)
+      accessKeyId: (env.AWS_SES_ACCESS_KEY_ID as string) || process.env.AWS_SES_ACCESS_KEY_ID,
+      secretAccessKey: (env.AWS_SES_SECRET_ACCESS_KEY as string) || process.env.AWS_SES_SECRET_ACCESS_KEY,
+      // NEXT_PUBLIC_* vars are build-time inlined, but also check runtime env for Workers
+      region: (env.NEXT_PUBLIC_AWS_SES_REGION as string) || process.env.NEXT_PUBLIC_AWS_SES_REGION || 'us-east-1',
+      fromEmail: (env.NEXT_PUBLIC_FROM_EMAIL as string) || process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@example.com',
+      replyToEmail: (env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL as string) || process.env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || 'noreply@example.com',
+    };
+  } catch {
+    // Fallback to process.env for local dev and build time
+    return {
+      accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY,
+      region: process.env.NEXT_PUBLIC_AWS_SES_REGION || 'us-east-1',
+      fromEmail: process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@example.com',
+      replyToEmail: process.env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || 'noreply@example.com',
+    };
+  }
+}
 
+/**
+ * Email Service using aws4fetch for Cloudflare Workers compatibility
+ *
+ * This service uses aws4fetch instead of @aws-sdk/client-ses because:
+ * - @aws-sdk/client-ses imports node:fs which is incompatible with Cloudflare Workers edge runtime
+ * - aws4fetch uses native Fetch API and SubtleCrypto, which work in edge environments
+ * - Reduces bundle size and improves cold start performance
+ *
+ * Uses OpenNext.js pattern: getCloudflareContext() with process.env fallback
+ * Credentials are resolved at method call time, not module load time
+ *
+ * @see https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html
+ */
 class EmailService {
-  private sesClient: SESClient | null = null;
-  private fromEmail: string;
-  private replyToEmail: string;
-
-  constructor(config?: EmailConfig) {
-    const accessKeyId = config?.accessKeyId || process.env.AWS_SES_ACCESS_KEY_ID;
-    const secretAccessKey = config?.secretAccessKey || process.env.AWS_SES_SECRET_ACCESS_KEY;
-    const region = config?.region || process.env.NEXT_PUBLIC_AWS_SES_REGION || 'us-east-1';
-
+  private async getAwsClient(): Promise<AwsClient | null> {
+    const { accessKeyId, secretAccessKey } = await getSesCredentials();
     if (accessKeyId && secretAccessKey) {
-      this.sesClient = new SESClient({
-        region,
-        credentials: {
-          accessKeyId,
-          secretAccessKey,
-        },
-      });
+      return new AwsClient({ accessKeyId, secretAccessKey });
     }
+    return null;
+  }
 
-    this.fromEmail = config?.fromEmail || process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@example.com';
-    this.replyToEmail = config?.replyToEmail || process.env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || this.fromEmail;
+  private async getConfig() {
+    return getSesCredentials();
   }
 
   private async sendEmail({
@@ -46,56 +81,97 @@ class EmailService {
     html: string;
     text?: string;
   }) {
-    if (!this.sesClient) {
-      // Email service not configured, skip silently
-      return;
+    // Get credentials at runtime (not module load)
+    const awsClient = await this.getAwsClient();
+    const config = await this.getConfig();
+
+    // Validate AWS client is configured
+    if (!awsClient) {
+      throw new Error(
+        'Email service not configured. Please provide AWS_SES_ACCESS_KEY_ID and AWS_SES_SECRET_ACCESS_KEY environment variables.',
+      );
     }
 
     const toAddresses = Array.isArray(to) ? to : [to];
 
-    const command = new SendEmailCommand({
-      Source: this.fromEmail,
+    // Construct SES v2 API request body
+    // @see https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html
+    const requestBody = {
+      Content: {
+        Simple: {
+          Subject: {
+            Data: subject,
+            Charset: 'UTF-8',
+          },
+          Body: {
+            Html: {
+              Data: html,
+              Charset: 'UTF-8',
+            },
+            ...(text && {
+              Text: {
+                Data: text,
+                Charset: 'UTF-8',
+              },
+            }),
+          },
+        },
+      },
       Destination: {
         ToAddresses: toAddresses,
       },
-      Message: {
-        Subject: {
-          Data: subject,
-          Charset: 'UTF-8',
-        },
-        Body: {
-          Html: {
-            Data: html,
-            Charset: 'UTF-8',
-          },
-          ...(text && {
-            Text: {
-              Data: text,
-              Charset: 'UTF-8',
-            },
-          }),
-        },
-      },
-      ReplyToAddresses: [this.replyToEmail],
-    });
+      FromEmailAddress: config.fromEmail,
+      ReplyToAddresses: [config.replyToEmail],
+    };
 
-    const response = await this.sesClient.send(command);
-    // Email sent successfully
-    return response;
+    try {
+      // Make authenticated request to SES v2 API using aws4fetch
+      const response = await awsClient.fetch(
+        `https://email.${config.region}.amazonaws.com/v2/email/outbound-emails`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        },
+      );
+
+      // Check if the request was successful
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(
+          `Failed to send email via SES: ${response.status} ${response.statusText}. ${errorBody}`,
+        );
+      }
+
+      // Parse and return the response
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Email sending failed:', error);
+      // Re-throw with more context
+      if (error instanceof Error) {
+        throw new TypeError(`Email sending failed: ${error.message}`);
+      }
+      throw new Error('Email sending failed: Unknown error occurred');
+    }
   }
 
-  async sendMagicLink(to: string, magicLink: string) {
-    // Dynamic import to avoid Next.js build issues with React Email components
-    const { MagicLink } = await import('@/emails/templates');
-
+  async sendMagicLink(to: string, magicLink: string, expirationMinutes = 15) {
+    // Render React Email template to HTML
+    // Note: Using @react-email/components instead of @react-email/render
+    // to avoid edge runtime export resolution issues in Cloudflare Workers
     const html = await render(MagicLink({
       loginUrl: magicLink,
+      expirationTime: `${expirationMinutes} minutes`,
     }));
-    const text = `Sign in to ${BRAND.name} using this link: ${magicLink}`;
+
+    const text = `Sign in to ${BRAND.displayName} using this link: ${magicLink}. This link expires in ${expirationMinutes} minutes.`;
 
     return this.sendEmail({
       to,
-      subject: `Your sign-in link - ${BRAND.name}`,
+      subject: `Sign in to ${BRAND.displayName}`,
       html,
       text,
     });

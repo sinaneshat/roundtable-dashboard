@@ -1,11 +1,13 @@
 'use client';
-
-import { motion } from 'motion/react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
+import React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
+import { Icons } from '@/components/icons';
+import { Logo } from '@/components/logo';
+import { useChatStore } from '@/components/providers';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -14,75 +16,134 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { useSidebarOptional } from '@/components/ui/sidebar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { BRAND } from '@/constants';
+import { useThreadQuery } from '@/hooks/queries';
+import { useCurrentPathname } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
+import { ChatScrollButton } from './chat-scroll-button';
 import { ChatSection } from './chat-states';
-import { useBreadcrumb } from './use-breadcrumb';
+import { useThreadHeaderOptional } from './thread-header-context';
 
-// =============================================================================
-// UNIFIED HEADER SYSTEM FOR CHAT
-// Consolidates: chat-header.tsx + page-header.tsx + chat/chat-header.tsx
-// Eliminates ~128 lines of duplicate code with consistent API
-// =============================================================================
-
-const breadcrumbMap: Record<string, { titleKey: string; parent?: string }> = {
+const BREADCRUMB_MAP = {
   '/chat': { titleKey: 'navigation.chat' },
   '/chat/pricing': { titleKey: 'navigation.pricing', parent: '/chat' },
-};
+} as const;
 
-// Navigation Header - consolidated navigation component
 type NavigationHeaderProps = {
   className?: string;
+  threadTitle?: string;
+  threadActions?: ReactNode;
+  showSidebarTrigger?: boolean;
+  showLogo?: boolean;
+  maxWidth?: boolean;
+  showScrollButton?: boolean;
 };
-
-export function NavigationHeader({ className }: NavigationHeaderProps = {}) {
-  const pathname = usePathname();
+function NavigationHeaderComponent({
+  className,
+  threadTitle: threadTitleProp,
+  threadActions: threadActionsProp,
+  showSidebarTrigger = true,
+  showLogo = false,
+  maxWidth = false,
+  showScrollButton = false,
+}: NavigationHeaderProps = {}) {
+  const pathname = useCurrentPathname();
   const t = useTranslations();
-  const { dynamicBreadcrumb } = useBreadcrumb();
+  const sidebarContext = useSidebarOptional();
+  const hasSidebar = sidebarContext !== null;
 
-  // Check if this is a thread page (dynamic route)
-  const isThreadPage = pathname?.startsWith('/chat/') && pathname !== '/chat' && pathname !== '/chat/pricing';
+  const { storeThreadTitle, showInitialUI, createdThreadId, thread, storeThreadId } = useChatStore(
+    useShallow(s => ({
+      storeThreadTitle: s.thread?.title ?? null,
+      storeThreadId: s.thread?.id ?? null,
+      showInitialUI: s.showInitialUI,
+      createdThreadId: s.createdThreadId,
+      thread: s.thread,
+    })),
+  );
+  const context = useThreadHeaderOptional();
 
-  // Use dynamic breadcrumb for thread pages, otherwise use static map
-  const currentPage = isThreadPage && dynamicBreadcrumb
-    ? { titleKey: dynamicBreadcrumb.title, parent: dynamicBreadcrumb.parent || '/chat', isDynamic: true }
-    : pathname ? breadcrumbMap[pathname] : undefined;
+  const isStaticRoute = pathname ? pathname in BREADCRUMB_MAP : false;
+  const hasActiveThread = pathname === '/chat' && !showInitialUI && (createdThreadId || thread);
+  const isOnThreadPage = pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute;
+  const { data: cachedThreadData } = useThreadQuery(storeThreadId ?? '', !!storeThreadId && isOnThreadPage);
 
-  const parentPage = currentPage?.parent ? breadcrumbMap[currentPage.parent] : null;
+  const effectiveThreadTitle = cachedThreadData?.success
+    ? cachedThreadData.data.thread.title
+    : storeThreadTitle;
 
+  const shouldUseStoreThreadTitle = hasActiveThread || (!isStaticRoute && pathname?.startsWith('/chat/') && pathname !== '/chat');
+  const threadTitle = threadTitleProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? effectiveThreadTitle : null);
+  const threadActions = threadActionsProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? context.threadActions : null);
+  const isThreadPage = (
+    (pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute)
+    || pathname?.startsWith('/public/chat/')
+  );
+  const isOverviewPage = pathname === '/chat' && !hasActiveThread;
+  const showThreadBreadcrumb = (isThreadPage || hasActiveThread) && threadTitle;
+  const currentPage = showThreadBreadcrumb
+    ? { titleKey: threadTitle, isDynamic: true as const }
+    : pathname ? BREADCRUMB_MAP[pathname as keyof typeof BREADCRUMB_MAP] : undefined;
   return (
-    <motion.header
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: 0.1 }}
+    <header
       className={cn(
-        'flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12',
+        'sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out',
+        !isOverviewPage && 'bg-background w-full',
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2 px-4 w-full">
-        <div className="flex items-center gap-2">
-          <SidebarTrigger className="-ms-1" />
-          <Separator orientation="vertical" className="me-2 h-4" />
-          {currentPage && (
-            <Breadcrumb>
+      <div className={cn(
+        'flex items-center justify-between gap-2 pt-4 px-5 md:px-6 lg:px-8 h-14 sm:h-16 w-full',
+        maxWidth && 'max-w-4xl mx-auto',
+      )}
+      >
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-hidden">
+          {hasSidebar && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden size-10 shrink-0"
+              onClick={() => sidebarContext.setOpenMobile(true)}
+              aria-label={t('accessibility.openSidebar')}
+            >
+              <Icons.panelLeft className="size-6" />
+            </Button>
+          )}
+          {showLogo && !isOverviewPage && (
+            <>
+              <Link href="/" className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 touch-manipulation">
+                <Logo size="sm" variant="icon" />
+                <span className="text-sm sm:text-base font-semibold tracking-tight hidden xs:inline">
+                  {BRAND.displayName}
+                </span>
+              </Link>
+              <Separator orientation="vertical" className="me-1 sm:me-2 h-3.5 sm:h-4 flex-shrink-0 opacity-30" />
+            </>
+          )}
+          {!isOverviewPage && currentPage && (
+            <Breadcrumb className="min-w-0 flex-1">
               <BreadcrumbList>
-                {parentPage && (
-                  <>
-                    <BreadcrumbItem className="hidden md:block">
-                      <BreadcrumbLink asChild>
-                        <Link href={currentPage.parent!}>
-                          {t(parentPage.titleKey)}
-                        </Link>
-                      </BreadcrumbLink>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator className="hidden md:block" />
-                  </>
-                )}
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="line-clamp-1 max-w-[300px]">
+                <BreadcrumbItem className="shrink-0">
+                  <BreadcrumbLink asChild>
+                    <Link
+                      href="/chat"
+                      className="text-muted-foreground hover:text-foreground transition-colors text-base"
+                    >
+                      {BRAND.displayName}
+                    </Link>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem className="min-w-0 overflow-hidden max-w-32 sm:max-w-48 md:max-w-64">
+                  <BreadcrumbPage
+                    className="line-clamp-1 truncate overflow-hidden text-ellipsis whitespace-nowrap text-sm sm:text-base max-w-32 sm:max-w-48 md:max-w-64"
+                    title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey)}
+                  >
                     {'isDynamic' in currentPage && currentPage.isDynamic
                       ? currentPage.titleKey
                       : t(currentPage.titleKey)}
@@ -92,19 +153,71 @@ export function NavigationHeader({ className }: NavigationHeaderProps = {}) {
             </Breadcrumb>
           )}
         </div>
-
-        {/* Action buttons at the right end */}
-        {dynamicBreadcrumb?.actions && (
-          <div className="flex items-center gap-1">
-            {dynamicBreadcrumb.actions}
+        {!isOverviewPage && (
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {showScrollButton && <ChatScrollButton variant="header" />}
+            {threadActions}
           </div>
         )}
       </div>
-    </motion.header>
+    </header>
   );
 }
+export const NavigationHeader = React.memo(NavigationHeaderComponent);
+function MinimalHeaderComponent({ className }: { className?: string } = {}) {
+  const t = useTranslations();
+  const sidebarContext = useSidebarOptional();
+  const hasSidebar = sidebarContext !== null;
 
-// Page Header - replaces page-header.tsx
+  const {
+    showInitialUI,
+    isStreaming,
+    isCreatingThread,
+    waitingToStartStreaming,
+    isModeratorStreaming,
+  } = useChatStore(useShallow(s => ({
+    showInitialUI: s.showInitialUI,
+    isStreaming: s.isStreaming,
+    isCreatingThread: s.isCreatingThread,
+    waitingToStartStreaming: s.waitingToStartStreaming,
+    isModeratorStreaming: s.isModeratorStreaming,
+  })));
+
+  const isThreadFlowActive = isStreaming || isCreatingThread || waitingToStartStreaming || isModeratorStreaming;
+  const showGlassEffect = !showInitialUI && isThreadFlowActive;
+
+  return (
+    <header
+      className={cn(
+        'sticky top-0 left-0 right-0 z-50',
+        'flex h-14 sm:h-16 shrink-0 items-center',
+        showGlassEffect && [
+          'backdrop-blur-xl bg-background/60',
+          'border-b border-border/30',
+          'mb-2',
+          'sm:backdrop-blur-none sm:bg-transparent sm:border-b-0 sm:mb-0',
+        ],
+        className,
+      )}
+    >
+      {hasSidebar && (
+        <div className="flex items-center px-3 sm:px-4 md:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-10 shrink-0"
+            onClick={() => sidebarContext.setOpenMobile(true)}
+            aria-label={t('accessibility.openSidebar')}
+          >
+            <Icons.panelLeft className="size-6" />
+          </Button>
+        </div>
+      )}
+      <div className="hidden md:block h-14 sm:h-16" />
+    </header>
+  );
+}
+export const MinimalHeader = React.memo(MinimalHeaderComponent);
 type PageHeaderProps = {
   title: string;
   description?: string;
@@ -114,7 +227,6 @@ type PageHeaderProps = {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 };
-
 export function PageHeader({
   title,
   description,
@@ -140,10 +252,8 @@ export function PageHeader({
       description: 'text-base text-muted-foreground',
       spacing: 'space-y-8',
     },
-  };
-
+  } as const;
   const config = sizeConfig[size];
-
   return (
     <div className={cn(config.spacing, className)}>
       <div className="flex items-center justify-between">
@@ -160,8 +270,6 @@ export function PageHeader({
     </div>
   );
 }
-
-// Chat Page Header - replaces ui/chat-header.tsx
 type ChatPageHeaderProps = {
   title: string;
   description: string;
@@ -169,7 +277,6 @@ type ChatPageHeaderProps = {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 };
-
 export function ChatPageHeader({
   title,
   description,
@@ -179,24 +286,35 @@ export function ChatPageHeader({
 }: ChatPageHeaderProps) {
   return (
     <ChatSection className={className}>
-      <div className="flex items-center justify-between">
-        <PageHeader
-          title={title}
-          description={description}
-          size={size}
-          showSeparator={false}
-        />
-        {action && (
-          <div className="flex items-center gap-2">
-            {action}
-          </div>
-        )}
+      <div className="mx-auto px-5 md:px-6">
+        <div className="flex items-center justify-between">
+          <PageHeader
+            title={title}
+            description={description}
+            size={size}
+            showSeparator={false}
+          />
+          {action && (
+            <div className="flex items-center gap-2">
+              {action}
+            </div>
+          )}
+        </div>
       </div>
     </ChatSection>
   );
 }
-
-// Header Action Wrapper
 export function PageHeaderAction({ children }: { children: ReactNode }) {
   return <div className="flex items-center space-x-2">{children}</div>;
+}
+
+export function ChatPageHeaderSkeleton() {
+  return (
+    <div className="mx-auto px-5 md:px-6 py-4">
+      <div className="space-y-1">
+        <Skeleton className="h-7 w-32" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+    </div>
+  );
 }

@@ -1,9 +1,23 @@
-// Temporary utils index to maintain compatibility while we migrate
-// This file re-exports commonly used utilities
-
-export * from '../format';
-export * from '../ui/cn';
-
-// Re-export utilities from utils directory
-export * from './error-logging';
-export * from './safe-logger';
+export * from './ai-display';
+export * from './cache-helpers';
+export * from './citation-parser';
+export * from './clipboard';
+export * from './date-transforms';
+export * from './dev-logger';
+export * from './error-handling';
+export * from './error-metadata-builders';
+export * from './file-capability';
+export * from './memo-utils';
+export * from './message-formatting';
+export * from './message-status';
+export * from './message-transforms';
+export * from './metadata';
+export * from './metadata-builder';
+export * from './moderator-utils';
+export * from './participant';
+export * from './participant-message-lookup';
+export * from './role-colors';
+export * from './round-utils';
+export * from './state-merge';
+export * from './type-guards';
+export * from './web-search-utils';

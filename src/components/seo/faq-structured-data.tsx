@@ -1,4 +1,4 @@
-import { createFaqJsonLd } from '@/utils/metadata';
+import { createFaqJsonLd } from '@/utils';
 
 /**
  * Props for the FaqStructuredData component
@@ -43,7 +43,7 @@ export function FaqStructuredData({ faqs }: FaqStructuredDataProps) {
   return (
     <script
       type="application/ld+json"
-      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
+      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for JSON-LD structured data injection (SEO)
       dangerouslySetInnerHTML={{
         __html: JSON.stringify(structuredData).replace(/</g, '\u003C'),
       }}

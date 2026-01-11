@@ -1,9 +1,7 @@
 import type { Metadata } from 'next';
 
-import type { SeoMetadata } from '@/api/types/metadata';
-import { BRAND } from '@/constants/brand';
-
-import { getBaseUrl } from './helpers';
+import { BRAND } from '@/constants';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 export type CreateMetadataProps = {
   title?: string;
@@ -20,13 +18,12 @@ export type CreateMetadataProps = {
   modifiedTime?: string;
 };
 
-// Generate JSON-LD structured data for SEO
-// Enhanced with Article support and additional fields
 export function createJsonLd(props: {
   type?: 'WebApplication' | 'Organization' | 'Product' | 'Article';
   name?: string;
   description?: string;
   url?: string;
+  baseUrl?: string;
   logo?: string;
   image?: string;
   sameAs?: string[];
@@ -40,9 +37,10 @@ export function createJsonLd(props: {
     type = 'WebApplication',
     name = BRAND.fullName,
     description = BRAND.description,
-    url = getBaseUrl(),
-    logo = `${getBaseUrl()}/static/logo.png`,
-    image = `${getBaseUrl()}/static/og-image.png`,
+    baseUrl: providedBaseUrl,
+    url = providedBaseUrl || getAppBaseUrl(),
+    logo = `${providedBaseUrl || getAppBaseUrl()}/static/logo.png`,
+    image = `${providedBaseUrl || getAppBaseUrl()}/static/og-image.png`,
     sameAs = [
       BRAND.social.twitter,
       BRAND.social.linkedin,
@@ -149,14 +147,11 @@ export function createJsonLd(props: {
   return baseStructuredData;
 }
 
-/**
- * Generate breadcrumb structured data for navigation SEO
- */
 export function createBreadcrumbJsonLd(items: Array<{
   name: string;
   url: string;
 }>) {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
 
   return {
     '@context': 'https://schema.org',
@@ -170,9 +165,6 @@ export function createBreadcrumbJsonLd(items: Array<{
   };
 }
 
-/**
- * Generate FAQ structured data for rich snippets
- */
 export function createFaqJsonLd(faqs: Array<{
   question: string;
   answer: string;
@@ -191,72 +183,21 @@ export function createFaqJsonLd(faqs: Array<{
   };
 }
 
-/**
- * Convert API SEO metadata to Next.js Metadata
- * Enables reuse of metadata across API and frontend
- */
-export function apiMetadataToNextMetadata(seoData: SeoMetadata): Metadata {
-  const baseUrl = getBaseUrl();
-  const fullUrl = seoData.canonicalUrl || baseUrl;
-  const fullImage = seoData.ogImage.startsWith('http')
-    ? seoData.ogImage
-    : `${baseUrl}${seoData.ogImage}`;
-
-  return {
-    title: seoData.title,
-    description: seoData.description,
-    keywords: seoData.keywords.join(', '),
-    ...(seoData.author && {
-      authors: [{ name: seoData.author }],
-    }),
-    openGraph: {
-      title: seoData.title,
-      description: seoData.description,
-      url: fullUrl,
-      siteName: BRAND.fullName,
-      images: [
-        {
-          url: fullImage,
-          width: 1200,
-          height: 630,
-          alt: seoData.title,
-        },
-      ],
-      locale: 'en_US',
-      type: seoData.ogType === 'product' ? 'website' : seoData.ogType,
-      ...(seoData.publishedTime && { publishedTime: seoData.publishedTime }),
-      ...(seoData.modifiedTime && { modifiedTime: seoData.modifiedTime }),
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: seoData.title,
-      description: seoData.description,
-      images: [fullImage],
-      creator: '@roundtablenow',
-      site: '@roundtablenow',
-    },
-    robots: seoData.noindex ? 'noindex, nofollow' : 'index, follow',
-    alternates: {
-      canonical: seoData.canonicalUrl || fullUrl,
-    },
-  };
-}
-
 export function createMetadata({
   title = BRAND.fullName,
   description = BRAND.description,
-  image = '/static/og-image.png', // Use the new OpenGraph image
+  image = '/static/og-image.png',
   url = '/',
   type = 'website',
   siteName = BRAND.fullName,
   robots = 'index, follow',
   canonicalUrl,
-  keywords = ['AI collaboration', 'dashboard', 'brainstorming', 'multiple models', 'roundtable'],
+  keywords = ['AI collaboration', 'brainstorming', 'multiple AI models', 'Roundtable'],
   author = BRAND.name,
   publishedTime,
   modifiedTime,
 }: CreateMetadataProps = {}): Metadata {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getAppBaseUrl();
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
   const fullImage = image.startsWith('http') ? image : `${baseUrl}${image}`;
 
@@ -289,6 +230,7 @@ export function createMetadata({
   };
 
   return {
+    metadataBase: new URL(baseUrl),
     title,
     description,
     keywords: keywords.join(', '),
@@ -299,10 +241,18 @@ export function createMetadata({
     alternates: {
       canonical: canonicalUrl || fullUrl,
     },
+    icons: {
+      icon: [
+        { url: '/favicon.ico', sizes: '32x32', type: 'image/x-icon' },
+      ],
+      apple: [
+        { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      ],
+    },
     other: {
       'theme-color': BRAND.colors.primary,
       'msapplication-TileColor': BRAND.colors.primary,
-      'apple-mobile-web-app-capable': 'yes',
+      'mobile-web-app-capable': 'yes',
       'apple-mobile-web-app-status-bar-style': 'default',
       'format-detection': 'telephone=no',
     },

@@ -1,3 +1,7 @@
+import type { CSSProperties } from 'react';
+
+import { colors } from '@/emails/design-tokens';
+
 import { EmailLink } from '../content/email-link';
 import { EmailText } from '../content/email-text';
 
@@ -6,7 +10,12 @@ type UnsubscribeFooterProps = {
   unsubscribeUrl?: string;
   senderIp?: string;
   senderLocation?: string;
-  className?: string;
+  style?: CSSProperties;
+};
+
+const highlightStyle: CSSProperties = {
+  color: colors.foreground,
+  fontWeight: '500',
 };
 
 export function UnsubscribeFooter({
@@ -14,15 +23,15 @@ export function UnsubscribeFooter({
   unsubscribeUrl,
   senderIp,
   senderLocation,
-  className,
+  style,
 }: UnsubscribeFooterProps) {
   return (
-    <EmailText size="sm" color="muted" className={className}>
+    <EmailText size="sm" color="muted" style={style}>
       {recipientEmail && (
         <>
           This email was intended for
           {' '}
-          <span className="text-black">{recipientEmail}</span>
+          <span style={highlightStyle}>{recipientEmail}</span>
           .
           {' '}
         </>
@@ -32,11 +41,11 @@ export function UnsubscribeFooter({
         <>
           This email was sent from
           {' '}
-          <span className="text-black">{senderIp}</span>
+          <span style={highlightStyle}>{senderIp}</span>
           {' '}
           located in
           {' '}
-          <span className="text-black">{senderLocation}</span>
+          <span style={highlightStyle}>{senderLocation}</span>
           .
           {' '}
         </>

@@ -14,7 +14,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import type { getSubscriptionsService } from '@/services/api';
+import type { GetSubscriptionsResponse } from '@/services/api';
 import {
   cancelSubscriptionService,
   switchSubscriptionService,
@@ -40,48 +40,43 @@ export function useSwitchSubscriptionMutation() {
       if (response.success && response.data?.subscription) {
         const updatedSubscription = response.data.subscription;
 
-        queryClient.setQueryData<Awaited<ReturnType<typeof getSubscriptionsService>>>(
+        queryClient.setQueryData<GetSubscriptionsResponse>(
           queryKeys.subscriptions.list(),
           (oldData) => {
-            if (!oldData?.success || !oldData.data?.subscriptions) {
+            if (!oldData || !oldData.success || !oldData.data?.items) {
               return oldData;
             }
 
-            // Replace the updated subscription in the list
-            const updatedSubscriptions = oldData.data.subscriptions.map(sub =>
+            const updatedItems = oldData.data.items.map((sub: typeof updatedSubscription) =>
               sub.id === updatedSubscription.id ? updatedSubscription : sub,
             );
 
             return {
               ...oldData,
               data: {
-                ...oldData.data,
-                subscriptions: updatedSubscriptions,
+                items: updatedItems,
+                count: oldData.data.count,
               },
             };
           },
         );
       }
 
-      // Invalidate all subscription-related queries to ensure UI updates
+      // Invalidate related queries
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.usage.all,
+      });
+
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.models.all,
+      });
+
+      // Invalidate subscriptions all queries
       void queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
-        refetchType: 'active',
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to switch subscription', error);
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      // Don't retry on client errors (4xx)
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -105,48 +100,43 @@ export function useCancelSubscriptionMutation() {
       if (response.success && response.data?.subscription) {
         const updatedSubscription = response.data.subscription;
 
-        queryClient.setQueryData<Awaited<ReturnType<typeof getSubscriptionsService>>>(
+        queryClient.setQueryData<GetSubscriptionsResponse>(
           queryKeys.subscriptions.list(),
           (oldData) => {
-            if (!oldData?.success || !oldData.data?.subscriptions) {
+            if (!oldData || !oldData.success || !oldData.data?.items) {
               return oldData;
             }
 
-            // Replace the updated subscription in the list
-            const updatedSubscriptions = oldData.data.subscriptions.map(sub =>
+            const updatedItems = oldData.data.items.map((sub: typeof updatedSubscription) =>
               sub.id === updatedSubscription.id ? updatedSubscription : sub,
             );
 
             return {
               ...oldData,
               data: {
-                ...oldData.data,
-                subscriptions: updatedSubscriptions,
+                items: updatedItems,
+                count: oldData.data.count,
               },
             };
           },
         );
       }
 
-      // Invalidate all subscription-related queries to ensure UI updates
+      // Invalidate related queries
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.usage.all,
+      });
+
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.models.all,
+      });
+
+      // Invalidate subscriptions all queries
       void queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
-        refetchType: 'active',
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to cancel subscription', error);
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      // Don't retry on client errors (4xx)
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }

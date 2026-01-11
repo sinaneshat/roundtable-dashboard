@@ -1,171 +1,279 @@
-/**
- * Chat Mutation Hooks
- *
- * TanStack Mutation hooks for all chat operations
- * Following patterns from checkout.ts and subscription-management.ts
- */
-
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { ChatThreadCacheSchema } from '@/api/routes/chat/schema';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
   addParticipantService,
   createCustomRoleService,
-  createMemoryService,
   createThreadService,
+  createUserPresetService,
   deleteCustomRoleService,
-  deleteMemoryService,
   deleteParticipantService,
   deleteThreadService,
+  deleteUserPresetService,
+  setRoundFeedbackService,
   updateCustomRoleService,
-  updateMemoryService,
   updateParticipantService,
   updateThreadService,
+  updateUserPresetService,
 } from '@/services/api';
+import {
+  validateInfiniteQueryCache,
+  validateThreadDetailCache,
+  validateThreadDetailPayloadCache,
+  validateThreadDetailResponseCache,
+  validateThreadsListPages,
+} from '@/stores/chat';
 
-// ============================================================================
-// Thread Mutations
-// ============================================================================
-
-/**
- * Hook to create a new chat thread
- * Protected endpoint - requires authentication
- *
- * After successful creation, invalidates thread lists and usage stats
- */
 export function useCreateThreadMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: createThreadService,
-    onSuccess: () => {
-      // Invalidate thread lists and usage stats
-      invalidationPatterns.threads.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.usage.stats() });
+      const previousUsage = queryClient.getQueryData(queryKeys.usage.stats());
+      return { previousUsage };
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to create thread', error);
+    onError: (_error, _variables, context) => {
+      if (context?.previousUsage) {
+        queryClient.setQueryData(queryKeys.usage.stats(), context.previousUsage);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      // Don't retry on client errors (4xx)
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to update thread details
- * Protected endpoint - requires authentication
- *
- * After successful update, invalidates specific thread and lists
- */
 export function useUpdateThreadMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ threadId, data }: Parameters<typeof updateThreadService>[0] extends string ? { threadId: string; data: Parameters<typeof updateThreadService>[1] } : never) =>
-      updateThreadService(threadId, data),
-    onSuccess: (_data, variables) => {
-      // Invalidate specific thread and lists
-      invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
+    mutationFn: updateThreadService,
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(variables.param.id) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
+      if ('slug' in variables.json && typeof variables.json.slug === 'string') {
+        await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.json.slug) });
+      }
+
+      const previousThread = queryClient.getQueryData(queryKeys.threads.detail(variables.param.id));
+      const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
+      const previousBySlug = ('slug' in variables.json && typeof variables.json.slug === 'string')
+        ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.json.slug))
+        : null;
+
+      queryClient.setQueryData(
+        queryKeys.threads.detail(variables.param.id),
+        (old) => {
+          const parsedData = validateThreadDetailPayloadCache(old);
+          if (!parsedData)
+            return old;
+
+          const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
+          if (!updatePayload.success)
+            return old;
+
+          return {
+            success: true,
+            data: {
+              ...parsedData,
+              thread: {
+                ...parsedData.thread,
+                ...updatePayload.data,
+              },
+            },
+          };
+        },
+      );
+
+      queryClient.setQueriesData(
+        {
+          queryKey: queryKeys.threads.all,
+          predicate: (query) => {
+            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
+              return false;
+            return query.queryKey[1] === 'list';
+          },
+        },
+        (old) => {
+          const parsedQuery = validateInfiniteQueryCache(old);
+          if (!parsedQuery)
+            return old;
+
+          const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
+          if (!updatePayload.success)
+            return old;
+
+          return {
+            ...parsedQuery,
+            pages: parsedQuery.pages.map((page) => {
+              if (!page.success || !page.data?.items)
+                return page;
+
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: page.data.items.map((thread) => {
+                    const threadData = ChatThreadCacheSchema.safeParse(thread);
+                    if (!threadData.success)
+                      return thread;
+
+                    return threadData.data.id === variables.param.id
+                      ? { ...threadData.data, ...updatePayload.data }
+                      : thread;
+                  }),
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      if ('slug' in variables.json && variables.json.slug) {
+        const slug = variables.json.slug;
+        if (typeof slug === 'string') {
+          queryClient.setQueryData(
+            queryKeys.threads.bySlug(slug),
+            (old) => {
+              const parsedData = validateThreadDetailPayloadCache(old);
+              if (!parsedData)
+                return old;
+
+              const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
+              if (!updatePayload.success)
+                return old;
+
+              return {
+                success: true,
+                data: {
+                  ...parsedData,
+                  thread: {
+                    ...parsedData.thread,
+                    ...updatePayload.data,
+                  },
+                },
+              };
+            },
+          );
+        }
+      }
+
+      return {
+        previousThread,
+        previousThreads,
+        previousBySlug,
+        slug: ('slug' in variables.json && typeof variables.json.slug === 'string') ? variables.json.slug : null,
+      };
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to update thread', error);
+    onError: (_error, variables, context) => {
+      if (context?.previousThread) {
+        queryClient.setQueryData(queryKeys.threads.detail(variables.param.id), context.previousThread);
+      }
+      if (context?.previousThreads) {
+        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
+      }
+      if (context?.slug && context?.previousBySlug) {
+        queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to delete a thread
- * Protected endpoint - requires authentication
- *
- * After successful deletion, invalidates thread lists and usage stats
- */
 export function useDeleteThreadMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: deleteThreadService,
-    onSuccess: () => {
-      // Invalidate thread lists and usage stats
-      invalidationPatterns.threads.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
+      await queryClient.cancelQueries({ queryKey: queryKeys.usage.stats() });
+
+      const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
+      const previousUsage = queryClient.getQueryData(queryKeys.usage.stats());
+
+      queryClient.setQueriesData(
+        {
+          queryKey: queryKeys.threads.all,
+          predicate: (query) => {
+            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
+              return false;
+            return query.queryKey[1] === 'list';
+          },
+        },
+        (old) => {
+          const parsedQuery = validateInfiniteQueryCache(old);
+          if (!parsedQuery)
+            return old;
+
+          return {
+            ...parsedQuery,
+            pages: parsedQuery.pages.map((page) => {
+              if (!page.success || !page.data?.items)
+                return page;
+
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: page.data.items.filter((thread) => {
+                    const threadData = ChatThreadCacheSchema.safeParse(thread);
+                    return threadData.success && threadData.data.id !== variables.param.id;
+                  }),
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      return { previousThreads, previousUsage };
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to delete thread', error);
+    onError: (_error, _variables, context) => {
+      if (context?.previousThreads) {
+        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
+      }
+      if (context?.previousUsage) {
+        queryClient.setQueryData(queryKeys.usage.stats(), context.previousUsage);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 1; // Only retry once for delete operations
-    },
+    retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to toggle thread favorite status
- * Protected endpoint - requires authentication
- *
- * Uses optimistic updates for instant UI feedback
- * Rolls back on error
- */
 export function useToggleFavoriteMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ threadId, isFavorite }: { threadId: string; isFavorite: boolean; slug?: string }) =>
-      updateThreadService(threadId, { json: { isFavorite } }),
-    // Optimistic update: Update UI immediately before server response
+      updateThreadService({ param: { id: threadId }, json: { isFavorite } }),
     onMutate: async (variables) => {
-      // Cancel any outgoing refetches to prevent overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
       if (variables.slug) {
         await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
       }
 
-      // Snapshot the previous values for rollback
       const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
       const previousBySlug = variables.slug
         ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.slug))
         : null;
 
-      // Optimistically update all thread list queries
       queryClient.setQueriesData(
         { queryKey: queryKeys.threads.all },
-        (old: unknown) => {
+        (old) => {
           if (!old || typeof old !== 'object')
             return old;
           if (!('pages' in old))
             return old;
-          const pages = old.pages as Array<{ success: boolean; data?: { items?: Array<{ id: string; isFavorite?: boolean }> } }>;
+          const pages = validateThreadsListPages(old.pages);
+          if (!pages)
+            return old;
 
           return {
             ...old,
@@ -189,26 +297,20 @@ export function useToggleFavoriteMutation() {
         },
       );
 
-      // Optimistically update bySlug query if slug is provided
       if (variables.slug) {
         queryClient.setQueryData(
           queryKeys.threads.bySlug(variables.slug),
-          (old: unknown) => {
-            if (!old || typeof old !== 'object')
-              return old;
-            if (!('success' in old) || !old.success)
-              return old;
-            if (!('data' in old) || !old.data || typeof old.data !== 'object')
-              return old;
-            if (!('thread' in old.data))
+          (old) => {
+            const parsedData = validateThreadDetailPayloadCache(old);
+            if (!parsedData)
               return old;
 
             return {
-              ...old,
+              success: true,
               data: {
-                ...(old.data as Record<string, unknown>),
+                ...parsedData,
                 thread: {
-                  ...(old.data as { thread: Record<string, unknown> }).thread,
+                  ...parsedData.thread,
                   isFavorite: variables.isFavorite,
                 },
               },
@@ -217,120 +319,75 @@ export function useToggleFavoriteMutation() {
         );
       }
 
-      // Return context with previous values for rollback
       return { previousThreads, previousBySlug, slug: variables.slug };
     },
-    // On error, rollback to previous values
-    onError: (error, _variables, context) => {
+    onError: (_error, _variables, context) => {
       if (context?.previousThreads) {
         queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
       }
       if (context?.slug && context?.previousBySlug) {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
       }
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to toggle favorite', error);
-      }
     },
-    // On success, invalidate to ensure data is in sync
-    onSettled: (_data, _error, variables) => {
-      invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-      if (variables.slug) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to toggle thread public/private status
- * Protected endpoint - requires authentication
- *
- * Uses optimistic updates for instant UI feedback
- * Rolls back on error
- */
 export function useTogglePublicMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ threadId, isPublic }: { threadId: string; isPublic: boolean; slug?: string }) =>
-      updateThreadService(threadId, { json: { isPublic } }),
-    // Optimistic update: Update UI immediately before server response
+      updateThreadService({ param: { id: threadId }, json: { isPublic } }),
     onMutate: async (variables) => {
-      // Cancel any outgoing refetches to prevent overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
+      // Only cancel/update detail caches - NOT the threads list
+      // Updating threads.all causes sidebar re-render which closes the share dialog
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(variables.threadId) });
       if (variables.slug) {
         await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
       }
 
-      // Snapshot the previous values for rollback
-      const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
+      const previousDetail = queryClient.getQueryData(queryKeys.threads.detail(variables.threadId));
       const previousBySlug = variables.slug
         ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.slug))
         : null;
 
-      // Optimistically update all thread list queries
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.threads.all },
-        (old: unknown) => {
-          if (!old || typeof old !== 'object')
+      // Update thread detail cache (used by header)
+      queryClient.setQueryData(
+        queryKeys.threads.detail(variables.threadId),
+        (old) => {
+          const parsedData = validateThreadDetailPayloadCache(old);
+          if (!parsedData)
             return old;
-          if (!('pages' in old))
-            return old;
-          const pages = old.pages as Array<{ success: boolean; data?: { items?: Array<{ id: string; isPublic?: boolean }> } }>;
 
           return {
-            ...old,
-            pages: pages.map((page) => {
-              if (!page.success || !page.data?.items)
-                return page;
-
-              return {
-                ...page,
-                data: {
-                  ...page.data,
-                  items: page.data.items.map(thread =>
-                    thread.id === variables.threadId
-                      ? { ...thread, isPublic: variables.isPublic }
-                      : thread,
-                  ),
-                },
-              };
-            }),
+            success: true,
+            data: {
+              ...parsedData,
+              thread: {
+                ...parsedData.thread,
+                isPublic: variables.isPublic,
+              },
+            },
           };
         },
       );
 
-      // Optimistically update bySlug query if slug is provided
       if (variables.slug) {
         queryClient.setQueryData(
           queryKeys.threads.bySlug(variables.slug),
-          (old: unknown) => {
-            if (!old || typeof old !== 'object')
-              return old;
-            if (!('success' in old) || !old.success)
-              return old;
-            if (!('data' in old) || !old.data || typeof old.data !== 'object')
-              return old;
-            if (!('thread' in old.data))
+          (old) => {
+            const parsedData = validateThreadDetailPayloadCache(old);
+            if (!parsedData)
               return old;
 
             return {
-              ...old,
+              success: true,
               data: {
-                ...(old.data as Record<string, unknown>),
+                ...parsedData,
                 thread: {
-                  ...(old.data as { thread: Record<string, unknown> }).thread,
+                  ...parsedData.thread,
                   isPublic: variables.isPublic,
                 },
               },
@@ -339,353 +396,313 @@ export function useTogglePublicMutation() {
         );
       }
 
-      // Return context with previous values for rollback
-      return { previousThreads, previousBySlug, slug: variables.slug };
+      return { previousDetail, previousBySlug, slug: variables.slug, threadId: variables.threadId };
     },
-    // On error, rollback to previous values
-    onError: (error, _variables, context) => {
-      if (context?.previousThreads) {
-        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
+    onError: (_error, _variables, context) => {
+      if (context?.threadId && context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousDetail);
       }
       if (context?.slug && context?.previousBySlug) {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
       }
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to toggle public status', error);
-      }
     },
-    // On success, invalidate to ensure data is in sync
-    onSettled: (_data, _error, variables) => {
-      invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-      if (variables.slug) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
 
-// ============================================================================
-// Message Mutations
-// ============================================================================
-// NOTE: useSendMessageMutation removed - use AI SDK v5 useChat hook for all message operations
-// All messages are now streamed via streamChatService for better UX
-// Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
-
-// ============================================================================
-// Participant Mutations
-// ============================================================================
-
-/**
- * Hook to add a participant to a thread
- * Protected endpoint - requires authentication
- *
- * After successful addition, invalidates specific thread
- */
 export function useAddParticipantMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ threadId, data }: Parameters<typeof addParticipantService>[0] extends string ? { threadId: string; data: Parameters<typeof addParticipantService>[1] } : never) =>
-      addParticipantService(threadId, data),
-    onSuccess: (_data, variables) => {
-      // Invalidate specific thread
-      invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
+    mutationFn: addParticipantService,
+    onMutate: async (variables) => {
+      const threadId = variables.param.id;
+
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(threadId) });
+
+      const previousThread = queryClient.getQueryData(queryKeys.threads.detail(threadId));
+
+      queryClient.setQueryData(
+        queryKeys.threads.detail(threadId),
+        (old) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('success' in old) || !old.success)
+            return old;
+          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+            return old;
+
+          const data = validateThreadDetailCache(old.data);
+          if (!data)
+            return old;
+
+          const { json: participantData } = variables;
+          const optimisticParticipant = {
+            id: `temp-${Date.now()}`,
+            threadId,
+            modelId: participantData.modelId,
+            role: participantData.role ?? null,
+            customRoleId: null,
+            priority: participantData.priority ?? 0,
+            isEnabled: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+          return {
+            ...old,
+            data: {
+              ...data,
+              participants: [...data.participants, optimisticParticipant],
+            },
+          };
+        },
+      );
+
+      return { previousThread, threadId };
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to add participant', error);
+    onError: (_error, _variables, context) => {
+      if (context?.previousThread && context?.threadId) {
+        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousThread);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
+    onSuccess: (data, variables) => {
+      const threadId = variables.param.id;
+
+      queryClient.setQueryData(
+        queryKeys.threads.detail(threadId),
+        (old) => {
+          const cache = validateThreadDetailResponseCache(old);
+          if (!cache || !cache.data.participants)
+            return old;
+
+          return {
+            ...cache,
+            data: {
+              ...cache.data,
+              participants: cache.data.participants.map((p: { id: string }) =>
+                p.id.startsWith('temp-')
+                  ? (data.success && data.data ? data.data : p)
+                  : p,
+              ),
+            },
+          };
+        },
+      );
     },
+    retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to update participant settings
- * Protected endpoint - requires authentication
- *
- * After successful update, invalidates all thread lists (we don't know which thread)
- */
 export function useUpdateParticipantMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ participantId, data }: Parameters<typeof updateParticipantService>[0] extends string ? { participantId: string; data: Parameters<typeof updateParticipantService>[1] } : never) =>
-      updateParticipantService(participantId, data),
-    onSuccess: () => {
-      // Invalidate all thread data (we don't know which thread the participant belongs to)
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
+    mutationFn: (data: Parameters<typeof updateParticipantService>[0] & { threadId?: string }) =>
+      updateParticipantService(data),
+    onMutate: async (variables) => {
+      const threadId = variables.threadId;
+      if (!threadId)
+        return { previousThread: null, threadId: null };
+
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(threadId) });
+
+      const previousThread = queryClient.getQueryData(queryKeys.threads.detail(threadId));
+
+      queryClient.setQueryData(
+        queryKeys.threads.detail(threadId),
+        (old) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('success' in old) || !old.success)
+            return old;
+          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+            return old;
+
+          const data = validateThreadDetailCache(old.data);
+          if (!data)
+            return old;
+
+          return {
+            ...old,
+            data: {
+              ...data,
+              participants: data.participants.map(p =>
+                p.id === variables.param.id
+                  ? { ...p, ...variables.json, updatedAt: new Date().toISOString() }
+                  : p,
+              ),
+            },
+          };
+        },
+      );
+
+      return { previousThread, threadId };
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to update participant', error);
+    onError: (_error, _variables, context) => {
+      if (context?.previousThread && context?.threadId) {
+        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousThread);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to delete a participant from a thread
- * Protected endpoint - requires authentication
- *
- * After successful deletion, invalidates all thread lists
- */
 export function useDeleteParticipantMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: deleteParticipantService,
-    onSuccess: () => {
-      // Invalidate all thread data
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
+    mutationFn: (data: Parameters<typeof deleteParticipantService>[0] & { threadId?: string }) =>
+      deleteParticipantService(data),
+    onMutate: async (variables) => {
+      const threadId = variables.threadId;
+      if (!threadId)
+        return { previousThread: null, threadId: null };
+
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(threadId) });
+
+      const previousThread = queryClient.getQueryData(queryKeys.threads.detail(threadId));
+
+      queryClient.setQueryData(
+        queryKeys.threads.detail(threadId),
+        (old) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('success' in old) || !old.success)
+            return old;
+          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+            return old;
+
+          const data = validateThreadDetailCache(old.data);
+          if (!data)
+            return old;
+
+          return {
+            ...old,
+            data: {
+              ...data,
+              participants: data.participants.filter(p =>
+                p.id !== variables.param.id,
+              ),
+            },
+          };
+        },
+      );
+
+      return { previousThread, threadId };
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to delete participant', error);
+    onError: (_error, _variables, context) => {
+      if (context?.previousThread && context?.threadId) {
+        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousThread);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 1;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
 
-// ============================================================================
-// Memory Mutations
-// ============================================================================
-
-/**
- * Hook to create a new memory
- * Protected endpoint - requires authentication
- *
- * After successful creation, invalidates memory lists and usage stats
- */
-export function useCreateMemoryMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: createMemoryService,
-    onSuccess: () => {
-      // Invalidate memory lists and usage stats
-      invalidationPatterns.memories.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to create memory', error);
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    throwOnError: false,
-  });
-}
-
-/**
- * Hook to update memory details
- * Protected endpoint - requires authentication
- *
- * After successful update, invalidates specific memory and lists
- */
-export function useUpdateMemoryMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ memoryId, data }: Parameters<typeof updateMemoryService>[0] extends string ? { memoryId: string; data: Parameters<typeof updateMemoryService>[1] } : never) =>
-      updateMemoryService(memoryId, data),
-    onSuccess: (_data, variables) => {
-      // Invalidate specific memory and lists
-      invalidationPatterns.memoryDetail(variables.memoryId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to update memory', error);
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    throwOnError: false,
-  });
-}
-
-/**
- * Hook to delete a memory
- * Protected endpoint - requires authentication
- *
- * After successful deletion, invalidates memory lists and usage stats
- */
-export function useDeleteMemoryMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: deleteMemoryService,
-    onSuccess: () => {
-      // Invalidate memory lists and usage stats
-      invalidationPatterns.memories.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to delete memory', error);
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 1;
-    },
-    throwOnError: false,
-  });
-}
-
-// ============================================================================
-// Custom Role Mutations
-// ============================================================================
-
-/**
- * Hook to create a new custom role
- * Protected endpoint - requires authentication
- *
- * After successful creation, invalidates custom role lists and usage stats
- */
 export function useCreateCustomRoleMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: createCustomRoleService,
     onSuccess: () => {
-      // Invalidate custom role lists and usage stats
       invalidationPatterns.customRoles.forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to create custom role', error);
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to update custom role details
- * Protected endpoint - requires authentication
- *
- * After successful update, invalidates specific role and lists
- */
 export function useUpdateCustomRoleMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ roleId, data }: Parameters<typeof updateCustomRoleService>[0] extends string ? { roleId: string; data: Parameters<typeof updateCustomRoleService>[1] } : never) =>
-      updateCustomRoleService(roleId, data),
+    mutationFn: updateCustomRoleService,
     onSuccess: (_data, variables) => {
-      // Invalidate specific role and lists
-      invalidationPatterns.customRoleDetail(variables.roleId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customRoles.detail(variables.param.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customRoles.lists() });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to update custom role', error);
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
 
-/**
- * Hook to delete a custom role
- * Protected endpoint - requires authentication
- *
- * After successful deletion, invalidates custom role lists and usage stats
- */
 export function useDeleteCustomRoleMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: deleteCustomRoleService,
     onSuccess: () => {
-      // Invalidate custom role lists and usage stats
       invalidationPatterns.customRoles.forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to delete custom role', error);
-      }
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+export function useSetRoundFeedbackMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: setRoundFeedbackService,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.threads.feedback(variables.param.threadId),
+      });
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 1;
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+export function useCreateUserPresetMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createUserPresetService,
+    onSuccess: () => {
+      invalidationPatterns.userPresets.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
     },
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+export function useUpdateUserPresetMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateUserPresetService,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.userPresets.detail(variables.param.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.userPresets.lists() });
+    },
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+export function useDeleteUserPresetMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteUserPresetService,
+    onSuccess: () => {
+      invalidationPatterns.userPresets.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
+    },
+    retry: false,
     throwOnError: false,
   });
 }

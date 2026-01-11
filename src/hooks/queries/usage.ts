@@ -3,108 +3,75 @@
  *
  * TanStack Query hooks for chat usage tracking and quotas
  * Following patterns from subscriptions.ts
+ *
+ * IMPORTANT: staleTime values MUST match server-side prefetch values
+ * See: docs/react-query-ssr-patterns.md
  */
 
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
 
-import { useSession } from '@/lib/auth/client';
+import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
-  checkMessageQuotaService,
-  checkThreadQuotaService,
   getUserUsageStatsService,
 } from '@/services/api';
 
 /**
- * Hook to fetch user usage statistics
- * Returns comprehensive usage data for threads and messages
+ * ✅ SINGLE SOURCE OF TRUTH - Usage statistics and quota checks
+ *
+ * This is the ONLY hook needed for both quota checking AND usage display.
+ *
+ * Returns ALL quota information in one call:
+ * - threads: { used, limit, remaining, percentage, status }
+ * - messages: { used, limit, remaining, percentage, status }
+ * - moderator: { used, limit, remaining, percentage, status }
+ * - customRoles: { used, limit, remaining, percentage, status }
+ * - period: { start, end, daysRemaining }
+ * - subscription: { tier, isAnnual }
+ *
+ * Quota blocking logic:
+ * - canCreate = used < limit
+ * - Check remaining === 0 or used >= limit to block UI
+ *
  * Protected endpoint - requires authentication
  *
- * Stale time: 1 minute (usage data should be relatively fresh)
+ * Stale time: 10 seconds (fresh data for UI blocking)
+ * Refetch interval: 30 seconds (automatic background updates)
+ *
+ * @param options - Optional query options
+ * @param options.forceEnabled - Force enable query regardless of auth state
+ *
+ * @example
+ * const { data } = useUsageStatsQuery();
+ * if (data?.success) {
+ *   const { threads, messages } = data.data;
+ *   const canCreateThread = threads.remaining > 0;
+ *   const canSendMessage = messages.remaining > 0;
+ * }
  */
-export function useUsageStatsQuery() {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
+export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
+  const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
     queryKey: queryKeys.usage.stats(),
-    queryFn: getUserUsageStatsService,
-    staleTime: 1 * 60 * 1000, // 1 minute
-    retry: (failureCount, error) => {
-      // Don't retry on authentication errors
-      if (error instanceof Error && error.message.includes('Authentication')) {
+    queryFn: () => getUserUsageStatsService(),
+    staleTime: STALE_TIMES.quota, // 10 seconds - fresh data for UI blocking
+    // ✅ PERFORMANCE FIX: Reduce polling frequency and pause when tab hidden
+    // Original: 30s always - wasteful when user not looking
+    // New: 60s when visible, false when hidden
+    refetchInterval: () => {
+      // Don't poll if tab is hidden
+      if (typeof document !== 'undefined' && document.hidden) {
         return false;
       }
-      // Don't retry on client errors (4xx)
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
+      // Poll every 60s when tab is visible (reduced from 30s)
+      return 60 * 1000;
     },
-    enabled: isAuthenticated, // Only fetch when authenticated
-    throwOnError: false,
-  });
-}
-
-/**
- * Hook to check thread creation quota
- * Returns whether user can create more threads
- * Protected endpoint - requires authentication
- *
- * Stale time: 30 seconds (quota checks should be fresh)
- */
-export function useThreadQuotaQuery() {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
-
-  return useQuery({
-    queryKey: queryKeys.usage.threadQuota(),
-    queryFn: checkThreadQuotaService,
-    staleTime: 30 * 1000, // 30 seconds
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    enabled: isAuthenticated,
-    throwOnError: false,
-  });
-}
-
-/**
- * Hook to check message creation quota
- * Returns whether user can send more messages
- * Protected endpoint - requires authentication
- *
- * Stale time: 30 seconds (quota checks should be fresh)
- */
-export function useMessageQuotaQuery() {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
-
-  return useQuery({
-    queryKey: queryKeys.usage.messageQuota(),
-    queryFn: checkMessageQuotaService,
-    staleTime: 30 * 1000, // 30 seconds
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    enabled: isAuthenticated,
+    retry: false,
+    enabled: options?.forceEnabled ?? isAuthenticated,
     throwOnError: false,
   });
 }

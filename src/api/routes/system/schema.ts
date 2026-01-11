@@ -1,17 +1,23 @@
 import { z } from '@hono/zod-openapi';
 
-import { createApiResponseSchema } from '@/api/core/schemas';
+import { HealthStatusSchema } from '@/api/core/enums';
+import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
+import type { ApiEnv } from '@/api/types';
+
+// ============================================================================
+// INTERNAL HANDLER SCHEMAS - Single Source of Truth
+// ============================================================================
 
 const HealthPayloadSchema = z.object({
   ok: z.boolean().openapi({
     example: true,
     description: 'Health check status indicator',
   }),
-  status: z.enum(['healthy', 'degraded', 'unhealthy']).openapi({
+  status: HealthStatusSchema.openapi({
     example: 'healthy',
     description: 'System health status',
   }),
-  timestamp: z.string().datetime().openapi({
+  timestamp: CoreSchemas.timestamp().openapi({
     example: new Date().toISOString(),
     description: 'Health check execution timestamp',
   }),
@@ -20,7 +26,7 @@ const HealthPayloadSchema = z.object({
 export const HealthResponseSchema = createApiResponseSchema(HealthPayloadSchema).openapi('HealthResponse');
 
 const HealthCheckResultSchema = z.object({
-  status: z.enum(['healthy', 'degraded', 'unhealthy']).openapi({
+  status: HealthStatusSchema.openapi({
     example: 'healthy',
     description: 'Health status of the checked component',
   }),
@@ -32,9 +38,16 @@ const HealthCheckResultSchema = z.object({
     example: 25,
     description: 'Health check execution time in milliseconds',
   }),
-  details: z.record(z.string(), z.unknown()).optional().openapi({
-    example: { missingVars: ['VAR_1', 'VAR_2'] },
-    description: 'Additional health check details',
+  details: z.object({
+    detailType: z.enum(['health_check']).openapi({
+      description: 'Type discriminator for health check details',
+    }),
+    missingVars: z.array(z.string()).openapi({
+      description: 'List of missing environment variables',
+      example: ['VAR_1', 'VAR_2'],
+    }),
+  }).optional().openapi({
+    description: 'Typed health check details for environment validation',
   }),
 }).openapi('HealthCheckResult');
 
@@ -43,11 +56,11 @@ const DetailedHealthPayloadSchema = z.object({
     example: true,
     description: 'Overall system health indicator',
   }),
-  status: z.enum(['healthy', 'degraded', 'unhealthy']).openapi({
+  status: HealthStatusSchema.openapi({
     example: 'healthy',
     description: 'Overall system health status',
   }),
-  timestamp: z.string().datetime().openapi({
+  timestamp: CoreSchemas.timestamp().openapi({
     example: new Date().toISOString(),
     description: 'Health check execution timestamp',
   }),
@@ -103,6 +116,41 @@ const DetailedHealthPayloadSchema = z.object({
 export const DetailedHealthResponseSchema = createApiResponseSchema(DetailedHealthPayloadSchema).openapi('DetailedHealthResponse');
 
 // ============================================================================
+// CACHE CLEAR SCHEMAS
+// ============================================================================
+
+const ClearCachePayloadSchema = z.object({
+  ok: z.boolean().openapi({
+    example: true,
+    description: 'Cache clear operation success indicator',
+  }),
+  message: z.string().openapi({
+    example: 'All backend caches cleared successfully',
+    description: 'Human-readable cache clear status message',
+  }),
+  timestamp: CoreSchemas.timestamp().openapi({
+    example: new Date().toISOString(),
+    description: 'Cache clear execution timestamp',
+  }),
+  clearedTags: z.array(z.string()).openapi({
+    example: ['user-tier-*', 'user-usage-*', 'active-products'],
+    description: 'List of cache tags that were cleared',
+  }),
+}).openapi('ClearCachePayload');
+
+export const ClearCacheResponseSchema = createApiResponseSchema(ClearCachePayloadSchema).openapi('ClearCacheResponse');
+
+/**
+ * Health check context type
+ *
+ * SINGLE SOURCE OF TRUTH for health check handler context
+ * Used internally by health check helper functions
+ */
+export type HealthCheckContext = {
+  env: ApiEnv['Bindings'];
+};
+
+// ============================================================================
 // TYPE EXPORTS FOR FRONTEND
 // ============================================================================
 
@@ -111,3 +159,5 @@ export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 export type HealthCheckResult = z.infer<typeof HealthCheckResultSchema>;
 export type DetailedHealthPayload = z.infer<typeof DetailedHealthPayloadSchema>;
 export type DetailedHealthResponse = z.infer<typeof DetailedHealthResponseSchema>;
+export type ClearCachePayload = z.infer<typeof ClearCachePayloadSchema>;
+export type ClearCacheResponse = z.infer<typeof ClearCacheResponseSchema>;

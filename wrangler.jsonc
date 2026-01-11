@@ -1,10 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
+  "main": "custom-worker.ts",
   "name": "roundtable-dashboard",
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
-  "compatibility_date": "2025-03-25",
-  "keep_names": false,
+  "compatibility_date": "2024-12-30",
   "compatibility_flags": [
     // Enable Node.js API
     // see https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag
@@ -19,14 +18,28 @@
   "observability": {
     "enabled": true
   },
+  // Smart Placement: disabled for local dev, enabled in preview/production
+  // @see https://developers.cloudflare.com/workers/configuration/smart-placement/
   "placement": {
     "mode": "off"
   },
+  // Next.js Image Optimization binding
+  // @see https://developers.cloudflare.com/images/transform-images/
+  "images": {
+    "binding": "IMAGES"
+  },
   "assets": {
     "directory": ".open-next/assets",
-    "binding": "ASSETS",
-    "run_worker_first": true
+    "binding": "ASSETS"
   },
+  // Worker self-reference for internal routing (required by OpenNext)
+  // @see https://opennext.js.org/cloudflare
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "roundtable-dashboard"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -34,11 +47,6 @@
       "database_id": "12ce87b8-9d6d-4c54-a9d4-7c59ceb3ef8e",
       "migrations_dir": "./src/db/migrations",
       "preview_database_id": "12ce87b8-9d6d-4c54-a9d4-7c59ceb3ef8e"
-    },
-    {
-      "binding": "NEXT_TAG_CACHE_D1",
-      "database_name": "roundtable-tag-cache-local",
-      "database_id": "acc02371-760f-4f50-adf5-c7f4c5531c07"
     }
   ],
   "kv_namespaces": [
@@ -60,21 +68,38 @@
       "preview_bucket_name": "roundtable-dashboard-r2-uploads-local"
     }
   ],
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "roundtable-dashboard"
-    }
-  ],
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
+  // AI Search (AutoRAG) - requires creating instances via Cloudflare dashboard or API:
+  // wrangler ai-search create roundtable-rag-local --source r2://roundtable-dashboard-r2-uploads-local
+  // Each environment needs its own AI Search instance connected to its R2 bucket
+  // See: https://developers.cloudflare.com/ai-search/get-started/
   "durable_objects": {
     "bindings": [
       {
         "name": "NEXT_CACHE_DO_QUEUE",
-        "class_name": "DOQueueHandler"
+        "class_name": "DOQueueHandler",
+        "script_name": "roundtable-dashboard"
       },
       {
         "name": "NEXT_CACHE_DO_PURGE",
-        "class_name": "BucketCachePurge"
+        "class_name": "BucketCachePurge",
+        "script_name": "roundtable-dashboard"
+      },
+      {
+        "name": "UPLOAD_CLEANUP_SCHEDULER",
+        "class_name": "UploadCleanupScheduler",
+        "script_name": "roundtable-dashboard"
+      },
+      {
+        "name": "NEXT_TAG_CACHE_DO_SHARDED",
+        "class_name": "DOShardedTagCache",
+        "script_name": "roundtable-dashboard"
       }
     ]
   },
@@ -82,14 +107,40 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["DOQueueHandler", "BucketCachePurge"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["UploadCleanupScheduler"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["DOShardedTagCache"]
     }
   ],
+  // Cloudflare Queues for async background tasks
+  // @see https://developers.cloudflare.com/queues/
+  "queues": {
+    "producers": [
+      {
+        "queue": "title-generation-queue-local",
+        "binding": "TITLE_GENERATION_QUEUE"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "title-generation-queue-local",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "retry_delay": 60
+      }
+    ]
+  },
   "vars": {
+    // URLs derived from NEXT_PUBLIC_WEBAPP_ENV via centralized config (src/lib/config/base-urls.ts)
     "NEXT_PUBLIC_WEBAPP_ENV": "local",
-    "NEXT_PUBLIC_APP_URL": "http://localhost:3000",
-    "NEXT_PUBLIC_API_URL": "http://localhost:3000/api/v1",
     "NEXT_PUBLIC_APP_NAME": "Roundtable Dashboard",
-    "NEXT_PUBLIC_APP_VERSION": "1.0.0",
+    "NEXT_PUBLIC_APP_VERSION": "1.0.1",
     "NEXT_PUBLIC_MAINTENANCE": "false",
     "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w4",
     "NEXT_PUBLIC_R2_PUBLIC_URL": "http://localhost:3000/uploads",
@@ -97,26 +148,70 @@
     "NEXT_PUBLIC_FROM_EMAIL": "noreply@roundtable.now",
     "NEXT_PUBLIC_SES_REPLY_TO_EMAIL": "support@roundtable.now",
     "NEXT_PUBLIC_SES_VERIFIED_EMAIL": "noreply@roundtable.now",
-    "NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1SEHsHGx4IA5m8QeAu2ukAY9",
-    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Rw8lgGx4IA5m8QeqPP5J0dmOfwWWW7aVof4An0u5xCZ0zwct30Lqb47urMNPUXSPaNO3Gz0reNsTAVua6hmjZiW00wqf4BTPI",
-    "AUTH_GOOGLE_ID": "440441347001-9k39tnfr8sahuf1i3n82utfutefp879b.apps.googleusercontent.com",
+    "NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1STOnK52vWNZ3v8wteUMwNCy",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
+    "AUTH_GOOGLE_ID": "815574816934-2chacenekb6gnis24lksiit84eddt3af.apps.googleusercontent.com",
     "BETTER_AUTH_URL": "http://localhost:3000",
-    "OPEN_NEXT_DEBUG": "true",
     "NEXTJS_ENV": "development",
     "NODE_VERSION": "22.14.0",
     "PNPM_VERSION": "10.10.0",
-    "NODE_ENV": "development"
+    "NODE_ENV": "development",
+    "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
+    "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com",
+    "CF_ACCOUNT_ID": "499b6c3c38f75f7f7dc7d3127954b921",
+    "NEXT_INC_CACHE_R2_PREFIX": "cache/",
+    // Debug & Logging Configuration (Maximum Verbosity)
+    "OPEN_NEXT_DEBUG": "true",
+    "OPENNEXT_DEBUG": "true",
+    "NEXT_DEBUG": "true",
+    "DEBUG": "*",
+    "VERBOSE": "true",
+    "LOG_LEVEL": "debug",
+    "WRANGLER_LOG": "debug",
+    "MINIFLARE_LOG_LEVEL": "debug"
     // All sensitive secrets are managed via wrangler secret commands
   },
   "env": {
     "preview": {
       "name": "roundtable-dashboard-preview",
+      // Smart Placement: routes worker near D1/R2 backends for reduced latency
+      "placement": {
+        "mode": "smart"
+      },
+      // Observability with sampling to reduce log volume
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 0.1
+      },
+      // ✅ STREAMING PERFORMANCE: Max CPU time for long AI streaming responses
+      // Workers Standard allows up to 30s CPU time per request
+      // @see https://developers.cloudflare.com/workers/platform/limits/
+      "limits": {
+        "cpu_ms": 30000
+      },
       "routes": [
         {
           "pattern": "app-preview.roundtable.now",
           "custom_domain": true
         }
       ],
+      "queues": {
+        "producers": [
+          {
+            "queue": "title-generation-queue-preview",
+            "binding": "TITLE_GENERATION_QUEUE"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "title-generation-queue-preview",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 3,
+            "retry_delay": 60
+          }
+        ]
+      },
       "d1_databases": [
         {
           "binding": "DB",
@@ -124,11 +219,6 @@
           "database_id": "45ba3c83-ee28-4138-a4af-fed442b3ad05",
           "migrations_dir": "./src/db/migrations",
           "preview_database_id": "45ba3c83-ee28-4138-a4af-fed442b3ad05"
-        },
-        {
-          "binding": "NEXT_TAG_CACHE_D1",
-          "database_name": "roundtable-tag-cache-preview",
-          "database_id": "a69a2dd5-50bf-4024-ad33-1f5b7609f092"
         }
       ],
       "kv_namespaces": [
@@ -150,6 +240,15 @@
           "preview_bucket_name": "roundtable-dashboard-r2-uploads-preview"
         }
       ],
+      "browser": {
+        "binding": "BROWSER"
+      },
+      "ai": {
+        "binding": "AI"
+      },
+      "images": {
+        "binding": "IMAGES"
+      },
       "services": [
         {
           "binding": "WORKER_SELF_REFERENCE",
@@ -160,20 +259,31 @@
         "bindings": [
           {
             "name": "NEXT_CACHE_DO_QUEUE",
-            "class_name": "DOQueueHandler"
+            "class_name": "DOQueueHandler",
+            "script_name": "roundtable-dashboard-preview"
           },
           {
             "name": "NEXT_CACHE_DO_PURGE",
-            "class_name": "BucketCachePurge"
+            "class_name": "BucketCachePurge",
+            "script_name": "roundtable-dashboard-preview"
+          },
+          {
+            "name": "UPLOAD_CLEANUP_SCHEDULER",
+            "class_name": "UploadCleanupScheduler",
+            "script_name": "roundtable-dashboard-preview"
+          },
+          {
+            "name": "NEXT_TAG_CACHE_DO_SHARDED",
+            "class_name": "DOShardedTagCache",
+            "script_name": "roundtable-dashboard-preview"
           }
         ]
       },
       "vars": {
+        // URLs derived from NEXT_PUBLIC_WEBAPP_ENV via centralized config (src/lib/config/base-urls.ts)
         "NEXT_PUBLIC_WEBAPP_ENV": "preview",
-        "NEXT_PUBLIC_APP_URL": "https://app-preview.roundtable.now",
-        "NEXT_PUBLIC_API_URL": "https://app-preview.roundtable.now/api/v1",
         "NEXT_PUBLIC_APP_NAME": "Roundtable Dashboard",
-        "NEXT_PUBLIC_APP_VERSION": "1.0.0",
+        "NEXT_PUBLIC_APP_VERSION": "1.0.1",
         "NEXT_PUBLIC_MAINTENANCE": "false",
         "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w5",
         "NEXT_PUBLIC_R2_PUBLIC_URL": "https://app-preview.roundtable.now/uploads",
@@ -181,26 +291,67 @@
         "NEXT_PUBLIC_FROM_EMAIL": "noreply@roundtable.now",
         "NEXT_PUBLIC_SES_REPLY_TO_EMAIL": "noreply@roundtable.now",
         "NEXT_PUBLIC_SES_VERIFIED_EMAIL": "noreply@roundtable.now",
-        "NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1SEHsHGx4IA5m8QeAu2ukAY9",
-        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Rw8lgGx4IA5m8QeqPP5J0dmOfwWWW7aVof4An0u5xCZ0zwct30Lqb47urMNPUXSPaNO3Gz0reNsTAVua6hmjZiW00wqf4BTPI",
-        "AUTH_GOOGLE_ID": "440441347001-9k39tnfr8sahuf1i3n82utfutefp879b.apps.googleusercontent.com",
+        "NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1STOnK52vWNZ3v8wteUMwNCy",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
+        "AUTH_GOOGLE_ID": "815574816934-2chacenekb6gnis24lksiit84eddt3af.apps.googleusercontent.com",
         "BETTER_AUTH_URL": "https://app-preview.roundtable.now",
-        "OPEN_NEXT_DEBUG": "false",
         "NEXTJS_ENV": "production",
         "NODE_VERSION": "22.14.0",
         "PNPM_VERSION": "10.10.0",
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
+        "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com",
+        "NEXT_INC_CACHE_R2_PREFIX": "cache/"
+        // Debug & Logging Configuration (Maximum Verbosity for Preview)
+        // "OPEN_NEXT_DEBUG": "true",
+        // "OPENNEXT_DEBUG": "true",
+        // "NEXT_DEBUG": "true",
+        // "DEBUG": "*",
+        // "VERBOSE": "true",
+        // "LOG_LEVEL": "debug"
         // All sensitive secrets are managed via wrangler secret commands
       }
     },
     "production": {
       "name": "roundtable-dashboard-production",
+      // Smart Placement: optimizes worker location near D1/R2 backends
+      "placement": {
+        "mode": "smart"
+      },
+      // Observability with lower sampling for production (5%)
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 0.05
+      },
+      // ✅ STREAMING PERFORMANCE: Max CPU time for long AI streaming responses
+      // Workers Standard allows up to 30s CPU time per request
+      // @see https://developers.cloudflare.com/workers/platform/limits/
+      "limits": {
+        "cpu_ms": 30000
+      },
       "routes": [
         {
           "pattern": "app.roundtable.now",
           "custom_domain": true
         }
       ],
+      "queues": {
+        "producers": [
+          {
+            "queue": "title-generation-queue-prod",
+            "binding": "TITLE_GENERATION_QUEUE"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "title-generation-queue-prod",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 3,
+            "retry_delay": 60
+          }
+        ]
+      },
       "d1_databases": [
         {
           "binding": "DB",
@@ -208,11 +359,6 @@
           "database_id": "8d7d88e0-7f78-4fa8-a70b-9aa32895ad6a",
           "migrations_dir": "./src/db/migrations",
           "preview_database_id": "8d7d88e0-7f78-4fa8-a70b-9aa32895ad6a"
-        },
-        {
-          "binding": "NEXT_TAG_CACHE_D1",
-          "database_name": "roundtable-tag-cache-prod",
-          "database_id": "28d6b58e-d5a0-4acc-9b54-70fb54a089f6"
         }
       ],
       "kv_namespaces": [
@@ -234,6 +380,15 @@
           "preview_bucket_name": "roundtable-dashboard-r2-uploads-prod"
         }
       ],
+      "browser": {
+        "binding": "BROWSER"
+      },
+      "ai": {
+        "binding": "AI"
+      },
+      "images": {
+        "binding": "IMAGES"
+      },
       "services": [
         {
           "binding": "WORKER_SELF_REFERENCE",
@@ -244,20 +399,31 @@
         "bindings": [
           {
             "name": "NEXT_CACHE_DO_QUEUE",
-            "class_name": "DOQueueHandler"
+            "class_name": "DOQueueHandler",
+            "script_name": "roundtable-dashboard-production"
           },
           {
             "name": "NEXT_CACHE_DO_PURGE",
-            "class_name": "BucketCachePurge"
+            "class_name": "BucketCachePurge",
+            "script_name": "roundtable-dashboard-production"
+          },
+          {
+            "name": "UPLOAD_CLEANUP_SCHEDULER",
+            "class_name": "UploadCleanupScheduler",
+            "script_name": "roundtable-dashboard-production"
+          },
+          {
+            "name": "NEXT_TAG_CACHE_DO_SHARDED",
+            "class_name": "DOShardedTagCache",
+            "script_name": "roundtable-dashboard-production"
           }
         ]
       },
       "vars": {
+        // URLs derived from NEXT_PUBLIC_WEBAPP_ENV via centralized config (src/lib/config/base-urls.ts)
         "NEXT_PUBLIC_WEBAPP_ENV": "prod",
-        "NEXT_PUBLIC_APP_URL": "https://app.roundtable.now",
-        "NEXT_PUBLIC_API_URL": "https://app.roundtable.now/api/v1",
         "NEXT_PUBLIC_APP_NAME": "Roundtable Dashboard",
-        "NEXT_PUBLIC_APP_VERSION": "1.0.0",
+        "NEXT_PUBLIC_APP_VERSION": "1.0.1",
         "NEXT_PUBLIC_MAINTENANCE": "false",
         "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w6",
         "NEXT_PUBLIC_R2_PUBLIC_URL": "https://app.roundtable.now/uploads",
@@ -265,15 +431,24 @@
         "NEXT_PUBLIC_FROM_EMAIL": "noreply@roundtable.now",
         "NEXT_PUBLIC_SES_REPLY_TO_EMAIL": "support@roundtable.now",
         "NEXT_PUBLIC_SES_VERIFIED_EMAIL": "noreply@roundtable.now",
-        "NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1SEHsHGx4IA5m8QeAu2ukAY9",
-        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Rw8lgGx4IA5m8QeqPP5J0dmOfwWWW7aVof4An0u5xCZ0zwct30Lqb47urMNPUXSPaNO3Gz0reNsTAVua6hmjZiW00wqf4BTPI",
-        "AUTH_GOOGLE_ID": "440441347001-9k39tnfr8sahuf1i3n82utfutefp879b.apps.googleusercontent.com",
+        "NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1STOnW52vWNZ3v8wNZnseej7",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51SPXN852vWNZ3v8w0JKMpuzcvZHMyvFLy0SRfadVpFXtIhfYwty1hNfmxSlyTFRfbTbpcOOKuPepnUUayr0Owy9v006fE9vdeS",
+        "AUTH_GOOGLE_ID": "815574816934-2chacenekb6gnis24lksiit84eddt3af.apps.googleusercontent.com",
         "BETTER_AUTH_URL": "https://app.roundtable.now",
-        "OPEN_NEXT_DEBUG": "false",
         "NEXTJS_ENV": "production",
         "NODE_VERSION": "22.14.0",
         "PNPM_VERSION": "10.10.0",
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
+        "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com",
+        "NEXT_INC_CACHE_R2_PREFIX": "cache/"
+        // Debug & Logging Configuration (Maximum Verbosity for Production debugging)
+        // "OPEN_NEXT_DEBUG": "true",
+        // "OPENNEXT_DEBUG": "true",
+        // "NEXT_DEBUG": "true",
+        // "DEBUG": "*",
+        // "VERBOSE": "true",
+        // "LOG_LEVEL": "debug"
         // All sensitive secrets are managed via wrangler secret commands
       }
     }

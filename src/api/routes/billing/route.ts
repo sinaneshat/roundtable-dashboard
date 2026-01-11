@@ -1,7 +1,19 @@
-import { createRoute, z } from '@hono/zod-openapi';
+/**
+ * Billing Routes
+ *
+ * Product catalog, checkout, subscription management, and Stripe webhook endpoints
+ */
+
+import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { createApiResponseSchema } from '@/api/core/schemas';
+import {
+  createMutationRouteResponses,
+  createProtectedRouteResponses,
+  createPublicRouteResponses,
+  IdParamSchema,
+  StandardApiResponses,
+} from '@/api/core';
 
 import {
   CancelSubscriptionRequestSchema,
@@ -10,13 +22,14 @@ import {
   CustomerPortalRequestSchema,
   CustomerPortalResponseSchema,
   ProductDetailResponseSchema,
-  ProductIdParamSchema,
   ProductListResponseSchema,
   SubscriptionChangeResponseSchema,
   SubscriptionDetailResponseSchema,
-  SubscriptionIdParamSchema,
   SubscriptionListResponseSchema,
   SwitchSubscriptionRequestSchema,
+  SyncAfterCheckoutResponseSchema,
+  SyncCreditsAfterCheckoutResponseSchema,
+  WebhookHeadersSchema,
   WebhookResponseSchema,
 } from './schema';
 
@@ -37,8 +50,7 @@ export const listProductsRoute = createRoute({
         'application/json': { schema: ProductListResponseSchema },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...createPublicRouteResponses(),
   },
 });
 
@@ -49,7 +61,7 @@ export const getProductRoute = createRoute({
   summary: 'Get product details',
   description: 'Get a specific product with all its pricing plans',
   request: {
-    params: ProductIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -58,9 +70,7 @@ export const getProductRoute = createRoute({
         'application/json': { schema: ProductDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Product not found' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...createPublicRouteResponses(),
   },
 });
 
@@ -76,6 +86,7 @@ export const createCheckoutSessionRoute = createRoute({
   description: 'Create a Stripe checkout session for subscription purchase',
   request: {
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: CheckoutRequestSchema,
@@ -90,9 +101,7 @@ export const createCheckoutSessionRoute = createRoute({
         'application/json': { schema: CheckoutResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -108,6 +117,7 @@ export const createCustomerPortalSessionRoute = createRoute({
   description: 'Create a Stripe customer portal session for managing subscriptions and billing',
   request: {
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: CustomerPortalRequestSchema,
@@ -122,9 +132,7 @@ export const createCustomerPortalSessionRoute = createRoute({
         'application/json': { schema: CustomerPortalResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data or no Stripe customer found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -145,9 +153,7 @@ export const listSubscriptionsRoute = createRoute({
         'application/json': { schema: SubscriptionListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -158,7 +164,7 @@ export const getSubscriptionRoute = createRoute({
   summary: 'Get subscription details',
   description: 'Get details of a specific subscription',
   request: {
-    params: SubscriptionIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -167,11 +173,8 @@ export const getSubscriptionRoute = createRoute({
         'application/json': { schema: SubscriptionDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Subscription not found' },
-    [HttpStatusCodes.FORBIDDEN]: { description: 'Subscription does not belong to user' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...StandardApiResponses.FORBIDDEN,
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -186,8 +189,9 @@ export const switchSubscriptionRoute = createRoute({
   summary: 'Switch subscription plan',
   description: 'Switch the current subscription to a different price. Automatically handles upgrades (immediate with proration) and downgrades (at period end).',
   request: {
-    params: SubscriptionIdParamSchema,
+    params: IdParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: SwitchSubscriptionRequestSchema,
@@ -202,11 +206,8 @@ export const switchSubscriptionRoute = createRoute({
         'application/json': { schema: SubscriptionChangeResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Subscription not found' },
-    [HttpStatusCodes.FORBIDDEN]: { description: 'Subscription does not belong to user' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid price ID or same as current plan' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...StandardApiResponses.FORBIDDEN,
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -217,8 +218,9 @@ export const cancelSubscriptionRoute = createRoute({
   summary: 'Cancel subscription',
   description: 'Cancel the subscription either immediately or at the end of the current billing period (default).',
   request: {
-    params: SubscriptionIdParamSchema,
+    params: IdParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: CancelSubscriptionRequestSchema,
@@ -233,11 +235,8 @@ export const cancelSubscriptionRoute = createRoute({
         'application/json': { schema: SubscriptionChangeResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Subscription not found' },
-    [HttpStatusCodes.FORBIDDEN]: { description: 'Subscription does not belong to user' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Subscription already canceled or invalid request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...StandardApiResponses.FORBIDDEN,
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -249,39 +248,44 @@ export const syncAfterCheckoutRoute = createRoute({
   method: 'post',
   path: '/billing/sync-after-checkout',
   tags: ['billing'],
-  summary: 'Sync Stripe data after checkout',
-  description: 'Eagerly sync Stripe subscription data after successful checkout to prevent race conditions with webhooks',
+  summary: 'Sync Stripe subscription data after checkout',
+  description: 'Eagerly sync Stripe subscription data after successful checkout to prevent race conditions with webhooks. For subscriptions only.',
   responses: {
     [HttpStatusCodes.OK]: {
       description: 'Stripe data synced successfully',
       content: {
         'application/json': {
-          schema: createApiResponseSchema(
-            z.object({
-              synced: z.boolean().openapi({
-                description: 'Whether sync was successful',
-                example: true,
-              }),
-              subscription: z.object({
-                status: z.string().openapi({
-                  description: 'Subscription status',
-                  example: 'active',
-                }),
-                subscriptionId: z.string().openapi({
-                  description: 'Stripe subscription ID',
-                  example: 'sub_ABC123',
-                }),
-              }).nullable().openapi({
-                description: 'Synced subscription state',
-              }).openapi('SyncedSubscriptionState'),
-            }).openapi('SyncAfterCheckoutPayload'),
-          ),
+          schema: SyncAfterCheckoutResponseSchema,
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'No Stripe customer found for user' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...createMutationRouteResponses(),
+  },
+});
+
+/**
+ * Sync Credits After Checkout Route
+ *
+ * Theo's "Stay Sane with Stripe" pattern:
+ * Separate endpoint for one-time credit purchases.
+ * Simpler flow than subscriptions - just grant credits and return.
+ */
+export const syncCreditsAfterCheckoutRoute = createRoute({
+  method: 'post',
+  path: '/billing/sync-credits-after-checkout',
+  tags: ['billing'],
+  summary: 'Sync credits after one-time purchase',
+  description: 'Process and grant credits after a one-time credit pack purchase. Separate from subscription flow for simplicity.',
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Credits synced successfully',
+      content: {
+        'application/json': {
+          schema: SyncCreditsAfterCheckoutResponseSchema,
+        },
+      },
+    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -305,16 +309,7 @@ export const handleWebhookRoute = createRoute({
 
     Tracked events: checkout.session.completed, customer.subscription.*, invoice.*, payment_intent.*`,
   request: {
-    headers: z.object({
-      'stripe-signature': z.string().min(1).openapi({
-        param: {
-          name: 'stripe-signature',
-          in: 'header',
-        },
-        example: 't=1234567890,v1=abcdef...',
-        description: 'Stripe webhook signature for verification',
-      }),
-    }),
+    headers: WebhookHeadersSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -323,7 +318,6 @@ export const handleWebhookRoute = createRoute({
         'application/json': { schema: WebhookResponseSchema },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid webhook signature or payload' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Webhook processing failed' },
+    ...createPublicRouteResponses(),
   },
 });

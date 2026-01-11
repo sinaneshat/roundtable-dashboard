@@ -2,7 +2,9 @@
  * Product Query Hooks
  *
  * TanStack Query hooks for Stripe products
- * Following patterns from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
+ *
+ * IMPORTANT: staleTime must match server prefetch (STALE_TIMES.products)
+ * for proper SSR hydration. Mismatched staleTime causes client refetch.
  */
 
 'use client';
@@ -10,27 +12,24 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import { getProductService, getProductsService } from '@/services/api';
+import { STALE_TIMES } from '@/lib/data/stale-times';
+import {
+  getProductService,
+  getProductsService,
+} from '@/services/api';
 
 /**
  * Hook to fetch all products with pricing plans
  * Public endpoint - no authentication required
- *
- * Stale time: 2 hours (products change infrequently)
+ * Products are static catalog data with ISR (24h revalidation)
  */
 export function useProductsQuery() {
   return useQuery({
     queryKey: queryKeys.products.list(),
     queryFn: getProductsService,
-    staleTime: 2 * 60 * 60 * 1000, // 2 hours
-    retry: (failureCount, error) => {
-      // Don't retry on client errors (4xx)
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    staleTime: STALE_TIMES.products, // Must match server prefetch for hydration
+    gcTime: Infinity,
+    retry: false,
     throwOnError: false,
   });
 }
@@ -39,21 +38,15 @@ export function useProductsQuery() {
  * Hook to fetch a specific product by ID
  * Public endpoint - no authentication required
  *
- * @param productId - Stripe product ID
+ * @param productId - Product ID
  */
 export function useProductQuery(productId: string) {
   return useQuery({
     queryKey: queryKeys.products.detail(productId),
-    queryFn: () => getProductService(productId),
-    staleTime: 2 * 60 * 60 * 1000, // 2 hours
+    queryFn: async () => getProductService({ param: { id: productId } }),
+    staleTime: 3600 * 1000, // 1 hour
     enabled: !!productId, // Only fetch when productId is available
-    retry: (failureCount, error) => {
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }

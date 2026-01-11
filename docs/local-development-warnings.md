@@ -1,5 +1,9 @@
 # Local Development Warnings - Expected Behavior
 
+This document explains warnings that appear during development and deployment. These are **informational only** and do not affect functionality.
+
+---
+
 ## ⚠️ Durable Object Warnings (EXPECTED & NORMAL)
 
 When running `npm run dev`, you will see warnings about Durable Objects not being exported. **This is completely normal and expected behavior.**
@@ -80,6 +84,68 @@ npm run deploy:preview
 - **Deploy to preview** for full production-like testing
 
 The warnings remind you that Cloudflare Workers features (like Durable Objects) are not available in standard Next.js dev mode, but they will work correctly when deployed.
+
+---
+
+## ⚠️ CORS Duplicate Key Warnings (EXPECTED - LIBRARY BEHAVIOR)
+
+During build/deploy, esbuild reports duplicate key warnings from Hono's CORS middleware:
+
+### Example Warning Messages
+
+```
+▲ [WARNING] Duplicate key "origin" in object literal [duplicate-object-key]
+▲ [WARNING] Duplicate key "allowMethods" in object literal [duplicate-object-key]
+▲ [WARNING] Duplicate key "allowHeaders" in object literal [duplicate-object-key]
+```
+
+### Why This Happens
+
+Hono's `cors()` middleware internally merges default options with user options using object spread:
+
+```javascript
+// Internal Hono implementation (simplified)
+const config = { ...defaults, ...userOptions };
+// Results in: { origin: "*", allowMethods: [...], origin: (fn) => ... }
+```
+
+When esbuild bundles this, it sees duplicate keys in the resulting object literal.
+
+### Impact
+
+**None.** JavaScript uses the last value when duplicate keys exist, so your custom CORS configuration takes precedence. The warnings are cosmetic only.
+
+### Source
+
+- `node_modules/hono/dist/middleware/cors/` (library code)
+- Cannot be fixed without patching Hono
+
+---
+
+## ⚠️ Floating UI Duplicate Options Warnings (EXPECTED - LIBRARY BEHAVIOR)
+
+During build/deploy, esbuild reports duplicate `options` key warnings from Floating UI:
+
+### Example Warning Messages
+
+```
+▲ [WARNING] Duplicate key "options" in object literal [duplicate-object-key]
+    .open-next/server-functions/default/handler.mjs:2946:63982
+```
+
+### Why This Happens
+
+The `@floating-ui/dom` library (used by Radix UI/shadcn components) has internal middleware configuration that creates objects with duplicate `options` keys when bundled.
+
+### Impact
+
+**None.** Same JavaScript duplicate key behavior - last value wins. The library functions correctly.
+
+### Source
+
+- `node_modules/@floating-ui/*` (library code)
+- Used by Radix UI primitives (Popover, Tooltip, Dropdown, etc.)
+- Cannot be fixed without patching the library
 
 ---
 

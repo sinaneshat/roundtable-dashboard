@@ -1,8 +1,5 @@
-// components/TextInput.tsx
-import React from 'react';
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
-
-import type { GeneralFormProps } from '@/types/general';
 
 import {
   FormControl,
@@ -11,30 +8,33 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '../ui/form';
-import { Textarea } from '../ui/textarea';
+} from '@/components/ui/form';
+import { Textarea } from '@/components/ui/textarea';
 
-type Props = {
+type RHFTextareaProps<TFieldValues extends FieldValues = FieldValues> = {
+  name: FieldPath<TFieldValues>;
+  title?: string;
+  description?: string;
   placeholder?: string;
+  required?: boolean;
+  className?: string;
   rows?: number;
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   hideLabel?: boolean;
-} & GeneralFormProps;
+};
 
-function RHFTextarea({
+export function RHFTextarea<TFieldValues extends FieldValues = FieldValues>({
   name,
   title,
   description,
   placeholder,
   required,
-  value: externalValue,
-  onChange: externalOnChange,
-  onKeyDown,
   rows,
+  onKeyDown,
   className,
   hideLabel = false,
-}: Props) {
-  const { control } = useFormContext();
+}: RHFTextareaProps<TFieldValues>) {
+  const { control } = useFormContext<TFieldValues>();
 
   return (
     <FormField
@@ -42,7 +42,7 @@ function RHFTextarea({
       name={name}
       render={({ field }) => (
         <FormItem className={className || 'w-full'}>
-          {!hideLabel && <FormLabel>{title}</FormLabel>}
+          {!hideLabel && title && <FormLabel>{title}</FormLabel>}
           <FormControl>
             <Textarea
               {...field}
@@ -51,25 +51,14 @@ function RHFTextarea({
               data-testid={field.name}
               placeholder={placeholder}
               className="resize-none"
-              onChange={(e) => {
-                field.onChange(e.target.value);
-                if (externalOnChange) {
-                  externalOnChange(e);
-                }
-              }}
               onKeyDown={onKeyDown}
-              value={field.value !== undefined ? field.value : externalValue}
+              value={field.value ?? ''}
             />
           </FormControl>
-          <FormDescription>
-            {description}
-            {' '}
-          </FormDescription>
+          {description && <FormDescription>{description}</FormDescription>}
           <FormMessage />
         </FormItem>
       )}
     />
   );
 }
-
-export default RHFTextarea;

@@ -1,10 +1,18 @@
 /**
- * Data fetching module exports
- * Centralized TanStack Query utilities
+ * Data Layer Barrel Export
  *
- * IMPORTANT: This is ONLY for API data fetching
- * For authentication, use @/lib/auth instead
+ * Centralized exports for TanStack Query utilities:
+ * - Query client singleton
+ * - Query key factories
+ * - Stale time configuration
  */
 
-// Query client - shared between server and client
+// Query client (singleton pattern for SSR)
 export { getQueryClient } from './query-client';
+
+// Query keys and invalidation patterns
+export { invalidationPatterns, queryKeys } from './query-keys';
+
+// Stale time configuration
+export type { StaleTimeKey } from './stale-times';
+export { getStaleTime, STALE_TIME_PRESETS, STALE_TIMES } from './stale-times';

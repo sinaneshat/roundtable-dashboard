@@ -33,6 +33,18 @@ roundtable.now implements a modern, type-safe API architecture built on:
 - **Middleware-Based Security** with rate limiting and CSRF protection
 - **OpenAPI Documentation** auto-generated from code
 
+### Type Safety & Patterns Cross-Reference
+
+**🚨 MANDATORY**: All type safety, enum, metadata, and validation patterns are defined in:
+- **`/docs/type-inference-patterns.md`** - Single source of truth for:
+  - Enum 5-part pattern (array constant → Zod schema → TypeScript type → constant object)
+  - Metadata type safety chain (discriminated unions, extraction functions, builders)
+  - Query keys pattern (hierarchical factory with `as const`)
+  - Zod schema patterns (CoreSchemas, discriminated unions, composition)
+  - Type inference chain (Database → Zod → TypeScript → OpenAPI)
+
+**ALL backend code MUST follow patterns defined in type-inference-patterns.md**
+
 ### Directory Structure
 
 ```
@@ -621,7 +633,7 @@ export const streamChatHandler = createHandler(
       threadId: id,
       userMessage: body.content,
       systemPrompt: participant.settings?.systemPrompt,
-      previousMessages: coreMessages,
+      previousMessages: modelMessages,
       model,
       temperature: 0.7,
       callbacks: {
@@ -668,7 +680,7 @@ export const StreamingEventSchema = z.discriminatedUnion('type', [
 **5. Streaming Utilities** (`src/api/common/streaming.ts`):
 - `createOpenRouterProvider()` - Initialize OpenRouter with AI SDK
 - `streamAIResponse()` - Main SSE streaming function with callbacks
-- `buildCoreMessages()` - Convert DB messages to AI SDK format
+- `buildModelMessages()` - Convert DB messages to AI SDK format (async in v6)
 - `parseSSEEvent()` - Zod-based event parsing (client-side)
 
 **Frontend Integration** (EventSource):
@@ -1146,6 +1158,206 @@ const db = await getDbAsync(); // Returns D1BatchDatabase<Schema>
 **Further Reading:**
 - [Cloudflare D1 Batch API](https://developers.cloudflare.com/d1/build-with-d1/d1-client-api/#batch-statements)
 - [Drizzle ORM Batch Operations](https://orm.drizzle.team/docs/batch-api)
+
+### Foreign Key Cascade Policy
+
+**Reference**: All table definitions in `src/db/tables/`
+
+This project follows a strict foreign key cascade policy to ensure data integrity and consistency. All foreign key relationships must follow these rules:
+
+#### Policy Overview
+
+| Parent Table | Child Table | ON DELETE Behavior | Rationale |
+|--------------|-------------|-------------------|-----------|
+| `user` | ALL tables | CASCADE | User owns all data - complete removal |
+| `chat_thread` | `chat_message`, `chat_participant`, `chat_thread_changelog`, `chat_moderator_summary` | CASCADE | Thread-scoped data - remove with thread |
+| `chat_participant` | `chat_message` | SET NULL | Preserve historical messages even if participant removed |
+| `chat_custom_role` | `chat_participant` | SET NULL | Participants have inline role fallback (`settings.systemPrompt`) |
+| `stripe_subscription` | `stripe_invoice` | SET NULL | Preserve historical invoices for accounting/audit |
+| `stripe_customer` | `stripe_subscription`, `stripe_payment_method`, `stripe_invoice` | CASCADE | Customer-scoped Stripe data |
+| `stripe_product` | `stripe_price` | CASCADE | Prices belong to products |
+| `stripe_price` | `stripe_subscription` | CASCADE | Subscriptions tied to specific pricing |
+
+#### Detailed Rules
+
+**1. User Deletion → CASCADE Everything**
+
+When a user is deleted, ALL associated data must be removed:
+
+```typescript
+// Example: user table foreign key
+userId: text('user_id')
+  .notNull()
+  .references(() => user.id, { onDelete: 'cascade' })
+```
+
+**Cascaded Tables:**
+- `user_chat_usage` - Usage tracking
+- `user_chat_usage_history` - Historical usage records
+- `chat_thread` - All threads (which cascades to messages, participants, etc.)
+- `chat_custom_role` - User's custom role templates
+- `stripe_customer` - Stripe customer record (which cascades to subscriptions, invoices, etc.)
+- `api_key` - API keys (auth tables)
+- `session` - Active sessions (auth tables)
+- `account` - OAuth accounts (auth tables)
+
+**2. Thread Deletion → CASCADE Thread-Scoped Data**
+
+When a thread is deleted, all thread-specific data is removed:
+
+```typescript
+threadId: text('thread_id')
+  .notNull()
+  .references(() => chatThread.id, { onDelete: 'cascade' })
+```
+
+**Cascaded Tables:**
+- `chat_message` - All messages in thread
+- `chat_participant` - All AI participants
+- `chat_thread_changelog` - Thread history
+- `chat_moderator_summary` - AI summary rounds
+
+**3. Participant Deletion → SET NULL for Messages**
+
+When a participant is removed, messages are preserved for historical context:
+
+```typescript
+participantId: text('participant_id')
+  .references(() => chatParticipant.id, { onDelete: 'set null' })
+```
+
+**Why SET NULL?**
+- User messages (`role: 'user'`) have `participantId = null` by default
+- AI messages preserve content even if participant configuration removed
+- Allows users to read conversation history after model removal
+
+**4. Custom Role Deletion → SET NULL for Participants**
+
+When a custom role is deleted, participants preserve their inline role:
+
+```typescript
+customRoleId: text('custom_role_id')
+  .references(() => chatCustomRole.id, { onDelete: 'set null' })
+```
+
+**Why SET NULL?**
+- Participants have fallback: `settings.systemPrompt` (inline role)
+- Custom roles are templates - deletion doesn't break active participants
+- Historical participants preserve their behavior
+
+**5. Subscription Deletion → SET NULL for Invoices**
+
+When a subscription is canceled/deleted, invoices are preserved:
+
+```typescript
+subscriptionId: text('subscription_id')
+  .references(() => stripeSubscription.id, { onDelete: 'set null' })
+```
+
+**Why SET NULL?**
+- Invoices are financial records - must be preserved for accounting
+- Historical billing data required for compliance and refunds
+- Subscription status stored on invoice itself
+
+**6. Customer/Product Deletion → CASCADE Stripe Data**
+
+Stripe catalog and customer data cascades:
+
+```typescript
+// Customer deletion cascades all customer-scoped data
+customerId: text('customer_id')
+  .notNull()
+  .references(() => stripeCustomer.id, { onDelete: 'cascade' })
+
+// Product deletion cascades prices
+productId: text('product_id')
+  .notNull()
+  .references(() => stripeProduct.id, { onDelete: 'cascade' })
+```
+
+**Cascaded by Customer:**
+- `stripe_subscription` - Customer's subscriptions
+- `stripe_payment_method` - Customer's payment methods
+- `stripe_invoice` - Customer's invoices (via customer_id foreign key)
+
+**Cascaded by Product:**
+- `stripe_price` - Product's pricing options
+
+#### Implementation Pattern
+
+```typescript
+// ✅ CORRECT: Explicit foreign key with cascade policy
+export const chatMessage = sqliteTable('chat_message', {
+  id: text('id').primaryKey(),
+  threadId: text('thread_id')
+    .notNull()
+    .references(() => chatThread.id, { onDelete: 'cascade' }), // Thread deletion removes messages
+  participantId: text('participant_id')
+    .references(() => chatParticipant.id, { onDelete: 'set null' }), // Preserve historical messages
+  // ... other fields
+});
+```
+
+#### Testing Foreign Key Behavior
+
+When making foreign key changes:
+
+1. **Test CASCADE Behavior:**
+```sql
+-- Delete a user and verify all related data removed
+DELETE FROM user WHERE id = 'test-user-id';
+-- Check: SELECT COUNT(*) FROM chat_thread WHERE user_id = 'test-user-id'; → 0
+```
+
+2. **Test SET NULL Behavior:**
+```sql
+-- Delete a participant and verify messages preserved with NULL participant_id
+DELETE FROM chat_participant WHERE id = 'test-participant-id';
+-- Check: SELECT * FROM chat_message WHERE participant_id IS NULL; → Shows orphaned messages
+```
+
+3. **Verify No Orphaned Records:**
+```sql
+-- Find messages with invalid thread_id (should be 0 due to CASCADE)
+SELECT COUNT(*) FROM chat_message m
+LEFT JOIN chat_thread t ON m.thread_id = t.id
+WHERE t.id IS NULL;
+```
+
+#### ❌ PROHIBITED Patterns
+
+```typescript
+// ❌ WRONG: No onDelete specified
+userId: text('user_id')
+  .references(() => user.id) // Missing: { onDelete: 'cascade' }
+
+// ❌ WRONG: Inconsistent behavior (should cascade)
+threadId: text('thread_id')
+  .references(() => chatThread.id, { onDelete: 'restrict' }) // WRONG: Should be CASCADE
+
+// ❌ WRONG: Cascading financial records (should preserve)
+subscriptionId: text('subscription_id')
+  .references(() => stripeSubscription.id, { onDelete: 'cascade' }) // WRONG: Should be SET NULL
+```
+
+#### Migration Safety
+
+When changing foreign key cascade behavior:
+
+1. Create migration with `ALTER TABLE ... DROP CONSTRAINT` then `ADD CONSTRAINT`
+2. Test cascade behavior in preview environment first
+3. Verify no data loss or orphaned records
+4. Document reasoning in migration file comments
+
+**Example Migration:**
+```sql
+-- Migration: Update invoice foreign key to preserve historical records
+-- Previous: ON DELETE CASCADE (❌ Wrong - deletes financial records)
+-- New: ON DELETE SET NULL (✅ Correct - preserves invoices for accounting)
+
+-- Note: SQLite doesn't support ALTER CONSTRAINT, must recreate table
+-- This is handled automatically by Drizzle migrations
+```
 
 ---
 

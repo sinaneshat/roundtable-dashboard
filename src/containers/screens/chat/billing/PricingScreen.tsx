@@ -1,10 +1,12 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
+import type { Subscription } from '@/api/routes/billing/schema';
 import { ChatPageHeader } from '@/components/chat/chat-header';
-import { ChatContainer } from '@/components/chat/chat-layout';
 import { ChatPage } from '@/components/chat/chat-states';
 import { PricingContent } from '@/components/pricing/pricing-content';
 import {
@@ -15,36 +17,65 @@ import {
   useSubscriptionsQuery,
   useSwitchSubscriptionMutation,
 } from '@/hooks';
+import { toastManager } from '@/lib/toast';
+import { getApiErrorMessage } from '@/lib/utils';
 
 export default function PricingScreen() {
+  const router = useRouter();
   const t = useTranslations();
   const [processingPriceId, setProcessingPriceId] = useState<string | null>(null);
   const [cancelingSubscriptionId, setCancelingSubscriptionId] = useState<string | null>(null);
   const [isManagingBilling, setIsManagingBilling] = useState(false);
 
   const { data: productsData, isLoading: isLoadingProducts, error: productsError } = useProductsQuery();
-  const { data: subscriptionsData, isLoading: isLoadingSubscriptions } = useSubscriptionsQuery();
+  const { data: subscriptionsData } = useSubscriptionsQuery();
 
   const createCheckoutMutation = useCreateCheckoutSessionMutation();
   const cancelMutation = useCancelSubscriptionMutation();
   const switchMutation = useSwitchSubscriptionMutation();
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
 
-  const products = productsData?.success ? productsData.data?.products || [] : [];
-  const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.subscriptions || [] : [];
+  const products = productsData?.success ? productsData.data?.items ?? [] : [];
+  const subscriptions: Subscription[] = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
+
+  const hasValidProductData = productsData?.success && !!productsData.data?.items;
+  const shouldShowError = productsError || (productsData && !productsData.success);
+  const shouldShowLoading = isLoadingProducts || (!hasValidProductData && !shouldShowError);
 
   const activeSubscription = subscriptions.find(
-    sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
 
   const handleSubscribe = async (priceId: string) => {
     setProcessingPriceId(priceId);
     try {
       if (activeSubscription) {
-        await switchMutation.mutateAsync({
+        const result = await switchMutation.mutateAsync({
           param: { id: activeSubscription.id },
           json: { newPriceId: priceId },
         });
+
+        if (result.success) {
+          const changeDetails = result.data?.changeDetails;
+
+          if (changeDetails) {
+            const changeType = changeDetails.isUpgrade
+              ? SubscriptionChangeTypes.UPGRADE
+              : changeDetails.isDowngrade
+                ? SubscriptionChangeTypes.DOWNGRADE
+                : SubscriptionChangeTypes.CHANGE;
+
+            const params = new URLSearchParams({
+              changeType,
+              oldProductId: changeDetails.oldPrice.productId,
+              newProductId: changeDetails.newPrice.productId,
+            });
+
+            router.replace(`/chat/billing/subscription-changed?${params.toString()}`);
+          } else {
+            router.replace('/chat/billing/subscription-changed');
+          }
+        }
       } else {
         const result = await createCheckoutMutation.mutateAsync({
           json: { priceId },
@@ -54,8 +85,8 @@ export default function PricingScreen() {
           window.location.href = result.data.url;
         }
       }
-    } catch (err) {
-      console.error('Subscription error:', err);
+    } catch (error) {
+      toastManager.error(t('billing.errors.subscribeFailed'), getApiErrorMessage(error));
     } finally {
       setProcessingPriceId(null);
     }
@@ -68,8 +99,8 @@ export default function PricingScreen() {
         param: { id: subscriptionId },
         json: { immediately: false },
       });
-    } catch (err) {
-      console.error('Cancel error:', err);
+    } catch (error) {
+      toastManager.error(t('billing.errors.cancelFailed'), getApiErrorMessage(error));
     } finally {
       setCancelingSubscriptionId(null);
     }
@@ -87,37 +118,33 @@ export default function PricingScreen() {
       if (result.success && result.data?.url) {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
-    } catch (err) {
-      console.error('Customer portal error:', err);
+    } catch (error) {
+      toastManager.error(t('billing.errors.manageBillingFailed'), getApiErrorMessage(error));
     } finally {
       setIsManagingBilling(false);
     }
   };
 
-  const isLoading = isLoadingProducts || isLoadingSubscriptions;
-
   return (
     <ChatPage>
       <ChatPageHeader
-        title={t('billing.products.title')}
-        description={t('billing.products.description')}
+        title={t('pricing.page.title')}
+        description={t('pricing.page.description')}
       />
 
-      <ChatContainer>
-        <PricingContent
-          products={products}
-          subscriptions={subscriptions}
-          isLoading={isLoading}
-          error={productsError}
-          processingPriceId={processingPriceId}
-          cancelingSubscriptionId={cancelingSubscriptionId}
-          isManagingBilling={isManagingBilling}
-          onSubscribe={handleSubscribe}
-          onCancel={handleCancel}
-          onManageBilling={handleManageBilling}
-          showSubscriptionBanner={false}
-        />
-      </ChatContainer>
+      <PricingContent
+        products={products}
+        subscriptions={subscriptions}
+        isLoading={shouldShowLoading}
+        error={shouldShowError ? productsError : null}
+        processingPriceId={processingPriceId}
+        cancelingSubscriptionId={cancelingSubscriptionId}
+        isManagingBilling={isManagingBilling}
+        onSubscribe={handleSubscribe}
+        onCancel={handleCancel}
+        onManageBilling={handleManageBilling}
+        showSubscriptionBanner={false}
+      />
     </ChatPage>
   );
 }

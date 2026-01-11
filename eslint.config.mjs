@@ -1,10 +1,10 @@
 import antfu from '@antfu/eslint-config';
 import nextPlugin from '@next/eslint-plugin-next';
 import pluginQuery from '@tanstack/eslint-plugin-query';
+import drizzlePlugin from 'eslint-plugin-drizzle';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
-
-import localRules from './eslint-local-rules.js';
+import testingLibraryPlugin from 'eslint-plugin-testing-library';
 
 export default antfu(
   {
@@ -54,6 +54,57 @@ export default antfu(
     },
   },
   {
+    plugins: {
+      drizzle: drizzlePlugin,
+    },
+    rules: {
+      'drizzle/enforce-delete-with-where': [
+        'error',
+        { drizzleObjectName: ['db', 'batch'] },
+      ],
+      'drizzle/enforce-update-with-where': [
+        'error',
+        { drizzleObjectName: ['db', 'batch'] },
+      ],
+    },
+  },
+  {
+    files: ['**/__tests__/**/*', '**/*.test.*', '**/*.spec.*', '**/test-*.{ts,tsx}', 'src/lib/testing/**/*', 'vitest.setup.ts'],
+    ignores: ['e2e/**/*'],
+    plugins: {
+      'testing-library': testingLibraryPlugin,
+    },
+    rules: {
+      // Vitest rules (plugin provided by antfu config as 'test')
+      'test/no-disabled-tests': 'warn',
+      'test/no-focused-tests': 'error',
+      'test/no-identical-title': 'error',
+      'test/prefer-to-have-length': 'warn',
+      'test/valid-expect': 'error',
+      'test/no-conditional-expect': 'error',
+
+      // Testing Library rules
+      'testing-library/await-async-queries': 'error',
+      'testing-library/no-await-sync-queries': 'error',
+      'testing-library/no-debugging-utils': 'warn',
+      'testing-library/prefer-screen-queries': 'warn',
+      'testing-library/prefer-user-event': 'warn',
+
+      // Relax some rules for test files
+      'ts/no-explicit-any': 'off',
+      'no-console': 'off',
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    // Next.js Metadata API files (opengraph-image, twitter-image, etc.) require named exports
+    // These are not React component files - they generate static images
+    files: ['**/opengraph-image.tsx', '**/twitter-image.tsx', '**/icon.tsx', '**/apple-icon.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
     rules: {
       'perfectionist/sort-imports': 'off',
       'import/order': 'off', // Avoid conflicts with `simple-import-sort` plugin
@@ -72,7 +123,7 @@ export default antfu(
       }],
       'ts/no-explicit-any': 'error',
       'ts/explicit-function-return-type': 'off',
-      'no-console': ['warn', { allow: ['error', 'warn'] }],
+      'no-console': ['error', { allow: ['error'] }],
 
       // // Prevent re-exports and enforce better export patterns
       // 'import/no-namespace': ['error', { ignore: ['*.css', '*.scss', '*.less'] }], // Prevents export * from './module'
@@ -81,22 +132,6 @@ export default antfu(
       // 'import/no-duplicates': 'error', // Prevents importing the same module in multiple places
       // 'import/prefer-default-export': 'off', // Don't force default exports
       // 'import/no-default-export': 'off', // Allow default exports where needed
-    },
-  },
-  {
-    plugins: {
-      local: localRules,
-    },
-    rules: {
-      // 🚨 CRITICAL: Cloudflare D1 Batch-First Architecture Enforcement
-      // These rules prevent transaction usage and enforce batch operations
-      'local/no-db-transactions': 'error', // Block db.transaction() usage
-      'local/prefer-batch-handler': 'warn', // Suggest using createHandlerWithBatch
-      'local/batch-context-awareness': 'warn', // Prefer batch.db over getDbAsync() in batch handlers
-
-      // 🚨 CRITICAL: OpenNext.js Database Pattern Enforcement
-      // Prevent global db imports to ensure per-request database instances
-      'local/no-global-db-import': 'error', // Block import { db } from '@/db' (use getDb/getDbAsync instead)
     },
   },
 );

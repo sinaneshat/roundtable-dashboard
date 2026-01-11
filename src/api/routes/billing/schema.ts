@@ -1,89 +1,46 @@
 import { z } from '@hono/zod-openapi';
-import type Stripe from 'stripe';
 
+import { PurchaseTypeSchema, StripeSubscriptionStatusSchema, SubscriptionTierSchema } from '@/api/core/enums';
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
-
-// ============================================================================
-// Path Parameter Schemas
-// ============================================================================
-
-export const ProductIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Stripe product ID',
-    example: 'prod_ABC123',
-  }),
-});
-
-export const SubscriptionIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Stripe subscription ID',
-    example: 'sub_ABC123',
-  }),
-});
+import {
+  stripePriceSelectSchema,
+  stripeProductSelectSchema,
+  stripeSubscriptionSelectSchema,
+} from '@/db/validation/billing';
 
 // ============================================================================
 // Product & Price Schemas
 // ============================================================================
 
-const PriceSchema = z.object({
-  id: z.string().openapi({
-    example: 'price_1ABC123',
-    description: 'Stripe price ID',
-  }),
-  productId: z.string().openapi({
-    example: 'prod_ABC123',
-    description: 'Stripe product ID',
-  }),
-  unitAmount: z.number().int().nonnegative().openapi({
-    example: 999,
-    description: 'Price in cents',
-  }),
-  currency: z.string().openapi({
-    example: 'usd',
-    description: 'Currency code',
-  }),
-  interval: z.enum(['month', 'year']).openapi({
-    example: 'month',
-    description: 'Billing interval',
-  }),
-  trialPeriodDays: z.number().int().nonnegative().nullable().openapi({
-    example: 14,
-    description: 'Trial days',
-  }),
-  active: z.boolean().openapi({
-    example: true,
-    description: 'Active status',
-  }),
-}).openapi('Price');
+const PriceSchema = stripePriceSelectSchema
+  .pick({
+    id: true,
+    productId: true,
+    unitAmount: true,
+    currency: true,
+    interval: true,
+    trialPeriodDays: true,
+    active: true,
+  })
+  .openapi('Price');
 
-const ProductSchema = z.object({
-  id: z.string().openapi({
-    example: 'prod_ABC123',
-    description: 'Stripe product ID',
-  }),
-  name: z.string().openapi({
-    example: 'Professional Plan',
-    description: 'Product name',
-  }),
-  description: z.string().nullable().openapi({
-    example: 'For growing teams',
-    description: 'Product description',
-  }),
-  features: z.array(z.string()).nullable().openapi({
-    example: ['Feature 1', 'Feature 2'],
-    description: 'Product features',
-  }),
-  active: z.boolean().openapi({
-    example: true,
-    description: 'Active status',
-  }),
-  prices: z.array(PriceSchema).optional().openapi({
-    description: 'Available prices',
-  }),
-}).openapi('Product');
+const ProductSchema = stripeProductSelectSchema
+  .pick({
+    id: true,
+    name: true,
+    description: true,
+    active: true,
+    features: true,
+  })
+  .extend({
+    prices: z.array(PriceSchema).optional().openapi({
+      description: 'Available prices for this product',
+    }),
+  })
+  .openapi('Product');
 
 const ProductListPayloadSchema = z.object({
-  products: z.array(ProductSchema).openapi({
+  items: z.array(ProductSchema).openapi({
     description: 'List of available products with prices',
   }),
   count: z.number().int().nonnegative().openapi({
@@ -107,22 +64,22 @@ export const ProductDetailResponseSchema = createApiResponseSchema(ProductDetail
 // ============================================================================
 
 export const CheckoutRequestSchema = z.object({
-  priceId: z.string().min(1).openapi({
+  priceId: CoreSchemas.id().openapi({
     description: 'Stripe price ID for the subscription',
     example: 'price_1ABC123',
   }),
   successUrl: CoreSchemas.url().optional().openapi({
-    description: 'URL to redirect to after successful checkout (defaults to /chat/billing/success). Do NOT include session_id parameter - success page will eagerly sync fresh data from Stripe API.',
-    example: 'https://app.example.com/chat/billing/success',
+    description: 'Redirect URL after successful checkout (defaults to /chat)',
+    example: 'https://app.example.com/chat',
   }),
   cancelUrl: CoreSchemas.url().optional().openapi({
-    description: 'URL to redirect to if checkout is canceled (defaults to /chat/billing)',
-    example: 'https://app.example.com/chat/billing',
+    description: 'Redirect URL if checkout is canceled (defaults to /chat/pricing)',
+    example: 'https://app.example.com/chat/pricing',
   }),
 }).openapi('CheckoutRequest');
 
 const CheckoutPayloadSchema = z.object({
-  sessionId: z.string().openapi({
+  sessionId: CoreSchemas.id().openapi({
     description: 'Stripe checkout session ID',
     example: 'cs_test_a1b2c3d4e5f6g7h8i9j0',
   }),
@@ -158,60 +115,29 @@ export const CustomerPortalResponseSchema = createApiResponseSchema(CustomerPort
 // Subscription Schemas
 // ============================================================================
 
-const SubscriptionSchema = z.object({
-  id: z.string().openapi({
-    description: 'Stripe subscription ID',
-    example: 'sub_ABC123',
-  }),
-  status: z.enum([
-    'active',
-    'past_due',
-    'unpaid',
-    'canceled',
-    'incomplete',
-    'incomplete_expired',
-    'trialing',
-    'paused',
-  ] as const).openapi({
-    description: 'Subscription status (matches Stripe.Subscription.Status)',
-    example: 'active',
-  }),
-  priceId: z.string().openapi({
-    description: 'Stripe price ID',
-    example: 'price_1ABC123',
-  }),
-  productId: z.string().openapi({
-    description: 'Stripe product ID',
-    example: 'prod_ABC123',
-  }),
-  currentPeriodStart: CoreSchemas.timestamp().openapi({
-    description: 'Current billing period start timestamp',
-    example: '2025-01-01T00:00:00.000Z',
-  }),
-  currentPeriodEnd: CoreSchemas.timestamp().openapi({
-    description: 'Current billing period end timestamp',
-    example: '2025-02-01T00:00:00.000Z',
-  }),
-  cancelAtPeriodEnd: z.boolean().openapi({
-    description: 'Whether subscription will cancel at period end',
-    example: false,
-  }),
-  canceledAt: CoreSchemas.timestamp().nullable().openapi({
-    description: 'Timestamp when subscription was canceled',
-    example: null,
-  }),
-  trialStart: CoreSchemas.timestamp().nullable().openapi({
-    description: 'Trial period start timestamp',
-    example: null,
-  }),
-  trialEnd: CoreSchemas.timestamp().nullable().openapi({
-    description: 'Trial period end timestamp',
-    example: null,
-  }),
-}).openapi('Subscription');
+const SubscriptionSchema = stripeSubscriptionSelectSchema
+  .pick({
+    id: true,
+    status: true,
+    priceId: true,
+    cancelAtPeriodEnd: true,
+  })
+  .extend({
+    currentPeriodStart: z.string().openapi({ description: 'Current period start date (ISO string)' }),
+    currentPeriodEnd: z.string().openapi({ description: 'Current period end date (ISO string)' }),
+    canceledAt: z.string().nullable().openapi({ description: 'Cancellation date (ISO string or null)' }),
+    trialStart: z.string().nullable().openapi({ description: 'Trial start date (ISO string or null)' }),
+    trialEnd: z.string().nullable().openapi({ description: 'Trial end date (ISO string or null)' }),
+    price: stripePriceSelectSchema
+      .pick({ productId: true })
+      .openapi({
+        description: 'Price details with product ID',
+      }),
+  })
+  .openapi('Subscription');
 
 const SubscriptionListPayloadSchema = z.object({
-  subscriptions: z.array(SubscriptionSchema).openapi({
+  items: z.array(SubscriptionSchema).openapi({
     description: 'List of user subscriptions',
   }),
   count: z.number().int().nonnegative().openapi({
@@ -264,7 +190,7 @@ export const WebhookResponseSchema = createApiResponseSchema(WebhookPayloadSchem
 // ============================================================================
 
 export const SwitchSubscriptionRequestSchema = z.object({
-  newPriceId: z.string().min(1).openapi({
+  newPriceId: CoreSchemas.id().openapi({
     description: 'New Stripe price ID to switch to (handles both upgrades and downgrades automatically)',
     example: 'price_1ABC456',
   }),
@@ -285,42 +211,146 @@ const SubscriptionChangePayloadSchema = z.object({
     description: 'Success message describing the change',
     example: 'Subscription upgraded successfully',
   }),
+  changeDetails: z.object({
+    oldPrice: PriceSchema.openapi({
+      description: 'Previous price details before the change',
+    }),
+    newPrice: PriceSchema.openapi({
+      description: 'New price details after the change',
+    }),
+    isUpgrade: z.boolean().openapi({
+      description: 'Whether this change is an upgrade (true) or downgrade (false)',
+      example: true,
+    }),
+    isDowngrade: z.boolean().openapi({
+      description: 'Whether this change is a downgrade (true) or upgrade (false)',
+      example: false,
+    }),
+  }).optional().openapi({
+    description: 'Details about the subscription change for showing before/after comparison',
+  }),
 }).openapi('SubscriptionChangePayload');
 
 export const SubscriptionChangeResponseSchema = createApiResponseSchema(SubscriptionChangePayloadSchema).openapi('SubscriptionChangeResponse');
 
-// ============================================================================
-// TYPE EXPORTS FOR FRONTEND & BACKEND
-// ============================================================================
-
-// ============================================================================
-// TYPE EXPORTS - Using Official Stripe SDK Types
-// ============================================================================
-
 export type Product = z.infer<typeof ProductSchema>;
 export type Price = z.infer<typeof PriceSchema>;
 export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
-export type Subscription = z.infer<typeof SubscriptionSchema>;
 
-// Use official Stripe SDK type for subscription status
-export type SubscriptionStatus = Stripe.Subscription.Status;
+// ============================================================================
+// Sync Response Schemas
+// ============================================================================
+
+export const SyncedSubscriptionStateSchema = z.object({
+  status: StripeSubscriptionStatusSchema.openapi({
+    description: 'Subscription status',
+    example: 'active',
+  }),
+  subscriptionId: z.string().openapi({
+    description: 'Stripe subscription ID',
+    example: 'sub_ABC123',
+  }),
+}).openapi('SyncedSubscriptionState');
+
+const TierChangeSchema = z.object({
+  previousTier: SubscriptionTierSchema.openapi({
+    description: 'Previous subscription tier before sync',
+    example: 'free',
+  }),
+  newTier: SubscriptionTierSchema.openapi({
+    description: 'New subscription tier after sync',
+    example: 'pro',
+  }),
+  previousPriceId: z.string().nullable().openapi({
+    description: 'Previous Stripe price ID (null for free tier)',
+    example: null,
+  }),
+  newPriceId: z.string().nullable().openapi({
+    description: 'New Stripe price ID (null for free tier)',
+    example: 'price_1ABC123',
+  }),
+}).openapi('TierChange');
+
+export const CreditPurchaseInfoSchema = z.object({
+  creditsGranted: z.number().openapi({
+    description: 'Number of credits granted from purchase',
+    example: 10000,
+  }),
+  amountPaid: z.number().openapi({
+    description: 'Amount paid in cents',
+    example: 1000,
+  }),
+  currency: z.string().openapi({
+    description: 'Currency of payment',
+    example: 'usd',
+  }),
+}).openapi('CreditPurchaseInfo');
+
+export const SyncAfterCheckoutPayloadSchema = z.object({
+  synced: z.boolean().openapi({
+    description: 'Whether sync was successful',
+    example: true,
+  }),
+  purchaseType: PurchaseTypeSchema.openapi({
+    description: 'Type of purchase that was made',
+    example: 'subscription',
+  }),
+  subscription: SyncedSubscriptionStateSchema.nullable().openapi({
+    description: 'Synced subscription state (for subscription purchases)',
+  }),
+  creditPurchase: CreditPurchaseInfoSchema.nullable().openapi({
+    description: 'Credit purchase info (null for subscription-only purchases)',
+  }),
+  tierChange: TierChangeSchema.openapi({
+    description: 'Tier change information for comparison UI',
+  }),
+  creditsBalance: z.number().openapi({
+    description: 'Current credits balance after purchase',
+    example: 10000,
+  }),
+}).openapi('SyncAfterCheckoutPayload');
+
+export const SyncAfterCheckoutResponseSchema = createApiResponseSchema(
+  SyncAfterCheckoutPayloadSchema,
+).openapi('SyncAfterCheckoutResponse');
+
+// ============================================================================
+// Webhook Schemas
+// ============================================================================
+
+export const WebhookHeadersSchema = z.object({
+  'stripe-signature': z.string().min(1).openapi({
+    param: {
+      name: 'stripe-signature',
+      in: 'header',
+    },
+    example: 't=1234567890,v1=abcdef...',
+    description: 'Stripe webhook signature for verification',
+  }),
+});
+
+export const SyncCreditsAfterCheckoutPayloadSchema = z.object({
+  synced: z.boolean().openapi({
+    description: 'Whether sync was successful',
+    example: true,
+  }),
+  creditPurchase: CreditPurchaseInfoSchema.nullable().openapi({
+    description: 'Credit purchase info (null if no recent purchase found)',
+  }),
+  creditsBalance: z.number().openapi({
+    description: 'Current credits balance after purchase',
+    example: 10000,
+  }),
+}).openapi('SyncCreditsAfterCheckoutPayload');
+
+export const SyncCreditsAfterCheckoutResponseSchema = createApiResponseSchema(
+  SyncCreditsAfterCheckoutPayloadSchema,
+).openapi('SyncCreditsAfterCheckoutResponse');
+
+export type Subscription = z.infer<typeof SubscriptionSchema>;
 
 export type SwitchSubscriptionRequest = z.infer<typeof SwitchSubscriptionRequestSchema>;
 export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequestSchema>;
-
-/**
- * Type-safe subscription response payload
- * Uses official Stripe.Subscription.Status type
- */
-export type SubscriptionResponsePayload = {
-  id: string;
-  status: SubscriptionStatus; // Stripe.Subscription.Status
-  priceId: string;
-  productId: string;
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
-  cancelAtPeriodEnd: boolean;
-  canceledAt: string | null;
-  trialStart: string | null;
-  trialEnd: string | null;
-};
+export type SyncAfterCheckoutPayload = z.infer<typeof SyncAfterCheckoutPayloadSchema>;
+export type SyncCreditsAfterCheckoutPayload = z.infer<typeof SyncCreditsAfterCheckoutPayloadSchema>;
+export type WebhookHeaders = z.infer<typeof WebhookHeadersSchema>;

@@ -1,4 +1,5 @@
-import { Head, Html, pixelBasedPreset, Tailwind } from '@react-email/components';
+// eslint-disable-next-line simple-import-sort/imports
+import { Html as EmailHtml, Head, pixelBasedPreset, Tailwind } from '@react-email/components';
 import type { ReactNode } from 'react';
 
 type EmailLayoutProps = {
@@ -13,7 +14,7 @@ export function EmailLayout({
   dir = 'ltr',
 }: EmailLayoutProps) {
   return (
-    <Html lang={lang} dir={dir}>
+    <EmailHtml lang={lang} dir={dir}>
       <Head />
       <Tailwind
         config={{
@@ -37,6 +38,6 @@ export function EmailLayout({
       >
         {children}
       </Tailwind>
-    </Html>
+    </EmailHtml>
   );
 }

@@ -1,87 +1,167 @@
 import {
-  EmailBody,
-  EmailButton,
-  EmailContainer,
-  EmailFooter,
-  EmailHeader,
-  EmailHeading,
-  EmailLayout,
-  EmailLink,
-  EmailPreview,
-  EmailSection,
-  EmailText,
-  UnsubscribeFooter,
-} from '@/emails/components';
+  Body,
+  Button,
+  Container,
+  Head,
+  Heading,
+  Hr,
+  Html,
+  Link,
+  Preview,
+  Section,
+  Text,
+} from '@react-email/components';
+
+import { BRAND } from '@/constants';
+import { Logo } from '@/emails/components/header/logo';
+import { colors, spacing, typography } from '@/emails/design-tokens';
 
 type MagicLinkProps = {
   userName?: string;
   loginUrl: string;
   expirationTime?: string;
-  requestIp?: string;
-  requestLocation?: string;
+};
+
+// Vercel-style email styling
+const main = {
+  backgroundColor: colors.background,
+  fontFamily: typography.fontFamily,
+  padding: spacing[4],
+};
+
+const container = {
+  backgroundColor: colors.white,
+  margin: '0 auto',
+  padding: `${spacing[10]} ${spacing[5]} ${spacing[10]} ${spacing[5]}`,
+  maxWidth: '465px',
+};
+
+const logoContainer = {
+  textAlign: 'center' as const,
+  margin: `0 0 ${spacing[6]} 0`,
+};
+
+const h1 = {
+  color: colors.foreground,
+  fontSize: typography.fontSize['2xl'],
+  fontWeight: typography.fontWeight.bold,
+  margin: `0 0 ${spacing[6]} 0`,
+  padding: '0',
+  lineHeight: '1.25',
+};
+
+const text = {
+  color: colors.foreground,
+  fontSize: typography.fontSize.sm,
+  lineHeight: '1.5',
+  margin: `0 0 ${spacing[4]} 0`,
+};
+
+const textSmall = {
+  color: colors.mutedForeground,
+  fontSize: typography.fontSize.xs,
+  lineHeight: '1.5',
+  margin: `${spacing[4]} 0`,
+};
+
+const buttonContainer = {
+  margin: `${spacing[6]} 0`,
+  textAlign: 'center' as const,
+};
+
+const button = {
+  backgroundColor: '#000000',
+  borderRadius: '6px',
+  color: '#FFFFFF',
+  fontSize: typography.fontSize.sm,
+  fontWeight: typography.fontWeight.medium,
+  textDecoration: 'none',
+  textAlign: 'center' as const,
+  display: 'inline-block',
+  padding: `${spacing[3]} ${spacing[6]}`,
+};
+
+const hr = {
+  borderColor: colors.border,
+  margin: `${spacing[6]} 0`,
+};
+
+const footer = {
+  color: colors.mutedForeground,
+  fontSize: typography.fontSize.xs,
+  lineHeight: '1.5',
+  margin: `${spacing[2]} 0`,
+};
+
+const link = {
+  color: '#000000',
+  textDecoration: 'underline',
 };
 
 export function MagicLink({
   userName,
   loginUrl,
   expirationTime = '15 minutes',
-  requestIp,
-  requestLocation,
 }: MagicLinkProps) {
-  const previewText = 'Your secure login link for Roundtable';
-
   return (
-    <EmailLayout>
-      <EmailBody>
-        <EmailPreview text={previewText} />
-        <EmailContainer>
-          <EmailHeader />
+    <Html>
+      <Head />
+      <Preview>
+        Your secure login link for
+        {' '}
+        {BRAND.displayName}
+      </Preview>
+      <Body style={main}>
+        <Container style={container}>
+          {/* Logo centered at the top */}
+          <Section style={logoContainer}>
+            <Logo size={64} />
+          </Section>
 
-          <EmailHeading level={1}>
+          <Heading style={h1}>
             Sign in to
             {' '}
-            <strong>Roundtable</strong>
-          </EmailHeading>
+            {BRAND.displayName}
+          </Heading>
 
-          <EmailText>
-            {userName ? `Hello ${userName},` : 'Hello,'}
-          </EmailText>
+          <Text style={text}>
+            {userName ? `Hi ${userName},` : 'Hi there,'}
+          </Text>
 
-          <EmailText>
-            Click the button below to securely sign in to your account. No password required!
-          </EmailText>
+          <Text style={text}>
+            Click the button below to securely sign in to your account. No password required.
+          </Text>
 
-          <EmailSection align="center">
-            <EmailButton href={loginUrl} variant="primary" size="lg">
+          <Section style={buttonContainer}>
+            <Button style={button} href={loginUrl}>
               Sign In Securely
-            </EmailButton>
-          </EmailSection>
+            </Button>
+          </Section>
 
-          <EmailText size="sm" color="secondary">
+          <Text style={textSmall}>
             This link will expire in
             {' '}
             {expirationTime}
             {' '}
             for your security.
-          </EmailText>
+          </Text>
 
-          <EmailText>
+          <Hr style={hr} />
+
+          <Text style={footer}>
             Or copy and paste this URL into your browser:
             {' '}
-            <EmailLink href={loginUrl}>
+            <Link href={loginUrl} style={link}>
               {loginUrl}
-            </EmailLink>
-          </EmailText>
+            </Link>
+          </Text>
 
-          <EmailFooter />
-
-          <UnsubscribeFooter
-            senderIp={requestIp}
-            senderLocation={requestLocation}
-          />
-        </EmailContainer>
-      </EmailBody>
-    </EmailLayout>
+          <Text style={footer}>
+            If you didn't request this email, you can safely ignore it.
+          </Text>
+        </Container>
+      </Body>
+    </Html>
   );
 }
 
@@ -89,8 +169,6 @@ MagicLink.PreviewProps = {
   userName: 'Alex Morgan',
   loginUrl: 'https://example.com/magic-link?token=magic123',
   expirationTime: '15 minutes',
-  requestIp: '192.168.1.1',
-  requestLocation: 'San Francisco, CA',
 } as MagicLinkProps;
 
 export default MagicLink;

@@ -1,5 +1,8 @@
-// Helper utilities
-export { type EnvVars, getBaseUrl, getEnvironmentVariables } from './helpers';
+/**
+ * Utils Barrel Export
+ *
+ * Re-exports from utility modules for cleaner imports.
+ */
 
-// Metadata utilities
-export { createMetadata, type CreateMetadataProps } from './metadata';
+// Metadata utilities (SEO, JSON-LD, Next.js page metadata)
+export { createBreadcrumbJsonLd, createFaqJsonLd, createJsonLd, createMetadata, type CreateMetadataProps } from './metadata';

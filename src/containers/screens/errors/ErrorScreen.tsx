@@ -1,46 +1,101 @@
 'use client';
 
-import { RefreshCw } from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import { useEffect } from 'react';
+import { NextIntlClientProvider, useTranslations } from 'next-intl';
 
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import messages from '@/i18n/locales/en/common.json';
+import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 
-type ErrorScreenProps = {
-  error: Error & { digest?: string };
-  reset: () => void;
+type ErrorDetails = {
+  message?: string;
+  stack?: string;
+  digest?: string;
 };
 
-export default function ErrorScreen({ error, reset }: ErrorScreenProps) {
-  const t = useTranslations();
+type ErrorScreenProps = {
+  reset: () => void;
+  error?: ErrorDetails;
+};
 
-  useEffect(() => {
-    // Error logging handled by error boundary
-  }, [error]);
+function ErrorScreenContent({ reset, error }: ErrorScreenProps) {
+  const t = useTranslations();
+  const showDetails = error && getWebappEnv() !== WEBAPP_ENVS.PROD;
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background">
-      <div className="w-full max-w-lg px-4">
-        <Card className="relative rounded-xl border bg-card/50 shadow-lg backdrop-blur-xl">
-          <CardHeader>
-            <h1 className="text-2xl font-semibold">{t('states.error.default')}</h1>
-            <p className="text-sm text-muted-foreground">
-              {t('states.error.unexpectedError')}
-            </p>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <Button
-              onClick={() => reset()}
-              variant="outline"
-              className="flex items-center"
-            >
-              <RefreshCw className="me-2 size-4" />
-              {t('states.error.tryAgain')}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background px-4 py-12">
+      <Empty className="max-w-lg border-none">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icons.alertTriangle className="text-destructive" />
+          </EmptyMedia>
+          <EmptyTitle className="text-2xl font-semibold">
+            {t('states.error.default')}
+          </EmptyTitle>
+          <EmptyDescription className="text-base">
+            {t('states.error.unexpectedError')}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent className="w-full space-y-4">
+          {showDetails && (
+            <details className="w-full rounded-lg bg-destructive/10 p-3 text-left" open>
+              <summary className="cursor-pointer text-sm font-medium text-destructive">
+                {t('states.error.detailsTitle')}
+              </summary>
+              <div className="mt-2 space-y-2">
+                {error.digest && (
+                  <div className="text-xs">
+                    <strong>{t('states.error.digest')}</strong>
+                    <code className="ml-2 rounded bg-black/10 px-1.5 py-0.5">
+                      {error.digest}
+                    </code>
+                  </div>
+                )}
+                {error.message && (
+                  <div className="text-xs">
+                    <strong>{t('states.error.errorLabel')}</strong>
+                    <pre className="mt-1 overflow-auto rounded bg-black/10 p-2 text-xs max-h-32">
+                      {error.message}
+                    </pre>
+                  </div>
+                )}
+                {error.stack && (
+                  <div className="text-xs">
+                    <strong>{t('states.error.stackTrace')}</strong>
+                    <pre className="mt-1 overflow-auto rounded bg-black/10 p-2 text-xs max-h-48">
+                      {error.stack}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </details>
+          )}
+          <Button
+            onClick={reset}
+            variant="outline"
+            size="lg"
+            startIcon={<Icons.refreshCw />}
+          >
+            {t('states.error.tryAgain')}
+          </Button>
+        </EmptyContent>
+      </Empty>
     </div>
+  );
+}
+
+export default function ErrorScreen({ reset, error }: ErrorScreenProps) {
+  return (
+    <NextIntlClientProvider messages={messages} locale="en" timeZone="UTC">
+      <ErrorScreenContent reset={reset} error={error} />
+    </NextIntlClientProvider>
   );
 }

@@ -1,8 +1,5 @@
-// components/TextInput.tsx
-import React from 'react';
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
-
-import type { FormOptions, GeneralFormProps } from '@/types/general';
 
 import {
   FormControl,
@@ -11,31 +8,36 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '../ui/form';
+} from '@/components/ui/form';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../ui/select';
+} from '@/components/ui/select';
+import type { FormOptions } from '@/lib/schemas';
 
-type Props = {
+type RHFSelectProps<TFieldValues extends FieldValues = FieldValues> = {
+  name: FieldPath<TFieldValues>;
+  title: string;
   options: FormOptions;
-} & GeneralFormProps;
+  placeholder?: string;
+  description?: string;
+  required?: boolean;
+  disabled?: boolean;
+};
 
-function RHFSelect({
+export function RHFSelect<TFieldValues extends FieldValues = FieldValues>({
   name,
   options,
   placeholder,
   title,
   description,
-  value: externalValue,
-  onChange: externalOnChange,
   required,
   disabled,
-}: Props) {
-  const { control } = useFormContext();
+}: RHFSelectProps<TFieldValues>) {
+  const { control } = useFormContext<TFieldValues>();
 
   return (
     <FormField
@@ -48,15 +50,8 @@ function RHFSelect({
             disabled={disabled}
             required={required}
             data-testid={field.name}
-            onValueChange={(e) => {
-              if (externalOnChange) {
-                return externalOnChange?.({ target: { value: e } });
-              }
-              return field.onChange(e);
-            }}
-            defaultValue={
-              field.value !== undefined ? field.value : externalValue
-            }
+            onValueChange={field.onChange}
+            value={field.value}
           >
             <FormControl>
               <SelectTrigger>
@@ -65,24 +60,20 @@ function RHFSelect({
             </FormControl>
             <SelectContent>
               {options.map(item => (
-                <SelectItem key={item.value} value={item.value}>
-                  <p>{item.label}</p>
+                <SelectItem
+                  key={item.value}
+                  value={item.value}
+                  disabled={item.value === ''}
+                >
+                  {item.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {description && (
-            <FormDescription>
-              {description}
-              {' '}
-            </FormDescription>
-          )}
-          {' '}
+          {description && <FormDescription>{description}</FormDescription>}
           <FormMessage />
         </FormItem>
       )}
     />
   );
 }
-
-export default RHFSelect;

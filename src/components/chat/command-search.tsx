@@ -1,229 +1,276 @@
 'use client';
-
-import { Search, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
-import type { Chat } from '@/lib/types/chat';
+import { KeyboardKeys } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { LinkLoadingIndicator } from '@/components/ui/link-loading-indicator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { VisuallyHidden } from '@/components/ui/visually-hidden';
+import { useThreadsQuery } from '@/hooks/queries';
+import { useDebouncedValue } from '@/hooks/utils';
+import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
-import { glassCard, glassOverlay } from '@/lib/ui/glassmorphism';
 
 type CommandSearchProps = {
-  chats: Chat[];
   isOpen: boolean;
   onClose: () => void;
 };
 
-export function CommandSearch({ chats, isOpen, onClose }: CommandSearchProps) {
+type SearchResultThread = {
+  id: string;
+  slug: string;
+  title: string;
+  updatedAt: string;
+};
+
+type SearchResultItemProps = {
+  thread: SearchResultThread;
+  index: number;
+  selectedIndex: number;
+  onClose: () => void;
+  onSelect: (index: number) => void;
+};
+
+function SearchResultItem({
+  thread,
+  index,
+  selectedIndex,
+  onClose,
+  onSelect,
+}: SearchResultItemProps) {
+  const href = `/chat/${thread.slug}`;
+  return (
+    <Link
+      href={href}
+      prefetch={false}
+      onClick={onClose}
+      className={cn(
+        'w-full p-3 transition-all text-left rounded-lg',
+        'hover:bg-white/[0.07]',
+        selectedIndex === index && 'bg-white/10',
+      )}
+      onMouseEnter={() => {
+        onSelect(index);
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-normal truncate text-foreground">
+            {thread.title}
+          </p>
+          <p className="text-xs text-muted-foreground truncate">
+            {new Date(thread.updatedAt).toLocaleDateString()}
+          </p>
+        </div>
+        <LinkLoadingIndicator variant="spinner" size="sm" className="text-muted-foreground shrink-0" />
+      </div>
+    </Link>
+  );
+}
+export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   const router = useRouter();
   const t = useTranslations();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-
-  // Filter chats based on search query
-  const filteredChats = useMemo(() => {
-    if (!searchQuery)
-      return chats.slice(0, 8);
-    return chats.filter(chat =>
-      chat.title.toLowerCase().includes(searchQuery.toLowerCase()),
-    ).slice(0, 8);
-  }, [chats, searchQuery]);
-
-  // Reset search when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Cleanup state when modal closes
-      setSearchQuery('');
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Cleanup state when modal closes
-      setSelectedIndex(0);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement | null>(null);
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+  const {
+    data: threadsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useThreadsQuery(debouncedSearch || undefined);
+  const threads = useMemo(() => {
+    if (!threadsData?.pages) {
+      return [];
     }
+    return threadsData.pages.flatMap((page) => {
+      if (page.success && page.data?.items) {
+        return page.data.items;
+      }
+      return [];
+    });
+  }, [threadsData]);
+  const handleClose = useCallback(() => {
+    setSearchQuery('');
+    setSelectedIndex(0);
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      return afterPaint(() => searchInputRef.current?.focus({ preventScroll: true }));
+    }
+    return undefined;
   }, [isOpen]);
 
-  // Handle keyboard navigation
+  const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    if (!isOpen)
+      return;
+    switch (e.key) {
+      case KeyboardKeys.ARROW_DOWN:
+        e.preventDefault();
+        setSelectedIndex(prev => (prev + 1) % threads.length);
+        break;
+      case KeyboardKeys.ARROW_UP:
+        e.preventDefault();
+        setSelectedIndex(prev => (prev - 1 + threads.length) % threads.length);
+        break;
+      case KeyboardKeys.ENTER:
+        e.preventDefault();
+        if (threads[selectedIndex]) {
+          router.push(`/chat/${threads[selectedIndex].slug}`);
+          handleClose();
+        }
+        break;
+      case KeyboardKeys.ESCAPE:
+        e.preventDefault();
+        handleClose();
+        break;
+    }
+  });
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen)
-        return;
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault();
-          setSelectedIndex(prev => (prev + 1) % filteredChats.length);
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setSelectedIndex(prev => (prev - 1 + filteredChats.length) % filteredChats.length);
-          break;
-        case 'Enter':
-          e.preventDefault();
-          if (filteredChats[selectedIndex]) {
-            router.push(`/chat/${filteredChats[selectedIndex].slug}`);
-            onClose();
-          }
-          break;
-        case 'Escape':
-          e.preventDefault();
-          onClose();
-          break;
-      }
+  const onClickOutside = useEffectEvent((event: MouseEvent) => {
+    if (modalRef.current && event.target instanceof Node && !modalRef.current.contains(event.target)) {
+      handleClose();
+    }
+  });
+
+  useEffect(() => {
+    if (!isOpen)
+      return;
+    const cancelPaint = afterPaint(() => {
+      document.addEventListener('mousedown', onClickOutside);
+    });
+    return () => {
+      cancelPaint();
+      document.removeEventListener('mousedown', onClickOutside);
     };
+  }, [isOpen]);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, filteredChats, selectedIndex, router, onClose]);
+  const onScroll = useEffectEvent(() => {
+    if (!scrollViewportRef.current || !hasNextPage || isFetchingNextPage)
+      return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current;
+    const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+    if (scrollPercentage > 0.8) {
+      fetchNextPage();
+    }
+  });
 
+  useEffect(() => {
+    const scrollArea = scrollAreaRef.current;
+    if (!scrollArea)
+      return;
+    const viewport = scrollArea.querySelector('[data-slot="scroll-area-viewport"]');
+    if (!viewport || !(viewport instanceof HTMLDivElement))
+      return;
+    scrollViewportRef.current = viewport;
+    viewport.addEventListener('scroll', onScroll);
+    return () => viewport.removeEventListener('scroll', onScroll);
+  }, []);
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className={cn('fixed inset-0 z-50', glassOverlay)}
-            onClick={onClose}
+    <Dialog open={isOpen} onOpenChange={open => !open && handleClose()}>
+      <DialogContent
+        ref={modalRef}
+        showCloseButton={false}
+        glass
+        className="!max-w-2xl !w-[calc(100vw-2.5rem)]"
+      >
+        <DialogHeader className="flex flex-row items-center gap-3 bg-card px-4 sm:px-5 md:px-6 py-4">
+          <VisuallyHidden>
+            <DialogTitle>{t('chat.searchChats')}</DialogTitle>
+            <DialogDescription>{t('chat.searchChatsDescription')}</DialogDescription>
+          </VisuallyHidden>
+          <Icons.search className="size-5 text-muted-foreground shrink-0" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder={t('chat.searchChats')}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
           />
+          <button
+            type="button"
+            onClick={handleClose}
+            className="size-9 shrink-0 flex items-center justify-center hover:bg-white/[0.07] rounded-full transition-colors"
+            aria-label={t('actions.close')}
+          >
+            <Icons.x className="size-5 text-muted-foreground" />
+          </button>
+        </DialogHeader>
 
-          {/* Search Modal */}
-          <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] overflow-hidden">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: -10 }}
-              transition={{
-                type: 'spring',
-                stiffness: 400,
-                damping: 35,
-                duration: 0.2,
-              }}
-              className="relative w-full max-w-2xl mx-4 overflow-hidden"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className={cn(glassCard('medium'), 'rounded-lg border overflow-hidden')}>
-                {/* Search Input */}
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-                  <Search className="size-5 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder={t('chat.searchChats')}
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onClose}
-                    className="size-8"
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
-
-                {/* Search Results */}
-                <div className="max-h-[60vh] overflow-y-auto overflow-x-hidden">
-                  {filteredChats.length > 0
-                    ? (
-                        <motion.div
-                          initial="hidden"
-                          animate="show"
-                          variants={{
-                            hidden: { opacity: 0 },
-                            show: {
-                              opacity: 1,
-                              transition: {
-                                staggerChildren: 0.03,
-                                delayChildren: 0.05,
-                              },
-                            },
-                          }}
-                        >
-                          {filteredChats.map((chat, index) => (
-                            <motion.div
-                              key={chat.id}
-                              variants={{
-                                hidden: { opacity: 0, y: -8 },
-                                show: { opacity: 1, y: 0 },
-                              }}
-                              transition={{
-                                type: 'spring',
-                                stiffness: 500,
-                                damping: 40,
-                              }}
-                            >
-                              <Link
-                                href={`/chat/${chat.slug}`}
-                                onClick={onClose}
-                                className={cn(
-                                  'flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors cursor-pointer',
-                                  selectedIndex === index && 'bg-accent',
-                                )}
-                                onMouseEnter={() => setSelectedIndex(index)}
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{chat.title}</p>
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {chat.messages.length > 0 ? chat.messages[chat.messages.length - 1]?.content : t('chat.noMessages')}
-                                  </p>
-                                </div>
-                                {chat.isFavorite && (
-                                  <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={{ type: 'spring', stiffness: 500 }}
-                                  >
-                                    <div className="size-2 rounded-full bg-yellow-500" />
-                                  </motion.div>
-                                )}
-                              </Link>
-                            </motion.div>
-                          ))}
-                        </motion.div>
-                      )
-                    : (
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="flex flex-col items-center justify-center py-12 px-4 text-center"
-                        >
-                          <p className="text-sm text-muted-foreground">{t('chat.noResults')}</p>
-                          <p className="text-xs text-muted-foreground mt-1">{t('chat.noResultsDescription')}</p>
-                        </motion.div>
+        <DialogBody className="h-[400px] border-t border-border bg-card">
+          <ScrollArea ref={scrollAreaRef} className="h-full">
+            {isLoading && !threads.length
+              ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="size-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )
+              : threads.length > 0
+                ? (
+                    <div className="flex flex-col px-3 py-3">
+                      {threads.map((thread, index) => (
+                        <SearchResultItem
+                          key={thread.id}
+                          thread={thread}
+                          index={index}
+                          selectedIndex={selectedIndex}
+                          onClose={handleClose}
+                          onSelect={setSelectedIndex}
+                        />
+                      ))}
+                      {isFetchingNextPage && (
+                        <div className="flex items-center justify-center py-4">
+                          <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        </div>
                       )}
-                </div>
+                    </div>
+                  )
+                : (
+                    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                      <p className="text-sm text-muted-foreground">{t('chat.noResults')}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{t('chat.noResultsDescription')}</p>
+                    </div>
+                  )}
+          </ScrollArea>
+        </DialogBody>
 
-                {/* Footer with keyboard shortcuts */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.15, duration: 0.2 }}
-                  className="flex items-center gap-4 px-4 py-2 border-t border-border bg-muted/30 text-xs text-muted-foreground"
-                >
-                  <div className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↑</kbd>
-                    <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↓</kbd>
-                    <span className="ml-1">{t('navigation.navigation')}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↵</kbd>
-                    <span className="ml-1">{t('actions.select')}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">Esc</kbd>
-                    <span className="ml-1">{t('actions.close')}</span>
-                  </div>
-                </motion.div>
-              </div>
-            </motion.div>
+        <div className="flex items-center gap-4 px-4 sm:px-5 md:px-6 py-4 border-t border-border text-xs text-muted-foreground shrink-0 bg-card">
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↑</kbd>
+            <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↓</kbd>
+            <span className="ml-1.5 text-white/50">{t('navigation.navigation')}</span>
           </div>
-        </>
-      )}
-    </AnimatePresence>
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↵</kbd>
+            <span className="ml-1.5 text-white/50">{t('actions.select')}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">Esc</kbd>
+            <span className="ml-1.5 text-white/50">{t('actions.close')}</span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

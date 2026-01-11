@@ -1,178 +1,122 @@
 'use client';
-
-import { AlertCircle, ArrowUpCircle, MessageSquare, MessagesSquare } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
-import { Button } from '@/components/ui/button';
+import { PlanTypes, UsageStatuses, UsageStatusMetadata } from '@/api/core/enums';
+import { Icons } from '@/components/icons';
+import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { useSidebar } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUsageStatsQuery } from '@/hooks/queries';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { cn } from '@/lib/ui/cn';
 
-/**
- * UsageMetrics Component
- *
- * Displays user's current usage statistics for threads and messages
- * Shows progress bars and remaining quota
- * Non-clickable - only shows upgrade button when quota is maxed out
- * Positioned above the profile icon in the sidebar
- */
 export function UsageMetrics() {
   const t = useTranslations();
-  const router = useRouter();
-  const { state } = useSidebar();
   const { data: usageData, isLoading, isError } = useUsageStatsQuery();
 
-  const isCollapsed = state === 'collapsed';
-
-  // Loading state
   if (isLoading) {
     return (
-      <div className={cn('px-2 py-3', isCollapsed && 'px-2')}>
-        <div className="space-y-3">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-2 w-full" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-2 w-full" />
-        </div>
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-full rounded-md" />
+        <Skeleton className="h-8 w-full rounded-md" />
       </div>
     );
   }
 
-  // Error state
   if (isError || !usageData?.success) {
-    return (
-      <div className={cn('px-2 py-3', isCollapsed && 'hidden')}>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <AlertCircle className="size-4" />
-          <span>{t('usage.errorLoading')}</span>
-        </div>
-      </div>
-    );
+    return null;
   }
 
-  const usage = usageData.data;
+  const { credits, plan } = usageData.data;
+  const creditsStatus = credits?.status ?? UsageStatuses.DEFAULT;
+  const isLowCredits = creditsStatus === UsageStatuses.CRITICAL || creditsStatus === UsageStatuses.WARNING;
+  const isPaidPlan = plan?.type === PlanTypes.PAID;
+  const pendingChange = plan?.pendingChange;
 
-  // Collapsed state - show minimal icons with tooltips
-  if (isCollapsed) {
-    return (
-      <div className="flex flex-col items-center gap-2 px-2 py-3">
-        <div className="flex size-8 items-center justify-center rounded-md bg-sidebar-accent">
-          <MessagesSquare className="size-4" />
-        </div>
-      </div>
-    );
-  }
-
-  // Calculate if user is approaching limits (80% or more) or maxed out (100%)
-  const threadsWarning = usage.threads.percentage >= 80;
-  const messagesWarning = usage.messages.percentage >= 80;
-  const threadsMaxedOut = usage.threads.percentage >= 100;
-  const messagesMaxedOut = usage.messages.percentage >= 100;
-  const isMaxedOut = threadsMaxedOut || messagesMaxedOut;
-
-  const handleUpgrade = () => {
-    router.push('/chat/pricing');
-  };
+  const totalCredits = isPaidPlan ? (plan?.monthlyCredits || CREDIT_CONFIG.PLANS.paid.monthlyCredits) : CREDIT_CONFIG.SIGNUP_CREDITS;
+  const usedPercentage = Math.min(100, Math.round(((totalCredits - credits.available) / totalCredits) * 100));
 
   return (
-    <div className="px-2 py-3">
-      <div className="space-y-3">
-        {/* Threads Usage */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5">
-              <MessagesSquare className="size-3.5" />
-              <span className="font-medium">{t('usage.threads')}</span>
-            </div>
-            <span className={cn(
-              'font-mono text-[10px]',
-              threadsWarning ? 'text-destructive' : 'text-muted-foreground',
-            )}
-            >
-              {usage.threads.used}
-              /
-              {usage.threads.limit}
-            </span>
-          </div>
-          <Progress
-            value={usage.threads.percentage}
-            className={cn(
-              'h-1.5',
-              threadsWarning && '[&>*]:bg-destructive',
-            )}
-          />
-          {threadsWarning && (
-            <p className="text-[10px] text-destructive">
-              {usage.threads.remaining}
-              {' '}
-              {t('usage.threadsRemaining')}
-            </p>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Badge
+          variant={isPaidPlan ? 'default' : 'outline'}
+          className={cn(
+            'text-[10px] px-1.5 py-0.5 h-4 font-semibold',
+            !isPaidPlan && 'border-green-500/40 text-green-600 bg-green-500/10',
           )}
-        </div>
-
-        {/* Messages Usage */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5">
-              <MessageSquare className="size-3.5" />
-              <span className="font-medium">{t('usage.messages')}</span>
-            </div>
-            <span className={cn(
-              'font-mono text-[10px]',
-              messagesWarning ? 'text-destructive' : 'text-muted-foreground',
-            )}
-            >
-              {usage.messages.used}
-              /
-              {usage.messages.limit}
-            </span>
+        >
+          {plan?.name || t('usage.freePlan')}
+        </Badge>
+        {!isPaidPlan && (
+          <div className="flex items-center gap-1 text-[9px] text-green-600">
+            <Icons.sparkles className="size-2.5" />
+            <span className="font-medium">{t('usage.freeRound')}</span>
           </div>
-          <Progress
-            value={usage.messages.percentage}
-            className={cn(
-              'h-1.5',
-              messagesWarning && '[&>*]:bg-destructive',
-            )}
-          />
-          {messagesWarning && (
-            <p className="text-[10px] text-destructive">
-              {usage.messages.remaining}
-              {' '}
-              {t('usage.messagesRemaining')}
-            </p>
-          )}
-        </div>
-
-        {/* Subscription Tier & Period Info */}
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1">
-          <span className="capitalize">
-            {usage.subscription.tier}
-            {' '}
-            {t('usage.plan')}
-          </span>
-          <span>
-            {usage.period.daysRemaining}
-            {' '}
-            {t('usage.daysLeft')}
-          </span>
-        </div>
-
-        {/* Upgrade button - only shown when quota is maxed out */}
-        {isMaxedOut && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full rounded-full gap-1.5"
-            onClick={handleUpgrade}
-          >
-            <ArrowUpCircle className="size-3.5" />
-            {t('usage.upgradeNow')}
-          </Button>
         )}
       </div>
+
+      {pendingChange && (
+        <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+          <p className="text-[10px] leading-tight text-blue-600 dark:text-blue-400">
+            {t('usage.gracePeriod', {
+              currentPlan: plan?.name || 'Pro',
+              newPlan: pendingChange.pendingTier.charAt(0).toUpperCase() + pendingChange.pendingTier.slice(1),
+              date: new Date(pendingChange.effectiveDate).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              }),
+            })}
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <Icons.coins className="size-3 text-muted-foreground" />
+            <span className="text-xs font-medium">{t('usage.credits')}</span>
+          </div>
+          <span className={cn(
+            'font-mono text-sm font-bold tabular-nums',
+            UsageStatusMetadata[creditsStatus].textColor,
+          )}
+          >
+            {credits.available.toLocaleString()}
+          </span>
+        </div>
+        <Progress
+          value={usedPercentage}
+          className="h-1.5"
+          indicatorClassName={UsageStatusMetadata[creditsStatus].progressColor}
+          aria-label={`${credits.available.toLocaleString()} ${t('usage.creditsAvailable')}`}
+        />
+        <p className="text-[9px] text-muted-foreground text-right">
+          {credits.available.toLocaleString()}
+          {' '}
+          {t('usage.creditsAvailable')}
+        </p>
+      </div>
+
+      {!isPaidPlan && (
+        <div className="space-y-2">
+          <Link
+            href="/chat/pricing"
+            prefetch
+            className={cn(
+              'w-full flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-medium',
+              'backdrop-blur-sm transition-all duration-200',
+              'bg-white/5 hover:bg-white/[0.07] active:bg-black/20 text-foreground',
+              isLowCredits && 'bg-amber-500/20 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30',
+            )}
+          >
+            <Icons.arrowUpCircle className="size-3" />
+            {t('usage.upgradeNow')}
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

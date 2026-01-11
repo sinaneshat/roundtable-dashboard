@@ -1,13 +1,14 @@
 'use client';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import * as React from 'react';
+import type { ComponentProps } from 'react';
+
 import { DayPicker } from 'react-day-picker';
 
+import { Icons } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
 
-export type CalendarProps = React.ComponentProps<typeof DayPicker>;
+type CalendarProps = ComponentProps<typeof DayPicker>;
 
 function Calendar({
   className,
@@ -54,8 +55,8 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        PreviousMonthButton: ({ ...props }) => <ChevronLeft className="size-4" />,
-        NextMonthButton: ({ ...props }) => <ChevronRight className="size-4" />,
+        PreviousMonthButton: () => <Icons.chevronLeft className="size-4" />,
+        NextMonthButton: () => <Icons.chevronRight className="size-4" />,
       }}
       {...props}
     />
@@ -63,5 +64,5 @@ function Calendar({
 }
 Calendar.displayName = 'Calendar';
 
-export { Calendar };
+export { Calendar, type CalendarProps };
 

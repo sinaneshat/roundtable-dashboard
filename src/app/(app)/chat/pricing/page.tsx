@@ -1,45 +1,28 @@
-import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
+import type { Metadata } from 'next';
 
-import { PricingScreen } from '@/containers/screens/chat/billing';
-import { getQueryClient } from '@/lib/data/query-client';
-import { queryKeys } from '@/lib/data/query-keys';
-import { getProductsService, getSubscriptionsService } from '@/services/api';
+import { BRAND } from '@/constants';
+import { PublicPricingScreen } from '@/containers/screens/chat/billing/PublicPricingScreen';
+import { createMetadata } from '@/utils';
 
-/**
- * Pricing Page - SSR (Server-Side Rendering)
- *
- * Unified pricing and subscription management page
- * Shows pricing plans with subscription-aware buttons:
- * - "Manage Billing" for users with active subscriptions
- * - "Subscribe" for users without subscriptions
- *
- * Includes annual vs monthly plan toggle
- * User-specific data requires dynamic rendering (cannot use ISR)
- */
+// Revalidate every 24 hours
+export const revalidate = 86400;
 
-// Force dynamic rendering for user-specific subscription data
-export const dynamic = 'force-dynamic';
+export async function generateMetadata(): Promise<Metadata> {
+  return createMetadata({
+    title: `Pricing - ${BRAND.name}`,
+    description: 'Start free or go Pro. Access ChatGPT, Claude, Gemini and more AI models in one conversation. Compare Roundtable pricing plans.',
+    url: '/chat/pricing',
+    robots: 'index, follow',
+    keywords: [
+      'AI chat pricing',
+      'ChatGPT alternative',
+      'multi-model AI',
+      'AI collaboration tool',
+      'Roundtable pricing',
+    ],
+  });
+}
 
-export default async function PricingPage() {
-  const queryClient = getQueryClient();
-
-  // Prefetch both products and user subscriptions on server
-  await Promise.all([
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.products.list(),
-      queryFn: getProductsService,
-      staleTime: 3600 * 1000, // 1 hour
-    }),
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.subscriptions.list(),
-      queryFn: getSubscriptionsService,
-      staleTime: 2 * 60 * 1000, // 2 minutes
-    }),
-  ]);
-
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <PricingScreen />
-    </HydrationBoundary>
-  );
+export default function PricingPage() {
+  return <PublicPricingScreen />;
 }

@@ -1,4 +1,4 @@
-import { createBreadcrumbJsonLd } from '@/utils/metadata';
+import { createBreadcrumbJsonLd } from '@/utils';
 
 /**
  * Props for the BreadcrumbStructuredData component
@@ -38,7 +38,9 @@ export function BreadcrumbStructuredData({ items }: BreadcrumbStructuredDataProp
   return (
     <script
       type="application/ld+json"
-      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
+      // Suppress hydration warning - JSON-LD scripts don't affect UI and can cause hydration mismatches
+      suppressHydrationWarning
+      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for JSON-LD structured data injection (SEO)
       dangerouslySetInnerHTML={{
         __html: JSON.stringify(structuredData).replace(/</g, '\u003C'),
       }}

@@ -1,135 +1,92 @@
 'use client';
-
-import {
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Info,
-  Package,
-  RefreshCw,
-  Wifi,
-  WifiOff,
-  XCircle,
-} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import React from 'react';
 
+import type {
+  ComponentSize,
+  EmptyStateStyle,
+  EmptyStateVariant,
+  ErrorSeverity,
+  ErrorStateVariant,
+  LoadingStateVariant,
+  NetworkErrorType,
+  SpacingVariant,
+  SuccessStateVariant,
+} from '@/api/core/enums';
+import {
+  ComponentSizes,
+  EmptyStateStyles,
+  EmptyStateVariants,
+  ErrorSeverities,
+  ErrorStateVariants,
+  LoadingStateVariants,
+  NetworkErrorTypes,
+  SpacingVariants,
+  SuccessStateVariants,
+} from '@/api/core/enums';
+import { Icons } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { FadeIn, PageTransition } from '@/components/ui/motion';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/ui/cn';
 
-// =============================================================================
-// UNIFIED STATE SYSTEM FOR CHAT
-// Consolidates: chat-empty-states.tsx + error-states.tsx + chat-states.tsx
-// Eliminates ~567 lines of duplicate code with consistent API
-// =============================================================================
-
-// Loading States - unified loading component with enhanced chat styling
 type LoadingStateProps = {
   title?: string;
   message?: string;
-  variant?: 'spinner' | 'page' | 'inline' | 'card' | 'skeleton';
+  variant?: LoadingStateVariant;
   className?: string;
-  style?: 'default' | 'dashed' | 'gradient';
-  size?: 'sm' | 'md' | 'lg';
+  size?: ComponentSize;
 };
 
+const DEFAULT_SIZE_CONFIG = { spinner: 'size-6', title: 'text-base', container: 'py-8 gap-3' } as const;
+
+const sizeConfig: Partial<Record<ComponentSize, { spinner: string; title: string; container: string }>> = {
+  [ComponentSizes.SM]: { spinner: 'size-4', title: 'text-sm', container: 'py-4 gap-2' },
+  [ComponentSizes.MD]: DEFAULT_SIZE_CONFIG,
+  [ComponentSizes.LG]: { spinner: 'size-8', title: 'text-lg', container: 'py-12 gap-4' },
+};
+
+/**
+ * LoadingState - Unified loading indicator
+ *
+ * Variants:
+ * - inline: Horizontal spinner + text (for buttons, inline loading)
+ * - centered: Centered spinner + text with animation (default, for page sections)
+ * - card: Loading state in a card container
+ */
 export function LoadingState({
   title,
   message,
-  variant = 'page',
+  variant = LoadingStateVariants.CENTERED,
   className,
-  style = 'default',
-  size = 'md',
+  size = ComponentSizes.MD,
 }: LoadingStateProps) {
   const t = useTranslations();
-
   const defaultTitle = title || t('states.loading.default');
   const defaultMessage = message || t('states.loading.please_wait');
+  const config = sizeConfig[size] ?? DEFAULT_SIZE_CONFIG;
 
-  if (variant === 'spinner') {
-    return <LoadingSpinner className={cn('h-6 w-6', className)} />;
-  }
-
-  if (variant === 'inline') {
+  if (variant === LoadingStateVariants.INLINE) {
     return (
-      <div className={cn('flex items-center gap-2 text-sm text-muted-foreground', className)}>
-        <LoadingSpinner className="h-4 w-4" />
-        <span>{defaultTitle}</span>
+      <div className={cn('flex items-center gap-2', className)}>
+        <Spinner className={cn(config.spinner, 'text-muted-foreground')} />
+        <span className={cn(config.title, 'text-muted-foreground')}>{defaultTitle}</span>
       </div>
     );
   }
 
-  if (variant === 'skeleton') {
-    const sizeConfig = {
-      sm: { container: 'py-6', cards: 2, height: 'h-24' },
-      md: { container: 'py-8', cards: 3, height: 'h-32' },
-      lg: { container: 'py-12', cards: 4, height: 'h-40' },
-    };
-    const config = sizeConfig[size];
-
+  if (variant === LoadingStateVariants.CARD) {
     return (
-      <div className={cn('space-y-4', config.container, className)}>
-        <div className="flex items-center justify-between">
-          <div className="h-6 w-32 animate-pulse rounded bg-muted" />
-          <div className="h-4 w-16 animate-pulse rounded bg-muted" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: config.cards }, (_, i) => (
-            <div key={i} className={cn('animate-pulse rounded-lg bg-muted', config.height)} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (variant === 'card') {
-    const styleConfig = {
-      default: 'border bg-card',
-      dashed: 'border-2 border-dashed border-border/50 bg-gradient-to-br from-muted/30 to-background',
-      gradient: 'bg-gradient-to-br from-card to-card/50 shadow-lg border-dashed border-2',
-    };
-
-    const sizeConfig = {
-      sm: { container: 'py-6', iconContainer: 'w-12 h-12', iconSize: 'h-6 w-6', title: 'text-base' },
-      md: { container: 'py-8', iconContainer: 'w-16 h-16', iconSize: 'h-8 w-8', title: 'text-lg' },
-      lg: { container: 'py-12', iconContainer: 'w-24 h-24', iconSize: 'h-12 w-12', title: 'text-2xl' },
-    };
-
-    const config = sizeConfig[size];
-
-    return (
-      <Card className={cn(styleConfig[style], className)}>
-        <CardContent className={config.container}>
-          <div className="text-center space-y-6">
-            <div className={cn(
-              config.iconContainer,
-              'rounded-full flex items-center justify-center mx-auto',
-              size === 'lg'
-                ? 'rounded-2xl bg-primary/10 border-2 border-dashed border-primary/20'
-                : 'bg-muted',
-            )}
-            >
-              <LoadingSpinner className={cn(
-                config.iconSize,
-                size === 'lg' ? 'text-primary/60' : 'text-muted-foreground',
-              )}
-              />
-            </div>
-            <div className="space-y-3">
-              <h3 className={cn(config.title, 'font-medium')}>
-                {defaultTitle}
-              </h3>
-              <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                {defaultMessage}
-              </p>
-            </div>
+      <Card className={cn('border-dashed', className)}>
+        <CardContent className={cn('flex flex-col items-center justify-center text-center', config.container)}>
+          <Spinner className={cn(config.spinner, 'text-primary')} />
+          <div className="space-y-1">
+            <p className={cn(config.title, 'font-medium')}>{defaultTitle}</p>
+            {message && <p className="text-sm text-muted-foreground">{defaultMessage}</p>}
           </div>
         </CardContent>
       </Card>
@@ -138,100 +95,111 @@ export function LoadingState({
 
   return (
     <PageTransition>
-      <FadeIn delay={0.05} className={className}>
-        <div className="text-center py-12">
-          <div className="flex items-center justify-center mb-4">
-            <LoadingSpinner className="h-8 w-8 me-2" />
-            <span className="text-xl font-medium">{defaultTitle}</span>
+      <FadeIn delay={0.05}>
+        <div className={cn('flex flex-col items-center justify-center text-center', config.container, className)}>
+          <Spinner className={cn(config.spinner, 'text-primary')} />
+          <div className="space-y-1">
+            <p className={cn(config.title, 'font-medium text-foreground')}>
+              {defaultTitle}
+            </p>
+            {message && (
+              <p className="text-sm text-muted-foreground">
+                {defaultMessage}
+              </p>
+            )}
           </div>
-          <p className="text-muted-foreground">{defaultMessage}</p>
         </div>
       </FadeIn>
     </PageTransition>
   );
 }
-
-// Error States - unified error component with multiple variants
 type ErrorStateProps = {
   title?: string;
   description?: string;
   onRetry?: () => void;
   retryLabel?: string;
-  variant?: 'alert' | 'card' | 'network' | 'boundary';
-  severity?: 'error' | 'warning' | 'info';
-  networkType?: 'offline' | 'timeout' | 'connection';
+  variant?: ErrorStateVariant;
+  severity?: ErrorSeverity;
+  networkType?: NetworkErrorType;
   className?: string;
-  icon?: ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
 };
-
 export function ErrorState({
   title,
   description,
   onRetry,
   retryLabel,
-  variant = 'card',
-  severity = 'error',
-  networkType = 'connection',
+  variant = ErrorStateVariants.CARD,
+  severity = ErrorSeverities.FAILED,
+  networkType = NetworkErrorTypes.CONNECTION,
   className,
   icon,
 }: ErrorStateProps) {
   const t = useTranslations();
-
   const defaultRetryLabel = retryLabel || t('actions.tryAgain');
-  // Network error configuration
-  const networkConfig = {
-    offline: {
-      icon: WifiOff,
+  type NetworkConfigItem = {
+    icon: typeof Icons.wifiOff;
+    title: string;
+    description: string;
+    badge: string;
+    badgeVariant: 'destructive' | 'secondary';
+  };
+  const networkConfig: Record<NetworkErrorType, NetworkConfigItem> = {
+    [NetworkErrorTypes.OFFLINE]: {
+      icon: Icons.wifiOff,
       title: t('states.error.offline'),
       description: t('states.error.offlineDescription'),
       badge: t('networkStatus.offline'),
-      badgeVariant: 'destructive' as const,
+      badgeVariant: 'destructive',
     },
-    timeout: {
-      icon: Clock,
+    [NetworkErrorTypes.TIMEOUT]: {
+      icon: Icons.clock,
       title: t('states.error.timeout'),
       description: t('states.error.timeoutDescription'),
       badge: t('networkStatus.timeout'),
-      badgeVariant: 'secondary' as const,
+      badgeVariant: 'secondary',
     },
-    connection: {
-      icon: Wifi,
+    [NetworkErrorTypes.CONNECTION]: {
+      icon: Icons.wifi,
       title: t('states.error.network'),
       description: t('states.error.networkDescription'),
       badge: t('networkStatus.connectionError'),
-      badgeVariant: 'destructive' as const,
+      badgeVariant: 'destructive',
     },
   };
-
-  // Severity configuration
-  const severityConfig = {
-    error: {
-      icon: XCircle,
+  type SeverityConfigItem = {
+    icon: typeof Icons.xCircle;
+    title: string;
+    description: string;
+    alertVariant: 'destructive' | 'default';
+    iconColor: string;
+  };
+  const severityConfig: Record<ErrorSeverity, SeverityConfigItem> = {
+    [ErrorSeverities.FAILED]: {
+      icon: Icons.xCircle,
       title: t('states.error.default'),
       description: t('states.error.description'),
-      alertVariant: 'destructive' as const,
+      alertVariant: 'destructive',
       iconColor: 'text-destructive',
     },
-    warning: {
-      icon: AlertTriangle,
+    [ErrorSeverities.WARNING]: {
+      icon: Icons.alertTriangle,
       title: t('status.warning'),
       description: t('states.error.description'),
-      alertVariant: 'default' as const,
+      alertVariant: 'default',
       iconColor: 'text-chart-2',
     },
-    info: {
-      icon: Info,
+    [ErrorSeverities.INFO]: {
+      icon: Icons.info,
       title: t('status.info'),
       description: t('states.error.description'),
-      alertVariant: 'default' as const,
+      alertVariant: 'default',
       iconColor: 'text-primary',
     },
   };
-
-  if (variant === 'network') {
+  if (variant === ErrorStateVariants.NETWORK) {
     const config = networkConfig[networkType];
     const Icon = config.icon;
-
     return (
       <Alert variant="destructive" className={cn('border-dashed', className)}>
         <Icon className="h-4 w-4" />
@@ -260,11 +228,9 @@ export function ErrorState({
       </Alert>
     );
   }
-
-  if (variant === 'alert') {
+  if (variant === ErrorStateVariants.ALERT) {
     const config = severityConfig[severity];
-    const IconComponent = (icon || config.icon) as React.ComponentType<{ className?: string }>;
-
+    const IconComponent = icon || config.icon;
     return (
       <Alert variant={config.alertVariant} className={className}>
         <IconComponent className={cn('h-4 w-4', config.iconColor)} />
@@ -284,13 +250,12 @@ export function ErrorState({
       </Alert>
     );
   }
-
-  if (variant === 'boundary') {
+  if (variant === ErrorStateVariants.BOUNDARY) {
     return (
       <Card className={cn('border-destructive/50', className)}>
         <CardContent className="text-center py-12 space-y-6">
           <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-            <XCircle className="h-8 w-8 text-destructive" />
+            <Icons.xCircle className="h-8 w-8 text-destructive" />
           </div>
           <div className="space-y-3">
             <h3 className="text-lg font-semibold text-destructive">
@@ -302,7 +267,7 @@ export function ErrorState({
           </div>
           {onRetry && (
             <Button onClick={onRetry} variant="outline">
-              <RefreshCw className="h-4 w-4 me-2" />
+              <Icons.refreshCw className="h-4 w-4 me-2" />
               {retryLabel}
             </Button>
           )}
@@ -310,10 +275,7 @@ export function ErrorState({
       </Card>
     );
   }
-
-  // Default card variant
-  const Icon = icon || AlertCircle;
-
+  const Icon = icon || Icons.alertCircle;
   return (
     <PageTransition>
       <FadeIn delay={0.05} className={className}>
@@ -331,7 +293,7 @@ export function ErrorState({
               </p>
               {onRetry && (
                 <Button variant="outline" onClick={onRetry}>
-                  <RefreshCw className="h-4 w-4 me-2" />
+                  <Icons.refreshCw className="h-4 w-4 me-2" />
                   {retryLabel}
                 </Button>
               )}
@@ -342,49 +304,41 @@ export function ErrorState({
     </PageTransition>
   );
 }
-
-// Empty States - unified empty state component
 type EmptyStateProps = {
   title?: string;
   description?: string;
   action?: ReactNode;
-  variant?: 'general' | 'custom';
+  variant?: EmptyStateVariant;
   size?: 'sm' | 'md' | 'lg';
-  style?: 'default' | 'dashed' | 'gradient';
+  style?: EmptyStateStyle;
   className?: string;
   icon?: ReactNode;
 };
-
-// Note: emptyStateConfig moved inside component to access t() function
-
 export function EmptyState({
   title,
   description,
   action,
-  variant = 'general',
+  variant = EmptyStateVariants.GENERAL,
   size = 'md',
-  style = 'default',
+  style = EmptyStateStyles.DEFAULT,
   className,
   icon,
 }: EmptyStateProps) {
   const t = useTranslations();
-
   const emptyStateConfig = {
-    general: {
-      icon: Package,
+    [EmptyStateVariants.GENERAL]: {
+      icon: Icons.package,
       title: t('states.empty.default'),
       description: t('states.empty.description'),
     },
-    custom: {
-      icon: AlertCircle,
+    [EmptyStateVariants.CUSTOM]: {
+      icon: Icons.alertCircle,
       title: t('states.empty.default'),
       description: t('states.empty.description'),
     },
   };
-
-  const config = emptyStateConfig[variant];
+  const config = emptyStateConfig[variant] || emptyStateConfig[EmptyStateVariants.GENERAL];
   const Icon = icon || config.icon;
-
   const sizeConfig = {
     sm: {
       container: 'py-6',
@@ -408,15 +362,12 @@ export function EmptyState({
       description: 'text-base',
     },
   };
-
   const styleConfig = {
-    default: 'border bg-card',
-    dashed: 'border-2 border-dashed border-border/50 bg-gradient-to-br from-muted/30 to-background',
-    gradient: 'border bg-gradient-to-br from-card to-card/50 shadow-lg',
+    [EmptyStateStyles.DEFAULT]: 'border bg-card',
+    [EmptyStateStyles.DASHED]: 'border-2 border-dashed border-border/50 bg-gradient-to-br from-muted/30 to-background',
+    [EmptyStateStyles.GRADIENT]: 'border bg-gradient-to-br from-card to-card/50 shadow-lg',
   };
-
   const sizeSettings = sizeConfig[size];
-
   return (
     <Card className={cn(styleConfig[style], className)}>
       <CardContent className={sizeSettings.container}>
@@ -462,29 +413,26 @@ export function EmptyState({
     </Card>
   );
 }
-
-// Success States - unified success component
 type SuccessStateProps = {
   title: string;
   description?: string;
   action?: ReactNode;
-  variant?: 'alert' | 'card';
+  variant?: SuccessStateVariant;
   className?: string;
 };
-
 export function SuccessState({
   title,
   description,
   action,
-  variant = 'alert',
+  variant = SuccessStateVariants.ALERT,
   className,
 }: SuccessStateProps) {
-  if (variant === 'card') {
+  if (variant === SuccessStateVariants.CARD) {
     return (
       <Card className={cn('border-chart-3/20 bg-chart-3/10', className)}>
         <CardContent className="text-center py-8 space-y-4">
           <div className="w-16 h-16 bg-chart-3/20 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle className="h-8 w-8 text-chart-3" />
+            <Icons.checkCircle className="h-8 w-8 text-chart-3" />
           </div>
           <div className="space-y-2">
             <h3 className="text-lg font-semibold text-chart-3">{title}</h3>
@@ -497,10 +445,9 @@ export function SuccessState({
       </Card>
     );
   }
-
   return (
     <Alert className={cn('border-chart-3/20 bg-chart-3/10', className)}>
-      <CheckCircle className="h-4 w-4 text-chart-3" />
+      <Icons.checkCircle className="h-4 w-4 text-chart-3" />
       <AlertTitle className="text-chart-3">{title}</AlertTitle>
       {description && (
         <AlertDescription className="text-chart-3/80">
@@ -511,13 +458,10 @@ export function SuccessState({
     </Alert>
   );
 }
-
-// Page Wrapper Components
 type ChatPageProps = {
   children: ReactNode;
   className?: string;
 };
-
 export function ChatPage({ children, className }: ChatPageProps) {
   return (
     <PageTransition>
@@ -527,26 +471,23 @@ export function ChatPage({ children, className }: ChatPageProps) {
     </PageTransition>
   );
 }
-
 type ChatSectionProps = {
   children: ReactNode;
   delay?: number;
-  spacing?: 'tight' | 'default' | 'loose';
+  spacing?: SpacingVariant;
   className?: string;
 };
-
 export function ChatSection({
   children,
   delay = 0.05,
-  spacing = 'default',
+  spacing = SpacingVariants.DEFAULT,
   className,
 }: ChatSectionProps) {
   const spacingConfig = {
-    tight: 'space-y-4',
-    default: 'space-y-6',
-    loose: 'space-y-8',
+    [SpacingVariants.TIGHT]: 'space-y-4',
+    [SpacingVariants.DEFAULT]: 'space-y-6',
+    [SpacingVariants.LOOSE]: 'space-y-8',
   };
-
   return (
     <FadeIn delay={delay} className={cn(spacingConfig[spacing], className)}>
       {children}

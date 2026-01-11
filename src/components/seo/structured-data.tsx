@@ -1,4 +1,4 @@
-import { createJsonLd } from '@/utils/metadata';
+import { createJsonLd } from '@/utils';
 
 /**
  * Props for the StructuredData component
@@ -13,6 +13,8 @@ type StructuredDataProps = {
   description?: string;
   /** URL of the entity */
   url?: string;
+  /** Base URL for the application (prevents hydration mismatch) */
+  baseUrl?: string;
   /** Logo URL for the entity */
   logo?: string;
   /** Image URL for the entity */
@@ -54,7 +56,7 @@ export function StructuredData(props: StructuredDataProps) {
   return (
     <script
       type="application/ld+json"
-      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
+      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for JSON-LD structured data injection (SEO)
       dangerouslySetInnerHTML={{
         __html: JSON.stringify(structuredData).replace(/</g, '\u003C'),
       }}

@@ -1,39 +1,43 @@
 'use client';
 
+import { usePostHog } from 'posthog-js/react';
 import { useEffect } from 'react';
 
-import { ErrorScreen } from '@/containers/screens/errors';
+import ErrorScreen from '@/containers/screens/errors/ErrorScreen';
 
-export default function Error({
-  error,
-  reset,
-}: {
+type ErrorProps = {
   error: Error & { digest?: string };
   reset: () => void;
-}) {
+};
+
+export default function Error({ error, reset }: ErrorProps) {
+  const posthog = usePostHog();
+
   useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    posthog.captureException(error, {
+      digest: error.digest,
+      errorBoundary: 'route',
+    });
+  }, [error, posthog]);
 
-    // Log development errors but don't crash the app
-    if (process.env.NODE_ENV === 'development') {
-      // Development error caught by error boundary
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development')
+      return;
+    if (!error.message.includes('Module') || !error.message.includes('was instantiated'))
+      return;
 
-      // Auto-recovery for common Turbopack HMR issues
-      if (error.message.includes('Module') && error.message.includes('was instantiated')) {
-        // Attempting automatic recovery from HMR module error...
-        // Small delay then reset to allow HMR to stabilize
-        timeoutId = setTimeout(() => {
-          reset();
-        }, 1000);
-      }
-    }
-
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
+    const timeoutId = setTimeout(reset, 1000);
+    return () => clearTimeout(timeoutId);
   }, [error, reset]);
 
-  return <ErrorScreen error={error} reset={reset} />;
+  return (
+    <ErrorScreen
+      reset={reset}
+      error={{
+        message: error.message,
+        stack: error.stack,
+        digest: error.digest,
+      }}
+    />
+  );
 }

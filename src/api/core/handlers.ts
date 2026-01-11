@@ -1,53 +1,123 @@
-/**
- * Unified Handler System - Context7 Best Practices
- *
- * Modern, type-safe route handler factory following official HONO patterns.
- * Replaces the existing route-handler-factory with improved type safety.
- *
- * Features:
- * - Maximum type safety with proper inference
- * - Integrated validation system
- * - Consistent error handling
- * - Transaction management
- * - OpenAPI compatibility
- */
-
 import type { RouteConfig, RouteHandler } from '@hono/zod-openapi';
-import type { Context, Env } from 'hono';
+import type { BatchItem } from 'drizzle-orm/batch';
+import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
-import type { ErrorCode } from '@/api/common/error-handling';
+import { executeBatch, validateBatchSize } from '@/api/common/batch-operations';
 import { AppError } from '@/api/common/error-handling';
-import { apiLogger } from '@/api/middleware/hono-logger';
-import type { ApiEnv, AuthenticatedContext, AuthMode } from '@/api/types';
-// Database access should be handled by individual handlers
+import { getErrorMessage } from '@/api/common/error-types';
+import type { ErrorCode } from '@/api/core/enums';
+import { ErrorCodes } from '@/api/core/enums';
+import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
+import { auth } from '@/lib/auth/server';
+import type { Session, User } from '@/lib/auth/types';
 
+import type { AuthMode } from './enums';
 import { HTTPExceptionFactory } from './http-exceptions';
 import { Responses } from './responses';
-import type { LoggerData } from './schemas';
-import {
-  IdParamSchema,
-  ListQuerySchema,
-  PaginationQuerySchema,
-  SearchQuerySchema,
-  SortingQuerySchema,
-  UuidParamSchema,
-} from './schemas';
+import { ValidationErrorDetailsSchema } from './schemas';
 import { validateWithSchema } from './validation';
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+export type AuthenticatedContext = {
+  user: User;
+  session: Session;
+  requestId: string;
+};
+
+// ============================================================================
+// CENTRALIZED ERROR HANDLING
+// ============================================================================
+
+function appErrorToResponse(c: Context, error: AppError): Response {
+  switch (error.code) {
+    // Authentication & Authorization (401, 403)
+    case ErrorCodes.UNAUTHENTICATED:
+    case ErrorCodes.TOKEN_EXPIRED:
+    case ErrorCodes.TOKEN_INVALID:
+      return Responses.authenticationError(c, error.message);
+    case ErrorCodes.UNAUTHORIZED:
+    case ErrorCodes.INSUFFICIENT_PERMISSIONS:
+      return Responses.authorizationError(c, error.message);
+
+    // Validation & Input (400)
+    case ErrorCodes.VALIDATION_ERROR:
+    case ErrorCodes.INVALID_INPUT:
+    case ErrorCodes.MISSING_REQUIRED_FIELD:
+    case ErrorCodes.INVALID_FORMAT:
+    case ErrorCodes.INVALID_ENUM_VALUE:
+    case ErrorCodes.BUSINESS_RULE_VIOLATION:
+      return Responses.badRequest(c, error.message, error.details);
+
+    // Resource Management (404, 409, 410)
+    case ErrorCodes.RESOURCE_NOT_FOUND:
+      return Responses.notFound(c, 'Resource');
+    case ErrorCodes.RESOURCE_CONFLICT:
+    case ErrorCodes.RESOURCE_ALREADY_EXISTS:
+    case ErrorCodes.RESOURCE_LOCKED:
+      return Responses.conflict(c, error.message);
+    case ErrorCodes.RESOURCE_EXPIRED:
+      return Responses.badRequest(c, error.message, error.details);
+
+    // External Services (502)
+    case ErrorCodes.EXTERNAL_SERVICE_ERROR:
+    case ErrorCodes.EMAIL_SERVICE_ERROR:
+    case ErrorCodes.STORAGE_SERVICE_ERROR:
+    case ErrorCodes.NETWORK_ERROR:
+    case ErrorCodes.TIMEOUT_ERROR:
+      return Responses.externalServiceError(c, 'External Service', error.message);
+
+    // Rate Limiting (429)
+    case ErrorCodes.RATE_LIMIT_EXCEEDED:
+      return Responses.rateLimitExceeded(c, 0, 0);
+
+    // Service Availability (503)
+    case ErrorCodes.SERVICE_UNAVAILABLE:
+    case ErrorCodes.MAINTENANCE_MODE:
+      return Responses.serviceUnavailable(c, error.message);
+
+    // Database (500)
+    case ErrorCodes.DATABASE_ERROR:
+    case ErrorCodes.BATCH_FAILED:
+    case ErrorCodes.BATCH_SIZE_EXCEEDED:
+      return Responses.databaseError(c, 'batch', error.message);
+
+    // System (500) - default fallback
+    case ErrorCodes.INTERNAL_SERVER_ERROR:
+    default:
+      return Responses.internalServerError(c, error.message);
+  }
+}
 
 // ============================================================================
 // PERFORMANCE UTILITIES
 // ============================================================================
 
-/**
- * Simple performance tracking utility for request timing
- */
-function createPerformanceTracker() {
+type PerformanceMark = {
+  label: string;
+  time: number;
+};
+
+type PerformanceMarks = Map<string, number>;
+
+type PerformanceTracker = {
+  startTime: number;
+  getElapsed: () => number;
+  getDuration: () => number;
+  mark: (label: string) => PerformanceMark;
+  getMarks: () => Map<string, number>;
+  now: () => number;
+};
+
+function createPerformanceTracker(): PerformanceTracker {
   const startTime = Date.now();
-  const marks: Record<string, number> = {};
+  const marks: PerformanceMarks = new Map();
 
   return {
     startTime,
@@ -55,10 +125,10 @@ function createPerformanceTracker() {
     getDuration: () => Date.now() - startTime,
     mark: (label: string) => {
       const time = Date.now() - startTime;
-      marks[label] = time;
+      marks.set(label, time);
       return { label, time };
     },
-    getMarks: () => ({ ...marks }),
+    getMarks: () => new Map(marks),
     now: () => Date.now(),
   };
 }
@@ -87,14 +157,10 @@ export type HandlerConfig<
   // Observability
   operationName?: string;
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
-
 };
 
-/**
- * Enhanced context with validated data and logger
- */
 export type HandlerContext<
-  TEnv extends Env = ApiEnv,
+  TEnv extends ApiEnv = ApiEnv,
   TBody extends z.ZodSchema = never,
   TQuery extends z.ZodSchema = never,
   TParams extends z.ZodSchema = never,
@@ -104,51 +170,33 @@ export type HandlerContext<
     query: [TQuery] extends [never] ? undefined : z.infer<TQuery>;
     params: [TParams] extends [never] ? undefined : z.infer<TParams>;
   };
-  logger: {
-    debug: (message: string, data?: LoggerData) => void;
-    info: (message: string, data?: LoggerData) => void;
-    warn: (message: string, data?: LoggerData) => void;
-    error: (message: string, error?: Error, data?: LoggerData) => void;
-  };
-  /**
-   * Get authenticated user and session (use when auth: 'session')
-   * @throws Error if user or session is null
-   */
   auth: () => AuthenticatedContext;
 };
-
-// Handler function types
 export type RegularHandler<
   _TRoute extends RouteConfig,
-  TEnv extends Env = ApiEnv,
-  TBody extends z.ZodSchema = never,
-  TQuery extends z.ZodSchema = never,
-  TParams extends z.ZodSchema = never,
-> = (
-  c: HandlerContext<TEnv, TBody, TQuery, TParams>
-) => Promise<Response>;
-
-/**
- * D1 Batch Context - Provides utilities for building batch operations
- */
-export type BatchContext = {
-  /** Add a prepared statement to the batch */
-  add: (statement: unknown) => void;
-  /** Execute all statements in the batch and return results */
-  execute: () => Promise<unknown[]>;
-  /** Get the database instance for read operations */
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-};
-
-export type BatchHandler<
-  _TRoute extends RouteConfig,
-  TEnv extends Env = ApiEnv,
+  TEnv extends ApiEnv = ApiEnv,
   TBody extends z.ZodSchema = never,
   TQuery extends z.ZodSchema = never,
   TParams extends z.ZodSchema = never,
 > = (
   c: HandlerContext<TEnv, TBody, TQuery, TParams>,
-  batch: BatchContext
+) => Promise<Response>;
+
+export type BatchContext = {
+  add: (statement: BatchItem<'sqlite'>) => void;
+  execute: () => Promise<unknown[]>;
+  db: Awaited<ReturnType<typeof getDbAsync>>;
+};
+
+export type BatchHandler<
+  _TRoute extends RouteConfig,
+  TEnv extends ApiEnv = ApiEnv,
+  TBody extends z.ZodSchema = never,
+  TQuery extends z.ZodSchema = never,
+  TParams extends z.ZodSchema = never,
+> = (
+  c: HandlerContext<TEnv, TBody, TQuery, TParams>,
+  batch: BatchContext,
 ) => Promise<Response>;
 
 // ============================================================================
@@ -156,53 +204,10 @@ export type BatchHandler<
 // ============================================================================
 
 /**
- * Create an enhanced logger for the operation
- */
-function createOperationLogger(c: Context, operation: string) {
-  const requestId = c.get('requestId') || 'unknown';
-  const userId = c.get('user')?.id || 'anonymous';
-
-  const baseContext = {
-    requestId,
-    userId,
-    method: c.req.method,
-    path: c.req.path,
-    operation,
-  };
-
-  return {
-    debug: (message: string, data?: LoggerData) => {
-      apiLogger.debug(`${operation}: ${message}`, { ...baseContext, ...data });
-    },
-    info: (message: string, data?: LoggerData) => {
-      apiLogger.info(`${operation}: ${message}`, { ...baseContext, ...data });
-    },
-    warn: (message: string, data?: LoggerData) => {
-      apiLogger.warn(`${operation}: ${message}`, { ...baseContext, ...data });
-    },
-    error: (message: string, error?: Error, data?: LoggerData) => {
-      apiLogger.error(`${operation}: ${message}`, {
-        ...baseContext,
-        error: error
-          ? {
-              name: error.name,
-              message: error.message,
-              stack: error.stack,
-            }
-          : undefined,
-        ...data,
-      });
-    },
-  };
-}
-
-/**
  * Apply authentication check based on mode
  * Properly implements authentication without incorrect middleware calls
  */
 async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void> {
-  const { auth } = await import('@/lib/auth/server');
-
   switch (authMode) {
     case 'session': {
       // Require valid session - throw error if not authenticated
@@ -233,13 +238,13 @@ async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void
           c.set('session', sessionData.session);
           c.set('user', sessionData.user);
         } else {
+          // Intentionally empty
           c.set('session', null);
           c.set('user', null);
         }
         c.set('requestId', c.req.header('x-request-id') || crypto.randomUUID());
-      } catch (error) {
-        // Log error but don't throw - allow unauthenticated requests
-        apiLogger.error('[Auth] Error retrieving session', error instanceof Error ? error : new Error(String(error)));
+      } catch {
+        // Allow unauthenticated requests
         c.set('session', null);
         c.set('user', null);
       }
@@ -248,7 +253,12 @@ async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void
     case 'api-key': {
       // API key authentication for cron jobs and external services
       const apiKey = c.req.header('x-api-key') || c.req.header('authorization')?.replace('Bearer ', '');
-      const expectedApiKey = process.env.CRON_SECRET || process.env.API_SECRET_KEY;
+
+      // In Cloudflare Workers: c.env contains bindings and secrets from wrangler
+      // In local dev: c.env contains process.env values via Hono dev server
+      // Type assertion for optional secrets not in CloudflareEnv definition
+      const env = c.env as Record<string, string | undefined>;
+      const expectedApiKey = env.CRON_SECRET || env.API_SECRET_KEY;
 
       if (!apiKey || !expectedApiKey || apiKey !== expectedApiKey) {
         throw new HTTPException(HttpStatusCodes.UNAUTHORIZED, {
@@ -272,6 +282,19 @@ async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void
 }
 
 /**
+ * Validated request data structure
+ */
+type ValidatedData<
+  TBody extends z.ZodSchema,
+  TQuery extends z.ZodSchema,
+  TParams extends z.ZodSchema,
+> = {
+  body: [TBody] extends [never] ? undefined : z.infer<TBody>;
+  query: [TQuery] extends [never] ? undefined : z.infer<TQuery>;
+  params: [TParams] extends [never] ? undefined : z.infer<TParams>;
+};
+
+/**
  * Validate request data using our unified validation system
  */
 async function validateRequest<
@@ -281,38 +304,41 @@ async function validateRequest<
 >(
   c: Context,
   config: Pick<HandlerConfig<RouteConfig, TBody, TQuery, TParams>, 'validateBody' | 'validateQuery' | 'validateParams'>,
-): Promise<{
-    body: [TBody] extends [never] ? undefined : z.infer<TBody>;
-    query: [TQuery] extends [never] ? undefined : z.infer<TQuery>;
-    params: [TParams] extends [never] ? undefined : z.infer<TParams>;
-  }> {
+): Promise<ValidatedData<TBody, TQuery, TParams>> {
+  type ValidatedBody = [TBody] extends [never] ? undefined : z.infer<TBody>;
+  type ValidatedQuery = [TQuery] extends [never] ? undefined : z.infer<TQuery>;
+  type ValidatedParams = [TParams] extends [never] ? undefined : z.infer<TParams>;
+
   const validated: {
-    body?: [TBody] extends [never] ? undefined : z.infer<TBody>;
-    query?: [TQuery] extends [never] ? undefined : z.infer<TQuery>;
-    params?: [TParams] extends [never] ? undefined : z.infer<TParams>;
+    body?: ValidatedBody;
+    query?: ValidatedQuery;
+    params?: ValidatedParams;
   } = {};
 
   // Validate body for POST/PUT/PATCH requests
   if (config.validateBody && ['POST', 'PUT', 'PATCH'].includes(c.req.method)) {
     try {
       const body = await c.req.json();
+
       const result = validateWithSchema(config.validateBody, body);
 
       if (!result.success) {
+        // 🔍 DEBUG: Log validation errors
+        console.error('[HANDLER-VALIDATE] Validation failed:', result.errors.slice(0, 5));
         throw HTTPExceptionFactory.unprocessableEntity({
           message: 'Request body validation failed',
-          details: { validationErrors: result.errors },
+          details: { detailType: 'validation', validationErrors: result.errors },
         });
       }
 
-      validated.body = result.data as [TBody] extends [never] ? undefined : z.infer<TBody>;
+      validated.body = result.data as ValidatedBody;
     } catch (error) {
       if (error instanceof HTTPException)
         throw error;
 
       throw HTTPExceptionFactory.unprocessableEntity({
         message: 'Invalid request body format',
-        details: { validationErrors: [{ field: 'body', message: 'Unable to parse request body' }] },
+        details: { detailType: 'validation', validationErrors: [{ field: 'body', message: 'Unable to parse request body' }] },
       });
     }
   }
@@ -326,11 +352,11 @@ async function validateRequest<
     if (!result.success) {
       throw HTTPExceptionFactory.unprocessableEntity({
         message: 'Query parameter validation failed',
-        details: { validationErrors: result.errors },
+        details: { detailType: 'validation', validationErrors: result.errors },
       });
     }
 
-    validated.query = result.data as [TQuery] extends [never] ? undefined : z.infer<TQuery>;
+    validated.query = result.data as ValidatedQuery;
   }
 
   // Validate path parameters
@@ -341,18 +367,14 @@ async function validateRequest<
     if (!result.success) {
       throw HTTPExceptionFactory.unprocessableEntity({
         message: 'Path parameter validation failed',
-        details: { validationErrors: result.errors },
+        details: { detailType: 'validation', validationErrors: result.errors },
       });
     }
 
-    validated.params = result.data as [TParams] extends [never] ? undefined : z.infer<TParams>;
+    validated.params = result.data as ValidatedParams;
   }
 
-  return validated as {
-    body: [TBody] extends [never] ? undefined : z.infer<TBody>;
-    query: [TQuery] extends [never] ? undefined : z.infer<TQuery>;
-    params: [TParams] extends [never] ? undefined : z.infer<TParams>;
-  };
+  return validated as ValidatedData<TBody, TQuery, TParams>;
 }
 
 // ============================================================================
@@ -376,7 +398,7 @@ async function validateRequest<
  */
 export function createHandler<
   TRoute extends RouteConfig,
-  TEnv extends Env = ApiEnv,
+  TEnv extends ApiEnv = ApiEnv,
   TBody extends z.ZodSchema = never,
   TQuery extends z.ZodSchema = never,
   TParams extends z.ZodSchema = never,
@@ -385,24 +407,22 @@ export function createHandler<
   implementation: RegularHandler<TRoute, TEnv, TBody, TQuery, TParams>,
 ): RouteHandler<TRoute, TEnv> {
   const handler = async (c: Context<TEnv>) => {
-    const operationName = config.operationName || `${c.req.method} ${c.req.path}`;
-    const logger = createOperationLogger(c, operationName);
     const performance = createPerformanceTracker();
 
-    // Set start time in context for response metadata
-    (c as Context & { set: (key: string, value: unknown) => void }).set('startTime', performance.startTime);
-
-    logger.debug('Handler started');
+    /**
+     * Set start time in context for response metadata
+     * Using Object.assign to add custom property outside ContextVariableMap
+     * This avoids type casting while maintaining compatibility with response metadata
+     */
+    Object.assign(c, { startTime: performance.startTime });
 
     try {
-      // Apply authentication
-      if (config.auth && config.auth !== 'public') {
-        logger.debug('Applying authentication', { logType: 'auth', mode: config.auth });
+      // Apply authentication (including 'public' mode for requestId setup)
+      if (config.auth) {
         await applyAuthentication(c, config.auth);
       }
 
       // Validate request
-      logger.debug('Validating request');
       const validated = await validateRequest<TBody, TQuery, TParams>(c, config);
 
       // Create authenticated context helper
@@ -425,33 +445,27 @@ export function createHandler<
       // Create enhanced context
       const enhancedContext = Object.assign(c, {
         validated,
-        logger,
         auth: authFn,
       }) as HandlerContext<TEnv, TBody, TQuery, TParams>;
 
       // Execute handler implementation
-      logger.debug('Executing handler implementation');
       const result = await implementation(enhancedContext);
-
-      logger.info('Handler completed successfully');
 
       return result;
     } catch (error) {
-      logger.error('Handler failed', error as Error);
-
       if (error instanceof HTTPException) {
         // Handle validation errors with our unified system
         if (error.status === HttpStatusCodes.UNPROCESSABLE_ENTITY) {
           // Check for EnhancedHTTPException with details
           if ('details' in error && error.details && typeof error.details === 'object') {
-            const details = error.details as { validationErrors?: Array<{ field: string; message: string; code?: string }> };
-            if (details.validationErrors) {
-              return Responses.validationError(c, details.validationErrors, error.message);
+            const detailsResult = ValidationErrorDetailsSchema.safeParse(error.details);
+            if (detailsResult.success && detailsResult.data.validationErrors) {
+              return Responses.validationError(c, detailsResult.data.validationErrors, error.message);
             }
           } else if (error.cause && typeof error.cause === 'object') {
-            const cause = error.cause as { validationErrors?: Array<{ field: string; message: string; code?: string }> };
-            if (cause.validationErrors) {
-              return Responses.validationError(c, cause.validationErrors, error.message);
+            const causeResult = ValidationErrorDetailsSchema.safeParse(error.cause);
+            if (causeResult.success && causeResult.data.validationErrors) {
+              return Responses.validationError(c, causeResult.data.validationErrors, error.message);
             }
           }
         }
@@ -459,38 +473,44 @@ export function createHandler<
       }
 
       if (error instanceof AppError) {
-        // Convert AppError instances to appropriate HTTP responses
-        switch (error.code) {
-          case 'RESOURCE_NOT_FOUND':
-            return Responses.notFound(c, 'Resource');
-          case 'RESOURCE_CONFLICT':
-          case 'RESOURCE_ALREADY_EXISTS':
-            return Responses.conflict(c, error.message);
-          case 'UNAUTHENTICATED':
-          case 'TOKEN_EXPIRED':
-          case 'TOKEN_INVALID':
-            return Responses.authenticationError(c, error.message);
-          case 'UNAUTHORIZED':
-          case 'INSUFFICIENT_PERMISSIONS':
-            return Responses.authorizationError(c, error.message);
-          case 'VALIDATION_ERROR':
-          case 'INVALID_INPUT':
-            return Responses.badRequest(c, error.message, error.details);
-          case 'DATABASE_ERROR':
-            return Responses.databaseError(c, 'batch', error.message);
-          case 'EXTERNAL_SERVICE_ERROR':
-            return Responses.externalServiceError(c, 'External Service', error.message);
-          default:
-            // For internal server errors and other unknown AppError codes
-            return Responses.internalServerError(c, error.message, operationName);
-        }
+        // ✅ CENTRALIZED: Use single source of truth for error → response mapping
+        return appErrorToResponse(c, error);
       }
 
       // Convert other errors to internal server error
-      return Responses.internalServerError(c, 'Handler execution failed', operationName);
+      return Responses.internalServerError(c, error instanceof Error ? error.message : 'Handler execution failed');
     }
   };
 
+  /**
+   * Type assertion: Handler factory return type
+   *
+   * STRUCTURAL TYPE MISMATCH (Expected):
+   * - RouteHandler = Handler<E, P, I, ComplexReturnType> with derived Input generic
+   * - Our handler = (c: Context<TEnv>) => Promise<Response>
+   * - TypeScript correctly identifies these don't structurally overlap
+   *
+   * WHY THIS IS RUNTIME-SAFE:
+   * 1. Hono's router calls handler(context) - Input generic is compile-time only
+   * 2. Context<TEnv> contains ALL data from Input generic at runtime
+   * 3. Our validation layer extracts and validates Input before handler execution
+   * 4. HandlerContext.validated provides type-safe access to all validated inputs
+   * 5. Response type Promise<Response> is compatible with all RouteHandler return types
+   *
+   * WHY DOUBLE CAST IS REQUIRED:
+   * - Single cast (as RouteHandler) fails: TS2352 "types don't sufficiently overlap"
+   * - TypeScript's structural checking can't verify generic type compatibility
+   * - Double cast (as unknown as RouteHandler) acknowledges we're bridging incompatible structures
+   * - This is the standard pattern for factory functions that abstract framework types
+   *
+   * ALTERNATIVE REJECTED:
+   * - Duplicating Hono's Input derivation logic: maintenance burden, breaks abstraction
+   * - Using Handler directly: loses type safety in route definitions
+   * - Removing type check: loses compile-time validation of route configs
+   *
+   * PATTERN: Standard handler factory with type abstraction
+   * REFERENCE: Hono factory pattern for route handler generators
+   */
   return handler as unknown as RouteHandler<TRoute, TEnv>;
 }
 
@@ -523,7 +543,7 @@ export function createHandler<
  */
 export function createHandlerWithBatch<
   TRoute extends RouteConfig,
-  TEnv extends Env = ApiEnv,
+  TEnv extends ApiEnv = ApiEnv,
   TBody extends z.ZodSchema = never,
   TQuery extends z.ZodSchema = never,
   TParams extends z.ZodSchema = never,
@@ -532,28 +552,22 @@ export function createHandlerWithBatch<
   implementation: BatchHandler<TRoute, TEnv, TBody, TQuery, TParams>,
 ): RouteHandler<TRoute, TEnv> {
   const handler = async (c: Context<TEnv>) => {
-    const operationName = config.operationName || `${c.req.method} ${c.req.path}`;
-    const logger = createOperationLogger(c, operationName);
     const performance = createPerformanceTracker();
 
-    // Set start time in context for response metadata
-    (c as Context & { set: (key: string, value: unknown) => void }).set('startTime', performance.startTime);
-
-    logger.debug('D1 batch handler started', {
-      logType: 'api' as const,
-      method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-      path: c.req.path,
-    } as LoggerData);
+    /**
+     * Set start time in context for response metadata
+     * Using Object.assign to add custom property outside ContextVariableMap
+     * This avoids type casting while maintaining compatibility with response metadata
+     */
+    Object.assign(c, { startTime: performance.startTime });
 
     try {
-      // Apply authentication
-      if (config.auth && config.auth !== 'public') {
-        logger.debug('Applying authentication', { logType: 'auth', mode: config.auth });
+      // Apply authentication (including 'public' mode for requestId setup)
+      if (config.auth) {
         await applyAuthentication(c, config.auth);
       }
 
       // Validate request
-      logger.debug('Validating request');
       const validated = await validateRequest<TBody, TQuery, TParams>(c, config);
 
       // Create authenticated context helper
@@ -576,16 +590,16 @@ export function createHandlerWithBatch<
       // Create enhanced context
       const enhancedContext = Object.assign(c, {
         validated,
-        logger,
         auth: authFn,
       }) as HandlerContext<TEnv, TBody, TQuery, TParams>;
 
       // Execute implementation with D1 batch operations
-      logger.debug('Preparing D1 batch operations');
       const db = await getDbAsync();
 
       // D1 batch operations collector - follows D1 best practices
-      const statements: unknown[] = [];
+      // ✅ DRIZZLE BEST PRACTICE: Use BatchItem type for full type safety
+      // Drizzle's BatchItem type supports all query builders (insert/update/delete/select)
+      const statements: BatchItem<'sqlite'>[] = [];
       const batchMetrics = {
         addedCount: 0,
         maxBatchSize: 100, // D1 recommended limit
@@ -593,76 +607,48 @@ export function createHandlerWithBatch<
       };
 
       const batchContext: BatchContext = {
-        add: (statement: unknown) => {
+        add: (statement: BatchItem<'sqlite'>) => {
           // Validate batch size limit
           if (statements.length >= batchMetrics.maxBatchSize) {
             throw new AppError({
               message: `Batch size limit exceeded. Maximum ${batchMetrics.maxBatchSize} operations allowed per batch.`,
               code: 'BATCH_SIZE_EXCEEDED' as ErrorCode,
               statusCode: HttpStatusCodes.BAD_REQUEST,
-              details: { currentSize: statements.length },
+              details: { detailType: 'batch', currentSize: statements.length },
             });
           }
 
           statements.push(statement);
           batchMetrics.addedCount++;
-
-          logger.debug('Statement added to batch', {
-            logType: 'database' as const,
-            operation: 'batch' as const,
-            affected: statements.length,
-          } as LoggerData);
         },
         execute: async (): Promise<unknown[]> => {
           if (statements.length === 0) {
-            logger.debug('No statements to execute in batch');
             return [];
           }
 
-          // Validate batch isn't too large
-          if (statements.length > batchMetrics.maxBatchSize) {
+          // Validate batch size using shared utility
+          try {
+            validateBatchSize(statements.length, batchMetrics.maxBatchSize);
+          } catch (error) {
             throw new AppError({
-              message: `Cannot execute batch with ${statements.length} statements. Maximum is ${batchMetrics.maxBatchSize}.`,
+              message: getErrorMessage(error),
               code: 'BATCH_SIZE_EXCEEDED' as ErrorCode,
               statusCode: HttpStatusCodes.BAD_REQUEST,
             });
           }
 
-          logger.info('Executing D1 batch operation', {
-            logType: 'operation' as const,
-            operationName: 'D1Batch',
-            resource: `batch-${statements.length}`,
-          } as LoggerData);
-
-          const batchStartTime = performance.now();
-
           try {
-            // Execute atomic batch operation - D1 handles implicit transaction
-            // All operations succeed or all fail - automatic rollback on failure
-            // @ts-expect-error - D1 batch type issue with Drizzle ORM
-            const results = await db.batch(statements);
-
-            const batchDuration = performance.now() - batchStartTime;
-
-            logger.info('D1 batch executed successfully', {
-              logType: 'performance' as const,
-              duration: batchDuration,
-              dbQueries: statements.length,
-            } as LoggerData);
+            // ✅ ATOMIC BATCH: Using shared executeBatch helper
+            // Following Drizzle ORM best practices with automatic D1/SQLite fallback
+            // No type assertion needed - statements is already typed as BatchItem<'sqlite'>[]
+            const results = await executeBatch(db, statements);
 
             // Clear statements after successful execution
             statements.length = 0;
 
-            return [...results] as unknown[];
+            return results;
           } catch (error) {
-            const batchDuration = performance.now() - batchStartTime;
-
             // All operations automatically rolled back by D1
-            logger.error('D1 batch execution failed - all operations rolled back', error as Error, {
-              logType: 'database' as const,
-              operation: 'batch' as const,
-              affected: statements.length,
-            } as LoggerData);
 
             // Enhance error with batch context
             if (error instanceof Error) {
@@ -671,8 +657,8 @@ export function createHandlerWithBatch<
                 code: 'BATCH_FAILED' as ErrorCode,
                 statusCode: HttpStatusCodes.INTERNAL_SERVER_ERROR,
                 details: {
+                  detailType: 'batch',
                   statementCount: statements.length,
-                  duration: batchDuration,
                   originalError: error.message,
                 },
               });
@@ -687,28 +673,15 @@ export function createHandlerWithBatch<
       // Execute the handler implementation
       const result = await implementation(enhancedContext, batchContext);
 
-      const duration = performance.getDuration();
-      logger.info('D1 batch handler completed successfully', {
-        logType: 'performance' as const,
-        duration,
-        marks: performance.getMarks(),
-      } as LoggerData);
-
       return result;
     } catch (error) {
-      const duration = performance.getDuration();
-      logger.error('D1 batch handler failed', error as Error, {
-        logType: 'performance' as const,
-        duration,
-      } as LoggerData);
-
       // Handle validation errors
       if (error instanceof HTTPException) {
         if (error.status === HttpStatusCodes.UNPROCESSABLE_ENTITY) {
           if ('details' in error && error.details && typeof error.details === 'object') {
-            const details = error.details as { validationErrors?: Array<{ field: string; message: string; code?: string }> };
-            if (details.validationErrors) {
-              return Responses.validationError(c, details.validationErrors, error.message);
+            const detailsResult = ValidationErrorDetailsSchema.safeParse(error.details);
+            if (detailsResult.success && detailsResult.data.validationErrors) {
+              return Responses.validationError(c, detailsResult.data.validationErrors, error.message);
             }
           }
         }
@@ -717,19 +690,8 @@ export function createHandlerWithBatch<
 
       // Handle application errors
       if (error instanceof AppError) {
-        switch (error.code) {
-          case 'BATCH_FAILED':
-          case 'BATCH_SIZE_EXCEEDED':
-            return Responses.databaseError(c, 'batch', error.message);
-          case 'DATABASE_ERROR':
-            return Responses.databaseError(c, 'batch', error.message);
-          case 'RESOURCE_NOT_FOUND':
-            return Responses.notFound(c, 'Resource');
-          case 'RESOURCE_CONFLICT':
-            return Responses.conflict(c, error.message);
-          default:
-            return HTTPExceptionFactory.create(error.statusCode || 500, { message: error.message });
-        }
+        // ✅ CENTRALIZED: Use single source of truth for error → response mapping
+        return appErrorToResponse(c, error);
       }
 
       // Handle D1-specific database errors
@@ -763,98 +725,39 @@ export function createHandlerWithBatch<
       }
 
       // Generic error fallback
-      return Responses.internalServerError(c, 'An unexpected error occurred', operationName);
+      return Responses.internalServerError(c, error instanceof Error ? error.message : 'An unexpected error occurred');
     }
   };
 
+  /**
+   * Type assertion: Batch handler factory return type
+   *
+   * STRUCTURAL TYPE MISMATCH (Expected):
+   * - RouteHandler = Handler<E, P, I, ComplexReturnType> with derived Input generic
+   * - Our handler = (c: Context<TEnv>) => Promise<Response>
+   * - TypeScript correctly identifies these don't structurally overlap
+   *
+   * WHY THIS IS RUNTIME-SAFE:
+   * 1. Hono's router calls handler(context) - Input generic is compile-time only
+   * 2. Context<TEnv> contains ALL data from Input generic at runtime
+   * 3. Our validation layer extracts and validates Input before handler execution
+   * 4. HandlerContext.validated provides type-safe access to all validated inputs
+   * 5. Response type Promise<Response> is compatible with all RouteHandler return types
+   * 6. Batch operations provide atomic D1 transaction semantics
+   *
+   * WHY DOUBLE CAST IS REQUIRED:
+   * - Single cast (as RouteHandler) fails: TS2352 "types don't sufficiently overlap"
+   * - TypeScript's structural checking can't verify generic type compatibility
+   * - Double cast (as unknown as RouteHandler) acknowledges we're bridging incompatible structures
+   * - This is the standard pattern for factory functions that abstract framework types
+   *
+   * ALTERNATIVE REJECTED:
+   * - Duplicating Hono's Input derivation logic: maintenance burden, breaks abstraction
+   * - Using Handler directly: loses type safety in route definitions
+   * - Removing type check: loses compile-time validation of route configs
+   *
+   * PATTERN: Standard handler factory with type abstraction
+   * REFERENCE: Hono factory pattern for route handler generators
+   */
   return handler as unknown as RouteHandler<TRoute, TEnv>;
 }
-
-// ============================================================================
-// RESPONSE HELPERS FOR HANDLERS
-// ============================================================================
-
-/**
- * Handler-specific response helpers with integrated logging
- */
-export const HandlerResponses = {
-  /**
-   * Success response with automatic logging
-   */
-  success: <T>(c: HandlerContext, data: T, logMessage?: string) => {
-    if (logMessage) {
-      c.logger.info(logMessage, { logType: 'api', method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH', path: c.req.path });
-    }
-    return Responses.ok(c, data);
-  },
-
-  /**
-   * Created response with automatic logging
-   */
-  created: <T>(c: HandlerContext, data: T, logMessage?: string) => {
-    if (logMessage) {
-      c.logger.info(logMessage, { logType: 'api', method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH', path: c.req.path });
-    }
-    return Responses.created(c, data);
-  },
-
-  /**
-   * Paginated response with automatic logging
-   */
-  paginated: <T>(
-    c: HandlerContext,
-    items: T[],
-    pagination: { page: number; limit: number; total: number },
-    logMessage?: string,
-  ) => {
-    if (logMessage) {
-      c.logger.info(logMessage, {
-        logType: 'api',
-        method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-        path: c.req.path,
-      });
-    }
-    return Responses.paginated(c, items, pagination);
-  },
-
-  /**
-   * Error response with automatic logging
-   */
-  error: (c: HandlerContext, message: string, status = 400) => {
-    c.logger.warn('Returning error response', {
-      logType: 'api',
-      method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-      path: c.req.path,
-      statusCode: status,
-    });
-    return Responses.badRequest(c, message);
-  },
-} as const;
-
-// ============================================================================
-// COMMON VALIDATION SCHEMAS FOR HANDLERS
-// ============================================================================
-
-/**
- * Common schemas for handler validation - using unified schema system
- * All schemas imported from './schemas' to eliminate duplication
- */
-export const HandlerSchemas = {
-  // Path parameters
-  idParam: IdParamSchema,
-  uuidParam: UuidParamSchema,
-
-  // Query parameters
-  pagination: PaginationQuerySchema,
-  sorting: SortingQuerySchema,
-  search: SearchQuerySchema,
-
-  // Combined query schemas
-  listQuery: ListQuerySchema,
-} as const;
-
-// ============================================================================
-// TYPE EXPORTS
-// ============================================================================
-
-// Types are exported via the index.ts file to avoid conflicts

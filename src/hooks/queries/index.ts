@@ -1,46 +1,42 @@
-/**
- * Query Hooks - Centralized Exports
- *
- * Single import point for all TanStack Query hooks
- * Following patterns from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
- */
-
-// ============================================================================
-// QUERY HOOKS BY DOMAIN
-// ============================================================================
-
-// Chat memory queries (protected)
 export {
-  useMemoriesQuery,
-  useMemoryQuery,
-} from './chat-memories';
-
-// Chat custom role queries (protected)
+  useApiKeyQuery,
+  useApiKeysQuery,
+} from './api-keys';
+export { useThreadChangelogQuery, useThreadRoundChangelogQuery } from './chat/changelog';
 export {
   useCustomRoleQuery,
   useCustomRolesQuery,
-} from './chat-roles';
-
-// Chat thread queries (protected)
+  useThreadFeedbackQuery,
+  useUserPresetQuery,
+  useUserPresetsQuery,
+} from './chat/feedback-and-roles';
+export { useThreadMessagesQuery } from './chat/messages';
+export { useThreadPreSearchesQuery } from './chat/pre-search';
 export {
   usePublicThreadQuery,
+  usePublicThreadSlugsQuery,
+  useThreadBySlugQuery,
   useThreadQuery,
+  useThreadSlugStatusQuery,
   useThreadsQuery,
-} from './chat-threads';
-
-// Product queries (public)
+} from './chat/threads';
+export { useModelsQuery } from './models';
 export { useProductQuery, useProductsQuery } from './products';
-
-// Subscription queries (protected)
 export {
-  useCurrentSubscriptionQuery,
+  useProjectAttachmentsQuery,
+  useProjectContextQuery,
+  useProjectMemoriesQuery,
+  useProjectQuery,
+  useProjectsQuery,
+} from './projects';
+export {
   useSubscriptionQuery,
   useSubscriptionsQuery,
 } from './subscriptions';
-
-// Usage queries (protected)
 export {
-  useMessageQuotaQuery,
-  useThreadQuotaQuery,
+  useDownloadUrlQuery,
+  useUploadsQuery,
+} from './uploads';
+export {
   useUsageStatsQuery,
 } from './usage';

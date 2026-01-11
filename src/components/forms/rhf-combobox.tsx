@@ -1,12 +1,9 @@
-// components/TextInput.tsx
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import type { FieldPath, FieldValues } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
 
-import { cn } from '@/lib/ui/cn';
-import type { FormOptions, GeneralFormProps } from '@/types/general';
-
-import { Button } from '../ui/button';
+import { Icons } from '@/components/icons';
+import { Button } from '@/components/ui/button';
 import {
   Command,
   CommandEmpty,
@@ -14,7 +11,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '../ui/command';
+} from '@/components/ui/command';
 import {
   FormControl,
   FormDescription,
@@ -22,71 +19,79 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '../ui/form';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+} from '@/components/ui/form';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import type { FormOptions } from '@/lib/schemas';
+import { cn } from '@/lib/ui/cn';
 
-type Props = {
+type RHFComboBoxProps<
+  TFieldValues extends FieldValues = FieldValues,
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
+> = {
+  name: TName;
+  title: string;
   options: FormOptions;
+  description?: string;
   loading?: boolean;
-} & GeneralFormProps;
+};
 
-function RHFComboBox({
+export function RHFComboBox<
+  TFieldValues extends FieldValues = FieldValues,
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
+>({
   name,
   title,
   description,
-
   loading = false,
   options,
-}: Props) {
-  const { control, setValue } = useFormContext();
+}: RHFComboBoxProps<TFieldValues, TName>) {
+  const { control } = useFormContext<TFieldValues>();
   const t = useTranslations();
 
   return (
     <FormField
       control={control}
       name={name}
-      render={({ field }) => (
-        <FormItem className="flex w-full flex-col">
-          <FormLabel>{title}</FormLabel>
-          <Popover>
-            <PopoverTrigger asChild>
-              <FormControl>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  className={cn(
-                    'w-full justify-between',
-                    !field.value && 'text-muted-foreground',
-                  )}
-                >
-                  {field.value
-                    ? options.find(option => option.value === field.value)
-                      ?.label
-                    : t('forms.selectOption', { option: title })}
-                  <ChevronsUpDown className="ms-2 size-4 shrink-0 opacity-50" />
-                </Button>
-              </FormControl>
-            </PopoverTrigger>
-            <PopoverContent className="w-full p-0">
-              <Command>
-                <CommandInput placeholder={t('forms.searchPlaceholder', { field: title })} />
-                <CommandEmpty>
-                  {t('forms.noResultsFound', { item: title })}
-                </CommandEmpty>
-                <CommandGroup>
-                  <CommandList>
-                    {!loading
-                      && options.length
-                      && options.map(option => (
+      render={({ field }) => {
+        const selectedOption = options.find(option => option.value === field.value);
+
+        return (
+          <FormItem className="flex w-full flex-col">
+            <FormLabel>{title}</FormLabel>
+            <Popover>
+              <PopoverTrigger asChild>
+                <FormControl>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      'w-full justify-between',
+                      !field.value && 'text-muted-foreground',
+                    )}
+                  >
+                    {selectedOption?.label || t('forms.selectOption', { option: title })}
+                    <Icons.chevronsUpDown className="ms-2 size-4 shrink-0 opacity-50" />
+                  </Button>
+                </FormControl>
+              </PopoverTrigger>
+              <PopoverContent className="w-[calc(100vw-2rem)] p-0 sm:w-full">
+                <Command>
+                  <CommandInput placeholder={t('forms.searchPlaceholder', { field: title })} />
+                  <CommandEmpty>
+                    {t('forms.noResultsFound', { item: title })}
+                  </CommandEmpty>
+                  <CommandGroup>
+                    <CommandList>
+                      {!loading && options.length > 0 && options.map(option => (
                         <CommandItem
                           data-testid={field.name}
                           value={option.label}
                           key={option.value}
                           onSelect={() => {
-                            setValue(field.name, option.value);
+                            field.onChange(option.value);
                           }}
                         >
-                          <Check
+                          <Icons.check
                             className={cn(
                               'me-2 h-4 w-4',
                               option.value === field.value
@@ -97,29 +102,28 @@ function RHFComboBox({
                           <p>{option.label}</p>
                         </CommandItem>
                       ))}
-                    {!loading && !options.length && (
-                      <CommandItem value="empty" disabled>
-                        <Check className={cn('me-2 h-4 w-4')} />
-                        {t('forms.noOptionsAvailable')}
-                      </CommandItem>
-                    )}
-                    {loading && (
-                      <CommandItem value="loading" disabled>
-                        <Loader2 className={cn('me-2 h-4 w-4 animate-spin')} />
-                        {t('forms.loading')}
-                      </CommandItem>
-                    )}
-                  </CommandList>
-                </CommandGroup>
-              </Command>
-            </PopoverContent>
-          </Popover>
-          <FormDescription>{description}</FormDescription>
-          <FormMessage />
-        </FormItem>
-      )}
+                      {!loading && options.length === 0 && (
+                        <CommandItem value="empty" disabled>
+                          <Icons.check className="me-2 h-4 w-4" />
+                          {t('forms.noOptionsAvailable')}
+                        </CommandItem>
+                      )}
+                      {loading && (
+                        <CommandItem value="loading" disabled>
+                          <Icons.loader className="me-2 h-4 w-4 animate-spin" />
+                          {t('forms.loading')}
+                        </CommandItem>
+                      )}
+                    </CommandList>
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            {description && <FormDescription>{description}</FormDescription>}
+            <FormMessage />
+          </FormItem>
+        );
+      }}
     />
   );
 }
-
-export default RHFComboBox;

@@ -2,7 +2,9 @@
 
 import { useTranslations } from 'next-intl';
 
+import type { ButtonProps } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
+import { useBoolean } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
 
 type GoogleButtonProps = {
@@ -12,6 +14,7 @@ type GoogleButtonProps = {
   children?: React.ReactNode;
   className?: string;
   disabled?: boolean;
+  size?: ButtonProps['size'];
 };
 
 /**
@@ -26,29 +29,29 @@ export function GoogleButton({
   children,
   className,
   disabled = false,
+  size,
 }: GoogleButtonProps) {
   const t = useTranslations();
+  const isLoading = useBoolean(false);
+
   const handleGoogleSignIn = async () => {
-    try {
-      // Use Better Auth's social sign-in method for Google
-      await authClient.signIn.social({
-        provider: 'google',
-        callbackURL,
-        errorCallbackURL,
-        newUserCallbackURL,
-      });
-    } catch (error) {
-      console.error('Google sign-in failed:', error);
-      // Handle error - could show toast notification
-    }
+    isLoading.onTrue();
+    await authClient.signIn.social({
+      provider: 'google',
+      callbackURL,
+      errorCallbackURL,
+      newUserCallbackURL,
+    });
   };
 
   return (
     <Button
       onClick={handleGoogleSignIn}
-      disabled={disabled}
+      disabled={disabled || isLoading.value}
+      loading={isLoading.value}
       className={className}
       variant="outline"
+      size={size}
     >
       <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
         <path

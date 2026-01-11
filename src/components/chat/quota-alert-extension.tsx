@@ -1,0 +1,68 @@
+'use client';
+
+import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+
+import { PlanTypes } from '@/api/core/enums';
+import { useUsageStatsQuery } from '@/hooks/queries';
+import { cn } from '@/lib/ui/cn';
+
+type QuotaAlertExtensionProps = {
+  hasHeaderToggle?: boolean;
+};
+
+/**
+ * Quota Alert Extension - Shows ONLY for PAID users who are out of credits.
+ *
+ * Free users see FreeTrialAlert (amber warning) instead.
+ * This component shows a simple message without an upgrade button since
+ * paid users cannot purchase the same plan again.
+ */
+export function QuotaAlertExtension({ hasHeaderToggle = false }: QuotaAlertExtensionProps) {
+  const t = useTranslations('usage');
+  const { data: statsData, isLoading } = useUsageStatsQuery();
+
+  // Only show for PAID users who are out of credits
+  // Free users see FreeTrialAlert instead
+  const shouldShow = useMemo(() => {
+    if (!statsData?.success || !statsData.data) {
+      return false;
+    }
+    const { credits, plan } = statsData.data;
+    // Only show for paid users - free users get FreeTrialAlert
+    if (plan?.type !== PlanTypes.PAID) {
+      return false;
+    }
+    return credits.available <= 0;
+  }, [statsData]);
+
+  if (isLoading || !shouldShow) {
+    return null;
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ height: 0, opacity: 0 }}
+        animate={{ height: 'auto', opacity: 1 }}
+        exit={{ height: 0, opacity: 0 }}
+        transition={{ duration: 0.25, ease: 'easeInOut' }}
+        className="overflow-hidden"
+      >
+        <div
+          className={cn(
+            'flex items-center justify-center gap-3 px-3 py-2',
+            'border-0 border-b border-destructive/20 rounded-none',
+            'bg-destructive/10',
+            hasHeaderToggle ? 'rounded-tr-2xl' : 'rounded-t-2xl',
+          )}
+        >
+          <p className="text-[10px] leading-tight text-destructive font-medium text-center">
+            {t('quotaAlert.paidUserMessage')}
+          </p>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}

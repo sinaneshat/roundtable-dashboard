@@ -8,8 +8,11 @@ import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { apiLogger } from '@/api/middleware/hono-logger';
+import { HttpMethods } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
+
+// Skip rate limiting in local development for e2e tests
+const isLocalDevelopment = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
 
 export type RateLimitConfig = {
   windowMs: number;
@@ -30,6 +33,20 @@ export const RATE_LIMIT_PRESETS = {
     windowMs: 60 * 60 * 1000, // 1 hour
     maxRequests: 100,
     message: 'Too many upload requests. Please try again later.',
+  },
+
+  // File download operations (generous for pages with many images/files)
+  download: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 200, // 200 downloads per minute per user (supports page refreshes with many attachments)
+    message: 'Too many download requests. Please slow down.',
+  },
+
+  // Public file download (stricter limits for unauthenticated/public access)
+  publicDownload: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 10, // 10 downloads per minute per IP for public files
+    message: 'Too many download requests. Please try again later.',
   },
 
   // Read operations
@@ -83,8 +100,11 @@ let cleanupInterval: NodeJS.Timeout | null = null;
 
 /**
  * Start cleanup interval for rate limit store
+ * Note: In test environment, cleanup is managed manually via stopCleanup()
  */
 function startCleanup() {
+  // Skip cleanup in test environment (detected at runtime via env)
+  // NEXT_PUBLIC_* vars are inlined at build time, so process.env is acceptable here
   if (cleanupInterval || process.env.NODE_ENV === 'test') {
     return;
   }
@@ -129,16 +149,6 @@ function defaultKeyGenerator(c: Context<ApiEnv>): string {
   if (session?.userId)
     return `session:${session.userId}`;
 
-  // Only log warning if we couldn't get any IP at all
-  if (ip === 'fallback') {
-    apiLogger.warn('No IP address found for rate limiting, using fallback identifier', {
-      logType: 'performance',
-      duration: 0,
-      component: 'rate-limiter',
-      fallbackReason: 'no-ip-headers',
-    });
-  }
-
   return `ip:${ip}`;
 }
 
@@ -150,16 +160,6 @@ function ipKeyGenerator(c: Context<ApiEnv>): string {
     || c.req.header('x-forwarded-for')
     || c.req.header('x-real-ip')
     || 'fallback';
-
-  // Only log warning if we couldn't get any IP at all
-  if (ip === 'fallback') {
-    apiLogger.warn('No IP address found for rate limiting, using fallback identifier', {
-      logType: 'performance',
-      duration: 0,
-      component: 'rate-limiter',
-      fallbackReason: 'no-ip-headers',
-    });
-  }
 
   return `ip:${ip}`;
 }
@@ -203,6 +203,12 @@ export class RateLimiterFactory {
    */
   static createCustom(config: RateLimitConfig) {
     return createMiddleware<ApiEnv>(async (c, next) => {
+      // Skip rate limiting in local development for e2e tests
+      if (isLocalDevelopment) {
+        await next();
+        return;
+      }
+
       const keyGenerator = config.keyGenerator || defaultKeyGenerator;
       const key = keyGenerator(c);
       const now = Date.now();
@@ -360,12 +366,12 @@ export class RateLimiterFactory {
       const method = c.req.method;
 
       switch (method) {
-        case 'PUT':
-        case 'POST':
+        case HttpMethods.PUT:
+        case HttpMethods.POST:
           return 'upload';
-        case 'DELETE':
+        case HttpMethods.DELETE:
           return 'delete';
-        case 'GET':
+        case HttpMethods.GET:
           return 'read';
         default:
           return 'api';

@@ -1,46 +1,32 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { getSessionOrRedirect } from '@/app/auth/actions';
 
-import { Card, CardContent } from '@/components/ui/card';
+type AuthCallbackScreenProps = {
+  returnUrl?: string;
+};
 
-const loadingMessages = [
-  'Setting up your account...',
-  'Organizing your workspace...',
-  'Getting everything ready...',
-  'Almost there...',
-];
+/**
+ * Auth Callback Screen - Server Component
+ *
+ * Handles OAuth callback flow with server-side redirects:
+ * 1. Verifies session exists (redirects to sign-in if not)
+ * 2. Redirects to returnUrl if provided and valid
+ * 3. Defaults to /chat for successful authentication
+ *
+ * No UI is rendered - only server-side redirects for security.
+ */
+export default async function AuthCallbackScreen({
+  returnUrl,
+}: AuthCallbackScreenProps): Promise<never> {
+  // 1. Verify session exists
+  await getSessionOrRedirect();
 
-export default function AuthCallbackScreen() {
-  const [messageIndex, setMessageIndex] = useState(0);
+  // 2. If valid return URL is provided, redirect to it
+  if (returnUrl && returnUrl.startsWith('/')) {
+    redirect(returnUrl);
+  }
 
-  useEffect(() => {
-    const messageInterval = setInterval(() => {
-      setMessageIndex(prev => (prev + 1) % loadingMessages.length);
-    }, 2000);
-
-    return () => clearInterval(messageInterval);
-  }, []);
-
-  return (
-    <Card className="w-full max-w-sm">
-      <CardContent className="pt-6">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="relative">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <div className="absolute inset-0 h-8 w-8 animate-ping rounded-full bg-primary opacity-20" />
-          </div>
-          <div className="text-center space-y-2">
-            <p className="text-sm font-medium text-foreground animate-pulse">
-              {loadingMessages[messageIndex]}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Please wait while we complete your authentication
-            </p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  // 3. Redirect to chat
+  redirect('/chat');
 }

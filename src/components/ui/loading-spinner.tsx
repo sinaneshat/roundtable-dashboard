@@ -1,24 +1,36 @@
-import { Loader2 } from 'lucide-react';
-
+import type { ComponentSize } from '@/api/core/enums';
+import { ComponentSizes } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
 
-interface LoadingSpinnerProps {
-  className?: string;
-  size?: 'sm' | 'md' | 'lg';
-  text?: string;
-}
+import { Spinner } from './spinner';
 
-const sizeClasses = {
-  sm: 'h-4 w-4',
-  md: 'h-8 w-8',
-  lg: 'h-12 w-12',
+type LoadingSpinnerProps = {
+  className?: string;
+  size?: Extract<ComponentSize, 'sm' | 'md' | 'lg'>;
+  text?: string;
 };
 
-export function LoadingSpinner({ className, size = 'md', text }: LoadingSpinnerProps) {
+const sizeClasses = {
+  [ComponentSizes.SM]: 'size-4',
+  [ComponentSizes.MD]: 'size-8',
+  [ComponentSizes.LG]: 'size-12',
+} as const;
+
+/**
+ * LoadingSpinner - Spinner with optional text label
+ *
+ * Uses the base Spinner component with added text support.
+ * For simple spinners without text, use <Spinner /> directly.
+ */
+export function LoadingSpinner({ className, size = ComponentSizes.MD, text }: LoadingSpinnerProps) {
+  if (!text) {
+    return <Spinner className={cn(sizeClasses[size], 'text-primary', className)} />;
+  }
+
   return (
-    <div className={cn('flex flex-col items-center justify-center p-8', className)}>
-      <Loader2 className={cn('animate-spin text-primary', sizeClasses[size])} />
-      {text && <p className="mt-2 text-sm text-muted-foreground">{text}</p>}
+    <div className={cn('flex flex-col items-center justify-center gap-2', className)}>
+      <Spinner className={cn(sizeClasses[size], 'text-primary')} />
+      <p className="text-sm text-muted-foreground">{text}</p>
     </div>
   );
 }

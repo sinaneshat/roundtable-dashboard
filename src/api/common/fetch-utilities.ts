@@ -6,39 +6,57 @@
  */
 
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import type { z } from 'zod';
+import { z } from 'zod';
 
-import type { EnhancedHTTPException } from '@/api/core/http-exceptions';
-import { HTTPExceptionFactory } from '@/api/core/http-exceptions';
+import type { EnhancedHTTPException } from '@/api/core';
+import { HTTPExceptionFactory } from '@/api/core';
+import { CircuitBreakerStates, CircuitBreakerStateSchema } from '@/api/core/enums';
+
 // CloudflareEnv is globally available from cloudflare-env.d.ts
-// Import logger from the correct path based on codebase structure
-import { apiLogger } from '@/api/middleware/hono-logger';
-
 import { createError } from './error-handling';
 
 // ============================================================================
-// TYPE DEFINITIONS
+// ZOD SCHEMAS - Single source of truth for type definitions
 // ============================================================================
 
-export type FetchConfig = {
-  timeoutMs?: number;
-  maxRetries?: number;
-  retryDelay?: number;
-  backoffFactor?: number;
-  retryableStatuses?: number[];
-  circuitBreaker?: {
-    failureThreshold: number;
-    resetTimeoutMs: number;
-  };
-  correlationId?: string;
-};
+/**
+ * Circuit breaker configuration schema
+ */
+const CircuitBreakerConfigSchema = z.object({
+  failureThreshold: z.number().int().positive(),
+  resetTimeoutMs: z.number().int().positive(),
+});
 
-export type RetryableError = {
-  isRetryable: boolean;
-  shouldCircuitBreak: boolean;
-  delay: number;
-};
+/**
+ * Fetch configuration schema
+ */
+export const FetchConfigSchema = z.object({
+  timeoutMs: z.number().int().positive().optional(),
+  maxRetries: z.number().int().nonnegative().optional(),
+  retryDelay: z.number().int().positive().optional(),
+  backoffFactor: z.number().positive().optional(),
+  retryableStatuses: z.array(z.number().int()).optional(),
+  circuitBreaker: CircuitBreakerConfigSchema.optional(),
+  correlationId: z.string().optional(),
+});
 
+export type FetchConfig = z.infer<typeof FetchConfigSchema>;
+
+/**
+ * Retryable error result schema
+ */
+export const RetryableErrorSchema = z.object({
+  isRetryable: z.boolean(),
+  shouldCircuitBreak: z.boolean(),
+  delay: z.number().nonnegative(),
+});
+
+export type RetryableError = z.infer<typeof RetryableErrorSchema>;
+
+/**
+ * Fetch result - generic type with discriminated union
+ * Note: Uses generic T for data type, so schema is for structure only
+ */
 export type FetchResult<T> = {
   success: true;
   data: T;
@@ -72,22 +90,28 @@ export type UnvalidatedParseResult
 // CIRCUIT BREAKER STATE MANAGEMENT
 // ============================================================================
 
-type CircuitBreakerState = {
-  failures: number;
-  lastFailureTime: number;
-  nextAttemptTime: number;
-  state: 'closed' | 'open' | 'half-open';
-};
+/**
+ * Circuit breaker state data schema
+ * Exported for use in tests and state inspection
+ */
+export const CircuitBreakerStateDataSchema = z.object({
+  failures: z.number().int().nonnegative(),
+  lastFailureTime: z.number().nonnegative(),
+  nextAttemptTime: z.number().nonnegative(),
+  state: CircuitBreakerStateSchema,
+});
 
-const circuitBreakers = new Map<string, CircuitBreakerState>();
+type CircuitBreakerStateData = z.infer<typeof CircuitBreakerStateDataSchema>;
 
-function getCircuitBreakerState(url: string): CircuitBreakerState {
+const circuitBreakers = new Map<string, CircuitBreakerStateData>();
+
+function getCircuitBreakerState(url: string): CircuitBreakerStateData {
   if (!circuitBreakers.has(url)) {
     circuitBreakers.set(url, {
       failures: 0,
       lastFailureTime: 0,
       nextAttemptTime: 0,
-      state: 'closed',
+      state: CircuitBreakerStates.CLOSED,
     });
   }
   return circuitBreakers.get(url)!;
@@ -104,13 +128,13 @@ function updateCircuitBreakerState(
   if (success) {
     // Reset on success
     state.failures = 0;
-    state.state = 'closed';
+    state.state = CircuitBreakerStates.CLOSED;
   } else if (config.circuitBreaker) {
     state.failures++;
     state.lastFailureTime = now;
 
     if (state.failures >= config.circuitBreaker.failureThreshold) {
-      state.state = 'open';
+      state.state = CircuitBreakerStates.OPEN;
       state.nextAttemptTime = now + config.circuitBreaker.resetTimeoutMs;
     }
   }
@@ -124,15 +148,15 @@ function shouldAllowRequest(url: string, config: FetchConfig): boolean {
   const now = Date.now();
 
   switch (state.state) {
-    case 'closed':
+    case CircuitBreakerStates.CLOSED:
       return true;
-    case 'open':
+    case CircuitBreakerStates.OPEN:
       if (now >= state.nextAttemptTime) {
-        state.state = 'half-open';
+        state.state = CircuitBreakerStates.HALF_OPEN;
         return true;
       }
       return false;
-    case 'half-open':
+    case CircuitBreakerStates.HALF_OPEN:
       return true;
     default:
       return true;
@@ -224,12 +248,6 @@ export async function fetchWithRetry<T = unknown>(
   // Circuit breaker check
   if (!shouldAllowRequest(url, fetchConfig)) {
     const duration = Date.now() - startTime;
-    apiLogger.warn('Circuit breaker OPEN - request blocked', {
-      url,
-      correlationId,
-      duration,
-      component: 'fetch-utilities',
-    });
 
     return {
       success: false,
@@ -247,14 +265,6 @@ export async function fetchWithRetry<T = unknown>(
       // Create abort controller with timeout following Hono patterns
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      apiLogger.debug('Fetch attempt', {
-        url,
-        attempt: attempt + 1,
-        maxRetries: maxRetries + 1,
-        correlationId,
-        component: 'fetch-utilities',
-      });
 
       // Make request with timeout
       const response = await fetch(url, {
@@ -277,15 +287,6 @@ export async function fetchWithRetry<T = unknown>(
           updateCircuitBreakerState(url, false, fetchConfig);
           const duration = Date.now() - startTime;
 
-          apiLogger.error('Response parsing failed', {
-            url,
-            error: parseResult.error,
-            contentType: parseResult.contentType,
-            duration,
-            correlationId,
-            component: 'fetch-utilities',
-          });
-
           return {
             success: false,
             error: `Response parsing failed: ${parseResult.error}`,
@@ -295,22 +296,9 @@ export async function fetchWithRetry<T = unknown>(
           };
         }
 
-        // Type handling based on schema presence:
-        // - With schema: parseResult.data is validated T (no casting needed)
-        // - Without schema: parseResult.data is unknown, consumer assumes responsibility for type T
-        // This approach balances type safety with backward compatibility
         const data = parseResult.data as T;
 
         const duration = Date.now() - startTime;
-
-        apiLogger.info('Fetch successful', {
-          url,
-          status: response.status,
-          attempts: attempt + 1,
-          duration,
-          correlationId,
-          component: 'fetch-utilities',
-        });
 
         return {
           success: true,
@@ -338,41 +326,21 @@ export async function fetchWithRetry<T = unknown>(
         retryInfo.delay,
       );
 
-      apiLogger.warn('Fetch failed, retrying', {
-        url,
-        status: response.status,
-        attempt: attempt + 1,
-        maxRetries: maxRetries + 1,
-        retryDelay: delay,
-        correlationId,
-        component: 'fetch-utilities',
-      });
-
       if (delay > 0) {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
 
       // Handle timeout and network errors
-      const isTimeout = error instanceof Error && error.name === 'AbortError';
-      const isNetworkError = error instanceof Error && error.message.includes('fetch');
+      const isTimeout = fetchError instanceof Error && fetchError.name === 'AbortError';
+      const isNetworkError = fetchError instanceof Error && fetchError.message.includes('fetch');
 
       if (attempt === maxRetries || (!isTimeout && !isNetworkError)) {
         break;
       }
 
       const delay = calculateRetryDelay(attempt, fetchConfig);
-
-      apiLogger.warn('Fetch error, retrying', {
-        url,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        attempt: attempt + 1,
-        maxRetries: maxRetries + 1,
-        retryDelay: delay,
-        correlationId,
-        component: 'fetch-utilities',
-      });
 
       if (delay > 0) {
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -385,15 +353,6 @@ export async function fetchWithRetry<T = unknown>(
 
   const duration = Date.now() - startTime;
   const errorMessage = lastError?.message || 'Unknown error';
-
-  apiLogger.error('Fetch failed after all retries', {
-    url,
-    error: errorMessage,
-    attempts: maxRetries + 1,
-    duration,
-    correlationId,
-    component: 'fetch-utilities',
-  });
 
   return {
     success: false,
@@ -420,7 +379,7 @@ export async function fetchJSON<T = unknown>(
     method: 'GET',
     headers: {
       'Accept': 'application/json',
-      'User-Agent': 'Roundtable-Dashboard/1.0',
+      'User-Agent': 'Roundtable/1.0',
     },
   }, config, schema);
 }
@@ -440,7 +399,7 @@ export async function postJSON<T = unknown>(
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'Roundtable-Dashboard/1.0',
+      'User-Agent': 'Roundtable/1.0',
       ...headers, // Custom headers override defaults
     },
     body: JSON.stringify(body),
@@ -466,6 +425,7 @@ export function createHTTPExceptionFromFetchResult(
     message,
     correlationId: result.response?.headers.get('x-correlation-id') || undefined,
     details: {
+      detailType: 'fetch_error',
       operation,
       originalStatus: status,
       errorDetails: result.error,
@@ -549,10 +509,10 @@ async function parseResponseSafely<T>(
 
     // For binary responses without schema, return as unknown
     return { success: true, data: bufferData, contentType };
-  } catch (error) {
+  } catch (parseError) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown parsing error',
+      error: parseError instanceof Error ? parseError.message : 'Unknown parsing error',
       contentType,
     };
   }
@@ -570,15 +530,6 @@ export function validateEnvironmentVariables(
 
   if (missing.length > 0) {
     const errorMessage = `Missing required environment variables: ${missing.join(', ')}`;
-    apiLogger.error('Environment validation failed', {
-      logType: 'validation' as const,
-      fieldCount: required.length,
-      validationType: 'params' as const,
-      errors: missing.map(key => ({
-        field: String(key),
-        message: `Required environment variable ${String(key)} is missing`,
-      })),
-    });
 
     throw createError.internal(errorMessage);
   }

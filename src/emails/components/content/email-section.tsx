@@ -1,39 +1,50 @@
 import { Section } from '@react-email/components';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+
+import type { EmailSpacing, TextAlignment } from '@/api/core/enums';
+import { spacing } from '@/emails/design-tokens';
 
 type EmailSectionProps = {
   children: ReactNode;
-  className?: string;
-  spacing?: 'sm' | 'md' | 'lg';
-  align?: 'left' | 'center' | 'right';
+  spacing?: EmailSpacing;
+  align?: Exclude<TextAlignment, 'justify'>;
+  style?: CSSProperties;
 };
 
-const spacingStyles = {
-  sm: 'mt-[16px] mb-[16px]',
-  md: 'mt-[24px] mb-[24px]',
-  lg: 'mt-[32px] mb-[32px]',
+const spacingStyles: Record<string, CSSProperties> = {
+  sm: {
+    marginTop: spacing[4],
+    marginBottom: spacing[4],
+  },
+  md: {
+    marginTop: spacing[6],
+    marginBottom: spacing[6],
+  },
+  lg: {
+    marginTop: spacing[8],
+    marginBottom: spacing[8],
+  },
 };
 
-const alignStyles = {
-  left: 'text-start',
-  center: 'text-center',
-  right: 'text-end',
+const alignStyles: Record<string, CSSProperties> = {
+  left: { textAlign: 'left' },
+  center: { textAlign: 'center' },
+  right: { textAlign: 'right' },
 };
 
 export function EmailSection({
   children,
-  className,
-  spacing = 'md',
+  spacing: spacingProp = 'md',
   align = 'left',
+  style,
 }: EmailSectionProps) {
-  const baseClass = `${spacingStyles[spacing]} ${alignStyles[align]}`;
-  const finalClass = className || baseClass;
+  const combinedStyle: CSSProperties = {
+    ...spacingStyles[spacingProp],
+    ...alignStyles[align],
+    ...style,
+  };
 
-  return (
-    <Section className={finalClass}>
-      {children}
-    </Section>
-  );
+  return <Section style={combinedStyle}>{children}</Section>;
 }
 
 export default EmailSection;

@@ -1,3 +1,4 @@
+import type { StoragePurpose } from '@/api/core/enums';
 import type { Session, User } from '@/lib/auth/types';
 
 declare module 'hono' {
@@ -9,7 +10,7 @@ declare module 'hono' {
     requestId: string | undefined;
     // Storage-related context variables
     storageKey: string;
-    storagePurpose: import('@/api/common/storage-keys').StoragePurpose | null;
+    storagePurpose: StoragePurpose | null;
     storageMethod: string;
     fileContentType: string;
     fileSize: number;

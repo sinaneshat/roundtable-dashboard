@@ -1,7 +1,7 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { createApiResponseSchema } from '@/api/core/schemas';
+import { createApiResponseSchema, createProtectedRouteResponses } from '@/api/core';
 
 import { SecureMePayloadSchema } from './schema';
 
@@ -20,7 +20,6 @@ export const secureMeRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    ...createProtectedRouteResponses(),
   },
 });

@@ -1,21 +1,21 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import type { ComponentProps, ElementType, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 
 import { motion } from 'motion/react';
 
+import type { BorderGradientDirection } from '@/api/core/enums';
+import { BORDER_GRADIENT_DIRECTIONS, BorderGradientDirections } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
 
-type Direction = 'TOP' | 'LEFT' | 'BOTTOM' | 'RIGHT';
-
-export interface HoverBorderGradientProps extends React.HTMLAttributes<HTMLElement> {
-  children: React.ReactNode;
+export interface HoverBorderGradientProps extends ComponentProps<'button'> {
+  children: ReactNode;
   containerClassName?: string;
   className?: string;
-  as?: React.ElementType;
+  as?: ElementType;
   duration?: number;
   clockwise?: boolean;
-  disabled?: boolean;
 }
 
 export function HoverBorderGradient({
@@ -28,23 +28,23 @@ export function HoverBorderGradient({
   ...props
 }: HoverBorderGradientProps) {
   const [hovered, setHovered] = useState<boolean>(false);
-  const [direction, setDirection] = useState<Direction>('TOP');
+  const [direction, setDirection] = useState<BorderGradientDirection>(BorderGradientDirections.TOP);
 
-  const rotateDirection = (currentDirection: Direction): Direction => {
-    const directions: Direction[] = ['TOP', 'LEFT', 'BOTTOM', 'RIGHT'];
+  const rotateDirection = (currentDirection: BorderGradientDirection): BorderGradientDirection => {
+    const directions = [...BORDER_GRADIENT_DIRECTIONS];
     const currentIndex = directions.indexOf(currentDirection);
     const nextIndex = clockwise
       ? (currentIndex - 1 + directions.length) % directions.length
       : (currentIndex + 1) % directions.length;
-    return directions[nextIndex] as Direction;
+    return directions[nextIndex]!;
   };
 
-  const movingMap: Record<Direction, string> = {
-    TOP: 'radial-gradient(20.7% 50% at 50% 0%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
-    LEFT: 'radial-gradient(16.6% 43.1% at 0% 50%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
-    BOTTOM:
+  const movingMap: Record<BorderGradientDirection, string> = {
+    [BorderGradientDirections.TOP]: 'radial-gradient(20.7% 50% at 50% 0%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
+    [BorderGradientDirections.LEFT]: 'radial-gradient(16.6% 43.1% at 0% 50%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
+    [BorderGradientDirections.BOTTOM]:
       'radial-gradient(20.7% 50% at 50% 100%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
-    RIGHT:
+    [BorderGradientDirections.RIGHT]:
       'radial-gradient(16.2% 41.199999999999996% at 100% 50%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
   };
 
@@ -54,7 +54,7 @@ export function HoverBorderGradient({
   useEffect(() => {
     if (!hovered) {
       const interval = setInterval(() => {
-        setDirection(prevState => rotateDirection(prevState));
+        setDirection((prevState) => rotateDirection(prevState));
       }, duration * 1000);
       return () => clearInterval(interval);
     }
@@ -68,7 +68,7 @@ export function HoverBorderGradient({
       }}
       onMouseLeave={() => setHovered(false)}
       className={cn(
-        'relative flex h-min w-fit flex-col flex-nowrap content-center items-center justify-center gap-10 overflow-visible rounded-md border border-input bg-background/50 p-px decoration-clone transition duration-500 hover:border-primary/50',
+        'relative flex h-min w-fit flex-col flex-nowrap content-center items-center justify-center gap-10 overflow-visible rounded-4xl border border-input bg-background/50 p-px decoration-clone transition duration-500 hover:border-primary/50',
         containerClassName,
       )}
       {...props}

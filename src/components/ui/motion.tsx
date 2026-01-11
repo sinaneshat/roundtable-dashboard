@@ -1,209 +1,500 @@
 'use client';
 
-import { motion, type HTMLMotionProps, type Variants } from 'motion/react';
+import type { HTMLMotionProps, Variants } from 'motion/react';
+import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
-// Subtle animation variants
-const defaultFadeIn: Variants = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 }
-};
+// Re-export LayoutGroup for use in parent components that need to coordinate animations
+export { LayoutGroup };
 
-const defaultScaleIn: Variants = {
-  initial: { opacity: 0, scale: 0.98 },
-  animate: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 0.98 }
-};
+// =============================================================================
+// ANIMATION CONSTANTS - Consistent timing and easing across all components
+// =============================================================================
 
-const defaultSlideIn: Variants = {
-  initial: { opacity: 0, x: -8 },
-  animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: 8 }
-};
+export const ANIMATION_DURATION = {
+  fast: 0.15,
+  normal: 0.25,
+  slow: 0.35,
+} as const;
 
+export const ANIMATION_EASE = {
+  standard: [0.32, 0.72, 0, 1] as const,
+  enter: [0, 0, 0.2, 1] as const,
+  exit: [0.4, 0, 1, 1] as const,
+} as const;
 
-const staggerItem: Variants = {
-  initial: { opacity: 0, y: 8 },
-  animate: { 
-    opacity: 1, 
-    y: 0,
-    transition: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }
-  }
-};
+// =============================================================================
+// SIMPLE ENTRANCE COMPONENTS
+// =============================================================================
 
-// Base motion component props
-interface MotionComponentProps extends HTMLMotionProps<'div'> {
+type SimpleEntranceProps = {
   children: ReactNode;
   className?: string;
-  delay?: number;
-  duration?: number;
-}
+  skipAnimation?: boolean;
+  index?: number;
+  enableScrollEffect?: boolean;
+  scrollIntensity?: number;
+  skipScale?: boolean;
+};
 
-// FadeIn Component
-export function FadeIn({ 
-  children, 
-  className, 
-  delay = 0, 
-  duration = 0.2,
-  variants = defaultFadeIn,
-  ...props 
-}: MotionComponentProps & { variants?: Variants }) {
-  return (
-    <motion.div
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      variants={variants}
-      transition={{ 
-        duration, 
-        delay,
-        ease: [0.25, 0.1, 0.25, 1]
-      }}
-      className={cn(className)}
-      {...props}
-    >
-      {children}
-    </motion.div>
-  );
-}
+// Viewport threshold - lower value = elements stay visible longer when scrolling away
+const VIEWPORT_THRESHOLD = 0.05;
 
-// ScaleIn Component
-export function ScaleIn({ 
-  children, 
-  className, 
-  delay = 0, 
-  duration = 0.2,
-  variants = defaultScaleIn,
-  ...props 
-}: MotionComponentProps & { variants?: Variants }) {
-  return (
-    <motion.div
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      variants={variants}
-      transition={{ 
-        duration, 
-        delay,
-        ease: [0.25, 0.1, 0.25, 1]
-      }}
-      className={cn(className)}
-      {...props}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-// SlideIn Component
-export function SlideIn({ 
-  children, 
-  className, 
-  delay = 0, 
-  duration = 0.2,
-  variants = defaultSlideIn,
-  ...props 
-}: MotionComponentProps & { variants?: Variants }) {
-  return (
-    <motion.div
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      variants={variants}
-      transition={{ 
-        duration, 
-        delay,
-        ease: [0.25, 0.1, 0.25, 1]
-      }}
-      className={cn(className)}
-      {...props}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-// StaggerContainer Component
-export function StaggerContainer({ 
-  children, 
+/**
+ * User message - fade in when scrolled into view
+ */
+export function ScrollAwareUserMessage({
+  children,
   className,
-  staggerDelay = 0.1,
-  delayChildren = 0.1,
-  ...props 
-}: MotionComponentProps & { 
-  staggerDelay?: number;
-  delayChildren?: number;
-}) {
-  const containerVariants: Variants = {
-    initial: {},
-    animate: {
-      transition: {
-        staggerChildren: staggerDelay,
-        delayChildren
-      }
-    }
-  };
+  skipAnimation = false,
+}: Omit<SimpleEntranceProps, 'index'>) {
+  if (skipAnimation) {
+    return <div className={cn('w-full', className)}>{children}</div>;
+  }
 
   return (
     <motion.div
-      initial="initial"
-      animate="animate"
-      variants={containerVariants}
-      className={cn(className)}
-      {...props}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
+      transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
+      className={cn('w-full', className)}
     >
       {children}
     </motion.div>
   );
 }
 
-// StaggerItem Component
-export function StaggerItem({ 
-  children, 
+/**
+ * Participant message - fade in when scrolled into view
+ */
+export function ScrollAwareParticipant({
+  children,
   className,
-  variants = staggerItem,
-  ...props 
-}: MotionComponentProps & { variants?: Variants }) {
+  skipAnimation = false,
+  index = 0,
+}: SimpleEntranceProps) {
+  if (skipAnimation) {
+    return <div className={cn('w-full', className)}>{children}</div>;
+  }
+
   return (
     <motion.div
-      variants={variants}
-      className={cn(className)}
-      {...props}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
+      transition={{ duration: 0.25, delay: index * 0.05, ease: ANIMATION_EASE.enter }}
+      className={cn('w-full', className)}
     >
       {children}
     </motion.div>
   );
 }
 
-// Simple wrapper without hover effects - for initial load only
-export function SimpleMotion({ 
-  children, 
+/**
+ * Timeline entrance - fade in when scrolled into view
+ */
+export function TimelineEntrance({
+  children,
   className,
-  delay: _delay,
-  duration: _duration,
-  ...props 
-}: MotionComponentProps) {
+  skipAnimation = false,
+  index = 0,
+}: SimpleEntranceProps) {
+  if (skipAnimation) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
+      transition={{ duration: 0.25, delay: index * 0.03, ease: ANIMATION_EASE.enter }}
       className={cn(className)}
-      {...(props as React.HTMLAttributes<HTMLDivElement>)}
     >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * PreSearch card - fade in when scrolled into view
+ */
+export function ScrollFromTop({
+  children,
+  className,
+  skipAnimation = false,
+}: Omit<SimpleEntranceProps, 'index'>) {
+  if (skipAnimation) {
+    return <div className={cn('w-full', className)}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
+      transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
+      className={cn('w-full', className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * Moderator card - fade in when scrolled into view
+ */
+export function ScrollFromBottom({
+  children,
+  className,
+  skipAnimation = false,
+}: Omit<SimpleEntranceProps, 'index'>) {
+  if (skipAnimation) {
+    return <div className={cn('w-full', className)}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
+      transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
+      className={cn('w-full', className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * Accordion card entrance - fade in when scrolled into view
+ */
+export function AccordionEntrance({
+  children,
+  className,
+  skipAnimation = false,
+}: Omit<SimpleEntranceProps, 'index'>) {
+  if (skipAnimation) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
+      transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
+      className={cn(className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// =============================================================================
+// STREAMING LIST COMPONENTS - Layout animations for smooth height transitions
+// =============================================================================
+
+type AnimatedStreamingListProps = {
+  children: ReactNode;
+  className?: string;
+  groupId?: string;
+  isStreaming?: boolean;
+};
+
+/**
+ * Container for streaming lists - no height animations
+ */
+export function AnimatedStreamingList({
+  children,
+  className,
+}: AnimatedStreamingListProps) {
+  return (
+    <div className={cn(className)}>
       {children}
     </div>
   );
 }
 
-// Page transition wrapper
-export function PageTransition({ children, className }: { children: ReactNode; className?: string }) {
+type AnimatedStreamingItemProps = {
+  children: ReactNode;
+  className?: string;
+  itemKey: string;
+  index?: number;
+  delay?: number;
+  staggerDelay?: number;
+  skipAnimation?: boolean;
+};
+
+/**
+ * Individual streaming item - fade in only, no height animations
+ */
+export function AnimatedStreamingItem({
+  children,
+  className,
+  index = 0,
+  delay = 0,
+  staggerDelay = 0.03,
+  skipAnimation = false,
+}: AnimatedStreamingItemProps) {
+  if (skipAnimation) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
   return (
-    <FadeIn 
-      className={cn('h-full', className)}
-      duration={0.2}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{
+        duration: ANIMATION_DURATION.normal,
+        delay: delay + index * staggerDelay,
+        ease: ANIMATION_EASE.enter,
+      }}
+      className={cn(className)}
     >
       {children}
+    </motion.div>
+  );
+}
+
+// =============================================================================
+// ACCORDION CONTENT - Smooth height animations with AnimatePresence
+// =============================================================================
+
+type AnimatedAccordionContentProps = {
+  children: ReactNode;
+  className?: string;
+  isOpen: boolean;
+  onAnimationComplete?: () => void;
+};
+
+/**
+ * Animated accordion content - smooth height transition using auto height
+ * Uses Motion's unique ability to animate to/from height: 'auto'
+ */
+export function AnimatedAccordionContent({
+  children,
+  className,
+  isOpen,
+  onAnimationComplete,
+}: AnimatedAccordionContentProps) {
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{
+            opacity: 1,
+            height: 'auto',
+            transition: {
+              height: {
+                type: 'spring',
+                stiffness: 500,
+                damping: 40,
+                mass: 0.8,
+              },
+              opacity: { duration: 0.2, ease: ANIMATION_EASE.enter },
+            },
+          }}
+          exit={{
+            opacity: 0,
+            height: 0,
+            transition: {
+              height: { duration: 0.2, ease: ANIMATION_EASE.exit },
+              opacity: { duration: 0.15, ease: ANIMATION_EASE.exit },
+            },
+          }}
+          onAnimationComplete={onAnimationComplete}
+          className={cn('overflow-hidden', className)}
+        >
+          {/* Content renders without layout animations to prevent scroll issues */}
+          <div>
+            {children}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// =============================================================================
+// STREAMING MESSAGE CONTENT - Smooth height transitions during text streaming
+// =============================================================================
+
+type StreamingMessageContentProps = {
+  children: ReactNode;
+  className?: string;
+};
+
+/**
+ * Wrapper for streaming message content
+ * No height animations - content grows naturally as text streams in
+ */
+export function StreamingMessageContent({
+  children,
+  className,
+}: StreamingMessageContentProps) {
+  return (
+    <div className={cn(className)}>
+      {children}
+    </div>
+  );
+}
+
+// =============================================================================
+// STAGGER VARIANTS (used by StaggerContainer/StaggerItem)
+// =============================================================================
+
+const staggerContainerVariants: Variants = {
+  initial: {},
+  animate: {
+    transition: {
+      staggerChildren: 0.05,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+const staggerItemVariants: Variants = {
+  initial: { opacity: 0 },
+  animate: {
+    opacity: 1,
+    transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
+  },
+};
+
+// =============================================================================
+// BASIC MOTION COMPONENTS
+// =============================================================================
+
+type MotionComponentProps = {
+  children: ReactNode;
+  className?: string;
+  delay?: number;
+  duration?: number;
+} & HTMLMotionProps<'div'>;
+
+/**
+ * Simple fade in
+ */
+export function FadeIn({
+  children,
+  className,
+  delay = 0,
+  duration = 0.2,
+  ...props
+}: MotionComponentProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration, delay, ease: ANIMATION_EASE.enter }}
+      className={cn(className)}
+      {...props}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * Scale in animation
+ */
+export function ScaleIn({
+  children,
+  className,
+  delay = 0,
+  duration = 0.2,
+  ...props
+}: MotionComponentProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration, delay, ease: ANIMATION_EASE.enter }}
+      className={cn(className)}
+      {...props}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * Stagger container
+ */
+export function StaggerContainer({
+  children,
+  className,
+  ...props
+}: MotionComponentProps & { staggerDelay?: number; delayChildren?: number }) {
+  return (
+    <motion.div
+      initial="initial"
+      animate="animate"
+      variants={staggerContainerVariants}
+      className={cn(className)}
+      {...props}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * Stagger item
+ */
+export function StaggerItem({
+  children,
+  className,
+  ...props
+}: MotionComponentProps) {
+  return (
+    <motion.div
+      variants={staggerItemVariants}
+      className={cn('w-full', className)}
+      {...props}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * Page transition
+ */
+export function PageTransition({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <FadeIn className={cn('h-full', className)} duration={0.2}>
+      {children}
     </FadeIn>
+  );
+}
+
+export function ScrollFadeEntrance({
+  children,
+  className,
+  skipAnimation = false,
+  index = 0,
+}: SimpleEntranceProps) {
+  if (skipAnimation) {
+    return <div className={cn('w-full', className)}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
+      transition={{ duration: 0.25, delay: index * 0.03, ease: ANIMATION_EASE.enter }}
+      className={cn('w-full', className)}
+    >
+      {children}
+    </motion.div>
   );
 }

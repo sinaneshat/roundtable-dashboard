@@ -1,409 +1,420 @@
 'use client';
 
-import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUp, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import type { ChatStatus } from 'ai';
 import { useTranslations } from 'next-intl';
-import type { KeyboardEventHandler } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
+import type { FormEvent, ReactNode, RefObject } from 'react';
+import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 
-import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
-import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
-import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
+import type { BorderVariant } from '@/api/core/enums';
+import { AiSdkStatuses, BorderVariants, ComponentSizes, ComponentVariants, PlanTypes } from '@/api/core/enums';
+import { ChatInputDropzoneOverlay } from '@/components/chat/chat-input-attachments';
+import { ChatInputAttachments } from '@/components/chat/chat-input-attachments-lazy';
+import { FreeTrialAlert } from '@/components/chat/free-trial-alert';
+import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
+import { VoiceVisualization } from '@/components/chat/voice-visualization-lazy';
+import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { STRING_LIMITS } from '@/constants';
+import { useUsageStatsQuery } from '@/hooks/queries';
+import type { PendingAttachment } from '@/hooks/utils';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { toast } from '@/components/ui/use-toast';
-import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
+  useAutoResizeTextarea,
+  useDragDrop,
+  useFreeTrialState,
+  useSpeechRecognition,
+} from '@/hooks/utils';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
-import { chatGlass } from '@/lib/ui/glassmorphism';
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const CHAT_MODES = [
-  { value: 'brainstorming', label: 'Brainstorming', icon: '💡' },
-  { value: 'analyzing', label: 'Analyzing', icon: '🔍' },
-  { value: 'debating', label: 'Debating', icon: '⚖️' },
-  { value: 'solving', label: 'Problem Solving', icon: '🎯' },
-] as const;
-
-// ============================================================================
-// Schema
-// ============================================================================
-
-const chatInputSchema = z.object({
-  message: z.string().min(1, 'Message is required').max(5000, 'Message is too long'),
-  mode: z.enum(['brainstorming', 'analyzing', 'debating', 'solving']),
-});
-
-type ChatInputFormData = z.infer<typeof chatInputSchema>;
-
-// ============================================================================
-// Component Props
-// ============================================================================
 
 type ChatInputProps = {
-  className?: string;
-  onThreadCreated?: (threadId: string, threadSlug: string, firstMessage: string) => void;
-  autoFocus?: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: (e: FormEvent) => void;
+  status: ChatStatus;
+  onStop?: () => void;
+  placeholder?: string;
   disabled?: boolean;
-  initialMessage?: string;
-  initialMode?: 'brainstorming' | 'analyzing' | 'debating' | 'solving';
-  initialParticipants?: ParticipantConfig[];
+  autoFocus?: boolean;
+  toolbar?: ReactNode;
+  participants?: ParticipantConfig[];
+  className?: string;
+  enableSpeech?: boolean;
+  minHeight?: number;
+  maxHeight?: number;
+  showCreditAlert?: boolean;
+  attachments?: PendingAttachment[];
+  onAddAttachments?: (files: File[]) => void;
+  onRemoveAttachment?: (id: string) => void;
+  enableAttachments?: boolean;
+  attachmentClickRef?: RefObject<(() => void) | null>;
+  isUploading?: boolean;
+  isHydrating?: boolean;
+  isSubmitting?: boolean;
+  isModelsLoading?: boolean;
+  hasHeaderToggle?: boolean;
+  hideInternalAlerts?: boolean;
+  borderVariant?: BorderVariant;
 };
 
-// ============================================================================
-// Component
-// ============================================================================
+const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
+const EMPTY_ATTACHMENTS: PendingAttachment[] = [];
 
-/**
- * Enhanced Chat Input Component
- *
- * Modern ChatGPT-style input with:
- * - Attachment menu (photos, 3D objects, files)
- * - Mode selector dropdown
- * - Auto-resizing textarea
- * - Smooth animations
- * - Loading states
- *
- * Design inspired by modern AI chat interfaces
- * Following patterns from /docs/frontend-patterns.md
- */
-export function ChatInput({
-  className,
-  onThreadCreated,
-  autoFocus = false,
+export const ChatInput = memo(({
+  value,
+  onChange,
+  onSubmit,
+  status,
+  onStop,
+  placeholder,
   disabled = false,
-  initialMessage = '',
-  initialMode = 'brainstorming',
-  initialParticipants,
-}: ChatInputProps) {
+  autoFocus = false,
+  toolbar,
+  participants = EMPTY_PARTICIPANTS,
+  className,
+  enableSpeech = true,
+  minHeight = 72,
+  maxHeight = 200,
+  showCreditAlert = false,
+  attachments = EMPTY_ATTACHMENTS,
+  onAddAttachments,
+  onRemoveAttachment,
+  enableAttachments = true,
+  attachmentClickRef,
+  isUploading = false,
+  isHydrating = false,
+  isSubmitting = false,
+  isModelsLoading = false,
+  hasHeaderToggle = false,
+  hideInternalAlerts = false,
+  borderVariant = BorderVariants.DEFAULT,
+}: ChatInputProps) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [isFocused, setIsFocused] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const isStreaming = status !== AiSdkStatuses.READY;
+  const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
+  const { isFreeUser, hasUsedTrial } = useFreeTrialState();
 
-  // Advanced configuration state - use initialParticipants if provided, otherwise default
-  const [participants, setParticipants] = useState<ParticipantConfig[]>(
-    initialParticipants || [
-      {
-        id: 'participant-default',
-        modelId: 'anthropic/claude-3.5-sonnet', // Claude 3.5 Sonnet - matches models-config.ts
-        role: '', // No role by default
-        order: 0,
-      },
-    ],
-  );
-  const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>([]);
+  const isQuotaExceeded = useMemo(() => {
+    if (!statsData?.success || !statsData.data) {
+      return false;
+    }
 
-  const createThreadMutation = useCreateThreadMutation();
+    const { credits, plan } = statsData.data;
+    if (plan?.type !== PlanTypes.PAID) {
+      return false;
+    }
+    return credits.available <= 0;
+  }, [statsData]);
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<ChatInputFormData>({
-    resolver: zodResolver(chatInputSchema),
-    defaultValues: {
-      message: initialMessage,
-      mode: initialMode,
-    },
-    mode: 'onChange', // Enable onChange mode for real-time validation
+  const isFreeUserBlocked = isFreeUser && hasUsedTrial;
+
+  const isInputDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
+  const isMicDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
+  const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || isFreeUserBlocked;
+  const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
+
+  const handleFilesSelected = useCallback((files: File[]) => {
+    if (onAddAttachments && files.length > 0) {
+      onAddAttachments(files);
+    }
+  }, [onAddAttachments]);
+
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    handleFilesSelected(files);
+    e.target.value = '';
+  }, [handleFilesSelected]);
+
+  const handleAttachmentClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // Paste handler for clipboard file attachments (Cmd+V / Ctrl+V)
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!enableAttachments || !onAddAttachments)
+      return;
+
+    const files = Array.from(e.clipboardData.files);
+    if (files.length > 0) {
+      e.preventDefault();
+      handleFilesSelected(files);
+    }
+  }, [enableAttachments, onAddAttachments, handleFilesSelected]);
+
+  useEffect(() => {
+    if (attachmentClickRef && enableAttachments) {
+      attachmentClickRef.current = handleAttachmentClick;
+    }
+  }, [attachmentClickRef, enableAttachments, handleAttachmentClick]);
+
+  const { isDragging, dragHandlers } = useDragDrop(handleFilesSelected);
+
+  useAutoResizeTextarea(textareaRef, {
+    value,
+    minHeight,
+    maxHeight,
   });
 
-  // Update form values when initial props change
+  const baseTextRef = useRef('');
+
+  const {
+    isListening,
+    isSupported: isSpeechSupported,
+    toggle: toggleSpeech,
+    reset: resetTranscripts,
+    audioLevels,
+    finalTranscript,
+    interimTranscript,
+  } = useSpeechRecognition({
+    continuous: true,
+    enableAudioVisualization: true,
+  });
+
+  const onChangeEvent = useEffectEvent((newValue: string) => {
+    onChange(newValue);
+  });
+
+  const prevIsListening = useRef(false);
   useEffect(() => {
-    if (initialMessage) {
-      setValue('message', initialMessage);
-      // Auto-resize textarea
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-      }
+    const wasListening = prevIsListening.current;
+    prevIsListening.current = isListening;
+
+    if (!wasListening && isListening) {
+      baseTextRef.current = value;
+      resetTranscripts();
+    } else if (wasListening && !isListening) {
+      const parts = [baseTextRef.current, finalTranscript].filter(Boolean);
+      onChangeEvent(parts.join(' ').trim());
     }
-  }, [initialMessage, setValue]);
+  }, [isListening, value, finalTranscript, resetTranscripts]);
 
   useEffect(() => {
-    if (initialMode) {
-      setValue('mode', initialMode);
+    if (!isListening)
+      return;
+
+    const parts = [baseTextRef.current, finalTranscript, interimTranscript].filter(Boolean);
+    const displayText = parts.join(' ').trim();
+
+    if (displayText !== value) {
+      onChangeEvent(displayText);
     }
-  }, [initialMode, setValue]);
+  }, [isListening, finalTranscript, interimTranscript, value]);
 
-  // Update participants when initialParticipants change
-  useEffect(() => {
-    if (initialParticipants && initialParticipants.length > 0) {
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Syncing state with prop changes
-      setParticipants(initialParticipants);
-    }
-  }, [initialParticipants]);
-
-  const messageValue = watch('message');
-  const modeValue = watch('mode');
-  const isSubmitting = createThreadMutation.isPending;
-  const hasMessage = Boolean(messageValue && messageValue.trim().length > 0);
-  const isDisabled = disabled || isSubmitting || !hasMessage;
-
-  // Merge refs callback for textarea (RHF ref + our ref for auto-resize)
-  const mergeTextareaRefs = useCallback((element: HTMLTextAreaElement | null) => {
-    // Apply RHF's ref
-    const { ref: rhfRef } = register('message');
-    if (typeof rhfRef === 'function') {
-      rhfRef(element);
-    } else if (rhfRef && 'current' in rhfRef) {
-      (rhfRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = element;
-    }
-
-    // Apply our ref for auto-resize
-    textareaRef.current = element;
-  }, [register]);
-
-  // Auto-resize textarea (min 3 lines = 72px, max 6 lines = 144px)
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      // Reset height to recalculate scroll height
-      textarea.style.height = 'auto';
-
-      // Calculate new height, capped at 144px (6 lines)
-      const newHeight = Math.min(textarea.scrollHeight, 144);
-      textarea.style.height = `${newHeight}px`;
-    }
-  }, [messageValue]);
-
-  // Auto-focus on mount
   useEffect(() => {
     if (autoFocus && textareaRef.current) {
-      textareaRef.current.focus();
+      return afterPaint(() => textareaRef.current?.focus({ preventScroll: true }));
     }
+    return undefined;
   }, [autoFocus]);
 
-  // ============================================================================
-  // Handlers
-  // ============================================================================
-
-  const onSubmit = async (data: ChatInputFormData) => {
-    try {
-      const result = await createThreadMutation.mutateAsync({
-        json: {
-          firstMessage: data.message,
-          title: 'New Chat',
-          mode: data.mode,
-          // Sort participants by order field before sending to API
-          // This ensures database priority matches the configured order
-          participants: participants
-            .sort((a, b) => a.order - b.order)
-            .map(p => ({
-              modelId: p.modelId,
-              ...(p.role && { role: p.role }), // Only include role if it exists
-              ...(p.customRoleId && { customRoleId: p.customRoleId }), // Only include customRoleId if it exists
-            })),
-          memoryIds: selectedMemoryIds.length > 0 ? selectedMemoryIds : undefined,
-        },
-      });
-
-      if (result.success && result.data) {
-        reset();
-        const thread = result.data.thread;
-
-        // Call parent callback with thread details - parent handles navigation
-        if (onThreadCreated) {
-          onThreadCreated(thread.id, thread.slug, data.message);
-        }
-
-        toast({
-          title: t('notifications.success.createSuccess'),
-          description: t('chat.threadCreated'),
-        });
-      } else {
-        throw new Error('Failed to create thread');
-      }
-    } catch (error) {
-      console.error('Failed to create thread:', error);
-      toast({
-        title: t('notifications.error.createFailed'),
-        description: t('chat.threadCreationFailed'),
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(onSubmit)();
+      if (!isSubmitDisabled && hasValidInput) {
+        const form = e.currentTarget.form || e.currentTarget;
+        const submitEvent = new Event('submit', { bubbles: true, cancelable: true }) as unknown as FormEvent<HTMLFormElement>;
+        Object.defineProperty(submitEvent, 'currentTarget', { value: form, writable: false });
+        Object.defineProperty(submitEvent, 'target', { value: form, writable: false });
+        onSubmit(submitEvent);
+      }
     }
   };
 
-  const handleClear = () => {
-    setValue('message', '');
-    textareaRef.current?.focus();
-  };
-
-  // ============================================================================
-  // Render
-  // ============================================================================
+  const showNoModelsError = participants.length === 0 && !isQuotaExceeded && !isHydrating && !isModelsLoading;
 
   return (
-    <div className={cn('w-full space-y-3', className)}>
-      {/* Participants Preview - Above Chat Box - Always show selected participants */}
-      {participants.length > 0 && (
-        <ParticipantsPreview participants={participants} className="mb-2" />
+    <div className="w-full">
+      {enableAttachments && onAddAttachments && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          onChange={handleFileInputChange}
+          className="hidden"
+          accept="image/*,application/pdf,text/*,.md,.json,.csv,.xml,.html,.css,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.go,.rs,.rb,.php"
+        />
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)}>
-        {/* Main Input Container - Glassmorphism */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-          className={cn(
-            chatGlass.inputBox,
-            'relative flex flex-col gap-2 rounded-3xl p-3',
-            isFocused && 'ring-2 ring-white/20',
+      <div
+        className={cn(
+          'relative flex flex-col overflow-hidden',
+          'rounded-2xl',
+          'border',
+          'bg-card',
+          'shadow-lg',
+          'transition-all duration-200',
+          isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && 'cursor-not-allowed',
+          // When header handles alerts, use passed borderVariant for consistent borders
+          hideInternalAlerts && borderVariant === BorderVariants.SUCCESS && 'border-green-500/30',
+          hideInternalAlerts && borderVariant === BorderVariants.WARNING && 'border-amber-500/30',
+          hideInternalAlerts && borderVariant === BorderVariants.ERROR && 'border-destructive',
+          // When no header, apply borders based on internal state
+          !hideInternalAlerts && (isOverLimit || showNoModelsError || (isQuotaExceeded && !isFreeUser)) && 'border-destructive',
+          !hideInternalAlerts && isFreeUser && !isOverLimit && !showNoModelsError && (hasUsedTrial ? 'border-amber-500/30' : 'border-green-500/30'),
+          className,
+        )}
+        {...(enableAttachments ? dragHandlers : {})}
+      >
+        {enableAttachments && <ChatInputDropzoneOverlay isDragging={isDragging} />}
+
+        <div className="flex flex-col overflow-hidden h-full">
+          {showCreditAlert && !hideInternalAlerts && <QuotaAlertExtension hasHeaderToggle={hasHeaderToggle} />}
+          {isFreeUser && !hideInternalAlerts && <FreeTrialAlert hasHeaderToggle={hasHeaderToggle} />}
+          {showNoModelsError && (
+            <div
+              className={cn(
+                'flex items-center gap-3 px-3 py-2',
+                'border-0 border-b border-destructive/20',
+                'bg-destructive/10',
+                // No top rounding when header is present (hideInternalAlerts means header handles top)
+                hideInternalAlerts ? 'rounded-none' : 'rounded-t-2xl',
+              )}
+            >
+              <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
+                {t('chat.input.noModelsSelected')}
+              </p>
+            </div>
           )}
-        >
-          {/* Textarea - Full Width with Auto-resize */}
-          <Textarea
-            {...register('message')}
-            ref={mergeTextareaRefs}
-            placeholder={t('chat.input.placeholder')}
-            disabled={disabled || isSubmitting}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            onKeyDown={handleKeyDown}
+
+          {isOverLimit && (
+            <div
+              className={cn(
+                'flex items-center gap-3 px-3 py-2',
+                'border-0 border-b border-destructive/20',
+                'bg-destructive/10',
+                // No top rounding when header is present
+                hideInternalAlerts ? 'rounded-none' : 'rounded-t-2xl',
+              )}
+            >
+              <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
+                {t('chat.input.messageTooLong')}
+              </p>
+            </div>
+          )}
+
+          {enableSpeech && isSpeechSupported && (
+            <VoiceVisualization
+              isActive={isListening}
+              audioLevels={audioLevels}
+              hasAlertAbove={hideInternalAlerts || showCreditAlert || isFreeUser || showNoModelsError || isOverLimit}
+            />
+          )}
+
+          {attachments.length > 0 && (
+            <ChatInputAttachments
+              attachments={attachments}
+              onRemove={enableAttachments ? onRemoveAttachment : undefined}
+            />
+          )}
+
+          <form
+            onSubmit={(e) => {
+              if (isSubmitDisabled || !hasValidInput) {
+                e.preventDefault();
+                return;
+              }
+              onSubmit(e);
+            }}
             className={cn(
-              'min-h-[72px] max-h-[144px] resize-none border-0 bg-transparent p-0 shadow-none overflow-y-auto',
-              'focus-visible:ring-0 focus-visible:ring-offset-0',
-              'placeholder:text-muted-foreground/60 w-full',
+              'flex flex-col h-full',
+              isQuotaExceeded && 'opacity-50 pointer-events-none',
             )}
-            rows={3}
-          />
+          >
+            <div className="px-3 sm:px-4 py-3 sm:py-4">
+              <textarea
+                ref={textareaRef}
+                dir="auto"
+                value={value}
+                onChange={(e) => {
+                  onChange(e.target.value);
+                }}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                disabled={isInputDisabled}
+                placeholder={
+                  isStreaming
+                    ? t('chat.input.streamingPlaceholder')
+                    : isListening
+                      ? t('chat.input.listeningPlaceholder')
+                      : placeholder || t('chat.input.placeholder')
+                }
+                className={cn(
+                  'w-full bg-transparent border-0 text-sm sm:text-base leading-relaxed',
+                  'focus:outline-none focus:ring-0',
+                  'placeholder:text-muted-foreground/60',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'resize-none scrollbar-thin',
+                )}
+                aria-disabled={isInputDisabled}
+                aria-label={isStreaming ? t('chat.input.streamingLabel') : t('chat.input.label')}
+                aria-invalid={isOverLimit}
+              />
+            </div>
 
-          {/* Bottom Controls Row */}
-          <div className="flex items-center gap-2 w-full">
-            {/* Left: AI and Memory Buttons */}
-            <ChatParticipantsList
-              participants={participants}
-              onParticipantsChange={setParticipants}
-            />
+            <div>
+              <div className="px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3">
+                <div className="flex-1 flex items-center gap-1 sm:gap-2 min-w-0">
+                  {toolbar}
+                </div>
 
-            <ChatMemoriesList
-              selectedMemoryIds={selectedMemoryIds}
-              onMemoryIdsChange={setSelectedMemoryIds}
-            />
-
-            {/* Mode Selector */}
-            <Select value={modeValue} onValueChange={value => setValue('mode', value as typeof modeValue)}>
-              <SelectTrigger
-                size="sm"
-                className="h-8 w-fit gap-1.5 rounded-full border px-3 text-xs"
-              >
-                <SelectValue>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs">
-                      {CHAT_MODES.find(m => m.value === modeValue)?.icon}
-                    </span>
-                    <span className="text-xs font-medium">
-                      {CHAT_MODES.find(m => m.value === modeValue)?.label}
-                    </span>
-                  </div>
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {CHAT_MODES.map(mode => (
-                  <SelectItem key={mode.value} value={mode.value}>
-                    <div className="flex items-center gap-2">
-                      <span>{mode.icon}</span>
-                      <span>{mode.label}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Spacer */}
-            <div className="flex-1" />
-
-            {/* Right: Clear Button and Send Button */}
-            <div className="flex items-center gap-2">
-              {/* Clear Button (when typing) */}
-              <AnimatePresence>
-                {messageValue && !isSubmitting && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.15 }}
-                  >
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                  {enableSpeech && isSpeechSupported && (
                     <Button
                       type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={handleClear}
-                      className="rounded-full size-8 text-muted-foreground hover:text-foreground"
+                      size={ComponentSizes.ICON}
+                      variant={isListening ? ComponentVariants.DEFAULT : ComponentVariants.GHOST}
+                      onClick={toggleSpeech}
+                      disabled={isMicDisabled && !isListening}
+                      title={isListening
+                        ? t('chat.toolbar.tooltips.stopRecording')
+                        : t('chat.toolbar.tooltips.microphone')}
+                      className={cn(
+                        'size-8 sm:size-9 shrink-0 rounded-full',
+                        isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
+                      )}
                     >
-                      <X className="size-4" />
+                      {isListening ? <Icons.stopCircle className="size-3.5 sm:size-4" /> : <Icons.mic className="size-3.5 sm:size-4" />}
                     </Button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                  )}
 
-              {/* Send Button */}
-              <Button
-                type="submit"
-                size="icon"
-                disabled={isDisabled}
-                loading={isSubmitting}
-                className={cn(
-                  'rounded-full size-9 transition-all',
-                  isDisabled
-                    ? 'bg-muted text-muted-foreground pointer-events-none'
-                    : 'bg-primary text-primary-foreground hover:bg-primary/90',
-                )}
-              >
-                {!isSubmitting && <ArrowUp className="size-4" />}
-              </Button>
+                  {isStreaming && onStop
+                    ? (
+                        <Button
+                          type="button"
+                          variant={ComponentVariants.WHITE}
+                          size={ComponentSizes.ICON}
+                          onClick={onStop}
+                          className="size-9 sm:size-10 shrink-0 touch-manipulation active:scale-95 transition-transform"
+                          aria-label={t('chat.input.stopStreaming')}
+                        >
+                          <Icons.square className="size-4 sm:size-5" />
+                        </Button>
+                      )
+                    : (
+                        <Button
+                          type="submit"
+                          variant={ComponentVariants.WHITE}
+                          size={ComponentSizes.ICON}
+                          disabled={isSubmitDisabled || !hasValidInput}
+                          className="size-9 sm:size-10 shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 disabled:bg-white/20 disabled:text-white/40"
+                          aria-label={isSubmitting ? t('chat.input.submitting') : t('chat.input.send')}
+                        >
+                          {isSubmitting
+                            ? <Icons.loader className="size-4 sm:size-5 animate-spin" />
+                            : <Icons.arrowUp className="size-4 sm:size-5" />}
+                        </Button>
+                      )}
+                </div>
+              </div>
             </div>
-          </div>
-        </motion.div>
-
-        {/* Helper Text */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.3 }}
-          className="mt-2 text-xs text-center text-muted-foreground"
-        >
-          {t('chat.input.helperText')}
-        </motion.p>
-
-        {/* Error Display */}
-        <AnimatePresence>
-          {errors.message && (
-            <motion.p
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="mt-2 text-xs text-center text-destructive"
-            >
-              {errors.message.message}
-            </motion.p>
-          )}
-        </AnimatePresence>
-
-      </form>
+          </form>
+        </div>
+      </div>
     </div>
   );
-}
+});
+
+ChatInput.displayName = 'ChatInput';

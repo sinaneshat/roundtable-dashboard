@@ -14,41 +14,45 @@ import { cn } from './cn';
 // ============================================================================
 
 /**
- * Glass effect variants
- * - subtle: Light glass effect for backgrounds
- * - medium: Standard glass effect for cards and panels
- * - strong: Heavy glass effect for prominent overlays
+ * Liquid Glass effect variants (Official Liquid Glass Generator specification)
+ * Based on https://liquidglassgen.com/ official presets:
+ * - subtle: Light Glass (90% opacity, 15px blur, 5% tint)
+ * - medium: Medium Glass (85% opacity, 20px blur, 8% tint) - Default for modals
+ * - strong: Heavy Glass (75% opacity, 30px blur, 15% tint)
+ *
+ * NOTE: Tailwind blur classes are approximations. Exact blur values are enforced via inline styles.
+ * Tailwind mapping: backdrop-blur-lg=16px, backdrop-blur-xl=24px, backdrop-blur-2xl=40px
  */
 export const glassVariants = {
-  // Subtle glass - minimal blur, very transparent
+  // Light Glass - subtle frosting, high transparency (15px blur via inline styles)
   subtle: cn(
-    'backdrop-blur-md',
-    'bg-background/5',
-    'border-white/10',
+    'backdrop-blur-lg', // Tailwind: 16px (closest to 15px target)
+    'bg-background/10', // 10% background + 5% tint layer = 15% total
+    'border-white/20',
     'shadow-md',
   ),
 
-  // Medium glass - standard blur, semi-transparent (default for cards)
+  // Medium Glass - standard modal glass effect (20px blur via inline styles) - DEFAULT
   medium: cn(
-    'backdrop-blur-xl',
-    'bg-background/10',
+    'backdrop-blur-xl', // Tailwind: 24px (will be overridden by inline 20px)
+    'bg-background/15', // 15% background + 8% tint layer = 23% total ≈ 85% transparency
     'border-white/20',
-    'shadow-2xl',
+    'shadow-lg',
   ),
 
-  // Strong glass - heavy blur, more opaque
+  // Heavy Glass - prominent overlays (30px blur via inline styles)
   strong: cn(
-    'backdrop-blur-2xl',
-    'bg-background/20',
+    'backdrop-blur-2xl', // Tailwind: 40px (will be overridden by inline 30px)
+    'bg-background/25', // 25% background = 75% transparency
     'border-white/30',
-    'shadow-3xl',
+    'shadow-xl',
   ),
 } as const;
 
 /**
- * Glass hover states
+ * Glass hover states (internal use by glassCard())
  */
-export const glassHoverVariants = {
+const glassHoverVariants = {
   subtle: cn(
     'hover:bg-background/10',
     'hover:border-white/15',
@@ -86,11 +90,16 @@ export function glassCard(variant: keyof typeof glassVariants = 'medium'): strin
 
 /**
  * Glass overlay for dialogs and modals
- * Enhanced backdrop blur for overlay elements
+ * Following Official Liquid Glass Generator specification
+ * Uses "Light Glass" preset (90% transparency, 15px blur, 5% tint)
+ * https://liquidglassgen.com/
+ *
+ * NOTE: Tailwind backdrop-blur-lg = 16px, closest to target 15px.
+ * Exact 15px blur enforced via inline glassOverlayStyles.
  */
 export const glassOverlay = cn(
-  'backdrop-blur-2xl',
-  'bg-black/50',
+  'backdrop-blur-lg', // Tailwind: 16px (closest to 15px target, overridden by inline styles)
+  'bg-black/30', // 30% opacity backdrop
 );
 
 /**
@@ -119,37 +128,6 @@ export const glassBadge = cn(
 );
 
 // ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Create custom glass effect with specific opacity
- * @param params - Glass effect configuration
- * @param params.blurAmount - Tailwind blur class (e.g., 'md', 'xl', '2xl')
- * @param params.bgOpacity - Background opacity (0-100)
- * @param params.borderOpacity - Border opacity (0-100)
- * @param params.shadow - Tailwind shadow class
- */
-export function createGlassEffect({
-  blurAmount = 'xl',
-  bgOpacity = 10,
-  borderOpacity = 20,
-  shadow = '2xl',
-}: {
-  blurAmount?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
-  bgOpacity?: number;
-  borderOpacity?: number;
-  shadow?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
-} = {}): string {
-  return cn(
-    `backdrop-blur-${blurAmount}`,
-    `bg-background/${bgOpacity}`,
-    `border-white/${borderOpacity}`,
-    `shadow-${shadow}`,
-  );
-}
-
-// ============================================================================
 // Component-Specific Presets
 // ============================================================================
 
@@ -165,16 +143,12 @@ export const chatGlass = {
     'hover:shadow-3xl', // Extra shadow on hover
   ),
 
-  // Chat input box
+  // Chat input box - Liquid Glass effect (fully transparent with blur)
   inputBox: cn(
-    'backdrop-blur-xl',
-    'bg-background/10',
-    'border border-white/30',
-    'shadow-2xl',
-    'hover:border-white/40',
-    'focus-within:bg-background/20',
-    'focus-within:border-white/40',
-    'focus-within:ring-2 focus-within:ring-white/20',
+    'backdrop-blur-2xl',
+    'border border-white/[0.12]',
+    'hover:border-white/20',
+    'focus-within:border-white/20',
     'transition-all duration-200',
   ),
 
@@ -208,9 +182,10 @@ export const dashboardGlass = {
     'border-b',
   ),
 
-  // Navigation sidebars
+  // Navigation sidebars - glassmorphism design matching chat input
   sidebar: cn(
-    glassVariants.strong,
-    'border-r',
+    'backdrop-blur-xl',
+    'bg-white/5',
+    'border border-white/[0.12]',
   ),
 } as const;
