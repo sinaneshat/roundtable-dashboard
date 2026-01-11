@@ -168,9 +168,10 @@
   "env": {
     "preview": {
       "name": "roundtable-dashboard-preview",
-      // Smart Placement: optimizes worker location near D1/R2 backends
+      // Smart Placement: DISABLED for testing - checking if this causes latency
+      // "placement": { "mode": "smart" },
       "placement": {
-        "mode": "smart"
+        "mode": "off"
       },
       // Observability with sampling to reduce log volume
       "observability": {
