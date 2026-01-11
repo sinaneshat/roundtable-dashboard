@@ -35,7 +35,7 @@ import { handleTitleGenerationQueue } from './src/workers/title-generation-queue
 
 // Re-export OpenNext's Durable Object classes (required for caching)
 // @ts-expect-error - .open-next/worker.js is generated at build time
-export { BucketCachePurge, DOQueueHandler } from './.open-next/worker.js';
+export { BucketCachePurge, DOQueueHandler, DOShardedTagCache } from './.open-next/worker.js';
 
 // Export our custom Durable Object for upload cleanup
 export { UploadCleanupScheduler } from './src/workers/upload-cleanup-scheduler';
