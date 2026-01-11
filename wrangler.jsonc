@@ -100,6 +100,11 @@
         "name": "UPLOAD_CLEANUP_SCHEDULER",
         "class_name": "UploadCleanupScheduler",
         "script_name": "roundtable-dashboard"
+      },
+      {
+        "name": "NEXT_TAG_CACHE_DO_SHARDED",
+        "class_name": "DOShardedTagCache",
+        "script_name": "roundtable-dashboard"
       }
     ]
   },
@@ -111,6 +116,10 @@
     {
       "tag": "v2",
       "new_sqlite_classes": ["UploadCleanupScheduler"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["DOShardedTagCache"]
     }
   ],
   // Cloudflare Queues for async background tasks
@@ -154,6 +163,8 @@
     "NODE_ENV": "development",
     "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
     "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com",
+    "CF_ACCOUNT_ID": "499b6c3c38f75f7f7dc7d3127954b921",
+    "NEXT_INC_CACHE_R2_PREFIX": "cache/",
     // Debug & Logging Configuration (Maximum Verbosity)
     "OPEN_NEXT_DEBUG": "true",
     "OPENNEXT_DEBUG": "true",
@@ -168,10 +179,9 @@
   "env": {
     "preview": {
       "name": "roundtable-dashboard-preview",
-      // Smart Placement: DISABLED for testing - checking if this causes latency
-      // "placement": { "mode": "smart" },
+      // Smart Placement: routes worker near D1/R2 backends for reduced latency
       "placement": {
-        "mode": "off"
+        "mode": "smart"
       },
       // Observability with sampling to reduce log volume
       "observability": {
@@ -271,6 +281,11 @@
             "name": "UPLOAD_CLEANUP_SCHEDULER",
             "class_name": "UploadCleanupScheduler",
             "script_name": "roundtable-dashboard-preview"
+          },
+          {
+            "name": "NEXT_TAG_CACHE_DO_SHARDED",
+            "class_name": "DOShardedTagCache",
+            "script_name": "roundtable-dashboard-preview"
           }
         ]
       },
@@ -295,7 +310,8 @@
         "PNPM_VERSION": "10.10.0",
         "NODE_ENV": "production",
         "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
-        "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+        "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com",
+        "NEXT_INC_CACHE_R2_PREFIX": "cache/"
         // Debug & Logging Configuration (Maximum Verbosity for Preview)
         // "OPEN_NEXT_DEBUG": "true",
         // "OPENNEXT_DEBUG": "true",
@@ -410,6 +426,11 @@
             "name": "UPLOAD_CLEANUP_SCHEDULER",
             "class_name": "UploadCleanupScheduler",
             "script_name": "roundtable-dashboard-production"
+          },
+          {
+            "name": "NEXT_TAG_CACHE_DO_SHARDED",
+            "class_name": "DOShardedTagCache",
+            "script_name": "roundtable-dashboard-production"
           }
         ]
       },
@@ -434,7 +455,8 @@
         "PNPM_VERSION": "10.10.0",
         "NODE_ENV": "production",
         "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
-        "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+        "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com",
+        "NEXT_INC_CACHE_R2_PREFIX": "cache/"
         // Debug & Logging Configuration (Maximum Verbosity for Production debugging)
         // "OPEN_NEXT_DEBUG": "true",
         // "OPENNEXT_DEBUG": "true",
