@@ -2,6 +2,8 @@
 
 import { memo } from 'react';
 
+import type { BorderVariant } from '@/api/core/enums';
+import { BorderVariants } from '@/api/core/enums';
 import { ChatAutoModeToggle } from '@/components/chat/chat-auto-mode-toggle';
 import { useFreeTrialState } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
@@ -11,6 +13,7 @@ type ChatInputHeaderProps = {
   onAutoModeChange: (value: boolean) => void;
   isAnalyzing?: boolean;
   disabled?: boolean;
+  borderVariant?: BorderVariant;
 };
 
 export const ChatInputHeader = memo(({
@@ -18,6 +21,7 @@ export const ChatInputHeader = memo(({
   onAutoModeChange,
   isAnalyzing = false,
   disabled = false,
+  borderVariant = BorderVariants.DEFAULT,
 }: ChatInputHeaderProps) => {
   const { isFreeUser } = useFreeTrialState();
 
@@ -32,6 +36,9 @@ export const ChatInputHeader = memo(({
         'bg-card',
         'overflow-hidden',
         'px-2 sm:px-3 py-1.5 sm:py-2',
+        borderVariant === BorderVariants.SUCCESS && 'border-green-500/30',
+        borderVariant === BorderVariants.WARNING && 'border-amber-500/30',
+        borderVariant === BorderVariants.ERROR && 'border-destructive',
       )}
     >
       <ChatAutoModeToggle

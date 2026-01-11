@@ -594,6 +594,7 @@ export function ChatView({
                     onAutoModeChange={setAutoMode}
                     isAnalyzing={isAnalyzingPrompt}
                     disabled={isInputBlocked && !isAnalyzingPrompt}
+                    borderVariant={borderVariant}
                   />
                 )}
                 <ChatInput

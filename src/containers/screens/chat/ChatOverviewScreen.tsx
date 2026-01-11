@@ -901,6 +901,7 @@ export default function ChatOverviewScreen() {
                               onAutoModeChange={setAutoMode}
                               isAnalyzing={isAnalyzingPrompt}
                               disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
+                              borderVariant={headerBorderVariant}
                             />
                             <ChatInput {...sharedChatInputProps} className="rounded-t-none border-t-0" hideInternalAlerts borderVariant={headerBorderVariant} />
                           </div>
@@ -927,6 +928,7 @@ export default function ChatOverviewScreen() {
                           onAutoModeChange={setAutoMode}
                           isAnalyzing={isAnalyzingPrompt}
                           disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
+                          borderVariant={headerBorderVariant}
                         />
                         <ChatInput {...sharedChatInputProps} className="rounded-t-none border-t-0" hideInternalAlerts borderVariant={headerBorderVariant} />
                       </div>

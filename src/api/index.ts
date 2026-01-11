@@ -23,7 +23,7 @@ import { trimTrailingSlash } from 'hono/trailing-slash';
 import notFound from 'stoker/middlewares/not-found';
 
 import { createOpenApiApp } from './core/app';
-import { attachSession, creditBalanceEdgeCache, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, protectMutations, publicThreadEdgeCache, RateLimiterFactory, requireSession, threadEdgeCache } from './middleware';
+import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, protectMutations, RateLimiterFactory, requireSession } from './middleware';
 // API Keys routes
 import {
   createApiKeyHandler,
@@ -437,21 +437,9 @@ app.use('/chat/*', ensureOpenRouterInitialized);
 app.use('/mcp/*', ensureOpenRouterInitialized);
 
 // ✅ PERF: Edge cache for public thread endpoints
-// Uses Cloudflare Cache API for sub-10ms cached responses
-// Cache key: request URL, TTL: 24 hours (matches ISR)
-app.use('/chat/public/*', publicThreadEdgeCache());
-
-// ✅ PERF: Edge cache for authenticated chat endpoints (user-specific)
-// Cache key includes user ID, TTL: 5 minutes
-// Applied to read-only GET routes, not mutations
-app.on('GET', '/chat/threads', threadEdgeCache());
-app.on('GET', '/chat/threads/:id', threadEdgeCache());
-app.on('GET', '/chat/threads/:id/messages', threadEdgeCache());
-app.on('GET', '/chat/threads/:id/changelog', threadEdgeCache());
-
-// ✅ PERF: Edge cache for credit balance (user-specific, short TTL)
-// Cache key includes user ID, TTL: 1 minute
-app.on('GET', '/credits/balance', creditBalanceEdgeCache());
+// NOTE: Edge caching disabled - incompatible with OpenNext/Cloudflare architecture
+// Next.js ISR + KV cache handles caching with proper tag-based invalidation
+// Cloudflare Cache API conflicts with OpenNext's caching strategy
 
 // Global rate limiting
 app.use('*', RateLimiterFactory.create('api'));
