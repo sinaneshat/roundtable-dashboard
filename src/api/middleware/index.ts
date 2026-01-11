@@ -1,12 +1,8 @@
 export { attachSession, protectMutations, requireOptionalSession, requireSession } from './auth';
 export { csrfProtection } from './csrf';
-export {
-  creditBalanceEdgeCache,
-  edgeCache,
-  publicThreadEdgeCache,
-  threadEdgeCache,
-  userAwareEdgeCache,
-} from './edge-cache';
+// NOTE: Edge caching removed - incompatible with OpenNext/Cloudflare architecture
+// OpenNext handles caching via R2/KV incremental cache + D1 tag cache
+// Custom Cloudflare Cache API conflicts with tag-based invalidation
 export {
   createEnvironmentSummary,
   createEnvironmentValidationMiddleware,
