@@ -65,6 +65,7 @@
     "preview": "pnpm build:worker && pnpm preview:worker",
     "deploy:preview": "pnpm build:worker && opennextjs-cloudflare deploy -- --env=preview --keep-vars",
     "deploy:production": "pnpm build:worker && opennextjs-cloudflare deploy -- --env=production --keep-vars",
+    "deploy:prod": "pnpm deploy:production",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:preview": "wrangler d1 migrations apply DB --remote --env=preview",
