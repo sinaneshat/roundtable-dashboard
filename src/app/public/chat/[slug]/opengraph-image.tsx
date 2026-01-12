@@ -1,8 +1,9 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
+import { and, asc, eq, notLike, or } from 'drizzle-orm';
 import { ImageResponse } from 'next/og';
 
 import type { ChatMode } from '@/api/core/enums';
-import { MessageRoles } from '@/api/core/enums';
+import { MessageRoles, ThreadStatuses } from '@/api/core/enums';
 import {
   createCachedImageResponse,
   generateOgCacheKey,
@@ -12,6 +13,7 @@ import {
   storeOgImageInCache,
 } from '@/api/services/og-cache';
 import { BRAND } from '@/constants';
+import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import {
   createGradient,
@@ -24,7 +26,6 @@ import {
   truncateText,
 } from '@/lib/ui';
 import { getOGFonts } from '@/lib/ui/og-fonts.server';
-import { getPublicThreadService } from '@/services/api';
 
 export const size = {
   width: 1200,
@@ -48,14 +49,59 @@ export default async function Image({
   } catch {
   }
 
-  let threadData: Awaited<ReturnType<typeof getPublicThreadService>> | null = null;
+  // Direct database access to avoid HTTP self-referential deadlocks in dev
+  let thread: typeof chatThread.$inferSelect | null = null;
+  let participants: Array<typeof chatParticipant.$inferSelect> = [];
+  let messages: Array<typeof chatMessage.$inferSelect> = [];
+
   try {
-    threadData = await getPublicThreadService({ param: { slug } });
+    const db = await getDbAsync();
+
+    // Find thread by slug or previousSlug
+    const threads = await db
+      .select()
+      .from(chatThread)
+      .where(or(
+        eq(chatThread.slug, slug),
+        eq(chatThread.previousSlug, slug),
+      ))
+      .limit(1);
+
+    thread = threads[0] ?? null;
+
+    // Only fetch data if thread is public and active
+    if (thread?.isPublic && thread.status !== ThreadStatuses.ARCHIVED && thread.status !== ThreadStatuses.DELETED) {
+      const [participantsResult, messagesResult] = await Promise.all([
+        db.select()
+          .from(chatParticipant)
+          .where(and(
+            eq(chatParticipant.threadId, thread.id),
+            eq(chatParticipant.isEnabled, true),
+          ))
+          .orderBy(chatParticipant.priority, chatParticipant.id),
+        db.select()
+          .from(chatMessage)
+          .where(and(
+            eq(chatMessage.threadId, thread.id),
+            notLike(chatMessage.id, 'pre-search-%'),
+          ))
+          .orderBy(
+            asc(chatMessage.roundNumber),
+            asc(chatMessage.createdAt),
+            asc(chatMessage.id),
+          ),
+      ]);
+
+      participants = participantsResult;
+      messages = messagesResult;
+    } else {
+      thread = null; // Treat non-public threads as not found
+    }
   } catch {
+    // DB error - fall through to fallback image
   }
 
-  if (threadData?.success && threadData.data?.thread) {
-    const { thread, participants = [], messages = [] } = threadData.data;
+  if (thread) {
     const versionHash = generateOgVersionHash({
       title: thread.title,
       mode: thread.mode,

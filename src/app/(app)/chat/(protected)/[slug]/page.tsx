@@ -23,7 +23,7 @@ export async function generateMetadata({
     robots: 'noindex, nofollow',
     url: `/chat/${slug}`,
     canonicalUrl: `/chat/${slug}`,
-    image: `/chat/${slug}/opengraph-image`,
+    // Let Next.js auto-detect opengraph-image.tsx - don't pass explicit image path
   });
 }
 

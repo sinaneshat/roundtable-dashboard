@@ -362,6 +362,8 @@ app.use('*', requestId());
 // Let Cloudflare handle gzip/brotli compression automatically
 app.use('*', timing());
 // Apply timeout to all routes except streaming endpoints
+// ⚠️ PERFORMANCE: Increased to 30s to account for D1 cold starts and cross-region latency
+// Cloudflare Workers Standard allows up to 30s CPU time (configured in wrangler.jsonc limits.cpu_ms)
 app.use('*', async (c, next) => {
   // Skip timeout for streaming endpoints (chat streaming and round summary)
   // AI SDK v6 PATTERN: Reasoning models (DeepSeek-R1, Claude 4, etc.) need 10+ minutes
@@ -369,7 +371,7 @@ app.use('*', async (c, next) => {
   if (c.req.path.includes('/stream') || c.req.path.includes('/moderator') || c.req.path.includes('/chat')) {
     return next();
   }
-  return timeout(15000)(c, next);
+  return timeout(30000)(c, next);
 });
 
 // Body limit - default 5MB for most routes
@@ -422,15 +424,39 @@ app.use('*', async (c, next) => {
 });
 
 // Session attachment - skip for public endpoints that don't need auth
+// ⚠️ PERFORMANCE: Session lookup is expensive (DB query) - skip for truly public routes
 // This avoids expensive database queries on every public request
 app.use('*', async (c, next) => {
   const path = c.req.path;
+  const method = c.req.method;
+
   // Skip session for truly public endpoints - handlers use requireOptionalSession if needed
+  // These routes NEVER need authentication:
+  // - Public chat threads (read-only, auth checked in handler if needed)
+  // - System/health endpoints
+  // - OpenAPI documentation
+  // - Webhook endpoints (use signature verification instead)
+  // - Product listings (public catalog)
+  // - Models listing (public)
+  // - Static asset paths
   if (
     path.startsWith('/chat/public/')
     || path.startsWith('/system/')
     || path === '/health'
     || path === '/api/v1/health'
+    || path === '/doc'
+    || path === '/openapi.json'
+    || path === '/scalar'
+    || path === '/llms.txt'
+    || path.startsWith('/webhooks/')
+    || (path.startsWith('/billing/products') && method === 'GET')
+    || (path === '/models' && method === 'GET')
+    || path.startsWith('/_next/')
+    || path.startsWith('/static/')
+    || path.endsWith('.ico')
+    || path.endsWith('.png')
+    || path.endsWith('.jpg')
+    || path.endsWith('.svg')
   ) {
     c.set('session', null);
     c.set('user', null);

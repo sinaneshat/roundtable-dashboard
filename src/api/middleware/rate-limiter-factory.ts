@@ -1,6 +1,9 @@
 /**
  * Unified rate limiter factory for consistent rate limiting across the API
  * Consolidates all rate limiting logic with preset configurations
+ *
+ * ⚠️ PERFORMANCE NOTE: In Cloudflare Workers, uses KV for distributed rate limiting.
+ * In-memory Map is used as fallback for local development only.
  */
 
 import type { Context } from 'hono';
@@ -92,14 +95,15 @@ export const RATE_LIMIT_PRESETS = {
   },
 } as const;
 
-// In-memory store (replace with Redis/D1 in production)
+// In-memory store for local development fallback only
+// In production, we use Cloudflare KV for distributed rate limiting
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
-// Cleanup interval
+// Cleanup interval (local dev only)
 let cleanupInterval: NodeJS.Timeout | null = null;
 
 /**
- * Start cleanup interval for rate limit store
+ * Start cleanup interval for rate limit store (local dev only)
  * Note: In test environment, cleanup is managed manually via stopCleanup()
  */
 function startCleanup() {
@@ -129,8 +133,65 @@ export function stopCleanup() {
   }
 }
 
-// Start cleanup on module load
+// Start cleanup on module load (only affects local dev)
 startCleanup();
+
+/**
+ * Rate limit entry stored in KV
+ */
+type KVRateLimitEntry = {
+  count: number;
+  resetTime: number;
+};
+
+/**
+ * Get rate limit entry from KV or in-memory store
+ */
+async function getRateLimitEntry(
+  c: Context<ApiEnv>,
+  key: string,
+): Promise<KVRateLimitEntry | null> {
+  // Try KV first (production/preview)
+  const kv = c.env?.KV;
+  if (kv) {
+    try {
+      const entry = await kv.get(`ratelimit:${key}`, 'json');
+      return entry as KVRateLimitEntry | null;
+    } catch {
+      // Fall through to in-memory
+    }
+  }
+
+  // Fall back to in-memory (local dev)
+  return rateLimitStore.get(key) || null;
+}
+
+/**
+ * Set rate limit entry in KV or in-memory store
+ */
+async function setRateLimitEntry(
+  c: Context<ApiEnv>,
+  key: string,
+  entry: KVRateLimitEntry,
+  ttlMs: number,
+): Promise<void> {
+  // Try KV first (production/preview)
+  const kv = c.env?.KV;
+  if (kv) {
+    try {
+      // KV expirationTtl is in seconds
+      await kv.put(`ratelimit:${key}`, JSON.stringify(entry), {
+        expirationTtl: Math.max(60, Math.ceil(ttlMs / 1000)), // Min 60s TTL
+      });
+      return;
+    } catch {
+      // Fall through to in-memory
+    }
+  }
+
+  // Fall back to in-memory (local dev)
+  rateLimitStore.set(key, entry);
+}
 
 /**
  * Default key generator based on user, session, or IP
@@ -200,6 +261,7 @@ export class RateLimiterFactory {
 
   /**
    * Create a custom rate limiter
+   * Uses Cloudflare KV for distributed rate limiting in production
    */
   static createCustom(config: RateLimitConfig) {
     return createMiddleware<ApiEnv>(async (c, next) => {
@@ -213,8 +275,8 @@ export class RateLimiterFactory {
       const key = keyGenerator(c);
       const now = Date.now();
 
-      // Get or create rate limit entry
-      let entry = rateLimitStore.get(key);
+      // Get or create rate limit entry (from KV in production)
+      let entry = await getRateLimitEntry(c, key);
 
       if (!entry || entry.resetTime < now) {
         // Create new entry
@@ -222,7 +284,6 @@ export class RateLimiterFactory {
           count: 0,
           resetTime: now + config.windowMs,
         };
-        rateLimitStore.set(key, entry);
       }
 
       // Check if limit exceeded
@@ -250,8 +311,9 @@ export class RateLimiterFactory {
         throw new HTTPException(HttpStatusCodes.TOO_MANY_REQUESTS, { res });
       }
 
-      // Increment counter
+      // Increment counter and save to KV
       entry.count++;
+      await setRateLimitEntry(c, key, entry, config.windowMs);
 
       // Add rate limit headers if requested
       if (config.includeHeaders !== false) {
@@ -266,11 +328,13 @@ export class RateLimiterFactory {
         // Optionally skip counting successful requests
         if (config.skipSuccessfulRequests) {
           entry.count--;
+          await setRateLimitEntry(c, key, entry, config.windowMs);
         }
       } catch (error) {
         // Optionally skip counting failed requests
         if (config.skipFailedRequests) {
           entry.count--;
+          await setRateLimitEntry(c, key, entry, config.windowMs);
         }
         throw error;
       }
@@ -324,6 +388,7 @@ export class RateLimiterFactory {
 
   /**
    * Create an organization quota limiter
+   * Uses Cloudflare KV for distributed quota tracking in production
    */
   static createOrganizationQuota(quotaBytes: number = 1024 * 1024 * 1024) {
     return createMiddleware<ApiEnv>(async (c, next) => {
@@ -338,7 +403,8 @@ export class RateLimiterFactory {
 
       // Using user-based quotas instead of organization quotas for now
       const quotaKey = `quota:${session?.userId || 'anonymous'}`;
-      const currentUsage = rateLimitStore.get(quotaKey)?.count || 0;
+      const entry = await getRateLimitEntry(c, quotaKey);
+      const currentUsage = entry?.count || 0;
 
       if (currentUsage + (fileSize || 0) > quotaBytes) {
         throw new HTTPException(HttpStatusCodes.INSUFFICIENT_STORAGE, {
@@ -350,10 +416,10 @@ export class RateLimiterFactory {
       await next();
 
       if (fileSize) {
-        rateLimitStore.set(quotaKey, {
+        await setRateLimitEntry(c, quotaKey, {
           count: currentUsage + fileSize,
           resetTime: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
-        });
+        }, 30 * 24 * 60 * 60 * 1000);
       }
     });
   }

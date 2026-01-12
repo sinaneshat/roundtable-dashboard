@@ -15,14 +15,16 @@ export default defineCloudflareConfig({
   // Durable Object Queue for ISR revalidation management
   queue: doQueue,
 
-  // DO Sharded Tag Cache for high-scale On-Demand revalidation
+  // DO Sharded Tag Cache - simplified for better latency
+  // Previous config: 12 shards × 6 replicas = 72 DO instances (overkill)
+  // New config: 4 shards × 3 replicas = 12 DO instances (adequate for most use cases)
   tagCache: doShardedTagCache({
-    baseShardSize: 12,
+    baseShardSize: 4,
     regionalCache: true,
-    regionalCacheTtlSec: 5,
+    regionalCacheTtlSec: 10, // Increased from 5s to reduce DO requests
     shardReplication: {
-      numberOfSoftReplicas: 4,
-      numberOfHardReplicas: 2,
+      numberOfSoftReplicas: 2,
+      numberOfHardReplicas: 1,
     },
   }),
 
