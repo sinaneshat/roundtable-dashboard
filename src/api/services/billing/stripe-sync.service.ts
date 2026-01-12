@@ -26,7 +26,7 @@ import {
 import { syncUserQuotaFromSubscription } from '@/api/services/usage';
 import * as tables from '@/db';
 import { getDbAsync } from '@/db';
-import { CustomerCacheTags, getUserSubscriptionCacheTags } from '@/db/cache/cache-tags';
+import { getUserSubscriptionCacheTags } from '@/db/cache/cache-tags';
 import {
   hasBillingCycleAnchor,
   hasPeriodTimestamps,
@@ -98,15 +98,12 @@ export async function syncStripeDataFromStripe(
 
   const db = await getDbAsync();
 
+  // NO CACHE: Customer/subscription data must always be fresh
   const customerResults = await db
     .select()
     .from(tables.stripeCustomer)
     .where(eq(tables.stripeCustomer.id, customerId))
-    .limit(1)
-    .$withCache({
-      config: { ex: 300 },
-      tag: CustomerCacheTags.byCustomerId(customerId),
-    });
+    .limit(1);
 
   const customer = customerResults[0];
   if (!customer) {
@@ -445,15 +442,12 @@ export async function syncStripeDataFromStripe(
 
 export async function getCustomerIdByUserId(userId: string): Promise<string | null> {
   const db = await getDbAsync();
+  // NO CACHE: Customer data must always be fresh
   const customerResults = await db
     .select()
     .from(tables.stripeCustomer)
     .where(eq(tables.stripeCustomer.userId, userId))
-    .limit(1)
-    .$withCache({
-      config: { ex: 300 },
-      tag: CustomerCacheTags.byUserId(userId),
-    });
+    .limit(1);
 
   return customerResults[0]?.id ?? null;
 }

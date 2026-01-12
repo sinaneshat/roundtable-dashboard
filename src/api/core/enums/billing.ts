@@ -400,6 +400,7 @@ export const CREDIT_ACTIONS = [
   'monthly_renewal',
   'credit_purchase',
   'free_round_complete',
+  'legacy_user_activation',
 ] as const;
 
 // 2️⃣ DEFAULT VALUE
@@ -426,6 +427,7 @@ export const CreditActions = {
   MONTHLY_RENEWAL: 'monthly_renewal' as const,
   CREDIT_PURCHASE: 'credit_purchase' as const,
   FREE_ROUND_COMPLETE: 'free_round_complete' as const,
+  LEGACY_USER_ACTIVATION: 'legacy_user_activation' as const,
 } as const;
 
 // ============================================================================

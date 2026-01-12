@@ -153,16 +153,12 @@ export type EnforceCreditsOptions = z.infer<typeof _EnforceCreditsOptionsSchema>
 export async function ensureUserCreditRecord(userId: string): Promise<UserCreditBalance> {
   const db = await getDbAsync();
 
-  // ✅ PERF: Add KV cache to credit balance lookup (60s TTL)
+  // NO CACHE: Credit balances must always be fresh to prevent optimistic lock failures
   const existingResults = await db
     .select()
     .from(tables.userCreditBalance)
     .where(eq(tables.userCreditBalance.userId, userId))
-    .limit(1)
-    .$withCache({
-      config: { ex: 60 }, // 1 minute cache - balance changes frequently
-      tag: `credit-balance-${userId}`,
-    });
+    .limit(1);
 
   if (existingResults[0]) {
     return existingResults[0];
@@ -298,6 +294,7 @@ export async function enforceCredits(
 async function checkHasActiveSubscription(userId: string): Promise<boolean> {
   const db = await getDbAsync();
 
+  // NO CACHE: Subscription status must always be fresh
   const results = await db
     .select()
     .from(tables.stripeCustomer)
@@ -309,11 +306,7 @@ async function checkHasActiveSubscription(userId: string): Promise<boolean> {
       ),
     )
     .where(eq(tables.stripeCustomer.userId, userId))
-    .limit(1)
-    .$withCache({
-      config: { ex: 120 },
-      tag: `has-active-sub-${userId}`,
-    });
+    .limit(1);
 
   return results.length > 0;
 }
