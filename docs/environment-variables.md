@@ -365,7 +365,7 @@ STRIPE_SECRET_KEY=<secret via wrangler secret put>
 
 **Set in Cloudflare Dashboard:**
 ```
-NEXT_PUBLIC_APP_URL=https://app.roundtable.now
+NEXT_PUBLIC_APP_URL=https://roundtable.now
 STRIPE_SECRET_KEY=<secret via wrangler secret put>
 ```
 

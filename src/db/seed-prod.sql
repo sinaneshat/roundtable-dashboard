@@ -1,6 +1,6 @@
 -- PRODUCTION ENVIRONMENT (Live Mode)
 -- Stripe Account: acct_1SPXN852vWNZ3v8w
--- URL: https://app.roundtable.now
+-- URL: https://roundtable.now
 --
 -- LIVE mode IDs - must match actual Stripe LIVE catalog
 -- Product: Pro (prod_Tm6uQ8p2TyzcaA) - $59/month

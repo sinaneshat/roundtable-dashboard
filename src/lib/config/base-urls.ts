@@ -69,8 +69,8 @@ export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
     api: 'https://app-preview.roundtable.now/api/v1',
   },
   [WEBAPP_ENVS.PROD]: {
-    app: 'https://app.roundtable.now',
-    api: 'https://app.roundtable.now/api/v1',
+    app: 'https://roundtable.now',
+    api: 'https://roundtable.now/api/v1',
   },
 };
 

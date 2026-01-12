@@ -64,7 +64,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
   const locale = 'en';
   const timeZone = 'UTC';
   const now = undefined;
-  const baseUrl = env.NEXT_PUBLIC_APP_URL || 'https://app.roundtable.now';
+  const baseUrl = env.NEXT_PUBLIC_APP_URL || 'https://roundtable.now';
 
   const contentTypeValue = tAeo('contentType');
   const contentType = isValidSeoContentType(contentTypeValue) ? contentTypeValue : DEFAULT_SEO_CONTENT_TYPE;
