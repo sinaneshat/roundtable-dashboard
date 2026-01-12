@@ -8,7 +8,7 @@ import type { UIMessage } from 'ai';
 import type { AbstractIntlMessages } from 'next-intl';
 
 import type { UIMessageRole } from '@/api/core/enums';
-import { FinishReasons, MessagePartTypes, MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, MessageRoles, ModelIds, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import { getParticipantIndex, getRoundNumber } from '@/lib/utils';
 
@@ -137,7 +137,7 @@ export function createTestModeratorMessage(data: {
       role: MessageRoles.ASSISTANT,
       isModerator: true,
       roundNumber: data.roundNumber,
-      model: data.model ?? 'gemini-2.0-flash-thinking-exp-1219',
+      model: data.model ?? ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
       finishReason: data.finishReason ?? FinishReasons.STOP,
       usage: {
         promptTokens: 100,

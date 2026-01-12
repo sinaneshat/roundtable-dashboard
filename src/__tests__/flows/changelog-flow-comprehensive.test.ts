@@ -23,7 +23,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChangelogTypes, ChatModes, MessageStatuses } from '@/api/core/enums';
+import { ChangelogTypes, ChatModes, MessageStatuses, ModelIds } from '@/api/core/enums';
 import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
 import { queryKeys } from '@/lib/data/query-keys';
 import { createMockStoredPreSearch } from '@/lib/testing';
@@ -629,26 +629,26 @@ describe('accordion Visibility and Content Accuracy', () => {
   describe('accordion content accuracy', () => {
     it('displays correct model names for additions', () => {
       const changelog = createMockChangelog(1, [
-        { type: 'added', participantId: 'p1', modelId: 'anthropic/claude-3.5-sonnet' },
-        { type: 'added', participantId: 'p2', modelId: 'openai/gpt-4o' },
+        { type: 'added', participantId: 'p1', modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5 },
+        { type: 'added', participantId: 'p2', modelId: ModelIds.OPENAI_GPT_4O_MINI },
       ]);
 
       const addedChanges = changelog.changeData.changes.filter(c => c.type === 'added');
 
       expect(addedChanges).toHaveLength(2);
-      expect(addedChanges[0]?.modelId).toBe('anthropic/claude-3.5-sonnet');
-      expect(addedChanges[1]?.modelId).toBe('openai/gpt-4o');
+      expect(addedChanges[0]?.modelId).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5);
+      expect(addedChanges[1]?.modelId).toBe(ModelIds.OPENAI_GPT_4O_MINI);
     });
 
     it('displays correct model names for removals', () => {
       const changelog = createMockChangelog(2, [
-        { type: 'removed', participantId: 'p1', modelId: 'google/gemini-2.0-flash' },
+        { type: 'removed', participantId: 'p1', modelId: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW },
       ]);
 
       const removedChanges = changelog.changeData.changes.filter(c => c.type === 'removed');
 
       expect(removedChanges).toHaveLength(1);
-      expect(removedChanges[0]?.modelId).toBe('google/gemini-2.0-flash');
+      expect(removedChanges[0]?.modelId).toBe(ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW);
     });
 
     it('displays role changes correctly', () => {
@@ -819,7 +819,7 @@ describe('various Change Types', () => {
       const changelog = createMockChangelog(1, [
         { type: 'added', participantId: 'p1', modelId: 'gpt-4o' },
         { type: 'added', participantId: 'p2', modelId: 'claude-3.5-sonnet' },
-        { type: 'added', participantId: 'p3', modelId: 'gemini-2.0-flash' },
+        { type: 'added', participantId: 'p3', modelId: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW },
       ]);
 
       expect(changelog.changeData.changes).toHaveLength(3);

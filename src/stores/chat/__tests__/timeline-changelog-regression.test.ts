@@ -13,7 +13,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, MessageStatuses, ModelIds } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { DbModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useThreadTimeline } from '@/hooks/utils';
@@ -149,10 +149,10 @@ describe('bug #1: Changelog Display Between Rounds', () => {
       // Changelog for round 2 (config changed before round 2)
       const changelog: TestChangelog[] = [
         createMockChangelog(2, [
-          { type: 'removed', participantId: 'p0', modelId: 'deepseek/deepseek-chat-v3-0324' },
-          { type: 'removed', participantId: 'p1', modelId: 'x-ai/grok-4-fast' },
-          { type: 'removed', participantId: 'p2', modelId: 'google/gemini-2.5-flash' },
-          { type: 'added', participantId: 'new-p0', modelId: 'x-ai/grok-4.1-fast' },
+          { type: 'removed', participantId: 'p0', modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324 },
+          { type: 'removed', participantId: 'p1', modelId: ModelIds.X_AI_GROK_4_FAST },
+          { type: 'removed', participantId: 'p2', modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH },
+          { type: 'added', participantId: 'new-p0', modelId: ModelIds.X_AI_GROK_4_1_FAST },
         ]),
       ];
 
@@ -386,7 +386,7 @@ describe('bug #3: Changelog Visibility After New Round Submission', () => {
     const changelog: TestChangelog[] = [
       createMockChangelog(2, [
         { type: 'removed', participantId: 'p0' },
-        { type: 'added', participantId: 'new-p0', modelId: 'x-ai/grok-4.1-fast' },
+        { type: 'added', participantId: 'new-p0', modelId: ModelIds.X_AI_GROK_4_1_FAST },
       ]),
     ];
 
@@ -565,10 +565,10 @@ describe('production State Reproduction', () => {
     // Changelogs (config changed before round 2)
     const changelog: TestChangelog[] = [
       createMockChangelog(2, [
-        { type: 'removed', participantId: '01KCC1FR15M9S8Y1CRHJ6ADZNG', modelId: 'deepseek/deepseek-chat-v3-0324' },
-        { type: 'removed', participantId: '01KCC1FR15MYRT64K4Q70SNA2Z', modelId: 'x-ai/grok-4-fast' },
-        { type: 'removed', participantId: '01KCC1FR16W3SF4NFJAJ84RCMF', modelId: 'google/gemini-2.5-flash' },
-        { type: 'added', participantId: '01KCC1S6D47KTNBC46N7337WTB', modelId: 'x-ai/grok-4.1-fast' },
+        { type: 'removed', participantId: '01KCC1FR15M9S8Y1CRHJ6ADZNG', modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324 },
+        { type: 'removed', participantId: '01KCC1FR15MYRT64K4Q70SNA2Z', modelId: ModelIds.X_AI_GROK_4_FAST },
+        { type: 'removed', participantId: '01KCC1FR16W3SF4NFJAJ84RCMF', modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH },
+        { type: 'added', participantId: '01KCC1S6D47KTNBC46N7337WTB', modelId: ModelIds.X_AI_GROK_4_1_FAST },
       ]),
     ];
 

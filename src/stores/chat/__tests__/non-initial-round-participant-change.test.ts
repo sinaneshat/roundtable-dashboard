@@ -5,7 +5,7 @@
  * applying recommendations that suggest different models.
  *
  * Bug Scenarios from Debug Logs:
- * 1. Round 1 starts with participants grok-4-fast + gemini-2.0-flash
+ * 1. Round 1 starts with participants grok-4-fast + gemini-3-flash
  * 2. User clicks recommendation suggesting claude-3.5-sonnet + gpt-4.1
  * 3. optimisticParticipantIds have modelId as id: {id: "anthropic/claude-3.5-sonnet", model: "..."}
  * 4. 500 error on pre-search POST
@@ -19,7 +19,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes, MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import { ChatModes, MessagePartTypes, MessageRoles, MessageStatuses, ModelIds } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import {
@@ -119,13 +119,13 @@ describe('participant ID handling between rounds', () => {
   describe('detectParticipantChanges', () => {
     it('should detect new participants when id === modelId', () => {
       const currentParticipants = [
-        createMockParticipant(0, 'x-ai/grok-4-fast'),
-        createMockParticipant(1, 'google/gemini-2.5-flash'),
+        createMockParticipant(0, ModelIds.X_AI_GROK_4_FAST),
+        createMockParticipant(1, ModelIds.GOOGLE_GEMINI_2_5_FLASH),
       ];
 
       const selectedParticipants = [
-        createNewParticipantConfig(0, 'anthropic/claude-3.5-sonnet', 'The Practical Evaluator'),
-        createNewParticipantConfig(1, 'openai/gpt-4.1', 'Implementation Strategist'),
+        createNewParticipantConfig(0, ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, 'The Practical Evaluator'),
+        createNewParticipantConfig(1, ModelIds.OPENAI_GPT_4_1, 'Implementation Strategist'),
       ];
 
       const result = detectParticipantChanges(currentParticipants, selectedParticipants);
@@ -137,8 +137,8 @@ describe('participant ID handling between rounds', () => {
 
     it('should NOT detect temporary IDs when using database IDs', () => {
       const currentParticipants = [
-        createMockParticipant(0, 'x-ai/grok-4-fast'),
-        createMockParticipant(1, 'google/gemini-2.5-flash'),
+        createMockParticipant(0, ModelIds.X_AI_GROK_4_FAST),
+        createMockParticipant(1, ModelIds.GOOGLE_GEMINI_2_5_FLASH),
       ];
 
       const selectedParticipants = currentParticipants.map(createExistingParticipantConfig);
@@ -151,13 +151,13 @@ describe('participant ID handling between rounds', () => {
 
     it('should detect mixed new and existing participants', () => {
       const currentParticipants = [
-        createMockParticipant(0, 'x-ai/grok-4-fast'),
-        createMockParticipant(1, 'google/gemini-2.5-flash'),
+        createMockParticipant(0, ModelIds.X_AI_GROK_4_FAST),
+        createMockParticipant(1, ModelIds.GOOGLE_GEMINI_2_5_FLASH),
       ];
 
       const selectedParticipants = [
         createExistingParticipantConfig(currentParticipants[0]!),
-        createNewParticipantConfig(1, 'openai/gpt-4.1'),
+        createNewParticipantConfig(1, ModelIds.OPENAI_GPT_4_1),
       ];
 
       const result = detectParticipantChanges(currentParticipants, selectedParticipants);
@@ -169,15 +169,15 @@ describe('participant ID handling between rounds', () => {
 
   describe('participantConfigToOptimistic', () => {
     it('should create optimistic participant with modelId as id for new participants', () => {
-      const config = createNewParticipantConfig(0, 'anthropic/claude-3.5-sonnet');
+      const config = createNewParticipantConfig(0, ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5);
       const optimistic = participantConfigToOptimistic(config, 'thread-123', 0);
 
-      expect(optimistic.id).toBe('anthropic/claude-3.5-sonnet');
-      expect(optimistic.modelId).toBe('anthropic/claude-3.5-sonnet');
+      expect(optimistic.id).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5);
+      expect(optimistic.modelId).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5);
     });
 
     it('should preserve database ID for existing participants', () => {
-      const dbParticipant = createMockParticipant(0, 'x-ai/grok-4-fast');
+      const dbParticipant = createMockParticipant(0, ModelIds.X_AI_GROK_4_FAST);
       const config = createExistingParticipantConfig(dbParticipant);
       const optimistic = participantConfigToOptimistic(config, 'thread-123', 0);
 
@@ -189,13 +189,13 @@ describe('participant ID handling between rounds', () => {
   describe('prepareParticipantUpdate', () => {
     it('should prepare correct data for completely new participants', () => {
       const currentParticipants = [
-        createMockParticipant(0, 'x-ai/grok-4-fast'),
-        createMockParticipant(1, 'google/gemini-2.5-flash'),
+        createMockParticipant(0, ModelIds.X_AI_GROK_4_FAST),
+        createMockParticipant(1, ModelIds.GOOGLE_GEMINI_2_5_FLASH),
       ];
 
       const selectedParticipants = [
-        createNewParticipantConfig(0, 'anthropic/claude-3.5-sonnet', 'The Practical Evaluator'),
-        createNewParticipantConfig(1, 'openai/gpt-4.1', 'Implementation Strategist'),
+        createNewParticipantConfig(0, ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, 'The Practical Evaluator'),
+        createNewParticipantConfig(1, ModelIds.OPENAI_GPT_4_1, 'Implementation Strategist'),
       ];
 
       const result = prepareParticipantUpdate(
@@ -207,8 +207,8 @@ describe('participant ID handling between rounds', () => {
       expect(result.updateResult.hasTemporaryIds).toBe(true);
       expect(result.updatePayloads[0]?.id).toBe('');
       expect(result.updatePayloads[1]?.id).toBe('');
-      expect(result.optimisticParticipants[0]?.id).toBe('anthropic/claude-3.5-sonnet');
-      expect(result.optimisticParticipants[1]?.id).toBe('openai/gpt-4.1');
+      expect(result.optimisticParticipants[0]?.id).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5);
+      expect(result.optimisticParticipants[1]?.id).toBe(ModelIds.OPENAI_GPT_4_1);
     });
   });
 });
@@ -223,8 +223,8 @@ describe('store state during participant change', () => {
       const store = createChatStore();
 
       const initialParticipants = [
-        createMockParticipant(0, 'x-ai/grok-4-fast'),
-        createMockParticipant(1, 'google/gemini-2.5-flash'),
+        createMockParticipant(0, ModelIds.X_AI_GROK_4_FAST),
+        createMockParticipant(1, ModelIds.GOOGLE_GEMINI_2_5_FLASH),
       ];
       store.getState().updateParticipants(initialParticipants);
 
@@ -233,9 +233,9 @@ describe('store state during participant change', () => {
 
       const optimisticParticipants: ChatParticipant[] = [
         {
-          id: 'anthropic/claude-3.5-sonnet',
+          id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
           threadId: 'thread-123',
-          modelId: 'anthropic/claude-3.5-sonnet',
+          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
           role: 'The Practical Evaluator',
           customRoleId: null,
           priority: 0,
@@ -245,9 +245,9 @@ describe('store state during participant change', () => {
           updatedAt: new Date(),
         },
         {
-          id: 'openai/gpt-4.1',
+          id: ModelIds.OPENAI_GPT_4_1,
           threadId: 'thread-123',
-          modelId: 'openai/gpt-4.1',
+          modelId: ModelIds.OPENAI_GPT_4_1,
           role: 'Implementation Strategist',
           customRoleId: null,
           priority: 1,
@@ -260,8 +260,8 @@ describe('store state during participant change', () => {
       store.getState().updateParticipants(optimisticParticipants);
 
       expect(store.getState().participants).toHaveLength(2);
-      expect(store.getState().participants[0]?.id).toBe('anthropic/claude-3.5-sonnet');
-      expect(store.getState().participants[1]?.id).toBe('openai/gpt-4.1');
+      expect(store.getState().participants[0]?.id).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5);
+      expect(store.getState().participants[1]?.id).toBe(ModelIds.OPENAI_GPT_4_1);
     });
 
     it('should update participants with real IDs after PATCH response', () => {
@@ -269,9 +269,9 @@ describe('store state during participant change', () => {
 
       const optimisticParticipants: ChatParticipant[] = [
         {
-          id: 'anthropic/claude-3.5-sonnet',
+          id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
           threadId: 'thread-123',
-          modelId: 'anthropic/claude-3.5-sonnet',
+          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
           role: 'The Practical Evaluator',
           customRoleId: null,
           priority: 0,
@@ -283,13 +283,13 @@ describe('store state during participant change', () => {
       ];
       store.getState().updateParticipants(optimisticParticipants);
 
-      expect(store.getState().participants[0]?.id).toBe('anthropic/claude-3.5-sonnet');
+      expect(store.getState().participants[0]?.id).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5);
 
       const realParticipants: ChatParticipant[] = [
         {
           id: '01KCC7R18HCEYWNPA56VBZVG6F',
           threadId: 'thread-123',
-          modelId: 'anthropic/claude-3.5-sonnet',
+          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
           role: 'The Practical Evaluator',
           customRoleId: null,
           priority: 0,
@@ -312,8 +312,8 @@ describe('store state during participant change', () => {
       const threadId = 'thread-123';
 
       const initialParticipants = [
-        createMockParticipant(0, 'x-ai/grok-4-fast', threadId),
-        createMockParticipant(1, 'google/gemini-2.5-flash', threadId),
+        createMockParticipant(0, ModelIds.X_AI_GROK_4_FAST, threadId),
+        createMockParticipant(1, ModelIds.GOOGLE_GEMINI_2_5_FLASH, threadId),
       ];
       store.getState().updateParticipants(initialParticipants);
 
@@ -333,7 +333,7 @@ describe('store state during participant change', () => {
             roundNumber: 0,
             participantId: initialParticipants[0]!.id,
             participantIndex: 0,
-            model: 'x-ai/grok-4-fast',
+            model: ModelIds.X_AI_GROK_4_FAST,
           },
         },
         {
@@ -345,7 +345,7 @@ describe('store state during participant change', () => {
             roundNumber: 0,
             participantId: initialParticipants[1]!.id,
             participantIndex: 1,
-            model: 'google/gemini-2.5-flash',
+            model: ModelIds.GOOGLE_GEMINI_2_5_FLASH,
           },
         },
       ];
@@ -369,8 +369,8 @@ describe('store state during participant change', () => {
       const threadId = 'thread-123';
 
       const round0Participants = [
-        createMockParticipant(0, 'x-ai/grok-4-fast', threadId),
-        createMockParticipant(1, 'google/gemini-2.5-flash', threadId),
+        createMockParticipant(0, ModelIds.X_AI_GROK_4_FAST, threadId),
+        createMockParticipant(1, ModelIds.GOOGLE_GEMINI_2_5_FLASH, threadId),
       ];
 
       const messages = [
@@ -389,7 +389,7 @@ describe('store state during participant change', () => {
             roundNumber: 0,
             participantId: round0Participants[0]!.id,
             participantIndex: 0,
-            model: 'x-ai/grok-4-fast',
+            model: ModelIds.X_AI_GROK_4_FAST,
           },
         },
       ];
@@ -399,7 +399,7 @@ describe('store state during participant change', () => {
         {
           id: '01KCC7R18HCEYWNPA56VBZVG6F',
           threadId,
-          modelId: 'anthropic/claude-3.5-sonnet',
+          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
           role: 'The Practical Evaluator',
           customRoleId: null,
           priority: 0,
@@ -432,8 +432,8 @@ describe('pre-search timing with participant changes', () => {
       const threadId = 'thread-123';
 
       const initialParticipants = [
-        createMockParticipant(0, 'x-ai/grok-4-fast', threadId),
-        createMockParticipant(1, 'google/gemini-2.5-flash', threadId),
+        createMockParticipant(0, ModelIds.X_AI_GROK_4_FAST, threadId),
+        createMockParticipant(1, ModelIds.GOOGLE_GEMINI_2_5_FLASH, threadId),
       ];
       store.getState().initializeThread(
         {
@@ -479,7 +479,7 @@ describe('pre-search timing with participant changes', () => {
         {
           id: '01KCC7R18HCEYWNPA56VBZVG6F',
           threadId,
-          modelId: 'anthropic/claude-3.5-sonnet',
+          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
           role: 'The Practical Evaluator',
           customRoleId: null,
           priority: 0,
@@ -589,18 +589,18 @@ describe('selectedParticipants Sync After Update', () => {
     const threadId = 'thread-123';
 
     store.getState().setSelectedParticipants([
-      createNewParticipantConfig(0, 'anthropic/claude-3.5-sonnet', 'The Practical Evaluator'),
-      createNewParticipantConfig(1, 'openai/gpt-4.1', 'Implementation Strategist'),
+      createNewParticipantConfig(0, ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, 'The Practical Evaluator'),
+      createNewParticipantConfig(1, ModelIds.OPENAI_GPT_4_1, 'Implementation Strategist'),
     ]);
 
-    expect(store.getState().selectedParticipants[0]?.id).toBe('anthropic/claude-3.5-sonnet');
-    expect(store.getState().selectedParticipants[1]?.id).toBe('openai/gpt-4.1');
+    expect(store.getState().selectedParticipants[0]?.id).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5);
+    expect(store.getState().selectedParticipants[1]?.id).toBe(ModelIds.OPENAI_GPT_4_1);
 
     const dbParticipants: ChatParticipant[] = [
       {
         id: '01KCC7R18HCEYWNPA56VBZVG6F',
         threadId,
-        modelId: 'anthropic/claude-3.5-sonnet',
+        modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
         role: 'The Practical Evaluator',
         customRoleId: null,
         priority: 0,
@@ -612,7 +612,7 @@ describe('selectedParticipants Sync After Update', () => {
       {
         id: '01KCC7R18H8E40CW730K19Q0TD',
         threadId,
-        modelId: 'openai/gpt-4.1',
+        modelId: ModelIds.OPENAI_GPT_4_1,
         role: 'Implementation Strategist',
         customRoleId: null,
         priority: 1,
@@ -644,7 +644,7 @@ describe('selectedParticipants Sync After Update', () => {
       {
         id: '01KCC7R18HCEYWNPA56VBZVG6F',
         threadId,
-        modelId: 'anthropic/claude-3.5-sonnet',
+        modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
         role: 'The Practical Evaluator',
         customRoleId: null,
         priority: 0,
@@ -657,7 +657,7 @@ describe('selectedParticipants Sync After Update', () => {
 
     const syncedConfig: ParticipantConfig = {
       id: '01KCC7R18HCEYWNPA56VBZVG6F',
-      modelId: 'anthropic/claude-3.5-sonnet',
+      modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
       role: 'The Practical Evaluator',
       customRoleId: undefined,
       priority: 0,

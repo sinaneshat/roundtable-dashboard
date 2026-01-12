@@ -11,7 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
+import { ModelIds, MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
 
 // ============================================================================
 // Mock Setup
@@ -75,7 +75,7 @@ function createParticipantTelemetryConfig(
       participant_role: options?.participantRole || 'AI Analyst',
       is_first_participant: participantIndex === 0,
       total_participants: options?.totalParticipants || 3,
-      model_id: options?.modelId || 'openai/gpt-4o',
+      model_id: options?.modelId || ModelIds.OPENAI_GPT_4O_MINI,
       model_name: 'GPT-4o',
       model_context_length: 128000,
       max_output_tokens: 8192,
@@ -114,7 +114,7 @@ function createModeratorTelemetryConfig(
       participant_id: 'moderator',
       participant_index: MODERATOR_PARTICIPANT_INDEX,
       participant_role: 'AI Moderator',
-      model_id: 'anthropic/claude-sonnet-4-20250514',
+      model_id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4,
       model_name: 'Claude Sonnet 4',
       is_moderator: true,
       participant_count: options?.participantCount || 3,
@@ -164,10 +164,10 @@ describe('aI SDK streamText Telemetry', () => {
 
     it('should include model configuration in metadata', () => {
       const config = createParticipantTelemetryConfig('thread_abc', 0, 0, {
-        modelId: 'anthropic/claude-3-opus-20240229',
+        modelId: ModelIds.ANTHROPIC_CLAUDE_OPUS_4_5,
       });
 
-      expect(config.metadata.model_id).toBe('anthropic/claude-3-opus-20240229');
+      expect(config.metadata.model_id).toBe(ModelIds.ANTHROPIC_CLAUDE_OPUS_4_5);
       expect(config.metadata.model_context_length).toBe(128000);
       expect(config.metadata.max_output_tokens).toBe(8192);
     });
@@ -251,7 +251,7 @@ describe('aI SDK streamText Telemetry', () => {
     it('should use council moderator model', () => {
       const config = createModeratorTelemetryConfig('thread_abc', 0);
 
-      expect(config.metadata.model_id).toBe('anthropic/claude-sonnet-4-20250514');
+      expect(config.metadata.model_id).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4);
       expect(config.metadata.model_name).toBe('Claude Sonnet 4');
     });
 
@@ -334,21 +334,21 @@ describe('smooth Stream Transformation', () => {
 
   describe('model-Specific smoothStream Usage', () => {
     const modelsRequiringSmoothStream = [
-      'x-ai/grok-2-1212',
-      'x-ai/grok-beta',
-      'x-ai/grok-3-beta',
-      'x-ai/grok-3-mini-beta',
-      'deepseek/deepseek-r1',
-      'deepseek/deepseek-chat',
-      'google/gemini-2.5-flash-preview',
-      'google/gemini-2.5-pro-preview',
+      ModelIds.X_AI_GROK_4,
+      ModelIds.X_AI_GROK_4_FAST,
+      ModelIds.X_AI_GROK_4_1,
+      ModelIds.X_AI_GROK_4_1_FAST,
+      ModelIds.DEEPSEEK_DEEPSEEK_R1_0528,
+      ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324,
+      ModelIds.GOOGLE_GEMINI_2_5_FLASH,
+      ModelIds.GOOGLE_GEMINI_2_5_PRO,
     ];
 
     const modelsNotRequiringSmoothStream = [
-      'openai/gpt-4o',
-      'openai/gpt-4o-mini',
-      'anthropic/claude-3-5-sonnet-20241022',
-      'anthropic/claude-3-opus-20240229',
+      ModelIds.OPENAI_GPT_4O_MINI,
+      ModelIds.OPENAI_GPT_4O_MINI,
+      ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
+      ModelIds.ANTHROPIC_CLAUDE_OPUS_4_5,
     ];
 
     it.each(modelsRequiringSmoothStream)(
@@ -614,7 +614,7 @@ describe('streaming Error Telemetry', () => {
         isTransient: true,
         shouldRetry: true,
         participantId: 'participant_1',
-        modelId: 'openai/gpt-4o',
+        modelId: ModelIds.OPENAI_GPT_4O_MINI,
         traceId: 'trace_abc123',
       };
 
@@ -654,7 +654,7 @@ describe('postHog LLM Tracking Telemetry', () => {
         participantId: 'participant_1',
         participantIndex: 0,
         participantRole: 'AI Analyst',
-        modelId: 'openai/gpt-4o',
+        modelId: ModelIds.OPENAI_GPT_4O_MINI,
         modelName: 'GPT-4o',
         threadMode: 'council',
         isRegeneration: false,

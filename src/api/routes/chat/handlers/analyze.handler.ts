@@ -49,7 +49,7 @@ import { AnalyzePromptRequestSchema } from '../schema';
 // ============================================================================
 
 const FALLBACK_CONFIG: AnalyzePromptPayload = {
-  participants: [{ modelId: 'google/gemini-2.5-flash', role: null }],
+  participants: [{ modelId: PROMPT_ANALYSIS_MODEL_ID, role: null }],
   mode: DEFAULT_CHAT_MODE,
   enableWebSearch: false,
 };

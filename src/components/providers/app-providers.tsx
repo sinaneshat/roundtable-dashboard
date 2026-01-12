@@ -36,6 +36,7 @@ type AppProvidersProps = {
     NEXT_PUBLIC_WEBAPP_ENV?: string;
     NEXT_PUBLIC_MAINTENANCE?: string;
     NEXT_PUBLIC_POSTHOG_API_KEY?: string;
+    NEXT_PUBLIC_POSTHOG_HOST?: string;
   };
   initialPreferences?: ModelPreferencesState | null;
 };
@@ -52,6 +53,7 @@ export function AppProviders({
   return (
     <PostHogProvider
       apiKey={env.NEXT_PUBLIC_POSTHOG_API_KEY}
+      apiHost={env.NEXT_PUBLIC_POSTHOG_HOST}
       environment={env.NEXT_PUBLIC_WEBAPP_ENV}
     >
       <QueryClientProvider>

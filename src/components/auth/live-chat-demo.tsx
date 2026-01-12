@@ -7,6 +7,7 @@ import {
   FinishReasons,
   MessagePartTypes,
   MessageRoles,
+  ModelIds,
   MODERATOR_NAME,
   MODERATOR_PARTICIPANT_INDEX,
 } from '@/api/core/enums';
@@ -25,9 +26,9 @@ const DEMO_USER = {
 const DEMO_USER_MESSAGE_CONTENT = 'We\'re a B2B SaaS startup with $2M ARR considering enterprise expansion vs doubling down on SMB. Our sales cycle is 14 days with $8K ACV. What would you recommend?';
 
 const DEMO_PARTICIPANTS_DATA = [
-  { modelId: 'anthropic/claude-sonnet-4', role: 'Strategic Analyst' },
-  { modelId: 'openai/gpt-4.1', role: 'Growth Advisor' },
-  { modelId: 'google/gemini-2.5-pro', role: 'Operations Expert' },
+  { modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4, role: 'Strategic Analyst' },
+  { modelId: ModelIds.OPENAI_GPT_4_1, role: 'Growth Advisor' },
+  { modelId: ModelIds.GOOGLE_GEMINI_2_5_PRO, role: 'Operations Expert' },
 ];
 
 const DEMO_MODERATOR_SYNTHESIS = `The council agrees on a staged approach: start with **Claude's customer audit**, then run **Gemini's 90-day experiment** before committing resources. **GPT's "Enterprise Lite"** mid-market option emerged as a potential middle path if the experiment shows promise.`;

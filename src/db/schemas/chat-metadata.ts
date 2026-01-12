@@ -545,7 +545,7 @@ export const DbModeratorMessageMetadataSchema = z.object({
   role: z.literal(UIMessageRoles.ASSISTANT),
   isModerator: z.literal(true), // Discriminator from participant messages
   roundNumber: RoundNumberSchema, // ✅ 0-BASED
-  model: z.string().min(1), // AI model used for summary (e.g., gemini-2.0-flash)
+  model: z.string().min(1), // AI model used for summary (e.g., gemini-2.5-flash)
 
   // Completion tracking
   finishReason: FinishReasonSchema.optional(),

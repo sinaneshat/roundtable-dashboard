@@ -10,7 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FinishReasons, ParticipantStreamStatuses } from '@/api/core/enums';
+import { FinishReasons, ModelIds, ParticipantStreamStatuses } from '@/api/core/enums';
 import { act, createMockParticipant, createMockThread } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
 
@@ -145,8 +145,8 @@ describe('streaming Telemetry E2E', () => {
       const threadId = 'thread_e2e_test';
       const roundNumber = 0;
       const participants = [
-        createMockParticipant({ id: 'p1', threadId, priority: 0, modelId: 'openai/gpt-4o' }),
-        createMockParticipant({ id: 'p2', threadId, priority: 1, modelId: 'anthropic/claude-3-5-sonnet' }),
+        createMockParticipant({ id: 'p1', threadId, priority: 0, modelId: ModelIds.OPENAI_GPT_4O_MINI }),
+        createMockParticipant({ id: 'p2', threadId, priority: 1, modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5 }),
       ];
 
       // Initialize store state
@@ -638,7 +638,7 @@ describe('telemetry Purpose Verification', () => {
       const costAttribution = {
         userId: 'user_123',
         userTier: 'pro',
-        modelId: 'openai/gpt-4o',
+        modelId: ModelIds.OPENAI_GPT_4O_MINI,
         inputTokens: 1500,
         outputTokens: 800,
         inputCostPerMillion: 2.5,
@@ -654,7 +654,7 @@ describe('telemetry Purpose Verification', () => {
 
     it('should support latency analysis by model', () => {
       const latencyMetrics = {
-        modelId: 'openai/gpt-4o',
+        modelId: ModelIds.OPENAI_GPT_4O_MINI,
         timeToFirstToken: 450, // ms
         totalDuration: 2500, // ms
         tokensPerSecond: 32,
@@ -672,7 +672,7 @@ describe('telemetry Purpose Verification', () => {
         errorMessage: 'Rate limit exceeded',
         traceId: 'trace_error_123',
         participantId: 'participant_1',
-        modelId: 'openai/gpt-4o',
+        modelId: ModelIds.OPENAI_GPT_4O_MINI,
         roundNumber: 2,
         threadId: 'thread_abc',
         retryAttempt: 3,
@@ -702,7 +702,7 @@ describe('telemetry Purpose Verification', () => {
       const usagePattern = {
         userId: 'user_123',
         userTier: 'enterprise',
-        modelsUsed: ['openai/gpt-4o', 'anthropic/claude-3-5-sonnet'],
+        modelsUsed: [ModelIds.OPENAI_GPT_4O_MINI, ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5],
         totalRounds: 15,
         averageParticipantsPerRound: 2.5,
         moderatorUsageRate: 0.8, // 80% of rounds use moderator

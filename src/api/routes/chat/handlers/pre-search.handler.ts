@@ -721,7 +721,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               queriesGenerated: totalQueries,
               analysisRationale: multiQueryResult.analysisRationale || '',
               complexity: complexityResult.complexity,
-              modelId: 'google/gemini-2.5-flash', // WEB_SEARCH model from AIModels
+              modelId: AIModels.WEB_SEARCH,
             },
             queryGenerationDuration,
           ),

@@ -1,5 +1,6 @@
 import './global.css';
 
+import { GoogleTagManager } from '@next/third-parties/google';
 import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import type { Metadata, Viewport } from 'next';
@@ -105,6 +106,9 @@ export default async function Layout({ children }: { children: React.ReactNode }
         />
       </head>
       <body>
+        {env.NEXT_PUBLIC_WEBAPP_ENV !== 'local' && (
+          <GoogleTagManager gtmId="GT-WVX5LHTL" />
+        )}
         <LiquidGlassFilters />
 
         <AppProviders
@@ -116,6 +120,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
             NEXT_PUBLIC_WEBAPP_ENV: env.NEXT_PUBLIC_WEBAPP_ENV,
             NEXT_PUBLIC_MAINTENANCE: env.NEXT_PUBLIC_MAINTENANCE,
             NEXT_PUBLIC_POSTHOG_API_KEY: env.NEXT_PUBLIC_POSTHOG_API_KEY,
+            NEXT_PUBLIC_POSTHOG_HOST: env.NEXT_PUBLIC_POSTHOG_HOST,
           }}
         >
           <main>{children}</main>

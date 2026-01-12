@@ -24,7 +24,7 @@ import type { UIMessage } from 'ai';
 import { act } from 'react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MessageRoles, TextPartStates, UIMessageRoles } from '@/api/core/enums';
+import { MessageRoles, ModelIds, TextPartStates, UIMessageRoles } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
@@ -487,12 +487,12 @@ describe('edge Cases: OpenRouter Model Variations', () => {
   });
 
   const openRouterModels = [
-    'openai/o3',
-    'anthropic/claude-opus-4.5',
-    'x-ai/grok-4',
-    'google/gemini-2.5-pro',
-    'deepseek/deepseek-r1-0528',
-    'mistralai/mistral-large-2512',
+    ModelIds.OPENAI_O3,
+    ModelIds.ANTHROPIC_CLAUDE_OPUS_4_5,
+    ModelIds.X_AI_GROK_4,
+    ModelIds.GOOGLE_GEMINI_2_5_PRO,
+    ModelIds.DEEPSEEK_DEEPSEEK_R1_0528,
+    ModelIds.MISTRALAI_MISTRAL_LARGE_2512,
   ];
 
   it.each(openRouterModels)('should handle %s streaming without frozen array errors', (model) => {
@@ -555,7 +555,7 @@ describe('edge Cases: OpenRouter Model Variations', () => {
         roundNumber: 0,
         participantId: 'p0',
         participantIndex: 0,
-        model: 'deepseek/deepseek-r1-0528',
+        model: ModelIds.DEEPSEEK_DEEPSEEK_R1_0528,
       },
     };
 

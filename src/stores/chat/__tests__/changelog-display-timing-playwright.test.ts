@@ -24,7 +24,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChangelogChangeTypesExtended, MessageStatuses } from '@/api/core/enums';
+import { ChangelogChangeTypesExtended, MessageStatuses, ModelIds } from '@/api/core/enums';
 import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ChatStoreApi } from '@/stores/chat';
@@ -248,8 +248,8 @@ describe('changelog Expandable Details', () => {
 
   it('includes model information for additions and removals', () => {
     const changelog = createMockChangelog(1, [
-      { type: 'added', participantId: 'p1', modelId: 'x-ai/grok-4.1-fast' },
-      { type: 'removed', participantId: 'p2', modelId: 'google/gemini-2.0' },
+      { type: 'added', participantId: 'p1', modelId: ModelIds.X_AI_GROK_4_1_FAST },
+      { type: 'removed', participantId: 'p2', modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH },
     ]);
 
     const addedEntry = changelog.changeData.changes.find(
@@ -259,8 +259,8 @@ describe('changelog Expandable Details', () => {
       c => c.type === ChangelogChangeTypesExtended.REMOVED,
     );
 
-    expect(addedEntry?.modelId).toBe('x-ai/grok-4.1-fast');
-    expect(removedEntry?.modelId).toBe('google/gemini-2.0');
+    expect(addedEntry?.modelId).toBe(ModelIds.X_AI_GROK_4_1_FAST);
+    expect(removedEntry?.modelId).toBe(ModelIds.GOOGLE_GEMINI_2_5_FLASH);
   });
 });
 
