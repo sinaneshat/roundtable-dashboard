@@ -7,7 +7,8 @@
  * - If free: upgrades to pro, grants 100K credits, sets 1 month period
  *
  * Usage:
- *   npx tsx scripts/user-upgrade.ts
+ *   Interactive:  npx tsx scripts/user-upgrade.ts
+ *   CLI args:     npx tsx scripts/user-upgrade.ts --env prod --email user@example.com
  *
  * Environment:
  *   Uses wrangler d1 execute to run SQL against preview/prod D1 databases
@@ -32,6 +33,7 @@ function createReadline(): readline.Interface {
   return readline.createInterface({
     input: process.stdin,
     output: process.stdout,
+    terminal: process.stdin.isTTY ?? false,
   });
 }
 
@@ -106,28 +108,55 @@ interface CreditRow {
   version: number;
 }
 
+function parseArgs(): { env?: string; email?: string } {
+  const args = process.argv.slice(2);
+  const result: { env?: string; email?: string } = {};
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--env' && args[i + 1]) {
+      result.env = args[++i];
+    } else if (args[i] === '--email' && args[i + 1]) {
+      result.email = args[++i];
+    }
+  }
+
+  return result;
+}
+
 async function main() {
+  const cliArgs = parseArgs();
   const rl = createReadline();
 
   console.log('\n🚀 User Upgrade Script\n');
   console.log('This script upgrades an existing user to Pro plan for 1 month.\n');
 
-  // Ask for environment
+  // Get environment from CLI args or prompt
   let env: Environment | null = null;
-  while (!env) {
-    const envInput = await question(rl, 'Environment (preview/prod): ');
-    if (envInput === 'preview' || envInput === 'prod') {
-      env = envInput;
-    } else {
-      console.log('❌ Invalid environment. Please enter "preview" or "prod".\n');
+  if (cliArgs.env === 'preview' || cliArgs.env === 'prod') {
+    env = cliArgs.env;
+    console.log(`Environment: ${env} (from CLI args)`);
+  } else {
+    while (!env) {
+      const envInput = await question(rl, 'Environment (preview/prod): ');
+      if (envInput === 'preview' || envInput === 'prod') {
+        env = envInput;
+      } else {
+        console.log('❌ Invalid environment. Please enter "preview" or "prod".\n');
+      }
     }
   }
 
   const dbName = D1_DATABASE_NAMES[env];
   console.log(`\n✅ Using database: ${dbName}\n`);
 
-  // Ask for user email
-  const email = await question(rl, 'User email to upgrade: ');
+  // Get email from CLI args or prompt
+  let email = cliArgs.email;
+  if (email) {
+    console.log(`User email: ${email} (from CLI args)`);
+  } else {
+    email = await question(rl, 'User email to upgrade: ');
+  }
+
   if (!email || !email.includes('@')) {
     console.error('❌ Invalid email address');
     rl.close();
