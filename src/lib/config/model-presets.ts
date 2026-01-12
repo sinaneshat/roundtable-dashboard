@@ -48,7 +48,12 @@ export type ModelPreset = z.infer<typeof ModelPresetSchema>;
 // ============================================================================
 
 export const MODEL_PRESET_IDS = [
+  // FREE tier presets
   'quick-perspectives',
+  'budget-brainstorm',
+  'fast-debate',
+  'problem-solver',
+  // PRO tier presets
   'balanced-discussion',
   'creative-exploration',
   'critical-debate',
@@ -68,7 +73,12 @@ export type ModelPresetId = z.infer<typeof ModelPresetIdSchema>;
 export const DEFAULT_MODEL_PRESET_ID: ModelPresetId = 'quick-perspectives';
 
 export const ModelPresetIds = {
+  // FREE tier presets
   QUICK_PERSPECTIVES: 'quick-perspectives' as const,
+  BUDGET_BRAINSTORM: 'budget-brainstorm' as const,
+  FAST_DEBATE: 'fast-debate' as const,
+  PROBLEM_SOLVER: 'problem-solver' as const,
+  // PRO tier presets
   BALANCED_DISCUSSION: 'balanced-discussion' as const,
   CREATIVE_EXPLORATION: 'creative-exploration' as const,
   CRITICAL_DEBATE: 'critical-debate' as const,
@@ -83,6 +93,9 @@ export const ModelPresetIds = {
 // ============================================================================
 
 export const MODEL_PRESETS: readonly ModelPreset[] = [
+  // ============================================================================
+  // FREE TIER PRESETS - Budget-friendly models with provider diversity
+  // ============================================================================
   {
     id: ModelPresetIds.QUICK_PERSPECTIVES,
     name: 'Quick Perspectives',
@@ -93,39 +106,89 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     mode: ChatModes.ANALYZING,
     searchEnabled: false,
     modelRoles: [
-      { modelId: ModelIds.OPENAI_GPT_5_NANO, role: 'Analyst' },
-      { modelId: ModelIds.OPENAI_GPT_4_1_NANO, role: 'Reasoner' },
+      { modelId: ModelIds.OPENAI_GPT_4O_MINI, role: 'Analyst' },
       { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: 'Challenger' },
+      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, role: 'Synthesizer' },
     ],
   },
+  {
+    id: ModelPresetIds.BUDGET_BRAINSTORM,
+    name: 'Budget Brainstorm',
+    description: 'Creative idea generation with efficient models that spark off each other',
+    icon: Icons.lightbulb,
+    requiredTier: SubscriptionTiers.FREE,
+    order: 2,
+    mode: ChatModes.BRAINSTORMING,
+    searchEnabled: false,
+    modelRoles: [
+      { modelId: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW, role: 'Ideator' },
+      { modelId: ModelIds.OPENAI_GPT_5_MINI, role: 'Builder' },
+      { modelId: ModelIds.ANTHROPIC_CLAUDE_HAIKU_4_5, role: 'Wildcard' },
+    ],
+  },
+  {
+    id: ModelPresetIds.FAST_DEBATE,
+    name: 'Fast Debate',
+    description: 'Efficient models that challenge perspectives and find common ground',
+    icon: Icons.swords,
+    requiredTier: SubscriptionTiers.FREE,
+    order: 3,
+    mode: ChatModes.DEBATING,
+    searchEnabled: false,
+    modelRoles: [
+      { modelId: ModelIds.OPENAI_GPT_4_1_MINI, role: 'Advocate' },
+      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, role: 'Contrarian' },
+      { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: 'Balancer' },
+    ],
+  },
+  {
+    id: ModelPresetIds.PROBLEM_SOLVER,
+    name: 'Problem Solver',
+    description: 'Technical models that collaborate to find practical solutions',
+    icon: Icons.wrench,
+    requiredTier: SubscriptionTiers.FREE,
+    order: 4,
+    mode: ChatModes.SOLVING,
+    searchEnabled: false,
+    modelRoles: [
+      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, role: 'Builder' },
+      { modelId: ModelIds.OPENAI_GPT_4O_MINI, role: 'Reviewer' },
+      { modelId: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW, role: 'Optimizer' },
+    ],
+  },
+  // ============================================================================
+  // PRO TIER PRESETS - Premium models with enhanced capabilities
+  // ============================================================================
   {
     id: ModelPresetIds.BALANCED_DISCUSSION,
     name: 'Balanced Discussion',
     description: 'Models that challenge and build on each other for thorough exploration',
     icon: Icons.scale,
     requiredTier: SubscriptionTiers.PRO,
-    order: 2,
+    order: 5,
     mode: ChatModes.ANALYZING,
     searchEnabled: false,
     modelRoles: [
       { modelId: ModelIds.OPENAI_GPT_5_1, role: 'Analyst' },
       { modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, role: 'Critic' },
       { modelId: ModelIds.GOOGLE_GEMINI_3_PRO_PREVIEW, role: 'Reframer' },
+      { modelId: ModelIds.X_AI_GROK_4, role: 'Challenger' },
     ],
   },
   {
     id: ModelPresetIds.CREATIVE_EXPLORATION,
     name: 'Creative Exploration',
     description: 'Models spark off each other\'s ideas, branching into unexpected territory',
-    icon: Icons.lightbulb,
+    icon: Icons.sparkles,
     requiredTier: SubscriptionTiers.PRO,
-    order: 3,
+    order: 6,
     mode: ChatModes.BRAINSTORMING,
     searchEnabled: false,
     modelRoles: [
-      { modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4, role: 'Ideator' },
-      { modelId: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW, role: 'Wildcard' },
-      { modelId: ModelIds.OPENAI_GPT_5_MINI, role: 'Builder' },
+      { modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, role: 'Ideator' },
+      { modelId: ModelIds.GOOGLE_GEMINI_3_PRO_PREVIEW, role: 'Wildcard' },
+      { modelId: ModelIds.OPENAI_GPT_5, role: 'Builder' },
+      { modelId: ModelIds.MISTRALAI_MISTRAL_LARGE_2512, role: 'Synthesizer' },
     ],
   },
   {
@@ -134,7 +197,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     description: 'High-powered models that genuinely disagree—and explain why',
     icon: Icons.swords,
     requiredTier: SubscriptionTiers.PRO,
-    order: 4,
+    order: 7,
     mode: ChatModes.DEBATING,
     searchEnabled: false,
     modelRoles: [
@@ -150,13 +213,14 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     description: 'Models that push back on your ideas to strengthen your thinking',
     icon: Icons.shieldAlert,
     requiredTier: SubscriptionTiers.PRO,
-    order: 5,
+    order: 8,
     mode: ChatModes.DEBATING,
     searchEnabled: false,
     modelRoles: [
       { modelId: ModelIds.OPENAI_GPT_5_1, role: 'Proposer' },
       { modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, role: 'Skeptic' },
-      { modelId: ModelIds.GOOGLE_GEMINI_2_5_PRO, role: 'Balancer' },
+      { modelId: ModelIds.GOOGLE_GEMINI_2_5_PRO, role: 'Devil\'s Advocate' },
+      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_R1_0528, role: 'Balancer' },
     ],
   },
   {
@@ -165,13 +229,14 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     description: 'Deep reasoners that examine each other\'s assumptions and blind spots',
     icon: Icons.brain,
     requiredTier: SubscriptionTiers.PRO,
-    order: 6,
+    order: 9,
     mode: ChatModes.ANALYZING,
     searchEnabled: false,
     modelRoles: [
       { modelId: ModelIds.OPENAI_O1, role: 'Reasoner' },
-      { modelId: ModelIds.ANTHROPIC_CLAUDE_OPUS_4, role: 'Systems' },
+      { modelId: ModelIds.ANTHROPIC_CLAUDE_OPUS_4, role: 'Systems Thinker' },
       { modelId: ModelIds.DEEPSEEK_DEEPSEEK_R1_0528, role: 'Challenger' },
+      { modelId: ModelIds.GOOGLE_GEMINI_2_5_PRO, role: 'Synthesizer' },
     ],
   },
   {
@@ -180,13 +245,14 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     description: 'Models cross-check each other\'s sources and synthesize findings',
     icon: Icons.fileSearch,
     requiredTier: SubscriptionTiers.PRO,
-    order: 7,
+    order: 10,
     mode: ChatModes.ANALYZING,
     searchEnabled: true,
     modelRoles: [
       { modelId: ModelIds.OPENAI_GPT_4_1, role: 'Researcher' },
       { modelId: ModelIds.GOOGLE_GEMINI_2_5_PRO, role: 'Verifier' },
       { modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, role: 'Synthesizer' },
+      { modelId: ModelIds.MISTRALAI_MISTRAL_LARGE_2512, role: 'Fact Checker' },
     ],
   },
   {
@@ -195,13 +261,14 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     description: 'Models challenge each other on architecture, correctness, and trade-offs',
     icon: Icons.wrench,
     requiredTier: SubscriptionTiers.PRO,
-    order: 8,
+    order: 11,
     mode: ChatModes.SOLVING,
     searchEnabled: 'conditional',
     modelRoles: [
-      { modelId: ModelIds.ANTHROPIC_CLAUDE_OPUS_4_5, role: 'Builder' },
-      { modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4, role: 'Reviewer' },
-      { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: 'Balancer' },
+      { modelId: ModelIds.ANTHROPIC_CLAUDE_OPUS_4_5, role: 'Architect' },
+      { modelId: ModelIds.OPENAI_GPT_5_1, role: 'Code Reviewer' },
+      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_R1_0528, role: 'Performance Expert' },
+      { modelId: ModelIds.GOOGLE_GEMINI_3_PRO_PREVIEW, role: 'Security Reviewer' },
     ],
   },
 ] as const;

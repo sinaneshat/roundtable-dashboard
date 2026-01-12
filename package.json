@@ -96,7 +96,8 @@
     "test:ci": "cross-env NODE_OPTIONS='--max-old-space-size=4096' vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e:headed": "playwright test --headed",
+    "user:upgrade": "tsx scripts/user-upgrade.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.7",
