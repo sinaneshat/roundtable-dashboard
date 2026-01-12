@@ -106,6 +106,9 @@ export default async function Layout({ children }: { children: React.ReactNode }
         />
       </head>
       <body>
+        {env.NEXT_PUBLIC_WEBAPP_ENV !== 'local' && (
+          <GoogleTagManager gtmId="GT-WVX5LHTL" />
+        )}
         <LiquidGlassFilters />
 
         <AppProviders
@@ -122,9 +125,6 @@ export default async function Layout({ children }: { children: React.ReactNode }
           <main>{children}</main>
         </AppProviders>
       </body>
-      {env.NEXT_PUBLIC_WEBAPP_ENV !== 'local' && (
-        <GoogleTagManager gtmId="GT-WVX5LHTL" />
-      )}
     </html>
   );
 }

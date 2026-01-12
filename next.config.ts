@@ -153,13 +153,13 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
-            // PostHog: /ingest proxy + direct fallback for session replay/web vitals
+            // Analytics: PostHog + Google Tag Manager
             value: [
               'default-src \'self\'',
-              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://us-assets.i.posthog.com https://cdn.jsdelivr.net',
+              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://us-assets.i.posthog.com https://cdn.jsdelivr.net https://www.googletagmanager.com https://www.google-analytics.com',
               'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://cdn.jsdelivr.net',
               'img-src * data: blob:',
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://accounts.google.com https://us.i.posthog.com https://us-assets.i.posthog.com`,
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://accounts.google.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com`,
               'worker-src \'self\' blob: https://us-assets.i.posthog.com',
               'font-src \'self\' data: https://cdn.jsdelivr.net',
               'frame-src \'self\' https://accounts.google.com https://us-assets.i.posthog.com',
@@ -179,13 +179,13 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
-            // PostHog: /ingest proxy + direct fallback for session replay/web vitals
+            // Analytics: PostHog + Google Tag Manager
             value: [
               'default-src \'self\'',
-              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://us-assets.i.posthog.com https://cdn.jsdelivr.net',
+              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://us-assets.i.posthog.com https://cdn.jsdelivr.net https://www.googletagmanager.com https://www.google-analytics.com',
               'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://cdn.jsdelivr.net',
               'img-src * data: blob:',
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://accounts.google.com https://us.i.posthog.com https://us-assets.i.posthog.com`,
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://accounts.google.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com`,
               'worker-src \'self\' blob: https://us-assets.i.posthog.com',
               'font-src \'self\' data: https://cdn.jsdelivr.net',
               'frame-src \'self\' https://accounts.google.com https://us-assets.i.posthog.com',
