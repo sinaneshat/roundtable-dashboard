@@ -13,6 +13,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
 import { revenueTracking } from '@/lib/analytics';
+import { BASE_URLS, getWebappEnvFromContext } from '@/lib/config/base-urls';
 import { isObject } from '@/lib/utils';
 
 import type {
@@ -284,7 +285,7 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
         customerId = stripeCustomer.id;
       }
 
-      const appUrl = c.env.NEXT_PUBLIC_APP_URL;
+      const appUrl = BASE_URLS[getWebappEnvFromContext(c)].app;
       const defaultSuccessUrl = `${appUrl}/chat/billing/subscription-success`;
       const successUrl = body.successUrl || defaultSuccessUrl;
       const cancelUrl = body.cancelUrl || `${appUrl}/chat/pricing`;
@@ -343,7 +344,7 @@ export const createCustomerPortalSessionHandler: RouteHandler<typeof createCusto
         throw createError.badRequest('No Stripe customer found for this user. Please create a subscription first.', ErrorContextBuilders.resourceNotFound('customer', undefined, user.id));
       }
 
-      const appUrl = c.env.NEXT_PUBLIC_APP_URL;
+      const appUrl = BASE_URLS[getWebappEnvFromContext(c)].app;
       const returnUrl = body.returnUrl || `${appUrl}/chat`;
 
       const session = await stripeService.createCustomerPortalSession({
