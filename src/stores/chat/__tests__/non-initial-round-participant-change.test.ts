@@ -5,7 +5,7 @@
  * applying recommendations that suggest different models.
  *
  * Bug Scenarios from Debug Logs:
- * 1. Round 1 starts with participants grok-4-fast + gemini-2.0-flash
+ * 1. Round 1 starts with participants grok-4-fast + gemini-3-flash
  * 2. User clicks recommendation suggesting claude-3.5-sonnet + gpt-4.1
  * 3. optimisticParticipantIds have modelId as id: {id: "anthropic/claude-3.5-sonnet", model: "..."}
  * 4. 500 error on pre-search POST

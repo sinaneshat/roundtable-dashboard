@@ -67,18 +67,10 @@ const nextConfig: NextConfig = {
   ],
 
   async rewrites() {
-    // PostHog proxy rewrites to avoid ad blockers
-    // @see https://posthog.com/docs/libraries/next-js#reverse-proxy
-    const posthogRewrites = [
-      {
-        source: '/ingest/static/:path*',
-        destination: 'https://us-assets.i.posthog.com/static/:path*',
-      },
-      {
-        source: '/ingest/:path*',
-        destination: 'https://us.i.posthog.com/:path*',
-      },
-    ];
+    // NOTE: PostHog proxy rewrites DO NOT WORK on OpenNext/Cloudflare Workers
+    // External proxy rewrites are broken: https://github.com/opennextjs/opennextjs-cloudflare/issues/594
+    // PostHog is configured to use direct URL (NEXT_PUBLIC_POSTHOG_HOST) instead
+    // Keeping rewrites for local dev where they do work via Next.js dev server
 
     if (isDev) {
       return {
@@ -88,11 +80,21 @@ const nextConfig: NextConfig = {
             destination: '/_dev-sw-blocked',
           },
         ],
-        afterFiles: posthogRewrites,
+        afterFiles: [
+          // PostHog proxy - works in local dev only
+          {
+            source: '/ingest/static/:path*',
+            destination: 'https://us-assets.i.posthog.com/static/:path*',
+          },
+          {
+            source: '/ingest/:path*',
+            destination: 'https://us.i.posthog.com/:path*',
+          },
+        ],
         fallback: [],
       };
     }
-    return { beforeFiles: [], afterFiles: posthogRewrites, fallback: [] };
+    return { beforeFiles: [], afterFiles: [], fallback: [] };
   },
 
   async headers() {
@@ -151,15 +153,14 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
-            // PostHog uses /ingest proxy, minimal external domains needed
-            // Only us-assets.i.posthog.com for session replay assets
+            // PostHog: /ingest proxy + direct fallback for session replay/web vitals
             value: [
               'default-src \'self\'',
               'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://us-assets.i.posthog.com https://cdn.jsdelivr.net',
               'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://cdn.jsdelivr.net',
               'img-src * data: blob:',
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://accounts.google.com`,
-              'worker-src \'self\' blob:',
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://accounts.google.com https://us.i.posthog.com https://us-assets.i.posthog.com`,
+              'worker-src \'self\' blob: https://us-assets.i.posthog.com',
               'font-src \'self\' data: https://cdn.jsdelivr.net',
               'frame-src \'self\' https://accounts.google.com https://us-assets.i.posthog.com',
               'frame-ancestors *',
@@ -178,15 +179,14 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
-            // PostHog uses /ingest proxy, minimal external domains needed
-            // Only us-assets.i.posthog.com for session replay assets
+            // PostHog: /ingest proxy + direct fallback for session replay/web vitals
             value: [
               'default-src \'self\'',
               'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://us-assets.i.posthog.com https://cdn.jsdelivr.net',
               'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://cdn.jsdelivr.net',
               'img-src * data: blob:',
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://accounts.google.com`,
-              'worker-src \'self\' blob:',
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://accounts.google.com https://us.i.posthog.com https://us-assets.i.posthog.com`,
+              'worker-src \'self\' blob: https://us-assets.i.posthog.com',
               'font-src \'self\' data: https://cdn.jsdelivr.net',
               'frame-src \'self\' https://accounts.google.com https://us-assets.i.posthog.com',
               'frame-ancestors \'none\'',

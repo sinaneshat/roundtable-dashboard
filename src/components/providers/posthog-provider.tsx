@@ -30,11 +30,14 @@ type PostHogProviderProps = {
 // on every render. Using `capture_pageview: 'history_change'` for automatic SPA navigation tracking.
 if (typeof window !== 'undefined') {
   const apiKey = process.env.NEXT_PUBLIC_POSTHOG_API_KEY;
+  const apiHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
   const environment = process.env.NEXT_PUBLIC_WEBAPP_ENV;
 
-  if (apiKey && environment !== 'local') {
+  if (apiKey && apiHost && environment !== 'local') {
     posthog.init(apiKey, {
-      api_host: '/ingest',
+      // Use direct PostHog URL - OpenNext/Cloudflare rewrites don't work for external proxies
+      // @see https://github.com/opennextjs/opennextjs-cloudflare/issues/594
+      api_host: apiHost,
       ui_host: 'https://us.posthog.com',
 
       // Pageview Tracking

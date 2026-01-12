@@ -15,7 +15,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChatModes, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import { ChatModes, MessageRoles, MessageStatuses, ModelIds } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { getRoundNumber } from '@/lib/utils';
 
@@ -146,7 +146,7 @@ function createModeratorMessage(roundNumber: number, text: string): UIMessage {
       role: MessageRoles.ASSISTANT,
       isModerator: true,
       roundNumber,
-      model: 'gemini-2.0-flash',
+      model: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
       finishReason: 'stop',
     },
   };

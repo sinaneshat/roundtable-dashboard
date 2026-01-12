@@ -20,7 +20,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, ModelIds, UIMessageRoles } from '@/api/core/enums';
 import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage } from '@/lib/testing';
 import { getModeratorMetadata, getRoundNumber } from '@/lib/utils';
 
@@ -73,7 +73,7 @@ function createIncompleteModeratorMessage(roundNumber: number): UIMessage {
       role: MessageRoles.ASSISTANT,
       isModerator: true,
       roundNumber,
-      model: 'gemini-2.0-flash-thinking-exp-1219',
+      model: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
       finishReason: FinishReasons.UNKNOWN, // Incomplete - interrupted stream
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       hasError: false,

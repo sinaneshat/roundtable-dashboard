@@ -1,5 +1,6 @@
 import './global.css';
 
+import { GoogleTagManager } from '@next/third-parties/google';
 import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import type { Metadata, Viewport } from 'next';
@@ -121,6 +122,9 @@ export default async function Layout({ children }: { children: React.ReactNode }
           <main>{children}</main>
         </AppProviders>
       </body>
+      {env.NEXT_PUBLIC_WEBAPP_ENV !== 'local' && (
+        <GoogleTagManager gtmId="GT-WVX5LHTL" />
+      )}
     </html>
   );
 }
