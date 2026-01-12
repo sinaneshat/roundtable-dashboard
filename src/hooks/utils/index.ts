@@ -1,4 +1,6 @@
 export { shouldRetryMutation } from './mutation-retry';
+export type { AnalyticsHook } from './use-analytics';
+export { useAnalytics } from './use-analytics';
 export { useAnalyzePromptStream } from './use-analyze-prompt-stream';
 export type { UseAuthCheckReturn } from './use-auth-check';
 export { useAuthCheck } from './use-auth-check';
@@ -59,6 +61,16 @@ export { useModeratorStream } from './use-moderator-stream';
 export { useMultiParticipantChat } from './use-multi-participant-chat';
 export type { UseOrderedModelsOptions } from './use-ordered-models';
 export { useOrderedModels } from './use-ordered-models';
+export {
+  useActiveFeatureFlags,
+  useFeatureFlagEnabled,
+  useFeatureFlagPayload,
+  useFeatureFlagVariantKey,
+  usePostHog,
+} from './use-posthog';
+export { usePostHogIdentify } from './use-posthog-identify';
+export type { ProjectAnalyticsHook } from './use-project-analytics';
+export { useProjectAnalytics } from './use-project-analytics';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
 export { useSpeechRecognition } from './use-speech-recognition';
 export { useSyncedRefs } from './use-synced-refs';

@@ -12,6 +12,10 @@ if (isDev && process.env.CLOUDFLARE_API_TOKEN) {
 const nextConfig: NextConfig = {
   output: 'standalone',
 
+  // Required for PostHog reverse proxy - prevents redirect loops on trailing slashes
+  // @see https://posthog.com/docs/advanced/proxy/nextjs
+  skipTrailingSlashRedirect: true,
+
   compiler: {
     removeConsole: isProd,
   },
@@ -63,6 +67,19 @@ const nextConfig: NextConfig = {
   ],
 
   async rewrites() {
+    // PostHog proxy rewrites to avoid ad blockers
+    // @see https://posthog.com/docs/libraries/next-js#reverse-proxy
+    const posthogRewrites = [
+      {
+        source: '/ingest/static/:path*',
+        destination: 'https://us-assets.i.posthog.com/static/:path*',
+      },
+      {
+        source: '/ingest/:path*',
+        destination: 'https://us.i.posthog.com/:path*',
+      },
+    ];
+
     if (isDev) {
       return {
         beforeFiles: [
@@ -71,11 +88,11 @@ const nextConfig: NextConfig = {
             destination: '/_dev-sw-blocked',
           },
         ],
-        afterFiles: [],
+        afterFiles: posthogRewrites,
         fallback: [],
       };
     }
-    return { beforeFiles: [], afterFiles: [], fallback: [] };
+    return { beforeFiles: [], afterFiles: posthogRewrites, fallback: [] };
   },
 
   async headers() {
@@ -127,21 +144,24 @@ const nextConfig: NextConfig = {
         headers: [{ key: 'X-API-Cache', value: 'controlled-by-middleware' }],
       },
       {
+        // Embed CSP - allows framing from any origin
         source: '/public/chat/:path*/embed',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
+            // PostHog uses /ingest proxy, minimal external domains needed
+            // Only us-assets.i.posthog.com for session replay assets
             value: [
               'default-src \'self\'',
-              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
-              'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://us-assets.i.posthog.com https://cdn.jsdelivr.net',
+              'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://cdn.jsdelivr.net',
               'img-src * data: blob:',
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https: wss://*.posthog.com wss://us.posthog.com wss://eu.posthog.com`,
-              'worker-src \'self\' blob: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
-              'font-src \'self\' data: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
-              'frame-src \'self\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://accounts.google.com`,
+              'worker-src \'self\' blob:',
+              'font-src \'self\' data: https://cdn.jsdelivr.net',
+              'frame-src \'self\' https://accounts.google.com https://us-assets.i.posthog.com',
               'frame-ancestors *',
               'base-uri \'self\'',
               'form-action \'self\' https://accounts.google.com',
@@ -150,6 +170,7 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Main app CSP
         source: '/:path*',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -157,15 +178,17 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
+            // PostHog uses /ingest proxy, minimal external domains needed
+            // Only us-assets.i.posthog.com for session replay assets
             value: [
               'default-src \'self\'',
-              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
-              'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://us-assets.i.posthog.com https://cdn.jsdelivr.net',
+              'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://cdn.jsdelivr.net',
               'img-src * data: blob:',
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https: wss://*.posthog.com wss://us.posthog.com wss://eu.posthog.com`,
-              'worker-src \'self\' blob: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
-              'font-src \'self\' data: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
-              'frame-src \'self\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://accounts.google.com`,
+              'worker-src \'self\' blob:',
+              'font-src \'self\' data: https://cdn.jsdelivr.net',
+              'frame-src \'self\' https://accounts.google.com https://us-assets.i.posthog.com',
               'frame-ancestors \'none\'',
               'base-uri \'self\'',
               'form-action \'self\' https://accounts.google.com',

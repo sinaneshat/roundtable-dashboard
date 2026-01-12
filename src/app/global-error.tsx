@@ -22,6 +22,11 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
       posthog.captureException(error, {
         digest: error.digest,
         errorBoundary: 'global',
+        // Enhanced context (limited due to global error boundary constraints)
+        pathname: window.location.pathname,
+        href: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
       });
     }
   }, [error]);

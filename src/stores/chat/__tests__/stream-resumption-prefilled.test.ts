@@ -81,7 +81,7 @@ type ChatThread = {
  * Creates mock participants for testing
  */
 function createMockParticipants(count: number = 3): ChatParticipant[] {
-  const models = ['deepseek/deepseek-chat-v3-0324', 'x-ai/grok-4-fast', 'google/gemini-2.0-flash-001'];
+  const models = ['deepseek/deepseek-chat-v3-0324', 'x-ai/grok-4-fast', 'google/gemini-2.5-flash'];
   const roles = ['Space Futurist', 'Climate Scientist', 'Resource Economist'];
 
   return Array.from({ length: count }, (_, i) => ({

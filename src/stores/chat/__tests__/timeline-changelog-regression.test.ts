@@ -151,7 +151,7 @@ describe('bug #1: Changelog Display Between Rounds', () => {
         createMockChangelog(2, [
           { type: 'removed', participantId: 'p0', modelId: 'deepseek/deepseek-chat-v3-0324' },
           { type: 'removed', participantId: 'p1', modelId: 'x-ai/grok-4-fast' },
-          { type: 'removed', participantId: 'p2', modelId: 'google/gemini-2.0-flash-001' },
+          { type: 'removed', participantId: 'p2', modelId: 'google/gemini-2.5-flash' },
           { type: 'added', participantId: 'new-p0', modelId: 'x-ai/grok-4.1-fast' },
         ]),
       ];
@@ -567,7 +567,7 @@ describe('production State Reproduction', () => {
       createMockChangelog(2, [
         { type: 'removed', participantId: '01KCC1FR15M9S8Y1CRHJ6ADZNG', modelId: 'deepseek/deepseek-chat-v3-0324' },
         { type: 'removed', participantId: '01KCC1FR15MYRT64K4Q70SNA2Z', modelId: 'x-ai/grok-4-fast' },
-        { type: 'removed', participantId: '01KCC1FR16W3SF4NFJAJ84RCMF', modelId: 'google/gemini-2.0-flash-001' },
+        { type: 'removed', participantId: '01KCC1FR16W3SF4NFJAJ84RCMF', modelId: 'google/gemini-2.5-flash' },
         { type: 'added', participantId: '01KCC1S6D47KTNBC46N7337WTB', modelId: 'x-ai/grok-4.1-fast' },
       ]),
     ];

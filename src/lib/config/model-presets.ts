@@ -95,7 +95,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     modelRoles: [
       { modelId: ModelIds.OPENAI_GPT_5_NANO, role: 'Analyst' },
       { modelId: ModelIds.OPENAI_GPT_4_1_NANO, role: 'Reasoner' },
-      { modelId: ModelIds.GOOGLE_GEMINI_2_0_FLASH_001, role: 'Challenger' },
+      { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: 'Challenger' },
     ],
   },
   {

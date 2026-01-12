@@ -914,6 +914,7 @@ const StripeSubscriptionSchema = z.object({
 async function trackRevenueFromWebhook(
   event: Stripe.Event,
   userId: string,
+  customerId: string,
 ): Promise<void> {
   const obj = event.data.object;
   if (!isObject(obj))
@@ -947,7 +948,10 @@ async function trackRevenueFromWebhook(
             product: invoice.lines?.data[0]?.description ?? undefined,
             subscription_id: subscriptionId,
             invoice_id: invoice.id,
-          }, { userId });
+            subscription_status: 'active',
+            total_revenue: invoice.amount_paid,
+            lifetime_value: invoice.amount_paid,
+          }, { userId, customerId });
         } else {
           await revenueTracking.subscriptionRenewed({
             revenue: invoice.amount_paid,
@@ -955,7 +959,8 @@ async function trackRevenueFromWebhook(
             product: invoice.lines?.data[0]?.description ?? undefined,
             subscription_id: subscriptionId,
             invoice_id: invoice.id,
-          }, { userId });
+            subscription_status: 'active',
+          }, { userId, customerId });
         }
         break;
       }
@@ -974,7 +979,8 @@ async function trackRevenueFromWebhook(
           subscription_id: subscriptionId,
           invoice_id: invoice.id,
           error_message: invoice.last_finalization_error?.message,
-        }, { userId });
+          subscription_status: 'past_due',
+        }, { userId, customerId });
         break;
       }
 
@@ -986,7 +992,8 @@ async function trackRevenueFromWebhook(
         await revenueTracking.subscriptionCanceled({
           subscription_id: subscription.id,
           product: subscription.items?.data[0]?.price?.nickname ?? undefined,
-        }, { userId });
+          subscription_status: 'canceled',
+        }, { userId, customerId });
         break;
       }
 
@@ -1022,14 +1029,16 @@ async function trackRevenueFromWebhook(
               currency: (subscription.currency ?? 'usd').toUpperCase(),
               subscription_id: subscription.id,
               product: subscription.items?.data[0]?.price?.nickname ?? undefined,
-            }, { userId });
+              subscription_status: 'active',
+            }, { userId, customerId });
           } else if (currentAmount < previousAmount) {
             await revenueTracking.subscriptionDowngraded({
               revenue: currentAmount,
               currency: (subscription.currency ?? 'usd').toUpperCase(),
               subscription_id: subscription.id,
               product: subscription.items?.data[0]?.price?.nickname ?? undefined,
-            }, { userId });
+              subscription_status: 'active',
+            }, { userId, customerId });
           }
         }
         break;
@@ -1086,7 +1095,7 @@ async function processWebhookEvent(
     return;
   }
 
-  await trackRevenueFromWebhook(event, customer.userId);
+  await trackRevenueFromWebhook(event, customer.userId, customerId);
 
   await syncStripeDataFromStripe(customerId);
 }
