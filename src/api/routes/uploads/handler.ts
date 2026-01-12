@@ -138,7 +138,7 @@ export const listUploadsHandler: RouteHandler<typeof listUploadsRoute, ApiEnv> =
       filters.push(eq(tables.upload.status, query.status));
     }
 
-    // Fetch uploads with cursor pagination
+    // Fetch uploads with cursor pagination - exclude r2Key from selection
     const uploads = await db.query.upload.findMany({
       where: buildCursorWhereWithFilters(
         tables.upload.createdAt,
@@ -148,11 +148,23 @@ export const listUploadsHandler: RouteHandler<typeof listUploadsRoute, ApiEnv> =
       ),
       orderBy: getCursorOrderBy(tables.upload.createdAt, 'desc'),
       limit: query.limit + 1,
+      columns: {
+        id: true,
+        userId: true,
+        filename: true,
+        fileSize: true,
+        mimeType: true,
+        status: true,
+        metadata: true,
+        createdAt: true,
+        updatedAt: true,
+        r2Key: false,
+      },
     });
 
-    // Apply pagination and remove r2Key
+    // Apply pagination
     const { items, pagination } = applyCursorPagination(
-      uploads.map(u => ({ ...u, r2Key: undefined })),
+      uploads,
       query.limit,
       uploadItem => createTimestampCursor(uploadItem.createdAt),
     );
@@ -180,6 +192,18 @@ export const getUploadHandler: RouteHandler<typeof getUploadRoute, ApiEnv> = cre
         eq(tables.upload.id, id),
         eq(tables.upload.userId, user.id),
       ),
+      columns: {
+        id: true,
+        userId: true,
+        filename: true,
+        fileSize: true,
+        mimeType: true,
+        status: true,
+        metadata: true,
+        createdAt: true,
+        updatedAt: true,
+        r2Key: false,
+      },
     });
 
     if (!uploadRecord) {
@@ -190,10 +214,7 @@ export const getUploadHandler: RouteHandler<typeof getUploadRoute, ApiEnv> = cre
       });
     }
 
-    return Responses.ok(c, {
-      ...uploadRecord,
-      r2Key: undefined,
-    });
+    return Responses.ok(c, uploadRecord);
   },
 );
 
@@ -212,12 +233,15 @@ export const getDownloadUrlHandler: RouteHandler<typeof getDownloadUrlRoute, Api
     const { id } = c.validated.params;
     const db = await getDbAsync();
 
-    // Verify ownership
+    // Verify ownership - only need id for existence check
     const uploadRecord = await db.query.upload.findFirst({
       where: and(
         eq(tables.upload.id, id),
         eq(tables.upload.userId, user.id),
       ),
+      columns: {
+        id: true,
+      },
     });
 
     if (!uploadRecord) {
@@ -446,10 +470,7 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
       }
     }
 
-    return Responses.created(c, {
-      ...uploadRecord,
-      r2Key: undefined,
-    });
+    return Responses.created(c, uploadRecord);
   },
 );
 
@@ -472,12 +493,16 @@ export const updateUploadHandler: RouteHandler<typeof updateUploadRoute, ApiEnv>
     const body = c.validated.body;
     const db = await getDbAsync();
 
-    // Verify ownership
+    // Verify ownership and get metadata in single query
     const existing = await db.query.upload.findFirst({
       where: and(
         eq(tables.upload.id, id),
         eq(tables.upload.userId, user.id),
       ),
+      columns: {
+        id: true,
+        metadata: true,
+      },
     });
 
     if (!existing) {
@@ -507,10 +532,7 @@ export const updateUploadHandler: RouteHandler<typeof updateUploadRoute, ApiEnv>
       .where(eq(tables.upload.id, id))
       .returning();
 
-    return Responses.ok(c, {
-      ...updated,
-      r2Key: undefined,
-    });
+    return Responses.ok(c, updated);
   },
 );
 
@@ -600,9 +622,14 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
 
       const isPublicAccess = validation.isPublic;
 
-      // Get upload record (no ownership check - signature validates access)
+      // Get upload record - only need r2Key, filename, mimeType for download
       const uploadRecord = await db.query.upload.findFirst({
         where: eq(tables.upload.id, id),
+        columns: {
+          r2Key: true,
+          filename: true,
+          mimeType: true,
+        },
       });
 
       if (!uploadRecord) {
@@ -644,12 +671,17 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
 
     const { user } = auth;
 
-    // Get upload record WITH ownership check
+    // Get upload record WITH ownership check - only need r2Key, filename, mimeType
     const uploadRecord = await db.query.upload.findFirst({
       where: and(
         eq(tables.upload.id, id),
         eq(tables.upload.userId, user.id),
       ),
+      columns: {
+        r2Key: true,
+        filename: true,
+        mimeType: true,
+      },
     });
 
     if (!uploadRecord) {
@@ -694,12 +726,16 @@ export const deleteUploadHandler: RouteHandler<typeof deleteUploadRoute, ApiEnv>
     const { id } = c.validated.params;
     const db = await getDbAsync();
 
-    // Get upload with R2 key
+    // Get upload with R2 key - only need r2Key for deletion
     const uploadRecord = await db.query.upload.findFirst({
       where: and(
         eq(tables.upload.id, id),
         eq(tables.upload.userId, user.id),
       ),
+      columns: {
+        id: true,
+        r2Key: true,
+      },
     });
 
     if (!uploadRecord) {
@@ -999,10 +1035,7 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
       c.executionCtx.waitUntil(cleanupMetadata);
     }
 
-    return Responses.ok(c, {
-      ...updated,
-      r2Key: undefined,
-    });
+    return Responses.ok(c, updated);
   },
 );
 

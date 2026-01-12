@@ -75,16 +75,18 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
   async (c) => {
     const { user } = c.auth();
 
+    // Parallelize independent validation checks
+    const [userTier] = await Promise.all([
+      getUserTier(user.id),
+      enforceCredits(user.id, 1), // ✅ CREDITS: Enforce credits for custom role creation
+    ]);
+
     // Block free users from creating custom roles
-    const userTier = await getUserTier(user.id);
     if (userTier === SubscriptionTiers.FREE) {
       throw createError.unauthorized(
         'Custom roles are not available on the Free plan. Upgrade to create custom roles.',
       );
     }
-
-    // ✅ CREDITS: Enforce credits for custom role creation
-    await enforceCredits(user.id, 1);
     // ✅ TYPE-SAFE: createHandler validates body via validateBody config
     const body = c.validated.body;
     const db = await getDbAsync();

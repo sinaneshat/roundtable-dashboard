@@ -34,7 +34,7 @@ import {
 import { checkFreeUserHasCompletedRound, getTierFromProductId, getUserCreditBalance, TIER_QUOTAS, upgradeToPaidPlan } from '@/api/services/billing';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
+import { CustomerCacheTags, PriceCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
 import type { UserChatUsage } from '@/db/validation';
 
 import type { UsageStatsPayload } from '../../routes/usage/schema';
@@ -46,15 +46,12 @@ function getTierQuotas(tier: SubscriptionTier) {
 export async function getUserTier(userId: string): Promise<SubscriptionTier> {
   const db = await getDbAsync();
 
+  // ⚠️ NO CACHING: Subscription tier changes after payments - must be fresh
   const usageResults = await db
     .select()
     .from(tables.userChatUsage)
     .where(eq(tables.userChatUsage.userId, userId))
-    .limit(1)
-    .$withCache({
-      config: { ex: 300 },
-      tag: UserCacheTags.tier(userId),
-    });
+    .limit(1);
 
   return usageResults[0]?.subscriptionTier || SubscriptionTiers.FREE;
 }
@@ -62,15 +59,12 @@ export async function getUserTier(userId: string): Promise<SubscriptionTier> {
 export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsage> {
   const db = await getDbAsync();
 
+  // ⚠️ NO CACHING: Usage data changes after credit transactions - must be fresh
   const usageResults = await db
     .select()
     .from(tables.userChatUsage)
     .where(eq(tables.userChatUsage.userId, userId))
-    .limit(1)
-    .$withCache({
-      config: { ex: 60 },
-      tag: UserCacheTags.usage(userId),
-    });
+    .limit(1);
 
   let usage = usageResults[0];
 
@@ -145,15 +139,12 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
   if (usage.currentPeriodEnd < now) {
     await rolloverBillingPeriod(userId, usage);
 
+    // ⚠️ NO CACHING: Fresh read after rollover - must be accurate
     const updatedUsageResults = await db
       .select()
       .from(tables.userChatUsage)
       .where(eq(tables.userChatUsage.userId, userId))
-      .limit(1)
-      .$withCache({
-        config: { ex: 60 },
-        tag: UserCacheTags.usage(userId),
-      });
+      .limit(1);
 
     const updatedUsage = updatedUsageResults[0];
 
@@ -204,6 +195,7 @@ async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage
     const stripeCustomer = stripeCustomerResults[0];
 
     if (stripeCustomer) {
+      // ⚠️ NO CACHING: Subscription status must be fresh for accurate downgrade decisions
       const activeSubscriptionResults = await db
         .select()
         .from(tables.stripeSubscription)
@@ -211,11 +203,7 @@ async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage
           eq(tables.stripeSubscription.customerId, stripeCustomer.id),
           eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
         ))
-        .limit(1)
-        .$withCache({
-          config: { ex: 120 },
-          tag: SubscriptionCacheTags.active(userId),
-        });
+        .limit(1);
 
       const activeSubscription = activeSubscriptionResults[0];
       shouldDowngradeToFree = !activeSubscription;

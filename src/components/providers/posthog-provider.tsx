@@ -3,6 +3,7 @@
 import posthog from 'posthog-js';
 import { PostHogProvider as PHProvider } from 'posthog-js/react';
 import type { ReactNode } from 'react';
+import { Suspense } from 'react';
 
 import { PageViewTracker } from './pageview-tracker';
 import { PostHogIdentifyUser } from './posthog-identify-user';
@@ -112,7 +113,10 @@ export default function PostHogProvider({
   return (
     <PHProvider client={posthog}>
       <PostHogIdentifyUser />
-      <PageViewTracker />
+      {/* Suspense required for useSearchParams in PageViewTracker - Next.js ISR/SSG requirement */}
+      <Suspense fallback={null}>
+        <PageViewTracker />
+      </Suspense>
       {children}
     </PHProvider>
   );

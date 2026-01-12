@@ -184,16 +184,110 @@ export async function loadThreadAttachmentContext(
   let skipped = 0;
 
   try {
-    const threadMessages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, threadId),
-      orderBy: [asc(tables.chatMessage.roundNumber)],
-      columns: {
-        id: true,
-        roundNumber: true,
-      },
-    });
+    // Parallelize independent queries
+    const [threadMessages, unprocessedUploads] = await Promise.all([
+      db.query.chatMessage.findMany({
+        where: eq(tables.chatMessage.threadId, threadId),
+        orderBy: [asc(tables.chatMessage.roundNumber)],
+        columns: {
+          id: true,
+          roundNumber: true,
+        },
+      }),
+      // Pre-load current attachments in parallel if they exist
+      currentAttachmentIds.length > 0
+        ? db.query.upload.findMany({
+            where: and(
+              inArray(tables.upload.id, currentAttachmentIds),
+              eq(tables.upload.status, 'uploaded'),
+            ),
+            columns: {
+              id: true,
+              filename: true,
+              mimeType: true,
+              fileSize: true,
+              r2Key: true,
+              status: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
 
     if (threadMessages.length === 0) {
+      // Still process current attachments if available
+      if (unprocessedUploads.length > 0) {
+        for (const upload of unprocessedUploads) {
+          const citationId = generateAttachmentCitationId(upload.id);
+          let textContent: string | null = null;
+
+          if (extractContent && TEXT_EXTRACTABLE_SET.has(upload.mimeType)) {
+            if (upload.fileSize <= MAX_TEXT_CONTENT_SIZE) {
+              try {
+                const { data } = await getFile(r2Bucket, upload.r2Key);
+                if (data) {
+                  textContent = new TextDecoder().decode(data);
+                  if (textContent.length > MAX_TEXT_CONTENT_SIZE) {
+                    textContent = `${textContent.slice(0, MAX_TEXT_CONTENT_SIZE)}\n... (truncated)`;
+                  }
+                  withContent++;
+                }
+              } catch (error) {
+                logger?.warn('Failed to extract content from current attachment', LogHelpers.operation({
+                  operationName: 'loadThreadAttachmentContext',
+                  uploadId: upload.id,
+                  error: getErrorMessage(error),
+                }));
+              }
+            } else {
+              skipped++;
+            }
+          }
+
+          const attachment: ThreadAttachmentWithContent = {
+            id: upload.id,
+            filename: upload.filename,
+            mimeType: upload.mimeType,
+            fileSize: upload.fileSize,
+            r2Key: upload.r2Key,
+            messageId: null,
+            roundNumber: null,
+            textContent,
+            citationId,
+          };
+
+          attachments.push(attachment);
+
+          const contentPreview = textContent
+            ? textContent.slice(0, 500) + (textContent.length > 500 ? '...' : '')
+            : `File: ${upload.filename} (${upload.mimeType}, ${(upload.fileSize / 1024).toFixed(1)}KB)`;
+
+          const downloadUrl = `/api/v1/uploads/${upload.id}/download`;
+
+          citableSources.push({
+            id: citationId,
+            type: CitationSourceTypes.ATTACHMENT,
+            sourceId: upload.id,
+            title: upload.filename,
+            content: contentPreview,
+            metadata: {
+              filename: upload.filename,
+              roundNumber: undefined,
+              downloadUrl,
+              mimeType: upload.mimeType,
+              fileSize: upload.fileSize,
+            },
+          });
+        }
+
+        const formattedPrompt = formatThreadAttachmentPrompt(attachments);
+        return {
+          attachments,
+          formattedPrompt,
+          citableSources,
+          stats: { total: attachments.length, withContent, skipped },
+        };
+      }
+
       return {
         attachments: [],
         formattedPrompt: '',
@@ -307,22 +401,15 @@ export async function loadThreadAttachmentContext(
       });
     }
 
-    const unprocessedAttachmentIds = currentAttachmentIds.filter(
-      id => !processedUploadIds.has(id),
+    // Filter to only unprocessed uploads from the pre-loaded list
+    const currentUploads = unprocessedUploads.filter(
+      upload => !processedUploadIds.has(upload.id),
     );
 
-    if (unprocessedAttachmentIds.length > 0) {
-      const currentUploads = await db.query.upload.findMany({
-        where: and(
-          inArray(tables.upload.id, unprocessedAttachmentIds),
-          eq(tables.upload.status, 'uploaded'),
-        ),
-      });
-
-      logger?.info('Loading current message attachments for citation context', LogHelpers.operation({
+    if (currentUploads.length > 0) {
+      logger?.info('Processing current message attachments for citation context', LogHelpers.operation({
         operationName: 'loadThreadAttachmentContext',
-        currentAttachmentIds: unprocessedAttachmentIds,
-        foundUploads: currentUploads.length,
+        currentAttachmentCount: currentUploads.length,
       }));
 
       for (const upload of currentUploads) {
@@ -458,6 +545,9 @@ export async function loadParticipantConfiguration(
 
     const reloadedThread = await db.query.chatThread.findFirst({
       where: eq(tables.chatThread.id, threadId),
+      columns: {
+        id: true,
+      },
       with: {
         participants: {
           where: eq(tables.chatParticipant.isEnabled, true),
@@ -524,6 +614,12 @@ export async function buildSystemPromptWithContext(
     try {
       const project = await db.query.chatProject.findFirst({
         where: eq(tables.chatProject.id, thread.projectId),
+        columns: {
+          id: true,
+          customInstructions: true,
+          autoragInstanceId: true,
+          r2FolderPrefix: true,
+        },
       });
 
       if (project) {
@@ -618,8 +714,9 @@ export async function buildSystemPromptWithContext(
           }
         }
 
-        try {
-          const citableContext = await buildCitableContext({
+        // Parallelize citable context and thread attachments loading
+        const [citableContextResult, threadAttachmentResult] = await Promise.allSettled([
+          buildCitableContext({
             projectId: thread.projectId,
             currentThreadId: thread.id,
             userQuery,
@@ -628,8 +725,20 @@ export async function buildSystemPromptWithContext(
             maxSearchResults: 5,
             maxModerators: 3,
             db,
-          });
+          }),
+          loadThreadAttachmentContext({
+            threadId: thread.id,
+            r2Bucket: env.UPLOADS_R2_BUCKET,
+            db,
+            logger,
+            maxAttachments: 20,
+            extractContent: true,
+            currentAttachmentIds: attachmentIds || [],
+          }),
+        ]);
 
+        if (citableContextResult.status === 'fulfilled') {
+          const citableContext = citableContextResult.value;
           citationSourceMap = citableContext.sourceMap;
           citableSources = citableContext.sources;
 
@@ -643,11 +752,37 @@ export async function buildSystemPromptWithContext(
             sourceCount: citableContext.sources.length,
             stats: citableContext.stats,
           }));
-        } catch (error) {
+        } else {
           logger?.warn('Citable project context loading failed', LogHelpers.operation({
             operationName: 'buildSystemPromptWithContext',
             projectId: thread.projectId,
-            error: getErrorMessage(error),
+            error: getErrorMessage(citableContextResult.reason),
+          }));
+        }
+
+        if (threadAttachmentResult.status === 'fulfilled') {
+          const threadAttachmentContext = threadAttachmentResult.value;
+
+          if (threadAttachmentContext.attachments.length > 0) {
+            systemPrompt = `${systemPrompt}${threadAttachmentContext.formattedPrompt}`;
+
+            for (const source of threadAttachmentContext.citableSources) {
+              citableSources.push(source);
+              citationSourceMap.set(source.id, source);
+            }
+
+            logger?.info('Added thread attachment context for RAG', LogHelpers.operation({
+              operationName: 'buildSystemPromptWithContext',
+              threadId: thread.id,
+              attachmentStats: threadAttachmentContext.stats,
+              citableSourcesAdded: threadAttachmentContext.citableSources.length,
+            }));
+          }
+        } else {
+          logger?.warn('Thread attachment context loading failed', LogHelpers.operation({
+            operationName: 'buildSystemPromptWithContext',
+            threadId: thread.id,
+            error: getErrorMessage(threadAttachmentResult.reason),
           }));
         }
       }
@@ -660,6 +795,7 @@ export async function buildSystemPromptWithContext(
     }
   }
 
+  // Web search context (only runs if no project, since project path handles attachments)
   if (thread.enableWebSearch) {
     try {
       const searchContext = buildSearchContext(previousDbMessages, {
@@ -678,38 +814,41 @@ export async function buildSystemPromptWithContext(
     }
   }
 
-  try {
-    const threadAttachmentContext = await loadThreadAttachmentContext({
-      threadId: thread.id,
-      r2Bucket: env.UPLOADS_R2_BUCKET,
-      db,
-      logger,
-      maxAttachments: 20,
-      extractContent: true,
-      currentAttachmentIds: attachmentIds || [],
-    });
+  // If no project context, load thread attachments separately
+  if (!thread.projectId || !userQuery.trim()) {
+    try {
+      const threadAttachmentContext = await loadThreadAttachmentContext({
+        threadId: thread.id,
+        r2Bucket: env.UPLOADS_R2_BUCKET,
+        db,
+        logger,
+        maxAttachments: 20,
+        extractContent: true,
+        currentAttachmentIds: attachmentIds || [],
+      });
 
-    if (threadAttachmentContext.attachments.length > 0) {
-      systemPrompt = `${systemPrompt}${threadAttachmentContext.formattedPrompt}`;
+      if (threadAttachmentContext.attachments.length > 0) {
+        systemPrompt = `${systemPrompt}${threadAttachmentContext.formattedPrompt}`;
 
-      for (const source of threadAttachmentContext.citableSources) {
-        citableSources.push(source);
-        citationSourceMap.set(source.id, source);
+        for (const source of threadAttachmentContext.citableSources) {
+          citableSources.push(source);
+          citationSourceMap.set(source.id, source);
+        }
+
+        logger?.info('Added thread attachment context for RAG', LogHelpers.operation({
+          operationName: 'buildSystemPromptWithContext',
+          threadId: thread.id,
+          attachmentStats: threadAttachmentContext.stats,
+          citableSourcesAdded: threadAttachmentContext.citableSources.length,
+        }));
       }
-
-      logger?.info('Added thread attachment context for RAG', LogHelpers.operation({
+    } catch (error) {
+      logger?.warn('Thread attachment context loading failed', LogHelpers.operation({
         operationName: 'buildSystemPromptWithContext',
         threadId: thread.id,
-        attachmentStats: threadAttachmentContext.stats,
-        citableSourcesAdded: threadAttachmentContext.citableSources.length,
+        error: getErrorMessage(error),
       }));
     }
-  } catch (error) {
-    logger?.warn('Thread attachment context loading failed', LogHelpers.operation({
-      operationName: 'buildSystemPromptWithContext',
-      threadId: thread.id,
-      error: getErrorMessage(error),
-    }));
   }
 
   return {
@@ -852,18 +991,24 @@ export async function prepareValidatedMessages(
 ): Promise<PrepareValidatedMessagesResult> {
   const { previousDbMessages, newMessage, logger, r2Bucket, db, attachmentIds } = params;
 
-  const previousMessages = await chatMessagesToUIMessages(previousDbMessages);
+  // Parallelize previousMessages conversion with attachment loading if needed
+  const [previousMessages, firstAttachmentLoad] = await Promise.all([
+    chatMessagesToUIMessages(previousDbMessages),
+    attachmentIds && attachmentIds.length > 0 && db
+      ? loadAttachmentContent({
+          attachmentIds,
+          r2Bucket,
+          db,
+          logger,
+        })
+      : Promise.resolve(null),
+  ]);
 
   let messageWithAttachments = newMessage;
 
-  if (attachmentIds && attachmentIds.length > 0 && db) {
+  if (firstAttachmentLoad) {
     try {
-      const { fileParts, errors, stats } = await loadAttachmentContent({
-        attachmentIds,
-        r2Bucket,
-        db,
-        logger,
-      });
+      const { fileParts, errors, stats } = firstAttachmentLoad;
 
       if (fileParts.length > 0) {
         const existingParts = Array.isArray(newMessage.parts)

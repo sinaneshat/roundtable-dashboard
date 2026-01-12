@@ -355,6 +355,7 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
   // Get the user's thread (free users can only have one)
   const thread = await db.query.chatThread.findFirst({
     where: eq(tables.chatThread.userId, userId),
+    columns: { id: true },
   });
 
   if (!thread) {
@@ -367,6 +368,7 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
       eq(tables.chatParticipant.threadId, thread.id),
       eq(tables.chatParticipant.isEnabled, true),
     ),
+    columns: { id: true },
   });
 
   if (enabledParticipants.length === 0) {
@@ -403,6 +405,7 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
     const moderatorMessageId = `${thread.id}_r0_moderator`;
     const moderatorMessage = await db.query.chatMessage.findFirst({
       where: eq(tables.chatMessage.id, moderatorMessageId),
+      columns: { parts: true },
     });
 
     if (!moderatorMessage) {
@@ -935,18 +938,20 @@ export async function getUserTransactionHistory(
       )
     : eq(tables.creditTransaction.userId, userId);
 
-  const transactions = await db
-    .select()
-    .from(tables.creditTransaction)
-    .where(whereClause)
-    .orderBy(desc(tables.creditTransaction.createdAt))
-    .limit(limit)
-    .offset(offset);
-
-  const countResult = await db
-    .select()
-    .from(tables.creditTransaction)
-    .where(whereClause);
+  // Parallelize transactions fetch and count
+  const [transactions, countResult] = await Promise.all([
+    db
+      .select()
+      .from(tables.creditTransaction)
+      .where(whereClause)
+      .orderBy(desc(tables.creditTransaction.createdAt))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select()
+      .from(tables.creditTransaction)
+      .where(whereClause),
+  ]);
 
   return {
     transactions,
