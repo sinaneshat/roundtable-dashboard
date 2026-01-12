@@ -228,10 +228,12 @@ export function ChatQuickStart({
     (count: number): string[] => {
       const selectedModels: string[] = [];
       const usedProviders = new Set<string>();
-      const providers = Array.from(modelsByProvider.entries())
-        .sort((a, b) => b[1].length - a[1].length)
-        .map(([provider]) => provider);
-      for (const provider of providers) {
+
+      // Get all providers and shuffle for variety
+      const providers = Array.from(modelsByProvider.keys());
+      const shuffledProviders = [...providers].sort(() => Math.random() - 0.5);
+
+      for (const provider of shuffledProviders) {
         if (selectedModels.length >= count)
           break;
         if (usedProviders.has(provider))
@@ -239,7 +241,9 @@ export function ChatQuickStart({
         const providerModels = modelsByProvider.get(provider);
         if (!providerModels || providerModels.length === 0)
           continue;
-        const model = providerModels[0];
+        // Pick a random model from this provider for variety
+        const randomIndex = Math.floor(Math.random() * providerModels.length);
+        const model = providerModels[randomIndex];
         if (model) {
           selectedModels.push(model.id);
           usedProviders.add(provider);

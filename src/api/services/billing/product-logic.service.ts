@@ -65,7 +65,7 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
   free: {
     name: 'Free',
     maxOutputTokens: 512,
-    maxModelPricing: 0.10,
+    maxModelPricing: 0.40, // Allows budget tier models (nano, mini, flash variants)
     maxModels: 3,
     quotas: {
       threadsPerMonth: 1,
