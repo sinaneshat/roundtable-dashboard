@@ -15,7 +15,8 @@ export const size = {
 };
 export const contentType = 'image/png';
 export const alt = `${BRAND.name} - ${BRAND.tagline}`;
-export const dynamic = 'force-dynamic';
+// Static generation - all assets embedded at build time
+export const revalidate = 86400;
 
 export default async function Image() {
   const [t, fonts, logoBase64] = await Promise.all([

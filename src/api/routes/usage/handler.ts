@@ -36,9 +36,9 @@ export const getUserUsageStatsHandler: RouteHandler<
 
     const stats = await getUserUsageStats(user.id);
 
-    // ✅ PERF: Cache stats for 2 minutes, stale-while-revalidate for 5 minutes
-    // Invalidated after mutations (message send, plan change)
-    c.header('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
+    // ⚠️ NO CACHING: Usage stats include credit balances which change after payments
+    // Must always be fresh to reflect current balance
+    c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
 
     return Responses.ok(c, stats);
   },

@@ -221,11 +221,23 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     // ✅ DATABASE-FIRST: Check if record exists, create if not
     // Record may not exist when web search is enabled mid-conversation
     // (thread was created without enableWebSearch, user enabled it later)
+    // ✅ OPTIMIZED: Select only needed columns for faster query
     let existingSearch = await db.query.chatPreSearch.findFirst({
       where: (fields, { and, eq: eqOp }) => and(
         eqOp(fields.threadId, threadId),
         eqOp(fields.roundNumber, roundNum),
       ),
+      columns: {
+        id: true,
+        threadId: true,
+        roundNumber: true,
+        userQuery: true,
+        status: true,
+        searchData: true,
+        createdAt: true,
+        errorMessage: true,
+        completedAt: true,
+      },
     });
 
     // ✅ AUTO-CREATE: If record doesn't exist, create it (supports mid-conversation web search enable)
@@ -1181,9 +1193,21 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
 
     await verifyThreadOwnership(threadId, user.id, db);
 
+    // ✅ OPTIMIZED: Select only needed columns for faster query
     const allPreSearches = await db.query.chatPreSearch.findMany({
       where: eq(tables.chatPreSearch.threadId, threadId),
       orderBy: (fields, { asc }) => [asc(fields.roundNumber)],
+      columns: {
+        id: true,
+        threadId: true,
+        roundNumber: true,
+        userQuery: true,
+        status: true,
+        searchData: true,
+        createdAt: true,
+        errorMessage: true,
+        completedAt: true,
+      },
     });
 
     // Mark stale STREAMING/PENDING searches as FAILED
@@ -1198,45 +1222,69 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
       return hasTimestampExceededTimeout(search.createdAt, STREAMING_CONFIG.ORPHAN_CLEANUP_TIMEOUT_MS);
     });
 
-    // Filter to truly orphaned searches by checking KV for recent activity
+    // ✅ OPTIMIZED: Parallelize KV checks for all potential orphans
     const orphanedSearches: typeof potentialOrphans = [];
-    for (const search of potentialOrphans) {
-      const streamId = generatePreSearchStreamId(threadId, search.roundNumber);
-      const chunks = await getPreSearchStreamChunks(streamId, c.env);
+    const orphanChecks = await Promise.all(
+      potentialOrphans.map(async (search) => {
+        const streamId = generatePreSearchStreamId(threadId, search.roundNumber);
+        const chunks = await getPreSearchStreamChunks(streamId, c.env);
 
-      // If KV has recent chunks, the stream is still active - don't mark as orphaned
-      if (chunks && chunks.length > 0) {
-        const lastChunkTime = Math.max(...chunks.map(chunk => chunk.timestamp));
-        const isStale = Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
+        // If KV has recent chunks, the stream is still active - don't mark as orphaned
+        if (chunks && chunks.length > 0) {
+          const lastChunkTime = Math.max(...chunks.map(chunk => chunk.timestamp));
+          const isStale = Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
 
-        if (!isStale) {
-          // Stream is still active, skip orphan cleanup for this search
-          continue;
+          if (!isStale) {
+            // Stream is still active, skip orphan cleanup for this search
+            return { search, isOrphaned: false };
+          }
         }
-      }
 
-      // No recent KV activity OR no KV available - this is truly orphaned
-      orphanedSearches.push(search);
+        // No recent KV activity OR no KV available - this is truly orphaned
+        return { search, isOrphaned: true };
+      }),
+    );
+
+    // Filter to only truly orphaned searches
+    for (const check of orphanChecks) {
+      if (check.isOrphaned) {
+        orphanedSearches.push(check.search);
+      }
     }
 
     if (orphanedSearches.length > 0) {
-      // Update orphaned searches to FAILED status
-      for (const search of orphanedSearches) {
-        // Clean up KV tracking for this orphaned search
-        await clearActivePreSearchStream(threadId, search.roundNumber, c.env);
+      // ✅ OPTIMIZED: Parallelize KV cleanup and batch database updates
+      // Clean up KV tracking for all orphaned searches in parallel
+      await Promise.all(
+        orphanedSearches.map(search =>
+          clearActivePreSearchStream(threadId, search.roundNumber, c.env),
+        ),
+      );
 
-        await db.update(tables.chatPreSearch)
-          .set({
+      // Update orphaned searches to FAILED status (parallel execution)
+      await Promise.all(
+        orphanedSearches.map(search =>
+          db.update(tables.chatPreSearch)
+            .set({
+              status: MessageStatuses.FAILED,
+              errorMessage: 'Search timed out after 2 minutes. This may have been caused by a page refresh or connection issue during streaming.',
+            })
+            .where(eq(tables.chatPreSearch.id, search.id)),
+        ),
+      );
+
+      // ✅ OPTIMIZED: Update in-memory data instead of re-querying database
+      // Mark orphaned searches as FAILED in the existing result set
+      const updatedPreSearches = allPreSearches.map((search) => {
+        const isOrphaned = orphanedSearches.some(orphan => orphan.id === search.id);
+        if (isOrphaned) {
+          return {
+            ...search,
             status: MessageStatuses.FAILED,
             errorMessage: 'Search timed out after 2 minutes. This may have been caused by a page refresh or connection issue during streaming.',
-          })
-          .where(eq(tables.chatPreSearch.id, search.id));
-      }
-
-      // Reload pre-searches after cleanup
-      const updatedPreSearches = await db.query.chatPreSearch.findMany({
-        where: eq(tables.chatPreSearch.threadId, threadId),
-        orderBy: (fields, { asc }) => [asc(fields.roundNumber)],
+          };
+        }
+        return search;
       });
 
       return Responses.ok(c, {

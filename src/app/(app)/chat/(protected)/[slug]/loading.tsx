@@ -3,7 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function ChatThreadLoading() {
   return (
     <div className="flex flex-col relative flex-1 min-h-full">
-      <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-4 pb-32">
+      <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-4 pb-56">
         <div className="mb-6 flex justify-end">
           <div className="max-w-[80%]">
             <div className="flex items-center gap-3 py-2 mb-2 flex-row-reverse">

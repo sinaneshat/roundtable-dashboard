@@ -73,7 +73,7 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
       keywords,
       url: `/public/chat/${slug}`,
       canonicalUrl: `/public/chat/${slug}`,
-      image: `/public/chat/${slug}/opengraph-image`,
+      // Let Next.js auto-detect opengraph-image.tsx - don't pass explicit image path
       type: 'article',
       publishedTime: thread.createdAt ? new Date(thread.createdAt).toISOString() : undefined,
       modifiedTime: thread.updatedAt ? new Date(thread.updatedAt).toISOString() : undefined,

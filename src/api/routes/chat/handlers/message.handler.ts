@@ -108,10 +108,19 @@ export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRo
     const { id: threadId } = c.validated.params;
     const db = await getDbAsync();
     await verifyThreadOwnership(threadId, user.id, db);
-    const changelog = await db.query.chatThreadChangelog.findMany({
-      where: eq(tables.chatThreadChangelog.threadId, threadId),
-      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
-    });
+
+    // ✅ PERF: KV cache for read-heavy changelog data (10 min TTL)
+    // Changelog changes infrequently - only when thread config is modified
+    const changelog = await db
+      .select()
+      .from(tables.chatThreadChangelog)
+      .where(eq(tables.chatThreadChangelog.threadId, threadId))
+      .orderBy(desc(tables.chatThreadChangelog.createdAt))
+      .$withCache({
+        config: { ex: 600 },
+        tag: `changelog:${threadId}`,
+      });
+
     return Responses.collection(c, changelog);
   },
 );
@@ -136,13 +145,22 @@ export const getThreadRoundChangelogHandler: RouteHandler<typeof getThreadRoundC
     const db = await getDbAsync();
     await verifyThreadOwnership(threadId, user.id, db);
 
-    const changelog = await db.query.chatThreadChangelog.findMany({
-      where: and(
-        eq(tables.chatThreadChangelog.threadId, threadId),
-        eq(tables.chatThreadChangelog.roundNumber, roundNumber),
-      ),
-      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
-    });
+    // ✅ PERF: KV cache for round-specific changelog (15 min TTL)
+    // Round changelogs are immutable once round completes
+    const changelog = await db
+      .select()
+      .from(tables.chatThreadChangelog)
+      .where(
+        and(
+          eq(tables.chatThreadChangelog.threadId, threadId),
+          eq(tables.chatThreadChangelog.roundNumber, roundNumber),
+        ),
+      )
+      .orderBy(desc(tables.chatThreadChangelog.createdAt))
+      .$withCache({
+        config: { ex: 900 },
+        tag: `changelog:${threadId}:round:${roundNumber}`,
+      });
 
     return Responses.collection(c, changelog);
   },

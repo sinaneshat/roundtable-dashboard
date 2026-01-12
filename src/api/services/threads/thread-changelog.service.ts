@@ -38,11 +38,12 @@ export async function getThreadChangelog(
 ): Promise<Array<ChatThreadChangelog>> {
   const db = await getDbAsync();
 
-  return db.query.chatThreadChangelog.findMany({
-    where: eq(tables.chatThreadChangelog.threadId, threadId),
-    orderBy: [desc(tables.chatThreadChangelog.createdAt)],
-    limit,
-  });
+  return db.query.chatThreadChangelog
+    .findMany({
+      where: eq(tables.chatThreadChangelog.threadId, threadId),
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
+      limit,
+    });
 }
 
 export async function getThreadChangelogByRound(
@@ -51,13 +52,14 @@ export async function getThreadChangelogByRound(
 ): Promise<Array<ChatThreadChangelog>> {
   const db = await getDbAsync();
 
-  return db.query.chatThreadChangelog.findMany({
-    where: and(
-      eq(tables.chatThreadChangelog.threadId, threadId),
-      eq(tables.chatThreadChangelog.roundNumber, roundNumber),
-    ),
-    orderBy: [desc(tables.chatThreadChangelog.createdAt)],
-  });
+  return db.query.chatThreadChangelog
+    .findMany({
+      where: and(
+        eq(tables.chatThreadChangelog.threadId, threadId),
+        eq(tables.chatThreadChangelog.roundNumber, roundNumber),
+      ),
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
+    });
 }
 
 export async function logModeChange(

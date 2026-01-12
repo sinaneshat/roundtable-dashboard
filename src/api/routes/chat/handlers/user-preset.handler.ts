@@ -41,6 +41,9 @@ export const listUserPresetsHandler: RouteHandler<typeof listUserPresetsRoute, A
     const { user } = c.auth();
     const query = c.validated.query;
     const db = await getDbAsync();
+
+    // Note: Relational queries (db.query.*) don't support $withCache
+    // Would need select builder pattern for caching, but query is already simple and fast
     const userPresets = await db.query.chatUserPreset.findMany({
       where: buildCursorWhereWithFilters(
         tables.chatUserPreset.updatedAt,

@@ -31,9 +31,9 @@ export const COUNCIL_MODERATOR_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_5_FLASH;
 
 /**
  * Model for conversation title generation
- * Uses Gemini 2.0 Flash - cheapest & fastest ($0.10/M input, $0.40/M output)
+ * Uses Gemini 2.5 Flash - fast & reliable ($0.30/M input, $2.50/M output)
  */
-export const TITLE_GENERATION_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_0_FLASH_001;
+export const TITLE_GENERATION_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_5_FLASH;
 
 // ============================================================================
 // WEB SEARCH MODELS
@@ -51,10 +51,10 @@ export const WEB_SEARCH_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_5_FLASH;
 
 /**
  * Model for image content analysis (pre-search context extraction)
- * Uses Gemini 2.0 Flash - fast, cheap, vision-capable
+ * Uses Gemini 2.5 Flash - fast, vision-capable
  * Used to describe image contents before generating search queries
  */
-export const IMAGE_ANALYSIS_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_0_FLASH_001;
+export const IMAGE_ANALYSIS_MODEL_ID = ModelIds.GOOGLE_GEMINI_2_5_FLASH;
 
 // ============================================================================
 // PROMPT ANALYSIS MODELS

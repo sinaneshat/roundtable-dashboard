@@ -30,7 +30,11 @@ import {
 import type { FormOptions } from '@/lib/schemas';
 
 // PostHog survey configuration
+// Note: This is a custom survey implementation (not created in PostHog dashboard)
+// Using stable UUIDs for consistent tracking across deployments
+// To create a managed survey, use PostHog dashboard and replace this ID
 const POSTHOG_FEEDBACK_SURVEY_ID = '019432a1-feedback-0000-survey-roundtable';
+const POSTHOG_FEEDBACK_SURVEY_NAME = 'Roundtable User Feedback';
 const POSTHOG_FEEDBACK_MESSAGE_QUESTION_ID = 'd8462827-1575-4e1e-ab1d-b5fddd9f829c';
 const POSTHOG_FEEDBACK_TYPE_QUESTION_ID = 'a3071551-d599-4eeb-9ffe-69e93dc647b6';
 
@@ -78,10 +82,12 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
     })), [t]);
 
   // Capture "survey shown" event when modal opens
+  // @see https://posthog.com/docs/surveys/implementing-custom-surveys
   useEffect(() => {
     if (open && posthog && !hasCapturedShownRef.current) {
       posthog.capture('survey shown', {
         $survey_id: POSTHOG_FEEDBACK_SURVEY_ID,
+        $survey_name: POSTHOG_FEEDBACK_SURVEY_NAME,
       });
       hasCapturedShownRef.current = true;
     }
@@ -98,18 +104,24 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
 
     hasSubmittedRef.current = true;
 
+    // PostHog survey sent event with proper response format
+    // @see https://posthog.com/docs/surveys/implementing-custom-surveys
     posthog.capture('survey sent', {
       $survey_id: POSTHOG_FEEDBACK_SURVEY_ID,
+      $survey_name: POSTHOG_FEEDBACK_SURVEY_NAME,
       $survey_questions: [
         {
           id: POSTHOG_FEEDBACK_MESSAGE_QUESTION_ID,
           question: 'Share your thoughts, report bugs, or request features',
+          type: 'open_text',
         },
         {
           id: POSTHOG_FEEDBACK_TYPE_QUESTION_ID,
           question: 'What type of feedback is this?',
+          type: 'multiple_choice',
         },
       ],
+      // Response values keyed by question ID (required format)
       [`$survey_response_${POSTHOG_FEEDBACK_MESSAGE_QUESTION_ID}`]: values.message,
       [`$survey_response_${POSTHOG_FEEDBACK_TYPE_QUESTION_ID}`]: values.feedbackType,
     });
@@ -127,9 +139,11 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
       return;
 
     // Capture "survey dismissed" if closed without submitting
+    // @see https://posthog.com/docs/surveys/implementing-custom-surveys
     if (posthog && !hasSubmittedRef.current && !showSuccess) {
       posthog.capture('survey dismissed', {
         $survey_id: POSTHOG_FEEDBACK_SURVEY_ID,
+        $survey_name: POSTHOG_FEEDBACK_SURVEY_NAME,
       });
     }
 

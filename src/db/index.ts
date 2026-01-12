@@ -294,6 +294,58 @@ function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | Retur
 }
 
 /**
+ * Cached database instance for the current request context.
+ *
+ * ⚠️ PERFORMANCE FIX: Previous implementation created a new database instance
+ * on EVERY property access, causing severe performance issues in production.
+ *
+ * New behavior:
+ * - Instance is cached per-request using WeakMap keyed by Cloudflare context
+ * - Falls back to module-level cache for local development
+ * - Prevents repeated getCloudflareContext() + Drizzle initialization
+ *
+ * @see src/lib/auth/server/index.ts - Better Auth configuration
+ * @see https://www.better-auth.com/docs/adapters/drizzle
+ */
+
+// Module-level cache for local development (no Cloudflare context)
+let _cachedLocalDbInstance: ReturnType<typeof createDbInstance> | null = null;
+
+// WeakMap to cache db instances per Cloudflare request context
+// This prevents creating new instances on every property access while still
+// respecting the Cloudflare Workers execution model (no cross-request reuse)
+const _dbInstanceCache = new WeakMap<object, ReturnType<typeof createDbInstance>>();
+
+/**
+ * Get or create a cached database instance for the current context
+ */
+function getCachedDbInstance(): ReturnType<typeof createDbInstance> {
+  // In Cloudflare Workers, use context-based caching
+  if (isCloudflareWorkersRuntime()) {
+    try {
+      const { ctx } = getCloudflareContext();
+      // Use the execution context as cache key (unique per request)
+      if (ctx) {
+        let instance = _dbInstanceCache.get(ctx);
+        if (!instance) {
+          instance = createDbInstance();
+          _dbInstanceCache.set(ctx, instance);
+        }
+        return instance;
+      }
+    } catch {
+      // Fall through to module-level cache
+    }
+  }
+
+  // Local development: use module-level singleton
+  if (!_cachedLocalDbInstance) {
+    _cachedLocalDbInstance = createDbInstance();
+  }
+  return _cachedLocalDbInstance;
+}
+
+/**
  * Global database Proxy for Better Auth compatibility
  *
  * ⚠️ IMPORTANT: This global export is ONLY for Better Auth initialization.
@@ -319,7 +371,8 @@ function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | Retur
  */
 export const db = new Proxy({} as ReturnType<typeof createDbInstance>, {
   get(_, prop) {
-    const dbInstance = createDbInstance();
+    // Use cached instance instead of creating new one on every access
+    const dbInstance = getCachedDbInstance();
     const value = dbInstance[prop as keyof typeof dbInstance];
 
     // Bind methods to the correct context

@@ -142,7 +142,6 @@ export const PROVIDER_STREAMING_DEFAULTS: Record<ModelProvider, StreamingBehavio
 export const MODEL_IDS = [
   'openai/gpt-oss-120b',
   'openai/gpt-5-nano',
-  'google/gemini-2.0-flash-001',
   'openai/gpt-4.1-nano',
   'openai/gpt-4o-mini',
   'x-ai/grok-4-fast',
@@ -187,7 +186,6 @@ export const DEFAULT_MODEL_ID: ModelId = 'openai/gpt-4o-mini';
 export const ModelIds = {
   OPENAI_GPT_OSS_120B: 'openai/gpt-oss-120b' as const,
   OPENAI_GPT_5_NANO: 'openai/gpt-5-nano' as const,
-  GOOGLE_GEMINI_2_0_FLASH_001: 'google/gemini-2.0-flash-001' as const,
   OPENAI_GPT_4_1_NANO: 'openai/gpt-4.1-nano' as const,
   OPENAI_GPT_4O_MINI: 'openai/gpt-4o-mini' as const,
   X_AI_GROK_4_FAST: 'x-ai/grok-4-fast' as const,

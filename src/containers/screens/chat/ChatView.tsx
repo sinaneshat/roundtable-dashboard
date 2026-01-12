@@ -291,6 +291,18 @@ export function ChatView({
     const hasVisionAttachments = chatAttachments.attachments.some(att =>
       isVisionRequiredMimeType(att.file.type),
     );
+    const existingVisionFiles = messages.some((msg) => {
+      if (!msg.parts)
+        return false;
+      return msg.parts.some((part) => {
+        if (!isFilePart(part))
+          return false;
+        return isVisionRequiredMimeType(part.mediaType);
+      });
+    });
+    const hasAnyVisionFiles = hasVisionAttachments || existingVisionFiles;
+
+    // Skip in OVERVIEW mode with no messages and no vision files
     if (mode === ScreenModes.OVERVIEW && messages.length === 0 && !hasVisionAttachments)
       return;
     if (incompatibleModelIds.size === 0)
@@ -301,6 +313,11 @@ export function ChatView({
     );
 
     if (incompatibleSelected.length === 0)
+      return;
+
+    // Only show toast if there are vision files that caused the incompatibility
+    // Skip toast for non-vision incompatibilities (e.g., accessibility)
+    if (!hasAnyVisionFiles)
       return;
 
     const incompatibleModelNames = incompatibleSelected
@@ -327,7 +344,7 @@ export function ChatView({
         t('models.modelsDeselectedDescription', { models: modelList }),
       );
     }
-  }, [mode, incompatibleModelIds, selectedParticipants, messages.length, threadActions, setSelectedParticipants, allEnabledModels, t, chatAttachments.attachments]);
+  }, [mode, incompatibleModelIds, selectedParticipants, messages, threadActions, setSelectedParticipants, allEnabledModels, t, chatAttachments.attachments]);
 
   const formActions = useChatFormActions();
   const { streamConfig: analyzePromptStream } = useAnalyzePromptStream();
@@ -555,7 +572,7 @@ export function ChatView({
     <>
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div className="flex flex-col relative flex-1 min-h-full">
-          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-44">
+          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-56">
             <ThreadTimeline
               timelineItems={timelineItems}
               user={user}
@@ -604,6 +621,7 @@ export function ChatView({
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handleAutoModeSubmit}
+                  disabled={isAnalyzingPrompt}
                   status={isInputBlocked ? 'submitted' : 'ready'}
                   placeholder={t('input.placeholder')}
                   participants={selectedParticipants}

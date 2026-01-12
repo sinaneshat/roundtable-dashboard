@@ -26,7 +26,8 @@ import 'server-only';
  *     event: 'api_event',
  *     properties: { ... }
  *   });
- *   await posthog.shutdown(); // Always shutdown after use
+ *   // Events auto-flush due to flushAt: 1 config
+ *   // NO need to call shutdown() here
  * }
  * ```
  *
@@ -40,8 +41,12 @@ let posthogClient: PostHog | null = null;
 /**
  * Get or create PostHog server-side client instance
  *
- * Returns null if in local environment or if API key is missing
- * Enabled in preview and production environments
+ * Singleton pattern for edge environments (Cloudflare Workers).
+ * Events flush immediately via flushAt: 1, flushInterval: 0.
+ * No need to call shutdown() after individual captures.
+ *
+ * Returns null if in local environment or if API key is missing.
+ * Enabled in preview and production environments.
  */
 export function getPostHogClient(): PostHog | null {
   const apiKey = process.env.NEXT_PUBLIC_POSTHOG_API_KEY;
@@ -129,14 +134,16 @@ export function getDistinctIdFromCookie(cookieHeader: string | null): string {
 }
 
 /**
- * Shutdown PostHog client and flush remaining events
+ * Flush PostHog client events explicitly
  *
- * Call this when shutting down the server or after capturing events
- * in serverless environments (API routes, server actions)
+ * Normally not needed due to flushAt: 1 config (immediate flush).
+ * Only use when you need to ensure events are sent before a critical operation.
+ *
+ * Note: Shutdown is handled automatically on process exit (see bottom of file).
  */
-export async function shutdownPostHog(): Promise<void> {
+export async function flushPostHog(): Promise<void> {
   if (posthogClient) {
-    await posthogClient.shutdown();
+    await posthogClient.flush();
   }
 }
 
@@ -175,8 +182,27 @@ export async function captureServerException(
   });
 }
 
-// Ensure PostHog is shut down when the process exits
+// Ensure PostHog is properly shut down on process termination
+// Note: 'exit' event is synchronous and can't await async operations
+// Use SIGTERM/SIGINT for graceful shutdown with async support
 if (typeof process !== 'undefined') {
+  const shutdownHandler = async () => {
+    if (posthogClient) {
+      try {
+        await posthogClient.shutdown();
+      } catch {
+        // Ignore shutdown errors
+      }
+    }
+    // Don't call process.exit() - let the normal termination continue
+  };
+
+  // Handle graceful shutdown signals
+  process.on('SIGTERM', shutdownHandler);
+  process.on('SIGINT', shutdownHandler);
+  process.on('beforeExit', shutdownHandler);
+
+  // Sync fallback for hard exit (best effort, may not complete)
   process.on('exit', () => {
     if (posthogClient) {
       posthogClient.shutdown();

@@ -50,8 +50,11 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     // can add ANY models (within limit) for their first experience.
     const skipPricingCheck = await isFreeUserWithPendingRound(user.id, userTier);
 
-    await validateTierLimits(id, userTier, db);
-    await validateModelAccess(body.modelId, userTier, { skipPricingCheck });
+    // ✅ OPTIMIZED: Parallelize independent validations (tier limits query + model access check)
+    await Promise.all([
+      validateTierLimits(id, userTier, db),
+      validateModelAccess(body.modelId, userTier, { skipPricingCheck }),
+    ]);
 
     // Get round number BEFORE batch (read-only)
     const nextRoundNumber = await getNextRoundForChangelog(id, db);

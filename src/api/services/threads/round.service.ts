@@ -169,15 +169,16 @@ export async function getNextRoundForChangelog(
   threadId: string,
   db: DbClient,
 ): Promise<number> {
-  const existingUserMessages = await db.query.chatMessage.findMany({
-    where: and(
-      eq(tables.chatMessage.threadId, threadId),
-      eq(tables.chatMessage.role, MessageRoles.USER),
-    ),
-    columns: { roundNumber: true },
-    orderBy: desc(tables.chatMessage.roundNumber),
-    limit: 1,
-  });
+  const existingUserMessages = await db.query.chatMessage
+    .findMany({
+      where: and(
+        eq(tables.chatMessage.threadId, threadId),
+        eq(tables.chatMessage.role, MessageRoles.USER),
+      ),
+      columns: { roundNumber: true },
+      orderBy: desc(tables.chatMessage.roundNumber),
+      limit: 1,
+    });
 
   const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
   return calculateNextRound(lastRoundNumber);
@@ -188,11 +189,12 @@ export async function validateRegenerateRound(
   regenerateRound: number,
   db: DbClient,
 ): Promise<void> {
-  const maxRound = await db.query.chatMessage.findFirst({
-    where: eq(tables.chatMessage.threadId, threadId),
-    orderBy: desc(tables.chatMessage.roundNumber),
-    columns: { roundNumber: true },
-  });
+  const maxRound = await db.query.chatMessage
+    .findFirst({
+      where: eq(tables.chatMessage.threadId, threadId),
+      orderBy: desc(tables.chatMessage.roundNumber),
+      columns: { roundNumber: true },
+    });
 
   const maxRoundNumber = maxRound?.roundNumber ?? DEFAULT_ROUND_NUMBER;
 

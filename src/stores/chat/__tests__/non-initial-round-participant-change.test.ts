@@ -120,7 +120,7 @@ describe('participant ID handling between rounds', () => {
     it('should detect new participants when id === modelId', () => {
       const currentParticipants = [
         createMockParticipant(0, 'x-ai/grok-4-fast'),
-        createMockParticipant(1, 'google/gemini-2.0-flash-001'),
+        createMockParticipant(1, 'google/gemini-2.5-flash'),
       ];
 
       const selectedParticipants = [
@@ -138,7 +138,7 @@ describe('participant ID handling between rounds', () => {
     it('should NOT detect temporary IDs when using database IDs', () => {
       const currentParticipants = [
         createMockParticipant(0, 'x-ai/grok-4-fast'),
-        createMockParticipant(1, 'google/gemini-2.0-flash-001'),
+        createMockParticipant(1, 'google/gemini-2.5-flash'),
       ];
 
       const selectedParticipants = currentParticipants.map(createExistingParticipantConfig);
@@ -152,7 +152,7 @@ describe('participant ID handling between rounds', () => {
     it('should detect mixed new and existing participants', () => {
       const currentParticipants = [
         createMockParticipant(0, 'x-ai/grok-4-fast'),
-        createMockParticipant(1, 'google/gemini-2.0-flash-001'),
+        createMockParticipant(1, 'google/gemini-2.5-flash'),
       ];
 
       const selectedParticipants = [
@@ -190,7 +190,7 @@ describe('participant ID handling between rounds', () => {
     it('should prepare correct data for completely new participants', () => {
       const currentParticipants = [
         createMockParticipant(0, 'x-ai/grok-4-fast'),
-        createMockParticipant(1, 'google/gemini-2.0-flash-001'),
+        createMockParticipant(1, 'google/gemini-2.5-flash'),
       ];
 
       const selectedParticipants = [
@@ -224,7 +224,7 @@ describe('store state during participant change', () => {
 
       const initialParticipants = [
         createMockParticipant(0, 'x-ai/grok-4-fast'),
-        createMockParticipant(1, 'google/gemini-2.0-flash-001'),
+        createMockParticipant(1, 'google/gemini-2.5-flash'),
       ];
       store.getState().updateParticipants(initialParticipants);
 
@@ -313,7 +313,7 @@ describe('store state during participant change', () => {
 
       const initialParticipants = [
         createMockParticipant(0, 'x-ai/grok-4-fast', threadId),
-        createMockParticipant(1, 'google/gemini-2.0-flash-001', threadId),
+        createMockParticipant(1, 'google/gemini-2.5-flash', threadId),
       ];
       store.getState().updateParticipants(initialParticipants);
 
@@ -345,7 +345,7 @@ describe('store state during participant change', () => {
             roundNumber: 0,
             participantId: initialParticipants[1]!.id,
             participantIndex: 1,
-            model: 'google/gemini-2.0-flash-001',
+            model: 'google/gemini-2.5-flash',
           },
         },
       ];
@@ -370,7 +370,7 @@ describe('store state during participant change', () => {
 
       const round0Participants = [
         createMockParticipant(0, 'x-ai/grok-4-fast', threadId),
-        createMockParticipant(1, 'google/gemini-2.0-flash-001', threadId),
+        createMockParticipant(1, 'google/gemini-2.5-flash', threadId),
       ];
 
       const messages = [
@@ -433,7 +433,7 @@ describe('pre-search timing with participant changes', () => {
 
       const initialParticipants = [
         createMockParticipant(0, 'x-ai/grok-4-fast', threadId),
-        createMockParticipant(1, 'google/gemini-2.0-flash-001', threadId),
+        createMockParticipant(1, 'google/gemini-2.5-flash', threadId),
       ];
       store.getState().initializeThread(
         {

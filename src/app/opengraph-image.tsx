@@ -15,7 +15,8 @@ export const size = {
 };
 export const contentType = 'image/png';
 export const alt = BRAND.fullName;
-export const dynamic = 'force-dynamic';
+// Static generation - all assets (fonts, logo, icons) are embedded at build time
+export const revalidate = 86400; // Revalidate once per day
 
 const FEATURED_PROVIDERS = [
   'openai',

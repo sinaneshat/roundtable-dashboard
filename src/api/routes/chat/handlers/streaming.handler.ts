@@ -174,20 +174,29 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const db = await getDbAsync();
 
       // =========================================================================
-      // STEP 2: Load thread and verify ownership
+      // STEP 2: Load thread, verify ownership, and calculate round number (parallelized)
       // =========================================================================
-      const thread = await db.query.chatThread.findFirst({
-        where: eq(tables.chatThread.id, threadId),
-        with: {
-          participants: {
-            where: eq(tables.chatParticipant.isEnabled, true),
-            orderBy: [
-              tables.chatParticipant.priority,
-              tables.chatParticipant.id,
-            ],
+      const [thread, roundResult] = await Promise.all([
+        db.query.chatThread.findFirst({
+          where: eq(tables.chatThread.id, threadId),
+          with: {
+            participants: {
+              where: eq(tables.chatParticipant.isEnabled, true),
+              orderBy: [
+                tables.chatParticipant.priority,
+                tables.chatParticipant.id,
+              ],
+            },
           },
-        },
-      });
+        }),
+        calculateRoundNumber({
+          threadId,
+          participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          message,
+          regenerateRound,
+          db,
+        }),
+      ]);
 
       if (!thread) {
         throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', threadId, user.id));
@@ -196,17 +205,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       if (thread.userId !== user.id) {
         throw createError.unauthorized('Not authorized to access this thread', ErrorContextBuilders.authorization('thread', threadId, user.id));
       }
-
-      // =========================================================================
-      // STEP 3: Calculate round number (needed for pre-search and regeneration)
-      // =========================================================================
-      const roundResult = await calculateRoundNumber({
-        threadId,
-        participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-        message,
-        regenerateRound,
-        db,
-      });
 
       const currentRoundNumber = roundResult.roundNumber;
 
@@ -288,67 +286,68 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       }
 
       // =========================================================================
-      // STEP 5: Handle mode change (if provided)
+      // STEP 5: Handle mode change and web search toggle (parallelized if both needed)
       // =========================================================================
-      if (
-        providedMode
-        && providedMode !== thread.mode
-        && participantIndex === 0
-      ) {
-        // ✅ CRITICAL FIX: Use nextRoundNumber for consistency with thread.handler.ts
-        // Changelog should appear BEFORE the next round (same pattern as thread.handler.ts:488, 571)
-        // This ensures changelog appears between current round and next round messages
+      const shouldUpdateMode = providedMode && providedMode !== thread.mode && participantIndex === 0;
+      const shouldUpdateWebSearch = providedEnableWebSearch !== undefined && providedEnableWebSearch !== thread.enableWebSearch && participantIndex === 0;
+
+      if (shouldUpdateMode || shouldUpdateWebSearch) {
         const nextRoundNumber = currentRoundNumber + 1;
+        const updateOperations: Promise<unknown>[] = [];
 
-        // Update thread mode
-        await db
-          .update(tables.chatThread)
-          .set({
-            mode: providedMode,
-            updatedAt: new Date(),
-          })
-          .where(eq(tables.chatThread.id, threadId));
+        if (shouldUpdateMode) {
+          // Update thread mode
+          updateOperations.push(
+            db.update(tables.chatThread)
+              .set({
+                mode: providedMode,
+                updatedAt: new Date(),
+              })
+              .where(eq(tables.chatThread.id, threadId)),
+          );
 
-        // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
-        await logModeChange(
-          threadId,
-          nextRoundNumber,
-          thread.mode,
-          providedMode,
-        );
+          // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+          updateOperations.push(
+            logModeChange(
+              threadId,
+              nextRoundNumber,
+              thread.mode,
+              providedMode!,
+            ),
+          );
+        }
 
-        thread.mode = providedMode;
-      }
+        if (shouldUpdateWebSearch) {
+          // Update thread web search setting
+          updateOperations.push(
+            db.update(tables.chatThread)
+              .set({
+                enableWebSearch: providedEnableWebSearch,
+                updatedAt: new Date(),
+              })
+              .where(eq(tables.chatThread.id, threadId)),
+          );
 
-      // =========================================================================
-      // STEP 5.5: Handle web search toggle (if provided)
-      // =========================================================================
-      if (
-        providedEnableWebSearch !== undefined
-        && providedEnableWebSearch !== thread.enableWebSearch
-        && participantIndex === 0
-      ) {
-        // ✅ CRITICAL FIX: Use nextRoundNumber for consistency with thread.handler.ts
-        // Changelog should appear BEFORE the next round
-        const nextRoundNumber = currentRoundNumber + 1;
+          // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+          updateOperations.push(
+            logWebSearchToggle(
+              threadId,
+              nextRoundNumber,
+              providedEnableWebSearch!,
+            ),
+          );
+        }
 
-        // Update thread web search setting
-        await db
-          .update(tables.chatThread)
-          .set({
-            enableWebSearch: providedEnableWebSearch,
-            updatedAt: new Date(),
-          })
-          .where(eq(tables.chatThread.id, threadId));
+        // Execute all updates in parallel
+        await Promise.all(updateOperations);
 
-        // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
-        await logWebSearchToggle(
-          threadId,
-          nextRoundNumber,
-          providedEnableWebSearch,
-        );
-
-        thread.enableWebSearch = providedEnableWebSearch;
+        // Update local thread object
+        if (shouldUpdateMode) {
+          thread.mode = providedMode!;
+        }
+        if (shouldUpdateWebSearch) {
+          thread.enableWebSearch = providedEnableWebSearch!;
+        }
       }
 
       // =========================================================================
@@ -408,16 +407,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       });
 
       // =========================================================================
-      // STEP 8: Load Previous Messages and Prepare for Streaming
+      // STEP 8: Load Previous Messages and Prepare for Streaming (parallelized with user tier check)
       // =========================================================================
-      const allDbMessages = await db.query.chatMessage.findMany({
-        where: eq(tables.chatMessage.threadId, threadId),
-        orderBy: [
-          asc(tables.chatMessage.roundNumber),
-          asc(tables.chatMessage.createdAt),
-          asc(tables.chatMessage.id),
-        ],
-      });
+      const [allDbMessages, userTier] = await Promise.all([
+        db.query.chatMessage.findMany({
+          where: eq(tables.chatMessage.threadId, threadId),
+          orderBy: [
+            asc(tables.chatMessage.roundNumber),
+            asc(tables.chatMessage.createdAt),
+            asc(tables.chatMessage.id),
+          ],
+        }),
+        getUserTier(user.id),
+      ]);
 
       // ✅ FIX: Filter out moderator messages from conversation context
       // Moderator messages are round summaries that should not be included in
@@ -467,7 +469,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // =========================================================================
       initializeOpenRouter(c.env);
       const client = openRouterService.getClient();
-      const userTier = await getUserTier(user.id);
 
       // Get model info for token limits and pricing
       const modelInfo = getModelById(participant.modelId);
@@ -735,12 +736,64 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // not random IDs that introduce collision risk
       const streamMessageId = `${threadId}_r${currentRoundNumber}_p${participantIndex ?? DEFAULT_PARTICIPANT_INDEX}`;
 
+      // =========================================================================
+      // ✅ PARALLELIZED INITIALIZATION: Pre-streaming setup operations
+      // =========================================================================
       // ✅ DEFENSIVE CHECK: Check for existing message with same ID
       // This handles retries and race conditions gracefully
       // Instead of throwing error, log warning and continue with idempotent behavior
-      const existingMessage = await db.query.chatMessage.findFirst({
-        where: eq(tables.chatMessage.id, streamMessageId),
-      });
+      const firstParticipant = participants[0];
+      if (!firstParticipant) {
+        throw createError.badRequest('No participants configured for thread', ErrorContextBuilders.validation('participants'));
+      }
+      const highestMultiplierModel = participants.reduce((max, p) => {
+        const multiplier = getModelCreditMultiplierById(p.modelId, getModelById);
+        const maxMultiplier = getModelCreditMultiplierById(max.modelId, getModelById);
+        return multiplier > maxMultiplier ? p : max;
+      }, firstParticipant);
+      const estimatedCredits = estimateWeightedCredits(
+        participants.length,
+        highestMultiplierModel.modelId,
+        getModelById,
+      );
+
+      const [existingMessage] = await Promise.all([
+        db.query.chatMessage.findFirst({
+          where: eq(tables.chatMessage.id, streamMessageId),
+        }),
+        // ✅ CREDIT RESERVATION: Reserve credits BEFORE streaming begins
+        // Pre-reserve estimated credits to prevent overdraft during streaming
+        // Actual credits are finalized in onFinish after token count is known
+        // Uses highest-cost model among participants for conservative estimation
+        // Skip round completion check - participants are PART of the round, not a new round
+        reserveCredits(user.id, streamMessageId, estimatedCredits, { skipRoundCheck: true }),
+        // ✅ RESUMABLE STREAMS: Initialize stream buffer for resumption
+        initializeParticipantStreamBuffer(
+          streamMessageId,
+          threadId,
+          currentRoundNumber,
+          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          c.env,
+        ),
+        // ✅ RESUMABLE STREAMS: Mark stream as active in KV for resume detection
+        markStreamActive(
+          threadId,
+          currentRoundNumber,
+          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          c.env,
+        ),
+        // ✅ RESUMABLE STREAMS: Set thread-level active stream for AI SDK resume pattern
+        // This enables the frontend to detect and resume this stream after page reload
+        // ✅ FIX: Pass total participants count for proper round-level tracking
+        setThreadActiveStream(
+          threadId,
+          streamMessageId,
+          currentRoundNumber,
+          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          participants.length, // ✅ FIX: Track total participants for round completion detection
+          c.env,
+        ),
+      ]);
 
       if (existingMessage) {
         // Message ID already exists - this could be a retry or race condition
@@ -822,60 +875,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       //
       // Reference: https://ai-sdk.dev/docs/reference/ai-sdk-core/stream-text
       // =========================================================================
-
-      // =========================================================================
-      // ✅ CREDIT RESERVATION: Reserve credits BEFORE streaming begins
-      // Pre-reserve estimated credits to prevent overdraft during streaming
-      // Actual credits are finalized in onFinish after token count is known
-      // Uses highest-cost model among participants for conservative estimation
-      // =========================================================================
-      const firstParticipant = participants[0];
-      if (!firstParticipant) {
-        throw createError.badRequest('No participants configured for thread', ErrorContextBuilders.validation('participants'));
-      }
-      const highestMultiplierModel = participants.reduce((max, p) => {
-        const multiplier = getModelCreditMultiplierById(p.modelId, getModelById);
-        const maxMultiplier = getModelCreditMultiplierById(max.modelId, getModelById);
-        return multiplier > maxMultiplier ? p : max;
-      }, firstParticipant);
-      const estimatedCredits = estimateWeightedCredits(
-        participants.length,
-        highestMultiplierModel.modelId,
-        getModelById,
-      );
-      // Skip round completion check - participants are PART of the round, not a new round
-      await reserveCredits(user.id, streamMessageId, estimatedCredits, { skipRoundCheck: true });
-
-      // =========================================================================
-      // ✅ RESUMABLE STREAMS: Initialize stream buffer for resumption
-      // =========================================================================
-      await initializeParticipantStreamBuffer(
-        streamMessageId,
-        threadId,
-        currentRoundNumber,
-        participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-        c.env,
-      );
-
-      // ✅ RESUMABLE STREAMS: Mark stream as active in KV for resume detection
-      await markStreamActive(
-        threadId,
-        currentRoundNumber,
-        participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-        c.env,
-      );
-
-      // ✅ RESUMABLE STREAMS: Set thread-level active stream for AI SDK resume pattern
-      // This enables the frontend to detect and resume this stream after page reload
-      // ✅ FIX: Pass total participants count for proper round-level tracking
-      await setThreadActiveStream(
-        threadId,
-        streamMessageId,
-        currentRoundNumber,
-        participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-        participants.length, // ✅ FIX: Track total participants for round completion detection
-        c.env,
-      );
 
       // ✅ STREAM RESPONSE: Single stream with built-in AI SDK retry logic
       const finalResult = streamText({
@@ -1041,20 +1040,25 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           });
 
           // =========================================================================
-          // ✅ CREDIT FINALIZATION: Deduct actual credits based on token usage
-          // Releases reservation and deducts actual credits used
+          // ✅ PARALLELIZED POST-STREAMING OPERATIONS: Credit finalization and balance check
           // =========================================================================
           const actualInputTokens = finishResult.usage?.inputTokens ?? 0;
           const actualOutputTokens = finishResult.usage?.outputTokens ?? 0;
 
-          await finalizeCredits(user.id, streamMessageId, {
-            inputTokens: actualInputTokens,
-            outputTokens: actualOutputTokens,
-            action: 'ai_response',
-            threadId,
-            messageId,
-            modelId: participant.modelId,
-          });
+          const [, creditBalance] = await Promise.all([
+            // ✅ CREDIT FINALIZATION: Deduct actual credits based on token usage
+            // Releases reservation and deducts actual credits used
+            finalizeCredits(user.id, streamMessageId, {
+              inputTokens: actualInputTokens,
+              outputTokens: actualOutputTokens,
+              action: 'ai_response',
+              threadId,
+              messageId,
+              modelId: participant.modelId,
+            }),
+            // ✅ FREE USER SINGLE-ROUND: Check credit balance for zero-out logic
+            getUserCreditBalance(user.id),
+          ]);
 
           // =========================================================================
           // ✅ FREE USER SINGLE-ROUND: Zero out credits after round is COMPLETE
@@ -1063,7 +1067,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // For single-participant threads, zero out after participant completes (no moderator).
           // For multi-participant threads, moderator.handler.ts handles zeroing after it completes.
           // =========================================================================
-          const creditBalance = await getUserCreditBalance(user.id);
           if (creditBalance.planType === PlanTypes.FREE && participants.length < 2) {
             // Single-participant thread: no moderator, so round completes after participant
             const roundComplete = await checkFreeUserHasCompletedRound(user.id);
@@ -1242,26 +1245,27 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           }
 
           // =========================================================================
-          // ✅ RESUMABLE STREAMS: Mark stream as completed for resume detection
+          // ✅ PARALLELIZED STREAM COMPLETION: Mark stream as completed for resume detection
           // =========================================================================
-          await markStreamCompleted(
-            threadId,
-            currentRoundNumber,
-            participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-            messageId,
-            c.env,
-          );
-
-          // ✅ FIX: Update participant status instead of clearing thread active stream
-          // Only clears thread active stream when ALL participants have finished
-          // This enables proper multi-participant stream resumption after page reload
-          await updateParticipantStatus(
-            threadId,
-            currentRoundNumber,
-            participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-            ParticipantStreamStatuses.COMPLETED,
-            c.env,
-          );
+          await Promise.all([
+            markStreamCompleted(
+              threadId,
+              currentRoundNumber,
+              participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+              messageId,
+              c.env,
+            ),
+            // ✅ FIX: Update participant status instead of clearing thread active stream
+            // Only clears thread active stream when ALL participants have finished
+            // This enables proper multi-participant stream resumption after page reload
+            updateParticipantStatus(
+              threadId,
+              currentRoundNumber,
+              participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+              ParticipantStreamStatuses.COMPLETED,
+              c.env,
+            ),
+          ]);
         },
       });
 

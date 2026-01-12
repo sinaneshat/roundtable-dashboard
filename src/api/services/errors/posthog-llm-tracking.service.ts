@@ -814,9 +814,7 @@ export async function trackLLMGeneration(
       properties,
     });
 
-    // Shutdown to flush events (important for serverless)
-    await posthog.shutdown();
-
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
     return { traceId, success: true };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -919,7 +917,7 @@ export async function trackLLMError(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail - don't break the application
   }
@@ -1022,7 +1020,7 @@ export async function trackEmbedding(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail - don't break the application
   }
@@ -1123,7 +1121,7 @@ export async function trackSpan(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail - don't break the application
   }
@@ -1215,7 +1213,7 @@ export async function trackTrace(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail - don't break the application
   }
@@ -1300,7 +1298,7 @@ export async function trackFeedback(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail - don't break the application
   }
@@ -1375,7 +1373,7 @@ export async function trackMetric(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail - don't break the application
   }
@@ -1505,7 +1503,7 @@ export async function trackQueryGeneration(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail
   }
@@ -1599,7 +1597,7 @@ export async function trackWebSearchExecution(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail
   }
@@ -1692,7 +1690,7 @@ export async function trackPreSearchComplete(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail
   }
@@ -1763,7 +1761,7 @@ export async function trackRoundComplete(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail
   }
@@ -1814,7 +1812,7 @@ export async function trackThreadCreated(
       },
     });
 
-    await posthog.shutdown();
+    // Events auto-flush due to flushAt: 1 config - no shutdown needed
   } catch {
     // Silently fail
   }

@@ -186,7 +186,7 @@ export function createFaqJsonLd(faqs: Array<{
 export function createMetadata({
   title = BRAND.fullName,
   description = BRAND.description,
-  image = '/static/og-image.png',
+  image,
   url = '/',
   type = 'website',
   siteName = BRAND.fullName,
@@ -199,21 +199,28 @@ export function createMetadata({
 }: CreateMetadataProps = {}): Metadata {
   const baseUrl = getAppBaseUrl();
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
-  const fullImage = image.startsWith('http') ? image : `${baseUrl}${image}`;
+
+  // Only set images if explicitly provided - otherwise let opengraph-image.tsx handle it
+  const fullImage = image
+    ? (image.startsWith('http') ? image : `${baseUrl}${image}`)
+    : undefined;
 
   const openGraph: Metadata['openGraph'] = {
     title,
     description,
     url: fullUrl,
     siteName,
-    images: [
-      {
-        url: fullImage,
-        width: 1200,
-        height: 630,
-        alt: title,
-      },
-    ],
+    // Only include images if explicitly provided, otherwise Next.js uses opengraph-image.tsx
+    ...(fullImage && {
+      images: [
+        {
+          url: fullImage,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
+    }),
     locale: 'en_US',
     type,
     ...(publishedTime && { publishedTime }),
@@ -224,7 +231,8 @@ export function createMetadata({
     card: 'summary_large_image',
     title,
     description,
-    images: [fullImage],
+    // Only include images if explicitly provided
+    ...(fullImage && { images: [fullImage] }),
     creator: '@roundtablenow',
     site: '@roundtablenow',
   };

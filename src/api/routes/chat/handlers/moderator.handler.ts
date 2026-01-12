@@ -551,15 +551,25 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
       );
     }
 
-    const thread = await verifyThreadOwnership(threadId, user.id, db);
-
-    // ✅ DETERMINISTIC MESSAGE ID: {threadId}_r{roundNumber}_moderator
+    // ✅ OPTIMIZATION: Parallelize independent queries
+    // These queries don't depend on each other and can run simultaneously
     const messageId = `${threadId}_r${roundNum}_moderator`;
 
-    // Check if moderator message already exists
-    const existingMessage = await db.query.chatMessage.findFirst({
-      where: eq(tables.chatMessage.id, messageId),
-    });
+    const [thread, existingMessage, userMessage] = await Promise.all([
+      verifyThreadOwnership(threadId, user.id, db),
+      db.query.chatMessage.findFirst({
+        where: eq(tables.chatMessage.id, messageId),
+      }),
+      db.query.chatMessage.findFirst({
+        where: (fields, { and: andOp, eq: eqOp }) =>
+          andOp(
+            eqOp(fields.threadId, threadId),
+            eqOp(fields.role, MessageRoles.USER),
+            eqOp(fields.roundNumber, roundNum),
+          ),
+        orderBy: [asc(tables.chatMessage.createdAt)],
+      }),
+    ]);
 
     if (existingMessage) {
       // Already exists - return the message data
@@ -647,17 +657,6 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
         field: 'participantMessageIds',
       });
     }
-
-    // Get user question for this round
-    const userMessage = await db.query.chatMessage.findFirst({
-      where: (fields, { and: andOp, eq: eqOp }) =>
-        andOp(
-          eqOp(fields.threadId, threadId),
-          eqOp(fields.role, MessageRoles.USER),
-          eqOp(fields.roundNumber, roundNum),
-        ),
-      orderBy: [asc(tables.chatMessage.createdAt)],
-    });
 
     if (!userMessage) {
       throw createError.badRequest(`No user message found for round ${roundNum}`, {
