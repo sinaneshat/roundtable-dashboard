@@ -1,13 +1,13 @@
 /**
- * OG Image Font Loader (Server-only)
+ * OG Image Font Loader (Edge-compatible)
  *
- * Loads Geist fonts from local filesystem using Node.js fs APIs.
- * This follows the Next.js 16 recommended pattern for OG image fonts.
+ * Loads Geist fonts via fetch from public folder.
+ * Compatible with Cloudflare Workers and edge runtimes.
+ *
+ * Fonts served from: /public/static/fonts/
  */
 
-import type { Buffer } from 'node:buffer';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 export type OGFontConfig = {
   name: string;
@@ -17,35 +17,37 @@ export type OGFontConfig = {
 };
 
 /**
- * Converts a Node.js Buffer to an ArrayBuffer.
- * Buffer.buffer may have extra data, so we slice to get only the relevant portion.
+ * Fetch a font file from the public folder
  */
-function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {
-  return buffer.buffer.slice(
-    buffer.byteOffset,
-    buffer.byteOffset + buffer.byteLength,
-  ) as ArrayBuffer;
+async function fetchFont(fontName: string): Promise<ArrayBuffer> {
+  const baseUrl = getAppBaseUrl();
+  const fontUrl = `${baseUrl}/static/fonts/${fontName}`;
+
+  const response = await fetch(fontUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch font ${fontName}: ${response.status}`);
+  }
+
+  return response.arrayBuffer();
 }
 
 /**
- * Loads fonts for OG image generation from local filesystem.
+ * Loads fonts for OG image generation via fetch.
  * Uses Geist TTF fonts (Satori only supports TTF/OTF, not WOFF2).
- * Fonts are located in src/assets/fonts/ directory.
+ * Fonts served from public/static/fonts/ directory.
  */
 export async function getOGFonts(): Promise<OGFontConfig[]> {
-  const fontsDir = join(process.cwd(), 'src/assets/fonts');
-
   const [regular, semibold, bold, black] = await Promise.all([
-    readFile(join(fontsDir, 'Geist-Regular.ttf')),
-    readFile(join(fontsDir, 'Geist-SemiBold.ttf')),
-    readFile(join(fontsDir, 'Geist-Bold.ttf')),
-    readFile(join(fontsDir, 'Geist-Black.ttf')),
+    fetchFont('Geist-Regular.ttf'),
+    fetchFont('Geist-SemiBold.ttf'),
+    fetchFont('Geist-Bold.ttf'),
+    fetchFont('Geist-Black.ttf'),
   ]);
 
   return [
-    { name: 'Geist', data: bufferToArrayBuffer(regular), style: 'normal', weight: 400 },
-    { name: 'Geist', data: bufferToArrayBuffer(semibold), style: 'normal', weight: 600 },
-    { name: 'Geist', data: bufferToArrayBuffer(bold), style: 'normal', weight: 700 },
-    { name: 'Geist', data: bufferToArrayBuffer(black), style: 'normal', weight: 800 },
+    { name: 'Geist', data: regular, style: 'normal', weight: 400 },
+    { name: 'Geist', data: semibold, style: 'normal', weight: 600 },
+    { name: 'Geist', data: bold, style: 'normal', weight: 700 },
+    { name: 'Geist', data: black, style: 'normal', weight: 800 },
   ];
 }

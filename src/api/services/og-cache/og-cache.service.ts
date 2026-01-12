@@ -12,8 +12,6 @@
  * @see /docs/backend-patterns.md - Service layer conventions
  */
 
-import { createHash } from 'node:crypto';
-
 import type { OgImageType } from '@/api/core/enums';
 
 // Cache TTL: 7 days (images rarely change, invalidated on content update)
@@ -22,6 +20,21 @@ const OG_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
 // ============================================================================
 // CACHE KEY GENERATION
 // ============================================================================
+
+/**
+ * Simple hash function for cache invalidation (edge-compatible)
+ * Uses a fast string hash instead of crypto for performance
+ */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  // Convert to hex and ensure positive
+  return Math.abs(hash).toString(16).padStart(8, '0');
+}
 
 /**
  * Generate a version hash for cache invalidation
@@ -43,7 +56,8 @@ export function generateOgVersionHash(data: {
     data.updatedAt ? new Date(data.updatedAt).getTime().toString() : '',
   ].join('|');
 
-  return createHash('sha256').update(content).digest('hex').slice(0, 12);
+  // Use simple hash for edge compatibility (no crypto dependency)
+  return simpleHash(content);
 }
 
 /**
