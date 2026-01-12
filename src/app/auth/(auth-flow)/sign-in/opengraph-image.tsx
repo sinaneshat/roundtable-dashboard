@@ -15,9 +15,8 @@ export const size = {
 };
 export const contentType = 'image/png';
 export const alt = `Sign In - ${BRAND.fullName}`;
-
-// Force dynamic to prevent build-time prerendering (fonts loaded at runtime)
-export const dynamic = 'force-dynamic';
+// Static generation - all assets embedded at build time
+export const revalidate = 86400;
 
 export default async function Image() {
   // Load translations, fonts, and logo in parallel

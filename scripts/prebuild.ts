@@ -2,7 +2,9 @@
 /**
  * Pre-build Script
  *
- * Runs before each build to clear Next.js cache for fresh builds
+ * Runs before each build to:
+ * 1. Clear Next.js cache for fresh builds
+ * 2. Generate OG image fonts (base64 embedded)
  */
 
 import { execSync } from 'node:child_process';
@@ -15,4 +17,12 @@ try {
   execSync('rm -rf .next', { cwd: ROOT_DIR, stdio: 'inherit' });
 } catch {
   // No cache to clear
+}
+
+// Generate OG assets (fonts + images embedded as base64 for edge compatibility)
+try {
+  console.log('Generating OG assets (fonts + images)...');
+  execSync('npx tsx scripts/generate-og-assets.ts', { cwd: ROOT_DIR, stdio: 'inherit' });
+} catch (error) {
+  console.error('Failed to generate OG assets:', error);
 }
