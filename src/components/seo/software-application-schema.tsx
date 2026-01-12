@@ -65,7 +65,7 @@ type SoftwareApplicationSchemaProps = {
  */
 export function SoftwareApplicationSchema(props: SoftwareApplicationSchemaProps) {
   const {
-    baseUrl = 'https://app.roundtable.now',
+    baseUrl = 'https://roundtable.now',
     name = BRAND.fullName,
     description = BRAND.description,
     version = '1.0.0',
