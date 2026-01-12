@@ -17,7 +17,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 
-import { AnalyzePromptSseEvents, DEFAULT_CHAT_MODE } from '@/api/core/enums';
+import { AnalyzePromptSseEvents, DEFAULT_CHAT_MODE, ModelIds } from '@/api/core/enums';
 import type { AnalyzePromptPayload } from '@/api/routes/chat/schema';
 import { analyzePromptStreamService } from '@/services/api';
 
@@ -35,7 +35,7 @@ type AnalyzePromptStreamResult = AnalyzePromptStreamState & {
 
 // Fallback config if streaming fails
 const FALLBACK_CONFIG: AnalyzePromptPayload = {
-  participants: [{ modelId: 'google/gemini-2.5-flash', role: null }],
+  participants: [{ modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: null }],
   mode: DEFAULT_CHAT_MODE,
   enableWebSearch: false,
 };

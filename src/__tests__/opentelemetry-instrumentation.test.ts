@@ -13,6 +13,8 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { ModelIds } from '@/api/core/enums';
+
 // ============================================================================
 // Test Utilities
 // ============================================================================
@@ -239,7 +241,7 @@ describe('telemetry Metadata Schema', () => {
       participant_role: 'AI Analyst',
       is_first_participant: true,
       total_participants: 3,
-      model_id: 'openai/gpt-4o',
+      model_id: ModelIds.OPENAI_GPT_4O_MINI,
       model_name: 'GPT-4o',
       model_context_length: 128000,
       max_output_tokens: 8192,
@@ -274,7 +276,7 @@ describe('telemetry Metadata Schema', () => {
       participant_id: 'moderator',
       participant_index: MODERATOR_PARTICIPANT_INDEX,
       participant_role: 'AI Moderator',
-      model_id: 'anthropic/claude-sonnet-4-20250514',
+      model_id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4,
       model_name: 'Claude Sonnet 4',
       is_moderator: true,
       participant_count: 3,
@@ -334,7 +336,7 @@ describe('oTEL Span Attributes', () => {
         conversation_mode: 'council',
         participant_id: 'p1',
         participant_index: 0,
-        model_id: 'openai/gpt-4o',
+        model_id: ModelIds.OPENAI_GPT_4O_MINI,
         user_id: 'user_1',
       },
     };

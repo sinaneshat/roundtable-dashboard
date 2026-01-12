@@ -13,7 +13,7 @@
 /* eslint-disable react/no-array-index-key */
 import { ImageResponse } from 'next/og';
 
-import { ChatModes } from '@/api/core/enums';
+import { ChatModes, ModelIds } from '@/api/core/enums';
 import { BRAND } from '@/constants';
 import {
   createGradient,
@@ -34,12 +34,12 @@ const MOCK_THREAD = {
   mode: ChatModes.ANALYZING,
   messagePreview: 'I\'m looking to understand the best practices for building a modern SaaS application with proper authentication, billing, and scalability...',
   participants: [
-    { modelId: 'anthropic/claude-3.5-sonnet', role: 'The Architect' },
-    { modelId: 'openai/gpt-4-turbo', role: 'Code Reviewer' },
-    { modelId: 'google/gemini-pro', role: 'Security Expert' },
-    { modelId: 'x-ai/grok-2', role: 'DevOps Specialist' },
-    { modelId: 'deepseek/deepseek-chat', role: 'Performance Optimizer' },
-    { modelId: 'perplexity/llama-3.1-sonar-large', role: 'Research Assistant' },
+    { modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, role: 'The Architect' },
+    { modelId: ModelIds.OPENAI_GPT_5_1, role: 'Code Reviewer' },
+    { modelId: ModelIds.GOOGLE_GEMINI_2_5_PRO, role: 'Security Expert' },
+    { modelId: ModelIds.X_AI_GROK_4, role: 'DevOps Specialist' },
+    { modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, role: 'Performance Optimizer' },
+    { modelId: ModelIds.MISTRALAI_MISTRAL_LARGE_2512, role: 'Research Assistant' },
   ],
   messagesCount: 24,
 };

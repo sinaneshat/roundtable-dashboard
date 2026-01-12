@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { ModelIds } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { categorizeParticipantChanges } from '@/api/services/participants';
 import type { ParticipantConfigInput } from '@/lib/schemas/participant-schemas';
@@ -64,13 +65,13 @@ describe('categorizeParticipantChanges', () => {
   describe('basic change detection', () => {
     it('should detect no changes when configurations are identical', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
-        createMockDbParticipant('p2', 'anthropic/claude-3', true, null, 1),
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
+        createMockDbParticipant('p2', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, true, null, 1),
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0),
-        createParticipantConfig('p2', 'anthropic/claude-3', 1),
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0),
+        createParticipantConfig('p2', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, 1),
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
@@ -83,34 +84,34 @@ describe('categorizeParticipantChanges', () => {
 
     it('should detect added participants', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0),
-        createParticipantConfig('p2', 'anthropic/claude-3', 1),
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0),
+        createParticipantConfig('p2', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, 1),
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.addedParticipants).toHaveLength(1);
-      expect(result.addedParticipants[0]?.modelId).toBe('anthropic/claude-3');
+      expect(result.addedParticipants[0]?.modelId).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4);
     });
 
     it('should detect removed participants', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
-        createMockDbParticipant('p2', 'anthropic/claude-3', true, null, 1),
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
+        createMockDbParticipant('p2', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, true, null, 1),
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0),
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0),
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.removedParticipants).toHaveLength(1);
-      expect(result.removedParticipants[0]?.modelId).toBe('anthropic/claude-3');
+      expect(result.removedParticipants[0]?.modelId).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4);
     });
   });
 
@@ -122,42 +123,42 @@ describe('categorizeParticipantChanges', () => {
     it('should detect re-enabled participant that was previously disabled', () => {
       // Scenario: Claude was disabled in a previous round, now being re-enabled
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
-        createMockDbParticipant('p2', 'anthropic/claude-3', false, null, 1), // DISABLED
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
+        createMockDbParticipant('p2', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, false, null, 1), // DISABLED
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0),
-        createParticipantConfig('new-id', 'anthropic/claude-3', 1), // Re-adding Claude
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0),
+        createParticipantConfig('new-id', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, 1), // Re-adding Claude
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.reenabledParticipants).toHaveLength(1);
-      expect(result.reenabledParticipants[0]?.modelId).toBe('anthropic/claude-3');
+      expect(result.reenabledParticipants[0]?.modelId).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4);
       // Should NOT be in addedParticipants since it exists in DB
       expect(result.addedParticipants).toHaveLength(0);
     });
 
     it('should not confuse re-enabled with truly new participants', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
-        createMockDbParticipant('p2', 'anthropic/claude-3', false, null, 1), // DISABLED
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
+        createMockDbParticipant('p2', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, false, null, 1), // DISABLED
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0),
-        createParticipantConfig('new-claude', 'anthropic/claude-3', 1), // Re-adding
-        createParticipantConfig('new-gemini', 'google/gemini-pro', 2), // Truly new
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0),
+        createParticipantConfig('new-claude', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, 1), // Re-adding
+        createParticipantConfig('new-gemini', ModelIds.GOOGLE_GEMINI_2_5_PRO, 2), // Truly new
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.reenabledParticipants).toHaveLength(1);
-      expect(result.reenabledParticipants[0]?.modelId).toBe('anthropic/claude-3');
+      expect(result.reenabledParticipants[0]?.modelId).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4);
 
       expect(result.addedParticipants).toHaveLength(1);
-      expect(result.addedParticipants[0]?.modelId).toBe('google/gemini-pro');
+      expect(result.addedParticipants[0]?.modelId).toBe(ModelIds.GOOGLE_GEMINI_2_5_PRO);
     });
   });
 
@@ -170,35 +171,35 @@ describe('categorizeParticipantChanges', () => {
       // Scenario: Claude was added, removed, added, removed, now adding again
       // The DB participant is disabled from the last removal
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
-        createMockDbParticipant('claude-id', 'anthropic/claude-3', false, null, 1), // DISABLED (2nd removal)
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
+        createMockDbParticipant('claude-id', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, false, null, 1), // DISABLED (2nd removal)
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0),
-        createParticipantConfig('new-claude', 'anthropic/claude-3', 1), // 3rd addition
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0),
+        createParticipantConfig('new-claude', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, 1), // 3rd addition
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       // Should be detected as re-enabled, not new
       expect(result.reenabledParticipants).toHaveLength(1);
-      expect(result.reenabledParticipants[0]?.modelId).toBe('anthropic/claude-3');
+      expect(result.reenabledParticipants[0]?.modelId).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4);
       expect(result.addedParticipants).toHaveLength(0);
     });
 
     it('should return all disabled DB participants in allDbParticipants', () => {
       // Multiple disabled participants from different removal cycles
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
-        createMockDbParticipant('claude-id', 'anthropic/claude-3', false, null, 1), // DISABLED
-        createMockDbParticipant('gemini-id', 'google/gemini-pro', false, null, 2), // DISABLED
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
+        createMockDbParticipant('claude-id', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, false, null, 1), // DISABLED
+        createMockDbParticipant('gemini-id', ModelIds.GOOGLE_GEMINI_2_5_PRO, false, null, 2), // DISABLED
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0),
-        createParticipantConfig('new-claude', 'anthropic/claude-3', 1), // Re-enabling
-        createParticipantConfig('new-gemini', 'google/gemini-pro', 2), // Re-enabling
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0),
+        createParticipantConfig('new-claude', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, 1), // Re-enabling
+        createParticipantConfig('new-gemini', ModelIds.GOOGLE_GEMINI_2_5_PRO, 2), // Re-enabling
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
@@ -206,8 +207,8 @@ describe('categorizeParticipantChanges', () => {
       // Both should be re-enabled
       expect(result.reenabledParticipants).toHaveLength(2);
       expect(result.reenabledParticipants.map(p => p.modelId).sort()).toEqual([
-        'anthropic/claude-3',
-        'google/gemini-pro',
+        ModelIds.ANTHROPIC_CLAUDE_SONNET_4,
+        ModelIds.GOOGLE_GEMINI_2_5_PRO,
       ]);
 
       // allDbParticipants should include all participants (enabled + disabled)
@@ -216,24 +217,24 @@ describe('categorizeParticipantChanges', () => {
 
     it('should handle simultaneous remove and re-add of different participants', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
-        createMockDbParticipant('claude-id', 'anthropic/claude-3', false, null, 1), // DISABLED
-        createMockDbParticipant('gemini-id', 'google/gemini-pro', true, null, 2), // ENABLED
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
+        createMockDbParticipant('claude-id', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, false, null, 1), // DISABLED
+        createMockDbParticipant('gemini-id', ModelIds.GOOGLE_GEMINI_2_5_PRO, true, null, 2), // ENABLED
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0),
-        createParticipantConfig('new-claude', 'anthropic/claude-3', 1), // Re-enabling Claude
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0),
+        createParticipantConfig('new-claude', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, 1), // Re-enabling Claude
         // Gemini is being REMOVED (not in provided list)
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.reenabledParticipants).toHaveLength(1);
-      expect(result.reenabledParticipants[0]?.modelId).toBe('anthropic/claude-3');
+      expect(result.reenabledParticipants[0]?.modelId).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4);
 
       expect(result.removedParticipants).toHaveLength(1);
-      expect(result.removedParticipants[0]?.modelId).toBe('google/gemini-pro');
+      expect(result.removedParticipants[0]?.modelId).toBe(ModelIds.GOOGLE_GEMINI_2_5_PRO);
     });
   });
 
@@ -244,26 +245,26 @@ describe('categorizeParticipantChanges', () => {
   describe('role change detection', () => {
     it('should detect role changes for enabled participants', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, 'Analyst', 0),
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, 'Analyst', 0),
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0, 'Critic'), // Role changed
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0, 'Critic'), // Role changed
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.updatedParticipants).toHaveLength(1);
-      expect(result.updatedParticipants[0]?.modelId).toBe('openai/gpt-4');
+      expect(result.updatedParticipants[0]?.modelId).toBe(ModelIds.OPENAI_GPT_4_1);
     });
 
     it('should detect role added where none existed', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0, 'New Role'),
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0, 'New Role'),
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
@@ -273,11 +274,11 @@ describe('categorizeParticipantChanges', () => {
 
     it('should detect role removed', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, 'Old Role', 0),
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, 'Old Role', 0),
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0, undefined), // Role removed
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0, undefined), // Role removed
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
@@ -295,8 +296,8 @@ describe('categorizeParticipantChanges', () => {
       const dbParticipants: ChatParticipant[] = [];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0),
-        createParticipantConfig('p2', 'anthropic/claude-3', 1),
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0),
+        createParticipantConfig('p2', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, 1),
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
@@ -307,8 +308,8 @@ describe('categorizeParticipantChanges', () => {
 
     it('should handle empty provided participants (all removed)', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
-        createMockDbParticipant('p2', 'anthropic/claude-3', true, null, 1),
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
+        createMockDbParticipant('p2', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, true, null, 1),
       ];
 
       const providedParticipants: ParticipantConfigInput[] = [];
@@ -321,28 +322,28 @@ describe('categorizeParticipantChanges', () => {
 
     it('should handle all participants being disabled in DB', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', false, null, 0),
-        createMockDbParticipant('p2', 'anthropic/claude-3', false, null, 1),
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, false, null, 0),
+        createMockDbParticipant('p2', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, false, null, 1),
       ];
 
       const providedParticipants = [
-        createParticipantConfig('new-p1', 'openai/gpt-4', 0),
+        createParticipantConfig('new-p1', ModelIds.OPENAI_GPT_4_1, 0),
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.reenabledParticipants).toHaveLength(1);
-      expect(result.reenabledParticipants[0]?.modelId).toBe('openai/gpt-4');
+      expect(result.reenabledParticipants[0]?.modelId).toBe(ModelIds.OPENAI_GPT_4_1);
     });
 
     it('should preserve allDbParticipants in result for downstream use', () => {
       const dbParticipants = [
-        createMockDbParticipant('p1', 'openai/gpt-4', true, null, 0),
-        createMockDbParticipant('p2', 'anthropic/claude-3', false, null, 1),
+        createMockDbParticipant('p1', ModelIds.OPENAI_GPT_4_1, true, null, 0),
+        createMockDbParticipant('p2', ModelIds.ANTHROPIC_CLAUDE_SONNET_4, false, null, 1),
       ];
 
       const providedParticipants = [
-        createParticipantConfig('p1', 'openai/gpt-4', 0),
+        createParticipantConfig('p1', ModelIds.OPENAI_GPT_4_1, 0),
       ];
 
       const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
@@ -350,7 +351,7 @@ describe('categorizeParticipantChanges', () => {
       // allDbParticipants should be included in result for buildParticipantOperations
       expect(result.allDbParticipants).toBeDefined();
       expect(result.allDbParticipants).toHaveLength(2);
-      expect(result.allDbParticipants.find(p => p.modelId === 'anthropic/claude-3')).toBeDefined();
+      expect(result.allDbParticipants.find(p => p.modelId === ModelIds.ANTHROPIC_CLAUDE_SONNET_4)).toBeDefined();
     });
   });
 

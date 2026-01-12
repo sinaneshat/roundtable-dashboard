@@ -24,7 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses, ModelIds } from '@/api/core/enums';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 
 // Type definitions for the test
@@ -81,7 +81,7 @@ type ChatThread = {
  * Creates mock participants for testing
  */
 function createMockParticipants(count: number = 3): ChatParticipant[] {
-  const models = ['deepseek/deepseek-chat-v3-0324', 'x-ai/grok-4-fast', 'google/gemini-2.5-flash'];
+  const models = [ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, ModelIds.X_AI_GROK_4_FAST, ModelIds.GOOGLE_GEMINI_2_5_FLASH];
   const roles = ['Space Futurist', 'Climate Scientist', 'Resource Economist'];
 
   return Array.from({ length: count }, (_, i) => ({
@@ -224,7 +224,7 @@ describe('stream Resumption with Prefilled State', () => {
       const preSearches = [createMockPreSearch(0, MessageStatuses.COMPLETE)];
       const messages = [
         createUserMessage(0),
-        createEmptyParticipantMessage(0, 0, 'deepseek/deepseek-chat-v3-0324'),
+        createEmptyParticipantMessage(0, 0, ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324),
       ];
 
       // Simulate the store state after refresh

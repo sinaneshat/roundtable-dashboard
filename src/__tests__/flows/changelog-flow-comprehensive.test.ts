@@ -629,15 +629,15 @@ describe('accordion Visibility and Content Accuracy', () => {
   describe('accordion content accuracy', () => {
     it('displays correct model names for additions', () => {
       const changelog = createMockChangelog(1, [
-        { type: 'added', participantId: 'p1', modelId: 'anthropic/claude-3.5-sonnet' },
-        { type: 'added', participantId: 'p2', modelId: 'openai/gpt-4o' },
+        { type: 'added', participantId: 'p1', modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5 },
+        { type: 'added', participantId: 'p2', modelId: ModelIds.OPENAI_GPT_4O_MINI },
       ]);
 
       const addedChanges = changelog.changeData.changes.filter(c => c.type === 'added');
 
       expect(addedChanges).toHaveLength(2);
-      expect(addedChanges[0]?.modelId).toBe('anthropic/claude-3.5-sonnet');
-      expect(addedChanges[1]?.modelId).toBe('openai/gpt-4o');
+      expect(addedChanges[0]?.modelId).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5);
+      expect(addedChanges[1]?.modelId).toBe(ModelIds.OPENAI_GPT_4O_MINI);
     });
 
     it('displays correct model names for removals', () => {

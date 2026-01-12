@@ -16,6 +16,7 @@ import {
   MessagePartTypes,
   MessageRoles,
   MessageStatuses,
+  ModelIds,
   MODERATOR_NAME,
   MODERATOR_PARTICIPANT_INDEX,
   RoundPhases,
@@ -54,7 +55,7 @@ function createMockParticipant(overrides: Partial<ChatParticipant> = {}): ChatPa
   return {
     id: `participant-${Math.random().toString(36).slice(2)}`,
     threadId: 'thread-123',
-    modelId: 'openai/gpt-4',
+    modelId: ModelIds.OPENAI_GPT_4_1,
     priority: 0,
     isEnabled: true,
     systemPrompt: null,
@@ -88,7 +89,7 @@ function createParticipantMessage(
     modelId?: string;
   } = {},
 ): UIMessage {
-  const { hasContent = true, isStreaming = false, isComplete = true, participantId, modelId = 'openai/gpt-4' } = options;
+  const { hasContent = true, isStreaming = false, isComplete = true, participantId, modelId = ModelIds.OPENAI_GPT_4_1 } = options;
 
   const parts = hasContent
     ? [{
@@ -155,7 +156,7 @@ describe('resumption Placeholder Ordering', () => {
     it('should show participant placeholders when streamingRoundNumber is set', () => {
       const participants = [
         createMockParticipant({ id: 'p1', priority: 0 }),
-        createMockParticipant({ id: 'p2', priority: 1, modelId: 'anthropic/claude' }),
+        createMockParticipant({ id: 'p2', priority: 1, modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4 }),
       ];
 
       const messages: UIMessage[] = [
@@ -209,13 +210,13 @@ describe('resumption Placeholder Ordering', () => {
     it('should only show moderator after all participants complete', () => {
       const participants = [
         createMockParticipant({ id: 'p1', priority: 0 }),
-        createMockParticipant({ id: 'p2', priority: 1, modelId: 'anthropic/claude' }),
+        createMockParticipant({ id: 'p2', priority: 1, modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4 }),
       ];
 
       const messages: UIMessage[] = [
         createUserMessage(0, 'Hello'),
         createParticipantMessage(0, 0, { isComplete: true, participantId: 'p1' }),
-        createParticipantMessage(0, 1, { isComplete: true, participantId: 'p2', modelId: 'anthropic/claude' }),
+        createParticipantMessage(0, 1, { isComplete: true, participantId: 'p2', modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4 }),
         createModeratorMessage(0, { hasContent: true }),
       ];
 
