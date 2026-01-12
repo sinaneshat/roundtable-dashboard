@@ -5,13 +5,18 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState, useSyncExternalStore } from 'react';
 
-import { UIBillingIntervals } from '@/api/core/enums';
+import { StripeSubscriptionStatuses, UIBillingIntervals } from '@/api/core/enums';
 import { ChatPage } from '@/components/chat/chat-states';
 import { Icons } from '@/components/icons';
 import { PricingContentSkeleton } from '@/components/pricing/pricing-content-skeleton';
 import { Button } from '@/components/ui/button';
 import { PricingCard } from '@/components/ui/pricing-card';
-import { useCreateCheckoutSessionMutation, useProductsQuery } from '@/hooks';
+import {
+  useCreateCheckoutSessionMutation,
+  useCreateCustomerPortalSessionMutation,
+  useProductsQuery,
+  useSubscriptionsQuery,
+} from '@/hooks';
 import { useAuthCheck } from '@/hooks/utils/use-auth-check';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
@@ -21,6 +26,7 @@ export function PublicPricingScreen() {
   const t = useTranslations();
   const { isAuthenticated } = useAuthCheck();
   const [processingPriceId, setProcessingPriceId] = useState<string | null>(null);
+  const [isManagingBilling, setIsManagingBilling] = useState(false);
 
   const hasMounted = useSyncExternalStore(
     () => () => {},
@@ -29,7 +35,11 @@ export function PublicPricingScreen() {
   );
 
   const { data: productsData, isLoading: isLoadingProducts, error: productsError } = useProductsQuery();
+  const { data: subscriptionsData } = useSubscriptionsQuery();
   const createCheckoutMutation = useCreateCheckoutSessionMutation();
+  const customerPortalMutation = useCreateCustomerPortalSessionMutation();
+
+  const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items ?? [] : [];
 
   const products = productsData?.success ? productsData.data?.items ?? [] : [];
   const hasValidProductData = productsData?.success && !!productsData.data?.items;
@@ -71,6 +81,32 @@ export function PublicPricingScreen() {
     }
   };
 
+  const handleManageBilling = async () => {
+    setIsManagingBilling(true);
+    try {
+      const result = await customerPortalMutation.mutateAsync({
+        json: {
+          returnUrl: window.location.href,
+        },
+      });
+
+      if (result.success && result.data?.url) {
+        window.open(result.data.url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      toastManager.error(t('billing.errors.manageBillingFailed'), getApiErrorMessage(error));
+    } finally {
+      setIsManagingBilling(false);
+    }
+  };
+
+  // Check if user has active subscription for this price
+  const hasSubscriptionForPrice = (priceId: string) => {
+    return subscriptions.some(
+      sub => sub.priceId === priceId && (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING),
+    );
+  };
+
   if (shouldShowLoading) {
     return (
       <ChatPage>
@@ -100,6 +136,7 @@ export function PublicPricingScreen() {
 
   const product = monthlyProducts[0];
   const price = product?.prices?.[0];
+  const hasCurrentSubscription = price ? hasSubscriptionForPrice(price.id) : false;
 
   return (
     <ChatPage className="h-full min-h-[calc(100vh-4rem)]">
@@ -115,9 +152,13 @@ export function PublicPricingScreen() {
                 interval: UIBillingIntervals.MONTH,
               }}
               isMostPopular={true}
+              isCurrentPlan={hasCurrentSubscription}
               delay={0}
               isProcessingSubscribe={processingPriceId === price.id}
+              isProcessingManageBilling={isManagingBilling}
               onSubscribe={() => handleSubscribe(price.id)}
+              onManageBilling={hasCurrentSubscription ? handleManageBilling : undefined}
+              disabled={hasCurrentSubscription}
             />
           )}
         </div>

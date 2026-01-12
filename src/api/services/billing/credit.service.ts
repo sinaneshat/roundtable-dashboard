@@ -153,16 +153,12 @@ export type EnforceCreditsOptions = z.infer<typeof _EnforceCreditsOptionsSchema>
 export async function ensureUserCreditRecord(userId: string): Promise<UserCreditBalance> {
   const db = await getDbAsync();
 
-  // ✅ PERF: Add KV cache to credit balance lookup (60s TTL)
+  // NO CACHE: Credit balances must always be fresh to prevent optimistic lock failures
   const existingResults = await db
     .select()
     .from(tables.userCreditBalance)
     .where(eq(tables.userCreditBalance.userId, userId))
-    .limit(1)
-    .$withCache({
-      config: { ex: 60 }, // 1 minute cache - balance changes frequently
-      tag: `credit-balance-${userId}`,
-    });
+    .limit(1);
 
   if (existingResults[0]) {
     return existingResults[0];
@@ -298,6 +294,7 @@ export async function enforceCredits(
 async function checkHasActiveSubscription(userId: string): Promise<boolean> {
   const db = await getDbAsync();
 
+  // NO CACHE: Subscription status must always be fresh
   const results = await db
     .select()
     .from(tables.stripeCustomer)
@@ -309,11 +306,7 @@ async function checkHasActiveSubscription(userId: string): Promise<boolean> {
       ),
     )
     .where(eq(tables.stripeCustomer.userId, userId))
-    .limit(1)
-    .$withCache({
-      config: { ex: 120 },
-      tag: `has-active-sub-${userId}`,
-    });
+    .limit(1);
 
   return results.length > 0;
 }
@@ -878,71 +871,6 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
   // CRITICAL: Invalidate cached credit balance so subsequent requests see the new planType
   // Without this, thread creation checks may still see planType=FREE from stale cache
   await invalidateCreditBalanceCache(db, userId);
-}
-
-/**
- * Activate legacy user pro plan (1 month free)
- *
- * Called during signup when email matches a legacy paid user.
- * Gives them Pro plan with 100K credits for 1 month - no Stripe setup needed.
- */
-export async function activateLegacyUserProPlan(userId: string, email: string): Promise<void> {
-  const db = await getDbAsync();
-
-  // Mutable ref to track current record for retries
-  let currentRecord = await ensureUserCreditRecord(userId);
-
-  // Don't downgrade if somehow already paid
-  if (currentRecord.planType === PlanTypes.PAID) {
-    console.error(`[CreditService] Legacy user ${email} already has Pro plan, skipping activation`);
-    return;
-  }
-
-  const planConfig = getPlanConfig(PlanTypes.PAID);
-  const now = new Date();
-  const nextRefill = new Date(now);
-  nextRefill.setMonth(nextRefill.getMonth() + 1);
-
-  const updatedRecord = await withOptimisticLockRetry(
-    () =>
-      db
-        .update(tables.userCreditBalance)
-        .set({
-          planType: PlanTypes.PAID,
-          balance: planConfig.monthlyCredits,
-          monthlyCredits: planConfig.monthlyCredits,
-          lastRefillAt: now,
-          nextRefillAt: nextRefill,
-          version: sql`${tables.userCreditBalance.version} + 1`,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(tables.userCreditBalance.userId, userId),
-            eq(tables.userCreditBalance.version, currentRecord.version),
-          ),
-        )
-        .returning(),
-    async () => {
-      // Re-fetch fresh record on retry
-      currentRecord = await ensureUserCreditRecord(userId);
-    },
-    { operation: 'activateLegacyUserProPlan', userId },
-  );
-
-  await recordTransaction({
-    userId,
-    type: CreditTransactionTypes.CREDIT_GRANT,
-    amount: planConfig.monthlyCredits,
-    balanceAfter: updatedRecord.balance,
-    action: CreditActions.LEGACY_USER_ACTIVATION,
-    description: `Legacy user Pro activation (1 month free): ${planConfig.monthlyCredits} credits - ${email}`,
-  });
-
-  // CRITICAL: Invalidate cached credit balance
-  await invalidateCreditBalanceCache(db, userId);
-
-  console.error(`[CreditService] Activated legacy user Pro plan for ${email} (${userId})`);
 }
 
 const _RecordTransactionSchema = z.object({

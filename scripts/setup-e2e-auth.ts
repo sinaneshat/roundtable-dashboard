@@ -149,6 +149,25 @@ function setupBillingForProUser(userId: string): void {
   const creditBalanceId = `cb_e2e_pro_test`;
   const usageId = `usage_e2e_pro_test`;
 
+  // Query for existing price from DB (matches seed-local.sql)
+  let priceId = 'price_test_e2e';
+  try {
+    const priceResult = execSync(
+      `npx wrangler d1 execute DB --local --command="SELECT id FROM stripe_price LIMIT 1" --json`,
+      { stdio: 'pipe', encoding: 'utf-8' },
+    );
+    const priceData = JSON.parse(priceResult);
+    const prices = priceData[0]?.results || [];
+    if (prices.length > 0) {
+      priceId = prices[0].id;
+      console.log(`  📋 Using existing price: ${priceId}`);
+    } else {
+      console.log('  ⚠️ No prices found, using fallback test price');
+    }
+  } catch {
+    console.log('  ⚠️ Could not query prices, using fallback test price');
+  }
+
   try {
     // Create stripe_customer
     const customerSql = `INSERT OR REPLACE INTO stripe_customer (id, user_id, email, name, default_payment_method_id, metadata, created_at, updated_at) VALUES ('${customerId}', '${userId}', 'e2e-pro-test@roundtable.now', 'E2E Pro Test User', '${paymentMethodId}', NULL, ${now}, ${now});`;
@@ -158,8 +177,8 @@ function setupBillingForProUser(userId: string): void {
     const paymentSql = `INSERT OR REPLACE INTO stripe_payment_method (id, customer_id, type, card_brand, card_last4, card_exp_month, card_exp_year, is_default, metadata, created_at, updated_at) VALUES ('${paymentMethodId}', '${customerId}', 'card', 'visa', '4242', 12, 2030, 1, NULL, ${now}, ${now});`;
     execSync(`npx wrangler d1 execute DB --local --command="${paymentSql}"`, { stdio: 'pipe' });
 
-    // Create subscription
-    const subscriptionSql = `INSERT OR REPLACE INTO stripe_subscription (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, current_period_start, current_period_end, metadata, version, created_at, updated_at) VALUES ('${subscriptionId}', '${customerId}', '${userId}', 'active', 'price_1Shoc952vWNZ3v8wCuBiKKIA', 1, 0, ${now}, ${futureDate}, NULL, 1, ${now}, ${now});`;
+    // Create subscription with dynamically queried price
+    const subscriptionSql = `INSERT OR REPLACE INTO stripe_subscription (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, current_period_start, current_period_end, metadata, version, created_at, updated_at) VALUES ('${subscriptionId}', '${customerId}', '${userId}', 'active', '${priceId}', 1, 0, ${now}, ${futureDate}, NULL, 1, ${now}, ${now});`;
     execSync(`npx wrangler d1 execute DB --local --command="${subscriptionSql}"`, { stdio: 'pipe' });
 
     // Create credit balance
