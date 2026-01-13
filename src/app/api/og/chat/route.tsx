@@ -19,8 +19,6 @@ import {
 } from '@/lib/ui';
 import { getOGFonts } from '@/lib/ui/og-fonts.server';
 
-export const runtime = 'edge';
-
 const size = {
   width: 1200,
   height: 630,
