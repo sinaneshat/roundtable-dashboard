@@ -18,7 +18,7 @@ export function ChatScrollButton({
   variant = ScrollButtonVariants.FLOATING,
   className,
 }: ChatScrollButtonProps) {
-  const t = useTranslations('chat');
+  const t = useTranslations();
   const [showButton, setShowButton] = useState(false);
   const rafRef = useRef<number | null>(null);
 
@@ -86,7 +86,7 @@ export function ChatScrollButton({
             className,
           )}
           onClick={scrollToBottom}
-          aria-label={t('scrollToBottom')}
+          aria-label={t('chat.scrollToBottom')}
         >
           <Icons.arrowDown className="size-4" />
         </Button>
@@ -106,7 +106,7 @@ export function ChatScrollButton({
           className,
         )}
         onClick={scrollToBottom}
-        aria-label={t('scrollToBottom')}
+        aria-label={t('chat.scrollToBottom')}
       >
         <Icons.arrowDown className="size-4" />
       </Button>

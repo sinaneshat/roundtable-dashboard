@@ -14,7 +14,7 @@
 
 import { z } from 'zod';
 
-import { DEFAULT_CHAT_MODE, ScreenModes } from '@/api/core/enums';
+import { DEFAULT_CHAT_MODE, ModelIds, ScreenModes } from '@/api/core/enums';
 
 import type {
   AnimationState,
@@ -44,6 +44,26 @@ export const FORM_DEFAULTS = {
   modelOrder: [], // Visual order of models for drag-and-drop
   autoMode: true, // ✅ Auto mode ON by default - AI selects models/roles/mode based on prompt
 } satisfies FormState;
+
+// ============================================================================
+// AUTO MODE FALLBACK CONFIG - Single Source of Truth
+// ============================================================================
+// Used by both client (useAnalyzePromptStream) and server (analyze.handler.ts)
+// when AI analysis fails. Uses MIN_PARTICIPANTS_REQUIRED (2) models for
+// multi-perspective value. Both models support vision for all scenarios.
+
+export const AUTO_MODE_FALLBACK_CONFIG: {
+  participants: { modelId: string; role: string | null }[];
+  mode: typeof DEFAULT_CHAT_MODE;
+  enableWebSearch: boolean;
+} = {
+  participants: [
+    { modelId: ModelIds.OPENAI_GPT_4O_MINI, role: null },
+    { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: null },
+  ],
+  mode: DEFAULT_CHAT_MODE,
+  enableWebSearch: false,
+};
 
 // ============================================================================
 // FEEDBACK SLICE DEFAULTS

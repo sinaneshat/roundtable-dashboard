@@ -83,7 +83,7 @@ export const ModelMessageCard = memo(({
   loadingText,
   maxContentHeight,
 }: ModelMessageCardProps) => {
-  const t = useTranslations('chat.participant');
+  const t = useTranslations();
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
 
   const { globalIsStreaming, registerAnimation, completeAnimation } = useChatStore(
@@ -173,7 +173,7 @@ export const ModelMessageCard = memo(({
                 )}
                 {!modelIsAccessible && requiredTierName && (
                   <Badge variant="outline" className="text-xs text-muted-foreground">
-                    {t('tierRequired', { tier: requiredTierName })}
+                    {t('chat.participant.tierRequired', { tier: requiredTierName })}
                   </Badge>
                 )}
                 {showStatusIndicator && (
@@ -198,7 +198,7 @@ export const ModelMessageCard = memo(({
                   showShimmer ? 'opacity-100' : 'opacity-0 pointer-events-none',
                 )}
               >
-                <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
+                <TextShimmer>{loadingText ?? t('chat.participant.generating', { model: modelName })}</TextShimmer>
               </div>
               {!showShimmer && renderableParts.length === 0 && parts.length > 0 && !hasError && (
                 <div
@@ -206,8 +206,8 @@ export const ModelMessageCard = memo(({
                   className="py-2 text-muted-foreground text-sm italic opacity-100"
                 >
                   {hasFilteredReasoningParts
-                    ? t('reasoningOnlyResponse', { model: modelName })
-                    : t('emptyResponse', { model: modelName })}
+                    ? t('chat.participant.reasoningOnlyResponse', { model: modelName })
+                    : t('chat.participant.emptyResponse', { model: modelName })}
                 </div>
               )}
               <div

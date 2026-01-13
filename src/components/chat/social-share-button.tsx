@@ -18,7 +18,7 @@ export function SocialShareButton({
   showTextOnLargeScreens = false,
   className,
 }: SocialShareButtonProps) {
-  const t = useTranslations('chat');
+  const t = useTranslations();
   const [copySuccess, setCopySuccess] = useState(false);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -47,8 +47,8 @@ export function SocialShareButton({
     <Button
       variant="ghost"
       size={showTextOnLargeScreens ? 'sm' : 'icon'}
-      aria-label={copySuccess ? t('linkCopied') : t('copyLink')}
-      title={copySuccess ? t('linkCopied') : t('copyLink')}
+      aria-label={copySuccess ? t('chat.linkCopied') : t('chat.copyLink')}
+      title={copySuccess ? t('chat.linkCopied') : t('chat.copyLink')}
       onClick={handleCopyLink}
       className={cn(
         'transition-all duration-200',
@@ -62,7 +62,7 @@ export function SocialShareButton({
         : <Icons.share className="size-4" />}
       {showTextOnLargeScreens && (
         <span className="hidden md:inline">
-          {copySuccess ? t('linkCopied') : t('copyLink')}
+          {copySuccess ? t('chat.linkCopied') : t('chat.copyLink')}
         </span>
       )}
     </Button>

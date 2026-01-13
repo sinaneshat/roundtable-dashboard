@@ -136,9 +136,29 @@ const PROMPT_POOL: PromptTemplate[] = [
   },
 ];
 
+// Simple seeded random for deterministic selection across server/client
+function seededRandom(seed: number): () => number {
+  return () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+}
+
+// Get daily seed to rotate prompts each day while keeping server/client in sync
+function getDailySeed(): number {
+  const now = new Date();
+  return now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+}
+
 function getRandomPrompts(count: number): PromptTemplate[] {
-  const shuffled = [...PROMPT_POOL].sort(() => Math.random() - 0.5);
+  const seed = getDailySeed();
+  const random = seededRandom(seed);
+  const shuffled = [...PROMPT_POOL].sort(() => random() - 0.5);
   return shuffled.slice(0, count);
+}
+
+function getDailyOffset(): number {
+  return getDailySeed() % 10;
 }
 
 type QuickStartSuggestion = {
@@ -190,9 +210,9 @@ export function ChatQuickStart({
   onSuggestionClick,
   className,
 }: ChatQuickStartProps) {
+  // Use daily seed for deterministic selection across server/client hydration
   const [randomPrompts] = useState(() => getRandomPrompts(3));
-  // Random offset for provider rotation - set once per mount for variety across page loads
-  const [initialProviderOffset] = useState(() => Math.floor(Math.random() * 10));
+  const [initialProviderOffset] = useState(() => getDailyOffset());
   const { data: usageData, isLoading: isUsageLoading } = useUsageStatsQuery();
   const { data: modelsResponse, isLoading: isModelsLoading } = useModelsQuery();
 

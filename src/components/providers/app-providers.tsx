@@ -21,8 +21,8 @@ const VersionUpdateModal = dynamic(
 );
 
 function MaintenanceMessage() {
-  const t = useTranslations('common');
-  return <div>{t('maintenance')}</div>;
+  const t = useTranslations();
+  return <div>{t('common.maintenance')}</div>;
 }
 
 type AppProvidersProps = {

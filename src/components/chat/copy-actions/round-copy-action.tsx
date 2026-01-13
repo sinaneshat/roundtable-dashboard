@@ -27,13 +27,13 @@ function RoundCopyActionComponent({
   moderatorText,
   className,
 }: RoundCopyActionProps) {
-  const t = useTranslations('chat.roundActions');
+  const t = useTranslations();
 
   const toastMessages = useMemo(() => ({
-    successTitle: t('copySuccess'),
-    successDescription: t('copySuccessDescription'),
-    errorTitle: t('copyError'),
-    errorDescription: t('copyErrorDescription'),
+    successTitle: t('chat.roundActions.copySuccess'),
+    successDescription: t('chat.roundActions.copySuccessDescription'),
+    errorTitle: t('chat.roundActions.copyError'),
+    errorDescription: t('chat.roundActions.copyErrorDescription'),
   }), [t]);
 
   const { copied, copy } = useCopyToClipboard({ messages: toastMessages });
@@ -50,8 +50,8 @@ function RoundCopyActionComponent({
     <CopyActionButton
       copied={copied}
       onClick={handleCopy}
-      tooltip={t('copyRound')}
-      label={t('copyRound')}
+      tooltip={t('chat.roundActions.copyRound')}
+      label={t('chat.roundActions.copyRound')}
       className={className}
       variant={CopyIconVariants.STACK}
     />

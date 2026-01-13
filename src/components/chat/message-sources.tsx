@@ -20,7 +20,7 @@ type MessageSourcesProps = {
 };
 
 export function MessageSources({ sources, className }: MessageSourcesProps) {
-  const t = useTranslations('chat.message');
+  const t = useTranslations();
 
   if (!sources || sources.length === 0) {
     return null;
@@ -36,7 +36,7 @@ export function MessageSources({ sources, className }: MessageSourcesProps) {
         >
           <Icons.paperclip className="size-3.5" />
           <span>
-            {t('sources', { count: sources.length })}
+            {t('chat.message.sources', { count: sources.length })}
           </span>
         </Button>
       </CollapsibleTrigger>

@@ -33,20 +33,20 @@ type ErrorFallbackProps = {
 };
 
 function useContextMessage(context: ErrorBoundaryContext): string {
-  const t = useTranslations('errors.boundary');
+  const t = useTranslations();
 
   switch (context) {
     case ErrorBoundaryContexts.CHAT:
-      return t('chat');
+      return t('errors.boundary.chat');
     case ErrorBoundaryContexts.MESSAGE_LIST:
-      return t('messageList');
+      return t('errors.boundary.messageList');
     case ErrorBoundaryContexts.CONFIGURATION:
-      return t('configuration');
+      return t('errors.boundary.configuration');
     case ErrorBoundaryContexts.PRE_SEARCH:
-      return t('preSearch');
+      return t('errors.boundary.preSearch');
     case ErrorBoundaryContexts.GENERAL:
     default:
-      return t('general');
+      return t('errors.boundary.general');
   }
 }
 
@@ -56,7 +56,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
   context,
   onReset,
 }) => {
-  const t = useTranslations('errors.boundary');
+  const t = useTranslations();
   const contextMessage = useContextMessage(context);
 
   return (
@@ -67,19 +67,19 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
         </div>
 
         <div className="space-y-2">
-          <h2 className="text-2xl font-semibold">{t('title')}</h2>
+          <h2 className="text-2xl font-semibold">{t('errors.boundary.title')}</h2>
           <p className="text-muted-foreground">{contextMessage}</p>
         </div>
 
         {getWebappEnv() !== WEBAPP_ENVS.PROD && error && (
           <details className="w-full rounded-lg bg-muted/50 p-4 text-left">
             <summary className="cursor-pointer font-medium">
-              {t('devDetailsLabel')}
+              {t('errors.boundary.devDetailsLabel')}
             </summary>
             <div className="mt-4 space-y-2">
               <div>
                 <strong>
-                  {t('errorLabel')}
+                  {t('errors.boundary.errorLabel')}
                   :
                 </strong>
                 <pre className="mt-1 whitespace-pre-wrap text-sm">
@@ -89,7 +89,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
               {error.stack && (
                 <div>
                   <strong>
-                    {t('stackLabel')}
+                    {t('errors.boundary.stackLabel')}
                     :
                   </strong>
                   <pre className="mt-1 max-h-48 overflow-auto whitespace-pre text-xs">
@@ -100,7 +100,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
               {errorInfo?.componentStack && (
                 <div>
                   <strong>
-                    {t('componentStackLabel')}
+                    {t('errors.boundary.componentStackLabel')}
                     :
                   </strong>
                   <pre className="mt-1 max-h-48 overflow-auto whitespace-pre text-xs">
@@ -114,13 +114,13 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
 
         <div className="flex gap-4">
           <Button onClick={onReset} variant="default" startIcon={<Icons.refreshCw />}>
-            {t('tryAgain')}
+            {t('errors.boundary.tryAgain')}
           </Button>
           <Button
             onClick={() => window.location.reload()}
             variant="outline"
           >
-            {t('refreshPage')}
+            {t('errors.boundary.refreshPage')}
           </Button>
         </div>
       </div>

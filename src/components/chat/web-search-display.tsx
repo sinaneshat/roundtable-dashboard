@@ -42,8 +42,7 @@ export function WebSearchDisplay({
   query,
   autoParameters: _autoParameters,
 }: WebSearchDisplayExtendedProps) {
-  const t = useTranslations('chat.tools.webSearch');
-  const tSteps = useTranslations('chat.preSearch.steps');
+  const t = useTranslations();
   const isOpen = useBoolean(true);
 
   if (isStreaming && (!results || results.length === 0)) {
@@ -56,23 +55,23 @@ export function WebSearchDisplay({
             <ChainOfThoughtHeader>
               <div className="flex items-center gap-2">
                 <Icons.globe className="size-4 animate-pulse" />
-                <TextShimmer className="text-sm">{query ? t('searchingFor', { query }) : t('title')}</TextShimmer>
+                <TextShimmer className="text-sm">{query ? t('chat.tools.webSearch.searchingFor', { query }) : t('chat.tools.webSearch.title')}</TextShimmer>
               </div>
             </ChainOfThoughtHeader>
             <ChainOfThoughtContent>
               <ChainOfThoughtStep
                 icon={Icons.search}
-                label={tSteps('query')}
+                label={t('chat.preSearch.steps.query')}
                 status={currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
               />
               <ChainOfThoughtStep
                 icon={Icons.globe}
-                label={tSteps('searchingTheWeb')}
+                label={t('chat.preSearch.steps.searchingTheWeb')}
                 status={currentStage === WebSearchStreamingStages.SEARCH ? ChainOfThoughtStepStatuses.ACTIVE : currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.PENDING : ChainOfThoughtStepStatuses.COMPLETE}
               />
               <ChainOfThoughtStep
                 icon={Icons.search}
-                label={tSteps('synthesizingAnswer')}
+                label={t('chat.preSearch.steps.synthesizingAnswer')}
                 status={currentStage === WebSearchStreamingStages.SYNTHESIZE ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.PENDING}
               />
               <div className="space-y-2 mt-2">
@@ -108,14 +107,14 @@ export function WebSearchDisplay({
           <ChainOfThoughtHeader>
             <div className="flex items-center gap-2">
               <Icons.globe className="size-4" />
-              <span>{query ? t('searchedFor', { query }) : t('title')}</span>
+              <span>{query ? t('chat.tools.webSearch.searchedFor', { query }) : t('chat.tools.webSearch.title')}</span>
             </div>
           </ChainOfThoughtHeader>
 
           <ChainOfThoughtContent>
             <ChainOfThoughtStep
               icon={Icons.search}
-              label={t('foundSources', { count: successfulResults.length })}
+              label={t('chat.tools.webSearch.foundSources', { count: successfulResults.length })}
               status={ChainOfThoughtStepStatuses.COMPLETE}
             >
               <ChainOfThoughtSearchResults>
@@ -138,7 +137,7 @@ export function WebSearchDisplay({
             {hasImages && (
               <ChainOfThoughtStep
                 icon={Icons.globe}
-                label={tSteps('foundImages')}
+                label={t('chat.preSearch.steps.foundImages')}
                 status={ChainOfThoughtStepStatuses.COMPLETE}
               >
                 <WebSearchImageGallery results={successfulResults} />
@@ -148,7 +147,7 @@ export function WebSearchDisplay({
             {(answer || isStreaming) && (
               <ChainOfThoughtStep
                 icon={Icons.search}
-                label={tSteps('answer')}
+                label={t('chat.preSearch.steps.answer')}
                 status={isStreaming ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
               >
                 <div className="p-4 rounded-lg bg-muted/10 border border-border/30">
@@ -165,7 +164,7 @@ export function WebSearchDisplay({
               <Alert variant="destructive">
                 <Icons.alertCircle className="size-4" />
                 <AlertDescription>
-                  {t('error.failedToLoad', {
+                  {t('chat.tools.webSearch.error.failedToLoad', {
                     count: totalResults - successfulResults.length,
                   })}
                 </AlertDescription>

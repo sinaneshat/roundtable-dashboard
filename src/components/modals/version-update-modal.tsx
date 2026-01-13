@@ -39,7 +39,7 @@ function checkVersionUpdate(): { shouldShow: boolean; version: string } {
 }
 
 export function VersionUpdateModal() {
-  const t = useTranslations('version');
+  const t = useTranslations();
   const [state] = useState(() => checkVersionUpdate());
   const [open, setOpen] = useState(state.shouldShow);
 
@@ -67,10 +67,10 @@ export function VersionUpdateModal() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icons.sparkles className="size-5 text-blue-400" />
-            {t('newVersionAvailable')}
+            {t('version.newVersionAvailable')}
           </DialogTitle>
           <DialogDescription>
-            {t('versionLabel')}
+            {t('version.versionLabel')}
             {' '}
             {state.version}
           </DialogDescription>
@@ -78,13 +78,13 @@ export function VersionUpdateModal() {
 
         <div className="space-y-4 bg-black/50 backdrop-blur-lg p-6">
           <p className="text-sm text-muted-foreground">
-            {t('updateDescription')}
+            {t('version.updateDescription')}
           </p>
         </div>
 
         <DialogFooter>
           <Button onClick={handleUpdate} className="w-full">
-            {t('updateNow')}
+            {t('version.updateNow')}
           </Button>
         </DialogFooter>
       </DialogContent>

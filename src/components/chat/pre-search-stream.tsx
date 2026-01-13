@@ -60,7 +60,6 @@ function PreSearchStreamComponent({
       tryMarkPreSearchTriggered: s.tryMarkPreSearchTriggered,
       markPreSearchTriggered: s.markPreSearchTriggered,
       clearPreSearchTracking: s.clearPreSearchTracking,
-      // ✅ FIX: Subscribe to changelog blocking flags
       isWaitingForChangelog: s.isWaitingForChangelog,
       configChangeRoundNumber: s.configChangeRoundNumber,
     })),

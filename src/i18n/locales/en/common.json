@@ -1,27 +1,10 @@
 {
   "accessibility": {
-    "accessibility": "Accessibility",
-    "disableHighContrast": "DisableHighContrast",
-    "disableMotion": "DisableMotion",
-    "enableHighContrast": "EnableHighContrast",
-    "enableMotion": "EnableMotion",
-    "highContrast": "HighContrast",
-    "largeText": "LargeText",
     "mobileSidebar": {
-      "title": "Navigation",
-      "description": "Main navigation menu"
+      "description": "Main navigation menu",
+      "title": "Navigation"
     },
-    "morePages": "More pages",
-    "nextPage": "Go to next page",
     "openSidebar": "Open sidebar",
-    "normalText": "NormalText",
-    "openToolbar": "OpenToolbar",
-    "pagination": "pagination",
-    "previousPage": "Go to previous page",
-    "reducedMotion": "ReducedMotion",
-    "selectAll": "Select all",
-    "selectRow": "Select row",
-    "settings": "Settings",
     "toggleSidebar": "Toggle Sidebar"
   },
   "actions": {
@@ -30,105 +13,94 @@
     "close": "Close",
     "delete": "Delete",
     "deleting": "Deleting",
-    "done": "Done",
-    "download": "Download",
     "goHome": "Go Home",
-    "loading": "Loading...",
-    "next": "Next",
-    "previous": "Previous",
-    "retry": "Retry",
+    "more": "More",
     "save": "Save",
-    "scrollToBottom": "Scroll to bottom",
     "select": "Select",
-    "tryAgain": "Try Again",
-    "updating": "Updating",
-    "toggleSidebar": "Toggle Sidebar",
-    "more": "More"
+    "tryAgain": "Try Again"
   },
   "apiKeys": {
-    "modal": {
-      "title": "API Keys",
-      "description": "Manage your API keys for programmatic access"
-    },
     "docs": {
       "accordion": {
-        "title": "API Documentation",
+        "description": "Access comprehensive documentation to integrate with our API. Choose the format that works best for you.",
         "subtitle": "Explore our API reference and guides",
-        "description": "Access comprehensive documentation to integrate with our API. Choose the format that works best for you."
+        "title": "API Documentation"
       },
       "links": {
         "interactive": {
-          "title": "Interactive Documentation",
-          "description": "Browse and test API endpoints with Scalar UI"
-        },
-        "openapi": {
-          "title": "OpenAPI Specification",
-          "description": "Download the complete API spec in JSON format"
+          "description": "Browse and test API endpoints with Scalar UI",
+          "title": "Interactive Documentation"
         },
         "llmText": {
-          "title": "LLM-Friendly Documentation",
-          "description": "Markdown format optimized for AI tools and agents"
+          "description": "Markdown format optimized for AI tools and agents",
+          "title": "LLM-Friendly Documentation"
+        },
+        "openapi": {
+          "description": "Download the complete API spec in JSON format",
+          "title": "OpenAPI Specification"
         }
       }
     },
-    "tabs": {
-      "list": "My Keys",
-      "create": "Create New"
-    },
     "form": {
-      "nameLabel": "API Key Name",
-      "namePlaceholder": "e.g., Production API Key",
-      "nameDescription": "A descriptive name to help you identify this key",
-      "expiresInLabel": "Expiration",
-      "expiresInPlaceholder": "Select expiration period",
-      "expiresInDescription": "When this key should expire (optional)",
-      "expiresIn": {
-        "never": "Never expires",
-        "7days": "7 days",
-        "30days": "30 days",
-        "90days": "90 days",
-        "180days": "180 days",
-        "365days": "365 days"
-      },
-      "successTitle": "API Key Created Successfully!",
-      "successMessage": "Your API key has been generated. Make sure to copy it now - you won't be able to see it again.",
-      "generatedKeyLabel": "Your API Key",
-      "copyButton": "Copy",
       "copied": "Copied!",
+      "copyButton": "Copy",
       "copyWarning": "This is your only chance to copy this key. Store it securely - we cannot recover it later.",
       "createButton": "Create API Key",
       "doneButton": "Done",
+      "expiresIn": {
+        "180days": "180 days",
+        "30days": "30 days",
+        "365days": "365 days",
+        "7days": "7 days",
+        "90days": "90 days",
+        "never": "Never expires"
+      },
+      "expiresInDescription": "When this key should expire (optional)",
+      "expiresInLabel": "Expiration",
+      "expiresInPlaceholder": "Select expiration period",
+      "generatedKeyLabel": "Your API Key",
       "limitReached": {
-        "title": "API Key Limit Reached",
-        "description": "You have reached the maximum limit of 5 API keys. Please delete an existing key before creating a new one."
-      }
+        "description": "You have reached the maximum limit of 5 API keys. Please delete an existing key before creating a new one.",
+        "title": "API Key Limit Reached"
+      },
+      "nameDescription": "A descriptive name to help you identify this key",
+      "nameLabel": "API Key Name",
+      "namePlaceholder": "e.g., Production API Key",
+      "successMessage": "Your API key has been generated. Make sure to copy it now - you won't be able to see it again.",
+      "successTitle": "API Key Created Successfully!"
     },
     "list": {
-      "noKeys": "No API keys yet",
-      "noKeysDescription": "Create your first API key to start using our programmatic API access",
-      "createNew": "Create API Key",
-      "unnamedKey": "Unnamed Key",
-      "createdAt": "Created",
-      "expiresAt": "Expires",
-      "neverExpires": "Never",
-      "expired": "Expired",
-      "status": "Status",
       "active": "Active",
-      "disabled": "Disabled",
-      "remainingRequests": "Remaining",
-      "rateLimit": "Rate Limit",
+      "createNew": "Create API Key",
+      "createdAt": "Created",
       "day": "day",
       "delete": "Delete API key",
-      "deleteConfirmTitle": "Delete API Key?",
-      "deleteConfirmDescription": "This action cannot be undone. This API key will immediately stop working.",
       "deleteButton": "Delete Key",
-      "deleteSuccess": "API key deleted",
-      "deleteSuccessDescription": "The API key has been permanently deleted",
+      "deleteConfirmDescription": "This action cannot be undone. This API key will immediately stop working.",
+      "deleteConfirmTitle": "Delete API Key?",
       "deleteFailed": "Failed to delete API key",
-      "deleteFailedDescription": "An error occurred while deleting the API key"
+      "disabled": "Disabled",
+      "errorTitle": "Error",
+      "expired": "Expired",
+      "expiresAt": "Expires",
+      "neverExpires": "Never",
+      "noKeys": "No API keys yet",
+      "noKeysDescription": "Create your first API key to start using our programmatic API access",
+      "rateLimit": "Rate Limit",
+      "remainingRequests": "Remaining",
+      "unnamedKey": "Unnamed Key"
+    },
+    "modal": {
+      "description": "Manage your API keys for programmatic access",
+      "title": "API Keys"
+    },
+    "tabs": {
+      "create": "Create New",
+      "list": "My Keys"
     }
   },
   "auth": {
+    "continueWithEmail": "Continue with Email",
     "email": "Email",
     "emailPlaceholder": "Enter your email",
     "errors": {
@@ -146,11 +118,6 @@
       "emailCreateAccount": "Account Creation Error",
       "emailCreateAccountDesc": "Could not create your account. Please try a different email address.",
       "errorCode": "Error code:",
-      "invalidEmailAddress": "Invalid email address",
-      "googleSignInFailed": "Google sign-in failed. Please try again.",
-      "signInFailed": "Sign-in Failed",
-      "threadNotFound": "Thread Not Found",
-      "threadUnavailable": "Thread Unavailable",
       "notice": "Notice",
       "oauthCallback": "Authentication Error",
       "oauthCallbackDesc": "There was a problem with the authentication process. Please try signing in again.",
@@ -160,6 +127,8 @@
       "oauthSigninDesc": "There was a problem signing in with your social account. Please try again.",
       "restartProcess": "Authentication Process Reset Required",
       "restartProcessDesc": "The authentication process needs to be restarted. Please try signing in again from the beginning.",
+      "threadNotFound": "Thread Not Found",
+      "threadUnavailable": "Thread Unavailable",
       "tryAgain": "Try Again",
       "verification": "Verification Required",
       "verificationDesc": "Please check your email to verify your account before signing in."
@@ -168,7 +137,6 @@
       "headline": "Your AI Board of Directors",
       "subtitle": "Get perspectives from multiple AI models working together to solve your toughest problems"
     },
-    "continueWithEmail": "Continue with Email",
     "magicLink": {
       "emailSentMessage": "We've sent a magic link to {email}. Click the link to sign in.",
       "error": "Error",
@@ -177,21 +145,20 @@
       "useDifferentEmail": "Use a different email"
     },
     "signIn": {
-      "description": "Sign in to your account",
       "title": "Welcome back"
     },
+    "signInWithGoogle": "Continue with Google",
     "signUp": {
-      "title": "Sign Up",
-      "join": "Join",
-      "getStartedFree": "Get Started Free",
       "features": {
         "multipleModels": "Multiple AI models collaborate together",
-        "realtimeBrainstorming": "Real-time brainstorming and problem solving",
-        "publicSharing": "Share conversations publicly"
-      }
-    },
-    "signInWithGoogle": "Continue with Google"
+        "publicSharing": "Share conversations publicly",
+        "realtimeBrainstorming": "Real-time brainstorming and problem solving"
+      },
+      "getStartedFree": "Get Started Free",
+      "join": "Join"
+    }
   },
+  "back": "Back",
   "billing": {
     "cancelSubscription": {
       "activeUntil": "Active until",
@@ -214,875 +181,417 @@
       "warning": "Are you absolutely sure you want to cancel?",
       "whatYouWillLose": "What you'll lose access to:"
     },
+    "cancelSuccess": "Subscription cancelled successfully",
     "currentPlan": "Current Plan",
-    "interval": {
-      "credits": "Credits",
-      "monthly": "Monthly"
-    },
-    "manageBilling": "Manage Billing",
-    "noPlansForInterval": "No plans available for this billing period",
-    "products": {
-      "description": "Browse and subscribe to available products",
-      "title": "Available Products"
-    },
-    "renewsOn": "Renews On",
-    "status": {
-      "canceled": "Canceled",
-      "canceledTooltip": "Your subscription will be canceled on {date}. You'll retain full access to all premium features until then, after which your account will return to the Free plan.",
-      "endOfPeriod": "the end of your billing period"
-    },
-    "success": {
-      "activatingSubscription": "Activating your subscription...",
-      "processingPurchase": "Processing your purchase...",
-      "processingSubscription": "Activating your subscription...",
-      "processingCredits": "Adding credits to your account...",
-      "confirmingPayment": "Please wait while we confirm your payment",
-      "description": "Your subscription has been activated",
-      "autoRedirect": "Redirecting to chat in {seconds} seconds...",
-      "startChat": "Start Your Roundtable",
-      "title": "Payment Successful!",
-      "viewPricing": "View Pricing Plans",
-      "planLimits": {
-        "credits": "Credits",
-        "concurrentModels": "Concurrent Models",
-        "monthlyCredits": "Monthly Credits",
-        "creditsAvailable": "Credits Available",
-        "maxThreads": "Max Threads",
-        "maxMessages": "Max Messages",
-        "maxMemories": "Max Memories",
-        "customRoles": "Custom Roles",
-        "status": "Status",
-        "activeUntilLabel": "Active until",
-        "paidDescription": "Your subscription includes the following features",
-        "defaultDescription": "You have access to the following features",
-        "models": "AI Models",
-        "monthly": "Monthly Refresh",
-        "bonus": "Bonus",
-        "oneTime": "One-time"
-      },
-      "credits": {
-        "title": "Credits Added!",
-        "description": "Your credits have been added to your account",
-        "creditsAdded": "{amount} credits",
-        "amountPaid": "Amount Paid",
-        "currentBalance": "Current Balance",
-        "purchased": "Purchased"
-      }
+    "errors": {
+      "cancelFailed": "Cancellation Failed",
+      "manageBillingFailed": "Failed to Open Billing Portal",
+      "subscribeFailed": "Subscription Failed"
     },
     "failure": {
-      "title": "Payment Failed",
-      "description": "We couldn't process your payment. Don't worry, you haven't been charged.",
-      "paymentFailed": "Payment Processing Failed",
-      "paymentFailedDescription": "Your payment could not be processed. This usually happens due to insufficient funds, card decline, or incorrect payment details.",
-      "syncFailed": "Subscription Sync Failed",
-      "syncFailedDescription": "Your payment was successful, but we encountered an issue activating your subscription. Our team has been notified and will resolve this shortly.",
       "authFailed": "Session Expired",
       "authFailedDescription": "Your session expired during payment processing. Please sign in and try again.",
-      "unknownError": "Unexpected Error",
-      "unknownErrorDescription": "An unexpected error occurred while processing your payment. Please try again or contact support if the issue persists.",
-      "noPurchaseFound": "No Purchase Found",
-      "noPurchaseFoundDescription": "We couldn't find a recent credit purchase for your account. If you believe this is an error, please contact support.",
-      "technicalDetails": "Technical details",
-      "errorCode": "Error code",
       "commonReasons": {
-        "title": "Common Reasons for Payment Failure:",
-        "insufficientFunds": "Insufficient funds in your account",
+        "bankRejection": "Transaction rejected by your bank for security reasons",
         "cardDeclined": "Card declined by your bank",
         "incorrectDetails": "Incorrect card details or billing information",
-        "bankRejection": "Transaction rejected by your bank for security reasons"
+        "insufficientFunds": "Insufficient funds in your account",
+        "title": "Common Reasons for Payment Failure:"
       },
+      "description": "We couldn't process your payment. Don't worry, you haven't been charged.",
+      "errorCode": "Error code",
+      "noPurchaseFound": "No Purchase Found",
+      "noPurchaseFoundDescription": "We couldn't find a recent credit purchase for your account. If you believe this is an error, please contact support.",
+      "paymentFailed": "Payment Processing Failed",
+      "paymentFailedDescription": "Your payment could not be processed. This usually happens due to insufficient funds, card decline, or incorrect payment details.",
+      "returnHome": "Return to Chat",
       "support": {
-        "title": "Need Help?",
         "description": "If you believe this is an error or if you were charged but still see this message, please contact our support team immediately. We're here to help resolve any billing issues.",
-        "includeInfo": "Please include any error codes shown above when contacting support."
+        "includeInfo": "Please include any error codes shown above when contacting support.",
+        "title": "Need Help?"
       },
+      "syncFailed": "Subscription Sync Failed",
+      "syncFailedDescription": "Your payment was successful, but we encountered an issue activating your subscription. Our team has been notified and will resolve this shortly.",
+      "technicalDetails": "Technical details",
+      "title": "Payment Failed",
       "tryAgain": "Try Again",
-      "returnHome": "Return to Chat"
+      "unknownError": "Unexpected Error",
+      "unknownErrorDescription": "An unexpected error occurred while processing your payment. Please try again or contact support if the issue persists."
     },
-    "errors": {
-      "subscribeFailed": "Subscription Failed",
-      "cancelFailed": "Cancellation Failed",
-      "manageBillingFailed": "Failed to Open Billing Portal"
-    },
+    "manageBilling": "Manage Billing",
+    "renewsOn": "Renews On",
     "subscriptionChanged": {
-      "title": "Subscription Updated!",
-      "upgrade": "Upgrade",
-      "downgrade": "Downgrade",
+      "afterDate": "After {date}",
+      "billingPeriodEnds": "End of billing period",
       "change": "Change",
-      "upgradeDescription": "Your subscription has been upgraded successfully. You now have access to enhanced features and higher limits.",
-      "downgradeDescription": "Your subscription change has been scheduled. You'll keep your current plan features until the end of your billing period.",
       "changeDescription": "Your subscription has been updated successfully.",
-      "gracePeriodNotice": "Your current plan will remain active until {date}. After that, your new plan takes effect.",
-      "previousPlan": "Previous Plan",
       "currentPlan": "Current Plan",
       "currentPlanNow": "Current Plan (Active Now)",
-      "afterDate": "After {date}",
+      "downgrade": "Downgrade",
+      "downgradeDescription": "Your subscription change has been scheduled. You'll keep your current plan features until the end of your billing period.",
+      "gracePeriodNotice": "Your current plan will remain active until {date}. After that, your new plan takes effect.",
       "newPlanDetails": "Your New Plan Details",
       "noSubscriptionFound": "No Subscription Found",
       "noSubscriptionFoundDescription": "We couldn't find an active subscription. Please try subscribing to a plan.",
+      "previousPlan": "Previous Plan",
+      "title": "Subscription Updated!",
+      "upgrade": "Upgrade",
+      "upgradeDescription": "Your subscription has been upgraded successfully. You now have access to enhanced features and higher limits.",
+      "viewPricing": "View Pricing Plans"
+    },
+    "success": {
+      "autoRedirect": "Redirecting to chat in {seconds} seconds...",
+      "confirmingPayment": "Please wait while we confirm your payment",
+      "description": "Your subscription has been activated",
+      "planLimits": {
+        "activeUntilLabel": "Active until",
+        "concurrentModels": "Concurrent Models",
+        "creditsAvailable": "Credits Available",
+        "monthlyCredits": "Monthly Credits",
+        "status": "Status"
+      },
+      "processingSubscription": "Activating your subscription...",
+      "startChat": "Start Your Roundtable",
+      "title": "Payment Successful!",
       "viewPricing": "View Pricing Plans"
     }
   },
-  "brand": {
-    "logoAlt": "Company Logo"
-  },
   "chat": {
-    "dashboard": {
-      "title": "AI Collaboration Hub",
-      "features": {
-        "multipleModels": "Multiple AI Models",
-        "realtimeCollaboration": "Real-time Collaboration",
-        "publicSharing": "Public Sharing"
-      }
-    },
-    "actions": {
-      "copy": "Copy message",
-      "messageCopied": "Message copied",
-      "messageCopiedDescription": "Message content copied to clipboard",
-      "scrollToBottom": "Scroll to bottom"
-    },
-    "models": {
-      "aiModels": "AI Models",
-      "models": "Models",
-      "searchModels": "Search AI models...",
-      "noModelsFound": "No models found.",
-      "selectedModels": "Selected Models",
-      "selectedModelsLabel": "Selected Models:",
-      "dragToReorder": "Drag to reorder",
-      "dragDisabled": "Drag disabled",
-      "limitReached": "Limit Reached",
-      "noVision": "No Vision",
-      "noVisionTooltip": "This model cannot process images or PDFs. Remove visual files to enable selection.",
-      "modelsDeselected": "Models Deselected",
-      "modelsDeselectedDescription": "{models} cannot process images/PDFs and were deselected",
-      "presetNoVisionAll": "All models in this preset cannot process images/PDFs. Remove visual files to use this preset.",
-      "presetNoVisionPartial": "{count} model(s) cannot process images/PDFs and will be excluded.",
-      "presetModelsExcluded": "Models Excluded",
-      "presetModelsExcludedDescription": "{count} model(s) without vision were excluded from preset",
-      "cannotSelectModel": "Cannot Select Model",
-      "modelIncompatibleWithFiles": "This model cannot process the uploaded images/PDFs. Remove visual files first.",
-      "presetIncompatible": "Preset Unavailable",
-      "presetIncompatibleDescription": "All models in this preset cannot process your uploaded images/PDFs. Remove visual files first.",
-      "minRequired": "Min 3 required",
-      "yourPlan": "Your Plan",
-      "mostPopular": "Most Popular",
-      "topModels": "Top AI Models",
-      "model": "model",
-      "upgradeToUnlock": "Upgrade to unlock all models",
-      "unlockAllModels": "Unlock All Pro Models",
-      "upgradeToTier": "Upgrade to {tier}",
-      "minimumRequired": {
-        "title": "Model Required",
-        "description": "Select at least {count} model to continue"
-      },
-      "yourModels": "Your Models",
-      "availableModels": "Available Models",
-      "premiumModels": "Premium Models",
-      "addRole": "Add Role",
-      "clearRole": "Clear role",
-      "modal": {
-        "title": "Choose, reorder, and assign roles",
-        "subtitle": "Manage your AI models and their roles",
-        "searchPlaceholder": "Search AI models...",
-        "premium": "Premium",
-        "locked": "Locked",
-        "upgrade": "Upgrade",
-        "back": "Back",
-        "setRoleFor": "Set role for {modelName}",
-        "selectOrEnterRole": "Select a predefined role or create a custom one",
-        "customRolePlaceholder": "Enter custom role name...",
-        "saveRole": "Save",
-        "upgradeRequired": "Upgrade Required",
-        "customRolesUpgradeMessage": "Custom roles are available for paid users only. Upgrade to create custom roles.",
-        "customRolesPaidOnly": "Custom roles are available for paid users",
-        "failedToCreateRole": "Failed to create role",
-        "roleDeleted": "Role deleted",
-        "roleDeletedMessage": "\"{name}\" has been deleted",
-        "failedToDeleteRole": "Failed to delete role",
-        "noModelsSelected": "No models selected",
-        "selectAtLeastOneModel": "Select at least one model to save as a preset",
-        "selectAtLeastOneModelUpdate": "Select at least one model to update the preset"
-      },
-      "presets": {
-        "title": "Presets",
-        "myPresets": "My Presets",
-        "systemPresets": "Presets",
-        "saveAsPreset": "Save as Preset",
-        "saveAsNew": "Save as New",
-        "updatePreset": "Update \"{name}\"",
-        "namePlaceholder": "Preset name...",
-        "cancel": "Cancel",
-        "save": "Save",
-        "done": "Done",
-        "presetSaved": "Preset saved",
-        "presetSavedMessage": "\"{name}\" has been saved to your presets",
-        "presetUpdated": "Preset updated",
-        "presetUpdatedMessage": "\"{name}\" has been updated",
-        "presetDeleted": "Preset deleted",
-        "presetDeletedMessage": "Your preset has been removed",
-        "failedToSave": "Failed to save preset",
-        "failedToUpdate": "Failed to update preset",
-        "failedToDelete": "Failed to delete preset",
-        "saving": "Saving...",
-        "updating": "Updating...",
-        "rolesRequired": "{count, plural, =1 {1 model needs a role} other {# models need roles}}",
-        "cannotSave": "Cannot save preset",
-        "nameRequired": "Please enter a preset name",
-        "update": "Update"
-      },
-      "buildCustom": {
-        "title": "Build Custom"
-      }
-    },
-    "roles": {
-      "addRole": "Add Role",
-      "searchOrCreateRole": "Search or create role...",
-      "createCustomRole": "Create Custom Role",
-      "defaultRoles": "Default Roles",
-      "customRoles": "Custom Roles",
-      "create": "Create",
-      "creating": "Creating...",
-      "noRolesFound": "No roles found.",
-      "deleteCustomRole": "Delete custom role",
-      "panel": {
-        "title": "Set Role for {model}",
-        "subtitle": "Select a role or enter a custom one",
-        "back": "Back",
-        "close": "Close",
-        "currentRole": "Current Role",
-        "clear": "Clear",
-        "predefinedRoles": "Predefined Roles",
-        "customRoles": "Custom Roles",
-        "customRoleInput": "Custom Role",
-        "customRolePlaceholder": "Enter custom role name...",
-        "customRoleHint": "Press Enter or click Save to assign",
-        "save": "Save"
-      }
-    },
-    "modes": {
-      "mode": "Mode",
-      "currentMode": "Current Mode:",
-      "chatModes": "Chat Modes",
-      "modal": {
-        "title": "Conversation Mode",
-        "subtitle": "Choose how AI models interact with your query",
-        "debating": {
-          "title": "Debating",
-          "description": "Explore different perspectives through structured debate"
-        },
-        "brainstorming": {
-          "title": "Brainstorming",
-          "description": "Generate creative ideas collaboratively"
-        },
-        "problemSolving": {
-          "title": "Problem Solving",
-          "description": "Work together to find practical solutions"
-        },
-        "analyzing": {
-          "title": "Analyzing",
-          "description": "Deep analysis from multiple expert viewpoints"
-        }
-      }
-    },
-    "webSearch": {
-      "title": "Web Search",
-      "toggle": "Web Search",
-      "enabled": "Search On",
-      "disabled": "Search Off",
-      "description": {
-        "enabled": "Participants can browse the web for information",
-        "disabled": "Click to enable web browsing for participants"
-      }
+    "attachments": {
+      "defaultFileType": "File",
+      "defaultName": "File",
+      "dropDescription": "Upload files to include in your message",
+      "dropHere": "Drop files here",
+      "loadingPreview": "Loading preview...",
+      "previewUnavailable": "Preview unavailable"
     },
     "autoMode": {
-      "label": "Auto",
-      "manualLabel": "Manual",
       "analyzing": "Analyzing...",
-      "tooltip": "AI automatically selects the best models and settings for your prompt"
+      "label": "Label",
+      "manualLabel": "Manual"
     },
+    "citations": {
+      "download": "Download"
+    },
+    "configuration": {
+      "actionSummary": {
+        "added": "Added",
+        "modified": "Modified",
+        "removed": "Removed"
+      },
+      "configurationChanged": "Configuration changed",
+      "webSearchDisabled": "Web search disabled",
+      "webSearchEnabled": "Web search enabled"
+    },
+    "copyLink": "Copy Link",
+    "dashboard": {
+      "features": {
+        "multipleModels": "Multiple AI Models",
+        "publicSharing": "Public Sharing",
+        "realtimeCollaboration": "Real-time Collaboration"
+      },
+      "title": "AI Collaboration Hub"
+    },
+    "deleteThread": "Delete thread",
+    "deleteThreadConfirmDescription": "This action cannot be undone. All messages will be permanently deleted.",
+    "deleteThreadConfirmTitle": "Delete this thread?",
+    "emptyStateSubtext": "Your chats will appear here",
+    "emptyStateTitle": "Start your first conversation",
+    "errors": {
+      "addOwnApiKey": "Add your own API key for higher limits",
+      "apiError": "API Error",
+      "authenticationError": "Authentication Error",
+      "checkConnection": "Check your internet connection",
+      "contentFilterHint": "Your message was filtered. Try rephrasing.",
+      "contentFiltered": "Content was filtered",
+      "contextTooLong": "Message too long. Please shorten your message.",
+      "emptyResponse": "Empty response received",
+      "errorType": "Error Type",
+      "fullMetadata": "Full metadata",
+      "generationCancelled": "Generation was cancelled",
+      "generationFailed": "Generation failed",
+      "hideDetails": "Hide details",
+      "model": "Model",
+      "modelNotFound": "Model not found",
+      "modelNotFoundHint": "The selected model may be unavailable. Try another model.",
+      "networkError": "Network Error",
+      "participant": "Participant",
+      "providerMessage": "Provider message",
+      "rateLimitReached": "Rate limit reached. Please wait and try again.",
+      "requestAborted": "Request was aborted",
+      "requestTimeout": "Request timed out",
+      "requestTookTooLong": "The request took too long to complete",
+      "responseFromProvider": "Response from provider",
+      "shortenMessage": "Try shortening your message",
+      "showDetails": "Show details",
+      "status": "Status",
+      "statusCode": "Status code",
+      "tryDifferentModel": "Try a different model",
+      "tryDifferentPrompt": "Try a different prompt",
+      "unexpectedError": "An unexpected error occurred",
+      "unknownModel": "Unknown model",
+      "useRegenerateButton": "Use the regenerate button to try again",
+      "validationError": "Validation Error",
+      "validationHint": "Check your input and try again",
+      "waitAndRegenerate": "Wait a moment and try regenerating",
+      "whatToDo": "What to do"
+    },
+    "feedback": {
+      "dislike": "Dislike",
+      "like": "Like"
+    },
+    "input": {
+      "attachFiles": "Attach files",
+      "clickMicToStop": "Click microphone to stop",
+      "label": "Message input",
+      "listeningPlaceholder": "Listening... speak now",
+      "messageTooLong": "Message too long. Please shorten to send.",
+      "noModelsSelected": "Select at least 1 model to send a message",
+      "placeholder": "Message Roundtable...",
+      "recording": "Recording...",
+      "send": "Send message",
+      "stopRecording": "Stop recording",
+      "stopStreaming": "Stop streaming",
+      "streamingLabel": "Message input (disabled while AI responds)",
+      "streamingPlaceholder": "Waiting for AI response...",
+      "submitting": "Sending...",
+      "voiceInput": "Voice input"
+    },
+    "linkCopied": "Link Copied!",
+    "makePrivate": "Make Private",
+    "makePublic": "Make Public",
+    "makePublicConfirmDescription": "Anyone with the link will be able to view this conversation.",
+    "makingPrivate": "Making private...",
+    "makingPublic": "Making public...",
+    "message": {
+      "sources": "Sources"
+    },
+    "messageActions": {
+      "copy": "Copy",
+      "copyError": "Copy failed",
+      "copyErrorDescription": "Failed to copy content to clipboard",
+      "copySuccess": "Copied!",
+      "copySuccessDescription": "Content copied to clipboard"
+    },
+    "models": {
+      "addRole": "Add role",
+      "aiModels": "AI Models",
+      "buildCustom": {
+        "title": "Title"
+      },
+      "cannotSelectModel": "Cannot Select Model",
+      "clearRole": "Clear role",
+      "limitReached": "Model limit reached",
+      "minimumRequired": {
+        "description": "Select at least {count} model to continue"
+      },
+      "modal": {
+        "customRolePlaceholder": "Enter custom role instructions...",
+        "saveRole": "Save Role",
+        "selectAtLeastOneModel": "Select at least one model"
+      },
+      "modelIncompatibleWithFiles": "This model cannot process the uploaded images/PDFs. Remove visual files first.",
+      "models": "Models",
+      "modelsDeselected": "Models Deselected",
+      "modelsDeselectedDescription": "{models} cannot process images/PDFs and were deselected",
+      "noModelsFound": "No models found",
+      "noVision": "No vision",
+      "noVisionTooltip": "This model cannot process images",
+      "presetModelsExcluded": "Some models excluded",
+      "presetModelsExcludedDescription": "Some models in this preset are not available on your plan.",
+      "presets": {
+        "cancel": "Cancel",
+        "cannotSave": "Cannot save preset",
+        "done": "Done",
+        "failedToDelete": "Failed to delete preset",
+        "failedToSave": "Failed to save preset",
+        "failedToUpdate": "Failed to update preset",
+        "myPresets": "My Presets",
+        "namePlaceholder": "Enter preset name...",
+        "nameRequired": "Name is required",
+        "presetDeleted": "Preset deleted",
+        "presetDeletedMessage": "The preset has been deleted.",
+        "presetSaved": "Preset saved!",
+        "presetSavedMessage": "Your preset has been saved successfully.",
+        "presetUpdated": "Preset updated!",
+        "presetUpdatedMessage": "Your preset has been updated successfully.",
+        "save": "Save",
+        "saveAsNew": "Save as New",
+        "saveAsPreset": "Save as Preset",
+        "systemPresets": "System Presets",
+        "title": "Title",
+        "update": "Update"
+      },
+      "unlockAllModels": "Unlock all models",
+      "upgradeToUnlock": "Upgrade to unlock"
+    },
+    "modes": {
+      "modal": {
+        "subtitle": "Subtitle",
+        "title": "Title"
+      },
+      "mode": "Mode"
+    },
+    "moreOptions": "More options",
+    "noResults": "No chats found",
+    "noResultsDescription": "Try a different search term",
+    "participant": {
+      "emptyResponse": "No response from {model}",
+      "gatheringThoughts": "Gathering thoughts...",
+      "generating": "Generating response from {model}...",
+      "moderatorObserving": "Observing...",
+      "reasoningOnlyResponse": "Reasoning-only response from {model}",
+      "tierRequired": "{tier} required",
+      "waitingForWebResults": "Waiting for web results...",
+      "waitingNamed": "Waiting for {name}...",
+      "waitingToSynthesize": "Waiting to synthesize..."
+    },
+    "pin": "Pin",
+    "pinned": "Pinned",
+    "preSearch": {
+      "autoRetryingSearch": "Retrying search...",
+      "pendingSearch": "Search pending...",
+      "plan": {
+        "title": "Title"
+      },
+      "searchedSources": "Searched {count} sources",
+      "searching": "Searching",
+      "source": "Source",
+      "sources": "Sources",
+      "steps": {
+        "answer": "Answer",
+        "foundImages": "Found images",
+        "query": "Query",
+        "searchingTheWeb": "Searching the web...",
+        "synthesizingAnswer": "Synthesizing answer..."
+      },
+      "title": "Web Research"
+    },
+    "public": {
+      "ctaDescription": "Create your own multi-AI conversations",
+      "ctaHeadline": "Start Your AI Roundtable",
+      "getStartedFree": "Get Started Free",
+      "goHome": "Go Home",
+      "loadingPublicChat": "Loading public chat...",
+      "noMessagesDescription": "This conversation hasn't started yet. Create your own multi-AI chat!",
+      "noMessagesYet": "No messages yet",
+      "privateChat": "Private Chat",
+      "privateChatDescription": "This conversation is private and cannot be viewed.",
+      "threadNotFound": "Thread Not Found",
+      "threadNotFoundDescription": "This public chat thread doesn't exist or has been made private.",
+      "tryFree": "Try Free"
+    },
+    "rename": "Rename",
+    "renameConversation": "Rename conversation",
+    "roles": {
+      "deleteCustomRole": "Delete custom role"
+    },
+    "roundActions": {
+      "copyError": "Copy failed",
+      "copyErrorDescription": "Failed to copy content to clipboard",
+      "copyRound": "Copy round",
+      "copySuccess": "Copied!",
+      "copySuccessDescription": "Content copied to clipboard",
+      "copySummary": "Copy summary",
+      "copyThread": "Copy thread",
+      "copyThreadSuccess": "Thread copied!",
+      "copyThreadSuccessDescription": "Thread content copied to clipboard"
+    },
+    "scrollToBottom": "Scroll to bottom",
+    "searchChats": "Search chats...",
+    "searchChatsDescription": "Search and navigate through your chat conversations",
+    "share": "Share",
+    "shareDialog": {
+      "copyLinkLabel": "Copy link",
+      "generatingPreview": "Generating preview...",
+      "publicStatus": "Public"
+    },
+    "shareThread": "Share Thread",
+    "shareThreadDescription": "Share this conversation with others",
+    "sources": {
+      "title": "Sources"
+    },
+    "threadDeleteFailed": "Failed to delete thread",
+    "threadDeleteFailedDescription": "There was an error deleting the thread. Please try again.",
+    "threadDeleted": "Thread deleted",
+    "threadDeletedDescription": "The thread has been successfully deleted.",
     "toolbar": {
       "options": "Options",
       "selected": "selected",
       "tooltips": {
-        "models": "Select AI models",
-        "mode": "Set conversation mode",
         "attach": "Attach files",
         "attachDisabled": "Attachments unavailable",
-        "webSearch": "Enable web search",
-        "webSearchEnabled": "Web search enabled",
         "microphone": "Voice input",
-        "stopRecording": "Stop recording"
-      }
-    },
-    "attachments": {
-      "defaultName": "Attachment",
-      "loadingPreview": "Loading preview...",
-      "previewUnavailable": "Preview unavailable",
-      "defaultFileType": "File",
-      "dropHere": "Drop files here",
-      "dropDescription": "Upload files to include in your message"
-    },
-    "loading": {
-      "creatingConversation": "Creating conversation",
-      "openingConversation": "Opening conversation",
-      "searching": "Searching",
-      "thinking": "Thinking",
-      "observing": "Observing"
-    },
-    "preSearch": {
-      "title": "Web Research",
-      "searching": "Searching",
-      "pendingSearch": "Searching the web...",
-      "autoRetryingSearch": "Search in progress, auto-retrying...",
-      "error": "Error",
-      "retry": "Retry",
-      "source": "source",
-      "sources": "sources",
-      "searchedSources": "Searched {count} sources",
-      "searchDepth": {
-        "basic": "basic",
-        "advanced": "advanced"
-      },
-      "steps": {
-        "understanding": "Understanding query",
-        "query": "Query",
-        "searchingTheWeb": "Searching the web",
-        "synthesizingAnswer": "Synthesizing answer",
-        "foundImages": "Found images",
-        "answer": "Answer",
-        "searching": "Searching web sources",
-        "searchComplete": "Web sources found",
-        "searchingDesc": "Finding relevant sources...",
-        "results": "Analysis & Results",
-        "sources": "Sources",
-        "generatingPlan": "Generating search plan...",
-        "generatingQueries": "Creating search queries...",
-        "executingSearch": "Searching web...",
-        "extractingContent": "Extracting content...",
-        "generatingAnswer": "Generating answer summary...",
-        "queryProgress": "Query {current} of {total}"
-      },
-      "plan": {
-        "title": "Search Plan",
-        "show": "Show search plan",
-        "hide": "Hide search plan"
-      },
-      "config": {
-        "title": "Search Configuration",
-        "numResults": "Number of results",
-        "searchDepth": "Search depth",
-        "numQueries": "Number of queries",
-        "configure": "Configure search"
+        "mode": "Set conversation mode",
+        "models": "Select AI models",
+        "stopRecording": "Stop recording",
+        "webSearch": "Enable web search",
+        "webSearchEnabled": "Web search enabled"
       }
     },
     "tools": {
+      "arguments": "Arguments",
+      "calling": "Calling tool...",
+      "id": "Tool ID",
       "webSearch": {
-        "title": "Web Search Results",
-        "source": {
-          "singular": "source",
-          "plural": "sources"
-        },
-        "failed": "failed",
-        "show": "Show",
-        "hide": "Hide",
-        "details": "details",
-        "relevanceLabel": "Relevance",
-        "relevanceTooltip": "This result is {score}% relevant to your query",
-        "keyPoints": "Key Points",
-        "searching": "Searching",
-        "loading": "Loading",
-        "cached": "Cached",
-        "wordsExtracted": "words extracted",
-        "requestId": "Request ID",
-        "llmAnswer": {
-          "title": "AI-Generated Summary",
-          "generating": "Generating"
-        },
-        "images": {
-          "title": "Related Images",
-          "count": "{count, plural, =0 {No images} =1 {1 image} other {# images}}",
-          "viewFull": "View full size",
-          "openSource": "View source page",
-          "copyUrl": "Copy image URL",
-          "loadError": "Failed to load image",
-          "noImages": "No images found",
-          "aiAnalysis": "AI Analysis",
-          "visionApi": "Vision API",
-          "author": "Author",
-          "published": "Published",
-          "viewSource": "View Source",
-          "urlCopied": "Image URL copied",
-          "urlCopiedDescription": "Image URL has been copied to clipboard"
-        },
-        "relevance": {
-          "high": "Highly relevant to your query",
-          "medium": "Moderately relevant to your query",
-          "low": "Somewhat relevant to your query"
-        },
-        "metadata": {
-          "minRead": "min read",
-          "words": "words"
-        },
-        "contentType": {
-          "news": "News",
-          "article": "Article",
-          "research": "Research",
-          "blog": "Blog",
-          "general": "Web Page"
-        },
         "error": {
-          "failedToLoad": "{count, plural, =1 {# page could not be loaded} other {# pages could not be loaded}}"
+          "failedToLoad": "Failed to load results"
         },
-        "parameters": {
-          "title": "Search Parameters",
-          "query": "Search Query",
-          "autoDetected": "Auto-detected Parameters",
-          "depth": {
-            "label": "Search Depth",
-            "basic": "Basic",
-            "advanced": "Advanced"
-          },
-          "topic": {
-            "label": "Topic"
-          },
-          "timeRange": {
-            "label": "Time Range"
-          },
-          "reasoning": "AI Reasoning"
+        "foundSources": "Found {count} sources",
+        "images": {
+          "count": "{count} images"
         },
-        "statistics": {
-          "title": "Search Statistics",
-          "totalResults": "Total Results",
-          "totalResultsDesc": "Total number of sources found",
-          "fullContent": "Full Content",
-          "totalWords": "Total Words",
-          "totalImages": "Images",
-          "avgReadTime": "Avg. Read Time",
-          "responseTime": "Response Time",
-          "qualityMetrics": "Quality Metrics",
-          "avgRelevance": "Avg. Relevance"
-        },
-        "configuration": {
-          "title": "Search Configuration",
-          "queries": "Queries",
-          "generatedQueries": "Generated Queries",
-          "results": "Results",
-          "searchTime": "Search Time",
-          "successRate": "Success Rate",
-          "successful": "Successful",
-          "failed": "Failed",
-          "totalTime": "Total Time",
-          "avgTime": "Avg. Time",
-          "performance": "Performance Metrics",
-          "queryDetails": "Query Details",
-          "rationale": "Rationale",
-          "complexity": {
-            "label": "Complexity",
-            "simple": "Simple",
-            "moderate": "Moderate",
-            "complex": "Complex"
-          },
-          "sources": "Sources",
-          "depth": "Search Depth",
-          "autoDetectedParams": "AI-Detected Parameters",
-          "queriesGenerated": "queries generated",
-          "perQuery": "per query",
-          "searchDepth": {
-            "basic": "Basic",
-            "advanced": "Advanced"
-          },
-          "sourceCount": {
-            "optimal": "{count, plural, =1 {1 source optimal} other {# sources optimal}}",
-            "label": "Recommended Sources"
-          }
-        },
-        "contentPreview": {
-          "title": "Full Content",
-          "copy": "Copy content",
-          "copied": "Copied!",
-          "openSource": "Open source",
-          "tableOfContents": "Table of Contents"
-        }
+        "searchedFor": "Searched for",
+        "searchingFor": "Searching for",
+        "title": "Title"
       }
     },
-    "messages": {
-      "tokens": "tokens",
-      "error": "Error",
-      "complete": "Complete",
-      "processing": "Processing..."
-    },
-    "configuration": {
-      "configurationChanged": "Configuration changed",
-      "added": "Added",
-      "modified": "Modified",
-      "removed": "Removed",
-      "webSearchEnabled": "Web search enabled",
-      "webSearchDisabled": "Web search disabled",
-      "actionSummary": {
-        "added": "added",
-        "modified": "modified",
-        "removed": "removed"
-      },
-      "errorBoundary": {
-        "title": "Unable to display configuration changes",
-        "description": "There was an error loading the configuration history. The conversation content is still available.",
-        "retry": "Try Again"
-      }
-    },
-    "errors": {
-      "streamError": "AI Model Failed to Respond",
-      "retry": "Retry",
-      "retryRound": "Retry this round of conversation",
-      "retryHint": "The AI model failed after multiple retries. Click Retry to try again with all participants.",
-      "unknownModel": "Unknown model",
-      "generationCancelled": "Generation cancelled",
-      "rateLimitReached": "Rate limit reached",
-      "contextTooLong": "Context too long",
-      "apiError": "API error",
-      "networkError": "Network error",
-      "requestTimeout": "Request timeout",
-      "validationError": "Invalid request",
-      "modelNotFound": "Model not available",
-      "contentFiltered": "Content filtered",
-      "authenticationError": "Authentication failed",
-      "emptyResponse": "No response generated",
-      "tryDifferentModel": "Try a different AI model",
-      "tryDifferentPrompt": "Try rephrasing your prompt",
-      "validationHint": "The file or input may not be supported by this model",
-      "modelNotFoundHint": "This model may be temporarily unavailable. Try selecting a different model.",
-      "contentFilterHint": "Try rephrasing your message to avoid content that may be filtered",
-      "generationFailed": "Generation failed",
-      "hideDetails": "− Hide details",
-      "showDetails": "+ Show details",
-      "errorType": "Error Type:",
-      "model": "Model:",
-      "participant": "Participant:",
-      "statusCode": "Status code:",
-      "providerMessage": "Provider message:",
-      "status": "Status:",
-      "requestAborted": "Request was aborted",
-      "responseFromProvider": "Response from AI provider:",
-      "whatToDo": "💡 What to do:",
-      "waitAndRegenerate": "Wait a few moments and use the regenerate button below",
-      "addOwnApiKey": "Or add your own API key to avoid rate limits",
-      "shortenMessage": "💡 Try shortening your message or starting a new chat",
-      "checkConnection": "💡 Check your connection and use regenerate button below",
-      "requestTookTooLong": "💡 Request took too long - use regenerate button below to retry",
-      "useRegenerateButton": "💡 Use regenerate button below to retry this round",
-      "fullMetadata": "Full metadata (dev only)",
-      "rateLimitTitle": "Rate Limit Exceeded",
-      "rateLimitSolution": "This model is experiencing high demand. Wait a moment and try again, or select a different model.",
-      "modelUnavailableTitle": "Model Unavailable",
-      "modelUnavailableSolution": "This model is temporarily unavailable. Retrying automatically or try selecting a different model.",
-      "timeoutTitle": "Request Timeout",
-      "timeoutSolution": "The request took too long. This might be a temporary issue. Try again or use a different model.",
-      "networkTitle": "Network Error",
-      "networkSolution": "Check your internet connection and try again.",
-      "emptyResponseTitle": "No Response",
-      "emptyResponseSolution": "The model didn't generate any content. This is usually temporary. Try regenerating the response.",
-      "modelErrorTitle": "Model Error",
-      "modelErrorSolution": "The model encountered an error processing your request. This may be due to content filters or input length limits.",
-      "invalidRequestTitle": "Invalid Request",
-      "invalidRequestSolution": "The request couldn't be processed. Check your input and try again.",
-      "authenticationTitle": "Authentication Error",
-      "authenticationSolution": "There's an issue with the API authentication. Please contact support.",
-      "unknownTitle": "Unexpected Error",
-      "unknownSolution": "An unexpected error occurred. Try again, and contact support if the issue persists.",
-      "defaultDescription": "The AI model encountered an error while processing your request.",
-      "retryAction": "Retry",
-      "nonRetryableHint": "This error cannot be automatically retried. Please try a different approach.",
-      "modelLabel": "Model",
-      "technicalDetails": "Technical Details",
-      "howToFix": "How to fix",
-      "messageList": {
-        "title": "Unable to Display Messages",
-        "description": "There was an error rendering the conversation messages. Your conversation is safe and can be recovered.",
-        "whatToDo": "What you can do:",
-        "tryRefresh": "Click the Retry button to attempt re-rendering messages",
-        "continueConversation": "You can still continue the conversation with new messages",
-        "contactSupport": "Contact support if this issue persists",
-        "retry": "Retry Rendering",
-        "refreshPage": "Refresh Page"
-      }
-    },
-    "pin": "Pin",
-    "pinning": "Pinning...",
-    "pinned": "Pinned",
-    "pinnedDescription": "Thread has been pinned",
     "unpin": "Unpin",
-    "unpinning": "Unpinning...",
-    "unpinned": "Unpinned",
-    "unpinnedDescription": "Thread has been unpinned",
-    "pinFailed": "Failed to update pin",
-    "pinFailedDescription": "Could not update pin status. Please try again.",
-    "copyFailed": "Failed to copy link",
-    "copyFailedDescription": "Could not copy link to clipboard. Please try again.",
-    "copyLink": "Copy link",
-    "deleteChat": "Delete Chat",
-    "deleteThread": "Delete Thread",
-    "deleteThreadConfirmDescription": "This action cannot be undone. The thread and all its messages will be permanently deleted.",
-    "deleteThreadConfirmTitle": "Delete this thread?",
-    "error": {
-      "generic": "An error occurred. Please try again."
-    },
-    "public": {
-      "threadNotFound": "Thread Not Found",
-      "threadNotFoundDescription": "This public chat thread doesn't exist or has been made private.",
-      "noMessagesYet": "No messages yet",
-      "noMessagesDescription": "This conversation hasn't started yet. Create your own multi-AI chat!",
-      "learnMore": "Learn More",
-      "tryNow": "Try Now",
-      "tryFree": "Try Free",
-      "tryRoundtable": "Try Roundtable",
-      "ctaHeadline": "Ready to start your own AI conversation?",
-      "ctaDescription": "Get diverse perspectives from multiple AI models working together.",
-      "getStartedFree": "Get Started Free",
-      "description": "lets you chat with multiple AI models simultaneously for deeper insights and better solutions.",
-      "loadingPublicChat": "Loading public chat...",
-      "privateChat": "Private Chat",
-      "privateChatDescription": "This chat is private and cannot be viewed publicly.",
-      "goHome": "Go Home",
-      "experiencePower": "Experience the power of multi-AI collaboration."
-    },
-    "trending": "Trending",
-    "comingSoon": "Coming soon",
-    "input": {
-      "placeholder": "Message Roundtable...",
-      "placeholderStreaming": "AI participants are responding...",
-      "streamingPlaceholder": "Waiting for AI response...",
-      "placeholderQuotaExceeded": "Message quota reached - upgrade to continue...",
-      "placeholderThreadQuotaExceeded": "Thread quota reached - upgrade to create more threads...",
-      "placeholderCreditsExhausted": "Credits exhausted - add credits to continue...",
-      "submit": "Send message",
-      "threadPlaceholder": "Continue the conversation...",
-      "voiceInput": "Voice input",
-      "stopRecording": "Stop recording",
-      "listeningPlaceholder": "Listening... speak now",
-      "label": "Message input",
-      "streamingLabel": "Message input (disabled while AI responds)",
-      "stopStreaming": "Stop streaming",
-      "attachFiles": "Attach files",
-      "attach": "Attach",
-      "dropFilesHere": "Drop files here",
-      "uploadFilesDescription": "Upload files to include in your message",
-      "removeAttachment": "Remove attachment",
-      "attachmentUploadFailed": "Upload failed",
-      "noModelsSelected": "Select at least 1 model to send a message",
-      "messageTooLong": "Message too long. Please shorten to send.",
-      "send": "Send message",
-      "submitting": "Sending...",
-      "recording": "Recording",
-      "clickMicToStop": "Click mic to stop"
-    },
-    "disclaimer": "AI can make mistakes. Please double-check responses.",
-    "sources": {
-      "title": "Sources",
-      "document": "Document"
-    },
-    "linkCopied": "Link copied",
-    "linkCopiedDescription": "Share link copied to clipboard",
-    "madePrivate": "Thread is now private",
-    "madePrivateDescription": "Only you can view this thread",
-    "madePublic": "Thread is now public",
-    "madePublicDescription": "Anyone with the link can now view this thread",
-    "makePrivate": "Make Private",
-    "makingPrivate": "Making private...",
-    "makePublic": "Make Public",
-    "makingPublic": "Making public...",
-    "makePublicAndShare": "Make public and share",
-    "makePublicFirstDescription": "Make this thread public to share it with others",
-    "makePublicConfirmDescription": "This conversation will no longer be private. Anyone with the link can view it.",
-    "makePublicConfirmTitle": "Make this conversation public?",
-    "makePublicConfirmAction": "Make Public",
-    "moreOptions": "More options",
-    "noMessages": "No messages",
-    "noMoreThreads": "That's all your chats for now",
-    "noResults": "No chats found",
-    "noResultsDescription": "Try a different search term",
-    "older": "Older",
-    "previous30Days": "Previous 30 Days",
-    "previous7Days": "Previous 7 Days",
-    "publicToggleFailed": "Failed to update visibility",
-    "publicToggleFailedDescription": "Could not update thread visibility. Please try again.",
-    "quickStart": {
-      "brainstorm": {
-        "description": "AI models spark off each other to generate unexpected angles",
-        "prompt": "What are the trade-offs between async-first and sync-heavy remote work cultures?",
-        "title": "Brainstorm Ideas"
-      },
-      "debate": {
-        "description": "Models surface genuine disagreement and explain why",
-        "prompt": "Should AI systems be allowed to make life-or-death medical decisions without human override?",
-        "title": "Debate Topics"
-      },
-      "solve": {
-        "description": "Models build on each other's proposals toward action",
-        "prompt": "I'm choosing between a monolith and microservices for a 10-person startup. What factors should I weigh?",
-        "title": "Solve Problems"
-      }
-    },
-    "rename": "Rename",
-    "renameConversation": "Rename conversation",
-    "delete": "Delete",
-    "share": "Share",
-    "waitForStreamingToComplete": "Wait for response to complete",
-    "scrollToBottom": "Scroll to bottom",
-    "searchChats": "Search chats...",
-    "searchChatsDescription": "Search and navigate through your chat conversations",
-    "noChatsYet": "No chats yet",
-    "noChatsDescription": "Start a new conversation to begin collaborating with AI participants",
-    "emptyStateHint": "Start a conversation",
-    "emptyStateTitle": "Start your first conversation",
-    "emptyStateSubtext": "Your chats will appear here",
-    "status": {
-      "streaming": "AI is thinking...",
-      "navigating": "Navigating to conversation..."
-    },
-    "shareConversation": "Share Conversation",
-    "shareThread": "Share Thread",
-    "shareThreadDescription": "Share this link with anyone to give them access to this thread",
-    "shareDialog": {
-      "publicStatus": "Public",
-      "shareOn": "Share on",
-      "privateWarningTitle": "This will revoke public access",
-      "privateWarningDescription": "Anyone with the existing link will no longer be able to view this thread.",
-      "previewLabel": "Preview",
-      "generatingPreview": "Generating preview...",
-      "copyLinkLabel": "Share Link",
-      "shareOnSocialLabel": "Share on Social",
-      "embedOptionsLabel": "Embed Options",
-      "embedOptionsDescription": "HTML and Markdown snippets",
-      "embedFormat": {
-        "html": "HTML",
-        "markdown": "Markdown"
-      }
-    },
-    "streaming": {
-      "remaining": "remaining",
-      "responding": "responding",
-      "waiting": "waiting"
-    },
-    "chainOfThought": {
-      "viewReasoning": "View reasoning process",
-      "modelReasoning": "Model Reasoning",
-      "reasoningDescription": "Internal thinking process used to generate this response"
-    },
-    "changelog": {
-      "modeChange": "Mode Change",
-      "participantAdded": "Participant Added",
-      "participantRemoved": "Participant Removed",
-      "participantUpdated": "Participant Updated",
-      "configurationChange": "Configuration Change"
-    },
-    "variants": {
-      "label": "Variant",
-      "previousVariant": "Previous variant",
-      "nextVariant": "Next variant",
-      "branchedConversation": "Branched conversation",
-      "loading": "Loading variants...",
-      "switchingVariant": "Switching variant..."
-    },
-    "user": {
-      "defaultName": "You"
-    },
-    "participant": {
-      "waiting": "Thinking...",
-      "waitingNamed": "Thinking...",
-      "generating": "Thinking...",
-      "gatheringThoughts": "Thinking...",
-      "waitingForWebResults": "Searching...",
-      "moderatorObserving": "Observing...",
-      "waitingToSynthesize": "Synthesizing...",
-      "emptyResponse": "No visible response from {model}",
-      "reasoningOnlyResponse": "{model} used reasoning but produced no text output",
-      "tierRequired": "{tier} required"
-    },
-    "streamingTimeout": "Streaming Timeout",
-    "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
-    "threadCreated": "Chat thread created successfully",
-    "threadCreationFailed": "Failed to create chat thread. Please try again.",
-    "threadDeleteFailed": "Failed to delete thread",
-    "threadDeleteFailedDescription": "Could not delete the chat thread. Please try again.",
-    "threadDeleted": "Thread deleted",
-    "threadDeletedDescription": "The chat thread has been successfully deleted",
-    "threadNotFound": "Thread not found",
-    "threadNotFoundDescription": "The chat thread you're looking for doesn't exist",
-    "today": "Today",
-    "updateFailed": "Failed to update thread",
-    "updateFailedDescription": "Could not update the thread. Please try again.",
-    "yesterday": "Yesterday",
-    "feedback": {
-      "like": "This round was helpful",
-      "dislike": "This round was not helpful"
-    },
-    "roundActions": {
-      "copySummary": "Copy summary",
-      "copyRound": "Copy round",
-      "copyThread": "Copy thread",
-      "copySuccess": "Summary copied",
-      "copySuccessDescription": "Summary copied to clipboard",
-      "copyThreadSuccess": "Thread copied",
-      "copyThreadSuccessDescription": "Full thread copied to clipboard as markdown",
-      "copyError": "Copy failed",
-      "copyErrorDescription": "Failed to copy to clipboard",
-      "share": "Share thread"
-    },
-    "messageActions": {
-      "copy": "Copy response",
-      "copySuccess": "Response copied",
-      "copySuccessDescription": "Response copied to clipboard",
-      "copyError": "Copy failed",
-      "copyErrorDescription": "Failed to copy response to clipboard"
-    },
-    "quota": {
-      "messageQuotaExceeded": "Message Quota Reached",
-      "quotaExceededDescription": "You've used {current} of {limit} messages this month.",
-      "threadQuotaExceeded": "Thread Quota Reached",
-      "threadQuotaExceededDescription": "You've used {current} of {limit} threads this month.",
-      "limitReached": "Usage limit reached",
-      "threadLimitReached": "Thread limit reached ({current}/{limit})",
-      "messageLimitReached": "Message limit reached ({current}/{limit})",
-      "summaryLimitReached": "Summary limit reached ({current}/{limit})",
-      "resetsOn": "Quota resets on {date}."
-    },
-    "credits": {
-      "exhausted": "Credits Exhausted",
-      "exhaustedDescription": "You've used all your available credits.",
-      "lowBalance": "Low Credit Balance",
-      "lowBalanceDescription": "You have {remaining} credits remaining.",
-      "balance": "{balance} credits",
-      "available": "{available} credits available",
-      "reserved": "{reserved} credits reserved",
-      "addCredits": "Add Credits",
-      "buyCredits": "Buy Credits",
-      "monthlyRefill": "Credits refill on {date}"
-    }
-  },
-  "errors": {
-    "boundary": {
-      "title": "Something Went Wrong",
-      "chat": "An error occurred while loading the chat. Please try again.",
-      "messageList": "An error occurred while displaying messages. Your conversation is safe.",
-      "configuration": "An error occurred while loading the configuration.",
-      "preSearch": "An error occurred during web search.",
-      "general": "An unexpected error occurred. Please try again.",
-      "devDetailsLabel": "Technical Details (Development)",
-      "errorLabel": "Error",
-      "stackLabel": "Stack Trace",
-      "componentStackLabel": "Component Stack",
-      "tryAgain": "Try Again",
-      "refreshPage": "Refresh Page"
+    "waitForStreamingToComplete": "Please wait for the AI to finish responding",
+    "webSearch": {
+      "toggle": "Web Search"
     }
   },
   "common": {
     "backToHome": "Back to Home",
-    "error": "An error occurred",
     "loading": "Loading...",
     "logo": "Logo",
-    "more": "More",
-    "none": "None",
-    "or": "Or",
-    "statusLabel": "Status: {status}"
+    "maintenance": "We're currently undergoing maintenance. Please check back soon.",
+    "none": "None"
+  },
+  "customRolesPaidOnly": "Custom roles are available for Pro users",
+  "customRolesUpgradeMessage": "Upgrade to Pro to create custom roles",
+  "errors": {
+    "boundary": {
+      "chat": "An error occurred while loading the chat. Please try again.",
+      "componentStackLabel": "Component Stack",
+      "configuration": "An error occurred while loading the configuration.",
+      "devDetailsLabel": "Technical Details (Development)",
+      "errorLabel": "Error",
+      "general": "An unexpected error occurred. Please try again.",
+      "messageList": "An error occurred while displaying messages. Your conversation is safe.",
+      "preSearch": "An error occurred during web search.",
+      "refreshPage": "Refresh Page",
+      "stackLabel": "Stack Trace",
+      "title": "Something Went Wrong",
+      "tryAgain": "Try Again"
+    },
+    "streamFailed": "Stream failed",
+    "unknownError": "An unknown error occurred"
+  },
+  "failedToCreateRole": "Failed to create role",
+  "failedToDeleteRole": "Failed to delete role",
+  "feedback": {
+    "description": "Description",
+    "messageLabel": "Message",
+    "messagePlaceholder": "Tell us what you think...",
+    "submit": "Submit",
+    "success": {
+      "message": "Your feedback has been submitted successfully.",
+      "title": "Title"
+    },
+    "title": "Title",
+    "typeLabel": "Feedback Type"
   },
   "forms": {
     "loading": "Loading",
@@ -1090,135 +599,52 @@
     "noResultsFound": "NoResultsFound",
     "pickDate": "PickDate",
     "searchPlaceholder": "Search...",
-    "selectOption": "Select an option",
-    "hidePassword": "Hide password",
-    "showPassword": "Show password"
-  },
-  "legal": {
-    "trustBadges": {
-      "secure": "Secure",
-      "protected": "Protected",
-      "transparent": "Transparent",
-      "fairUse": "Fair Use",
-      "legalCompliance": "Legal Compliance",
-      "userRights": "User Rights"
-    },
-    "privacy": {
-      "tagline": "Your privacy and data protection matter to us",
-      "lastUpdatedYear": "Last updated: {year}",
-      "changes": {
-        "content": "We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.",
-        "title": "8. Changes to This Policy"
-      },
-      "children": {
-        "content": "Our service is not directed to individuals under the age of 13. We do not knowingly collect personal information from children under 13.",
-        "title": "7. Children's Privacy"
-      },
-      "collection": {
-        "content": "We collect information you provide directly to us, such as when you create an account, subscribe to a service, or contact us for support.",
-        "title": "1. Information We Collect"
-      },
-      "contact": {
-        "content": "If you have any questions about this Privacy Policy, please contact us at hello@roundtable.now.",
-        "title": "9. Contact Us"
-      },
-      "cookies": {
-        "content": "We use cookies and similar tracking technologies to track activity on our service and hold certain information to improve and analyze our service.",
-        "title": "5. Cookies and Tracking"
-      },
-      "lastUpdated": "Last updated: {date}",
-      "rights": {
-        "content": "You have the right to access, update, or delete your personal information. You may also opt-out of certain communications from us.",
-        "title": "6. Your Rights"
-      },
-      "security": {
-        "content": "We implement appropriate technical and organizational measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction.",
-        "title": "4. Data Security"
-      },
-      "sharing": {
-        "content": "We do not sell, trade, or otherwise transfer your personal information to third parties without your consent, except as described in this Privacy Policy.",
-        "title": "3. Information Sharing"
-      },
-      "title": "Privacy Policy",
-      "usage": {
-        "content": "We use the information we collect to provide, maintain, and improve our services, process transactions, and communicate with you.",
-        "title": "2. How We Use Your Information"
-      }
-    },
-    "terms": {
-      "tagline": "Guidelines for using our AI collaboration platform",
-      "effectiveYear": "Effective: {year}",
-      "acceptance": {
-        "content": "By accessing and using this service, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.",
-        "title": "1. Acceptance of Terms"
-      },
-      "billing": {
-        "content": "You agree to pay all fees and charges incurred in connection with your use of the service. We reserve the right to change our fees at any time with prior notice.",
-        "title": "3. Billing and Payments"
-      },
-      "contact": {
-        "content": "If you have any questions about these Terms of Service, please contact us at hello@roundtable.now.",
-        "title": "8. Contact Information"
-      },
-      "governing": {
-        "content": "These Terms shall be governed and construed in accordance with the laws of the jurisdiction in which the company is established, without regard to its conflict of law provisions.",
-        "title": "7. Governing Law"
-      },
-      "lastUpdated": "Last updated: {date}",
-      "liability": {
-        "content": "In no event shall Roundtable, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential, or punitive damages.",
-        "title": "6. Limitation of Liability"
-      },
-      "privacy": {
-        "content": "Your use of our service is also governed by our Privacy Policy. Please review our Privacy Policy, which also governs the site and informs users of our data collection practices.",
-        "title": "4. Privacy Policy"
-      },
-      "services": {
-        "content": "This service is provided to help you manage your billing and subscriptions. You may use this service for lawful purposes only and in accordance with these Terms.",
-        "title": "2. Use of Service"
-      },
-      "termination": {
-        "content": "We may terminate or suspend your account and bar access to the service immediately, without prior notice or liability, under our sole discretion, for any reason whatsoever.",
-        "title": "5. Termination"
-      },
-      "title": "Terms of Service"
-    }
+    "selectOption": "Select an option"
   },
   "meta": {
-    "signIn": {
-      "title": "Sign In",
-      "description": "Sign in to your account to access AI collaboration tools and manage your conversations.",
-      "keywords": [
-        "sign in",
-        "login",
-        "authentication"
-      ]
-    },
-    "signUp": {
-      "title": "Sign Up",
-      "description": "Create an account to start collaborating with multiple AI models in real-time conversations.",
-      "keywords": [
-        "sign up",
-        "register"
-      ]
-    },
     "legal": {
       "privacy": {
-        "title": "Privacy Policy",
-        "description": "Learn how we collect, use, and protect your personal information when you use our AI collaboration platform.",
-        "keywords": [
-          "privacy",
-          "user data"
-        ]
+        "description": "Learn how Roundtable protects your data and respects your privacy",
+        "keywords": ["privacy policy", "data protection", "GDPR", "user privacy"],
+        "title": "Privacy Policy"
       },
       "terms": {
-        "title": "Terms of Service",
-        "description": "Read our terms and conditions for using the AI collaboration platform and managing your account.",
-        "keywords": [
-          "legal",
-          "compliance"
-        ]
+        "description": "Read the terms and conditions for using Roundtable",
+        "keywords": ["terms of service", "user agreement", "terms and conditions"],
+        "title": "Terms of Service"
       }
+    },
+    "signIn": {
+      "description": "Sign in to your Roundtable account to continue AI collaboration",
+      "keywords": ["sign in", "login", "AI chat login"],
+      "title": "Sign In"
+    },
+    "signUp": {
+      "description": "Create a free Roundtable account and start collaborating with multiple AI models",
+      "keywords": ["sign up", "create account", "register", "free AI chat"],
+      "title": "Create Account"
+    }
+  },
+  "legal": {
+    "privacy": {
+      "lastUpdated": "Last updated: {date}",
+      "lastUpdatedYear": "Last updated: {year}",
+      "tagline": "Your privacy and data protection matter to us",
+      "title": "Privacy Policy"
+    },
+    "terms": {
+      "effectiveYear": "Effective: {year}",
+      "lastUpdated": "Last updated: {date}",
+      "tagline": "Guidelines for using our AI collaboration platform",
+      "title": "Terms of Service"
+    },
+    "trustBadges": {
+      "fairUse": "Fair Use",
+      "legalCompliance": "Legal Compliance",
+      "protected": "Protected",
+      "secure": "Secure",
+      "transparent": "Transparent",
+      "userRights": "User Rights"
     }
   },
   "moderator": {
@@ -1229,21 +655,15 @@
       "solving": "Problem Solving"
     }
   },
+  "moreOptions": "More options",
   "navigation": {
     "chat": "Chat",
     "chats": "Chats",
-    "dashboard": "Home",
-    "debates": "Debates",
-    "features": "Features",
-    "messages": "Messages",
     "navigation": "Navigation",
     "newChat": "New Chat",
     "pricing": "Pricing",
     "searchChats": "Search chats",
-    "signOut": "Sign Out",
-    "upgrade": "Upgrade",
-    "upgradeDescription": "Unlock more features",
-    "managePlan": "Manage your plan"
+    "signOut": "Sign Out"
   },
   "networkStatus": {
     "connectionError": "Connection Error",
@@ -1258,144 +678,97 @@
     }
   },
   "plans": {
-    "errorDescription": "There was an error loading subscription plans. Please try again.",
-    "pricing": {
-      "free": {
-        "description": "Try with 1 free roundtable",
-        "features": {
-          "aiModels": "3 AI models for 1 free round",
-          "basicSupport": "Basic support",
-          "freeRound": "1 free roundtable conversation",
-          "upgradeRequired": "Upgrade to Pro for unlimited"
-        },
-        "name": "Free"
-      },
-      "pro": {
-        "description": "Full access with monthly credits",
-        "features": {
-          "aiModels": "Unlimited AI models",
-          "prioritySupport": "Priority support",
-          "monthlyCredits": "100,000 credits/month",
-          "autoRenewal": "Automatic credit renewal"
-        },
-        "name": "Pro"
-      }
-    }
+    "errorDescription": "There was an error loading subscription plans. Please try again."
   },
   "pricing": {
-    "alreadyHaveAccount": "Already have an account?",
     "card": {
       "cancelSubscription": "Cancel Subscription",
-      "credits": "credits",
       "currentPlan": "Current Plan",
-      "daysFreeTrial": "days free trial",
       "getStarted": "Get Started",
       "manageBilling": "Manage Billing",
-      "monthly": "Monthly Plan",
-      "mostPopular": "Most Popular",
-      "oneTime": "one-time",
       "processing": "Processing...",
-      "purchase": "Purchase",
-      "startFreeTrial": "Start Free Trial",
-      "subscribe": "Subscribe",
       "switchPlan": "Switch to This Plan",
-      "upgradePlan": "Upgrade plan",
-      "upgradeDescription": "Unlock all AI models & features",
-      "upgradeToPro": "Upgrade to Pro",
       "valueProps": {
         "allModels": {
-          "title": "All AI Models",
-          "description": "Access GPT, Claude, Gemini & more"
-        },
-        "presets": {
-          "title": "Presets & Custom",
-          "description": "Use ready-made presets or create your own"
-        },
-        "unlimited": {
-          "title": "Unlimited Messages",
-          "description": "No caps, no limits, just chat"
+          "description": "Access GPT, Claude, Gemini & more",
+          "title": "All AI Models"
         },
         "councilSummary": {
-          "title": "Council Summary",
-          "description": "AI-generated summary of all discussions"
+          "description": "Get synthesized insights from all models",
+          "title": "Council Summary"
+        },
+        "presets": {
+          "description": "Save and reuse your favorite model configurations",
+          "title": "Presets & Custom"
+        },
+        "unlimited": {
+          "description": "No caps, no limits, just chat",
+          "title": "Unlimited Messages"
         }
       }
     },
-    "default": {
-      "alwaysActive": "Always Active",
-      "activatedByDefault": "Activated by default for you"
-    },
     "error": {
-      "title": "Unable to Load Pricing",
-      "description": "We couldn't load the pricing information. Please try again later."
+      "description": "We couldn't load the pricing information. Please try again later.",
+      "title": "Unable to Load Pricing"
     },
     "page": {
       "description": "Choose the perfect plan for your needs",
       "title": "Pricing & Plans"
-    },
-    "questionsContact": "Have questions? Contact us at"
+    }
   },
-  "pwa": {
-    "dismiss": "Dismiss update notification",
-    "later": "Later",
-    "newVersionAvailable": "Update available",
-    "updateDescription": "A new version is ready. Update now for the latest features and improvements.",
-    "updateNow": "Update"
-  },
-  "privacy": {
-    "description": "Description",
-    "title": "Title"
-  },
-  "processing": "Processing",
+  "roleDeleted": "Role deleted",
+  "roleDeletedMessage": "The custom role has been deleted.",
+  "scrollToBottom": "Scroll to bottom",
+  "searchPlaceholder": "Search...",
+  "selectAtLeastOneModel": "Select at least one model",
+  "selectAtLeastOneModelUpdate": "Select At Least One Model Update",
+  "selectOrEnterRole": "Select or enter a role",
   "seo": {
-    "keywords": {
-      "aiCollaboration": "AI collaboration",
-      "multipleAiModels": "multiple AI models",
-      "brainstorming": "AI brainstorming tool",
-      "chatgpt": "ChatGPT",
-      "claude": "Claude AI",
-      "gemini": "Google Gemini",
-      "gpt4": "GPT-4",
-      "collaborativeAi": "collaborative AI",
-      "teamProductivity": "team productivity",
-      "artificialIntelligence": "artificial intelligence",
-      "aiChat": "AI chat",
-      "compareAi": "compare AI models",
-      "multiModelChat": "multi-model AI chat",
-      "aiDebate": "AI debate",
-      "aiProblemSolving": "AI problem solving",
-      "bestAiChat": "best AI chat app",
-      "aiAssistant": "AI assistant",
-      "chatWithMultipleAi": "chat with multiple AI",
-      "aiComparisonTool": "AI comparison tool",
-      "createAccount": "create account",
-      "privacyPolicy": "privacy policy",
-      "dataProtection": "data protection",
-      "gdpr": "GDPR",
-      "termsOfService": "terms of service",
-      "termsAndConditions": "terms and conditions",
-      "userAgreement": "user agreement"
-    },
     "aeo": {
+      "contentType": "SoftwareApplication",
+      "primaryAnswer": "Roundtable is a collaborative AI brainstorming platform where multiple AI models work together to solve problems, generate ideas, and provide diverse perspectives in real-time conversations.",
       "primaryQuestion": "What is {brand}?",
-      "primaryAnswer": "Roundtable is an AI collaboration platform where multiple AI models like ChatGPT, Claude, and Gemini work together in real-time to brainstorm ideas, debate topics, and solve complex problems.",
-      "contentType": "guide",
       "relatedQuestions": {
+        "benefits": "What are the benefits of using multiple AI models together?",
         "howItWorks": "How does multi-AI collaboration work?",
-        "benefits": "Why use multiple AI models together?",
-        "howToUse": "How to brainstorm with ChatGPT, Claude, and Gemini at once?",
-        "comparison": "How to compare AI model responses side by side?"
+        "howToUse": "How do I start a conversation with {brand}?"
       }
     },
     "features": {
-      "multiModelCollaboration": "Multi-model AI collaboration with ChatGPT, Claude, Gemini",
-      "realtimeChat": "Real-time AI chat interface",
-      "sessionManagement": "Conversation session management",
-      "publicSharing": "Share AI conversations publicly",
-      "usageTracking": "Usage tracking and analytics",
-      "multipleParticipants": "Multiple AI models responding to one prompt"
+      "multiModelCollaboration": "Multi-model AI collaboration",
+      "multipleParticipants": "Multiple participants",
+      "publicSharing": "Public sharing",
+      "realtimeChat": "Real-time AI chat",
+      "sessionManagement": "Session management",
+      "usageTracking": "Usage tracking"
+    },
+    "keywords": {
+      "aiChat": "AI chat",
+      "aiCollaboration": "AI collaboration",
+      "aiComparisonTool": "AI comparison tool",
+      "aiDebate": "AI debate",
+      "aiProblemSolving": "AI problem solving",
+      "bestAiChat": "best AI chat",
+      "brainstorming": "brainstorming",
+      "chatWithMultipleAi": "chat with multiple AI",
+      "chatgpt": "ChatGPT",
+      "claude": "Claude",
+      "collaborativeAi": "collaborative AI",
+      "compareAi": "compare AI",
+      "createAccount": "create account",
+      "dataProtection": "data protection",
+      "gdpr": "GDPR",
+      "gemini": "Gemini",
+      "gpt4": "GPT-4",
+      "multiModelChat": "multi-model chat",
+      "multipleAiModels": "multiple AI models",
+      "privacyPolicy": "privacy policy",
+      "termsAndConditions": "terms and conditions",
+      "termsOfService": "terms of service",
+      "userAgreement": "user agreement"
     }
   },
+  "setRoleFor": "Set role for",
   "states": {
     "empty": {
       "default": "No data found",
@@ -1406,25 +779,22 @@
       "boundaryDescription": "An unexpected error occurred while loading this content.",
       "default": "Something went wrong",
       "description": "There was an error processing your request.",
+      "detailsTitle": "Error Details (dev/preview only)",
+      "digest": "Digest:",
+      "errorLabel": "Error:",
       "network": "Connection Issue",
       "networkDescription": "Unable to connect to the server. Please try again.",
       "offline": "No Internet Connection",
       "offlineDescription": "Please check your internet connection and try again.",
-      "retry": "Retry",
+      "stackTrace": "Stack Trace:",
       "timeout": "Request Timed Out",
       "timeoutDescription": "The request took too long to complete. Please try again.",
       "tryAgain": "Try again",
-      "unexpectedError": "An unexpected error occurred. Please try again.",
-      "detailsTitle": "Error Details (dev/preview only)",
-      "digest": "Digest:",
-      "errorLabel": "Error:",
-      "stackTrace": "Stack Trace:"
+      "unexpectedError": "An unexpected error occurred. Please try again."
     },
     "loading": {
       "default": "Loading...",
-      "please_wait": "Please wait while we fetch your data...",
-      "authentication": "Loading authentication...",
-      "errorDetails": "Loading error details..."
+      "please_wait": "Please wait while we fetch your data..."
     }
   },
   "status": {
@@ -1432,194 +802,63 @@
     "warning": "Warning"
   },
   "subscription": {
-    "label": "Subscription",
-    "changingTo": "Changing to",
-    "planChangeInfo": "Upgrades apply instantly. Downgrades take effect at period end.",
+    "planLabel": "Plan",
     "tiers": {
       "free": {
-        "name": "Free",
-        "description": "1 free roundtable to get started"
+        "name": "Free"
       },
       "pro": {
-        "name": "Pro",
-        "description": "100,000 credits/month with unlimited AI models and priority support"
+        "name": "Pro"
       }
     }
   },
-  "table": {
-    "columns": "Columns",
-    "dataTable": "Data table",
-    "noDataFound": "No data found",
-    "noItemsToDisplay": "No items to display",
-    "openFiltersMenu": "Open filters menu",
-    "rowsPerPage": "Rows per page",
-    "rowsSelected": "{selected} of {total} row(s) selected",
-    "searchPlaceholder": "Search {field}...",
-    "selectAllRows": "Select all rows",
-    "selectRow": "Select row {id}"
-  },
-  "terms": {
-    "description": "Description",
-    "title": "Title"
-  },
-  "time": {
-    "today": "Today",
-    "yesterday": "Yesterday",
-    "daysAgo": "{count} days ago",
-    "oneWeekAgo": "1 week ago",
-    "weeksAgo": "{count} weeks ago"
-  },
+  "subtitle": "Subtitle",
+  "title": "Title",
+  "upgrade": "Upgrade",
+  "upgradeRequired": "Upgrade required",
   "usage": {
-    "active": "Active",
     "credits": "Credits",
     "creditsAvailable": "credits available",
-    "daysLeft": "days left",
-    "errorLoading": "Unable to load usage data",
     "freePlan": "Free",
     "freeRound": "1 Free",
-    "messages": "Messages",
-    "messagesRemaining": "messages remaining",
-    "summary": "Summary",
-    "summaryRemaining": "summaries remaining",
-    "plan": "Plan",
-    "planUsage": "Credits",
-    "threads": "Threads",
-    "threadsRemaining": "threads remaining",
-    "upgrade": "Upgrade",
-    "upgradeNow": "Upgrade Now",
     "freeTrial": {
       "availableDescription": "Try 1 free round with 3 models. Upgrade for all 10+ models & unlimited chats.",
-      "usedDescription": "Free trial complete. Go Pro for all 10+ models & unlimited conversations.",
-      "upgradeToPro": "Upgrade to Pro"
+      "upgradeToPro": "Upgrade to Pro",
+      "usedDescription": "Free trial complete. Go Pro for all 10+ models & unlimited conversations."
     },
-    "scheduledChange": "Plan Change Scheduled",
-    "changingTo": "Switching to",
-    "onPeriodEnd": "at period end",
-    "keepAccessUntil": "Keep current access until",
     "gracePeriod": "You're on {currentPlan} until {date}. After that, you'll switch to {newPlan}.",
-    "remaining": "left",
-    "of": "of",
-    "used": "used",
-    "currentPeriod": "Current Period",
-    "resetsOn": "Resets on {date}",
-    "status": {
-      "healthy": "Healthy usage",
-      "warning": "Approaching limit",
-      "critical": "Limit reached",
-      "nearLimit": "Getting close to limit"
-    },
+    "plan": "Plan",
     "quotaAlert": {
-      "message": "You've run out of credits. Upgrade to Pro to continue chatting.",
-      "action": "Upgrade",
-      "paidUserMessage": "You've run out of credits for this billing period."
+      "paidUserMessage": "You have reached your usage quota for this period."
     },
-    "viewDetails": "View usage details",
-    "managePlan": "Manage Plan",
-    "available": "available",
-    "moderator": "Analyses"
+    "upgradeNow": "Upgrade Now"
   },
   "user": {
     "defaultName": "User"
   },
   "userMenu": {
-    "proPlan": "Pro Plan",
+    "feedbackDescription": "Help us improve Roundtable",
     "manageBilling": "Manage billing",
-    "upgradeToPro": "Upgrade to Pro",
-    "upgradeDescription": "Unlock all AI models & unlimited messages",
+    "proPlan": "Pro Plan",
     "sendFeedback": "Send Feedback",
-    "feedbackDescription": "Help us improve Roundtable"
+    "upgradeDescription": "Unlock all AI models & unlimited messages",
+    "upgradeToPro": "Upgrade to Pro"
   },
-  "feedback": {
-    "title": "Send Feedback",
-    "description": "Share your thoughts, report bugs, or request features",
-    "typeLabel": "Feedback Type",
-    "types": {
-      "bug": "Bug Report",
-      "feature_request": "Feature Request",
-      "general": "General Feedback",
-      "other": "Other"
-    },
-    "messageLabel": "Your Message",
-    "messagePlaceholder": "Tell us what's on your mind...",
-    "submit": "Submit Feedback",
-    "submitting": "Submitting...",
-    "success": {
-      "title": "Thank you!",
-      "message": "Your feedback has been submitted successfully."
-    },
-    "error": {
-      "title": "Error",
-      "message": "Failed to submit feedback. Please try again."
-    },
-    "validation": {
-      "messageMin": "Message must be at least 10 characters",
-      "messageMax": "Message must be less than 5000 characters"
-    }
+  "version": {
+    "newVersionAvailable": "New version available",
+    "updateDescription": "A new version is available. Update to get the latest features.",
+    "updateNow": "Update Now",
+    "versionLabel": "Version"
   },
   "webSearch": {
-    "images": {
-      "title": "Images from Search",
-      "count": "{count, plural, =0 {No images} =1 {1 image} other {# images}}",
-      "viewFull": "View full size",
-      "openSource": "View source page",
-      "copyUrl": "Copy image URL",
-      "copiedUrl": "Image URL copied!",
-      "loadError": "Failed to load image",
-      "noImages": "No images found",
-      "from": "From {source}"
-    },
     "result": {
-      "author": "By {name}",
-      "publishedDate": "Published {date}",
-      "readingTime": "{minutes} min read",
-      "wordCount": "{count, plural, =1 {1 word} other {# words}}",
-      "showFullContent": "Show full content",
-      "showLess": "Show less",
-      "expandMore": "More",
-      "collapseLess": "Less",
+      "collapseLess": "Show less",
+      "expandMore": "Show more",
       "keyPoints": "Key Points",
-      "relevanceScore": "Relevance: {score}%",
-      "openExternal": "Open in new tab",
-      "copyLink": "Copy link",
-      "relevance": "relevant",
-      "minRead": " min",
-      "words": "words",
-      "morePoints": "more"
-    },
-    "config": {
-      "title": "Search Configuration",
-      "queries": "Queries",
-      "results": "Results",
-      "time": "Search Time",
-      "avgTime": "Avg Response Time",
-      "successRate": "Success Rate",
-      "successful": "Successful",
-      "failed": "Failed",
-      "totalResults": "Total Results",
-      "autoDetected": "AI-Detected Parameters",
-      "generatedQueries": "Generated Queries",
-      "rationale": "Rationale",
-      "complexity": "Complexity",
-      "sources": "Sources requested",
-      "searchDepth": "Search Depth",
-      "topic": "Topic",
-      "timeRange": "Time Range",
-      "showConfig": "Show search details",
-      "hideConfig": "Hide search details"
-    },
-    "content": {
-      "preview": "Content Preview",
-      "full": "Full Content",
-      "copied": "Content copied!",
-      "copyContent": "Copy content",
-      "noContent": "No content available",
-      "tableOfContents": "Table of Contents"
-    },
-    "status": {
-      "searching": "Searching...",
-      "complete": "Search complete",
-      "failed": "Search failed",
-      "cached": "From cache"
+      "minRead": "{min} min read",
+      "morePoints": "{count} more points",
+      "relevance": "Relevance",
+      "words": "words"
     }
   }
 }

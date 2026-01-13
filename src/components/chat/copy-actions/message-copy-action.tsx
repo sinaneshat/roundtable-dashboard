@@ -19,13 +19,13 @@ function MessageCopyActionComponent({
   tooltip,
   label,
 }: MessageCopyActionProps) {
-  const t = useTranslations('chat.messageActions');
+  const t = useTranslations();
 
   const messages = useMemo(() => ({
-    successTitle: t('copySuccess'),
-    successDescription: t('copySuccessDescription'),
-    errorTitle: t('copyError'),
-    errorDescription: t('copyErrorDescription'),
+    successTitle: t('chat.messageActions.copySuccess'),
+    successDescription: t('chat.messageActions.copySuccessDescription'),
+    errorTitle: t('chat.messageActions.copyError'),
+    errorDescription: t('chat.messageActions.copyErrorDescription'),
   }), [t]);
 
   const { copied, copy } = useCopyToClipboard({ messages });
@@ -38,8 +38,8 @@ function MessageCopyActionComponent({
     <CopyActionButton
       copied={copied}
       onClick={handleCopy}
-      tooltip={tooltip ?? t('copy')}
-      label={label ?? t('copy')}
+      tooltip={tooltip ?? t('chat.messageActions.copy')}
+      label={label ?? t('chat.messageActions.copy')}
       className={className}
       variant="copy"
     />

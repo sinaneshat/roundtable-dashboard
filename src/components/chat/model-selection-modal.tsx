@@ -95,9 +95,7 @@ export function ModelSelectionModal({
   enableDrag = true,
   incompatibleModelIds,
 }: ModelSelectionModalProps) {
-  const t = useTranslations('chat.models.modal');
-  const tModels = useTranslations('chat.models');
-  const tRoles = useTranslations('chat.roles');
+  const t = useTranslations();
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -300,7 +298,7 @@ export function ModelSelectionModal({
 
     const selectedModels = orderedModels.filter(om => om.participant !== null);
     if (selectedModels.length === 0) {
-      toastManager.error(tModels('presets.cannotSave'), t('selectAtLeastOneModel'));
+      toastManager.error(t('chat.models.presets.cannotSave'), t('selectAtLeastOneModel'));
       return;
     }
 
@@ -326,12 +324,12 @@ export function ModelSelectionModal({
         setTimeout(() => setNewlyCreatedPresetId(null), 2000);
       }
 
-      toastManager.success(tModels('presets.presetSaved'), tModels('presets.presetSavedMessage', { name: trimmedName }));
+      toastManager.success(t('chat.models.presets.presetSaved'), t('chat.models.presets.presetSavedMessage', { name: trimmedName }));
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error, tModels('presets.failedToSave'));
-      toastManager.error(tModels('presets.failedToSave'), errorMessage);
+      const errorMessage = getApiErrorMessage(error, t('chat.models.presets.failedToSave'));
+      toastManager.error(t('chat.models.presets.failedToSave'), errorMessage);
     }
-  }, [orderedModels, createPresetMutation, tModels, t, isSavingPreset]);
+  }, [orderedModels, createPresetMutation, t, isSavingPreset]);
 
   const handleUpdatePreset = useCallback(async () => {
     if (!editingPresetId)
@@ -339,7 +337,7 @@ export function ModelSelectionModal({
 
     const selectedModels = orderedModels.filter(om => om.participant !== null);
     if (selectedModels.length === 0) {
-      toastManager.error(tModels('presets.cannotSave'), t('selectAtLeastOneModelUpdate'));
+      toastManager.error(t('chat.models.presets.cannotSave'), t('selectAtLeastOneModelUpdate'));
       return;
     }
 
@@ -359,22 +357,22 @@ export function ModelSelectionModal({
 
       setEditingPresetId(null);
 
-      toastManager.success(tModels('presets.presetUpdated'), tModels('presets.presetUpdatedMessage', { name: presetName }));
+      toastManager.success(t('chat.models.presets.presetUpdated'), t('chat.models.presets.presetUpdatedMessage', { name: presetName }));
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error, tModels('presets.failedToUpdate'));
-      toastManager.error(tModels('presets.failedToUpdate'), errorMessage);
+      const errorMessage = getApiErrorMessage(error, t('chat.models.presets.failedToUpdate'));
+      toastManager.error(t('chat.models.presets.failedToUpdate'), errorMessage);
     }
-  }, [editingPresetId, orderedModels, userPresets, updatePresetMutation, tModels, t]);
+  }, [editingPresetId, orderedModels, userPresets, updatePresetMutation, t]);
 
   const handleDeleteUserPreset = useCallback(async (presetId: string) => {
     try {
       await deletePresetMutation.mutateAsync({ param: { id: presetId } });
-      toastManager.success(tModels('presets.presetDeleted'), tModels('presets.presetDeletedMessage'));
+      toastManager.success(t('chat.models.presets.presetDeleted'), t('chat.models.presets.presetDeletedMessage'));
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error, tModels('presets.failedToDelete'));
-      toastManager.error(tModels('presets.failedToDelete'), errorMessage);
+      const errorMessage = getApiErrorMessage(error, t('chat.models.presets.failedToDelete'));
+      toastManager.error(t('chat.models.presets.failedToDelete'), errorMessage);
     }
-  }, [deletePresetMutation, tModels]);
+  }, [deletePresetMutation, t]);
 
   const allModels = useMemo(() => {
     return orderedModels.map(om => om.model);
@@ -422,10 +420,10 @@ export function ModelSelectionModal({
       hasSelectedModels: selectedModels.length > 0,
       canSave: selectedModels.length > 0,
       errorMessage: selectedModels.length === 0
-        ? tModels('modal.selectAtLeastOneModel')
+        ? t('chat.models.modal.selectAtLeastOneModel')
         : null,
     };
-  }, [orderedModels, tModels]);
+  }, [orderedModels, t]);
 
   useEffect(() => {
     if (shouldApplyPresetRef.current && selectedPreset && onPresetSelect) {
@@ -468,8 +466,8 @@ export function ModelSelectionModal({
 
     if (incompatibleCount > 0 && incompatibleCount < selectedPresetModelIds.length) {
       toastManager.warning(
-        tModels('presetModelsExcluded'),
-        tModels('presetModelsExcludedDescription', { count: incompatibleCount }),
+        t('chat.models.presetModelsExcluded'),
+        t('chat.models.presetModelsExcludedDescription', { count: incompatibleCount }),
       );
     }
 
@@ -477,7 +475,7 @@ export function ModelSelectionModal({
       onPresetSelect(selectedPreset);
       onOpenChange(false);
     }
-  }, [selectedPreset, selectedPresetModelIds, onPresetSelect, onOpenChange, incompatibleModelIds, tModels]);
+  }, [selectedPreset, selectedPresetModelIds, onPresetSelect, onOpenChange, incompatibleModelIds, t]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -606,7 +604,7 @@ export function ModelSelectionModal({
                                     handleDeleteCustomRole(role.id, role.name);
                                   }}
                                   className="shrink-0 p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all"
-                                  aria-label={tRoles('deleteCustomRole')}
+                                  aria-label={t('chat.roles.deleteCustomRole')}
                                 >
                                   <Icons.trash className="h-4 w-4 text-destructive" />
                                 </button>
@@ -679,10 +677,10 @@ export function ModelSelectionModal({
                     >
                       <TabsList className="grid w-full grid-cols-2 mb-4">
                         <TabsTrigger value={ModelSelectionTabs.PRESETS}>
-                          {tModels('presets.title')}
+                          {t('chat.models.presets.title')}
                         </TabsTrigger>
                         <TabsTrigger value={ModelSelectionTabs.CUSTOM}>
-                          {tModels('buildCustom.title')}
+                          {t('chat.models.buildCustom.title')}
                         </TabsTrigger>
                       </TabsList>
 
@@ -692,7 +690,7 @@ export function ModelSelectionModal({
                             {isLoadingUserPresets && (
                               <div>
                                 <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">
-                                  {tModels('presets.myPresets')}
+                                  {t('chat.models.presets.myPresets')}
                                 </h4>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <PresetCardSkeleton />
@@ -704,7 +702,7 @@ export function ModelSelectionModal({
                             {!isLoadingUserPresets && userPresets.length > 0 && (
                               <div>
                                 <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">
-                                  {tModels('presets.myPresets')}
+                                  {t('chat.models.presets.myPresets')}
                                 </h4>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <AnimatePresence initial={false}>
@@ -764,7 +762,7 @@ export function ModelSelectionModal({
                             <div>
                               {(userPresets.length > 0 || isLoadingUserPresets) && (
                                 <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">
-                                  {tModels('presets.systemPresets')}
+                                  {t('chat.models.presets.systemPresets')}
                                 </h4>
                               )}
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -820,7 +818,7 @@ export function ModelSelectionModal({
                             )}
                           >
                             <Icons.alertCircle className="size-3.5 shrink-0" />
-                            <span>{tModels('minimumRequired.description', { count: 1 })}</span>
+                            <span>{t('chat.models.minimumRequired.description', { count: 1 })}</span>
                           </div>
                         )}
 
@@ -828,7 +826,7 @@ export function ModelSelectionModal({
                           {sortedFilteredModels.length === 0
                             ? (
                                 <div className="flex flex-col items-center justify-center py-12 h-full pr-3">
-                                  <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
+                                  <p className="text-sm text-muted-foreground">{t('chat.models.noModelsFound')}</p>
                                 </div>
                               )
                             : enableDrag && !isFiltering
@@ -903,7 +901,7 @@ export function ModelSelectionModal({
                             className="text-xs sm:text-sm shrink-0"
                           >
                             <span className="truncate max-w-[100px] sm:max-w-none">
-                              {tModels('presets.update')}
+                              {t('chat.models.presets.update')}
                             </span>
                           </Button>
                           <Button
@@ -911,7 +909,7 @@ export function ModelSelectionModal({
                             size="sm"
                             onClick={() => {
                               if (!presetValidation.canSave) {
-                                toastManager.error(tModels('presets.cannotSave'), presetValidation.errorMessage ?? '');
+                                toastManager.error(t('chat.models.presets.cannotSave'), presetValidation.errorMessage ?? '');
                                 return;
                               }
                               setEditingPresetId(null);
@@ -920,7 +918,7 @@ export function ModelSelectionModal({
                             disabled={updatePresetMutation.isPending}
                             className="text-xs sm:text-sm shrink-0"
                           >
-                            {tModels('presets.saveAsNew')}
+                            {t('chat.models.presets.saveAsNew')}
                           </Button>
                         </div>
                       )
@@ -938,14 +936,14 @@ export function ModelSelectionModal({
                             size="sm"
                             onClick={() => {
                               if (!presetValidation.canSave) {
-                                toastManager.error(tModels('presets.cannotSave'), presetValidation.errorMessage ?? '');
+                                toastManager.error(t('chat.models.presets.cannotSave'), presetValidation.errorMessage ?? '');
                                 return;
                               }
                               isSavingPreset.onTrue();
                             }}
                             className="text-xs sm:text-sm"
                           >
-                            {tModels('presets.saveAsPreset')}
+                            {t('chat.models.presets.saveAsPreset')}
                           </Button>
                         )
                 )}
@@ -961,7 +959,7 @@ export function ModelSelectionModal({
                   >
                     <Link href="/chat/pricing" className="flex items-center gap-1.5">
                       <Icons.lockOpen className="size-3.5" />
-                      {tModels('unlockAllModels')}
+                      {t('chat.models.unlockAllModels')}
                     </Link>
                   </Button>
                 )}
@@ -972,7 +970,7 @@ export function ModelSelectionModal({
                   size="sm"
                   className="shrink-0 text-xs sm:text-sm"
                 >
-                  {activeTab === ModelSelectionTabs.PRESETS ? tModels('presets.save') : tModels('presets.done')}
+                  {activeTab === ModelSelectionTabs.PRESETS ? t('chat.models.presets.save') : t('chat.models.presets.done')}
                 </Button>
               </div>
             </div>

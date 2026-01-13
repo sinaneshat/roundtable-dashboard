@@ -15,13 +15,13 @@ function ModeratorCopyActionComponent({
   moderatorText,
   className,
 }: ModeratorCopyActionProps) {
-  const t = useTranslations('chat.roundActions');
+  const t = useTranslations();
 
   const messages = useMemo(() => ({
-    successTitle: t('copySuccess'),
-    successDescription: t('copySuccessDescription'),
-    errorTitle: t('copyError'),
-    errorDescription: t('copyErrorDescription'),
+    successTitle: t('chat.roundActions.copySuccess'),
+    successDescription: t('chat.roundActions.copySuccessDescription'),
+    errorTitle: t('chat.roundActions.copyError'),
+    errorDescription: t('chat.roundActions.copyErrorDescription'),
   }), [t]);
 
   const { copied, copy } = useCopyToClipboard({ messages });
@@ -34,8 +34,8 @@ function ModeratorCopyActionComponent({
     <CopyActionButton
       copied={copied}
       onClick={handleCopy}
-      tooltip={t('copySummary')}
-      label={t('copySummary')}
+      tooltip={t('chat.roundActions.copySummary')}
+      label={t('chat.roundActions.copySummary')}
       className={className}
       variant="copy"
     />

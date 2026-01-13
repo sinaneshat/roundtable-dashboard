@@ -171,7 +171,7 @@ function Sidebar({
   children,
   ...props
 }: SidebarProps) {
-  const t = useTranslations('accessibility');
+  const t = useTranslations();
   const { isMobile, state, openMobile, setOpenMobile, toggleSidebar } = useSidebar()
 
   const isFloatingOrInset = variant === SidebarVariants.FLOATING || variant === SidebarVariants.INSET
@@ -215,8 +215,8 @@ function Sidebar({
           side={side}
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>{t('mobileSidebar.title')}</SheetTitle>
-            <SheetDescription>{t('mobileSidebar.description')}</SheetDescription>
+            <SheetTitle>{t('accessibility.mobileSidebar.title')}</SheetTitle>
+            <SheetDescription>{t('accessibility.mobileSidebar.description')}</SheetDescription>
           </SheetHeader>
           <div className="flex h-full w-full flex-col p-2">
             {children}
@@ -296,7 +296,7 @@ function SidebarTrigger({
   ...props
 }: SidebarTriggerProps) {
   const { toggleSidebar, state } = useSidebar()
-  const t = useTranslations('actions');
+  const t = useTranslations();
 
   const isCollapsed = state === SidebarStates.COLLAPSED
 
@@ -314,7 +314,7 @@ function SidebarTrigger({
       {...props}
     >
       <Icons.panelLeft className={iconClassName ?? (isCollapsed ? "size-3.5" : "size-4")} />
-      <span className="sr-only">{t('toggleSidebar')}</span>
+      <span className="sr-only">{t('accessibility.toggleSidebar')}</span>
     </Button>
   )
 }

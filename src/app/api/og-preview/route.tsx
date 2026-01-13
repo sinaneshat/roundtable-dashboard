@@ -23,7 +23,7 @@ import {
   getModelIconBase64,
   getUIIconBase64,
   OG_COLORS,
-} from '@/lib/ui';
+} from '@/lib/ui/og-image-helpers';
 
 // Mock data for preview - Showcasing diverse AI model providers
 // ✅ MOCK DATA FOR OG PREVIEW: Example model IDs for preview generation only

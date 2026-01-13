@@ -70,7 +70,7 @@ function SheetContent({
   children,
   ...props
 }: SheetContentProps) {
-  const t = useTranslations('actions');
+  const t = useTranslations();
 
   return (
     <SheetPortal>
@@ -83,7 +83,7 @@ function SheetContent({
         {children}
         <SheetPrimitive.Close className="absolute end-3 top-3 sm:end-4 sm:top-4 rounded-full opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
           <Icons.x className="size-4" />
-          <span className="sr-only">{t('close')}</span>
+          <span className="sr-only">{t('actions.close')}</span>
         </SheetPrimitive.Close>
       </SheetPrimitive.Content>
     </SheetPortal>

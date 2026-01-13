@@ -29,8 +29,7 @@ export function ChatRenameDialog({
   threadId,
   currentTitle,
 }: ChatRenameDialogProps) {
-  const t = useTranslations('chat');
-  const tActions = useTranslations('actions');
+  const t = useTranslations();
   const [title, setTitle] = useState(currentTitle);
   const updateThreadMutation = useUpdateThreadMutation();
 
@@ -72,17 +71,17 @@ export function ChatRenameDialog({
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{t('renameConversation')}</DialogTitle>
+            <DialogTitle>{t('chat.renameConversation')}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <Label htmlFor="thread-title" className="sr-only">
-              {t('rename')}
+              {t('chat.rename')}
             </Label>
             <Input
               id="thread-title"
               value={title}
               onChange={e => setTitle(e.target.value)}
-              placeholder={t('rename')}
+              placeholder={t('chat.rename')}
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
             />
@@ -93,14 +92,14 @@ export function ChatRenameDialog({
               variant={ComponentVariants.GHOST}
               onClick={() => onOpenChange(false)}
             >
-              {tActions('cancel')}
+              {t('actions.cancel')}
             </Button>
             <Button
               type="submit"
               loading={updateThreadMutation.isPending}
               disabled={!title.trim()}
             >
-              {tActions('save')}
+              {t('actions.save')}
             </Button>
           </DialogFooter>
         </form>

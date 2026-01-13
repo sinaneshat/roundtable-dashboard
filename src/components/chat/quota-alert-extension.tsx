@@ -20,7 +20,7 @@ type QuotaAlertExtensionProps = {
  * paid users cannot purchase the same plan again.
  */
 export function QuotaAlertExtension({ hasHeaderToggle = false }: QuotaAlertExtensionProps) {
-  const t = useTranslations('usage');
+  const t = useTranslations();
   const { data: statsData, isLoading } = useUsageStatsQuery();
 
   // Only show for PAID users who are out of credits
@@ -59,7 +59,7 @@ export function QuotaAlertExtension({ hasHeaderToggle = false }: QuotaAlertExten
           )}
         >
           <p className="text-[10px] leading-tight text-destructive font-medium text-center">
-            {t('quotaAlert.paidUserMessage')}
+            {t('usage.quotaAlert.paidUserMessage')}
           </p>
         </div>
       </motion.div>

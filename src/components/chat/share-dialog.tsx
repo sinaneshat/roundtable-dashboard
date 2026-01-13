@@ -40,8 +40,7 @@ export function ShareDialog({
   onMakePublic,
   onMakePrivate,
 }: ShareDialogProps) {
-  const t = useTranslations('chat');
-  const tActions = useTranslations('actions');
+  const t = useTranslations();
 
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -110,21 +109,21 @@ export function ShareDialog({
         {!isPublic && (
           <>
             <DialogHeader>
-              <DialogTitle>{t('shareThread')}</DialogTitle>
+              <DialogTitle>{t('chat.shareThread')}</DialogTitle>
               <DialogDescription>
-                {t('makePublicConfirmDescription')}
+                {t('chat.makePublicConfirmDescription')}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
-                {tActions('cancel')}
+                {t('actions.cancel')}
               </Button>
               <Button
                 onClick={onMakePublic}
                 disabled={isLoading}
                 startIcon={isLoading ? <Icons.loader className="size-4 animate-spin" /> : undefined}
               >
-                {isLoading ? t('makingPublic') : t('makePublic')}
+                {isLoading ? t('chat.makingPublic') : t('chat.makePublic')}
               </Button>
             </DialogFooter>
           </>
@@ -134,20 +133,20 @@ export function ShareDialog({
           <>
             <DialogHeader className="pb-2">
               <div className="flex items-center gap-3">
-                <DialogTitle className="text-xl">{t('shareThread')}</DialogTitle>
+                <DialogTitle className="text-xl">{t('chat.shareThread')}</DialogTitle>
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-medium">
-                  {t('shareDialog.publicStatus')}
+                  {t('chat.shareDialog.publicStatus')}
                 </Badge>
               </div>
               <DialogDescription className="text-muted-foreground/80">
-                {t('shareThreadDescription')}
+                {t('chat.shareThreadDescription')}
               </DialogDescription>
             </DialogHeader>
 
             <div className="flex flex-col gap-5">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground/90">
-                  {t('shareDialog.copyLinkLabel')}
+                  {t('chat.shareDialog.copyLinkLabel')}
                 </label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -190,7 +189,7 @@ export function ShareDialog({
                       >
                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
                           <Icons.loader className="size-6 animate-spin" />
-                          <span className="text-sm">{t('shareDialog.generatingPreview')}</span>
+                          <span className="text-sm">{t('chat.shareDialog.generatingPreview')}</span>
                         </div>
                       </div>
                     )
@@ -215,7 +214,7 @@ export function ShareDialog({
                 className="w-full sm:w-auto h-10 border-amber-500/30 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 hover:border-amber-500/40"
                 startIcon={isLoading ? <Icons.loader className="size-4 animate-spin" /> : <Icons.lock className="size-4" />}
               >
-                {isLoading ? t('makingPrivate') : t('makePrivate')}
+                {isLoading ? t('chat.makingPrivate') : t('chat.makePrivate')}
               </Button>
             </DialogFooter>
           </>

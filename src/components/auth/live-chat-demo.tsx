@@ -12,6 +12,7 @@ import {
   MODERATOR_PARTICIPANT_INDEX,
 } from '@/api/core/enums';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
+import { ChatStoreDemoProvider } from '@/components/providers';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ChatMessage, ChatParticipant } from '@/db/validation/chat';
 import { useThreadTimeline } from '@/hooks/utils';
@@ -41,6 +42,9 @@ const DEMO_RESPONSES = [
   `**I'd push back slightly** on jumping to enterprise without data. Run a 90-day experiment with 5 prospects from your existing base—that gives you real numbers on sales cycles and resources before committing.`,
 ];
 
+// Static date to prevent hydration mismatch (server vs client Date.now() differences)
+const DEMO_DATE = new Date('2024-01-01T00:00:00.000Z');
+
 const STATIC_PARTICIPANTS: ChatParticipant[] = DEMO_PARTICIPANTS_DATA.map((p, idx) => ({
   id: `participant-${idx}`,
   threadId: 'demo-thread',
@@ -49,8 +53,8 @@ const STATIC_PARTICIPANTS: ChatParticipant[] = DEMO_PARTICIPANTS_DATA.map((p, id
   role: p.role,
   priority: idx,
   isEnabled: true,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+  createdAt: DEMO_DATE,
+  updatedAt: DEMO_DATE,
   settings: null,
 }));
 
@@ -69,7 +73,7 @@ function createUserMessage(): ChatMessage {
     parts: [{ type: MessagePartTypes.TEXT, text: DEMO_USER_MESSAGE_CONTENT }],
     toolCalls: null,
     roundNumber: 1,
-    createdAt: new Date(),
+    createdAt: DEMO_DATE,
     metadata: { role: MessageRoles.USER, roundNumber: 1 },
   };
 }
@@ -83,7 +87,7 @@ function createParticipantMessage(index: number, text: string): ChatMessage {
     parts: [{ type: MessagePartTypes.TEXT, text }],
     toolCalls: null,
     roundNumber: 1,
-    createdAt: new Date(),
+    createdAt: DEMO_DATE,
     metadata: {
       role: MessageRoles.ASSISTANT,
       roundNumber: 1,
@@ -109,7 +113,7 @@ function createModeratorMessage(text: string): ChatMessage {
     parts: [{ type: MessagePartTypes.TEXT, text }],
     toolCalls: null,
     roundNumber: 1,
-    createdAt: new Date(),
+    createdAt: DEMO_DATE,
     metadata: {
       role: MessageRoles.ASSISTANT,
       roundNumber: 1,
@@ -244,26 +248,28 @@ export function LiveChatDemo() {
   const isDemoActive = activeParticipant >= 0 && activeParticipant <= 3;
 
   return (
-    <div className="h-full min-h-0 overflow-hidden">
-      <ScrollArea className="h-full">
-        <div className="w-full px-10 py-6 [&_p]:text-muted-foreground [&_strong]:text-foreground">
-          <ThreadTimeline
-            timelineItems={timelineItems}
-            user={DEMO_USER}
-            participants={STATIC_PARTICIPANTS}
-            threadId="demo-thread"
-            isStreaming={isParticipantStreaming}
-            currentParticipantIndex={isParticipantStreaming ? activeParticipant : 0}
-            currentStreamingParticipant={isParticipantStreaming ? STATIC_PARTICIPANTS[activeParticipant] ?? null : null}
-            streamingRoundNumber={isDemoActive ? 1 : null}
-            preSearches={[]}
-            isReadOnly={true}
-            skipEntranceAnimations={false}
-            demoMode={true}
-            isModeratorStreaming={isModeratorStreaming}
-          />
-        </div>
-      </ScrollArea>
-    </div>
+    <ChatStoreDemoProvider>
+      <div className="h-full min-h-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="w-full px-10 py-6 [&_p]:text-muted-foreground [&_strong]:text-foreground">
+            <ThreadTimeline
+              timelineItems={timelineItems}
+              user={DEMO_USER}
+              participants={STATIC_PARTICIPANTS}
+              threadId="demo-thread"
+              isStreaming={isParticipantStreaming}
+              currentParticipantIndex={isParticipantStreaming ? activeParticipant : 0}
+              currentStreamingParticipant={isParticipantStreaming ? STATIC_PARTICIPANTS[activeParticipant] ?? null : null}
+              streamingRoundNumber={isDemoActive ? 1 : null}
+              preSearches={[]}
+              isReadOnly={true}
+              skipEntranceAnimations={false}
+              demoMode={true}
+              isModeratorStreaming={isModeratorStreaming}
+            />
+          </div>
+        </ScrollArea>
+      </div>
+    </ChatStoreDemoProvider>
   );
 }

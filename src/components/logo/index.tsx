@@ -23,7 +23,7 @@ type Props = {
  */
 function Logo(props: Props) {
   const { size = LogoSizes.SM, variant = LogoVariants.ICON, className } = props;
-  const t = useTranslations('common');
+  const t = useTranslations();
 
   // ✅ Get dimensions from metadata (enum-driven, no switch statements)
   const metadata = LogoSizeMetadata[size];
@@ -38,7 +38,7 @@ function Logo(props: Props) {
     <Image
       src={logoSrc}
       className={cn('object-contain', className)}
-      alt={t('logo')}
+      alt={t('common.logo')}
       width={logoSize.width}
       height={logoSize.height}
       priority

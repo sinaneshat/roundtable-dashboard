@@ -6,7 +6,7 @@ import {
   createGradient,
   getLogoBase64,
   OG_COLORS,
-} from '@/lib/ui';
+} from '@/lib/ui/og-image-helpers';
 import { getOGFonts } from '@/lib/ui/og-fonts.server';
 
 export const size = {

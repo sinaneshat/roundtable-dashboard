@@ -208,7 +208,7 @@ function InlineCitationSource({
   mimeType,
   fileSize,
 }: InlineCitationSourceProps) {
-  const t = useTranslations('chat.citations');
+  const t = useTranslations();
   const config = SOURCE_TYPE_CONFIG[sourceType];
   const Icon = config.icon;
   const isAttachment = sourceType === CitationSourceTypes.ATTACHMENT;
@@ -255,7 +255,7 @@ function InlineCitationSource({
           )}
         >
           <Icons.download className="size-3" />
-          <span>{t('download', { name: filename || 'file' })}</span>
+          <span>{t('chat.citations.download', { name: filename || 'file' })}</span>
         </a>
       )}
       {url && !isAttachment && (

@@ -88,7 +88,7 @@ function BreadcrumbEllipsis({
   className,
   ...props
 }: ComponentProps<'span'>) {
-  const t = useTranslations('common');
+  const t = useTranslations();
 
   return (
     <span
@@ -99,7 +99,7 @@ function BreadcrumbEllipsis({
       {...props}
     >
       <Icons.moreHorizontal className="size-4" />
-      <span className="sr-only">{t('more')}</span>
+      <span className="sr-only">{t('actions.more')}</span>
     </span>
   )
 }
