@@ -35,7 +35,6 @@ import { LogoGlow } from '@/components/ui/logo-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
-  useAnalyzePromptStream,
   useBoolean,
   useChatAttachments,
   useFreeTrialState,
@@ -59,6 +58,7 @@ import {
   threadHasVisionRequiredFiles,
 } from '@/lib/utils';
 import {
+  useAutoModeAnalysis,
   useChatFormActions,
   useOverviewActions,
   useScreenInitialization,
@@ -144,7 +144,6 @@ export default function ChatOverviewScreen() {
     updateParticipant,
     setEnableWebSearch,
     setAutoMode,
-    setIsAnalyzingPrompt,
     resetToOverview,
   } = useChatStore(
     useShallow(s => ({
@@ -164,7 +163,6 @@ export default function ChatOverviewScreen() {
       updateParticipant: s.updateParticipant,
       setEnableWebSearch: s.setEnableWebSearch,
       setAutoMode: s.setAutoMode,
-      setIsAnalyzingPrompt: s.setIsAnalyzingPrompt,
       resetToOverview: s.resetToOverview,
     })),
   );
@@ -190,7 +188,8 @@ export default function ChatOverviewScreen() {
 
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(modelModal.value && !isStreaming);
-  const { streamConfig: analyzePromptStream } = useAnalyzePromptStream();
+  // syncToPreferences=true for Overview screen - handles preference persistence
+  const { analyzeAndApply } = useAutoModeAnalysis(true);
   const { borderVariant: headerBorderVariant } = useFreeTrialState();
 
   const allEnabledModels = useMemo(
@@ -597,37 +596,13 @@ export default function ChatOverviewScreen() {
         }
 
         if (autoMode && inputValue.trim()) {
-          setIsAnalyzingPrompt(true);
-
           // Check if visual files are attached to restrict model selection to vision-capable models
           const hasVisualFiles = chatAttachments.attachments.some(att =>
             isVisionRequiredMimeType(att.file.type),
           );
 
-          try {
-            const result = await analyzePromptStream({ prompt: inputValue.trim(), hasVisualFiles });
-            if (result) {
-              const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;
-              const newParticipants = participants.map((p: { modelId: string; role: string | null }, index: number) => ({
-                id: p.modelId,
-                modelId: p.modelId,
-                role: p.role || '',
-                priority: index,
-              }));
-              setSelectedParticipants(newParticipants);
-              setModelOrder(newParticipants.map((p: { modelId: string }) => p.modelId));
-              setSelectedMode(recommendedMode);
-              setEnableWebSearch(recommendedWebSearch);
-              setPersistedModelIds(newParticipants.map((p: { modelId: string }) => p.modelId));
-              setPersistedModelOrder(newParticipants.map((p: { modelId: string }) => p.modelId));
-              setPersistedMode(recommendedMode);
-              setPersistedWebSearch(recommendedWebSearch);
-            }
-          } catch {
-            console.error('[ChatOverview] Auto mode analysis failed, using current config');
-          } finally {
-            setIsAnalyzingPrompt(false);
-          }
+          // Consolidated auto mode analysis - updates both chat store and preferences
+          await analyzeAndApply({ prompt: inputValue.trim(), hasVisualFiles });
         }
 
         const currentParticipants = storeApi.getState().selectedParticipants;
@@ -654,7 +629,7 @@ export default function ChatOverviewScreen() {
         }
       }
     },
-    [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId, chatAttachments, autoMode, setIsAnalyzingPrompt, analyzePromptStream, setSelectedParticipants, setModelOrder, setSelectedMode, setEnableWebSearch, setPersistedModelIds, setPersistedModelOrder, setPersistedMode, setPersistedWebSearch, storeApi],
+    [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId, chatAttachments, autoMode, analyzeAndApply, storeApi],
   );
 
   const handleToggleModel = useCallback((modelId: string) => {

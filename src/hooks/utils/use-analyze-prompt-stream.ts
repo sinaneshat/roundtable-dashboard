@@ -18,9 +18,10 @@
 
 import { useCallback, useRef, useState } from 'react';
 
-import { AnalyzePromptSseEvents, DEFAULT_CHAT_MODE, ModelIds } from '@/api/core/enums';
+import { AnalyzePromptSseEvents } from '@/api/core/enums';
 import type { AnalyzePromptPayload } from '@/api/routes/chat/schema';
 import { analyzePromptStreamService } from '@/services/api';
+import { AUTO_MODE_FALLBACK_CONFIG } from '@/stores/chat/store-defaults';
 
 type AnalyzePromptStreamState = {
   isStreaming: boolean;
@@ -37,13 +38,6 @@ type AnalyzePromptStreamResult = AnalyzePromptStreamState & {
   streamConfig: (options: StreamConfigOptions) => Promise<AnalyzePromptPayload | null>;
   abort: () => void;
   reset: () => void;
-};
-
-// Fallback config if streaming fails
-const FALLBACK_CONFIG: AnalyzePromptPayload = {
-  participants: [{ modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: null }],
-  mode: DEFAULT_CHAT_MODE,
-  enableWebSearch: false,
 };
 
 export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
@@ -175,7 +169,7 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
         isStreaming: false,
       }));
 
-      return finalConfig ?? FALLBACK_CONFIG;
+      return finalConfig ?? AUTO_MODE_FALLBACK_CONFIG;
     } catch (err) {
       if (abortController.signal.aborted) {
         setState(prev => ({
@@ -194,7 +188,7 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
         partialConfig: null,
       });
 
-      return FALLBACK_CONFIG;
+      return AUTO_MODE_FALLBACK_CONFIG;
     }
   }, [abort]);
 

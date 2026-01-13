@@ -175,7 +175,6 @@ export function ThreadTimeline({
                       streamingRoundNumber={streamingRoundNumber}
                       demoOpen={demoPreSearchOpen}
                       demoShowContent={demoPreSearchOpen ? item.data.searchData !== undefined : undefined}
-                      isReadOnly={isReadOnly}
                     />
                   </UnifiedErrorBoundary>
                 </div>

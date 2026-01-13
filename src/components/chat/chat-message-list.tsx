@@ -161,8 +161,6 @@ type ParticipantMessageWrapperProps = {
   displayName?: string;
   /** Hide action buttons (for moderator where council actions handle it) */
   hideActions?: boolean;
-  /** Read-only mode for public/shared views without ChatStoreProvider */
-  isReadOnly?: boolean;
 };
 
 const ParticipantMessageWrapper = memo(({
@@ -180,7 +178,6 @@ const ParticipantMessageWrapper = memo(({
   avatarName: avatarNameOverride,
   displayName: displayNameOverride,
   hideActions = false,
-  isReadOnly = false,
 }: ParticipantMessageWrapperProps) => {
   const defaultAvatarProps = participant
     ? getAvatarPropsFromModelId(MessageRoles.ASSISTANT, participant.modelId, null, 'AI')
@@ -222,7 +219,6 @@ const ParticipantMessageWrapper = memo(({
           hideActions={hideActions}
           loadingText={loadingText}
           maxContentHeight={maxContentHeight}
-          isReadOnly={isReadOnly}
         />
       </div>
     </div>
@@ -1303,7 +1299,6 @@ export const ChatMessageList = memo(
                               loadingText={loadingText}
                               maxContentHeight={maxContentHeight}
                               hideActions={demoMode}
-                              isReadOnly={isReadOnly}
                             />
                           </ScrollAwareParticipant>
                         );
@@ -1408,7 +1403,6 @@ export const ChatMessageList = memo(
                           avatarName={MODERATOR_NAME}
                           displayName={MODERATOR_NAME}
                           hideActions
-                          isReadOnly={isReadOnly}
                         />
                       </ScrollAwareParticipant>
                     </div>
@@ -1573,7 +1567,6 @@ export const ChatMessageList = memo(
                   avatarName={MODERATOR_NAME}
                   displayName={MODERATOR_NAME}
                   hideActions
-                  isReadOnly={isReadOnly}
                 />
               </ScrollAwareParticipant>
             </div>

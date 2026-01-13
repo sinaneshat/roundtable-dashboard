@@ -2,6 +2,8 @@
  * Chat Store Public API
  */
 
+export type { UseAutoModeAnalysisReturn } from './actions/auto-mode-actions';
+export { useAutoModeAnalysis } from './actions/auto-mode-actions';
 export type { UseFeedbackActionsOptions, UseFeedbackActionsReturn } from './actions/feedback-actions';
 export { useFeedbackActions } from './actions/feedback-actions';
 export type { UseFlowControllerOptions } from './actions/flow-controller';

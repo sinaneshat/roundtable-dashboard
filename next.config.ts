@@ -1,6 +1,11 @@
+import bundleAnalyzer from '@next/bundle-analyzer';
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
+
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
 
 const isDev = process.env.NODE_ENV === 'development';
 const isProd = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'prod';
@@ -24,13 +29,66 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: !isProd,
   experimental: {
     optimizePackageImports: [
+      // Icons
       'lucide-react',
-      'recharts',
-      'date-fns',
       '@radix-ui/react-icons',
+      // UI Libraries
+      'recharts',
+      'framer-motion',
       'motion',
+      // Date/Time
+      'date-fns',
+      // AI SDK
       'ai',
       '@ai-sdk/react',
+      '@ai-sdk/ui-utils',
+      // State Management
+      'zustand',
+      '@tanstack/react-query',
+      '@tanstack/react-virtual',
+      // Form/Validation
+      'zod',
+      'react-hook-form',
+      '@hookform/resolvers',
+      // Radix UI primitives
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-popover',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-tooltip',
+      '@radix-ui/react-slot',
+      '@radix-ui/react-scroll-area',
+      '@radix-ui/react-avatar',
+      '@radix-ui/react-checkbox',
+      '@radix-ui/react-label',
+      '@radix-ui/react-separator',
+      '@radix-ui/react-switch',
+      '@radix-ui/react-accordion',
+      '@radix-ui/react-alert-dialog',
+      '@radix-ui/react-aspect-ratio',
+      '@radix-ui/react-collapsible',
+      '@radix-ui/react-context-menu',
+      '@radix-ui/react-hover-card',
+      '@radix-ui/react-menubar',
+      '@radix-ui/react-navigation-menu',
+      '@radix-ui/react-progress',
+      '@radix-ui/react-radio-group',
+      '@radix-ui/react-slider',
+      '@radix-ui/react-toast',
+      '@radix-ui/react-toggle',
+      '@radix-ui/react-toggle-group',
+      // Markdown/Content
+      'streamdown',
+      'react-markdown',
+      'remark-gfm',
+      'rehype-raw',
+      // Utilities
+      'clsx',
+      'tailwind-merge',
+      'class-variance-authority',
+      // PostHog
+      'posthog-js',
     ],
   },
 
@@ -64,6 +122,25 @@ const nextConfig: NextConfig = {
     '@shikijs/langs',
     '@shikijs/themes',
     '@shikijs/engine-oniguruma',
+    '@shikijs/engine-javascript',
+    // Mermaid diagrams (~3MB with deps)
+    'mermaid',
+    'cytoscape',
+    'cytoscape-cose-bilkent',
+    'cytoscape-fcose',
+    'd3',
+    'd3-sankey',
+    'dagre-d3-es',
+    'elkjs',
+    'langium',
+    'chevrotain',
+    // KaTeX math rendering (~600KB)
+    'katex',
+    // Heavy unified/remark/rehype plugins
+    'unified',
+    'remark-math',
+    'rehype-katex',
+    'marked',
   ],
 
   async rewrites() {
@@ -231,10 +308,51 @@ const nextConfig: NextConfig = {
       config.optimization.moduleIds = 'named';
       config.optimization.chunkIds = 'named';
     }
+
+    // Client-side optimizations
+    if (!isServer) {
+      // Better chunk splitting for lazy loading
+      config.optimization.splitChunks = {
+        ...config.optimization.splitChunks,
+        cacheGroups: {
+          ...config.optimization.splitChunks?.cacheGroups,
+          // Separate vendor chunks for better caching
+          framework: {
+            name: 'framework',
+            test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+            priority: 40,
+            chunks: 'all',
+            enforce: true,
+          },
+          // Heavy libs in separate chunks
+          heavyLibs: {
+            name: 'heavy-libs',
+            test: /[\\/]node_modules[\\/](framer-motion|recharts|@tanstack)[\\/]/,
+            priority: 30,
+            chunks: 'all',
+          },
+          // Radix UI components
+          radix: {
+            name: 'radix',
+            test: /[\\/]node_modules[\\/]@radix-ui[\\/]/,
+            priority: 25,
+            chunks: 'all',
+          },
+          // AI SDK
+          aiSdk: {
+            name: 'ai-sdk',
+            test: /[\\/]node_modules[\\/](ai|@ai-sdk)[\\/]/,
+            priority: 20,
+            chunks: 'all',
+          },
+        },
+      };
+    }
+
     return config;
   },
 };
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
-export default withNextIntl(nextConfig);
+export default withBundleAnalyzer(withNextIntl(nextConfig));

@@ -17,7 +17,6 @@ import { useChatStore, useChatStoreApi } from '@/components/providers';
 import { useCustomRolesQuery, useModelsQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries';
 import type { TimelineItem, UseChatAttachmentsReturn } from '@/hooks/utils';
 import {
-  useAnalyzePromptStream,
   useBoolean,
   useChatScroll,
   useFreeTrialState,
@@ -32,6 +31,7 @@ import { isFilePart } from '@/lib/schemas/message-schemas';
 import { toastManager } from '@/lib/toast';
 import { getIncompatibleModelIds, getModeratorMetadata, getRoundNumber, isModeratorMessage, isVisionRequiredMimeType } from '@/lib/utils';
 import {
+  useAutoModeAnalysis,
   useChatFormActions,
   useFeedbackActions,
   useFlowLoading,
@@ -108,9 +108,6 @@ export function ChatView({
     autoMode,
     setAutoMode,
     isAnalyzingPrompt,
-    setIsAnalyzingPrompt,
-    setSelectedMode,
-    setEnableWebSearch,
   } = useChatStore(
     useShallow(s => ({
       messages: s.messages,
@@ -139,9 +136,6 @@ export function ChatView({
       autoMode: s.autoMode,
       setAutoMode: s.setAutoMode,
       isAnalyzingPrompt: s.isAnalyzingPrompt,
-      setIsAnalyzingPrompt: s.setIsAnalyzingPrompt,
-      setSelectedMode: s.setSelectedMode,
-      setEnableWebSearch: s.setEnableWebSearch,
     })),
   );
 
@@ -343,7 +337,8 @@ export function ChatView({
   }, [mode, incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, messages, threadActions, setSelectedParticipants, allEnabledModels, t, chatAttachments.attachments]);
 
   const formActions = useChatFormActions();
-  const { streamConfig: analyzePromptStream } = useAnalyzePromptStream();
+  // syncToPreferences=false for ChatView - overview screen handles preference persistence
+  const { analyzeAndApply } = useAutoModeAnalysis(false);
 
   const { showLoader } = useFlowLoading({ mode });
 
@@ -377,47 +372,16 @@ export function ChatView({
 
   const handleAutoModeSubmit = useCallback(async (e: React.FormEvent) => {
     if (mode === ScreenModes.OVERVIEW && autoMode && inputValue.trim()) {
-      setIsAnalyzingPrompt(true);
-
       // Check if visual files are attached to restrict model selection to vision-capable models
       const hasVisualFiles = chatAttachments.attachments.some(att =>
         isVisionRequiredMimeType(att.file.type),
       );
 
-      try {
-        const result = await analyzePromptStream({ prompt: inputValue.trim(), hasVisualFiles });
-        if (result) {
-          const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;
-          const newParticipants = participants.map((p: { modelId: string; role: string | null }, index: number) => ({
-            id: p.modelId,
-            modelId: p.modelId,
-            role: p.role || '',
-            priority: index,
-          }));
-          setSelectedParticipants(newParticipants);
-          setModelOrder(newParticipants.map((p: { modelId: string }) => p.modelId));
-          setSelectedMode(recommendedMode);
-          setEnableWebSearch(recommendedWebSearch);
-        }
-      } catch {
-      } finally {
-        setIsAnalyzingPrompt(false);
-      }
+      // Consolidated auto mode analysis - updates store directly
+      await analyzeAndApply({ prompt: inputValue.trim(), hasVisualFiles });
     }
     await onSubmit(e);
-  }, [
-    mode,
-    autoMode,
-    inputValue,
-    chatAttachments.attachments,
-    setIsAnalyzingPrompt,
-    analyzePromptStream,
-    setSelectedParticipants,
-    setModelOrder,
-    setSelectedMode,
-    setEnableWebSearch,
-    onSubmit,
-  ]);
+  }, [mode, autoMode, inputValue, chatAttachments.attachments, analyzeAndApply, onSubmit]);
 
   const keyboardOffset = useVisualViewportPosition();
 

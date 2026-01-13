@@ -167,6 +167,36 @@ async function checkMissingTranslations(): Promise<MissingTranslationsResult> {
   };
 }
 
-checkMissingTranslations().catch(error => {
+async function main() {
+  console.log('Checking for missing translations...\n');
+
+  const result = await checkMissingTranslations();
+
+  console.log(`Total keys used in code: ${result.totalKeys}`);
+  console.log(`Missing keys: ${result.missingKeys.length}\n`);
+
+  if (result.missingKeys.length > 0) {
+    console.log('Missing Translation Keys:');
+    console.log('=========================\n');
+
+    for (const missing of result.missingKeys) {
+      console.log(`  ❌ ${missing.key}`);
+      for (const loc of missing.files.slice(0, 2)) {
+        console.log(`     └─ ${loc.file}:${loc.line}`);
+      }
+      if (missing.files.length > 2) {
+        console.log(`     └─ ... and ${missing.files.length - 2} more`);
+      }
+    }
+
+    console.log('\n---\nKeys to add to common.json:\n');
+    console.log(result.missingKeys.map(m => m.key).join('\n'));
+  } else {
+    console.log('✅ All translation keys are defined!');
+  }
+}
+
+main().catch(error => {
+  console.error('Error:', error);
   process.exit(1);
 });

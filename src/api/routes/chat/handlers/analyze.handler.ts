@@ -26,7 +26,6 @@ import {
   ChatModes,
   ChatModeSchema,
   DEFAULT_CHAT_MODE,
-  ModelIds,
   SHORT_ROLE_NAMES,
   ShortRoleNameSchema,
   SubscriptionTiers,
@@ -43,6 +42,7 @@ import type { AnalyzeModelInfo } from '@/api/services/prompts';
 import { buildAnalyzeSystemPrompt } from '@/api/services/prompts';
 import { getUserTier } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
+import { AUTO_MODE_FALLBACK_CONFIG } from '@/stores/chat/store-defaults';
 
 import type { analyzePromptRoute } from '../route';
 import type { AnalyzePromptPayload, RecommendedParticipant } from '../schema';
@@ -51,19 +51,6 @@ import { AnalyzePromptRequestSchema } from '../schema';
 // ============================================================================
 // Constants
 // ============================================================================
-
-// Fallback uses MIN_PARTICIPANTS_REQUIRED (2) participant models for multi-perspective value
-// Uses fast, accessible models from different providers for diverse perspectives
-// Both models support vision, so this config works for all scenarios (visual and non-visual)
-// Uses ModelIds enum for single source of truth
-const FALLBACK_CONFIG: AnalyzePromptPayload = {
-  participants: [
-    { modelId: ModelIds.OPENAI_GPT_4O_MINI, role: null },
-    { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: null },
-  ],
-  mode: DEFAULT_CHAT_MODE,
-  enableWebSearch: false,
-};
 
 const ANALYSIS_TEMPERATURE = 0.3;
 
@@ -294,10 +281,10 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
             accessibleModelIds,
             maxModels,
           );
-          finalConfig = validated ?? bestConfig ?? FALLBACK_CONFIG;
+          finalConfig = validated ?? bestConfig ?? AUTO_MODE_FALLBACK_CONFIG;
         } catch {
           // Use best partial or fallback
-          finalConfig = bestConfig ?? FALLBACK_CONFIG;
+          finalConfig = bestConfig ?? AUTO_MODE_FALLBACK_CONFIG;
         }
 
         // Send final done event with complete config
@@ -313,7 +300,7 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
         await writeSSE(AnalyzePromptSseEvents.FAILED, JSON.stringify({
           timestamp: Date.now(),
           error: error instanceof Error ? error.message : 'Analysis failed',
-          config: FALLBACK_CONFIG,
+          config: AUTO_MODE_FALLBACK_CONFIG,
         }));
       }
     });
