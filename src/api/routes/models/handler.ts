@@ -61,7 +61,7 @@ function enrichModelWithTierAccess(model: ModelForPricing, userTier: Subscriptio
  */
 export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = createHandler(
   {
-    auth: 'public',
+    auth: 'session-optional',
     operationName: 'listModels',
   },
   async (c) => {
