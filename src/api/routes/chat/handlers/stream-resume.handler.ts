@@ -21,6 +21,54 @@ import type {
   ThreadStreamResumptionState,
 } from '../schema';
 
+/**
+ * ✅ FIX: Validate KV participant status against actual DB messages
+ * KV can have stale data (e.g., participant marked FAILED but message was never saved)
+ * This function cross-validates to find the REAL next participant
+ */
+async function getDbValidatedNextParticipant(
+  threadId: string,
+  roundNumber: number,
+  totalParticipants: number,
+  _kvNextParticipant: { roundNumber: number; participantIndex: number; totalParticipants: number } | null,
+): Promise<{ participantIndex: number } | null> {
+  const db = await getDbAsync();
+
+  // Query DB for actual participant messages in current round
+  const assistantMessages = await db.query.chatMessage.findMany({
+    where: and(
+      eq(tables.chatMessage.threadId, threadId),
+      eq(tables.chatMessage.roundNumber, roundNumber),
+      eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
+    ),
+    columns: { id: true, metadata: true },
+  });
+
+  // Get participant indices that have actual DB messages (excluding moderator)
+  const participantIndicesWithMessages = new Set<number>();
+  for (const msg of assistantMessages) {
+    const metadata = msg.metadata;
+    if (metadata && typeof metadata === 'object') {
+      if ('isModerator' in metadata && metadata.isModerator === true) {
+        continue;
+      }
+      if ('participantIndex' in metadata && typeof metadata.participantIndex === 'number') {
+        participantIndicesWithMessages.add(metadata.participantIndex);
+      }
+    }
+  }
+
+  // Find first participant without a DB message
+  for (let i = 0; i < totalParticipants; i++) {
+    if (!participantIndicesWithMessages.has(i)) {
+      return { participantIndex: i };
+    }
+  }
+
+  // All participants have messages
+  return null;
+}
+
 export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
@@ -92,11 +140,20 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       const metadata = await getParticipantStreamMetadata(streamIdToResume, c.env);
 
       if (!metadata) {
-        if (nextParticipant && !roundComplete) {
+        // ✅ FIX: Validate KV result against actual DB messages
+        const dbValidatedNext = await getDbValidatedNextParticipant(
+          threadId,
+          activeStream.roundNumber,
+          activeStream.totalParticipants,
+          nextParticipant,
+        );
+        const validatedRoundComplete = !dbValidatedNext;
+
+        if (dbValidatedNext && !validatedRoundComplete) {
           return Responses.noContentWithHeaders({
             roundNumber: activeStream.roundNumber,
             totalParticipants: activeStream.totalParticipants,
-            nextParticipantIndex: nextParticipant.participantIndex,
+            nextParticipantIndex: dbValidatedNext.participantIndex,
             participantStatuses: activeStream.participantStatuses,
             roundComplete: false,
           });
@@ -129,18 +186,27 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
           c.env,
         );
 
-        const updatedNextParticipant = await getNextParticipantToStream(threadId, c.env);
-        const updatedRoundComplete = !updatedNextParticipant;
+        const kvUpdatedNextParticipant = await getNextParticipantToStream(threadId, c.env);
+
+        // ✅ FIX: Validate KV result against actual DB messages
+        // KV might have marked participant as FAILED but message was never saved
+        const dbValidatedNextParticipant = await getDbValidatedNextParticipant(
+          threadId,
+          activeStream.roundNumber,
+          activeStream.totalParticipants,
+          kvUpdatedNextParticipant,
+        );
+        const updatedRoundComplete = !dbValidatedNextParticipant;
 
         if (updatedRoundComplete) {
           await clearThreadActiveStream(threadId, c.env);
         }
 
-        if (updatedNextParticipant && !updatedRoundComplete) {
+        if (dbValidatedNextParticipant && !updatedRoundComplete) {
           return Responses.noContentWithHeaders({
             roundNumber: activeStream.roundNumber,
             totalParticipants: activeStream.totalParticipants,
-            nextParticipantIndex: updatedNextParticipant.participantIndex,
+            nextParticipantIndex: dbValidatedNextParticipant.participantIndex,
             participantStatuses: activeStream.participantStatuses,
             roundComplete: false,
           });
@@ -410,7 +476,54 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
           );
         }
 
-        const nextParticipant = await getNextParticipantToStream(threadId, c.env);
+        const kvNextParticipant = await getNextParticipantToStream(threadId, c.env);
+
+        // ✅ FIX: Cross-validate KV statuses against actual DB messages
+        // KV can have stale data (e.g., participant marked completed but message never saved)
+        // Query DB to find which participants actually have messages
+        const participantMessagesForValidation = await db.query.chatMessage.findMany({
+          where: and(
+            eq(tables.chatMessage.threadId, threadId),
+            eq(tables.chatMessage.roundNumber, currentRoundNumber),
+            eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
+          ),
+          columns: { id: true, metadata: true },
+        });
+
+        // Get participant indices that have actual DB messages (excluding moderator)
+        const participantIndicesWithMessages = new Set<number>();
+        for (const msg of participantMessagesForValidation) {
+          const metadata = msg.metadata;
+          if (metadata && typeof metadata === 'object') {
+            // Skip moderator messages
+            if ('isModerator' in metadata && metadata.isModerator === true) {
+              continue;
+            }
+            // Get participant index from metadata
+            if ('participantIndex' in metadata && typeof metadata.participantIndex === 'number') {
+              participantIndicesWithMessages.add(metadata.participantIndex);
+            }
+          }
+        }
+
+        // Find the REAL next participant: first one without a DB message
+        // This overrides KV if KV has stale/incorrect status
+        let nextParticipant = kvNextParticipant;
+        for (let i = 0; i < activeStream.totalParticipants; i++) {
+          if (!participantIndicesWithMessages.has(i)) {
+            // This participant has no DB message - they need to respond
+            // Override KV result if different
+            if (!kvNextParticipant || kvNextParticipant.participantIndex !== i) {
+              nextParticipant = {
+                roundNumber: activeStream.roundNumber,
+                participantIndex: i,
+                totalParticipants: activeStream.totalParticipants,
+              };
+            }
+            break;
+          }
+        }
+
         const allComplete = !nextParticipant;
 
         if (allComplete && stale) {
@@ -466,7 +579,27 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
         return !('isModerator' in metadata && metadata.isModerator === true);
       });
 
+      // ✅ FIX: Also calculate nextParticipantToTrigger when no KV
+      // Get participant indices that have actual DB messages
+      const dbParticipantIndices = new Set<number>();
+      for (const msg of participantMessages) {
+        const metadata = msg.metadata;
+        if (metadata && typeof metadata === 'object' && 'participantIndex' in metadata && typeof metadata.participantIndex === 'number') {
+          dbParticipantIndices.add(metadata.participantIndex);
+        }
+      }
+
+      // Find first participant without a message
+      let dbNextParticipant: number | null = null;
+      for (let i = 0; i < totalParticipants; i++) {
+        if (!dbParticipantIndices.has(i)) {
+          dbNextParticipant = i;
+          break;
+        }
+      }
+
       participantStatus.totalParticipants = totalParticipants;
+      participantStatus.nextParticipantToTrigger = dbNextParticipant;
       // ✅ FIX: Use filtered participant messages count, not all assistant messages
       participantStatus.allComplete = participantMessages.length >= totalParticipants;
     }

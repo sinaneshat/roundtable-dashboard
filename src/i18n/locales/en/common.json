@@ -456,14 +456,14 @@
     "noResultsDescription": "Try a different search term",
     "participant": {
       "emptyResponse": "No response from {model}",
-      "gatheringThoughts": "Gathering thoughts...",
+      "gatheringThoughts": "Thinking...",
       "generating": "Generating response from {model}...",
       "moderatorObserving": "Observing...",
       "reasoningOnlyResponse": "Reasoning-only response from {model}",
       "tierRequired": "{tier} required",
-      "waitingForWebResults": "Waiting for web results...",
-      "waitingNamed": "Waiting for {name}...",
-      "waitingToSynthesize": "Waiting to synthesize..."
+      "waitingForWebResults": "Searching...",
+      "waitingNamed": "Thinking...",
+      "waitingToSynthesize": "Observing..."
     },
     "pin": "Pin",
     "pinned": "Pinned",

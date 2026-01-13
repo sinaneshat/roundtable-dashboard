@@ -311,6 +311,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       }));
     }
 
+    // CRITICAL: Set isPatchInProgress BEFORE setWaitingToStartStreaming to prevent race condition
+    // The streaming trigger effect checks isPatchInProgress - must be true before effect runs
+    actions.setIsPatchInProgress(true);
+
     actions.setWaitingToStartStreaming(true);
     const firstParticipant = freshParticipants[0];
     if (firstParticipant) {
@@ -319,8 +323,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
     actions.setInputValue('');
     actions.clearAttachments();
-
-    actions.setIsPatchInProgress(true);
 
     try {
       const response = await updateThreadMutation.mutateAsync({
