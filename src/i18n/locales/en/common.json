@@ -1058,6 +1058,22 @@
       "monthlyRefill": "Credits refill on {date}"
     }
   },
+  "errors": {
+    "boundary": {
+      "title": "Something Went Wrong",
+      "chat": "An error occurred while loading the chat. Please try again.",
+      "messageList": "An error occurred while displaying messages. Your conversation is safe.",
+      "configuration": "An error occurred while loading the configuration.",
+      "preSearch": "An error occurred during web search.",
+      "general": "An unexpected error occurred. Please try again.",
+      "devDetailsLabel": "Technical Details (Development)",
+      "errorLabel": "Error",
+      "stackLabel": "Stack Trace",
+      "componentStackLabel": "Component Stack",
+      "tryAgain": "Try Again",
+      "refreshPage": "Refresh Page"
+    }
+  },
   "common": {
     "backToHome": "Back to Home",
     "error": "An error occurred",
