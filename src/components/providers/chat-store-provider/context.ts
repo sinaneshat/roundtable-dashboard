@@ -17,20 +17,6 @@ export function useChatStore<T>(selector: (store: ChatStore) => T): T {
   return useStore(context, selector);
 }
 
-/**
- * Safe version of useChatStore that returns undefined when outside provider.
- * Use for components that may render in demo/standalone contexts.
- */
-export function useChatStoreSafe<T>(selector: (store: ChatStore) => T): T | undefined {
-  const context = use(ChatStoreContext);
-
-  if (!context) {
-    return undefined;
-  }
-
-  return useStore(context, selector);
-}
-
 export function useChatStoreApi(): ChatStoreApi {
   const context = use(ChatStoreContext);
 

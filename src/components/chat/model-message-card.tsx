@@ -20,7 +20,7 @@ import { MessageSources } from '@/components/chat/message-sources';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
-import { useChatStoreSafe } from '@/components/providers';
+import { useChatStore } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { StreamingMessageContent } from '@/components/ui/motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -86,19 +86,13 @@ export const ModelMessageCard = memo(({
   const t = useTranslations();
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
 
-  // Use safe hook for demo/standalone contexts where ChatStoreProvider may not exist
-  const storeState = useChatStoreSafe(
+  const { globalIsStreaming, registerAnimation, completeAnimation } = useChatStore(
     useShallow(s => ({
       globalIsStreaming: s.isStreaming,
       registerAnimation: s.registerAnimation,
       completeAnimation: s.completeAnimation,
     })),
   );
-
-  // Fallback values when outside provider (demo mode)
-  const globalIsStreaming = storeState?.globalIsStreaming ?? false;
-  const registerAnimation = storeState?.registerAnimation ?? (() => {});
-  const completeAnimation = storeState?.completeAnimation ?? (() => {});
 
   const hasActualStreamingParts = globalIsStreaming && parts.some(
     p => 'state' in p && p.state === TextPartStates.STREAMING,

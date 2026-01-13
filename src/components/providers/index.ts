@@ -2,11 +2,11 @@ export { AppProviders } from './app-providers';
 export { ChatLayoutProviders } from './chat-layout-providers';
 export {
   ChatStoreContext,
+  ChatStoreDemoProvider,
   ChatStoreProvider,
   type ChatStoreProviderProps,
   useChatStore,
   useChatStoreApi,
-  useChatStoreSafe,
 } from './chat-store-provider';
 export { PageViewTracker } from './pageview-tracker';
 export { PostHogIdentifyUser } from './posthog-identify-user';
