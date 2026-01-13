@@ -24,7 +24,7 @@
  * @see /src/api/types/streaming.ts for type definitions
  */
 
-import { FinishReasons, LogTypes, StreamPhases, StreamStatuses } from '@/api/core/enums';
+import { FinishReasons, LogTypes, parseSSEEventType, StreamPhases, StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
 import { LogHelpers } from '@/api/types/logger';
@@ -38,7 +38,6 @@ import type {
 } from '@/api/types/streaming';
 import {
   ModeratorStreamBufferMetadataSchema,
-  parseSSEEventType,
   parseStreamBufferMetadata,
   PreSearchStreamChunkSchema,
   PreSearchStreamMetadataSchema,
@@ -499,11 +498,24 @@ export async function deleteParticipantStreamBuffer(
   }
 }
 
+/**
+ * Options for resuming participant streams from KV buffer
+ *
+ * ✅ CLOUDFLARE LIMITS:
+ * - Wall-clock: UNLIMITED (as long as client connected)
+ * - IDLE timeout: 100s (must send data or HTTP 524)
+ * - CPU time: 5 min max
+ */
 export type ResumeStreamOptions = {
+  /** Poll interval for checking new chunks (default: 100ms) */
   pollIntervalMs?: number;
+  /** Max duration for polling loop (default: 10 min) */
   maxPollDurationMs?: number;
+  /** Timeout if no new data received (default: 90s - just under Cloudflare's 100s idle timeout) */
   noNewDataTimeoutMs?: number;
+  /** Filter out reasoning-delta events on replay (default: false) */
   filterReasoningOnReplay?: boolean;
+  /** Start streaming from specific chunk index (default: 0) */
   startFromChunkIndex?: number;
 };
 
@@ -514,8 +526,8 @@ export function createLiveParticipantResumeStream(
 ): ReadableStream<Uint8Array> {
   const {
     pollIntervalMs = 100,
-    maxPollDurationMs = 5 * 60 * 1000,
-    noNewDataTimeoutMs = 30 * 1000,
+    maxPollDurationMs = 10 * 60 * 1000, // 10 minutes - generous for long AI streams
+    noNewDataTimeoutMs = 90 * 1000, // 90 seconds - just under Cloudflare's 100s idle timeout
     filterReasoningOnReplay = false,
     startFromChunkIndex = 0,
   } = options;
@@ -976,12 +988,24 @@ export async function isPreSearchBufferStale(
   }
 }
 
+/**
+ * Create live resume stream for pre-search operations
+ *
+ * Pre-search is typically faster than participant/moderator streams,
+ * but still needs generous timeouts for complex web searches.
+ *
+ * @param streamId - Pre-search stream ID
+ * @param env - Cloudflare bindings
+ * @param pollIntervalMs - Poll interval (default: 100ms)
+ * @param maxPollDurationMs - Max poll duration (default: 10 min)
+ * @param noNewDataTimeoutMs - No new data timeout (default: 90s - just under Cloudflare's 100s idle timeout)
+ */
 export function createLivePreSearchResumeStream(
   streamId: string,
   env: ApiEnv['Bindings'],
   pollIntervalMs = 100,
-  maxPollDurationMs = 5 * 60 * 1000,
-  noNewDataTimeoutMs = 5 * 1000,
+  maxPollDurationMs = 10 * 60 * 1000, // 10 minutes - generous for complex searches
+  noNewDataTimeoutMs = 90 * 1000, // 90 seconds - just under Cloudflare's 100s idle timeout
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   let isClosed = false;

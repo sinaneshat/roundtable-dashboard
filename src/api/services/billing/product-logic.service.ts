@@ -65,7 +65,7 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
   free: {
     name: 'Free',
     maxOutputTokens: 512,
-    maxModelPricing: 0.40, // Allows budget tier models (nano, mini, flash variants)
+    maxModelPricing: 0.35, // Allows budget models from multiple providers (<= $0.35/1M tokens)
     maxModels: 3,
     quotas: {
       threadsPerMonth: 1,
@@ -109,10 +109,17 @@ export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number>
 export const MAX_MODEL_PRICING_BY_TIER: Record<SubscriptionTier, number | null>
   = deriveTierRecord(config => config.maxModelPricing);
 
-export const MIN_MODELS_REQUIRED = 3;
+export const MIN_PARTICIPANTS_REQUIRED = 2;
 
 export const MAX_MODELS_BY_TIER: Record<SubscriptionTier, number>
   = deriveTierRecord(config => config.maxModels);
+
+/**
+ * Absolute maximum participants allowed across all tiers.
+ * Derived from pro tier's maxModels limit.
+ * Used as literal value in Zod schemas that require compile-time constants.
+ */
+export const MAX_PARTICIPANTS_LIMIT = 12;
 
 export const TIER_QUOTAS: Record<
   SubscriptionTier,
@@ -232,32 +239,17 @@ export function getMaxOutputTokensForTier(tier: SubscriptionTier): number {
  * @param modelContextLength - Model's total context window
  * @param estimatedInputTokens - Estimated tokens used by input (system prompt + messages)
  * @param tier - User's subscription tier
- * @param isReasoningModel - Whether model uses reasoning tokens (GPT-5 Nano, o3, DeepSeek R1, etc.)
  * @returns Safe max output tokens that won't exceed context or tier limits
- *
- * Reasoning models need higher limits because their output tokens include:
- * 1. Reasoning tokens (hidden/encrypted thinking)
- * 2. Response tokens (visible text)
- *
- * Without extra headroom, reasoning models exhaust tokens on thinking
- * before generating complete responses (cut off mid-sentence).
  */
 export function getSafeMaxOutputTokens(
   modelContextLength: number,
   estimatedInputTokens: number,
   tier: SubscriptionTier,
-  isReasoningModel: boolean = false,
 ): number {
   const tierMaxOutput = getMaxOutputTokensForTier(tier);
   const safetyBuffer = Math.floor(modelContextLength * 0.2);
   const availableTokens = modelContextLength - estimatedInputTokens - safetyBuffer;
-
-  // Reasoning models need 4x headroom to account for reasoning tokens
-  // e.g., GPT-5 Nano may use 3000 tokens reasoning + 1000 tokens response
-  // With 4096 tier limit → 16384 for reasoning models
-  const effectiveTierMax = isReasoningModel ? tierMaxOutput * 4 : tierMaxOutput;
-
-  return Math.max(512, Math.min(effectiveTierMax, availableTokens));
+  return Math.max(512, Math.min(tierMaxOutput, availableTokens));
 }
 
 export function getMaxModelPricingForTier(tier: SubscriptionTier): number | null {
@@ -553,11 +545,32 @@ export const TITLE_GENERATION_CONFIG = {
   systemPrompt: TITLE_GENERATION_PROMPT,
 } as const;
 
+/**
+ * AI Provider Timeout Configuration
+ *
+ * ✅ CLOUDFLARE WORKERS LIMITS:
+ * - CPU time: 300,000ms (5 min) - paid plan max
+ * - Wall-clock: UNLIMITED - continues as long as client connected
+ * - IDLE timeout: 100s - Cloudflare returns HTTP 524 if no data sent
+ *
+ * These timeouts control AbortSignal.timeout() for AI SDK streamText/generateText.
+ * Set generously since actual constraint is Cloudflare's idle timeout.
+ * Active SSE streams sending data are NOT affected by idle timeout.
+ *
+ * @see https://developers.cloudflare.com/workers/platform/limits/
+ */
 export const AI_TIMEOUT_CONFIG = {
-  default: 600000,
-  titleGeneration: 10000,
-  perAttemptMs: 600000,
-  moderatorAnalysisMs: 120000,
+  /** Default timeout for AI operations (10 min) */
+  default: 600_000,
+
+  /** Title generation timeout (10s) - quick operation */
+  titleGeneration: 10_000,
+
+  /** Per-attempt timeout for streaming (10 min) - max allowed per AI SDK call */
+  perAttemptMs: 600_000,
+
+  /** Moderator/council analysis timeout (5 min) - complex multi-response synthesis */
+  moderatorAnalysisMs: 300_000,
 } as const;
 
 export const AI_RETRY_CONFIG = {

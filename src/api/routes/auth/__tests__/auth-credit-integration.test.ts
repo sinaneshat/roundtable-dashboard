@@ -158,14 +158,12 @@ vi.mock('@/db', async () => {
                   $withCache: vi.fn(() => results),
                 };
 
-                // For credit queries, make it array-like
-                if (selectType === 'credit') {
-                  Object.assign(limitResult, results);
-                  limitResult.length = results.length;
-                  results.forEach((item, idx) => {
-                    limitResult[idx] = item;
-                  });
-                }
+                // Make results array-like for both credit and usage queries
+                Object.assign(limitResult, results);
+                limitResult.length = results.length;
+                results.forEach((item, idx) => {
+                  limitResult[idx] = item;
+                });
 
                 return {
                   limit: vi.fn(() => limitResult),

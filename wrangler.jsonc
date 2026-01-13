@@ -183,11 +183,14 @@
         "enabled": true,
         "head_sampling_rate": 0.1
       },
-      // ✅ STREAMING PERFORMANCE: Max CPU time for long AI streaming responses
-      // Workers Standard allows up to 30s CPU time per request
+      // ✅ STREAMING PERFORMANCE: Maximum CPU time for long AI streaming responses
+      // Workers Paid Plan supports up to 5 minutes (300,000ms) CPU time per request
+      // Note: Wall-clock duration has NO limit as long as client stays connected
+      // IMPORTANT: Cloudflare has 100-second IDLE timeout - must send data within 100s or get HTTP 524
       // @see https://developers.cloudflare.com/workers/platform/limits/
+      // @see https://developers.cloudflare.com/changelog/2025-03-25-higher-cpu-limits/
       "limits": {
-        "cpu_ms": 30000
+        "cpu_ms": 300000
       },
       "routes": [
         {
@@ -323,11 +326,14 @@
       "observability": {
         "enabled": true
       },
-      // ✅ STREAMING PERFORMANCE: Max CPU time for long AI streaming responses
-      // Workers Standard allows up to 30s CPU time per request
+      // ✅ STREAMING PERFORMANCE: Maximum CPU time for long AI streaming responses
+      // Workers Paid Plan supports up to 5 minutes (300,000ms) CPU time per request
+      // Note: Wall-clock duration has NO limit as long as client stays connected
+      // IMPORTANT: Cloudflare has 100-second IDLE timeout - must send data within 100s or get HTTP 524
       // @see https://developers.cloudflare.com/workers/platform/limits/
+      // @see https://developers.cloudflare.com/changelog/2025-03-25-higher-cpu-limits/
       "limits": {
-        "cpu_ms": 30000
+        "cpu_ms": 300000
       },
       "routes": [
         {

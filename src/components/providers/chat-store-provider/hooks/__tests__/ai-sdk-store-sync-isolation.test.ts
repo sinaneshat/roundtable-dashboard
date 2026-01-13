@@ -491,7 +491,6 @@ describe('edge Cases: OpenRouter Model Variations', () => {
     ModelIds.ANTHROPIC_CLAUDE_OPUS_4_5,
     ModelIds.X_AI_GROK_4,
     ModelIds.GOOGLE_GEMINI_2_5_PRO,
-    ModelIds.DEEPSEEK_DEEPSEEK_R1_0528,
     ModelIds.MISTRALAI_MISTRAL_LARGE_2512,
   ];
 
@@ -555,7 +554,7 @@ describe('edge Cases: OpenRouter Model Variations', () => {
         roundNumber: 0,
         participantId: 'p0',
         participantIndex: 0,
-        model: ModelIds.DEEPSEEK_DEEPSEEK_R1_0528,
+        model: ModelIds.OPENAI_O3,
       },
     };
 

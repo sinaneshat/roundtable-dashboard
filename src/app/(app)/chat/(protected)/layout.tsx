@@ -4,6 +4,7 @@ import type React from 'react';
 
 import { requireAuth } from '@/app/auth/actions';
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
+import { ChatLayoutProviders } from '@/components/providers';
 import { BRAND, LIMITS } from '@/constants';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -60,9 +61,11 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <ChatLayoutShell session={session}>
-        {children}
-      </ChatLayoutShell>
+      <ChatLayoutProviders>
+        <ChatLayoutShell session={session}>
+          {children}
+        </ChatLayoutShell>
+      </ChatLayoutProviders>
     </HydrationBoundary>
   );
 }

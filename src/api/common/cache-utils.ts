@@ -143,25 +143,35 @@ export async function invalidateMessagesCache(
  * Also invalidates the public slugs list cache for SSG regeneration.
  * Optionally clears cached OG images from R2.
  *
+ * CRITICAL: Must pass threadId to invalidate ALL cached data including:
+ * - Messages (MessageCacheTags.byThread)
+ * - Participants (ThreadCacheTags.participants)
+ * - Owner, changelog, feedback, preSearch (PublicThreadCacheTags)
+ *
  * @param db - Database instance with cache support
  * @param slug - Thread slug to invalidate
+ * @param threadId - Thread ID to invalidate (required for complete cache invalidation)
  * @param r2Bucket - Optional R2 bucket for OG image cache cleanup
  */
 export async function invalidatePublicThreadCache(
   db: Awaited<ReturnType<typeof getDbAsync>>,
   slug: string,
+  threadId: string,
   r2Bucket?: R2Bucket,
 ): Promise<void> {
   if (db.$cache?.invalidate) {
     await db.$cache.invalidate({
       tags: [
-        ...PublicThreadCacheTags.all(slug),
+        ...PublicThreadCacheTags.all(slug, threadId),
         ...PublicSlugsListCacheTags.all(),
+        ...MessageCacheTags.all(threadId),
+        ThreadCacheTags.participants(threadId),
       ],
     });
   }
   revalidateTag(THREAD_CACHE_TAGS.publicThread(slug), 'max');
   revalidateTag(THREAD_CACHE_TAGS.allPublicThreads, 'max');
+  revalidateTag(THREAD_CACHE_TAGS.threadMessages(threadId), 'max');
 
   if (r2Bucket) {
     await deleteOgImageFromCache(r2Bucket, 'public-thread', slug).catch(() => {});

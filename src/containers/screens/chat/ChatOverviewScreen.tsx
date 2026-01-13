@@ -283,8 +283,9 @@ export default function ChatOverviewScreen() {
     modelOrder,
   });
 
-  const incompatibleModelIds = useMemo(() => {
+  const { incompatibleModelIds, visionIncompatibleModelIds } = useMemo(() => {
     const incompatible = new Set<string>();
+    const visionIncompatible = new Set<string>();
 
     for (const model of allEnabledModels) {
       if (!model.is_accessible_to_user) {
@@ -299,13 +300,14 @@ export default function ChatOverviewScreen() {
 
     if (existingVisionFiles || newVisionFiles) {
       const files = [{ mimeType: 'image/png' }];
-      const visionIncompatible = getIncompatibleModelIds(allEnabledModels, files);
-      for (const id of visionIncompatible) {
+      const visionIncompatibleIds = getIncompatibleModelIds(allEnabledModels, files);
+      for (const id of visionIncompatibleIds) {
         incompatible.add(id);
+        visionIncompatible.add(id);
       }
     }
 
-    return incompatible;
+    return { incompatibleModelIds: incompatible, visionIncompatibleModelIds: visionIncompatible };
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
   const incompatibleModelIdsRef = useRef(incompatibleModelIds);
@@ -446,7 +448,12 @@ export default function ChatOverviewScreen() {
     if (incompatibleSelected.length === 0)
       return;
 
-    const incompatibleModelNames = incompatibleSelected
+    // Only show toast for models deselected due to vision incompatibility (not access control)
+    const visionDeselected = incompatibleSelected.filter(
+      p => visionIncompatibleModelIds.has(p.modelId),
+    );
+
+    const visionModelNames = visionDeselected
       .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
@@ -462,17 +469,18 @@ export default function ChatOverviewScreen() {
     setSelectedParticipants(reindexed);
     setPersistedModelIds(reindexed.map(p => p.modelId));
 
-    if (incompatibleModelNames.length > 0) {
-      const modelList = incompatibleModelNames.length <= 2
-        ? incompatibleModelNames.join(' and ')
-        : `${incompatibleModelNames.slice(0, 2).join(', ')} and ${incompatibleModelNames.length - 2} more`;
+    // Only show "images/PDFs" toast when models are actually deselected due to vision incompatibility
+    if (visionModelNames.length > 0) {
+      const modelList = visionModelNames.length <= 2
+        ? visionModelNames.join(' and ')
+        : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;
 
       toastManager.warning(
         t('chat.models.modelsDeselected'),
         t('chat.models.modelsDeselectedDescription', { models: modelList }),
       );
     }
-  }, [incompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds, allEnabledModels, t]);
+  }, [incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds, allEnabledModels, t]);
 
   const threadActions = useMemo(
     () => currentThread && !showInitialUI
@@ -590,8 +598,14 @@ export default function ChatOverviewScreen() {
 
         if (autoMode && inputValue.trim()) {
           setIsAnalyzingPrompt(true);
+
+          // Check if visual files are attached to restrict model selection to vision-capable models
+          const hasVisualFiles = chatAttachments.attachments.some(att =>
+            isVisionRequiredMimeType(att.file.type),
+          );
+
           try {
-            const result = await analyzePromptStream(inputValue.trim());
+            const result = await analyzePromptStream({ prompt: inputValue.trim(), hasVisualFiles });
             if (result) {
               const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;
               const newParticipants = participants.map((p: { modelId: string; role: string | null }, index: number) => ({

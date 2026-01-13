@@ -586,7 +586,7 @@ export async function trackLLMGeneration(
     // =========================================================================
     // Use totalUsage for cumulative metrics (if available)
     // For single-step generations, totalUsage === usage
-    // For multi-step reasoning (e.g., o1, o3, DeepSeek R1), totalUsage includes ALL steps
+    // For multi-step reasoning (e.g., o1, o3), totalUsage includes ALL steps
     const totalUsage = options?.totalUsage || finishResult.usage;
     const totalInputTokens = totalUsage?.inputTokens || inputTokens;
     const totalOutputTokens = totalUsage?.outputTokens || outputTokens;

@@ -1103,7 +1103,7 @@ export function useMultiParticipantChat(
 
         // ✅ CRITICAL FIX: Check if message has generated text to avoid false empty_response errors
         // For some fast models (e.g., gemini-flash-lite), parts might not be populated yet when onFinish fires
-        // ✅ REASONING MODELS: Include REASONING parts (DeepSeek R1, Claude thinking, etc.)
+        // ✅ REASONING MODELS: Include REASONING parts (Claude thinking, etc.)
         // AI SDK v6 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
         // ✅ FIX: Filter out [REDACTED]-only reasoning (GPT-5 Nano, o3-mini encrypted reasoning)
         // Uses centralized isRenderableContent from message-schemas.ts for consistency
@@ -1115,7 +1115,7 @@ export function useMultiParticipantChat(
         );
 
         // ✅ RACE CONDITION FIX: Multiple signals for successful generation
-        // Some models (DeepSeek R1, etc.) return finishReason='unknown' even on success
+        // Some models return finishReason='unknown' even on success
         const metadata = data.message.metadata;
         const metadataObj = metadata && typeof metadata === 'object' ? metadata : {};
 

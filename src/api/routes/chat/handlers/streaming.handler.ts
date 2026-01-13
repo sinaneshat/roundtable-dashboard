@@ -531,14 +531,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const averageTokensPerMessage = 200;
       const messageTokens = modelMessages.length * averageTokensPerMessage;
       const estimatedInputTokens = systemPromptTokens + messageTokens + 500;
-      // Pass isReasoningModel flag so reasoning models get extra token headroom
-      // Reasoning models (GPT-5 Nano, o3, DeepSeek R1) use tokens for hidden thinking
-      const isReasoningModel = modelInfo?.is_reasoning_model ?? false;
       const maxOutputTokens = getSafeMaxOutputTokens(
         modelContextLength,
         estimatedInputTokens,
         userTier,
-        isReasoningModel,
       );
 
       const modelSupportsTemperature = modelInfo?.supports_temperature ?? true;
@@ -603,7 +599,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         messages: modelMessages,
         maxOutputTokens,
         ...(modelSupportsTemperature && { temperature: temperatureValue }),
-        // ✅ REASONING: Add providerOptions for o1/o3/o4/DeepSeek R1 models
+        // ✅ REASONING: Add providerOptions for o1/o3/o4 models
         ...(providerOptions && { providerOptions }),
         // ✅ CHUNK NORMALIZATION: Normalize streaming for models with buffered chunk delivery
         // Some providers (xAI/Grok, DeepSeek, Gemini) buffer server-side, sending large chunks
@@ -973,7 +969,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           const messageId = streamMessageId;
 
           // ✅ CRITICAL FIX: Detect and handle empty responses before persistence
-          // Models like DeepSeek R1, gemini-2.5-flash-lite return empty responses
+          // Models like gemini-2.5-flash-lite return empty responses
           // This prevents AI SDK internal state corruption that causes "Cannot read properties of undefined (reading 'state')" errors
           const hasText = (finishResult.text?.trim().length || 0) > 0;
           // ✅ FIX: Don't count [REDACTED]-only reasoning as valid content
@@ -1000,7 +996,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           //
           // Examples of empty responses in production:
           // - gemini-2.5-flash-lite: finishReason='unknown', 0 tokens, no text
-          // - deepseek/deepseek-r1: finishReason='stop', 0 tokens, no text
           // - gpt-5-nano with finishReason='length': exhausted tokens on reasoning
           const emptyResponseError = !hasContent
             ? (isOnlyRedactedReasoning && finishResult.finishReason === FinishReasons.LENGTH
@@ -1132,7 +1127,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
             // ✅ AI SDK V6 MULTI-STEP TRACKING: Use totalUsage for cumulative metrics (if available)
             // For single-step generations, totalUsage === usage
-            // For multi-step reasoning (e.g., o1, o3, DeepSeek R1), totalUsage includes ALL steps
+            // For multi-step reasoning (e.g., o1, o3), totalUsage includes ALL steps
             const totalUsage
               = 'totalUsage' in finishResult && finishResult.totalUsage
                 ? {
@@ -1470,7 +1465,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             trackError().catch(() => {});
           }
 
-          // Suppress DeepSeek R1 logprobs validation errors (non-conforming API structure)
+          // Suppress DeepSeek logprobs validation errors (non-conforming API structure)
           if (
             errorName === 'AI_TypeValidationError'
             && streamErrorMessage.includes('logprobs')

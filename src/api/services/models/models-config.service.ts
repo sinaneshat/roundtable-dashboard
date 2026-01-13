@@ -3,6 +3,7 @@ import { z } from '@hono/zod-openapi';
 import type { ModelId } from '@/api/core/enums';
 import {
   ModelCategorySchema,
+  ModelIds,
   ModelIdSchema,
   ModelProviderSchema,
   PROVIDER_STREAMING_DEFAULTS,
@@ -232,26 +233,6 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_reasoning_model: false,
     supports_temperature: true,
     supports_reasoning_stream: false,
-  },
-  {
-    id: 'deepseek/deepseek-r1-0528',
-    name: 'DeepSeek R1 0528',
-    description: 'Deep thinker. Takes time to reason through complex problems carefully.',
-    context_length: 163840,
-    created: 1748390400,
-    pricing: { prompt: '0.00000040', completion: '0.00000175' },
-    top_provider: { context_length: 163840, max_completion_tokens: 8192, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text->text', tokenizer: 'DeepSeek', instruct_type: 'deepseek' },
-    provider: 'deepseek',
-    category: 'reasoning',
-    capabilities: { vision: false, reasoning: true, streaming: true, tools: true },
-    pricing_display: { input: '$0.40/1M', output: '$1.75/1M' },
-    is_free: false,
-    supports_vision: false,
-    is_reasoning_model: true,
-    supports_temperature: true,
-    supports_reasoning_stream: true,
   },
   {
     id: 'deepseek/deepseek-v3.2',
@@ -742,12 +723,12 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
  * @see User request: "best models supporting multimodals now"
  */
 export const USER_FACING_MODEL_IDS: readonly ModelId[] = [
-  'google/gemini-2.5-flash', // $0.30/M - Fast, affordable multimodal
-  'google/gemini-2.5-pro', // $1.25/M - #1 on LMArena, flagship
-  'openai/gpt-5.1', // $1.25/M - OpenAI latest flagship, multimodal
-  'google/gemini-3-pro-preview', // $2/M - Gemini 3 flagship (preview, may have MCP issues)
-  'anthropic/claude-sonnet-4.5', // $3/M - Agent-optimized, 1M context
-  'anthropic/claude-opus-4.5', // $5/M - 80.9% SWE-bench, best reasoning
+  ModelIds.GOOGLE_GEMINI_2_5_FLASH, // $0.30/M - Fast, affordable multimodal
+  ModelIds.GOOGLE_GEMINI_2_5_PRO, // $1.25/M - #1 on LMArena, flagship
+  ModelIds.OPENAI_GPT_5_1, // $1.25/M - OpenAI latest flagship, multimodal
+  ModelIds.GOOGLE_GEMINI_3_PRO_PREVIEW, // $2/M - Gemini 3 flagship (preview, may have MCP issues)
+  ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, // $3/M - Agent-optimized, 1M context
+  ModelIds.ANTHROPIC_CLAUDE_OPUS_4_5, // $5/M - 80.9% SWE-bench, best reasoning
 ] as const;
 
 // ============================================================================

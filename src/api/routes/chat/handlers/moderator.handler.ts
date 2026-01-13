@@ -34,6 +34,10 @@ import {
 } from '@/api/services/errors';
 import { filterDbToParticipantMessages } from '@/api/services/messages';
 import { extractModeratorModelName, initializeOpenRouter, openRouterService } from '@/api/services/models';
+import type { ModeratorParticipantResponse } from '@/api/services/prompts';
+import {
+  buildCouncilModeratorSystemPrompt,
+} from '@/api/services/prompts';
 import {
   appendParticipantStreamChunk,
   clearThreadActiveStream,
@@ -55,7 +59,6 @@ import type { councilModeratorRoundRoute } from '../route';
 import type { MessageWithParticipant, ModeratorPromptConfig, ParticipantResponse } from '../schema';
 import {
   MessageWithParticipantSchema,
-  ModeratorPromptConfigSchema,
   RoundModeratorRequestSchema,
 } from '../schema';
 
@@ -67,132 +70,10 @@ import {
 const MODERATOR_PARTICIPANT_INDEX = NO_PARTICIPANT_SENTINEL;
 
 // ============================================================================
-// Prompt Building (Schema-Driven)
+// Prompt Building - Uses Centralized Prompts Service
 // ============================================================================
-
-/**
- * Build participant list for prompt context
- * Uses ParticipantResponse schema type for type safety
- */
-function buildParticipantList(participantResponses: ParticipantResponse[]): string {
-  return participantResponses
-    .map(p => `${p.participantRole} (${p.modelName})`)
-    .join(', ');
-}
-
-/**
- * Build transcript section from participant responses
- * Uses ParticipantResponse schema type for type safety
- */
-function buildTranscript(participantResponses: ParticipantResponse[]): string {
-  return participantResponses
-    .map(p => `**${p.participantRole} (${p.modelName}):**\n${p.responseContent}`)
-    .join('\n\n');
-}
-
-/**
- * Build system prompt for council moderator generation (V3.0)
- *
- * ✅ SCHEMA-DRIVEN: Uses ModeratorPromptConfig schema for validation
- * ✅ ADAPTIVE FORMAT: Structure adapts to conversation type (not rigid sections)
- * ✅ COPY-PASTEABLE: Summary stands alone as a usable answer
- *
- * Research basis:
- * - MIT Multi-AI collaboration: synthesis improves when highlighting convergence/divergence
- * - Karpathy LLM Council: chairman model produces final unified response
- * - Council of AIs medical study: collaborative process corrected errors 83% of time
- */
-function buildModeratorSystemPrompt(config: ModeratorPromptConfig): string {
-  // Validate config against schema
-  const validated = ModeratorPromptConfigSchema.parse(config);
-  const { roundNumber, mode, userQuestion, participantResponses } = validated;
-
-  // Build participant context using schema-typed helpers
-  const participantList = buildParticipantList(participantResponses);
-  const participantCount = participantResponses.length;
-  const transcript = buildTranscript(participantResponses);
-
-  return `# Council Moderator
-
-You are synthesizing a multi-AI council discussion into a decision-ready summary.
-
----
-
-## Your Task
-
-Produce a summary that:
-1. **Answers the question** — The user should get a complete, usable answer from your summary alone
-2. **Shows the structure** — Where did models converge? Where and WHY did they diverge?
-3. **Is copy-pasteable** — This should work as a standalone response the user can copy and use directly
-
----
-
-## Adaptive Format
-
-**Do not use a rigid template.** Structure your response based on what actually happened in the discussion:
-
-**Strong consensus** → Lead with the shared answer. Note any nuances briefly. Keep it concise.
-
-**Productive disagreement** → Lead with the key tension. Explain each position fairly. Identify the crux—the underlying assumption or value that divides them. The user should understand WHY smart models disagree.
-
-**Models building on each other** → Show the evolution. "Claude started with X, Gemini extended it to Y, GPT identified edge case Z." Present the synthesized conclusion.
-
-**Brainstorm / divergent ideas** → Group related ideas. Highlight the most promising 2-3. Note trade-offs between approaches.
-
-**Models talked past each other** → Name this explicitly. Identify what each was actually addressing. Suggest what question would need clarifying.
-
----
-
-## Required Elements
-
-Weave these naturally into your response—don't use them as rigid section headers:
-
-**1. Direct answer first**
-What's the bottom line? Lead with it. A reader should be able to stop after the first paragraph and have a useful answer.
-
-**2. Convergence map**
-What did multiple models agree on? Be specific: "Both Claude and Gemini emphasized X because..." This shows where the council reached alignment.
-
-**3. Divergence map**
-Where did they disagree? What's at the root—different assumptions, values, or interpretations of the question? This is often the most valuable insight.
-
-**4. The synthesis**
-Your integrated view that accounts for the strongest points across perspectives. Don't just list views—synthesize them.
-
-**5. Key insight**
-What's the one thing from this discussion that the user should remember? What did the council surface that a single model might have missed?
-
-**6. Open questions** (if multi-round or complex)
-What would a follow-up need to address? What remains unresolved?
-
----
-
-## Style
-
-- **Confident, not hedging** — Don't say "it depends" without saying on what
-- **Specific, not vague** — "Claude's point about latency" not "some participants noted concerns"
-- **Credit the models** — "As GPT pointed out..." / "Gemini's key insight was..." creates the sense of a real council
-- **Show the dialogue** — When models engaged with each other meaningfully, highlight it: "Claude pushed back on Gemini's assumption that..."
-- **No meta-commentary** — Don't explain what you're doing, just do it
-- **Prose over bullets** — This is a synthesis, not a checklist (bullets okay for listing options)
-- **Faithful to the discussion** — Do not introduce new arguments or external knowledge
-
----
-
-## Context
-
-**Mode:** ${mode}
-**Round:** ${roundNumber}
-**User Question:** ${userQuestion}
-**Participants (${participantCount}):** ${participantList}
-
-### Transcript
-${transcript}
-
----
-
-Begin with the direct answer. Make this summary something the user would want to copy and share.`;
-}
+// ✅ SINGLE SOURCE: Moderator prompts defined in prompts.service.ts
+// See: buildCouncilModeratorSystemPrompt, ModeratorParticipantResponse
 
 // ============================================================================
 // Council Moderator Generation (Text Streaming - Like Participants)
@@ -232,12 +113,13 @@ function generateCouncilModerator(
   const moderatorModelId = AIModels.COUNCIL_MODERATOR;
   const moderatorModelName = extractModeratorModelName(moderatorModelId);
 
-  const systemPrompt = buildModeratorSystemPrompt({
+  // ✅ SINGLE SOURCE: Uses buildCouncilModeratorSystemPrompt from prompts.service.ts
+  const systemPrompt = buildCouncilModeratorSystemPrompt(
     roundNumber,
     mode,
     userQuestion,
-    participantResponses,
-  });
+    participantResponses as ModeratorParticipantResponse[],
+  );
 
   // Build initial moderator metadata (streaming state)
   const streamMetadata: DbModeratorMessageMetadata = {
@@ -712,7 +594,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     const { session } = c.auth();
 
     // Generate and return streaming response
-    // Mode is validated through ModeratorPromptConfigSchema.parse() in buildModeratorSystemPrompt
+    // ✅ SINGLE SOURCE: Mode validated via ChatModeSchema in prompts.service.ts
     return generateCouncilModerator(
       {
         roundNumber: roundNum,

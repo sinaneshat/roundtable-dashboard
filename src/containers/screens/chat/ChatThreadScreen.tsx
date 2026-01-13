@@ -137,8 +137,9 @@ export default function ChatThreadScreen({
     [modelsData?.data?.items],
   );
 
-  const incompatibleModelIds = useMemo(() => {
+  const { incompatibleModelIds, visionIncompatibleModelIds } = useMemo(() => {
     const incompatible = new Set<string>();
+    const visionIncompatible = new Set<string>();
 
     for (const model of allEnabledModels) {
       if (!model.is_accessible_to_user) {
@@ -153,13 +154,14 @@ export default function ChatThreadScreen({
 
     if (existingVisionFiles || newVisionFiles) {
       const files = [{ mimeType: 'image/png' }];
-      const visionIncompatible = getIncompatibleModelIds(allEnabledModels, files);
-      for (const id of visionIncompatible) {
+      const visionIncompatibleIds = getIncompatibleModelIds(allEnabledModels, files);
+      for (const id of visionIncompatibleIds) {
         incompatible.add(id);
+        visionIncompatible.add(id);
       }
     }
 
-    return incompatible;
+    return { incompatibleModelIds: incompatible, visionIncompatibleModelIds: visionIncompatible };
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
   useEffect(() => {
@@ -173,7 +175,12 @@ export default function ChatThreadScreen({
     if (incompatibleSelected.length === 0)
       return;
 
-    const incompatibleModelNames = incompatibleSelected
+    // Only show toast for models deselected due to vision incompatibility (not access control)
+    const visionDeselected = incompatibleSelected.filter(
+      p => visionIncompatibleModelIds.has(p.modelId),
+    );
+
+    const visionModelNames = visionDeselected
       .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
@@ -189,17 +196,18 @@ export default function ChatThreadScreen({
     setSelectedParticipants(reindexed);
     setSelectedModelIds(reindexed.map(p => p.modelId));
 
-    if (incompatibleModelNames.length > 0) {
-      const modelList = incompatibleModelNames.length <= 2
-        ? incompatibleModelNames.join(' and ')
-        : `${incompatibleModelNames.slice(0, 2).join(', ')} and ${incompatibleModelNames.length - 2} more`;
+    // Only show "images/PDFs" toast when models are actually deselected due to vision incompatibility
+    if (visionModelNames.length > 0) {
+      const modelList = visionModelNames.length <= 2
+        ? visionModelNames.join(' and ')
+        : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;
 
       toastManager.warning(
         t('chat.models.modelsDeselected'),
         t('chat.models.modelsDeselectedDescription', { models: modelList }),
       );
     }
-  }, [incompatibleModelIds, selectedParticipants, setSelectedParticipants, setSelectedModelIds, allEnabledModels, t]);
+  }, [incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, setSelectedParticipants, setSelectedModelIds, allEnabledModels, t]);
 
   const formActions = useChatFormActions();
 

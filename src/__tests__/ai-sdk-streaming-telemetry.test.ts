@@ -338,7 +338,6 @@ describe('smooth Stream Transformation', () => {
       ModelIds.X_AI_GROK_4_FAST,
       ModelIds.X_AI_GROK_4_1,
       ModelIds.X_AI_GROK_4_1_FAST,
-      ModelIds.DEEPSEEK_DEEPSEEK_R1_0528,
       ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324,
       ModelIds.GOOGLE_GEMINI_2_5_FLASH,
       ModelIds.GOOGLE_GEMINI_2_5_PRO,

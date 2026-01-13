@@ -1,4 +1,5 @@
 export { AppProviders } from './app-providers';
+export { ChatLayoutProviders } from './chat-layout-providers';
 export {
   ChatStoreContext,
   ChatStoreProvider,

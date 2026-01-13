@@ -94,7 +94,8 @@ export const ModelPresetIds = {
 
 export const MODEL_PRESETS: readonly ModelPreset[] = [
   // ============================================================================
-  // FREE TIER PRESETS - Budget-friendly models with provider diversity
+  // FREE TIER PRESET - Only Quick Perspectives available for free users
+  // Uses budget models (<= $0.35/1M) with provider diversity
   // ============================================================================
   {
     id: ModelPresetIds.QUICK_PERSPECTIVES,
@@ -111,12 +112,15 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
       { modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, role: 'Synthesizer' },
     ],
   },
+  // ============================================================================
+  // PRO TIER PRESETS - Budget-friendly but PRO-only (includes premium models)
+  // ============================================================================
   {
     id: ModelPresetIds.BUDGET_BRAINSTORM,
     name: 'Budget Brainstorm',
     description: 'Creative idea generation with efficient models that spark off each other',
     icon: Icons.lightbulb,
-    requiredTier: SubscriptionTiers.FREE,
+    requiredTier: SubscriptionTiers.PRO,
     order: 2,
     mode: ChatModes.BRAINSTORMING,
     searchEnabled: false,
@@ -131,7 +135,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Fast Debate',
     description: 'Efficient models that challenge perspectives and find common ground',
     icon: Icons.swords,
-    requiredTier: SubscriptionTiers.FREE,
+    requiredTier: SubscriptionTiers.PRO,
     order: 3,
     mode: ChatModes.DEBATING,
     searchEnabled: false,
@@ -146,14 +150,14 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Problem Solver',
     description: 'Technical models that collaborate to find practical solutions',
     icon: Icons.wrench,
-    requiredTier: SubscriptionTiers.FREE,
+    requiredTier: SubscriptionTiers.PRO,
     order: 4,
     mode: ChatModes.SOLVING,
     searchEnabled: false,
     modelRoles: [
-      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, role: 'Builder' },
-      { modelId: ModelIds.OPENAI_GPT_4O_MINI, role: 'Reviewer' },
-      { modelId: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW, role: 'Optimizer' },
+      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_V3_2, role: 'Builder' },
+      { modelId: ModelIds.OPENAI_GPT_4_1_MINI, role: 'Reviewer' },
+      { modelId: ModelIds.MISTRALAI_MISTRAL_LARGE_2512, role: 'Optimizer' },
     ],
   },
   // ============================================================================
@@ -220,7 +224,6 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
       { modelId: ModelIds.OPENAI_GPT_5_1, role: 'Proposer' },
       { modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, role: 'Skeptic' },
       { modelId: ModelIds.GOOGLE_GEMINI_2_5_PRO, role: 'Devil\'s Advocate' },
-      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_R1_0528, role: 'Balancer' },
     ],
   },
   {
@@ -235,7 +238,6 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     modelRoles: [
       { modelId: ModelIds.OPENAI_O1, role: 'Reasoner' },
       { modelId: ModelIds.ANTHROPIC_CLAUDE_OPUS_4, role: 'Systems Thinker' },
-      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_R1_0528, role: 'Challenger' },
       { modelId: ModelIds.GOOGLE_GEMINI_2_5_PRO, role: 'Synthesizer' },
     ],
   },
@@ -267,7 +269,6 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     modelRoles: [
       { modelId: ModelIds.ANTHROPIC_CLAUDE_OPUS_4_5, role: 'Architect' },
       { modelId: ModelIds.OPENAI_GPT_5_1, role: 'Code Reviewer' },
-      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_R1_0528, role: 'Performance Expert' },
       { modelId: ModelIds.GOOGLE_GEMINI_3_PRO_PREVIEW, role: 'Security Reviewer' },
     ],
   },

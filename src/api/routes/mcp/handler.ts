@@ -825,8 +825,7 @@ async function toolGenerateResponses(
     const modelInfo = getModelById(participant.modelId);
     const modelContextLength = modelInfo?.context_length || 16000;
     const estimatedInputTokens = typedMessages.length * 200 + 500;
-    const isReasoningModel = modelInfo?.is_reasoning_model ?? false;
-    const maxOutputTokens = getSafeMaxOutputTokens(modelContextLength, estimatedInputTokens, userTier, isReasoningModel);
+    const maxOutputTokens = getSafeMaxOutputTokens(modelContextLength, estimatedInputTokens, userTier);
 
     const systemPrompt = participant.settings?.systemPrompt || buildParticipantSystemPrompt(participant.role);
     const supportsTemperature = modelInfo?.supports_temperature ?? true;

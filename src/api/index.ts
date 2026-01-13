@@ -366,7 +366,7 @@ app.use('*', timing());
 // Cloudflare Workers Standard allows up to 30s CPU time (configured in wrangler.jsonc limits.cpu_ms)
 app.use('*', async (c, next) => {
   // Skip timeout for streaming endpoints (chat streaming and round summary)
-  // AI SDK v6 PATTERN: Reasoning models (DeepSeek-R1, Claude 4, etc.) need 10+ minutes
+  // AI SDK v6 PATTERN: Reasoning models (Claude 4, o1, o3, etc.) need 10+ minutes
   // Reference: https://sdk.vercel.ai/docs/providers/community-providers/claude-code#extended-thinking
   if (c.req.path.includes('/stream') || c.req.path.includes('/moderator') || c.req.path.includes('/chat')) {
     return next();

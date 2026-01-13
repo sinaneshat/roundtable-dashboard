@@ -25,7 +25,7 @@ import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
 // Direct import to avoid barrel export pulling in server-only credit.service.ts
-import { MIN_MODELS_REQUIRED } from '@/api/services/billing/product-logic.service';
+import { MIN_PARTICIPANTS_REQUIRED } from '@/api/services/billing/product-logic.service';
 
 // ============================================================================
 // CONSTANTS (Official Pattern)
@@ -367,7 +367,7 @@ export function createModelPreferencesStore(
             }
 
             // PRIORITY 2: Use first N accessible models as defaults
-            const defaultIds = accessibleModelIds.slice(0, MIN_MODELS_REQUIRED);
+            const defaultIds = accessibleModelIds.slice(0, MIN_PARTICIPANTS_REQUIRED);
             if (defaultIds.length > 0) {
               set(
                 (draft: Draft<ModelPreferencesState>) => {

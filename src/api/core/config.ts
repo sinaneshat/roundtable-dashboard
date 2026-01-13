@@ -332,9 +332,11 @@ export const FEATURE_FLAGS = {
 /**
  * SSE Streaming configuration
  *
- * ✅ RESOURCE LIMITS (wrangler.jsonc):
- * - CPU time: 30,000ms (30s) - actual compute time
+ * ✅ CLOUDFLARE WORKERS LIMITS (wrangler.jsonc):
+ * - CPU time: 300,000ms (5 min) - paid plan maximum
+ * - Wall-clock: UNLIMITED - as long as client stays connected
  * - Memory: 128MB - fixed, optimized via O(1) chunk storage
+ * - IDLE timeout: 100 seconds - must send data or HTTP 524
  *
  * Timeout protection prevents orphaned streaming records when:
  * - User navigates away during stream
@@ -345,34 +347,40 @@ export const FEATURE_FLAGS = {
  *
  * @see AI_TIMEOUT_CONFIG in product-logic.service.ts for AI provider timeouts
  * @see stream-buffer.service.ts for O(1) memory-optimized chunk storage
+ * @see https://developers.cloudflare.com/workers/platform/limits/
  */
 export const STREAMING_CONFIG = {
   /**
-   * Stream timeout in milliseconds (20 seconds)
+   * Stream timeout in milliseconds (90 seconds)
    * Applied to: moderator analysis, pre-search execution
    *
-   * Rationale: SSE connections can get interrupted without backend knowing
-   * After 20s, assume connection lost and mark as failed for recovery
+   * Rationale: SSE connections can get interrupted without backend knowing.
+   * Set just under Cloudflare's 100-second idle timeout to catch stale streams
+   * before Cloudflare returns HTTP 524.
+   *
+   * Note: Active streams sending data are NOT affected by idle timeout.
    */
-  STREAM_TIMEOUT_MS: 20_000,
+  STREAM_TIMEOUT_MS: 90_000,
 
   /**
-   * Orphan cleanup timeout in milliseconds (2 minutes)
+   * Orphan cleanup timeout in milliseconds (5 minutes)
    * Applied to: cleanup operations in list endpoints
    *
-   * Rationale: Grace period for legitimate long-running operations
-   * Used by getThreadAnalysesHandler, getThreadPreSearchesHandler
+   * Rationale: Grace period for legitimate long-running AI operations.
+   * Matches Cloudflare's max CPU time (5 min) for consistency.
+   * Used by getThreadAnalysesHandler, getThreadPreSearchesHandler.
    */
-  ORPHAN_CLEANUP_TIMEOUT_MS: 2 * 60 * 1000,
+  ORPHAN_CLEANUP_TIMEOUT_MS: 5 * 60 * 1000,
 
   /**
-   * Stale chunk timeout in milliseconds (30 seconds)
+   * Stale chunk timeout in milliseconds (90 seconds)
    * Applied to: stream resumption handlers
    *
-   * Rationale: If no chunks received for 30s, consider stream stale
-   * Matches Cloudflare CPU limit for consistent behavior
+   * Rationale: If no chunks received for 90s, consider stream stale.
+   * Matches Cloudflare's ~100s idle timeout for consistent behavior.
+   * Accounts for AI models that may "think" before streaming begins.
    */
-  STALE_CHUNK_TIMEOUT_MS: 30_000,
+  STALE_CHUNK_TIMEOUT_MS: 90_000,
 } as const;
 
 // ============================================================================

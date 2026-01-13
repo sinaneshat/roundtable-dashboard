@@ -221,8 +221,9 @@ export function ChatView({
     modelOrder,
   });
 
-  const incompatibleModelIds = useMemo(() => {
+  const incompatibleModelData = useMemo(() => {
     const incompatible = new Set<string>();
+    const visionIncompatible = new Set<string>();
 
     for (const model of allEnabledModels) {
       if (!model.is_accessible_to_user) {
@@ -246,14 +247,18 @@ export function ChatView({
 
     if (existingVisionFiles || newVisionFiles) {
       const files = [{ mimeType: 'image/png' }];
-      const visionIncompatible = getIncompatibleModelIds(allEnabledModels, files);
-      for (const id of visionIncompatible) {
+      const visionIncompatibleIds = getIncompatibleModelIds(allEnabledModels, files);
+      for (const id of visionIncompatibleIds) {
         incompatible.add(id);
+        visionIncompatible.add(id);
       }
     }
 
-    return incompatible;
+    return { incompatibleModelIds: incompatible, visionIncompatibleModelIds: visionIncompatible };
   }, [messages, chatAttachments.attachments, allEnabledModels]);
+
+  const incompatibleModelIds = incompatibleModelData.incompatibleModelIds;
+  const visionIncompatibleModelIds = incompatibleModelData.visionIncompatibleModelIds;
 
   const incompatibleModelIdsRef = useRef(incompatibleModelIds);
   useEffect(() => {
@@ -291,16 +296,6 @@ export function ChatView({
     const hasVisionAttachments = chatAttachments.attachments.some(att =>
       isVisionRequiredMimeType(att.file.type),
     );
-    const existingVisionFiles = messages.some((msg) => {
-      if (!msg.parts)
-        return false;
-      return msg.parts.some((part) => {
-        if (!isFilePart(part))
-          return false;
-        return isVisionRequiredMimeType(part.mediaType);
-      });
-    });
-    const hasAnyVisionFiles = hasVisionAttachments || existingVisionFiles;
 
     // Skip in OVERVIEW mode with no messages and no vision files
     if (mode === ScreenModes.OVERVIEW && messages.length === 0 && !hasVisionAttachments)
@@ -315,12 +310,12 @@ export function ChatView({
     if (incompatibleSelected.length === 0)
       return;
 
-    // Only show toast if there are vision files that caused the incompatibility
-    // Skip toast for non-vision incompatibilities (e.g., accessibility)
-    if (!hasAnyVisionFiles)
-      return;
+    // Only show toast for models deselected due to vision incompatibility (not access control)
+    const visionDeselected = incompatibleSelected.filter(
+      p => visionIncompatibleModelIds.has(p.modelId),
+    );
 
-    const incompatibleModelNames = incompatibleSelected
+    const visionModelNames = visionDeselected
       .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
@@ -334,17 +329,18 @@ export function ChatView({
       setSelectedParticipants(compatibleParticipants);
     }
 
-    if (incompatibleModelNames.length > 0) {
-      const modelList = incompatibleModelNames.length <= 2
-        ? incompatibleModelNames.join(' and ')
-        : `${incompatibleModelNames.slice(0, 2).join(', ')} and ${incompatibleModelNames.length - 2} more`;
+    // Only show "images/PDFs" toast when models are actually deselected due to vision incompatibility
+    if (visionModelNames.length > 0) {
+      const modelList = visionModelNames.length <= 2
+        ? visionModelNames.join(' and ')
+        : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;
 
       toastManager.warning(
         t('models.modelsDeselected'),
         t('models.modelsDeselectedDescription', { models: modelList }),
       );
     }
-  }, [mode, incompatibleModelIds, selectedParticipants, messages, threadActions, setSelectedParticipants, allEnabledModels, t, chatAttachments.attachments]);
+  }, [mode, incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, messages, threadActions, setSelectedParticipants, allEnabledModels, t, chatAttachments.attachments]);
 
   const formActions = useChatFormActions();
   const { streamConfig: analyzePromptStream } = useAnalyzePromptStream();
@@ -383,8 +379,13 @@ export function ChatView({
     if (mode === ScreenModes.OVERVIEW && autoMode && inputValue.trim()) {
       setIsAnalyzingPrompt(true);
 
+      // Check if visual files are attached to restrict model selection to vision-capable models
+      const hasVisualFiles = chatAttachments.attachments.some(att =>
+        isVisionRequiredMimeType(att.file.type),
+      );
+
       try {
-        const result = await analyzePromptStream(inputValue.trim());
+        const result = await analyzePromptStream({ prompt: inputValue.trim(), hasVisualFiles });
         if (result) {
           const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;
           const newParticipants = participants.map((p: { modelId: string; role: string | null }, index: number) => ({
@@ -408,6 +409,7 @@ export function ChatView({
     mode,
     autoMode,
     inputValue,
+    chatAttachments.attachments,
     setIsAnalyzingPrompt,
     analyzePromptStream,
     setSelectedParticipants,
@@ -572,7 +574,7 @@ export function ChatView({
     <>
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div className="flex flex-col relative flex-1 min-h-full">
-          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-56">
+          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-96">
             <ThreadTimeline
               timelineItems={timelineItems}
               user={user}

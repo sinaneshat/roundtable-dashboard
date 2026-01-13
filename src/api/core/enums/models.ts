@@ -148,7 +148,6 @@ export const MODEL_IDS = [
   'x-ai/grok-4.1-fast',
   'x-ai/grok-code-fast-1',
   'deepseek/deepseek-chat-v3-0324',
-  'deepseek/deepseek-r1-0528',
   'deepseek/deepseek-v3.2',
   'google/gemini-2.5-flash',
   'openai/gpt-5-mini',
@@ -181,8 +180,7 @@ export const ModelIdSchema = z.enum(MODEL_IDS).openapi({
 
 export type ModelId = z.infer<typeof ModelIdSchema>;
 
-export const DEFAULT_MODEL_ID: ModelId = 'openai/gpt-4o-mini';
-
+// 5. CONSTANT OBJECT - Define before DEFAULT_MODEL_ID so it can be referenced
 export const ModelIds = {
   OPENAI_GPT_OSS_120B: 'openai/gpt-oss-120b' as const,
   OPENAI_GPT_5_NANO: 'openai/gpt-5-nano' as const,
@@ -192,7 +190,6 @@ export const ModelIds = {
   X_AI_GROK_4_1_FAST: 'x-ai/grok-4.1-fast' as const,
   X_AI_GROK_CODE_FAST_1: 'x-ai/grok-code-fast-1' as const,
   DEEPSEEK_DEEPSEEK_CHAT_V3_0324: 'deepseek/deepseek-chat-v3-0324' as const,
-  DEEPSEEK_DEEPSEEK_R1_0528: 'deepseek/deepseek-r1-0528' as const,
   DEEPSEEK_DEEPSEEK_V3_2: 'deepseek/deepseek-v3.2' as const,
   GOOGLE_GEMINI_2_5_FLASH: 'google/gemini-2.5-flash' as const,
   OPENAI_GPT_5_MINI: 'openai/gpt-5-mini' as const,
@@ -211,9 +208,13 @@ export const ModelIds = {
   GOOGLE_GEMINI_3_PRO_PREVIEW: 'google/gemini-3-pro-preview' as const,
   X_AI_GROK_3: 'x-ai/grok-3' as const,
   X_AI_GROK_4: 'x-ai/grok-4' as const,
+  X_AI_GROK_4_1: 'x-ai/grok-4.1' as const,
   ANTHROPIC_CLAUDE_SONNET_4: 'anthropic/claude-sonnet-4' as const,
   ANTHROPIC_CLAUDE_SONNET_4_5: 'anthropic/claude-sonnet-4.5' as const,
   ANTHROPIC_CLAUDE_OPUS_4_5: 'anthropic/claude-opus-4.5' as const,
   OPENAI_O1: 'openai/o1' as const,
   ANTHROPIC_CLAUDE_OPUS_4: 'anthropic/claude-opus-4' as const,
 } as const;
+
+// 4. DEFAULT VALUE - Uses ModelIds for single source of truth
+export const DEFAULT_MODEL_ID: ModelId = ModelIds.OPENAI_GPT_4O_MINI;
