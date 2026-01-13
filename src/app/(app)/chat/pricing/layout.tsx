@@ -3,6 +3,7 @@ import type React from 'react';
 
 import { getOptionalAuth } from '@/app/auth/actions';
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
+import { ChatLayoutProviders } from '@/components/providers';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
@@ -62,9 +63,11 @@ export default async function PricingLayout({ children }: PricingLayoutProps) {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <ChatLayoutShell session={session}>
-        {children}
-      </ChatLayoutShell>
+      <ChatLayoutProviders>
+        <ChatLayoutShell session={session}>
+          {children}
+        </ChatLayoutShell>
+      </ChatLayoutProviders>
     </HydrationBoundary>
   );
 }
