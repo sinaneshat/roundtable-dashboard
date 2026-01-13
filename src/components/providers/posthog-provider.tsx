@@ -81,19 +81,8 @@ export default function PostHogProvider({
       // Scroll Tracking
       scroll_root_selector: '#__next',
 
-      // Debug Mode - enable in preview for troubleshooting
-      debug: environment === 'preview',
-
-      // Loaded Callback
-      loaded: (ph) => {
-        if (environment === 'preview') {
-          // eslint-disable-next-line no-console
-          console.log('[PostHog] Initialized', {
-            distinctId: ph.get_distinct_id(),
-            sessionId: ph.get_session_id(),
-          });
-        }
-      },
+      // Debug Mode - disabled in all environments to prevent console noise
+      debug: false,
     });
   }, [apiKey, apiHost, environment]);
 
