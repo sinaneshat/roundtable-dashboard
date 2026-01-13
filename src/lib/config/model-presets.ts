@@ -113,21 +113,22 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     ],
   },
   // ============================================================================
-  // PRO TIER PRESETS - Budget-friendly but PRO-only (includes premium models)
+  // FREE TIER PRESETS - Budget models with provider diversity
+  // Uses only FREE tier models (<= $0.35/1M) from different providers
   // ============================================================================
   {
     id: ModelPresetIds.BUDGET_BRAINSTORM,
     name: 'Budget Brainstorm',
     description: 'Creative idea generation with efficient models that spark off each other',
     icon: Icons.lightbulb,
-    requiredTier: SubscriptionTiers.PRO,
+    requiredTier: SubscriptionTiers.FREE,
     order: 2,
     mode: ChatModes.BRAINSTORMING,
     searchEnabled: false,
     modelRoles: [
-      { modelId: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW, role: 'Ideator' },
-      { modelId: ModelIds.OPENAI_GPT_5_MINI, role: 'Builder' },
-      { modelId: ModelIds.ANTHROPIC_CLAUDE_HAIKU_4_5, role: 'Wildcard' },
+      { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: 'Ideator' },
+      { modelId: ModelIds.X_AI_GROK_4_FAST, role: 'Builder' },
+      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_V3_2, role: 'Wildcard' },
     ],
   },
   {
@@ -135,14 +136,14 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Fast Debate',
     description: 'Efficient models that challenge perspectives and find common ground',
     icon: Icons.swords,
-    requiredTier: SubscriptionTiers.PRO,
+    requiredTier: SubscriptionTiers.FREE,
     order: 3,
     mode: ChatModes.DEBATING,
     searchEnabled: false,
     modelRoles: [
-      { modelId: ModelIds.OPENAI_GPT_4_1_MINI, role: 'Advocate' },
-      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, role: 'Contrarian' },
-      { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: 'Balancer' },
+      { modelId: ModelIds.OPENAI_GPT_4_1_NANO, role: 'Advocate' },
+      { modelId: ModelIds.X_AI_GROK_4_1_FAST, role: 'Contrarian' },
+      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, role: 'Balancer' },
     ],
   },
   {
@@ -150,14 +151,14 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Problem Solver',
     description: 'Technical models that collaborate to find practical solutions',
     icon: Icons.wrench,
-    requiredTier: SubscriptionTiers.PRO,
+    requiredTier: SubscriptionTiers.FREE,
     order: 4,
     mode: ChatModes.SOLVING,
     searchEnabled: false,
     modelRoles: [
-      { modelId: ModelIds.DEEPSEEK_DEEPSEEK_V3_2, role: 'Builder' },
-      { modelId: ModelIds.OPENAI_GPT_4_1_MINI, role: 'Reviewer' },
-      { modelId: ModelIds.MISTRALAI_MISTRAL_LARGE_2512, role: 'Optimizer' },
+      { modelId: ModelIds.OPENAI_GPT_5_NANO, role: 'Builder' },
+      { modelId: ModelIds.X_AI_GROK_CODE_FAST_1, role: 'Reviewer' },
+      { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: 'Optimizer' },
     ],
   },
   // ============================================================================
