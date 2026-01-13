@@ -378,7 +378,11 @@ export function ModelSelectionModal({
     return orderedModels.map(om => om.model);
   }, [orderedModels]);
 
-  const userTier = userTierInfo?.current_tier ?? SubscriptionTiers.FREE;
+  // User has Pro access if EITHER source confirms it
+  // This handles race conditions where one query loads before the other
+  const userTier = (isPaidUser || userTierInfo?.current_tier === SubscriptionTiers.PRO)
+    ? SubscriptionTiers.PRO
+    : SubscriptionTiers.FREE;
 
   const hasLockedPresets = useMemo(() => {
     return MODEL_PRESETS.some(preset => !canAccessPreset(preset, userTier));
@@ -963,7 +967,7 @@ export function ModelSelectionModal({
               </div>
 
               <div className="flex items-center gap-2">
-                {hasLockedPresets && userTierInfo?.can_upgrade && (
+                {hasLockedPresets && !isPaidUser && (
                   <Button
                     asChild
                     variant="outline"
