@@ -113,15 +113,15 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     ],
   },
   // ============================================================================
-  // FREE TIER PRESETS - Budget models with provider diversity
-  // Uses only FREE tier models (<= $0.35/1M) from different providers
+  // PRO TIER PRESETS - Budget models with provider diversity (PRO-only access)
+  // Uses FREE tier models but requires PRO subscription to unlock preset
   // ============================================================================
   {
     id: ModelPresetIds.BUDGET_BRAINSTORM,
     name: 'Budget Brainstorm',
     description: 'Creative idea generation with efficient models that spark off each other',
     icon: Icons.lightbulb,
-    requiredTier: SubscriptionTiers.FREE,
+    requiredTier: SubscriptionTiers.PRO,
     order: 2,
     mode: ChatModes.BRAINSTORMING,
     searchEnabled: false,
@@ -136,7 +136,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Fast Debate',
     description: 'Efficient models that challenge perspectives and find common ground',
     icon: Icons.swords,
-    requiredTier: SubscriptionTiers.FREE,
+    requiredTier: SubscriptionTiers.PRO,
     order: 3,
     mode: ChatModes.DEBATING,
     searchEnabled: false,
@@ -151,7 +151,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
     name: 'Problem Solver',
     description: 'Technical models that collaborate to find practical solutions',
     icon: Icons.wrench,
-    requiredTier: SubscriptionTiers.FREE,
+    requiredTier: SubscriptionTiers.PRO,
     order: 4,
     mode: ChatModes.SOLVING,
     searchEnabled: false,

@@ -531,10 +531,10 @@ describe('tier-Specific Feature Access', () => {
     expect(proConfig.maxOutputTokens).toBe(4096);
   });
 
-  it('free tier has model pricing limit of $0.10', () => {
+  it('free tier has model pricing limit of $0.20', () => {
     const freeConfig = TIER_CONFIG.free;
 
-    expect(freeConfig.maxModelPricing).toBe(0.10);
+    expect(freeConfig.maxModelPricing).toBe(0.20);
   });
 
   it('pro tier has no model pricing limit (null)', () => {
@@ -1237,7 +1237,7 @@ describe('feature Access by Tier', () => {
   it('free tier has model pricing limit', () => {
     const freeConfig = TIER_CONFIG.free;
 
-    expect(freeConfig.maxModelPricing).toBe(0.10);
+    expect(freeConfig.maxModelPricing).toBe(0.20);
     expect(freeConfig.maxModelPricing).not.toBeNull();
   });
 

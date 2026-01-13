@@ -8,7 +8,7 @@
  * - Free tier users have limited quotas (1 thread, 100 messages, no custom roles)
  * - Free tier users get 5000 signup credits (one-time, no monthly refills)
  * - Free tier users can complete one round (round 0) before being blocked
- * - Free tier users cannot access premium models (>$0.10/M tokens)
+ * - Free tier users cannot access premium models (>$0.20/M tokens)
  * - Free tier users have max 512 output tokens per response
  * - Upgrade to Pro grants immediate access to all features and 100K credits
  * - Downgrade to free preserves remaining credits but stops monthly refills
@@ -448,7 +448,7 @@ describe('feature Access Control', () => {
       createFreeUser(userId);
 
       const config = TIER_CONFIG[SubscriptionTiers.FREE];
-      expect(config.maxModelPricing).toBe(0.10);
+      expect(config.maxModelPricing).toBe(0.20);
     });
 
     it('should have no pricing limit for pro tier', () => {
@@ -828,7 +828,7 @@ describe('edge Cases and Boundary Conditions', () => {
     const userId = 'edge_user_2';
     createFreeUser(userId);
 
-    const thresholdModel = createModel('threshold', 0.10);
+    const thresholdModel = createModel('threshold', 0.20);
     expect(canAccessModel(userId, thresholdModel.id)).toBe(true);
   });
 

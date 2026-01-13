@@ -249,11 +249,15 @@ export async function enforceCredits(
 ): Promise<void> {
   let balance = await getUserCreditBalance(userId);
 
-  // Skip round check for operations that are part of completing the round
-  // (e.g., moderator analysis which must run to mark round as complete)
-  if (balance.planType === PlanTypes.FREE && !options?.skipRoundCheck) {
+  // FREE users: unlimited usage on their first thread until round 0 completes
+  if (balance.planType === PlanTypes.FREE) {
     const hasCompletedRound = await checkFreeUserHasCompletedRound(userId);
-    if (hasCompletedRound) {
+    if (!hasCompletedRound) {
+      // First thread, round 0 not complete - allow unlimited resumptions
+      return;
+    }
+    // Round 0 completed - block unless skipRoundCheck (for final operations like moderator)
+    if (!options?.skipRoundCheck) {
       const context: ErrorContext = {
         errorType: ErrorContextTypes.RESOURCE,
         resource: 'credits',
@@ -264,8 +268,6 @@ export async function enforceCredits(
         context,
       );
     }
-    // Free user hasn't completed round 0 yet - allow unlimited usage until round completes
-    return;
   }
 
   if (balance.available < requiredCredits) {

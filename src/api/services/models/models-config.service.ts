@@ -276,7 +276,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   // ========================================================================
-  // PRO TIER ONLY (>$0.10/M) - Premium models requiring paid subscription
+  // PRO TIER ONLY (>$0.20/M) - Premium models requiring paid subscription
   // ========================================================================
   {
     id: 'openai/gpt-5-mini',

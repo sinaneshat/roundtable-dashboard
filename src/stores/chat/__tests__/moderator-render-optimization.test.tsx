@@ -31,10 +31,10 @@ const messages = {
     chat: {
       participant: {
         generating: 'Generating response from {model}...',
-        moderatorObserving: 'Observing the discussion...',
-        gatheringThoughts: 'Gathering thoughts...',
-        waitingNamed: 'Waiting for {name}...',
-        waitingForWebResults: 'Waiting for web results...',
+        moderatorObserving: 'Observing...',
+        gatheringThoughts: 'Thinking...',
+        waitingNamed: 'Thinking...',
+        waitingForWebResults: 'Searching...',
       },
     },
   },
