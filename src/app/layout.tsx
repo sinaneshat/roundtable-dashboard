@@ -92,6 +92,9 @@ export default async function Layout({ children }: { children: React.ReactNode }
             tAeo('relatedQuestions.howToUse', { brand: BRAND.displayName }),
           ]}
         />
+      </head>
+      <body>
+        {/* JSON-LD structured data - placed in body per Next.js App Router best practices */}
         <StructuredData type="WebApplication" baseUrl={baseUrl} />
         <SoftwareApplicationSchema
           baseUrl={baseUrl}
@@ -104,27 +107,27 @@ export default async function Layout({ children }: { children: React.ReactNode }
             tFeatures('multipleParticipants'),
           ]}
         />
-      </head>
-      <body>
         {env.NEXT_PUBLIC_WEBAPP_ENV !== 'local' && (
           <GoogleTagManager gtmId="GT-WVX5LHTL" />
         )}
         <LiquidGlassFilters />
 
-        <AppProviders
-          locale={locale}
-          messages={messages}
-          timeZone={timeZone}
-          now={now}
-          env={{
-            NEXT_PUBLIC_WEBAPP_ENV: env.NEXT_PUBLIC_WEBAPP_ENV,
-            NEXT_PUBLIC_MAINTENANCE: env.NEXT_PUBLIC_MAINTENANCE,
-            NEXT_PUBLIC_POSTHOG_API_KEY: env.NEXT_PUBLIC_POSTHOG_API_KEY,
-            NEXT_PUBLIC_POSTHOG_HOST: env.NEXT_PUBLIC_POSTHOG_HOST,
-          }}
-        >
-          <main>{children}</main>
-        </AppProviders>
+        <main>
+          <AppProviders
+            locale={locale}
+            messages={messages}
+            timeZone={timeZone}
+            now={now}
+            env={{
+              NEXT_PUBLIC_WEBAPP_ENV: env.NEXT_PUBLIC_WEBAPP_ENV,
+              NEXT_PUBLIC_MAINTENANCE: env.NEXT_PUBLIC_MAINTENANCE,
+              NEXT_PUBLIC_POSTHOG_API_KEY: env.NEXT_PUBLIC_POSTHOG_API_KEY,
+              NEXT_PUBLIC_POSTHOG_HOST: env.NEXT_PUBLIC_POSTHOG_HOST,
+            }}
+          >
+            {children}
+          </AppProviders>
+        </main>
       </body>
     </html>
   );

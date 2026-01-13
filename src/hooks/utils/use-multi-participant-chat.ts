@@ -2302,19 +2302,20 @@ export function useMultiParticipantChat(
       return false; // Normal round transition, not a page refresh
     }
 
-    // ✅ CRITICAL FIX: When server has prefilled resumption state, DON'T let AI SDK take over
-    // The server knows which participant needs to be triggered, and custom resumption
-    // (incomplete-round-resumption.ts → use-round-resumption.ts) will handle it.
-    // AI SDK resume would interfere by streaming wrong participant's data and corrupting messages.
-    if (streamResumptionPrefilled) {
-      return 'blocked'; // Don't set streaming state, let custom resumption handle
-    }
-
-    // Detected resumed stream - set streaming flag
-    // This ensures store.isStreaming reflects the actual state
+    // Detected resumed stream - set streaming flag FIRST
+    // This ensures store.isStreaming reflects the actual state for message sync
+    // Must happen BEFORE the streamResumptionPrefilled check so message sync works
     isStreamingRef.current = true;
     // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Valid React 19 pattern: useEffectEvent callback for stream state sync
     setIsExplicitlyStreaming(true);
+
+    // ✅ CRITICAL FIX: When server has prefilled resumption state, DON'T trigger custom resumption
+    // The server knows which participant needs to be triggered, but AI SDK is already handling
+    // the stream. We've already set isExplicitlyStreaming=true above so message sync works.
+    // Return 'blocked' to prevent incomplete-round-resumption from triggering a duplicate.
+    if (streamResumptionPrefilled) {
+      return 'blocked'; // Stream is being handled by AI SDK, don't trigger custom resumption
+    }
 
     // Also populate roundParticipantsRef if needed for proper orchestration
     // Store guarantees participants are sorted by priority
