@@ -287,6 +287,11 @@ export function ChatView({
   });
 
   useEffect(() => {
+    // Skip incompatible filter when autoMode is enabled in OVERVIEW mode
+    // Server validates model accessibility in auto mode - trust those results
+    if (mode === ScreenModes.OVERVIEW && autoMode)
+      return;
+
     const hasVisionAttachments = chatAttachments.attachments.some(att =>
       isVisionRequiredMimeType(att.file.type),
     );
@@ -334,7 +339,7 @@ export function ChatView({
         t('chat.models.modelsDeselectedDescription', { models: modelList }),
       );
     }
-  }, [mode, incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, messages, threadActions, setSelectedParticipants, allEnabledModels, t, chatAttachments.attachments]);
+  }, [mode, autoMode, incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, messages, threadActions, setSelectedParticipants, allEnabledModels, t, chatAttachments.attachments]);
 
   const formActions = useChatFormActions();
   // syncToPreferences=false for ChatView - overview screen handles preference persistence
@@ -377,11 +382,20 @@ export function ChatView({
         isVisionRequiredMimeType(att.file.type),
       );
 
+      // Build set of accessible model IDs to filter server response
+      const accessibleModelIds = new Set(
+        allEnabledModels.filter(m => m.is_accessible_to_user).map(m => m.id),
+      );
+
       // Consolidated auto mode analysis - updates store directly
-      await analyzeAndApply({ prompt: inputValue.trim(), hasVisualFiles });
+      await analyzeAndApply({
+        prompt: inputValue.trim(),
+        hasVisualFiles,
+        accessibleModelIds,
+      });
     }
     await onSubmit(e);
-  }, [mode, autoMode, inputValue, chatAttachments.attachments, analyzeAndApply, onSubmit]);
+  }, [mode, autoMode, inputValue, chatAttachments.attachments, allEnabledModels, analyzeAndApply, onSubmit]);
 
   const keyboardOffset = useVisualViewportPosition();
 
