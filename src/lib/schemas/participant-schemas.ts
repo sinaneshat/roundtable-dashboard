@@ -338,7 +338,7 @@ const BaseParticipantConfigSchema = z.object({
  *
  * const formData = ParticipantConfigSchema.parse({
  *   id: 'participant-1',
- *   modelId: 'openai/gpt-4',
+ *   modelId: 'openai/gpt-4o-mini',
  *   role: 'The Summarizer',
  *   customRoleId: null,
  *   priority: 0,
@@ -378,7 +378,7 @@ export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
  *
  * const input = ParticipantConfigInputSchema.parse({
  *   id: 'participant-abc',
- *   modelId: 'anthropic/claude-3.5-sonnet',
+ *   modelId: 'anthropic/claude-sonnet-4.5',
  *   role: 'The Critic',
  *   customRoleId: null,
  *   priority: 1,
@@ -414,7 +414,7 @@ export type ParticipantConfigInput = z.infer<
  *
  * const payload = ParticipantUpdatePayloadSchema.parse({
  *   id: 'participant-xyz',
- *   modelId: 'openai/gpt-4',
+ *   modelId: 'openai/gpt-4o-mini',
  *   role: 'The Synthesizer',
  *   customRoleId: null,
  *   priority: 2,
