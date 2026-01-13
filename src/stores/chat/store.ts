@@ -13,7 +13,7 @@ import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
-import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses, UploadStatuses } from '@/api/core/enums';
+import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses, TextPartStates, UploadStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview, UploadItem } from '@/hooks/utils';
@@ -1015,20 +1015,36 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     let messagesToSet: UIMessage[];
 
     if (isSameThread && storeMessages.length > 0) {
-      const storeMaxRound = storeMessages.reduce((max, m) => {
-        const round = getRoundNumber(m.metadata) ?? 0;
-        return Math.max(max, round);
-      }, 0);
+      // ✅ BUG FIX: Detect stale streaming parts in store messages
+      // After page refresh, store messages from Zustand persist may have stale
+      // `state: 'streaming'` parts from an interrupted session. These are NOT
+      // actively streaming - they're artifacts of the previous session.
+      // Fresh DB messages (newMessages) have complete data with finishReason.
+      // If store has any stale streaming parts, ALWAYS prefer DB messages.
+      const hasStaleStreamingParts = storeMessages.some(msg =>
+        msg.parts?.some(p => 'state' in p && p.state === TextPartStates.STREAMING),
+      );
 
-      const newMaxRound = newMessages.reduce((max, m) => {
-        const round = getRoundNumber(m.metadata) ?? 0;
-        return Math.max(max, round);
-      }, 0);
-
-      if (storeMaxRound > newMaxRound || (storeMaxRound === newMaxRound && storeMessages.length >= newMessages.length)) {
-        messagesToSet = storeMessages;
-      } else {
+      if (hasStaleStreamingParts && newMessages.length > 0) {
+        // Store has stale streaming state - use fresh DB messages
         messagesToSet = newMessages;
+      } else {
+        // Original logic: Compare round numbers for active streaming scenarios
+        const storeMaxRound = storeMessages.reduce((max, m) => {
+          const round = getRoundNumber(m.metadata) ?? 0;
+          return Math.max(max, round);
+        }, 0);
+
+        const newMaxRound = newMessages.reduce((max, m) => {
+          const round = getRoundNumber(m.metadata) ?? 0;
+          return Math.max(max, round);
+        }, 0);
+
+        if (storeMaxRound > newMaxRound || (storeMaxRound === newMaxRound && storeMessages.length >= newMessages.length)) {
+          messagesToSet = storeMessages;
+        } else {
+          messagesToSet = newMessages;
+        }
       }
     } else {
       messagesToSet = newMessages;

@@ -552,7 +552,7 @@ export function ChatView({
     <>
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div className="flex flex-col relative flex-1 min-h-full">
-          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-96">
+          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-[36rem]">
             <ThreadTimeline
               timelineItems={timelineItems}
               user={user}
@@ -585,17 +585,15 @@ export function ChatView({
               <ChatScrollButton variant="input" />
               <div className="flex flex-col">
                 <ChatInputUpgradeBanner />
-                {mode === ScreenModes.OVERVIEW && (
-                  <ChatInputHeader
-                    autoMode={autoMode}
-                    onAutoModeChange={setAutoMode}
-                    isAnalyzing={isAnalyzingPrompt}
-                    disabled={isInputBlocked && !isAnalyzingPrompt}
-                    borderVariant={borderVariant}
-                  />
-                )}
+                <ChatInputHeader
+                  autoMode={autoMode}
+                  onAutoModeChange={setAutoMode}
+                  isAnalyzing={isAnalyzingPrompt}
+                  disabled={isInputBlocked && !isAnalyzingPrompt}
+                  borderVariant={borderVariant}
+                />
                 <ChatInput
-                  className={(mode === ScreenModes.OVERVIEW || isFreeUser) ? 'rounded-t-none border-t-0' : undefined}
+                  className="rounded-t-none border-t-0"
                   hideInternalAlerts={mode === ScreenModes.OVERVIEW || isFreeUser}
                   borderVariant={(mode === ScreenModes.OVERVIEW || isFreeUser) ? borderVariant : undefined}
                   value={inputValue}
@@ -629,7 +627,7 @@ export function ChatView({
                       enableAttachments={!isInputBlocked}
                       disabled={isInputBlocked}
                       isModelsLoading={isModelsLoading}
-                      autoMode={mode === ScreenModes.OVERVIEW && autoMode}
+                      autoMode={autoMode}
                     />
                   )}
                 />

@@ -21,12 +21,11 @@ describe('pricingContentSkeleton', () => {
       expect(container.querySelector('.mx-auto')).toBeInTheDocument();
     });
 
-    it('renders with proper grid layout', () => {
+    it('renders with proper max-width layout', () => {
       const { container } = render(<PricingContentSkeleton />);
 
-      const grid = container.querySelector('.grid');
-      expect(grid).toBeInTheDocument();
-      expect(grid).toHaveClass('grid-cols-1');
+      const maxWidthContainer = container.querySelector('.max-w-md');
+      expect(maxWidthContainer).toBeInTheDocument();
     });
 
     it('renders skeleton card wrapper', () => {
@@ -55,7 +54,7 @@ describe('pricingContentSkeleton', () => {
     it('renders feature list skeletons', () => {
       const { container } = render(<PricingContentSkeleton />);
 
-      const featureItems = container.querySelectorAll('.flex.items-start.gap-3');
+      const featureItems = container.querySelectorAll('.flex.items-center.gap-3');
       expect(featureItems).toHaveLength(4);
     });
 
@@ -69,7 +68,7 @@ describe('pricingContentSkeleton', () => {
     it('renders button skeleton', () => {
       const { container } = render(<PricingContentSkeleton />);
 
-      const buttonSkeleton = container.querySelector('.h-12.w-full');
+      const buttonSkeleton = container.querySelector('.h-11.w-full');
       expect(buttonSkeleton).toBeInTheDocument();
     });
   });
@@ -94,14 +93,14 @@ describe('pricingContentSkeleton', () => {
     it('uses same padding as content', () => {
       const { container } = render(<PricingContentSkeleton />);
 
-      const paddedContainer = container.querySelector('.px-3');
+      const paddedContainer = container.querySelector('.px-4');
       expect(paddedContainer).toBeInTheDocument();
     });
 
     it('uses same gap spacing as content', () => {
       const { container } = render(<PricingContentSkeleton />);
 
-      const spacedContainer = container.querySelector('.space-y-8');
+      const spacedContainer = container.querySelector('.space-y-4');
       expect(spacedContainer).toBeInTheDocument();
     });
   });

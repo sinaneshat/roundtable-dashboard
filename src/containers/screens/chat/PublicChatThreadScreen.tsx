@@ -111,7 +111,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div
           id="public-chat-scroll-container"
-          className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-72 sm:pb-96"
+          className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-96 sm:pb-[36rem]"
         >
           {timeline.length === 0
             ? (

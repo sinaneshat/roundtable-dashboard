@@ -4,11 +4,11 @@ import { getTranslations } from 'next-intl/server';
 import type { ChatMode } from '@/api/core/enums';
 import { ChatModes, DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { BRAND } from '@/constants';
+import { getOGFonts } from '@/lib/ui/og-fonts.server';
 import {
   createGradient,
   OG_COLORS,
 } from '@/lib/ui/og-image-helpers';
-import { getOGFonts } from '@/lib/ui/og-fonts.server';
 import { getThreadBySlugService } from '@/services/api';
 
 export const size = {

@@ -264,6 +264,8 @@ export async function enforceCredits(
         context,
       );
     }
+    // Free user hasn't completed round 0 yet - allow unlimited usage until round completes
+    return;
   }
 
   if (balance.available < requiredCredits) {

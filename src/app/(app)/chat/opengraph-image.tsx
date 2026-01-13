@@ -2,12 +2,12 @@ import { ImageResponse } from 'next/og';
 import { getTranslations } from 'next-intl/server';
 
 import { BRAND } from '@/constants';
+import { getOGFonts } from '@/lib/ui/og-fonts.server';
 import {
   createGradient,
   getLogoBase64,
   OG_COLORS,
 } from '@/lib/ui/og-image-helpers';
-import { getOGFonts } from '@/lib/ui/og-fonts.server';
 
 export const size = {
   width: 1200,
