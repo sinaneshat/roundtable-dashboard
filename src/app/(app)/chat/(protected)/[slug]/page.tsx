@@ -54,30 +54,27 @@ export default async function ChatThreadPage({
     permanentRedirect(`/chat/${thread.slug}`);
   }
 
-  // ✅ PERF FIX: Prefetch all thread data server-side to avoid client-side calls
-  // Uses matching staleTime with client hooks to prevent refetch on hydration
-  // Wrapped in try-catch to prevent Server Component failures
-  try {
-    await Promise.all([
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.threads.changelog(thread.id),
-        queryFn: () => getThreadChangelogService({ param: { id: thread.id } }),
-        staleTime: STALE_TIMES.threadChangelog, // ✅ FIX: Match client hook staleTime (Infinity)
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.threads.preSearches(thread.id),
-        queryFn: () => getThreadPreSearchesService({ param: { id: thread.id } }),
-        staleTime: STALE_TIMES.preSearch,
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.threads.feedback(thread.id),
-        queryFn: () => getThreadFeedbackService({ param: { id: thread.id } }),
-        staleTime: STALE_TIMES.threadFeedback, // ✅ Never stale - invalidated only on mutation
-      }),
-    ]);
-  } catch (error) {
-    console.error('[ChatThreadPage] Prefetch failed:', error);
-  }
+  // ✅ PERF: Fire-and-forget prefetches - don't block page render
+  // Prefetches populate cache but we don't await - page renders instantly
+  void Promise.all([
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.threads.changelog(thread.id),
+      queryFn: () => getThreadChangelogService({ param: { id: thread.id } }),
+      staleTime: STALE_TIMES.threadChangelog,
+    }),
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.threads.preSearches(thread.id),
+      queryFn: () => getThreadPreSearchesService({ param: { id: thread.id } }),
+      staleTime: STALE_TIMES.preSearch,
+    }),
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.threads.feedback(thread.id),
+      queryFn: () => getThreadFeedbackService({ param: { id: thread.id } }),
+      staleTime: STALE_TIMES.threadFeedback,
+    }),
+  ]).catch(() => {
+    // Silently fail - client will refetch if needed
+  });
 
   queryClient.setQueryData(
     queryKeys.threads.detail(thread.id),

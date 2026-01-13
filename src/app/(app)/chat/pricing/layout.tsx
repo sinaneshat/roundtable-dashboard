@@ -29,37 +29,33 @@ export default async function PricingLayout({ children }: PricingLayoutProps) {
   // Optional auth - show different UI for logged in users
   const session = await getOptionalAuth();
 
-  // Prefetch products and models for pricing page
-  // Prefetch subscriptions if user is authenticated
-  try {
-    const prefetchPromises = [
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.products.list(),
-        queryFn: getProductsService,
-        staleTime: STALE_TIMES.products,
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.models.list(),
-        queryFn: () => listModelsService(),
-        staleTime: STALE_TIMES.models,
-      }),
-    ];
-
+  // ✅ PERF: Fire-and-forget prefetches - don't block rendering
+  // Prefetches populate the cache for instant client hydration
+  // But we don't await them - let the page render immediately
+  void Promise.all([
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.products.list(),
+      queryFn: getProductsService,
+      staleTime: STALE_TIMES.products,
+    }),
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.models.list(),
+      queryFn: () => listModelsService(),
+      staleTime: STALE_TIMES.models,
+    }),
     // Prefetch subscriptions for authenticated users
-    if (session?.user) {
-      prefetchPromises.push(
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.subscriptions.list(),
-          queryFn: () => getSubscriptionsService(),
-          staleTime: STALE_TIMES.subscriptions,
-        }),
-      );
-    }
-
-    await Promise.all(prefetchPromises);
-  } catch (error) {
-    console.error('[PricingLayout] Prefetch failed:', error);
-  }
+    ...(session?.user
+      ? [
+          queryClient.prefetchQuery({
+            queryKey: queryKeys.subscriptions.list(),
+            queryFn: () => getSubscriptionsService(),
+            staleTime: STALE_TIMES.subscriptions,
+          }),
+        ]
+      : []),
+  ]).catch(() => {
+    // Silently fail - client will refetch if needed
+  });
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

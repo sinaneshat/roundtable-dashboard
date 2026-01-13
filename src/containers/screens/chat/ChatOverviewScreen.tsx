@@ -437,6 +437,13 @@ export default function ChatOverviewScreen() {
   ]);
 
   useEffect(() => {
+    // Skip incompatible filter when autoMode is enabled
+    // Server validates model accessibility in auto mode - trust those results
+    // This prevents race conditions where client's models list shows different
+    // accessibility than what the server determined during analyze
+    if (autoMode)
+      return;
+
     if (incompatibleModelIds.size === 0)
       return;
 
@@ -479,7 +486,7 @@ export default function ChatOverviewScreen() {
         t('chat.models.modelsDeselectedDescription', { models: modelList }),
       );
     }
-  }, [incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds, allEnabledModels, t]);
+  }, [autoMode, incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds, allEnabledModels, t]);
 
   const threadActions = useMemo(
     () => currentThread && !showInitialUI
@@ -601,8 +608,16 @@ export default function ChatOverviewScreen() {
             isVisionRequiredMimeType(att.file.type),
           );
 
+          // Pass accessible model IDs to filter server response
+          // This prevents setting participants that would be filtered by incompatible models effect
+          const accessibleSet = new Set(accessibleModelIds);
+
           // Consolidated auto mode analysis - updates both chat store and preferences
-          await analyzeAndApply({ prompt: inputValue.trim(), hasVisualFiles });
+          await analyzeAndApply({
+            prompt: inputValue.trim(),
+            hasVisualFiles,
+            accessibleModelIds: accessibleSet,
+          });
         }
 
         const currentParticipants = storeApi.getState().selectedParticipants;
@@ -629,7 +644,7 @@ export default function ChatOverviewScreen() {
         }
       }
     },
-    [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId, chatAttachments, autoMode, analyzeAndApply, storeApi],
+    [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId, chatAttachments, autoMode, analyzeAndApply, storeApi, accessibleModelIds],
   );
 
   const handleToggleModel = useCallback((modelId: string) => {

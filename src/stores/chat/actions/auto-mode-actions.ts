@@ -22,6 +22,12 @@ import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 type AutoModeAnalysisOptions = {
   prompt: string;
   hasVisualFiles?: boolean;
+  /**
+   * Set of model IDs accessible to the user from the client's models API.
+   * Used to filter server response - prevents setting participants that would
+   * immediately be filtered out by the incompatible models effect.
+   */
+  accessibleModelIds?: Set<string>;
 };
 
 export type UseAutoModeAnalysisReturn = {
@@ -63,7 +69,7 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
   })));
 
   const analyzeAndApply = useCallback(async (options: AutoModeAnalysisOptions): Promise<boolean> => {
-    const { prompt, hasVisualFiles = false } = options;
+    const { prompt, hasVisualFiles = false, accessibleModelIds } = options;
 
     chatStoreActions.setIsAnalyzingPrompt(true);
 
@@ -74,12 +80,29 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
         const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;
 
         // Transform to ParticipantConfig format
-        const newParticipants: ParticipantConfig[] = participants.map((p, index) => ({
+        let newParticipants: ParticipantConfig[] = participants.map((p, index) => ({
           id: p.modelId,
           modelId: p.modelId,
           role: p.role || '',
           priority: index,
         }));
+
+        // Filter by client-accessible models if provided
+        // This prevents setting participants that would immediately be filtered
+        // out by the incompatible models effect due to tier mismatch
+        if (accessibleModelIds && accessibleModelIds.size > 0) {
+          const filteredParticipants = newParticipants.filter(
+            p => accessibleModelIds.has(p.modelId),
+          );
+          // Only apply filter if it leaves at least 1 participant
+          // If all filtered out, keep original (server says they're accessible)
+          if (filteredParticipants.length > 0) {
+            newParticipants = filteredParticipants.map((p, index) => ({
+              ...p,
+              priority: index,
+            }));
+          }
+        }
 
         const modelIds = newParticipants.map(p => p.modelId);
 
