@@ -2,21 +2,34 @@
 /**
  * User Upgrade Script
  *
- * Upgrades an existing user to Pro plan for 1 month.
+ * Grants a user Pro access for 1 month (manual upgrade, no Stripe payment).
  * - If already pro: tops off credits (+100K) and extends period (+1 month)
  * - If free: upgrades to pro, grants 100K credits, sets 1 month period
  *
- * Usage:
- *   npx tsx scripts/user-upgrade.ts
+ * Creates all necessary database records for proper behavior:
+ * - user_chat_usage: subscription tier = 'pro', billing period
+ * - user_credit_balance: credit balance, plan_type = 'paid'
+ * - credit_transaction: audit log for the credit grant
+ * - stripe_customer: links user to Stripe (prevents rollover downgrade)
+ * - stripe_subscription: active subscription with cancel_at_period_end=1
  *
- * Environment:
- *   Uses wrangler d1 execute to run SQL against preview/prod D1 databases
+ * Key behavior:
+ * - Uses REAL Stripe product/price IDs from seed files (environment-specific)
+ * - Sets cancel_at_period_end=1 so user can STILL PURCHASE a real subscription
+ * - The checkout handler allows new subscriptions when cancel_at_period_end=true
+ * - Metadata includes {"manualGrant":"true"} for tracking
+ *
+ * Usage:
+ *   Interactive:  npx tsx scripts/user-upgrade.ts
+ *   CLI args:     npx tsx scripts/user-upgrade.ts --env prod --email user@example.com
+ *
+ * Prerequisites:
+ *   - Seed data must be applied (product/price records must exist)
+ *   - User must already be signed up
  */
 
 import { execSync } from 'node:child_process';
 import * as readline from 'node:readline';
-
-const ACCOUNT_ID = '499b6c3c38f75f7f7dc7d3127954b921';
 
 const D1_DATABASE_NAMES = {
   preview: 'roundtable-dashboard-db-preview',
@@ -26,12 +39,26 @@ const D1_DATABASE_NAMES = {
 // Pro plan constants (from product-logic.service.ts and credit-config.ts)
 const PRO_MONTHLY_CREDITS = 100_000;
 
+// Stripe IDs from seed files - use real product/price so tier detection works correctly
+// These match the actual Stripe catalog (test mode for preview, live mode for prod)
+const STRIPE_IDS = {
+  preview: {
+    productId: 'prod_Tf8t3FTCKcpVDq',
+    priceId: 'price_1Smaap52vWNZ3v8w4wEjE10y',
+  },
+  prod: {
+    productId: 'prod_Tm6uQ8p2TyzcaA',
+    priceId: 'price_1SoYgp52vWNZ3v8wGzxrv0NC',
+  },
+} as const;
+
 type Environment = keyof typeof D1_DATABASE_NAMES;
 
 function createReadline(): readline.Interface {
   return readline.createInterface({
     input: process.stdin,
     output: process.stdout,
+    terminal: process.stdin.isTTY ?? false,
   });
 }
 
@@ -106,28 +133,70 @@ interface CreditRow {
   version: number;
 }
 
+interface StripeCustomerRow {
+  id: string;
+  user_id: string;
+  email: string;
+}
+
+interface StripeSubscriptionRow {
+  id: string;
+  customer_id: string;
+  user_id: string;
+  status: string;
+  price_id: string;
+  current_period_end: number;
+}
+
+function parseArgs(): { env?: string; email?: string } {
+  const args = process.argv.slice(2);
+  const result: { env?: string; email?: string } = {};
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--env' && args[i + 1]) {
+      result.env = args[++i];
+    } else if (args[i] === '--email' && args[i + 1]) {
+      result.email = args[++i];
+    }
+  }
+
+  return result;
+}
+
 async function main() {
+  const cliArgs = parseArgs();
   const rl = createReadline();
 
   console.log('\n🚀 User Upgrade Script\n');
   console.log('This script upgrades an existing user to Pro plan for 1 month.\n');
 
-  // Ask for environment
+  // Get environment from CLI args or prompt
   let env: Environment | null = null;
-  while (!env) {
-    const envInput = await question(rl, 'Environment (preview/prod): ');
-    if (envInput === 'preview' || envInput === 'prod') {
-      env = envInput;
-    } else {
-      console.log('❌ Invalid environment. Please enter "preview" or "prod".\n');
+  if (cliArgs.env === 'preview' || cliArgs.env === 'prod') {
+    env = cliArgs.env;
+    console.log(`Environment: ${env} (from CLI args)`);
+  } else {
+    while (!env) {
+      const envInput = await question(rl, 'Environment (preview/prod): ');
+      if (envInput === 'preview' || envInput === 'prod') {
+        env = envInput;
+      } else {
+        console.log('❌ Invalid environment. Please enter "preview" or "prod".\n');
+      }
     }
   }
 
   const dbName = D1_DATABASE_NAMES[env];
   console.log(`\n✅ Using database: ${dbName}\n`);
 
-  // Ask for user email
-  const email = await question(rl, 'User email to upgrade: ');
+  // Get email from CLI args or prompt
+  let email = cliArgs.email;
+  if (email) {
+    console.log(`User email: ${email} (from CLI args)`);
+  } else {
+    email = await question(rl, 'User email to upgrade: ');
+  }
+
   if (!email || !email.includes('@')) {
     console.error('❌ Invalid email address');
     rl.close();
@@ -166,8 +235,25 @@ async function main() {
     `SELECT * FROM user_credit_balance WHERE user_id = '${user.id}'`,
   ) as CreditRow[];
 
+  // Check existing Stripe records
+  const customerRecords = executeD1Json(
+    dbName,
+    `SELECT id, user_id, email FROM stripe_customer WHERE user_id = '${user.id}'`,
+  ) as StripeCustomerRow[];
+
   const existingUsage = usageRecords[0];
   const existingCredit = creditRecords[0];
+  const existingCustomer = customerRecords[0];
+
+  // Check for existing active subscription if customer exists
+  let existingSubscription: StripeSubscriptionRow | undefined;
+  if (existingCustomer) {
+    const subscriptionRecords = executeD1Json(
+      dbName,
+      `SELECT id, customer_id, user_id, status, price_id, current_period_end FROM stripe_subscription WHERE customer_id = '${existingCustomer.id}' AND status = 'active'`,
+    ) as StripeSubscriptionRow[];
+    existingSubscription = subscriptionRecords[0];
+  }
 
   console.log('📊 Current status:');
   if (existingUsage) {
@@ -181,6 +267,16 @@ async function main() {
     console.log(`   Balance: ${existingCredit.balance.toLocaleString()} credits`);
   } else {
     console.log('   No credit balance (will create)');
+  }
+  if (existingCustomer) {
+    console.log(`   Stripe customer: ${existingCustomer.id}`);
+    if (existingSubscription) {
+      console.log(`   Active subscription: ${existingSubscription.id} (${existingSubscription.status})`);
+    } else {
+      console.log('   No active subscription (will create)');
+    }
+  } else {
+    console.log('   No Stripe customer (will create)');
   }
   console.log('');
 
@@ -271,12 +367,89 @@ async function main() {
     );
     console.log('✅ Logged credit_transaction');
 
+    // 4. Get environment-specific Stripe IDs (from seed files)
+    const stripeIds = STRIPE_IDS[env];
+    console.log(`✅ Using Stripe IDs for ${env}: product=${stripeIds.productId}, price=${stripeIds.priceId}`);
+
+    // Verify the product/price exist in DB (should be from seed)
+    const existingProducts = executeD1Json(
+      dbName,
+      `SELECT id FROM stripe_product WHERE id = '${stripeIds.productId}'`,
+    ) as { id: string }[];
+
+    if (existingProducts.length === 0) {
+      console.error(`❌ Stripe product ${stripeIds.productId} not found in database.`);
+      console.error('   Run the seed migration first: pnpm db:migrate:preview or pnpm db:migrate:prod');
+      process.exit(1);
+    }
+
+    const existingPrices = executeD1Json(
+      dbName,
+      `SELECT id FROM stripe_price WHERE id = '${stripeIds.priceId}'`,
+    ) as { id: string }[];
+
+    if (existingPrices.length === 0) {
+      console.error(`❌ Stripe price ${stripeIds.priceId} not found in database.`);
+      console.error('   Run the seed migration first: pnpm db:migrate:preview or pnpm db:migrate:prod');
+      process.exit(1);
+    }
+
+    // 5. Create or update Stripe customer
+    const customerId = existingCustomer?.id || `cus_manual_${user.id.substring(0, 16)}`;
+    if (!existingCustomer) {
+      executeD1(
+        dbName,
+        `INSERT INTO stripe_customer
+         (id, user_id, email, name, metadata, created_at, updated_at)
+         VALUES ('${customerId}', '${user.id}', '${email}', '${user.name.replace(/'/g, "''")}', '{"manualGrant":"true"}', ${now}, ${now})`,
+      );
+      console.log('✅ Created stripe_customer');
+    } else {
+      console.log('✅ stripe_customer already exists');
+    }
+
+    // 6. Create or update Stripe subscription
+    // NOTE: cancel_at_period_end = 1 allows user to purchase a REAL subscription later
+    // The checkout handler only blocks if there's an active sub WITHOUT cancel_at_period_end
+    const subscriptionId = existingSubscription?.id || `sub_manual_${generateId()}`;
+    if (existingSubscription) {
+      // Update existing subscription period, keep cancel_at_period_end = 1
+      executeD1(
+        dbName,
+        `UPDATE stripe_subscription
+         SET current_period_start = ${now},
+             current_period_end = ${newPeriodEnd},
+             cancel_at = ${newPeriodEnd},
+             status = 'active',
+             cancel_at_period_end = 1,
+             version = version + 1,
+             updated_at = ${now}
+         WHERE id = '${existingSubscription.id}'`,
+      );
+      console.log('✅ Updated stripe_subscription (cancel_at_period_end=1, user can still purchase real subscription)');
+    } else {
+      executeD1(
+        dbName,
+        `INSERT INTO stripe_subscription
+         (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, cancel_at,
+          current_period_start, current_period_end, metadata, version, created_at, updated_at)
+         VALUES ('${subscriptionId}', '${customerId}', '${user.id}', 'active', '${stripeIds.priceId}', 1, 1, ${newPeriodEnd},
+                 ${now}, ${newPeriodEnd}, '{"manualGrant":"true"}', 1, ${now}, ${now})`,
+      );
+      console.log('✅ Created stripe_subscription (cancel_at_period_end=1, user can still purchase real subscription)');
+    }
+
     console.log(`\n🎉 Successfully upgraded ${email} to Pro!\n`);
     console.log('Summary:');
     console.log(`   Tier: pro`);
     console.log(`   Period: ${new Date(now * 1000).toLocaleDateString()} - ${new Date(newPeriodEnd * 1000).toLocaleDateString()}`);
     console.log(`   Credits: ${newBalance.toLocaleString()}`);
-    console.log(`   Monthly credits: ${PRO_MONTHLY_CREDITS.toLocaleString()}\n`);
+    console.log(`   Monthly credits: ${PRO_MONTHLY_CREDITS.toLocaleString()}`);
+    console.log(`   Stripe customer: ${customerId}`);
+    console.log(`   Stripe subscription: ${subscriptionId} (active, cancels at period end)`);
+    console.log(`   Stripe price: ${stripeIds.priceId}\n`);
+    console.log('✅ All database records created - user will properly show as Pro subscriber.');
+    console.log('✅ User can still purchase a real Stripe subscription (grant set to cancel at period end).\n');
   } catch (error) {
     console.error('\n❌ Upgrade failed. Please check the error above.\n');
     process.exit(1);

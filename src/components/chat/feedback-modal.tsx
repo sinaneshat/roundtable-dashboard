@@ -69,10 +69,9 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
       feedbackType: DEFAULT_USER_FEEDBACK_TYPE,
       message: '',
     },
-    mode: 'onChange',
   });
 
-  const { handleSubmit, reset, formState: { isSubmitting, isValid } } = methods;
+  const { handleSubmit, reset, formState: { isSubmitting } } = methods;
 
   // Build feedback type options from enum
   const feedbackTypeOptions: FormOptions = useMemo(() =>
@@ -213,7 +212,6 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
                   <Button
                     type="submit"
                     loading={isSubmitting}
-                    disabled={!isValid}
                   >
                     {tFeedback('submit')}
                   </Button>

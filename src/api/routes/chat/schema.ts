@@ -75,8 +75,8 @@ const BaseParticipantSchema = z.object({
     example: 'participant_1',
   }),
   modelId: CoreSchemas.id().openapi({
-    description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
-    example: 'anthropic/claude-3.5-sonnet',
+    description: 'Model ID (e.g., anthropic/claude-sonnet-4.5, openai/gpt-4o)',
+    example: 'anthropic/claude-sonnet-4.5',
   }),
   role: z.string().nullable().optional().openapi({
     description: 'Optional assigned role for this model',
@@ -361,8 +361,8 @@ export const DeleteThreadResponseSchema = createApiResponseSchema(z.object({
 
 export const AddParticipantRequestSchema = z.object({
   modelId: CoreSchemas.id().openapi({
-    description: 'Model ID (e.g., anthropic/claude-3.5-sonnet)',
-    example: 'anthropic/claude-3.5-sonnet',
+    description: 'Model ID (e.g., anthropic/claude-sonnet-4.5)',
+    example: 'anthropic/claude-sonnet-4.5',
   }),
   role: z.string().min(1).max(100).nullish().openapi({
     description: 'Optional assigned role',
@@ -692,8 +692,8 @@ export type PreSearchListResponse = z.infer<typeof PreSearchListResponseSchema>;
 
 export const UserPresetModelRoleSchema = z.object({
   modelId: CoreSchemas.id().openapi({
-    description: 'Model ID (e.g., anthropic/claude-3.5-sonnet)',
-    example: 'anthropic/claude-3.5-sonnet',
+    description: 'Model ID (e.g., anthropic/claude-sonnet-4.5)',
+    example: 'anthropic/claude-sonnet-4.5',
   }),
   role: z.string().max(100).nullish().openapi({
     description: 'Optional role name for this model in the preset',
@@ -933,7 +933,7 @@ export const ParticipantResponseSchema = z.object({
   }),
   modelId: z.string().min(1).openapi({
     description: 'Model ID used by this participant',
-    example: 'anthropic/claude-3.5-sonnet',
+    example: 'anthropic/claude-sonnet-4.5',
   }),
   modelName: z.string().openapi({
     description: 'Human-readable model name',
@@ -1701,6 +1701,10 @@ export const AnalyzePromptRequestSchema = z.object({
     description: 'User prompt to analyze for optimal configuration',
     example: 'What are the best practices for building a SaaS product?',
   }),
+  hasVisualFiles: z.boolean().optional().default(false).openapi({
+    description: 'Whether visual files (images/PDFs) are attached - restricts model selection to vision-capable models',
+    example: false,
+  }),
 }).openapi('AnalyzePromptRequest');
 
 export type AnalyzePromptRequest = z.infer<typeof AnalyzePromptRequestSchema>;
@@ -1719,6 +1723,7 @@ export const RecommendedParticipantSchema = z.object({
 export type RecommendedParticipant = z.infer<typeof RecommendedParticipantSchema>;
 
 export const AnalyzePromptPayloadSchema = z.object({
+  // Max value (12) matches MAX_PARTICIPANTS_LIMIT from product-logic.service.ts (pro tier's maxModels)
   participants: z.array(RecommendedParticipantSchema).min(1).max(12).openapi({
     description: 'Recommended model-role pairs for the prompt',
   }),

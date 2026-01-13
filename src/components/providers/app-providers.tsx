@@ -10,7 +10,6 @@ import { GlobalErrorBoundary } from '@/components/errors/global-error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import type { ModelPreferencesState } from '@/stores/preferences';
 
-import { ChatStoreProvider } from './chat-store-provider';
 import PostHogProvider from './posthog-provider';
 import { PreferencesStoreProvider } from './preferences-store-provider';
 import { QueryClientProvider } from './query-client-provider';
@@ -58,22 +57,20 @@ export function AppProviders({
     >
       <QueryClientProvider>
         <PreferencesStoreProvider initialState={initialPreferences}>
-          <ChatStoreProvider>
-            <NuqsAdapter>
-              <NextIntlClientProvider
-                messages={messages}
-                locale={locale}
-                timeZone={timeZone}
-                now={now}
-              >
-                <GlobalErrorBoundary>
-                  {env.NEXT_PUBLIC_MAINTENANCE === 'true' ? <MaintenanceMessage /> : children}
-                </GlobalErrorBoundary>
-                <VersionUpdateModal />
-                <Toaster />
-              </NextIntlClientProvider>
-            </NuqsAdapter>
-          </ChatStoreProvider>
+          <NuqsAdapter>
+            <NextIntlClientProvider
+              messages={messages}
+              locale={locale}
+              timeZone={timeZone}
+              now={now}
+            >
+              <GlobalErrorBoundary>
+                {env.NEXT_PUBLIC_MAINTENANCE === 'true' ? <MaintenanceMessage /> : children}
+              </GlobalErrorBoundary>
+              <VersionUpdateModal />
+              <Toaster />
+            </NextIntlClientProvider>
+          </NuqsAdapter>
         </PreferencesStoreProvider>
       </QueryClientProvider>
     </PostHogProvider>

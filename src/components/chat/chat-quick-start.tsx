@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
 import { AvatarSizes, ChatModes, PlanTypes, SubscriptionTiers } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-import { MIN_MODELS_REQUIRED } from '@/api/services/billing/product-logic.service';
+import { MIN_PARTICIPANTS_REQUIRED } from '@/api/services/billing/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
@@ -191,6 +191,8 @@ export function ChatQuickStart({
   className,
 }: ChatQuickStartProps) {
   const [randomPrompts] = useState(() => getRandomPrompts(3));
+  // Random offset for provider rotation - set once per mount for variety across page loads
+  const [initialProviderOffset] = useState(() => Math.floor(Math.random() * 10));
   const { data: usageData, isLoading: isUsageLoading } = useUsageStatsQuery();
   const { data: modelsResponse, isLoading: isModelsLoading } = useModelsQuery();
 
@@ -224,125 +226,109 @@ export function ChatQuickStart({
     return grouped;
   }, [accessibleModels]);
 
-  const selectUniqueProviderModels = useCallback(
-    (count: number): string[] => {
-      const selectedModels: string[] = [];
-      const usedProviders = new Set<string>();
+  // Stable provider order - sorted alphabetically for deterministic selection
+  const sortedProviders = useMemo(() => {
+    return Array.from(modelsByProvider.keys()).sort();
+  }, [modelsByProvider]);
 
-      // Get all providers and shuffle for variety
-      const providers = Array.from(modelsByProvider.keys());
-      const shuffledProviders = [...providers].sort(() => Math.random() - 0.5);
-
-      for (const provider of shuffledProviders) {
-        if (selectedModels.length >= count)
-          break;
-        if (usedProviders.has(provider))
-          continue;
-        const providerModels = modelsByProvider.get(provider);
-        if (!providerModels || providerModels.length === 0)
-          continue;
-        // Pick a random model from this provider for variety
-        const randomIndex = Math.floor(Math.random() * providerModels.length);
-        const model = providerModels[randomIndex];
-        if (model) {
-          selectedModels.push(model.id);
-          usedProviders.add(provider);
+  // Pre-select one model per provider (deterministic, first model from each)
+  const modelPerProvider = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const provider of sortedProviders) {
+      const models = modelsByProvider.get(provider);
+      if (models && models.length > 0) {
+        // Sort by ID for stable, deterministic selection
+        const sorted = [...models].sort((a, b) => a.id.localeCompare(b.id));
+        const firstModel = sorted[0];
+        if (firstModel) {
+          result.set(provider, firstModel.id);
         }
       }
+    }
+    return result;
+  }, [sortedProviders, modelsByProvider]);
+
+  const selectUniqueProviderModels = useCallback(
+    (count: number, offset: number = 0): string[] => {
+      const selectedModels: string[] = [];
+
+      // Rotate providers based on offset for variety across suggestions
+      const rotatedProviders = [
+        ...sortedProviders.slice(offset % sortedProviders.length),
+        ...sortedProviders.slice(0, offset % sortedProviders.length),
+      ];
+
+      for (const provider of rotatedProviders) {
+        if (selectedModels.length >= count)
+          break;
+        const modelId = modelPerProvider.get(provider);
+        if (modelId) {
+          selectedModels.push(modelId);
+        }
+      }
+
+      // If we need more models than providers, fill from remaining
+      if (selectedModels.length < count) {
+        const used = new Set(selectedModels);
+        for (const model of accessibleModels) {
+          if (selectedModels.length >= count)
+            break;
+          if (!used.has(model.id)) {
+            selectedModels.push(model.id);
+            used.add(model.id);
+          }
+        }
+      }
+
       return selectedModels;
     },
-    [modelsByProvider],
+    [sortedProviders, modelPerProvider, accessibleModels],
   );
 
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
-    const availableModelIds = accessibleModels
-      .map(m => m.id)
-      .filter(id => id && id.length > 0);
-
-    if (availableModelIds.length === 0) {
+    if (accessibleModels.length === 0) {
       return [];
     }
 
-    const getModelsForTier = (idealCount: number): string[] => {
-      const uniqueProviderModels = selectUniqueProviderModels(idealCount);
+    const idealCount = userTier === SubscriptionTiers.FREE
+      ? MIN_PARTICIPANTS_REQUIRED
+      : 4;
 
-      if (
-        uniqueProviderModels.length
-        >= Math.min(idealCount, availableModelIds.length)
-      ) {
-        return uniqueProviderModels;
-      }
+    // Build each suggestion with a DIFFERENT provider offset for maximum diversity
+    const buildSuggestion = (
+      template: PromptTemplate,
+      suggestionIndex: number,
+    ): QuickStartSuggestion => {
+      // Combine initial random offset with suggestion index for variety on each page load
+      // while still ensuring diversity across the 3 suggestions
+      const models = selectUniqueProviderModels(idealCount, initialProviderOffset + suggestionIndex);
 
-      const models = [...uniqueProviderModels];
-      const used = new Set(models);
-
-      for (const modelId of availableModelIds) {
-        if (models.length >= idealCount)
-          break;
-        if (!used.has(modelId)) {
-          models.push(modelId);
-          used.add(modelId);
-        }
-      }
-
-      return models;
+      return {
+        title: template.title,
+        prompt: template.prompt,
+        mode: template.mode,
+        participants: template.roles
+          .slice(0, models.length)
+          .map((role, idx) => {
+            const modelId = models[idx];
+            if (!modelId)
+              return null;
+            return {
+              id: `p${idx + 1}`,
+              modelId,
+              role,
+              priority: idx,
+              customRoleId: undefined,
+            };
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null),
+      };
     };
 
-    const freeModels = getModelsForTier(MIN_MODELS_REQUIRED);
-    const proModels = getModelsForTier(4);
-
-    const buildSuggestionsFromTemplates = (
-      templates: PromptTemplate[],
-      models: string[],
-    ): QuickStartSuggestion[] => {
-      if (models.length === 0)
-        return [];
-
-      return templates.map((template, templateIndex) => {
-        const rotatedModels = [
-          ...models.slice(templateIndex % models.length),
-          ...models.slice(0, templateIndex % models.length),
-        ];
-
-        return {
-          title: template.title,
-          prompt: template.prompt,
-          mode: template.mode,
-          participants: template.roles
-            .slice(0, rotatedModels.length)
-            .map((role, idx) => {
-              const modelId = rotatedModels[idx];
-              if (!modelId)
-                return null;
-              return {
-                id: `p${idx + 1}`,
-                modelId,
-                role,
-                priority: idx,
-                customRoleId: undefined,
-              };
-            })
-            .filter((p): p is NonNullable<typeof p> => p !== null),
-        };
-      });
-    };
-
-    const freeTierSuggestions = buildSuggestionsFromTemplates(
-      randomPrompts,
-      freeModels,
+    return randomPrompts.map((template, index) =>
+      buildSuggestion(template, index),
     );
-
-    const proTierSuggestions = buildSuggestionsFromTemplates(
-      randomPrompts,
-      proModels,
-    );
-
-    const tierSuggestions: QuickStartSuggestion[] = userTier === SubscriptionTiers.FREE
-      ? freeTierSuggestions
-      : proTierSuggestions;
-
-    return tierSuggestions;
-  }, [userTier, accessibleModels, selectUniqueProviderModels, randomPrompts]);
+  }, [userTier, accessibleModels, selectUniqueProviderModels, randomPrompts, initialProviderOffset]);
 
   if (isLoading) {
     return <QuickStartSkeleton className={className} />;

@@ -29,9 +29,15 @@ const PROTECTED_AUTH_PATHS: readonly string[] = [
 
 /**
  * Specific email addresses allowed in local/preview environments
- * These are exceptions to the domain restriction (currently empty - only @deadpixel.ai allowed)
+ * These are exceptions to the domain restriction
+ * @see e2e/fixtures/test-users.ts for E2E test user definitions
  */
-const ALLOWED_EMAIL_EXCEPTIONS: readonly string[] = [];
+const ALLOWED_EMAIL_EXCEPTIONS: readonly string[] = [
+  // E2E test users - required for Playwright tests
+  'e2e-free-test@roundtable.now',
+  'e2e-pro-test@roundtable.now',
+  'e2e-admin-test@roundtable.now',
+];
 
 /**
  * Configuration for email domain restrictions

@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
@@ -45,10 +45,34 @@ export function ShareDialog({
 
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Revision counter - incremented when we need a fresh OG image
+  const [ogRevision, setOgRevision] = useState(0);
+  const prevOpenRef = useRef(open);
+  const prevIsPublicRef = useRef(isPublic);
+
+  // Increment revision when dialog opens with public thread, or thread transitions to public
+  // This is an intentional state synchronization from props - not a derived value
+  useEffect(() => {
+    const dialogJustOpened = open && !prevOpenRef.current;
+    const justBecamePublic = isPublic && !prevIsPublicRef.current;
+    const shouldRefresh = !isLoading && ((dialogJustOpened && isPublic) || justBecamePublic);
+
+    if (shouldRefresh) {
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional cache bust on dialog/visibility state change
+      setOgRevision(prev => prev + 1);
+    }
+
+    prevOpenRef.current = open;
+    prevIsPublicRef.current = isPublic;
+  }, [open, isPublic, isLoading]);
 
   const baseUrl = getAppBaseUrl();
   const shareUrl = `${baseUrl}/public/chat/${slug}`;
-  const ogImageUrl = `${baseUrl}/public/chat/${slug}/opengraph-image`;
+  // Derive cache key from revision - only non-zero revisions add cache bust param
+  const ogImageUrl = useMemo(() => {
+    const basePath = `${baseUrl}/public/chat/${slug}/opengraph-image`;
+    return ogRevision > 0 ? `${basePath}?v=${ogRevision}-${Date.now()}` : basePath;
+  }, [baseUrl, slug, ogRevision]);
 
   useEffect(() => {
     return () => {
@@ -158,13 +182,28 @@ export function ShareDialog({
               </div>
 
               <div className="overflow-hidden rounded-xl border border-border/50 bg-muted/20">
-                <SmartImage
-                  src={ogImageUrl}
-                  alt="Thread preview"
-                  aspectRatio="1200/630"
-                  unoptimized
-                  containerClassName="rounded-xl overflow-hidden"
-                />
+                {isLoading
+                  ? (
+                      <div
+                        className="flex items-center justify-center bg-muted/30 animate-pulse"
+                        style={{ aspectRatio: '1200/630' }}
+                      >
+                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                          <Icons.loader className="size-6 animate-spin" />
+                          <span className="text-sm">{t('shareDialog.generatingPreview')}</span>
+                        </div>
+                      </div>
+                    )
+                  : (
+                      <SmartImage
+                        key={ogImageUrl}
+                        src={ogImageUrl}
+                        alt="Thread preview"
+                        aspectRatio="1200/630"
+                        unoptimized
+                        containerClassName="rounded-xl overflow-hidden"
+                      />
+                    )}
               </div>
             </div>
 

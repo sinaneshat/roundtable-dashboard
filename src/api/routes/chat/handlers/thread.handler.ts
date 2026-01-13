@@ -1161,7 +1161,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     // ✅ PUBLIC THREAD CACHE: Invalidate when visibility changes
     // Also clears cached OG images from R2
     if (body.isPublic !== undefined && thread.slug) {
-      await invalidatePublicThreadCache(db, thread.slug, c.env.UPLOADS_R2_BUCKET);
+      await invalidatePublicThreadCache(db, thread.slug, id, c.env.UPLOADS_R2_BUCKET);
     }
 
     // ✅ NEW MESSAGE CREATION: Create user message if provided
@@ -1308,7 +1308,7 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
     // ✅ PUBLIC THREAD CACHE: Invalidate if thread was public
     // Also clears cached OG images from R2
     if (thread.isPublic && thread.slug) {
-      await invalidatePublicThreadCache(db, thread.slug, c.env.UPLOADS_R2_BUCKET);
+      await invalidatePublicThreadCache(db, thread.slug, id, c.env.UPLOADS_R2_BUCKET);
     }
 
     return Responses.ok(c, {
@@ -1458,32 +1458,33 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     // ✅ PUBLIC PAGE FIX: Exclude incomplete rounds from public view
     // Incomplete rounds (mid-stream) can cause duplications when the same user
     // views the public page. Only show rounds that are fully complete.
-    // A round is complete when it has all enabled participant responses.
-    const enabledParticipantCount = participants.length;
-
-    // Count participant responses per round
-    const roundParticipantCounts = new Map<number, number>();
+    //
+    // ✅ BUG FIX: Handle participant changes after round completion
+    // Previous bug: If participants were added after round completion, old rounds
+    // would be filtered out because assistantCount < enabledParticipantCount.
+    //
+    // NEW APPROACH: A round is considered complete if it has AT LEAST ONE assistant
+    // response. For public threads (historical data), we trust that rounds were
+    // complete when the thread was made public. The strict "all participants
+    // responded" check fails when participants are added/removed post-publication.
     const roundHasUserMessage = new Map<number, boolean>();
+    const roundHasAssistantResponse = new Map<number, boolean>();
 
     for (const msg of allMessages) {
       const round = msg.roundNumber;
       if (msg.role === MessageRoles.USER) {
         roundHasUserMessage.set(round, true);
-      } else if (msg.role === MessageRoles.ASSISTANT) {
-        roundParticipantCounts.set(round, (roundParticipantCounts.get(round) ?? 0) + 1);
+      } else if (msg.role === MessageRoles.ASSISTANT && msg.participantId) {
+        roundHasAssistantResponse.set(round, true);
       }
     }
 
     // Determine which rounds are complete
-    // A round is complete if it has a user message AND all participants have responded
+    // A round is complete if it has a user message AND at least one assistant response
     const completeRounds = new Set<number>();
     for (const [round, hasUser] of roundHasUserMessage) {
-      if (hasUser) {
-        const participantCount = roundParticipantCounts.get(round) ?? 0;
-        // Round is complete if all enabled participants have responded
-        if (participantCount >= enabledParticipantCount) {
-          completeRounds.add(round);
-        }
+      if (hasUser && roundHasAssistantResponse.get(round)) {
+        completeRounds.add(round);
       }
     }
 

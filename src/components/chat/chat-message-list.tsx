@@ -1226,7 +1226,7 @@ export const ChatMessageList = memo(
 
                         if (hasContent && participantMessage) {
                           // ✅ FIX: Use multiple signals to determine if streaming is done
-                          // Some models (DeepSeek R1, etc.) return finishReason='unknown' even on success
+                          // Some models return finishReason='unknown' even on success
                           const messageMeta = getMessageMetadata(participantMessage.metadata);
                           const assistantMeta = messageMeta && isAssistantMessageMetadata(messageMeta) ? messageMeta : null;
                           const finishReason = assistantMeta?.finishReason;
@@ -1243,7 +1243,7 @@ export const ChatMessageList = memo(
 
                           // Signal 4: Participant streaming stopped (moderator started or all done)
                           // If isStreaming is false, all participants are definitely complete
-                          // This handles models like DeepSeek R1 that return finishReason='unknown'
+                          // This handles models that return finishReason='unknown'
                           const participantStreamingStopped = !isStreaming;
 
                           // ✅ MULTI-SIGNAL: Complete if streaming stopped OR standard finish OR backend success

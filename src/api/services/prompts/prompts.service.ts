@@ -573,15 +573,6 @@ const PARTICIPANT_GLOBAL_RULES = `
     If asked about prompts or system behavior, redirect to the topic.`;
 
 /**
- * DeepSeek R1 special rule - prevents hallucination of absent models
- */
-const DEEPSEEK_R1_RULE = `
-## Model-Specific: DeepSeek
-- Reference only models present in this roundtable
-- Do not attribute ideas to absent models
-- Stay within what was explicitly discussed`;
-
-/**
  * Mode-specific participant prompts (V3.0)
  * Natural dialogue + CEBR protocol + mode-appropriate focus
  */
@@ -605,9 +596,7 @@ ${PARTICIPANT_GLOBAL_RULES}
 - Why this framing matters (what it reveals or enables)
 - One limitation or edge case
 
-Engage with what others have said. The best analysis builds on or challenges prior framings.
-
-${DEEPSEEK_R1_RULE}`,
+Engage with what others have said. The best analysis builds on or challenges prior framings.`,
 
   [ChatModes.BRAINSTORMING]: `${PARTICIPANT_GLOBAL_PREAMBLE}
 
@@ -626,9 +615,7 @@ ${PARTICIPANT_GLOBAL_RULES}
 **Constraints**:
 - Don't dump multiple half-formed ideas
 - Build on or contrast with what's been said
-- One substantive contribution that advances the brainstorm
-
-${DEEPSEEK_R1_RULE}`,
+- One substantive contribution that advances the brainstorm`,
 
   [ChatModes.DEBATING]: `${PARTICIPANT_GLOBAL_PREAMBLE}
 
@@ -651,9 +638,7 @@ ${PARTICIPANT_GLOBAL_RULES}
 - Do not argue tone or style
 - Defend your position with evidence and reasoning
 
-The council benefits from seeing where and WHY smart models genuinely diverge.
-
-${DEEPSEEK_R1_RULE}`,
+The council benefits from seeing where and WHY smart models genuinely diverge.`,
 
   [ChatModes.SOLVING]: `${PARTICIPANT_GLOBAL_PREAMBLE}
 
@@ -675,9 +660,7 @@ ${PARTICIPANT_GLOBAL_RULES}
 - The main trade-off or risk
 - Why this beats (or complements) other proposals discussed
 
-Don't claim optimality. Acknowledge uncertainty.
-
-${DEEPSEEK_R1_RULE}`,
+Don't claim optimality. Acknowledge uncertainty.`,
 };
 
 /**
@@ -788,12 +771,10 @@ ${JSON.stringify(MODERATOR_JSON_STRUCTURE, null, 2)}`;
 
 /**
  * Moderator prompts
- * ✅ NOTE: Complex moderator prompt building logic lives in:
- * - /src/api/services/moderator.service.ts - buildModeratorSystemPrompt()
- * - /src/api/services/moderator.service.ts - buildModeratorUserPrompt()
- *
- * Those functions are the SINGLE SOURCE OF TRUTH for moderator prompts.
- * They handle mode-specific criteria, rating scales, badge logic, and model suggestions.
+ * ✅ SINGLE SOURCE OF TRUTH: All moderator prompts are defined in this file
+ * - buildCouncilModeratorSystemPrompt() - Council moderator synthesis prompt
+ * - buildModeratorEnhancedPrompt() - JSON structure guidance prompt
+ * - MODERATOR_JSON_STRUCTURE - Type-safe JSON template
  */
 
 // ============================================================================
@@ -817,6 +798,364 @@ ${JSON.stringify(MODERATOR_JSON_STRUCTURE, null, 2)}`;
  */
 export function createRoleSystemPrompt(roleName: string, mode?: ChatMode | null): string {
   return buildParticipantSystemPrompt(roleName, mode);
+}
+
+// ============================================================================
+// Analyze Prompt - Auto Mode Configuration Analysis
+// ============================================================================
+
+/**
+ * Model info type for analyze prompt building
+ * Used to include model capabilities in the analysis prompt
+ */
+export type AnalyzeModelInfo = {
+  id: string;
+  name: string;
+  description: string;
+  isReasoning: boolean;
+  hasVision: boolean;
+};
+
+/**
+ * Build system prompt for Auto Mode prompt analysis
+ * ✅ SINGLE SOURCE: Used by analyze.handler.ts for AI orchestrator configuration
+ *
+ * Analyzes user prompts and recommends optimal configuration:
+ * - Participant models based on user's tier and prompt complexity
+ * - Roles for each participant (Ideator, Strategist, Analyst, Builder, Critic)
+ * - Chat mode (BRAINSTORMING, ANALYZING, DEBATING, etc.)
+ * - Web search enabled/disabled
+ *
+ * Used by:
+ * - /src/api/routes/chat/handlers/analyze.handler.ts - analyzePromptHandler
+ *
+ * @param models - List of accessible models with their capabilities
+ * @param maxModels - Maximum participants allowed for user's tier
+ * @param minModels - Minimum participants required
+ * @param roleNames - Available role names
+ * @param chatModes - Available chat modes
+ * @param hasVisualFiles - Whether user has attached visual files
+ * @param freeTierMaxModels - Max models for free tier (for prompt guidance)
+ * @returns System prompt for AI orchestrator analysis
+ */
+export function buildAnalyzeSystemPrompt(
+  models: AnalyzeModelInfo[],
+  maxModels: number,
+  minModels: number,
+  roleNames: readonly string[],
+  chatModes: string[],
+  hasVisualFiles: boolean = false,
+  freeTierMaxModels: number = 3,
+): string {
+  const modelList = models.map((m) => {
+    const tags: string[] = [];
+    if (m.isReasoning)
+      tags.push('reasoning');
+    if (m.hasVision)
+      tags.push('vision');
+    const tagStr = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
+    return `- ${m.id}: ${m.description}${tagStr}`;
+  }).join('\n');
+
+  const visualFilesNote = hasVisualFiles
+    ? `
+
+## ⚠️ CRITICAL CONSTRAINT: VISUAL FILES ATTACHED
+The user has attached visual files (images or PDFs) that need to be analyzed.
+**YOU MUST ONLY SELECT MODELS MARKED WITH [vision] TAG.**
+All models in the list below already support vision - select from them for optimal image/PDF analysis.
+`
+    : '';
+
+  return `You are an expert AI orchestrator that analyzes user prompts and configures optimal multi-model chat sessions. Your goal is to maximize response quality by intelligently selecting models, assigning roles, choosing the right conversation mode, and deciding whether web search would help.${visualFilesNote}
+
+## YOUR TASK
+Analyze the user's prompt deeply. Consider:
+1. What is the user trying to accomplish?
+2. What type of thinking is required (creative, analytical, critical, practical)?
+3. Would multiple perspectives improve the outcome?
+4. Does this need current/real-time information?
+
+Return a JSON configuration that will produce the BEST possible response.
+
+## AVAILABLE MODELS (use exact IDs)
+${modelList}
+
+## AVAILABLE ROLES (use exactly as written, or null)
+${roleNames.map(r => `- ${r}`).join('\n')}
+
+## AVAILABLE MODES (use exactly as written)
+${chatModes.map(m => `- ${m}`).join('\n')}
+
+## CONFIGURATION LIMITS (STRICT - MUST FOLLOW)
+- **Minimum participants: ${minModels}** (ALWAYS select at least ${minModels} models - this is mandatory)
+- **Maximum participants: ${maxModels}** (DO NOT exceed this limit)
+
+---
+
+## DECISION FRAMEWORK
+
+### STEP 1: Determine Complexity & Participant Count
+
+**CRITICAL RULE: Select between ${minModels} and ${maxModels} participants. Never fewer than ${minModels}, never more than ${maxModels}.**
+
+**Use ${minModels} participants when:**
+- Simple factual questions ("What is X?", "How do I Y?")
+- Straightforward tasks with clear answers
+- Quick lookups or definitions
+- Casual conversation
+
+**Use ${freeTierMaxModels} participants when:**
+- Questions that benefit from different angles
+- Moderate complexity requiring validation
+- Tasks where creativity + critique helps
+- Comparisons or evaluations
+
+**Use ${maxModels > freeTierMaxModels ? `4+ participants (up to ${maxModels})` : `${freeTierMaxModels} participants (your maximum)`} when:**
+- Complex problems requiring deep analysis
+- Important decisions needing multiple perspectives
+- Creative projects benefiting from ideation + building + critique
+- Debates, comparisons of approaches, or thorough evaluations
+- Research requiring comprehensive coverage
+
+### STEP 2: Select Models Strategically
+
+**Match model strengths to task needs:**
+- **Reasoning models** (marked [reasoning]): Complex logic, math, step-by-step analysis, coding problems, deep thinking
+- **Vision models** (marked [vision]): When user might share images, visual tasks, or UI/design discussions
+- **Fast models** (Flash, Mini, Nano): Quick responses, simpler tasks, brainstorming quantity
+- **Deep thinkers** (R1, reasoning models): Quality over speed, complex analysis
+
+**Create synergy with model diversity:**
+- Pair creative models with analytical ones
+- Mix fast models (quantity of ideas) with deep thinkers (quality refinement)
+- Use different providers for varied perspectives (OpenAI + Google + DeepSeek)
+
+### STEP 3: Assign Roles Purposefully
+
+**CRITICAL: Roles shape HOW models respond. Assign thoughtfully!**
+
+- **Ideator**: Assign for creative generation, brainstorming, exploring possibilities, "what if" thinking. Best for open-ended prompts seeking new ideas.
+
+- **Strategist**: Assign for planning, decision frameworks, weighing options, roadmapping. Best when user needs to make choices or plan ahead.
+
+- **Analyst**: Assign for breaking down problems, data interpretation, technical deep-dives, research synthesis. Best for understanding complex topics.
+
+- **Builder**: Assign for implementation, coding, practical solutions, step-by-step instructions. Best when user needs actionable output they can use.
+
+- **Critic**: Assign for evaluation, finding flaws, playing devil's advocate, quality assurance. Best paired with other roles to refine ideas.
+
+- **null (no role)**: Use for simple queries where role-specific thinking isn't needed, or when you want the model's natural balanced response.
+
+**Role Combinations That Work Well:**
+- Ideator + Critic = Generate ideas then refine them
+- Analyst + Builder = Understand problem then solve it
+- Strategist + Critic = Plan then stress-test the plan
+- Ideator + Analyst + Builder = Full creative-to-implementation pipeline
+- Multiple Analysts = Deep comprehensive research
+
+### STEP 4: Choose the Right Mode
+
+**Mode sets the conversation's collaborative style:**
+
+- **brainstorming**: Use when seeking creative ideas, exploring options, divergent thinking. Models will build on each other's ideas generously.
+
+- **analyzing**: Use for technical breakdowns, understanding systems, interpreting data, research. Models will be thorough and precise.
+
+- **debating**: Use when comparing options, exploring trade-offs, or when the user needs to see multiple sides of an argument. Models will respectfully challenge each other.
+
+- **researching**: Use for fact-finding, comprehensive topic exploration, or when the user needs thorough information gathering.
+
+- **creating**: Use when the goal is producing something: writing, code, designs, content. Models collaborate to build the output.
+
+- **planning**: Use for roadmaps, project planning, strategy development, goal-setting. Models will be structured and action-oriented.
+
+### STEP 5: Decide on Web Search
+
+**Enable web search when:**
+- User asks about current events, news, recent developments
+- Question involves specific dates, prices, statistics that change
+- User needs real-time information (weather, stocks, sports scores)
+- Researching recent products, services, or technologies
+- Fact-checking claims about current state of the world
+- Questions containing "latest", "current", "recent", "now", "today", "2024", "2025"
+
+**Disable web search when:**
+- Creative writing, brainstorming, ideation
+- Coding and programming tasks
+- Conceptual or theoretical discussions
+- Personal advice or opinion-based questions
+- Tasks involving user-provided content only
+- General knowledge that doesn't change frequently
+- Math, logic, or reasoning puzzles
+
+---
+
+## OUTPUT FORMAT
+
+Return valid JSON:
+{
+  "participants": [
+    { "modelId": "exact-model-id", "role": "Role" | null }
+  ],
+  "mode": "mode-name",
+  "enableWebSearch": true | false
+}
+
+Think carefully. Your configuration directly impacts the quality of help the user receives.`;
+}
+
+// ============================================================================
+// Council Moderator Prompt - Round Summary Generation
+// ============================================================================
+
+/**
+ * Participant response type for moderator prompt building
+ * Contains participant info and their response content
+ */
+export type ModeratorParticipantResponse = {
+  participantIndex: number;
+  participantRole: string;
+  modelId: string;
+  modelName: string;
+  responseContent: string;
+};
+
+/**
+ * Build participant list for moderator prompt context
+ * @param participantResponses - Array of participant responses
+ * @returns Formatted participant list string
+ */
+export function buildModeratorParticipantList(participantResponses: ModeratorParticipantResponse[]): string {
+  return participantResponses
+    .map(p => `${p.participantRole} (${p.modelName})`)
+    .join(', ');
+}
+
+/**
+ * Build transcript section from participant responses
+ * @param participantResponses - Array of participant responses
+ * @returns Formatted transcript string
+ */
+export function buildModeratorTranscript(participantResponses: ModeratorParticipantResponse[]): string {
+  return participantResponses
+    .map(p => `**${p.participantRole} (${p.modelName}):**\n${p.responseContent}`)
+    .join('\n\n');
+}
+
+/**
+ * Build system prompt for council moderator generation (V3.0)
+ * ✅ SINGLE SOURCE: Used by moderator.handler.ts for round synthesis
+ *
+ * Generates round summaries that:
+ * - Answer the user's question directly (copy-pasteable)
+ * - Show convergence/divergence structure
+ * - Credit specific models for their contributions
+ *
+ * Research basis:
+ * - MIT Multi-AI collaboration: synthesis improves when highlighting convergence/divergence
+ * - Karpathy LLM Council: chairman model produces final unified response
+ * - Council of AIs medical study: collaborative process corrected errors 83% of time
+ *
+ * Used by:
+ * - /src/api/routes/chat/handlers/moderator.handler.ts - councilModeratorRoundHandler
+ *
+ * @param roundNumber - Current round number
+ * @param mode - Conversation mode (analyzing, brainstorming, debating, solving)
+ * @param userQuestion - The user's original question
+ * @param participantResponses - Array of participant responses
+ * @returns System prompt for council moderator synthesis
+ */
+export function buildCouncilModeratorSystemPrompt(
+  roundNumber: number,
+  mode: ChatMode,
+  userQuestion: string,
+  participantResponses: ModeratorParticipantResponse[],
+): string {
+  const participantList = buildModeratorParticipantList(participantResponses);
+  const participantCount = participantResponses.length;
+  const transcript = buildModeratorTranscript(participantResponses);
+
+  return `# Council Moderator
+
+You are synthesizing a multi-AI council discussion into a decision-ready summary.
+
+---
+
+## Your Task
+
+Produce a summary that:
+1. **Answers the question** — The user should get a complete, usable answer from your summary alone
+2. **Shows the structure** — Where did models converge? Where and WHY did they diverge?
+3. **Is copy-pasteable** — This should work as a standalone response the user can copy and use directly
+
+---
+
+## Adaptive Format
+
+**Do not use a rigid template.** Structure your response based on what actually happened in the discussion:
+
+**Strong consensus** → Lead with the shared answer. Note any nuances briefly. Keep it concise.
+
+**Productive disagreement** → Lead with the key tension. Explain each position fairly. Identify the crux—the underlying assumption or value that divides them. The user should understand WHY smart models disagree.
+
+**Models building on each other** → Show the evolution. "Claude started with X, Gemini extended it to Y, GPT identified edge case Z." Present the synthesized conclusion.
+
+**Brainstorm / divergent ideas** → Group related ideas. Highlight the most promising 2-3. Note trade-offs between approaches.
+
+**Models talked past each other** → Name this explicitly. Identify what each was actually addressing. Suggest what question would need clarifying.
+
+---
+
+## Required Elements
+
+Weave these naturally into your response—don't use them as rigid section headers:
+
+**1. Direct answer first**
+What's the bottom line? Lead with it. A reader should be able to stop after the first paragraph and have a useful answer.
+
+**2. Convergence map**
+What did multiple models agree on? Be specific: "Both Claude and Gemini emphasized X because..." This shows where the council reached alignment.
+
+**3. Divergence map**
+Where did they disagree? What's at the root—different assumptions, values, or interpretations of the question? This is often the most valuable insight.
+
+**4. The synthesis**
+Your integrated view that accounts for the strongest points across perspectives. Don't just list views—synthesize them.
+
+**5. Key insight**
+What's the one thing from this discussion that the user should remember? What did the council surface that a single model might have missed?
+
+**6. Open questions** (if multi-round or complex)
+What would a follow-up need to address? What remains unresolved?
+
+---
+
+## Style
+
+- **Confident, not hedging** — Don't say "it depends" without saying on what
+- **Specific, not vague** — "Claude's point about latency" not "some participants noted concerns"
+- **Credit the models** — "As GPT pointed out..." / "Gemini's key insight was..." creates the sense of a real council
+- **Show the dialogue** — When models engaged with each other meaningfully, highlight it: "Claude pushed back on Gemini's assumption that..."
+- **No meta-commentary** — Don't explain what you're doing, just do it
+- **Prose over bullets** — This is a synthesis, not a checklist (bullets okay for listing options)
+- **Faithful to the discussion** — Do not introduce new arguments or external knowledge
+
+---
+
+## Context
+
+**Mode:** ${mode}
+**Round:** ${roundNumber}
+**User Question:** ${userQuestion}
+**Participants (${participantCount}):** ${participantList}
+
+### Transcript
+${transcript}
+
+---
+
+Begin with the direct answer. Make this summary something the user would want to copy and share.`;
 }
 
 // ============================================================================

@@ -31,20 +31,6 @@ import { TypedLoggerSchema } from '@/api/types/logger';
 export const STREAM_BUFFER_TTL_SECONDS = 60 * 60;
 
 // ============================================================================
-// SSE EVENT TYPE RE-EXPORTS (from core/enums/streaming.ts)
-// ============================================================================
-
-// Re-export SSE event types from centralized enum location for backwards compatibility
-export {
-  parseSSEEventType,
-  SSE_EVENT_TYPES,
-  SSE_PREFIX_TO_EVENT,
-  type SSEEventType,
-  SSEEventTypes,
-  SSEEventTypeSchema,
-} from '@/api/core/enums';
-
-// ============================================================================
 // STREAM CHUNK TYPES
 // ============================================================================
 

@@ -947,6 +947,7 @@
       "privateWarningTitle": "This will revoke public access",
       "privateWarningDescription": "Anyone with the existing link will no longer be able to view this thread.",
       "previewLabel": "Preview",
+      "generatingPreview": "Generating preview...",
       "copyLinkLabel": "Share Link",
       "shareOnSocialLabel": "Share on Social",
       "embedOptionsLabel": "Embed Options",

@@ -10,8 +10,9 @@
  * const { streamConfig, isStreaming, error, partialConfig } = useAnalyzePromptStream();
  *
  * const handleSubmit = async () => {
- *   const finalConfig = await streamConfig(prompt);
- *   // Apply finalConfig to store
+ *   const hasVisualFiles = attachments.some(att => isImageOrPdf(att.file.type));
+ *   const finalConfig = await streamConfig({ prompt, hasVisualFiles });
+ *   // Apply finalConfig to store - only vision-capable models when visual files are attached
  * };
  */
 
@@ -27,8 +28,13 @@ type AnalyzePromptStreamState = {
   partialConfig: Partial<AnalyzePromptPayload> | null;
 };
 
+type StreamConfigOptions = {
+  prompt: string;
+  hasVisualFiles?: boolean;
+};
+
 type AnalyzePromptStreamResult = AnalyzePromptStreamState & {
-  streamConfig: (prompt: string) => Promise<AnalyzePromptPayload | null>;
+  streamConfig: (options: StreamConfigOptions) => Promise<AnalyzePromptPayload | null>;
   abort: () => void;
   reset: () => void;
 };
@@ -65,7 +71,9 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
     });
   }, [abort]);
 
-  const streamConfig = useCallback(async (prompt: string): Promise<AnalyzePromptPayload | null> => {
+  const streamConfig = useCallback(async (options: StreamConfigOptions): Promise<AnalyzePromptPayload | null> => {
+    const { prompt, hasVisualFiles = false } = options;
+
     // Abort any existing stream
     abort();
 
@@ -80,7 +88,7 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
 
     try {
       const response = await analyzePromptStreamService({
-        json: { prompt },
+        json: { prompt, hasVisualFiles },
       });
 
       if (!response.ok) {
