@@ -182,8 +182,8 @@ describe('product Logic Service', () => {
     });
 
     it('free tier has limited model access', () => {
-      expect(TIER_CONFIG.free.maxModelPricing).toBe(0.10);
-      expect(MAX_MODEL_PRICING_BY_TIER.free).toBe(0.10);
+      expect(TIER_CONFIG.free.maxModelPricing).toBe(0.20);
+      expect(MAX_MODEL_PRICING_BY_TIER.free).toBe(0.20);
     });
   });
 });

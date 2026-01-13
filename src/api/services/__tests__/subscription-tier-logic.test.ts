@@ -323,10 +323,10 @@ describe('output Token Limits by Plan', () => {
 });
 
 describe('model Access by Plan', () => {
-  it('free tier has $0.10 per 1M tokens pricing limit', () => {
+  it('free tier has $0.20 per 1M tokens pricing limit', () => {
     const freeConfig = TIER_CONFIG.free;
 
-    expect(freeConfig.maxModelPricing).toBe(0.10);
+    expect(freeConfig.maxModelPricing).toBe(0.20);
   });
 
   it('pro tier has NO model pricing limit', () => {
@@ -335,14 +335,14 @@ describe('model Access by Plan', () => {
     expect(proConfig.maxModelPricing).toBeNull();
   });
 
-  it('free tier can access budget models (<= $0.10/1M tokens)', () => {
-    const budgetModel = createMockModel(0.05, 0.10); // $0.05 input, $0.10 output per 1M tokens
+  it('free tier can access budget models (<= $0.20/1M tokens)', () => {
+    const budgetModel = createMockModel(0.05, 0.20); // $0.05 input, $0.20 output per 1M tokens
     const canAccess = canAccessModelByPricing(SubscriptionTiers.FREE, budgetModel);
 
     expect(canAccess).toBe(true);
   });
 
-  it('free tier CANNOT access premium models (> $0.10/1M tokens)', () => {
+  it('free tier CANNOT access premium models (> $0.20/1M tokens)', () => {
     const premiumModel = createMockModel(5.00, 15.00); // $5 input, $15 output per 1M tokens
     const canAccess = canAccessModelByPricing(SubscriptionTiers.FREE, premiumModel);
 
@@ -350,7 +350,7 @@ describe('model Access by Plan', () => {
   });
 
   it('pro tier can access all models regardless of pricing', () => {
-    const budgetModel = createMockModel(0.05, 0.10);
+    const budgetModel = createMockModel(0.05, 0.20);
     const premiumModel = createMockModel(5.00, 15.00);
     const flagshipModel = createMockModel(30.00, 60.00);
 
@@ -695,7 +695,7 @@ describe('default/Fallback Plan Behavior', () => {
 
     expect(config.name).toBe('Free');
     expect(config.maxOutputTokens).toBe(512);
-    expect(config.maxModelPricing).toBe(0.10);
+    expect(config.maxModelPricing).toBe(0.20);
     expect(config.quotas.threadsPerMonth).toBe(1);
   });
 });

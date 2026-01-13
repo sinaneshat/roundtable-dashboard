@@ -65,7 +65,7 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
   free: {
     name: 'Free',
     maxOutputTokens: 512,
-    maxModelPricing: 0.10, // Allows budget models from multiple providers (<= $0.10/1M tokens)
+    maxModelPricing: 0.20, // 5 budget models: 3 OpenAI + 1 DeepSeek + 1 X-AI (<= $0.20/1M tokens)
     maxModels: 3,
     quotas: {
       threadsPerMonth: 1,

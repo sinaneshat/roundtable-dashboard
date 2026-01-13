@@ -364,11 +364,11 @@ describe('product Logic - Quota and Tier Configuration', () => {
         expect(getModelCostCategory(mockFreeModel)).toBe('free');
       });
 
-      it('categorizes low-cost models ($0.10-$1.00)', () => {
+      it('categorizes low-cost models ($0.35-$1.00)', () => {
         const lowCostModel = {
           ...mockFreeModel,
-          pricing: { prompt: '0.00000025', completion: '0.0000005' }, // $0.25/1M
-          pricing_display: { input: '$0.25', output: '$0.50' },
+          pricing: { prompt: '0.0000005', completion: '0.000001' }, // $0.50/1M
+          pricing_display: { input: '$0.50', output: '$1.00' },
         };
         expect(getModelCostCategory(lowCostModel)).toBe('low');
       });
