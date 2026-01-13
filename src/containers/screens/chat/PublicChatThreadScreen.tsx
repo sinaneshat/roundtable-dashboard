@@ -18,7 +18,6 @@ import { chatMessagesToUIMessages, transformChatParticipants, transformPreSearch
 
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const t = useTranslations();
-  const tPublic = useTranslations('chat.public');
 
   // Use hydrated data from server prefetch - no loading flash with proper HydrationBoundary
   const { data: threadData, isPending } = usePublicThreadQuery(slug);
@@ -57,7 +56,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-muted-foreground">{tPublic('loadingPublicChat')}</p>
+          <p className="text-sm text-muted-foreground">{t('chat.public.loadingPublicChat')}</p>
         </div>
       </div>
     );
@@ -94,13 +93,13 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
             <Icons.lock className="w-8 h-8 text-destructive" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold">{tPublic('privateChat')}</h2>
+            <h2 className="text-2xl font-bold">{t('chat.public.privateChat')}</h2>
             <p className="text-muted-foreground">
-              {tPublic('privateChatDescription')}
+              {t('chat.public.privateChatDescription')}
             </p>
           </div>
           <Button asChild variant={ComponentVariants.DEFAULT}>
-            <Link href="/">{tPublic('goHome')}</Link>
+            <Link href="/">{t('chat.public.goHome')}</Link>
           </Button>
         </div>
       </div>
@@ -157,17 +156,17 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                       <div className="relative rounded-xl border border-white/20 dark:border-white/10 bg-background/50 backdrop-blur-sm p-8 dark:shadow-[0px_0px_27px_0px_#2D2D2D] text-center">
                         <Icons.sparkles className="size-6 text-primary mx-auto mb-4" />
                         <h3 className="text-lg font-semibold mb-2">
-                          {tPublic('ctaHeadline')}
+                          {t('chat.public.ctaHeadline')}
                         </h3>
                         <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-                          {tPublic('ctaDescription')}
+                          {t('chat.public.ctaDescription')}
                         </p>
                         <Button asChild>
                           <Link
                             href="/auth/sign-up?utm_source=public_chat&utm_medium=bottom_cta&utm_campaign=try_free"
                             className="flex items-center gap-2"
                           >
-                            <span>{tPublic('getStartedFree')}</span>
+                            <span>{t('chat.public.getStartedFree')}</span>
                             <Icons.arrowRight className="size-4" />
                           </Link>
                         </Button>

@@ -20,7 +20,7 @@ export const ChatAutoModeToggle = memo(({
   isAnalyzing = false,
   disabled = false,
 }: ChatAutoModeToggleProps) => {
-  const t = useTranslations('chat.autoMode');
+  const t = useTranslations();
 
   const handleAutoClick = useCallback(() => {
     if (!disabled && !isAnalyzing) {
@@ -43,7 +43,7 @@ export const ChatAutoModeToggle = memo(({
         disabled && 'opacity-50 pointer-events-none',
       )}
       role="radiogroup"
-      aria-label={t('label')}
+      aria-label={t('chat.autoMode.label')}
     >
       {/* Auto Button */}
       <motion.button
@@ -109,7 +109,7 @@ export const ChatAutoModeToggle = memo(({
               )}
             />
           </motion.div>
-          <span>{isAnalyzing ? t('analyzing') : t('label')}</span>
+          <span>{isAnalyzing ? t('chat.autoMode.analyzing') : t('chat.autoMode.label')}</span>
         </motion.div>
       </motion.button>
 
@@ -143,7 +143,7 @@ export const ChatAutoModeToggle = memo(({
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
           />
         )}
-        <span className="relative z-10">{t('manualLabel')}</span>
+        <span className="relative z-10">{t('chat.autoMode.manualLabel')}</span>
       </motion.button>
     </div>
   );

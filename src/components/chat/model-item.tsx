@@ -30,7 +30,7 @@ function RoleBadgeDisplay({
   displayRole,
   onOpenRolePanel,
   onClearRole,
-  tModels,
+  tModels: t,
 }: RoleBadgeDisplayProps) {
   return (
     <div
@@ -61,7 +61,7 @@ function RoleBadgeDisplay({
                   onClearRole();
                 }}
                 className="shrink-0 p-0.5 rounded-full hover:bg-white/[0.07] transition-colors"
-                aria-label={tModels('clearRole')}
+                aria-label={t('chat.models.clearRole')}
               >
                 <Icons.x className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               </button>
@@ -77,7 +77,7 @@ function RoleBadgeDisplay({
               }}
             >
               <Icons.plus className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
-              {tModels('addRole')}
+              {t('chat.models.addRole')}
             </button>
           )}
     </div>
@@ -107,7 +107,7 @@ export function ModelItem({
   isIncompatibleWithFiles = false,
   pendingRole,
 }: ModelItemProps) {
-  const tModels = useTranslations('chat.models');
+  const t = useTranslations();
   const dragControls = useDragControls();
   const [isDragging, setIsDragging] = useState(false);
   const { model, participant } = orderedModel;
@@ -151,18 +151,18 @@ export function ModelItem({
             )}
             {isDisabledDueToLimit && !isDisabledDueToTier && (
               <Badge variant="outline" className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-warning/50 text-warning shrink-0">
-                {tModels('limitReached')}
+                {t('chat.models.limitReached')}
               </Badge>
             )}
             {/* Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop */}
             {showFileIncompatibilityWarning && !isDisabledDueToTier && !isDisabledDueToLimit && (
               <Badge
                 variant="outline"
-                title={tModels('noVisionTooltip')}
+                title={t('chat.models.noVisionTooltip')}
                 className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1"
               >
                 <Icons.eyeOff className="size-2.5 sm:size-3" />
-                {tModels('noVision')}
+                {t('chat.models.noVision')}
               </Badge>
             )}
 
@@ -171,7 +171,7 @@ export function ModelItem({
                 displayRole={participant?.role ?? pendingRole?.role}
                 onOpenRolePanel={onOpenRolePanel}
                 onClearRole={onClearRole}
-                tModels={tModels}
+                tModels={t}
               />
             )}
           </div>
@@ -187,7 +187,7 @@ export function ModelItem({
               href="/chat/pricing"
               className="shrink-0 p-1 sm:p-1.5 rounded-full touch-manipulation"
               onClick={e => e.stopPropagation()}
-              aria-label={tModels('upgradeToUnlock')}
+              aria-label={t('chat.models.upgradeToUnlock')}
             >
               <Icons.lock className="size-4 sm:size-5 text-amber-400" />
             </Link>

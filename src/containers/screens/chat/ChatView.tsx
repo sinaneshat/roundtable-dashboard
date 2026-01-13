@@ -71,7 +71,7 @@ export function ChatView({
   chatAttachments,
   threadId: serverThreadId,
 }: ChatViewProps) {
-  const t = useTranslations('chat');
+  const t = useTranslations();
 
   const isModeModalOpen = useBoolean(false);
   const isModelModalOpen = useBoolean(false);
@@ -336,8 +336,8 @@ export function ChatView({
         : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;
 
       toastManager.warning(
-        t('models.modelsDeselected'),
-        t('models.modelsDeselectedDescription', { models: modelList }),
+        t('chat.models.modelsDeselected'),
+        t('chat.models.modelsDeselectedDescription', { models: modelList }),
       );
     }
   }, [mode, incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, messages, threadActions, setSelectedParticipants, allEnabledModels, t, chatAttachments.attachments]);
@@ -486,8 +486,8 @@ export function ChatView({
       const latestIncompatible = incompatibleModelIdsRef.current;
       if (latestIncompatible.has(modelId)) {
         toastManager.warning(
-          t('models.cannotSelectModel'),
-          t('models.modelIncompatibleWithFiles'),
+          t('chat.models.cannotSelectModel'),
+          t('chat.models.modelIncompatibleWithFiles'),
         );
         return;
       }
@@ -625,7 +625,7 @@ export function ChatView({
                   onSubmit={handleAutoModeSubmit}
                   disabled={isAnalyzingPrompt}
                   status={isInputBlocked ? 'submitted' : 'ready'}
-                  placeholder={t('input.placeholder')}
+                  placeholder={t('chat.input.placeholder')}
                   participants={selectedParticipants}
                   showCreditAlert={true}
                   attachments={chatAttachments.attachments}

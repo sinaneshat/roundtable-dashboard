@@ -161,6 +161,8 @@ type ParticipantMessageWrapperProps = {
   displayName?: string;
   /** Hide action buttons (for moderator where council actions handle it) */
   hideActions?: boolean;
+  /** Read-only mode for public/shared views without ChatStoreProvider */
+  isReadOnly?: boolean;
 };
 
 const ParticipantMessageWrapper = memo(({
@@ -178,6 +180,7 @@ const ParticipantMessageWrapper = memo(({
   avatarName: avatarNameOverride,
   displayName: displayNameOverride,
   hideActions = false,
+  isReadOnly = false,
 }: ParticipantMessageWrapperProps) => {
   const defaultAvatarProps = participant
     ? getAvatarPropsFromModelId(MessageRoles.ASSISTANT, participant.modelId, null, 'AI')
@@ -219,6 +222,7 @@ const ParticipantMessageWrapper = memo(({
           hideActions={hideActions}
           loadingText={loadingText}
           maxContentHeight={maxContentHeight}
+          isReadOnly={isReadOnly}
         />
       </div>
     </div>
@@ -515,7 +519,6 @@ export const ChatMessageList = memo(
     isReadOnly = false,
   }: ChatMessageListProps) => {
     const t = useTranslations();
-    const tParticipant = useTranslations('chat.participant');
     const { findModel } = useModelLookup({ enabled: !isReadOnly });
     const userInfo = useMemo(() => user || { name: 'User', image: null }, [user]);
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
@@ -1270,15 +1273,15 @@ export const ChatMessageList = memo(
 
                           if (isTheirTurn) {
                             if (participantIdx === 0 && preSearchActive) {
-                              loadingText = tParticipant('waitingForWebResults');
+                              loadingText = t('chat.participant.waitingForWebResults');
                             } else {
-                              loadingText = tParticipant('gatheringThoughts');
+                              loadingText = t('chat.participant.gatheringThoughts');
                             }
                           } else {
                             const currentSpeaker = enabledParticipants[effectiveCurrentIndex];
                             const currentSpeakerModel = currentSpeaker ? findModel(currentSpeaker.modelId) : null;
                             const currentSpeakerName = currentSpeakerModel?.name || currentSpeaker?.modelId || 'AI';
-                            loadingText = tParticipant('waitingNamed', { name: currentSpeakerName });
+                            loadingText = t('chat.participant.waitingNamed', { name: currentSpeakerName });
                           }
                         }
 
@@ -1300,6 +1303,7 @@ export const ChatMessageList = memo(
                               loadingText={loadingText}
                               maxContentHeight={maxContentHeight}
                               hideActions={demoMode}
+                              isReadOnly={isReadOnly}
                             />
                           </ScrollAwareParticipant>
                         );
@@ -1363,7 +1367,7 @@ export const ChatMessageList = memo(
                   // - When participants still streaming: "Waiting to synthesize..."
                   // - When participants done, moderator starting: "Observing discussion..."
                   const moderatorLoadingText = moderatorParts.length === 0
-                    ? (isStreaming ? tParticipant('waitingToSynthesize') : tParticipant('moderatorObserving'))
+                    ? (isStreaming ? t('chat.participant.waitingToSynthesize') : t('chat.participant.moderatorObserving'))
                     : undefined;
 
                   // ✅ FLASH FIX: Keep component mounted but hidden instead of return null
@@ -1404,6 +1408,7 @@ export const ChatMessageList = memo(
                           avatarName={MODERATOR_NAME}
                           displayName={MODERATOR_NAME}
                           hideActions
+                          isReadOnly={isReadOnly}
                         />
                       </ScrollAwareParticipant>
                     </div>
@@ -1562,12 +1567,13 @@ export const ChatMessageList = memo(
                   status={MessageStatuses.PENDING}
                   parts={[]}
                   isAccessible={true}
-                  loadingText={tParticipant('moderatorObserving')}
+                  loadingText={t('chat.participant.moderatorObserving')}
                   maxContentHeight={maxContentHeight}
                   avatarSrc={BRAND.logos.main}
                   avatarName={MODERATOR_NAME}
                   displayName={MODERATOR_NAME}
                   hideActions
+                  isReadOnly={isReadOnly}
                 />
               </ScrollAwareParticipant>
             </div>

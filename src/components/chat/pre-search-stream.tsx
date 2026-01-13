@@ -11,7 +11,7 @@ import { PreSearchResponseSchema } from '@/api/routes/chat/schema';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { Icons } from '@/components/icons';
-import { ChatStoreContext, useChatStore } from '@/components/providers';
+import { ChatStoreContext, useChatStoreOptional } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
@@ -49,22 +49,21 @@ function PreSearchStreamComponent({
 
   const store = use(ChatStoreContext);
 
-  const {
-    tryMarkPreSearchTriggered,
-    markPreSearchTriggered,
-    clearPreSearchTracking,
-    isWaitingForChangelog,
-    configChangeRoundNumber,
-  } = useChatStore(
+  const storeState = useChatStoreOptional(
     useShallow(s => ({
       tryMarkPreSearchTriggered: s.tryMarkPreSearchTriggered,
       markPreSearchTriggered: s.markPreSearchTriggered,
       clearPreSearchTracking: s.clearPreSearchTracking,
-      // ✅ FIX: Subscribe to changelog blocking flags
       isWaitingForChangelog: s.isWaitingForChangelog,
       configChangeRoundNumber: s.configChangeRoundNumber,
     })),
   );
+
+  const tryMarkPreSearchTriggered = storeState?.tryMarkPreSearchTriggered;
+  const markPreSearchTriggered = storeState?.markPreSearchTriggered;
+  const clearPreSearchTracking = storeState?.clearPreSearchTracking;
+  const isWaitingForChangelog = storeState?.isWaitingForChangelog ?? false;
+  const configChangeRoundNumber = storeState?.configChangeRoundNumber;
 
   const [partialSearchData, setPartialSearchData] = useState<Partial<PreSearchDataPayload> | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -103,6 +102,10 @@ function PreSearchStreamComponent({
   isAutoRetryingOnFalseRef.current = isAutoRetrying.onFalse;
 
   useEffect(() => {
+    if (!tryMarkPreSearchTriggered || !clearPreSearchTracking) {
+      return;
+    }
+
     if (isWaitingForChangelog || configChangeRoundNumber !== null) {
       return;
     }
@@ -367,7 +370,7 @@ function PreSearchStreamComponent({
   const isPollingRef = useRef(false);
 
   useEffect(() => {
-    if (!is409Conflict.value)
+    if (!is409Conflict.value || !clearPreSearchTracking)
       return;
 
     if (isPollingRef.current) {
@@ -469,6 +472,9 @@ function PreSearchStreamComponent({
   }, [is409Conflict.value, threadId, preSearch.id, preSearch.roundNumber, clearPreSearchTracking]);
 
   useEffect(() => {
+    if (!markPreSearchTriggered)
+      return;
+
     const currentState = store?.getState();
     const roundAlreadyMarked = currentState?.hasPreSearchBeenTriggered(preSearch.roundNumber) ?? false;
 
@@ -477,7 +483,7 @@ function PreSearchStreamComponent({
       && (preSearch.status === MessageStatuses.COMPLETE
         || preSearch.status === MessageStatuses.FAILED)
     ) {
-      markPreSearchTriggered(preSearch.roundNumber);
+      markPreSearchTriggered?.(preSearch.roundNumber);
     }
   }, [store, preSearch.roundNumber, preSearch.status, markPreSearchTriggered]);
 

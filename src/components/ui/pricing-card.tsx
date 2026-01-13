@@ -60,7 +60,7 @@ export function PricingCard({
   hasOtherSubscription = false,
   disabled = false,
 }: PricingCardProps) {
-  const t = useTranslations('pricing.card');
+  const t = useTranslations();
 
   const handleAction = () => {
     if (isCurrentPlan && onCancel) {
@@ -73,12 +73,12 @@ export function PricingCard({
 
   const getButtonText = () => {
     if (isCurrentPlan) {
-      return t('cancelSubscription');
+      return t('pricing.card.cancelSubscription');
     }
     if (hasOtherSubscription) {
-      return t('switchPlan');
+      return t('pricing.card.switchPlan');
     }
-    return t('getStarted');
+    return t('pricing.card.getStarted');
   };
 
   const isActionButtonLoading = isCurrentPlan ? isProcessingCancel : isProcessingSubscribe;
@@ -118,7 +118,7 @@ export function PricingCard({
         >
           <div className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow-lg">
             <Icons.check className="size-3" />
-            {t('currentPlan')}
+            {t('pricing.card.currentPlan')}
           </div>
         </motion.div>
       )}
@@ -211,10 +211,10 @@ export function PricingCard({
                   </div>
                   <div className="flex-1">
                     <span className="text-sm font-medium">
-                      {t(`valueProps.${prop.key}.title`)}
+                      {t(`pricing.card.valueProps.${prop.key}.title`)}
                     </span>
                     <p className="text-xs text-muted-foreground">
-                      {t(`valueProps.${prop.key}.description`)}
+                      {t(`pricing.card.valueProps.${prop.key}.description`)}
                     </p>
                   </div>
                 </motion.li>
@@ -242,11 +242,11 @@ export function PricingCard({
                     ? (
                         <span className="flex items-center justify-center gap-2">
                           <Icons.loader className="h-4 w-4 animate-spin" />
-                          {t('processing')}
+                          {t('pricing.card.processing')}
                         </span>
                       )
                     : (
-                        t('manageBilling')
+                        t('pricing.card.manageBilling')
                       )}
                 </HoverBorderGradient>
               )}
@@ -269,7 +269,7 @@ export function PricingCard({
                   ? (
                       <span className="flex items-center justify-center gap-2">
                         <Icons.loader className="h-4 w-4 animate-spin" />
-                        {t('processing')}
+                        {t('pricing.card.processing')}
                       </span>
                     )
                   : (

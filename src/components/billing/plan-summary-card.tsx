@@ -24,7 +24,7 @@ export function PlanOverviewCard({
   stats,
   activeUntil,
 }: PlanOverviewCardProps) {
-  const t = useTranslations('billing.success.planLimits');
+  const t = useTranslations();
 
   return (
     <Card className="w-full">
@@ -52,7 +52,7 @@ export function PlanOverviewCard({
         </div>
         {activeUntil && (
           <p className="text-xs text-muted-foreground pt-2 border-t">
-            {t('activeUntilLabel')}
+            {t('billing.success.planLimits.activeUntilLabel')}
             {' '}
             {activeUntil}
           </p>

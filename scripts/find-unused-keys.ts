@@ -66,17 +66,57 @@ async function getAllSourceFiles(): Promise<string[]> {
   return files;
 }
 
-function findKeyUsageInContent(content: string, key: string): boolean {
+function extractNamespacesFromFile(content: string): string[] {
+  const namespaces: string[] = [];
+
+  // Match getTranslations('namespace') and useTranslations('namespace')
+  const getTransPattern = /(?:getTranslations|useTranslations)\(['"`]([^'"`]+)['"`]\)/g;
+  let match;
+  while ((match = getTransPattern.exec(content)) !== null) {
+    namespaces.push(match[1]);
+  }
+
+  return namespaces;
+}
+
+function findKeyUsageInContent(content: string, key: string, namespaces: string[]): boolean {
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+  // Direct full key match: t('full.key.path')
   const directPattern = new RegExp(`t\\(['"\`]${escapedKey}['"\`][),]`, 'g');
   if (directPattern.test(content)) return true;
 
+  // Key used as string literal somewhere
   const templatePattern = new RegExp(`['"\`]${escapedKey}['"\`]`, 'g');
   if (templatePattern.test(content)) return true;
 
-  const namespacePattern = new RegExp(`useTranslations\\(['"\`]${escapedKey}['"\`]\\)`, 'g');
+  // useTranslations or getTranslations with this exact namespace
+  const namespacePattern = new RegExp(`(?:useTranslations|getTranslations)\\(['"\`]${escapedKey}['"\`]\\)`, 'g');
   if (namespacePattern.test(content)) return true;
+
+  // Check if key is accessed via a namespace: getTranslations('seo.keywords') -> t('aiCollaboration')
+  for (const ns of namespaces) {
+    if (key.startsWith(`${ns}.`)) {
+      const relativeKey = key.slice(ns.length + 1);
+      const escapedRelativeKey = relativeKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      // Match t('relativeKey'), tNamespace('relativeKey'), etc.
+      const relativePattern = new RegExp(`\\w*\\(['"\`]${escapedRelativeKey}['"\`]`, 'g');
+      if (relativePattern.test(content)) return true;
+    }
+  }
+
+  // Dynamic key construction: t(`prefix.${variable}.suffix`)
+  // Check if any part of the key path is used in a template literal
+  const keyParts = key.split('.');
+  for (let i = 0; i < keyParts.length; i++) {
+    const partialKey = keyParts.slice(0, i + 1).join('.');
+    const escapedPartialKey = partialKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // Match patterns like: t(`prefix.${var}.key`) where prefix matches
+    const dynamicPattern = new RegExp(`['"\`]${escapedPartialKey}\\.\\$\\{`, 'g');
+    if (dynamicPattern.test(content)) return true;
+  }
 
   return false;
 }
@@ -95,9 +135,10 @@ async function findUnusedKeys(): Promise<UnusedKeysResult> {
   for (const file of sourceFiles) {
     const filePath = path.join(process.cwd(), file);
     const content = fs.readFileSync(filePath, 'utf-8');
+    const namespaces = extractNamespacesFromFile(content);
 
     for (const key of allKeys) {
-      if (findKeyUsageInContent(content, key)) {
+      if (findKeyUsageInContent(content, key, namespaces)) {
         usageCount[key]++;
       }
     }

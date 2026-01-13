@@ -23,13 +23,13 @@ function ThreadSummaryCopyActionComponent({
   threadTitle,
   className,
 }: ThreadSummaryCopyActionProps) {
-  const t = useTranslations('chat.roundActions');
+  const t = useTranslations();
 
   const toastMessages = useMemo(() => ({
-    successTitle: t('copyThreadSuccess'),
-    successDescription: t('copyThreadSuccessDescription'),
-    errorTitle: t('copyError'),
-    errorDescription: t('copyErrorDescription'),
+    successTitle: t('chat.roundActions.copyThreadSuccess'),
+    successDescription: t('chat.roundActions.copyThreadSuccessDescription'),
+    errorTitle: t('chat.roundActions.copyError'),
+    errorDescription: t('chat.roundActions.copyErrorDescription'),
   }), [t]);
 
   const { copied, copy } = useCopyToClipboard({ messages: toastMessages });
@@ -43,8 +43,8 @@ function ThreadSummaryCopyActionComponent({
     <CopyActionButton
       copied={copied}
       onClick={handleCopy}
-      tooltip={t('copyThread')}
-      label={t('copyThread')}
+      tooltip={t('chat.roundActions.copyThread')}
+      label={t('chat.roundActions.copyThread')}
       className={className}
       variant={CopyIconVariants.STACK}
     />

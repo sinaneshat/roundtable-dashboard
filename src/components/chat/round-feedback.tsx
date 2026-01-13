@@ -26,7 +26,7 @@ function RoundFeedbackComponent({
   pendingType = null,
   className,
 }: RoundFeedbackProps) {
-  const t = useTranslations('chat.feedback');
+  const t = useTranslations();
   const handleLike = () => {
     onFeedbackChange(currentFeedback === FeedbackTypes.LIKE ? null : FeedbackTypes.LIKE);
   };
@@ -43,8 +43,8 @@ function RoundFeedbackComponent({
         size="sm"
         onClick={handleLike}
         disabled={disabled || isPending}
-        aria-label={t('like')}
-        title={t('like')}
+        aria-label={t('chat.feedback.like')}
+        title={t('chat.feedback.like')}
         className={cn(
           'h-7 w-7 p-0 rounded-full transition-colors',
           currentFeedback === FeedbackTypes.LIKE
@@ -66,8 +66,8 @@ function RoundFeedbackComponent({
         size="sm"
         onClick={handleDislike}
         disabled={disabled || isPending}
-        aria-label={t('dislike')}
-        title={t('dislike')}
+        aria-label={t('chat.feedback.dislike')}
+        title={t('chat.feedback.dislike')}
         className={cn(
           'h-7 w-7 p-0 rounded-full transition-colors',
           currentFeedback === FeedbackTypes.DISLIKE

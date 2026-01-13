@@ -22,8 +22,7 @@ export function ChatDeleteDialog({
   threadSlug,
   redirectIfCurrent = false,
 }: ChatDeleteDialogProps) {
-  const t = useTranslations('chat');
-  const tActions = useTranslations('actions');
+  const t = useTranslations();
   const pathname = usePathname();
   const router = useRouter();
   const deleteThreadMutation = useDeleteThreadMutation();
@@ -32,8 +31,8 @@ export function ChatDeleteDialog({
     deleteThreadMutation.mutate({ param: { id: threadId } }, {
       onSuccess: () => {
         toastManager.success(
-          t('threadDeleted'),
-          t('threadDeletedDescription'),
+          t('chat.threadDeleted'),
+          t('chat.threadDeletedDescription'),
         );
         if (redirectIfCurrent && threadSlug) {
           if (pathname.includes(`/chat/${threadSlug}`)) {
@@ -44,8 +43,8 @@ export function ChatDeleteDialog({
       },
       onError: () => {
         toastManager.error(
-          t('threadDeleteFailed'),
-          t('threadDeleteFailedDescription'),
+          t('chat.threadDeleteFailed'),
+          t('chat.threadDeleteFailedDescription'),
         );
       },
     });
@@ -55,11 +54,11 @@ export function ChatDeleteDialog({
     <ConfirmationDialog
       open={isOpen}
       onOpenChange={onOpenChange}
-      title={t('deleteThreadConfirmTitle')}
-      description={t('deleteThreadConfirmDescription')}
-      confirmText={tActions('delete')}
-      confirmingText={tActions('deleting')}
-      cancelText={tActions('cancel')}
+      title={t('chat.deleteThreadConfirmTitle')}
+      description={t('chat.deleteThreadConfirmDescription')}
+      confirmText={t('actions.delete')}
+      confirmingText={t('actions.deleting')}
+      cancelText={t('actions.cancel')}
       isLoading={deleteThreadMutation.isPending}
       variant="destructive"
       onConfirm={handleDelete}

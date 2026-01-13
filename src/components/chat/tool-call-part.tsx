@@ -13,7 +13,7 @@ type ToolCallPartProps = {
 };
 
 export function ToolCallPart({ part, className }: ToolCallPartProps) {
-  const t = useTranslations('chat.tools');
+  const t = useTranslations();
 
   return (
     <Card className={cn('border-primary/20 bg-primary/5', className)}>
@@ -26,20 +26,20 @@ export function ToolCallPart({ part, className }: ToolCallPartProps) {
             {part.toolName}
           </Badge>
           <span className="text-xs text-muted-foreground">
-            {t('calling')}
+            {t('chat.tools.calling')}
           </span>
         </div>
       </CardHeader>
       <CardContent className="space-y-2 pb-3">
         <div className="text-xs text-muted-foreground font-mono">
-          {t('id')}
+          {t('chat.tools.id')}
           :
           {' '}
           {part.toolCallId}
         </div>
         <div className="space-y-1">
           <div className="text-xs font-medium text-foreground/80">
-            {t('arguments')}
+            {t('chat.tools.arguments')}
             :
           </div>
           <pre className="text-xs bg-background/50 p-2 rounded border border-border/50 overflow-x-auto">

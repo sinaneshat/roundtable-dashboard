@@ -26,3 +26,22 @@ export function useChatStoreApi(): ChatStoreApi {
 
   return context;
 }
+
+/**
+ * Optional version of useChatStore that returns undefined when outside ChatStoreProvider.
+ * Use this for components that render in both protected chat context and public/read-only views.
+ *
+ * NOTE: The conditional useStore call is safe because context availability never changes
+ * during a component's lifecycle - protected routes always have the provider while
+ * public routes never have it. This maintains stable hook call order.
+ */
+export function useChatStoreOptional<T>(selector: (store: ChatStore) => T): T | undefined {
+  const context = use(ChatStoreContext);
+
+  if (!context) {
+    return undefined;
+  }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- Safe: context availability is constant per route
+  return useStore(context, selector);
+}

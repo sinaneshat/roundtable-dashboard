@@ -27,14 +27,14 @@ export function ChatThreadMenuItems({
   isFavorite,
   isPinPending = false,
 }: ChatThreadMenuItemsProps) {
-  const t = useTranslations('chat');
+  const t = useTranslations();
 
   return (
     <>
       {onRename && (
         <DropdownMenuItem onClick={onRename}>
           <Icons.pencil className="size-4" />
-          {t('rename')}
+          {t('chat.rename')}
         </DropdownMenuItem>
       )}
       <DropdownMenuItem
@@ -46,13 +46,13 @@ export function ChatThreadMenuItems({
           ? <Icons.loader className="size-4 animate-spin" />
           : <Icons.pin className={cn('size-4', isFavorite && 'fill-current')} />}
         {isFavorite
-          ? t('unpin')
-          : t('pin')}
+          ? t('chat.unpin')
+          : t('chat.pin')}
       </DropdownMenuItem>
       {onShare && (
         <DropdownMenuItem onClick={onShare}>
           <Icons.share className="size-4" />
-          {t('share')}
+          {t('chat.share')}
         </DropdownMenuItem>
       )}
       {onDelete && (
@@ -60,7 +60,7 @@ export function ChatThreadMenuItems({
           <DropdownMenuSeparator />
           <DropdownMenuItem variant={DropdownMenuVariants.DESTRUCTIVE} onClick={onDelete}>
             <Icons.trash className="size-4" />
-            {t('deleteThread')}
+            {t('chat.deleteThread')}
           </DropdownMenuItem>
         </>
       )}

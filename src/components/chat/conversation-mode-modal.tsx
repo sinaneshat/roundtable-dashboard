@@ -33,7 +33,7 @@ export function ConversationModeModal({
   className,
   children,
 }: ConversationModeModalProps) {
-  const t = useTranslations('chat.modes.modal');
+  const t = useTranslations();
 
   const enabledModes = CHAT_MODE_CONFIGS.filter(mode => mode.isEnabled).sort(
     (a, b) => a.order - b.order,
@@ -45,8 +45,8 @@ export function ConversationModeModal({
         className={cn('!max-w-md !w-[calc(100vw-2.5rem)]', className)}
       >
         <DialogHeader>
-          <DialogTitle className="text-xl">{t('title')}</DialogTitle>
-          <DialogDescription>{t('subtitle')}</DialogDescription>
+          <DialogTitle className="text-xl">{t('chat.modes.modal.title')}</DialogTitle>
+          <DialogDescription>{t('chat.modes.modal.subtitle')}</DialogDescription>
         </DialogHeader>
 
         <DialogBody className="flex flex-col py-4">

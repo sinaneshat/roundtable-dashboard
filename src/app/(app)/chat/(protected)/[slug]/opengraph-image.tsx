@@ -7,7 +7,7 @@ import { BRAND } from '@/constants';
 import {
   createGradient,
   OG_COLORS,
-} from '@/lib/ui';
+} from '@/lib/ui/og-image-helpers';
 import { getOGFonts } from '@/lib/ui/og-fonts.server';
 import { getThreadBySlugService } from '@/services/api';
 

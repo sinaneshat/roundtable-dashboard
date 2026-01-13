@@ -6,6 +6,7 @@ export {
   type ChatStoreProviderProps,
   useChatStore,
   useChatStoreApi,
+  useChatStoreOptional,
 } from './chat-store-provider';
 export { PageViewTracker } from './pageview-tracker';
 export { PostHogIdentifyUser } from './posthog-identify-user';

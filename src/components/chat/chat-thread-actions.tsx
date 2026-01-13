@@ -36,7 +36,7 @@ type ChatThreadActionsProps = {
 };
 
 export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = false }: ChatThreadActionsProps) {
-  const t = useTranslations('chat');
+  const t = useTranslations();
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const toggleFavoriteMutation = useToggleFavoriteMutation();
   const togglePublicMutation = useTogglePublicMutation();
@@ -138,7 +138,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
           {displayIsPublic && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
               <Icons.globe className="size-3.5" />
-              <span className="text-xs font-medium">{t('shareDialog.publicStatus')}</span>
+              <span className="text-xs font-medium">{t('chat.shareDialog.publicStatus')}</span>
             </div>
           )}
 
@@ -147,7 +147,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               <Button
                 variant={ComponentVariants.GHOST}
                 size={ComponentSizes.SM}
-                aria-label={t('share')}
+                aria-label={t('chat.share')}
                 onClick={handleOpenShareDialog}
                 disabled={togglePublicMutation.isPending || isBusy}
                 className="gap-2"
@@ -155,11 +155,11 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                 {togglePublicMutation.isPending
                   ? <Icons.loader className="size-4 animate-spin" />
                   : <Icons.share className="size-4" />}
-                <span>{t('share')}</span>
+                <span>{t('chat.share')}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p className="text-sm">{isBusy ? t('waitForStreamingToComplete') : t('share')}</p>
+              <p className="text-sm">{isBusy ? t('chat.waitForStreamingToComplete') : t('chat.share')}</p>
             </TooltipContent>
           </Tooltip>
 
@@ -168,7 +168,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               <Button
                 variant={ComponentVariants.GHOST}
                 size={ComponentSizes.ICON}
-                aria-label={t('moreOptions')}
+                aria-label={t('chat.moreOptions')}
                 className="size-9"
                 disabled={isBusy}
               >
@@ -214,7 +214,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
         {displayIsPublic && (
           <div className="flex items-center gap-1 px-1.5 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 shrink-0">
             <Icons.globe className="size-3.5" />
-            <span className="text-xs font-medium hidden xs:inline">{t('shareDialog.publicStatus')}</span>
+            <span className="text-xs font-medium hidden xs:inline">{t('chat.shareDialog.publicStatus')}</span>
           </div>
         )}
 

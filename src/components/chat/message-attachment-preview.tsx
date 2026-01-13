@@ -59,11 +59,11 @@ function AttachmentThumbnail({
   attachment: MessageAttachment;
   messageId: string;
 }) {
-  const t = useTranslations('chat.attachments');
+  const t = useTranslations();
   const { url: originalUrl, filename, mediaType, uploadId } = attachment;
   const isImage = Boolean(mediaType?.startsWith('image/'));
   const iconType = getIconType(mediaType);
-  const displayName = filename ?? t('defaultName');
+  const displayName = filename ?? t('chat.attachments.defaultName');
 
   const needsFetch = !isValidDisplayUrl(originalUrl) && Boolean(uploadId);
 
@@ -89,17 +89,17 @@ function AttachmentThumbnail({
 
   const statusMessage = (() => {
     if (isLoading) {
-      return t('loadingPreview');
+      return t('chat.attachments.loadingPreview');
     }
     if (fetchError || !hasValidUrl) {
-      return t('previewUnavailable');
+      return t('chat.attachments.previewUnavailable');
     }
     return null;
   })();
 
   // Build native title text for tooltip
   // Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop
-  const fileTypeLabel = mediaType ? getFileTypeLabelFromMime(mediaType) : t('defaultFileType');
+  const fileTypeLabel = mediaType ? getFileTypeLabelFromMime(mediaType) : t('chat.attachments.defaultFileType');
   const titleParts = [displayName, fileTypeLabel];
   if (statusMessage) {
     titleParts.push(statusMessage);

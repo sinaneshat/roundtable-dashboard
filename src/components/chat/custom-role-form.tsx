@@ -27,7 +27,7 @@ export const CustomRoleForm = memo(({
   isPending,
   disabled = false,
 }: CustomRoleFormProps) => {
-  const t = useTranslations('chat.models.modal');
+  const t = useTranslations();
 
   const form = useForm<CustomRoleFormValues>({
     resolver: zodResolver(customRoleSchema),
@@ -60,7 +60,7 @@ export const CustomRoleForm = memo(({
               <FormControl>
                 <Input
                   {...field}
-                  placeholder={t('customRolePlaceholder')}
+                  placeholder={t('chat.models.modal.customRolePlaceholder')}
                   disabled={isPending || disabled}
                   className="h-8 text-sm"
                 />
@@ -76,7 +76,7 @@ export const CustomRoleForm = memo(({
           loading={isPending}
           className="h-8 shrink-0"
         >
-          {t('saveRole')}
+          {t('chat.models.modal.saveRole')}
         </Button>
       </form>
     </Form>

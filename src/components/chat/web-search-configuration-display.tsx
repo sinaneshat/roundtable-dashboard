@@ -42,7 +42,7 @@ export function WebSearchConfigurationDisplay({
   isStreamingPlan = false,
   className,
 }: WebSearchConfigurationDisplayProps) {
-  const tPreSearch = useTranslations('chat.preSearch.plan');
+  const t = useTranslations();
 
   // Don't render if no data available
   if ((!queries || queries.length === 0) && !searchPlan) {
@@ -73,7 +73,7 @@ export function WebSearchConfigurationDisplay({
       {searchPlan && (
         <div className="space-y-1">
           <FadeInText>
-            <span className="text-xs font-medium text-muted-foreground">{tPreSearch('title')}</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('chat.preSearch.plan.title')}</span>
           </FadeInText>
           <div className="text-sm text-foreground/80 leading-relaxed">
             <TypingText

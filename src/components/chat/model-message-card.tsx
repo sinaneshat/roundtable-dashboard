@@ -20,7 +20,7 @@ import { MessageSources } from '@/components/chat/message-sources';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
-import { useChatStore } from '@/components/providers';
+import { useChatStoreOptional } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { StreamingMessageContent } from '@/components/ui/motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -62,6 +62,8 @@ type ModelMessageCardProps = {
   loadingText?: string;
   /** Max height for scrollable content area. When set, wraps content in ScrollArea */
   maxContentHeight?: number;
+  /** Read-only mode auto-detected via useChatStoreOptional - prop kept for API stability */
+  isReadOnly?: boolean;
 };
 const DEFAULT_PARTS: MessagePart[] = [];
 
@@ -82,17 +84,22 @@ export const ModelMessageCard = memo(({
   hideActions = false,
   loadingText,
   maxContentHeight,
+  isReadOnly: _isReadOnly = false,
 }: ModelMessageCardProps) => {
-  const t = useTranslations('chat.participant');
+  const t = useTranslations();
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
 
-  const { globalIsStreaming, registerAnimation, completeAnimation } = useChatStore(
+  const storeState = useChatStoreOptional(
     useShallow(s => ({
       globalIsStreaming: s.isStreaming,
       registerAnimation: s.registerAnimation,
       completeAnimation: s.completeAnimation,
     })),
   );
+
+  const globalIsStreaming = storeState?.globalIsStreaming ?? false;
+  const registerAnimation = storeState?.registerAnimation;
+  const completeAnimation = storeState?.completeAnimation;
 
   const hasActualStreamingParts = globalIsStreaming && parts.some(
     p => 'state' in p && p.state === TextPartStates.STREAMING,
@@ -117,6 +124,9 @@ export const ModelMessageCard = memo(({
   const prevStatusRef = useRef(status);
 
   useLayoutEffect(() => {
+    if (!registerAnimation || !completeAnimation)
+      return;
+
     const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
     const nowComplete = status !== MessageStatuses.STREAMING && status !== MessageStatuses.PENDING;
 
@@ -139,6 +149,9 @@ export const ModelMessageCard = memo(({
   }, [status, isStreaming, participantIndex, registerAnimation, completeAnimation]);
 
   useLayoutEffect(() => {
+    if (!completeAnimation)
+      return;
+
     const index = participantIndex;
     return () => {
       if (hasRegisteredRef.current && index >= 0) {
@@ -173,7 +186,7 @@ export const ModelMessageCard = memo(({
                 )}
                 {!modelIsAccessible && requiredTierName && (
                   <Badge variant="outline" className="text-xs text-muted-foreground">
-                    {t('tierRequired', { tier: requiredTierName })}
+                    {t('chat.participant.tierRequired', { tier: requiredTierName })}
                   </Badge>
                 )}
                 {showStatusIndicator && (
@@ -198,7 +211,7 @@ export const ModelMessageCard = memo(({
                   showShimmer ? 'opacity-100' : 'opacity-0 pointer-events-none',
                 )}
               >
-                <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
+                <TextShimmer>{loadingText ?? t('chat.participant.generating', { model: modelName })}</TextShimmer>
               </div>
               {!showShimmer && renderableParts.length === 0 && parts.length > 0 && !hasError && (
                 <div
@@ -206,8 +219,8 @@ export const ModelMessageCard = memo(({
                   className="py-2 text-muted-foreground text-sm italic opacity-100"
                 >
                   {hasFilteredReasoningParts
-                    ? t('reasoningOnlyResponse', { model: modelName })
-                    : t('emptyResponse', { model: modelName })}
+                    ? t('chat.participant.reasoningOnlyResponse', { model: modelName })
+                    : t('chat.participant.emptyResponse', { model: modelName })}
                 </div>
               )}
               <div

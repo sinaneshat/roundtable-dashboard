@@ -29,7 +29,7 @@ export function VoiceVisualization({
   barCount = 40,
   hasAlertAbove = false,
 }: VoiceVisualizationProps) {
-  const t = useTranslations('chat.input');
+  const t = useTranslations();
   const bars = useMemo(() => {
     if (audioLevels.length > 0) {
       return audioLevels.slice(0, barCount);
@@ -73,7 +73,7 @@ export function VoiceVisualization({
               <Icons.mic className="size-3.5 text-blue-500" />
             </motion.div>
             <span className="text-[10px] font-medium text-blue-500">
-              {t('recording')}
+              {t('chat.input.recording')}
             </span>
           </div>
 
@@ -104,7 +104,7 @@ export function VoiceVisualization({
           </div>
 
           <span className="text-[10px] text-blue-500/60 shrink-0 hidden sm:block">
-            {t('clickMicToStop')}
+            {t('chat.input.clickMicToStop')}
           </span>
         </div>
       </motion.div>

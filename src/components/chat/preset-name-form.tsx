@@ -18,7 +18,7 @@ export const PresetNameForm = memo(({
   onCancel,
   isPending,
 }: PresetNameFormProps) => {
-  const tModels = useTranslations('chat.models');
+  const t = useTranslations();
   const [name, setName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -26,7 +26,7 @@ export const PresetNameForm = memo(({
     e.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName) {
-      toastManager.error(tModels('presets.cannotSave'), tModels('presets.nameRequired'));
+      toastManager.error(t('chat.models.presets.cannotSave'), t('chat.models.presets.nameRequired'));
       return;
     }
     await onSubmit(trimmedName);
@@ -58,7 +58,7 @@ export const PresetNameForm = memo(({
         ref={inputRef}
         value={name}
         onChange={e => setName(e.target.value)}
-        placeholder={tModels('presets.namePlaceholder')}
+        placeholder={t('chat.models.presets.namePlaceholder')}
         disabled={isPending}
         className="h-8 w-28 sm:w-40 text-sm"
         onKeyDown={handleKeyDown}
@@ -71,7 +71,7 @@ export const PresetNameForm = memo(({
         disabled={isPending}
         className="text-xs sm:text-sm shrink-0 px-2 sm:px-3"
       >
-        {tModels('presets.cancel')}
+        {t('chat.models.presets.cancel')}
       </Button>
       <Button
         type="submit"
@@ -80,7 +80,7 @@ export const PresetNameForm = memo(({
         loading={isPending}
         className="text-xs sm:text-sm shrink-0 px-2 sm:px-3"
       >
-        {tModels('presets.save')}
+        {t('chat.models.presets.save')}
       </Button>
     </form>
   );

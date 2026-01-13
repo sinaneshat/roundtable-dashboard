@@ -56,8 +56,7 @@ type ChangeItemProps = {
 };
 
 export function ConfigurationChangesGroup({ group, className, isReadOnly }: ConfigurationChangesGroupExtendedProps) {
-  const t = useTranslations('chat.configuration');
-  const tActionSummary = useTranslations('chat.configuration.actionSummary');
+  const t = useTranslations();
   if (!group.changes || group.changes.length === 0) {
     return null;
   }
@@ -80,13 +79,13 @@ export function ConfigurationChangesGroup({ group, className, isReadOnly }: Conf
 
   const actionSummaries: string[] = [];
   if (addedChanges?.length) {
-    actionSummaries.push(`${addedChanges.length} ${tActionSummary('added')}`);
+    actionSummaries.push(`${addedChanges.length} ${t('chat.configuration.actionSummary.added')}`);
   }
   if (modifiedChanges?.length) {
-    actionSummaries.push(`${modifiedChanges.length} ${tActionSummary('modified')}`);
+    actionSummaries.push(`${modifiedChanges.length} ${t('chat.configuration.actionSummary.modified')}`);
   }
   if (removedChanges?.length) {
-    actionSummaries.push(`${removedChanges.length} ${tActionSummary('removed')}`);
+    actionSummaries.push(`${removedChanges.length} ${t('chat.configuration.actionSummary.removed')}`);
   }
   return (
     <div className={cn('py-2', className)}>
@@ -94,7 +93,7 @@ export function ConfigurationChangesGroup({ group, className, isReadOnly }: Conf
         <ChainOfThoughtHeader>
           <div className="flex items-center gap-2">
             <Icons.clock className="size-4 text-muted-foreground flex-shrink-0" />
-            <span className="text-sm">{t('configurationChanged')}</span>
+            <span className="text-sm">{t('chat.configuration.configurationChanged')}</span>
             <span className="hidden md:inline text-xs text-muted-foreground">•</span>
             <span className="hidden md:inline text-xs text-muted-foreground truncate">
               {actionSummaries.join(', ')}
@@ -121,7 +120,7 @@ export function ConfigurationChangesGroup({ group, className, isReadOnly }: Conf
                   <div className="flex items-center gap-2 px-1">
                     <Icon className={cn('size-4', config.color)} />
                     <span className={cn('text-sm font-medium', config.color)}>
-                      {t(action)}
+                      {t(`chat.configuration.${action}`)}
                     </span>
                   </div>
                   <div className="w-full overflow-x-auto md:overflow-x-auto">
@@ -142,7 +141,7 @@ export function ConfigurationChangesGroup({ group, className, isReadOnly }: Conf
 }
 
 function ChangeItem({ change, isReadOnly }: ChangeItemProps) {
-  const t = useTranslations('chat.configuration');
+  const t = useTranslations();
   const { findModel } = useModelLookup({ enabled: !isReadOnly });
 
   const changeData: DbChangelogData | undefined = safeParseChangelogData(change.changeData);
@@ -284,7 +283,7 @@ function ChangeItem({ change, isReadOnly }: ChangeItemProps) {
         >
           <Icons.globe className="size-3.5 sm:size-4 text-muted-foreground shrink-0" />
           <span className="text-[10px] sm:text-xs font-medium">
-            {enabled ? t('webSearchEnabled') : t('webSearchDisabled')}
+            {enabled ? t('chat.configuration.webSearchEnabled') : t('chat.configuration.webSearchDisabled')}
           </span>
         </div>
       )}

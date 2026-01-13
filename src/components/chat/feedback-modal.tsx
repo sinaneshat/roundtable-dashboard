@@ -55,8 +55,6 @@ type FeedbackModalProps = {
 
 export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
   const t = useTranslations();
-  const tActions = useTranslations('actions');
-  const tFeedback = useTranslations('feedback');
   const posthog = usePostHog();
 
   const [showSuccess, setShowSuccess] = useState(false);
@@ -161,10 +159,10 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
             </div>
             <div>
               <DialogTitle className="text-xl">
-                {tFeedback('title')}
+                {t('feedback.title')}
               </DialogTitle>
               <DialogDescription className="mt-1">
-                {tFeedback('description')}
+                {t('feedback.description')}
               </DialogDescription>
             </div>
           </div>
@@ -177,9 +175,9 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
                   <div className="flex size-12 items-center justify-center rounded-full bg-green-500/10 mb-4">
                     <Icons.checkCircle className="size-6 text-green-500" />
                   </div>
-                  <h3 className="text-lg font-semibold">{tFeedback('success.title')}</h3>
+                  <h3 className="text-lg font-semibold">{t('feedback.success.title')}</h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {tFeedback('success.message')}
+                    {t('feedback.success.message')}
                   </p>
                 </div>
               </DialogBody>
@@ -189,13 +187,13 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
                 <DialogBody className="space-y-4 py-4">
                   <RHFSelect
                     name="feedbackType"
-                    title={tFeedback('typeLabel')}
+                    title={t('feedback.typeLabel')}
                     options={feedbackTypeOptions}
                   />
                   <RHFTextarea
                     name="message"
-                    title={tFeedback('messageLabel')}
-                    placeholder={tFeedback('messagePlaceholder')}
+                    title={t('feedback.messageLabel')}
+                    placeholder={t('feedback.messagePlaceholder')}
                     rows={5}
                   />
                 </DialogBody>
@@ -207,13 +205,13 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
                     onClick={handleClose}
                     disabled={isSubmitting}
                   >
-                    {tActions('cancel')}
+                    {t('actions.cancel')}
                   </Button>
                   <Button
                     type="submit"
                     loading={isSubmitting}
                   >
-                    {tFeedback('submit')}
+                    {t('feedback.submit')}
                   </Button>
                 </DialogFooter>
               </FormProvider>

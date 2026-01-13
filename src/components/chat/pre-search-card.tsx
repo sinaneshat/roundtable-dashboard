@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { MessageStatuses } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Icons } from '@/components/icons';
-import { useChatStore } from '@/components/providers';
+import { useChatStoreOptional } from '@/components/providers';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FadeIn } from '@/components/ui/motion';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -24,6 +24,8 @@ type PreSearchCardProps = {
   streamingRoundNumber?: number | null;
   demoOpen?: boolean;
   demoShowContent?: boolean;
+  /** Read-only mode auto-detected via useChatStoreOptional - prop kept for API stability */
+  isReadOnly?: boolean;
 };
 
 export function PreSearchCard({
@@ -33,11 +35,12 @@ export function PreSearchCard({
   streamingRoundNumber,
   demoOpen,
   demoShowContent,
+  isReadOnly: _isReadOnly = false,
 }: PreSearchCardProps) {
   const t = useTranslations();
   const queryClient = useQueryClient();
 
-  const { updatePreSearchStatus, updatePreSearchData, registerAnimation, completeAnimation } = useChatStore(
+  const storeState = useChatStoreOptional(
     useShallow(s => ({
       updatePreSearchStatus: s.updatePreSearchStatus,
       updatePreSearchData: s.updatePreSearchData,
@@ -45,6 +48,11 @@ export function PreSearchCard({
       completeAnimation: s.completeAnimation,
     })),
   );
+
+  const updatePreSearchStatus = storeState?.updatePreSearchStatus;
+  const updatePreSearchData = storeState?.updatePreSearchData;
+  const registerAnimation = storeState?.registerAnimation;
+  const completeAnimation = storeState?.completeAnimation;
   const hasRegisteredRef = useRef(false);
   const prevStatusRef = useRef(preSearch.status);
 
@@ -58,6 +66,9 @@ export function PreSearchCard({
   }, [manualControl, streamingRoundNumber]);
 
   useLayoutEffect(() => {
+    if (!registerAnimation)
+      return;
+
     const isStreaming = preSearch.status === MessageStatuses.STREAMING;
     if (isStreaming && !hasRegisteredRef.current) {
       registerAnimation(AnimationIndices.PRE_SEARCH);
@@ -66,6 +77,9 @@ export function PreSearchCard({
   }, [preSearch.status, registerAnimation]);
 
   useLayoutEffect(() => {
+    if (!completeAnimation)
+      return;
+
     return () => {
       if (hasRegisteredRef.current) {
         completeAnimation(AnimationIndices.PRE_SEARCH);
@@ -75,6 +89,9 @@ export function PreSearchCard({
   }, [completeAnimation]);
 
   useLayoutEffect(() => {
+    if (!completeAnimation)
+      return;
+
     const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
     const nowComplete = preSearch.status !== MessageStatuses.STREAMING
       && preSearch.status !== MessageStatuses.PENDING;
@@ -89,11 +106,13 @@ export function PreSearchCard({
   }, [preSearch.status, completeAnimation]);
 
   const handleStreamStart = useCallback(() => {
+    if (!updatePreSearchStatus)
+      return;
     updatePreSearchStatus(preSearch.roundNumber, MessageStatuses.STREAMING);
   }, [preSearch.roundNumber, updatePreSearchStatus]);
 
   const handleStreamComplete = useCallback((completedData?: PreSearchDataPayload) => {
-    if (!completedData)
+    if (!completedData || !updatePreSearchData || !updatePreSearchStatus)
       return;
 
     updatePreSearchData(preSearch.roundNumber, completedData);

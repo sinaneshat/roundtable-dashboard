@@ -19,7 +19,7 @@ export function MessageErrorDetails({
   metadata,
   className,
 }: MessageErrorDetailsProps) {
-  const t = useTranslations('chat.errors');
+  const t = useTranslations();
   const showDetails = useBoolean(false);
 
   if (!metadata || !isAssistantMessageMetadata(metadata)) {
@@ -32,36 +32,36 @@ export function MessageErrorDetails({
   }
 
   const providerMessage = metadata.providerMessage ?? null;
-  const errorMessage = providerMessage || metadata.errorMessage || t('unexpectedError');
+  const errorMessage = providerMessage || metadata.errorMessage || t('chat.errors.unexpectedError');
   const errorType: string = metadata.errorType || ErrorTypes.UNKNOWN;
-  const model = metadata.model || t('unknownModel');
+  const model = metadata.model || t('chat.errors.unknownModel');
   const participantIndex = metadata.participantIndex;
   const aborted = metadata.aborted || false;
 
   const getErrorTitle = () => {
     if (aborted)
-      return t('generationCancelled');
+      return t('chat.errors.generationCancelled');
     if (errorType === ErrorTypes.EMPTY_RESPONSE || errorType === ErrorCategories.EMPTY_RESPONSE)
-      return t('emptyResponse');
+      return t('chat.errors.emptyResponse');
     if (errorType === ErrorTypes.RATE_LIMIT || errorType === ErrorCategories.RATE_LIMIT || errorType === ErrorCategories.PROVIDER_RATE_LIMIT)
-      return t('rateLimitReached');
+      return t('chat.errors.rateLimitReached');
     if (errorType === ErrorTypes.CONTEXT_LENGTH)
-      return t('contextTooLong');
+      return t('chat.errors.contextTooLong');
     if (errorType === ErrorTypes.API_ERROR)
-      return t('apiError');
+      return t('chat.errors.apiError');
     if (errorType === ErrorTypes.NETWORK || errorType === ErrorCategories.NETWORK || errorType === ErrorCategories.PROVIDER_NETWORK)
-      return t('networkError');
+      return t('chat.errors.networkError');
     if (errorType === ErrorTypes.TIMEOUT)
-      return t('requestTimeout');
+      return t('chat.errors.requestTimeout');
     if (errorType === ErrorCategories.VALIDATION)
-      return t('validationError');
+      return t('chat.errors.validationError');
     if (errorType === ErrorCategories.MODEL_NOT_FOUND)
-      return t('modelNotFound');
+      return t('chat.errors.modelNotFound');
     if (errorType === ErrorCategories.MODEL_CONTENT_FILTER || errorType === ErrorCategories.CONTENT_FILTER)
-      return t('contentFiltered');
+      return t('chat.errors.contentFiltered');
     if (errorType === ErrorCategories.AUTHENTICATION)
-      return t('authenticationError');
-    return t('generationFailed');
+      return t('chat.errors.authenticationError');
+    return t('chat.errors.generationFailed');
   };
 
   return (
@@ -78,21 +78,21 @@ export function MessageErrorDetails({
         onClick={showDetails.onToggle}
         className="ml-6 mt-1 text-xs text-destructive/60 hover:text-destructive/80 underline-offset-2 hover:underline"
       >
-        {showDetails.value ? t('hideDetails') : t('showDetails')}
+        {showDetails.value ? t('chat.errors.hideDetails') : t('chat.errors.showDetails')}
       </button>
       {showDetails.value && (
         <div className="mt-2 ml-6 space-y-1 text-xs text-destructive/70">
           <div className="flex gap-2">
-            <span className="font-medium min-w-20">{t('errorType')}</span>
+            <span className="font-medium min-w-20">{t('chat.errors.errorType')}</span>
             <span className="font-mono">{errorType}</span>
           </div>
           <div className="flex gap-2">
-            <span className="font-medium min-w-20">{t('model')}</span>
+            <span className="font-medium min-w-20">{t('chat.errors.model')}</span>
             <span className="font-mono">{model}</span>
           </div>
           {participantIndex !== null && participantIndex !== undefined && (
             <div className="flex gap-2">
-              <span className="font-medium min-w-20">{t('participant')}</span>
+              <span className="font-medium min-w-20">{t('chat.errors.participant')}</span>
               <span className="font-mono">
                 #
                 {getDisplayParticipantIndex(participantIndex)}
@@ -101,25 +101,25 @@ export function MessageErrorDetails({
           )}
           {metadata.statusCode && (
             <div className="flex gap-2">
-              <span className="font-medium min-w-20">{t('statusCode')}</span>
+              <span className="font-medium min-w-20">{t('chat.errors.statusCode')}</span>
               <span className="font-mono text-destructive">{metadata.statusCode}</span>
             </div>
           )}
           {providerMessage && (
             <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-destructive/20">
-              <span className="font-medium">{t('providerMessage')}</span>
+              <span className="font-medium">{t('chat.errors.providerMessage')}</span>
               <span className="text-xs text-destructive/80 leading-relaxed">{providerMessage}</span>
             </div>
           )}
           {aborted && (
             <div className="flex gap-2">
-              <span className="font-medium min-w-20">{t('status')}</span>
-              <span>{t('requestAborted')}</span>
+              <span className="font-medium min-w-20">{t('chat.errors.status')}</span>
+              <span>{t('chat.errors.requestAborted')}</span>
             </div>
           )}
           {metadata.responseBody && process.env.NODE_ENV === 'development' && (
             <div className="mt-2 pt-2 border-t border-destructive/20">
-              <div className="font-medium mb-1">{t('responseFromProvider')}</div>
+              <div className="font-medium mb-1">{t('chat.errors.responseFromProvider')}</div>
               <pre className="p-2 bg-destructive/5 rounded text-[10px] overflow-auto max-h-24 font-mono">
                 {metadata.responseBody}
               </pre>
@@ -129,62 +129,62 @@ export function MessageErrorDetails({
             <div className="mt-2 pt-2 border-t border-destructive/20 text-xs">
               {(errorType === ErrorTypes.RATE_LIMIT || errorType === ErrorCategories.RATE_LIMIT) && (
                 <div>
-                  <p className="font-medium mb-1">{t('whatToDo')}</p>
+                  <p className="font-medium mb-1">{t('chat.errors.whatToDo')}</p>
                   <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
-                    <li>{t('waitAndRegenerate')}</li>
+                    <li>{t('chat.errors.waitAndRegenerate')}</li>
                     {providerMessage?.includes('add your own key') && (
-                      <li>{t('addOwnApiKey')}</li>
+                      <li>{t('chat.errors.addOwnApiKey')}</li>
                     )}
                   </ul>
                 </div>
               )}
               {errorType === ErrorTypes.CONTEXT_LENGTH && (
-                <p>{t('shortenMessage')}</p>
+                <p>{t('chat.errors.shortenMessage')}</p>
               )}
               {(errorType === ErrorTypes.NETWORK || errorType === ErrorCategories.NETWORK || errorType === ErrorCategories.PROVIDER_NETWORK) && (
-                <p>{t('checkConnection')}</p>
+                <p>{t('chat.errors.checkConnection')}</p>
               )}
               {errorType === ErrorTypes.TIMEOUT && (
-                <p>{t('requestTookTooLong')}</p>
+                <p>{t('chat.errors.requestTookTooLong')}</p>
               )}
               {errorType === ErrorCategories.VALIDATION && (
                 <div>
-                  <p className="font-medium mb-1">{t('whatToDo')}</p>
+                  <p className="font-medium mb-1">{t('chat.errors.whatToDo')}</p>
                   <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
-                    <li>{t('validationHint')}</li>
-                    <li>{t('tryDifferentModel')}</li>
+                    <li>{t('chat.errors.validationHint')}</li>
+                    <li>{t('chat.errors.tryDifferentModel')}</li>
                   </ul>
                 </div>
               )}
               {errorType === ErrorCategories.MODEL_NOT_FOUND && (
-                <p>{t('modelNotFoundHint')}</p>
+                <p>{t('chat.errors.modelNotFoundHint')}</p>
               )}
               {(errorType === ErrorCategories.MODEL_CONTENT_FILTER || errorType === ErrorCategories.CONTENT_FILTER) && (
                 <div>
-                  <p className="font-medium mb-1">{t('whatToDo')}</p>
+                  <p className="font-medium mb-1">{t('chat.errors.whatToDo')}</p>
                   <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
-                    <li>{t('contentFilterHint')}</li>
+                    <li>{t('chat.errors.contentFilterHint')}</li>
                   </ul>
                 </div>
               )}
               {(errorType === ErrorTypes.EMPTY_RESPONSE || errorType === ErrorCategories.EMPTY_RESPONSE) && (
                 <div>
-                  <p className="font-medium mb-1">{t('whatToDo')}</p>
+                  <p className="font-medium mb-1">{t('chat.errors.whatToDo')}</p>
                   <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
-                    <li>{t('tryDifferentModel')}</li>
-                    <li>{t('tryDifferentPrompt')}</li>
-                    <li>{t('useRegenerateButton')}</li>
+                    <li>{t('chat.errors.tryDifferentModel')}</li>
+                    <li>{t('chat.errors.tryDifferentPrompt')}</li>
+                    <li>{t('chat.errors.useRegenerateButton')}</li>
                   </ul>
                 </div>
               )}
               {(errorType === ErrorTypes.MODEL_UNAVAILABLE || errorType === ErrorTypes.API_ERROR || errorType === ErrorTypes.UNKNOWN || errorType === ErrorCategories.UNKNOWN) && (
-                <p>{t('useRegenerateButton')}</p>
+                <p>{t('chat.errors.useRegenerateButton')}</p>
               )}
             </div>
           )}
           {process.env.NODE_ENV === 'development' && metadata && (
             <details className="mt-2 pt-2 border-t border-destructive/20">
-              <summary className="cursor-pointer font-medium text-destructive/60">{t('fullMetadata')}</summary>
+              <summary className="cursor-pointer font-medium text-destructive/60">{t('chat.errors.fullMetadata')}</summary>
               <pre className="mt-1 p-2 bg-destructive/5 rounded text-[10px] overflow-auto max-h-32 font-mono">
                 {JSON.stringify(metadata, null, 2)}
               </pre>

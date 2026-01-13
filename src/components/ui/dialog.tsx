@@ -58,7 +58,7 @@ function DialogContent({
   glass = false,
   ...props
 }: DialogContentProps) {
-  const t = useTranslations('actions');
+  const t = useTranslations();
 
   return (
     <DialogPortal data-slot="dialog-portal">
@@ -82,7 +82,7 @@ function DialogContent({
             className="ring-offset-background focus-visible:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-3 end-3 sm:top-4 sm:end-4 rounded-full opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <Icons.x />
-            <span className="sr-only">{t('close')}</span>
+            <span className="sr-only">{t('actions.close')}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
