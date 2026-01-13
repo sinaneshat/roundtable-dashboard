@@ -268,7 +268,8 @@
     "autoMode": {
       "analyzing": "Analyzing...",
       "label": "Auto",
-      "manualLabel": "Manual"
+      "manualLabel": "Manual",
+      "tooltip": "AI automatically selects the best models and settings for your prompt"
     },
     "citations": {
       "download": "Download"
@@ -377,7 +378,7 @@
       "addRole": "Add role",
       "aiModels": "AI Models",
       "buildCustom": {
-        "title": "Title"
+        "title": "Build Custom"
       },
       "cannotSelectModel": "Cannot Select Model",
       "clearRole": "Clear role",
@@ -419,18 +420,36 @@
         "saveAsNew": "Save as New",
         "saveAsPreset": "Save as Preset",
         "systemPresets": "System Presets",
-        "title": "Title",
+        "title": "Presets",
         "update": "Update"
       },
       "unlockAllModels": "Unlock all models",
       "upgradeToUnlock": "Upgrade to unlock"
     },
     "modes": {
+      "chatModes": "Chat Modes",
+      "currentMode": "Current Mode:",
+      "mode": "Mode",
       "modal": {
-        "subtitle": "Subtitle",
-        "title": "Title"
-      },
-      "mode": "Mode"
+        "analyzing": {
+          "description": "Deep analysis from multiple expert viewpoints",
+          "title": "Analyzing"
+        },
+        "brainstorming": {
+          "description": "Generate creative ideas collaboratively",
+          "title": "Brainstorming"
+        },
+        "debating": {
+          "description": "Explore different perspectives through structured debate",
+          "title": "Debating"
+        },
+        "problemSolving": {
+          "description": "Work together to find practical solutions",
+          "title": "Problem Solving"
+        },
+        "subtitle": "Choose how AI models interact with your query",
+        "title": "Conversation Mode"
+      }
     },
     "moreOptions": "More options",
     "noResults": "No chats found",
@@ -449,21 +468,40 @@
     "pin": "Pin",
     "pinned": "Pinned",
     "preSearch": {
-      "autoRetryingSearch": "Retrying search...",
-      "pendingSearch": "Search pending...",
+      "autoRetryingSearch": "Search in progress, auto-retrying...",
+      "error": "Error",
+      "pendingSearch": "Searching the web...",
       "plan": {
-        "title": "Title"
+        "show": "Show search plan",
+        "title": "Search Plan"
+      },
+      "retry": "Retry",
+      "searchDepth": {
+        "advanced": "advanced",
+        "basic": "basic"
       },
       "searchedSources": "Searched {count} sources",
       "searching": "Searching",
-      "source": "Source",
-      "sources": "Sources",
+      "source": "source",
+      "sources": "sources",
       "steps": {
         "answer": "Answer",
+        "executingSearch": "Searching web...",
+        "extractingContent": "Extracting content...",
         "foundImages": "Found images",
+        "generatingAnswer": "Generating answer summary...",
+        "generatingPlan": "Generating search plan...",
+        "generatingQueries": "Creating search queries...",
         "query": "Query",
-        "searchingTheWeb": "Searching the web...",
-        "synthesizingAnswer": "Synthesizing answer..."
+        "queryProgress": "Query {current} of {total}",
+        "results": "Analysis & Results",
+        "searchComplete": "Web sources found",
+        "searching": "Searching web sources",
+        "searchingDesc": "Finding relevant sources...",
+        "searchingTheWeb": "Searching the web",
+        "sources": "Sources",
+        "synthesizingAnswer": "Synthesizing answer",
+        "understanding": "Understanding query"
       },
       "title": "Web Research"
     },
@@ -543,12 +581,19 @@
         },
         "searchedFor": "Searched for",
         "searchingFor": "Searching for",
-        "title": "Title"
+        "title": "Sources"
       }
     },
     "unpin": "Unpin",
     "waitForStreamingToComplete": "Please wait for the AI to finish responding",
     "webSearch": {
+      "description": {
+        "disabled": "Click to enable web browsing for participants",
+        "enabled": "Participants can browse the web for information"
+      },
+      "disabled": "Search Off",
+      "enabled": "Search On",
+      "title": "Web Search",
       "toggle": "Web Search"
     }
   },
@@ -582,16 +627,31 @@
   "failedToCreateRole": "Failed to create role",
   "failedToDeleteRole": "Failed to delete role",
   "feedback": {
-    "description": "Description",
-    "messageLabel": "Message",
-    "messagePlaceholder": "Tell us what you think...",
-    "submit": "Submit",
+    "description": "Share your thoughts, report bugs, or request features",
+    "error": {
+      "message": "Failed to submit feedback. Please try again.",
+      "title": "Error"
+    },
+    "messageLabel": "Your Message",
+    "messagePlaceholder": "Tell us what's on your mind...",
+    "submit": "Submit Feedback",
+    "submitting": "Submitting...",
     "success": {
       "message": "Your feedback has been submitted successfully.",
-      "title": "Title"
+      "title": "Thank you!"
     },
-    "title": "Title",
-    "typeLabel": "Feedback Type"
+    "title": "Send Feedback",
+    "typeLabel": "Feedback Type",
+    "types": {
+      "bug": "Bug Report",
+      "feature_request": "Feature Request",
+      "general": "General Feedback",
+      "other": "Other"
+    },
+    "validation": {
+      "messageMax": "Message must be less than 5000 characters",
+      "messageMin": "Message must be at least 10 characters"
+    }
   },
   "forms": {
     "loading": "Loading",
@@ -812,8 +872,8 @@
       }
     }
   },
-  "subtitle": "Subtitle",
-  "title": "Title",
+  "subtitle": "Choose AI models to participate in your conversation",
+  "title": "Select Models",
   "upgrade": "Upgrade",
   "upgradeRequired": "Upgrade required",
   "usage": {

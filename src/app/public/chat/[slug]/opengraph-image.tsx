@@ -15,6 +15,7 @@ import {
 import { BRAND } from '@/constants';
 import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
+import { getOGFonts } from '@/lib/ui/og-fonts.server';
 import {
   createGradient,
   getLogoBase64,
@@ -25,7 +26,6 @@ import {
   OG_COLORS,
   truncateText,
 } from '@/lib/ui/og-image-helpers';
-import { getOGFonts } from '@/lib/ui/og-fonts.server';
 
 export const size = {
   width: 1200,

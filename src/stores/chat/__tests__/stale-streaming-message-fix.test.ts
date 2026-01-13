@@ -103,9 +103,7 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
       // Verify content is from DB (complete response)
       const textPart = assistantMsg?.parts?.find(p => p.type === MessagePartTypes.TEXT);
       expect(textPart).toBeDefined();
-      if (textPart && 'text' in textPart) {
-        expect(textPart.text).toBe('Complete response from participant 1');
-      }
+      expect(textPart).toHaveProperty('text', 'Complete response from participant 1');
     });
 
     it('handles multiple rounds with stale streaming in later round', () => {

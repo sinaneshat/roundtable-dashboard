@@ -384,6 +384,19 @@ export function ModelSelectionModal({
     return MODEL_PRESETS.some(preset => !canAccessPreset(preset, userTier));
   }, [userTier]);
 
+  // Sort presets: accessible (FREE) first, then locked (PRO)
+  const sortedPresets = useMemo(() => {
+    return [...MODEL_PRESETS].sort((a, b) => {
+      const aAccessible = canAccessPreset(a, userTier);
+      const bAccessible = canAccessPreset(b, userTier);
+      if (aAccessible && !bAccessible)
+        return -1;
+      if (!aAccessible && bAccessible)
+        return 1;
+      return a.order - b.order;
+    });
+  }, [userTier]);
+
   const selectedPreset = useMemo((): ModelPreset | null => {
     if (!selectedPresetId)
       return null;
@@ -766,7 +779,7 @@ export function ModelSelectionModal({
                                 </h4>
                               )}
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {MODEL_PRESETS.map(preset => (
+                                {sortedPresets.map(preset => (
                                   <ModelPresetCard
                                     key={preset.id}
                                     preset={preset}
