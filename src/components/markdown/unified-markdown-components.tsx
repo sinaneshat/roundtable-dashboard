@@ -17,7 +17,10 @@ import { cn } from '@/lib/ui/cn';
  * All components accept className prop for flexible styling overrides.
  */
 export const streamdownComponents = {
-  p: ({ children, className }: ComponentPropsWithoutRef<'p'>) => <p dir="auto" className={cn('text-base leading-7 mb-4 last:mb-0 break-words [word-break:break-word] [overflow-wrap:anywhere]', className)}>{children}</p>,
+  // ✅ HYDRATION FIX: Use <div> instead of <p> to allow block-level children
+  // Markdown can produce paragraphs containing code blocks, lazy-loaded components, etc.
+  // HTML doesn't allow <p> to contain <div>, <pre>, etc. - causes hydration errors.
+  p: ({ children, className }: ComponentPropsWithoutRef<'p'>) => <div dir="auto" className={cn('text-base leading-7 mb-4 last:mb-0 break-words [word-break:break-word] [overflow-wrap:anywhere]', className)}>{children}</div>,
 
   a: ({ href, children, className, ...props }: ComponentPropsWithoutRef<'a'>) => (
     <a href={href} target="_blank" rel="noopener noreferrer" className={cn('text-primary hover:text-primary/80 underline decoration-primary/40 underline-offset-4 transition-colors inline-flex items-center gap-1', className)} {...props}>
@@ -66,7 +69,8 @@ export const streamdownComponents = {
  */
 export const streamdownCompactComponents = {
   ...streamdownComponents,
-  p: ({ children, className }: ComponentPropsWithoutRef<'p'>) => <p dir="auto" className={cn('text-sm leading-6 mb-3 last:mb-0 break-words [word-break:break-word] [overflow-wrap:anywhere]', className)}>{children}</p>,
+  // ✅ HYDRATION FIX: Use <div> instead of <p> (same reason as base components)
+  p: ({ children, className }: ComponentPropsWithoutRef<'p'>) => <div dir="auto" className={cn('text-sm leading-6 mb-3 last:mb-0 break-words [word-break:break-word] [overflow-wrap:anywhere]', className)}>{children}</div>,
   ul: ({ children, className }: ComponentPropsWithoutRef<'ul'>) => <ul dir="auto" className={cn('list-disc ps-5 mb-3 last:mb-0 space-y-1.5 text-sm max-w-full', className)}>{children}</ul>,
   ol: ({ children, className }: ComponentPropsWithoutRef<'ol'>) => <ol dir="auto" className={cn('list-decimal ps-5 mb-3 last:mb-0 space-y-1.5 text-sm max-w-full', className)}>{children}</ol>,
   li: ({ children, className }: ComponentPropsWithoutRef<'li'>) => <li dir="auto" className={cn('text-sm leading-6 break-words [word-break:break-word] [overflow-wrap:anywhere]', className)}>{children}</li>,
