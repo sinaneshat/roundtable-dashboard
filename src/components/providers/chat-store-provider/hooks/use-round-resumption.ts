@@ -14,12 +14,14 @@
  * Solution: Extract isReady explicitly, add retry mechanism with small delay
  */
 
+import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
-import { ScreenModes } from '@/api/core/enums';
-import { getCurrentRoundNumber } from '@/lib/utils';
+import { MessageRoles, ScreenModes } from '@/api/core/enums';
+import type { ChatParticipant } from '@/api/routes/chat/schema';
+import { getCurrentRoundNumber, getParticipantIndex as getParticipantIndexFromMetadata, getRoundNumber, isModeratorMessage } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { shouldWaitForPreSearch } from '@/stores/chat';
 
@@ -37,6 +39,61 @@ type UseRoundResumptionParams = {
  */
 function getParticipantIndex(value: { index: number; participantId: string } | number): number {
   return typeof value === 'number' ? value : value.index;
+}
+
+/**
+ * ✅ CACHE MISMATCH FIX: Validate and correct nextParticipantToTrigger
+ *
+ * Problem: Server prefill queries live DB to calculate nextParticipantToTrigger,
+ * but SSR messages may come from cache. This causes mismatch:
+ * - Server says nextP=1 (p0 exists in live DB)
+ * - Cached messages don't have p0
+ * - Client starts from p1, then triggers p0 after p1 completes
+ * - Result: Wrong streaming order (p1 → p0 → p2 instead of p0 → p1 → p2)
+ *
+ * Solution: Validate that all participants 0 to nextP-1 have messages.
+ * If not, recalculate nextP as the first participant without a message.
+ *
+ * @param serverNextIndex - The server's suggested nextParticipantToTrigger
+ * @param messages - The actual messages loaded (may be from cache)
+ * @param participants - Enabled participants for the thread
+ * @param currentRound - The current round number
+ * @returns Corrected nextParticipantToTrigger
+ */
+function validateAndCorrectNextParticipant(
+  serverNextIndex: number,
+  messages: readonly UIMessage[],
+  participants: readonly ChatParticipant[],
+  currentRound: number,
+): number {
+  // Get participant indices that have messages in the current round
+  const participantIndicesWithMessages = new Set<number>();
+  for (const msg of messages) {
+    if (msg.role !== MessageRoles.ASSISTANT)
+      continue;
+    if (isModeratorMessage(msg))
+      continue;
+    const msgRound = getRoundNumber(msg.metadata);
+    if (msgRound !== currentRound)
+      continue;
+    const pIdx = getParticipantIndexFromMetadata(msg.metadata);
+    if (pIdx !== null) {
+      participantIndicesWithMessages.add(pIdx);
+    }
+  }
+
+  // Check if all participants 0 to serverNextIndex-1 have messages
+  const totalParticipants = participants.length;
+  for (let i = 0; i < serverNextIndex && i < totalParticipants; i++) {
+    if (!participantIndicesWithMessages.has(i)) {
+      // Found a participant without a message that should have one
+      // according to server. Return this as the corrected next participant.
+      return i;
+    }
+  }
+
+  // All prior participants have messages, server's nextP is valid
+  return serverNextIndex;
 }
 
 /**
@@ -247,9 +304,23 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
               return;
             }
 
+            // ✅ CACHE MISMATCH FIX: Validate server's nextParticipantToTrigger
+            const pollServerNextIndex = getParticipantIndex(pollNextParticipant);
+            const pollCorrectedNextIndex = validateAndCorrectNextParticipant(
+              pollServerNextIndex,
+              pollMessages,
+              pollParticipants,
+              pollRound,
+            );
+            const pollCorrectedParticipant = pollCorrectedNextIndex === pollServerNextIndex
+              ? pollNextParticipant
+              : typeof pollNextParticipant === 'number'
+                ? pollCorrectedNextIndex
+                : { index: pollCorrectedNextIndex, participantId: pollParticipants[pollCorrectedNextIndex]?.id ?? '' };
+
             // Generate resumption key and check for duplicates
             const pollThreadId = pollThread?.id || 'unknown';
-            const pollResumptionKey = `${pollThreadId}-r${pollRound}-p${getParticipantIndex(pollNextParticipant)}`;
+            const pollResumptionKey = `${pollThreadId}-r${pollRound}-p${pollCorrectedNextIndex}`;
             if (resumptionTriggeredRef.current === pollResumptionKey) {
               return;
             }
@@ -259,7 +330,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
             // ✅ CRITICAL FIX: Pass pollMessages to ensure correct userMessageId for backend lookup
             // Without this, continueFromParticipant uses stale AI SDK messages instead of
             // the freshly-persisted messages from PATCH, causing "User message not found" errors
-            chat.continueFromParticipant(pollNextParticipant, pollParticipants, pollMessages);
+            chat.continueFromParticipant(pollCorrectedParticipant, pollParticipants, pollMessages);
           };
 
           retryTimeoutRef.current = setTimeout(pollUntilReady, 100);
@@ -276,9 +347,23 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
           return;
         }
 
+        // ✅ CACHE MISMATCH FIX: Validate server's nextParticipantToTrigger
+        const serverNextIndex = getParticipantIndex(latestNextParticipant);
+        const correctedNextIndex = validateAndCorrectNextParticipant(
+          serverNextIndex,
+          latestMessages,
+          latestParticipants,
+          currentRound,
+        );
+        const correctedParticipant = correctedNextIndex === serverNextIndex
+          ? latestNextParticipant
+          : typeof latestNextParticipant === 'number'
+            ? correctedNextIndex
+            : { index: correctedNextIndex, participantId: latestParticipants[correctedNextIndex]?.id ?? '' };
+
         // Generate resumption key and check for duplicates
         const threadId = latestThread?.id || 'unknown';
-        const retryResumptionKey = `${threadId}-r${currentRound}-p${getParticipantIndex(latestNextParticipant)}`;
+        const retryResumptionKey = `${threadId}-r${currentRound}-p${correctedNextIndex}`;
         if (resumptionTriggeredRef.current === retryResumptionKey) {
           return;
         }
@@ -287,7 +372,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         resumptionTriggeredRef.current = retryResumptionKey;
         // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes
         // ✅ CRITICAL FIX: Pass latestMessages to ensure correct userMessageId for backend lookup
-        chat.continueFromParticipant(latestNextParticipant, latestParticipants, latestMessages);
+        chat.continueFromParticipant(correctedParticipant, latestParticipants, latestMessages);
       }, 100); // Small delay for AI SDK hydration to complete
       return;
     }
@@ -302,15 +387,36 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
       return;
     }
 
+    // ✅ CACHE MISMATCH FIX: Validate server's nextParticipantToTrigger against actual messages
+    // Server prefill uses live DB, but SSR messages may be cached. If mismatch detected,
+    // correct the next participant to ensure proper streaming order (p0 → p1 → p2).
+    const serverNextIndex = getParticipantIndex(nextParticipantToTrigger);
+    const correctedNextIndex = validateAndCorrectNextParticipant(
+      serverNextIndex,
+      storeMessages,
+      storeParticipants,
+      currentRound,
+    );
+
+    // Build corrected participant trigger value
+    const correctedParticipant = correctedNextIndex === serverNextIndex
+      ? nextParticipantToTrigger
+      : typeof nextParticipantToTrigger === 'number'
+        ? correctedNextIndex
+        : { index: correctedNextIndex, participantId: storeParticipants[correctedNextIndex]?.id ?? '' };
+
+    // Update resumption key to reflect corrected participant
+    const correctedResumptionKey = `${storeThread?.id || 'unknown'}-r${currentRound}-p${correctedNextIndex}`;
+
     // ✅ Mark as triggered before calling to prevent race condition double-triggers
-    resumptionTriggeredRef.current = resumptionKey;
+    resumptionTriggeredRef.current = correctedResumptionKey;
 
     // Resume from specific participant
     // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes
     // ✅ CRITICAL FIX: Pass storeMessages to ensure correct userMessageId for backend lookup
     // Without this, continueFromParticipant uses stale AI SDK messages instead of
     // the freshly-persisted messages from PATCH, causing "User message not found" errors
-    chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants, storeMessages);
+    chat.continueFromParticipant(correctedParticipant, storeParticipants, storeMessages);
 
     // Cleanup
     return () => {

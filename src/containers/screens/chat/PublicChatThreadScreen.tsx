@@ -15,14 +15,31 @@ import { usePublicThreadQuery } from '@/hooks/queries';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
 import { chatMessagesToUIMessages, transformChatParticipants, transformPreSearches } from '@/lib/utils';
+import type { GetPublicThreadResponse } from '@/services/api';
 
-export default function PublicChatThreadScreen({ slug }: { slug: string }) {
+// Extract the data payload type from the API response
+type PublicThreadData = Extract<GetPublicThreadResponse, { success: true }>['data'];
+
+type PublicChatThreadScreenProps = {
+  slug: string;
+  /** SSR data passed directly - ensures immediate render without hydration flash */
+  initialData?: PublicThreadData | null;
+};
+
+export default function PublicChatThreadScreen({ slug, initialData }: PublicChatThreadScreenProps) {
   const t = useTranslations();
 
-  // Use hydrated data from server prefetch - no loading flash with proper HydrationBoundary
+  // ✅ SSR HYDRATION: Use initialData from props first, fallback to React Query
+  // This ensures immediate server render with content - no loading flash
   const { data: threadData, isPending } = usePublicThreadQuery(slug);
-  const threadResponse = threadData?.success ? threadData.data : null;
+  const queryResponse = threadData?.success ? threadData.data : null;
+
+  // Prefer SSR props, fallback to React Query data
+  const threadResponse = initialData || queryResponse;
   const thread = threadResponse?.thread || null;
+
+  // Only show pending if we have no data at all (neither SSR nor React Query)
+  const isActuallyPending = isPending && !initialData;
 
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
   const changelog = useMemo(() => threadResponse?.changelog || [], [threadResponse]);
@@ -41,17 +58,17 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     preSearches,
   });
 
-  // isPending is false when data is hydrated from server
-  const isStoreReady = !isPending && messages.length > 0;
+  // Data is ready when we have SSR props or React Query data
+  const isStoreReady = !isActuallyPending && messages.length > 0;
 
   useChatScroll({
     messages,
     enableNearBottomDetection: true,
   });
 
-  // Show loading only when truly pending (no hydrated data)
-  // With proper server prefetch + HydrationBoundary, this should rarely show
-  if (isPending) {
+  // Show loading only when truly pending (no SSR data AND no React Query data)
+  // With SSR props passed directly, this should never show on initial load
+  if (isActuallyPending) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4">

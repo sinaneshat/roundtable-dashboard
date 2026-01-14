@@ -7,6 +7,7 @@ import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
+import { verifyAndFetchFreshMessages } from '@/lib/utils';
 import { getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService, getThreadPreSearchesService, getThreadStreamResumptionStateService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
@@ -48,11 +49,33 @@ export default async function ChatThreadPage({
     redirect('/chat');
   }
 
-  const { thread, participants, messages, user } = threadResult.data;
+  const { thread, participants, messages: initialMessages, user } = threadResult.data;
 
   if (thread.isAiGeneratedTitle && thread.slug !== slug) {
     permanentRedirect(`/chat/${thread.slug}`);
   }
+
+  // Fetch stream resumption state FIRST - needed for message verification
+  let streamResumptionState = null;
+  try {
+    const streamStateResult = await getThreadStreamResumptionStateService({
+      param: { threadId: thread.id },
+    });
+    if (streamStateResult?.success && streamStateResult.data) {
+      streamResumptionState = streamStateResult.data;
+    }
+  } catch (error) {
+    console.error('[ChatThreadPage] Failed to fetch stream resumption state:', error);
+  }
+
+  // ✅ SSR CONSISTENCY: Verify messages match stream status, retry if D1 is stale
+  // This ensures proper SSR paint without client-side fallback fetches
+  // Returns messages with Date objects already transformed
+  const { messages: messagesWithDates } = await verifyAndFetchFreshMessages({
+    threadId: thread.id,
+    currentMessages: initialMessages,
+    streamResumptionState,
+  });
 
   // ✅ PERF: Fire-and-forget prefetches - don't block page render
   // Prefetches populate cache but we don't await - page renders instantly
@@ -81,18 +104,6 @@ export default async function ChatThreadPage({
     threadResult,
   );
 
-  let streamResumptionState = null;
-  try {
-    const streamStateResult = await getThreadStreamResumptionStateService({
-      param: { threadId: thread.id },
-    });
-    if (streamStateResult?.success && streamStateResult.data) {
-      streamResumptionState = streamStateResult.data;
-    }
-  } catch (error) {
-    console.error('[ChatThreadPage] Failed to fetch stream resumption state:', error);
-  }
-
   const threadWithDates = {
     ...thread,
     createdAt: new Date(thread.createdAt),
@@ -106,10 +117,7 @@ export default async function ChatThreadPage({
     updatedAt: new Date(p.updatedAt),
   }));
 
-  const messagesWithDates = messages.map(m => ({
-    ...m,
-    createdAt: new Date(m.createdAt),
-  }));
+  // Messages already transformed by verifyAndFetchFreshMessages
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatModeSchema, UploadStatuses } from '@/api/core/enums';
@@ -26,6 +26,7 @@ import {
   getModeratorMessageForRound,
   useChatFormActions,
   useScreenInitialization,
+  useSyncHydrateStore,
 } from '@/stores/chat';
 
 import { ChatView } from './ChatView';
@@ -87,6 +88,24 @@ export default function ChatThreadScreen({
   const t = useTranslations();
   const isDeleteDialogOpen = useBoolean(false);
   const chatAttachments = useChatAttachments();
+  // Track initial mount to skip showing "models deselected" toast on page load
+  const hasCompletedInitialMountRef = useRef(false);
+
+  // ✅ SSR HYDRATION: Compute uiMessages early for sync hydration
+  const uiMessages = useMemo(
+    () => chatMessagesToUIMessages(initialMessages, participants),
+    [initialMessages, participants],
+  );
+
+  // ✅ SSR HYDRATION: Hydrate store synchronously BEFORE any useChatStore calls
+  // This ensures first paint has content - no loading flash
+  useSyncHydrateStore({
+    mode: 'thread',
+    thread,
+    participants,
+    initialMessages: uiMessages,
+    streamResumptionState,
+  });
 
   useThreadHeaderUpdater({ thread, slug, onDeleteClick: isDeleteDialogOpen.onTrue });
 
@@ -116,14 +135,6 @@ export default function ChatThreadScreen({
       setSelectedParticipants: s.setSelectedParticipants,
       waitingToStartStreaming: s.waitingToStartStreaming,
     })),
-  );
-
-  // ✅ MOVED: prefillStreamResumptionState is now called synchronously in useScreenInitialization
-  // to fix the timing race where initializeThread read streamResumptionPrefilled=false
-
-  const uiMessages = useMemo(
-    () => chatMessagesToUIMessages(initialMessages, participants),
-    [initialMessages, participants],
   );
 
   const { data: modelsData } = useModelsQuery();
@@ -160,15 +171,24 @@ export default function ChatThreadScreen({
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
   useEffect(() => {
-    if (incompatibleModelIds.size === 0)
+    // Mark initial mount as complete after first run
+    // This prevents showing toast on page load for pre-existing incompatible models
+    const isInitialMount = !hasCompletedInitialMountRef.current;
+    if (isInitialMount) {
+      hasCompletedInitialMountRef.current = true;
+    }
+
+    if (incompatibleModelIds.size === 0) {
       return;
+    }
 
     const incompatibleSelected = selectedParticipants.filter(
       p => incompatibleModelIds.has(p.modelId),
     );
 
-    if (incompatibleSelected.length === 0)
+    if (incompatibleSelected.length === 0) {
       return;
+    }
 
     // Only show toast for models deselected due to vision incompatibility (not access control)
     const visionDeselected = incompatibleSelected.filter(
@@ -191,8 +211,10 @@ export default function ChatThreadScreen({
     setSelectedParticipants(reindexed);
     setSelectedModelIds(reindexed.map(p => p.modelId));
 
-    // Only show "images/PDFs" toast when models are actually deselected due to vision incompatibility
-    if (visionModelNames.length > 0) {
+    // Only show "images/PDFs" toast when:
+    // 1. Models are actually deselected due to vision incompatibility
+    // 2. NOT on initial page load (only when user adds new files)
+    if (visionModelNames.length > 0 && !isInitialMount) {
       const modelList = visionModelNames.length <= 2
         ? visionModelNames.join(' and ')
         : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;

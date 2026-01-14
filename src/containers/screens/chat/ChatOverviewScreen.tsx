@@ -82,6 +82,8 @@ export default function ChatOverviewScreen() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const sessionUser = session?.user;
+  // Track initial mount to skip showing "models deselected" toast on page load
+  const hasCompletedInitialMountRef = useRef(false);
 
   const { defaultModelId } = useModelLookup();
 
@@ -443,22 +445,38 @@ export default function ChatOverviewScreen() {
   ]);
 
   useEffect(() => {
+    // Mark initial mount as complete after first run
+    // This prevents showing toast on page load for pre-existing incompatible models
+    const isInitialMount = !hasCompletedInitialMountRef.current;
+    if (isInitialMount) {
+      hasCompletedInitialMountRef.current = true;
+    }
+
+    const hasVisionAttachments = chatAttachments.attachments.some(att =>
+      isVisionRequiredMimeType(att.file.type),
+    );
+
     // Skip incompatible filter when autoMode is enabled
     // Server validates model accessibility in auto mode - trust those results
     // This prevents race conditions where client's models list shows different
     // accessibility than what the server determined during analyze
-    if (autoMode)
+    // ✅ VISION FIX: ALWAYS check vision incompatibility when files are attached
+    // Even in auto mode, we need to filter out non-vision models before submission
+    if (autoMode && !hasVisionAttachments) {
       return;
+    }
 
-    if (incompatibleModelIds.size === 0)
+    if (incompatibleModelIds.size === 0) {
       return;
+    }
 
     const incompatibleSelected = selectedParticipants.filter(
       p => incompatibleModelIds.has(p.modelId),
     );
 
-    if (incompatibleSelected.length === 0)
+    if (incompatibleSelected.length === 0) {
       return;
+    }
 
     // Only show toast for models deselected due to vision incompatibility (not access control)
     const visionDeselected = incompatibleSelected.filter(
@@ -481,8 +499,10 @@ export default function ChatOverviewScreen() {
     setSelectedParticipants(reindexed);
     setPersistedModelIds(reindexed.map(p => p.modelId));
 
-    // Only show "images/PDFs" toast when models are actually deselected due to vision incompatibility
-    if (visionModelNames.length > 0) {
+    // Only show "images/PDFs" toast when:
+    // 1. Models are actually deselected due to vision incompatibility
+    // 2. NOT on initial page load (only when user adds new files)
+    if (visionModelNames.length > 0 && !isInitialMount) {
       const modelList = visionModelNames.length <= 2
         ? visionModelNames.join(' and ')
         : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;
@@ -492,7 +512,7 @@ export default function ChatOverviewScreen() {
         t('chat.models.modelsDeselectedDescription', { models: modelList }),
       );
     }
-  }, [autoMode, incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds, allEnabledModels, t]);
+  }, [autoMode, incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds, allEnabledModels, t, chatAttachments.attachments]);
 
   const threadActions = useMemo(
     () => currentThread && !showInitialUI

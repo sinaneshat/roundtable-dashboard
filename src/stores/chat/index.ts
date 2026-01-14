@@ -18,6 +18,8 @@ export type { UseOverviewActionsReturn } from './actions/overview-actions';
 export { useOverviewActions } from './actions/overview-actions';
 export type { UseScreenInitializationOptions } from './actions/screen-initialization';
 export { useScreenInitialization } from './actions/screen-initialization';
+export type { SyncHydrateOptions } from './actions/sync-hydrate-store';
+export { useSyncHydrateStore } from './actions/sync-hydrate-store';
 export type { UseThreadActionsOptions } from './actions/thread-actions';
 export { useThreadActions } from './actions/thread-actions';
 export type {

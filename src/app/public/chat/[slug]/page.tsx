@@ -145,8 +145,9 @@ export default async function PublicChatThreadPage({ params }: PageParams) {
   const { slug } = await params;
   const queryClient = getQueryClient();
 
+  let response;
   try {
-    const response = await getCachedPublicThreadForMetadata(slug);
+    response = await getCachedPublicThreadForMetadata(slug);
 
     queryClient.setQueryData(queryKeys.threads.public(slug), response);
 
@@ -184,9 +185,16 @@ export default async function PublicChatThreadPage({ params }: PageParams) {
     redirect(`/auth/sign-in?${searchParams.toString()}`);
   }
 
+  // ✅ SSR HYDRATION: Pass data directly as props for immediate render
+  // Don't rely solely on React Query hydration which can flash loading state
+  const threadData = response.data;
+
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <PublicChatThreadScreen slug={slug} />
+      <PublicChatThreadScreen
+        slug={slug}
+        initialData={threadData}
+      />
     </HydrationBoundary>
   );
 }

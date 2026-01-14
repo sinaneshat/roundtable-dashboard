@@ -18,6 +18,7 @@ export * from './participant';
 export * from './participant-message-lookup';
 export * from './role-colors';
 export * from './round-utils';
+export * from './ssr-message-verification';
 export * from './state-merge';
 export * from './type-guards';
 export * from './web-search-utils';
