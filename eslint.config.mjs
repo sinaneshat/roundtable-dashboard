@@ -134,4 +134,12 @@ export default antfu(
       // 'import/no-default-export': 'off', // Allow default exports where needed
     },
   },
+  {
+    // Module augmentation files require interface for declaration merging (TypeScript requirement)
+    // Official pattern: https://next-intl.dev/docs/workflows/typescript
+    files: ['**/global.ts', '**/*-context.d.ts'],
+    rules: {
+      'ts/consistent-type-definitions': 'off',
+    },
+  },
 );
