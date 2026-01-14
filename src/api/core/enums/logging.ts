@@ -113,7 +113,7 @@ export const DEV_LOG_LEVEL_VALUES: Record<DevLogLevel, number> = {
 // ============================================================================
 
 // 1. ARRAY CONSTANT
-export const RLOG_CATEGORIES = ['PHASE', 'RESUME', 'STREAM', 'MSG', 'GATE', 'TRIGGER', 'PRESRCH', 'MOD', 'CHANGELOG', 'SUBMIT'] as const;
+export const RLOG_CATEGORIES = ['PHASE', 'RESUME', 'STREAM', 'MSG', 'GATE', 'TRIGGER', 'PRESRCH', 'MOD', 'CHANGELOG', 'SUBMIT', 'INIT', 'SYNC'] as const;
 
 // 2. DEFAULT VALUE
 export const DEFAULT_RLOG_CATEGORY = 'PHASE' as const;
@@ -139,6 +139,8 @@ export const RlogCategories = {
   MOD: 'MOD' as const,
   CHANGELOG: 'CHANGELOG' as const,
   SUBMIT: 'SUBMIT' as const,
+  INIT: 'INIT' as const,
+  SYNC: 'SYNC' as const,
 } as const;
 
 // ============================================================================
@@ -271,6 +273,8 @@ export const RLOG_CATEGORY_STYLES: Record<RlogCategory, string> = {
   [RlogCategories.MOD]: 'color: #673AB7; font-weight: bold',
   [RlogCategories.CHANGELOG]: 'color: #009688; font-weight: bold',
   [RlogCategories.SUBMIT]: 'color: #795548; font-weight: bold',
+  [RlogCategories.INIT]: 'color: #607D8B; font-weight: bold',
+  [RlogCategories.SYNC]: 'color: #3F51B5',
 } as const;
 
 // ============================================================================

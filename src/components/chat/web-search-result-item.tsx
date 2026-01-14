@@ -110,8 +110,7 @@ export function WebSearchResultItem({
               {typeof result.metadata?.readingTime === 'number' && result.metadata.readingTime > 0 && (
                 <span className="flex items-center gap-0.5">
                   <Icons.clock className="size-2.5" />
-                  {result.metadata.readingTime}
-                  {t('minRead')}
+                  {t('minRead', { min: result.metadata.readingTime })}
                 </span>
               )}
               {typeof result.metadata?.wordCount === 'number' && result.metadata.wordCount > 0 && (
@@ -151,9 +150,9 @@ export function WebSearchResultItem({
 
         {allImages.length > 0 && (
           <div className="mt-2.5 flex gap-1.5 flex-wrap">
-            {allImages.slice(0, 4).map(img => (
+            {allImages.slice(0, 4).map((img, idx) => (
               <a
-                key={img.url}
+                key={`${img.url}-${idx}`}
                 href={result.url}
                 target="_blank"
                 rel="noopener noreferrer"

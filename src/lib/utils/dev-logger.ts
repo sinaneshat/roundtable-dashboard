@@ -185,6 +185,8 @@ export const rlog = {
   state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
   changelog: (action: string, detail: string): void => rlogNow(RlogCategories.CHANGELOG, `${action}: ${detail}`),
   submit: (action: string, detail: string): void => rlogNow(RlogCategories.SUBMIT, `${action}: ${detail}`),
+  init: (action: string, detail: string): void => rlogNow(RlogCategories.INIT, `${action}: ${detail}`),
+  sync: (key: string, detail: string): void => rlogLog(RlogCategories.SYNC, key, detail),
 };
 
 export const devLog = {

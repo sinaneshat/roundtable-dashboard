@@ -11,6 +11,7 @@
 import type messages from './locales/en/common.json';
 
 declare module 'next-intl' {
+  // eslint-disable-next-line ts/consistent-type-definitions
   interface AppConfig {
     Messages: typeof messages;
   }

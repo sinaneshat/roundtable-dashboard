@@ -652,7 +652,7 @@
       "other": "Other"
     },
     "validation": {
-      "messageMax": "Message must be less than 5000 characters",
+      "messageMax": "Message must be less than {max} characters",
       "messageMin": "Message must be at least 10 characters"
     }
   },

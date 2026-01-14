@@ -142,11 +142,11 @@ function NavigationHeaderComponent({
                 <BreadcrumbItem className="min-w-0 overflow-hidden max-w-32 sm:max-w-48 md:max-w-64">
                   <BreadcrumbPage
                     className="line-clamp-1 truncate overflow-hidden text-ellipsis whitespace-nowrap text-sm sm:text-base max-w-32 sm:max-w-48 md:max-w-64"
-                    title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey)}
+                    title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey as Parameters<typeof t>[0])}
                   >
                     {'isDynamic' in currentPage && currentPage.isDynamic
                       ? currentPage.titleKey
-                      : t(currentPage.titleKey)}
+                      : t(currentPage.titleKey as Parameters<typeof t>[0])}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>

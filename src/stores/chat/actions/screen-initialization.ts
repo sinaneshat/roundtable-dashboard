@@ -15,6 +15,7 @@ import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { queryKeys } from '@/lib/data/query-keys';
 import { chatMessageToUIMessage } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import { getThreadMessagesService } from '@/services/api';
 
 import { useIncompleteRoundResumption } from './incomplete-round-resumption';
@@ -87,7 +88,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     const freshIsWaitingForChangelog = freshState.isWaitingForChangelog;
     const freshPendingMessage = freshState.pendingMessage;
 
-    console.error(`[screenInit] thread=${threadId?.slice(-8) ?? 'null'} ready=${isReady} initd=${alreadyInitialized} parts=${participants.length} msgs=${initialMessages?.length ?? 0} phase=${streamResumptionState?.currentPhase ?? 'none'} nextP=${streamResumptionState?.participants?.nextParticipantToTrigger ?? 'null'} patch=${freshIsPatchInProgress}`);
+    rlog.init('effect', `t=${threadId?.slice(-8) ?? '-'} rdy=${isReady ? 1 : 0} initd=${alreadyInitialized ? 1 : 0} parts=${participants.length} msgs=${initialMessages?.length ?? 0} phase=${streamResumptionState?.currentPhase ?? '-'} patch=${freshIsPatchInProgress ? 1 : 0}`);
 
     // ✅ CRITICAL FIX: Do NOT prefill resumption state when a form submission is in progress
     // handleUpdateThreadAndSend calls clearStreamResumption() to clear stale state
@@ -130,7 +131,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
 
     // ✅ FIX: When SSR has stale data, initialize with SSR data then fetch fresh from API
     if (ssrHasIncompleteData && isResumption && threadId) {
-      console.error(`[screenInit] SSR stale (${ssrAssistantMsgCount} vs ${serverTotalParticipants}) - will fetch fresh`);
+      rlog.init('ssr-stale', `assist=${ssrAssistantMsgCount} vs server=${serverTotalParticipants}`);
     }
 
     if (isReady && !alreadyInitialized && !isFormActionsSubmission) {
@@ -169,7 +170,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     staleFetchAttemptedRef.current = threadId;
     setIsFetchingFreshMessages(true);
 
-    console.error(`[screenInit] Fetching fresh messages for stale SSR data`);
+    rlog.init('fetch-fresh', 'fetching msgs for stale SSR');
 
     queryClient.fetchQuery({
       queryKey: queryKeys.threads.messages(threadId),
@@ -182,12 +183,12 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
           const freshMessages: UIMessage[] = response.data
             .filter(m => m.role === 'user' || m.role === 'assistant')
             .map(chatMessageToUIMessage);
-          console.error(`[screenInit] Fetched ${freshMessages.length} fresh messages`);
+          rlog.init('fetch-done', `got ${freshMessages.length} msgs`);
           actions.setMessages(freshMessages);
         }
       })
-      .catch((err) => {
-        console.error(`[screenInit] Failed to fetch fresh messages:`, err);
+      .catch(() => {
+        rlog.init('fetch-fail', 'failed to get fresh msgs');
       })
       .finally(() => {
         setIsFetchingFreshMessages(false);

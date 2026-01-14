@@ -87,6 +87,9 @@ describe('form Slice Actions', () => {
   describe('addParticipant', () => {
     it('adds participant to empty list', () => {
       const store = createChatStore();
+
+      // Clear default participants for isolated test
+      store.getState().setSelectedParticipants([]);
       const participant = createParticipantConfig(0);
 
       store.getState().addParticipant(participant);
@@ -97,6 +100,9 @@ describe('form Slice Actions', () => {
 
     it('does not add duplicate participant', () => {
       const store = createChatStore();
+
+      // Clear default participants for isolated test
+      store.getState().setSelectedParticipants([]);
       const participant = createParticipantConfig(0);
 
       store.getState().addParticipant(participant);
@@ -108,6 +114,8 @@ describe('form Slice Actions', () => {
     it('assigns correct priority on add', () => {
       const store = createChatStore();
 
+      // Clear default participants for isolated test
+      store.getState().setSelectedParticipants([]);
       store.getState().addParticipant(createParticipantConfig(0));
       store.getState().addParticipant(createParticipantConfig(1));
       store.getState().addParticipant(createParticipantConfig(2));
@@ -123,6 +131,8 @@ describe('form Slice Actions', () => {
     it('removes participant by id', () => {
       const store = createChatStore();
 
+      // Clear default participants for isolated test
+      store.getState().setSelectedParticipants([]);
       store.getState().addParticipant(createParticipantConfig(0));
       store.getState().addParticipant(createParticipantConfig(1));
       store.getState().removeParticipant('participant-0');
@@ -134,6 +144,8 @@ describe('form Slice Actions', () => {
     it('recalculates priorities after removal', () => {
       const store = createChatStore();
 
+      // Clear default participants for isolated test
+      store.getState().setSelectedParticipants([]);
       store.getState().addParticipant(createParticipantConfig(0));
       store.getState().addParticipant(createParticipantConfig(1));
       store.getState().addParticipant(createParticipantConfig(2));
@@ -149,6 +161,8 @@ describe('form Slice Actions', () => {
     it('moves participant from index 0 to 2', () => {
       const store = createChatStore();
 
+      // Clear default participants for isolated test
+      store.getState().setSelectedParticipants([]);
       store.getState().addParticipant(createParticipantConfig(0));
       store.getState().addParticipant(createParticipantConfig(1));
       store.getState().addParticipant(createParticipantConfig(2));
@@ -164,6 +178,8 @@ describe('form Slice Actions', () => {
     it('updates priorities after reorder', () => {
       const store = createChatStore();
 
+      // Clear default participants for isolated test
+      store.getState().setSelectedParticipants([]);
       store.getState().addParticipant(createParticipantConfig(0));
       store.getState().addParticipant(createParticipantConfig(1));
       store.getState().reorderParticipants(1, 0);
@@ -187,7 +203,8 @@ describe('form Slice Actions', () => {
 
       expect(store.getState().inputValue).toBe(FORM_DEFAULTS.inputValue);
       expect(store.getState().selectedMode).toBe(FORM_DEFAULTS.selectedMode);
-      expect(store.getState().selectedParticipants).toHaveLength(0);
+      // resetForm restores the default preset participants
+      expect(store.getState().selectedParticipants).toHaveLength(FORM_DEFAULTS.selectedParticipants.length);
       expect(store.getState().enableWebSearch).toBe(FORM_DEFAULTS.enableWebSearch);
     });
   });

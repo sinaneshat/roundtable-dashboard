@@ -21,6 +21,7 @@ import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 
 import type { SendMessage, StartRound } from './store-action-types';
 import type { ResetFormPreferences } from './store-defaults';
@@ -798,7 +799,7 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     }, false, 'streamResumption/setCurrentResumptionPhase'),
 
   prefillStreamResumptionState: (threadId, serverState) => {
-    console.error(`[prefill] thread=${threadId.slice(-8)} phase=${serverState.currentPhase} r${serverState.roundNumber} complete=${serverState.roundComplete} nextP=${serverState.participants?.nextParticipantToTrigger ?? 'null'}`);
+    rlog.phase('prefill', `t=${threadId.slice(-8)} phase=${serverState.currentPhase} r${serverState.roundNumber} done=${serverState.roundComplete ? 1 : 0} nextP=${serverState.participants?.nextParticipantToTrigger ?? '-'}`);
 
     // ✅ FIX: For complete/idle phases, still set prefilled state to block incomplete-round-resumption
     // Previously we skipped entirely, leaving streamResumptionPrefilled=false and currentResumptionPhase=null.
@@ -806,7 +807,7 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     // allowing incomplete-round-resumption to run and re-trigger participants for completed rounds.
     // Now we set the phase to COMPLETE/IDLE so the guard works: `if (phase === COMPLETE) return`.
     if (serverState.roundComplete || serverState.currentPhase === RoundPhases.COMPLETE || serverState.currentPhase === RoundPhases.IDLE) {
-      console.error(`[prefill] round complete/idle - setting phase to block resumption`);
+      rlog.phase('prefill-block', 'round complete/idle - blocking resumption');
       set({
         streamResumptionPrefilled: true,
         prefilledForThreadId: threadId,
@@ -1040,7 +1041,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const isResumingStream = currentState.streamResumptionPrefilled;
     const resumptionRound = currentState.resumptionRoundNumber;
 
-    console.error(`[initThread] resum=${isResumingStream} same=${isSameThread} store=${storeMessages.length} db=${newMessages.length} resumR=${resumptionRound ?? 'null'}`);
+    rlog.init('thread', `resum=${isResumingStream ? 1 : 0} same=${isSameThread ? 1 : 0} store=${storeMessages.length} db=${newMessages.length} resumR=${resumptionRound ?? '-'}`);
 
     let messagesToSet: UIMessage[];
 

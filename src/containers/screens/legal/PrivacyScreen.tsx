@@ -46,7 +46,7 @@ export default async function PrivacyScreen() {
         </CardHeader>
         <CardContent className="prose prose-sm dark:prose-invert max-w-none">
           <section className="space-y-6">
-            {PRIVACY_SECTIONS.map((section) => (
+            {PRIVACY_SECTIONS.map(section => (
               <div key={section}>
                 <h2 className="text-xl font-semibold mb-3">
                   {t(`${section}.title`)}

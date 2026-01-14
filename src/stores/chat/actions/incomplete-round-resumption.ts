@@ -14,6 +14,7 @@ import type { RoundPhase } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
 import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getModeratorMetadata, getParticipantIndex, getParticipantModelIds, getRoundNumber, hasError as checkHasError } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 
 import {
   getMessageStreamingStatus,
@@ -815,7 +816,7 @@ export function useIncompleteRoundResumption(
       const latestState = store.getState();
       if (latestState.currentResumptionPhase === RoundPhases.COMPLETE
         || latestState.currentResumptionPhase === RoundPhases.IDLE) {
-        console.error(`[incompleteResume] SKIP: current store phase=${latestState.currentResumptionPhase} (closure was stale)`);
+        rlog.gate('phase-skip', `phase=${latestState.currentResumptionPhase}`);
         return;
       }
     }
@@ -947,7 +948,7 @@ export function useIncompleteRoundResumption(
     }
 
     // Log what we detected before triggering
-    console.error(`[incompleteResume] TRIGGER P${effectiveNextParticipant} r${currentRoundNumber} responded=[${[...respondedParticipantIndices]}] inProgress=[${[...inProgressParticipantIndices]}] total=${enabledParticipants.length}`);
+    rlog.trigger('resume', `P${effectiveNextParticipant} r${currentRoundNumber} responded=[${[...respondedParticipantIndices]}] inProgress=[${[...inProgressParticipantIndices]}] total=${enabledParticipants.length}`);
 
     // ✅ DOUBLE-TRIGGER FIX: Set round-level guard SYNCHRONOUSLY before ANY state updates
     roundTriggerInProgressRef.current = roundKey;
@@ -1156,7 +1157,7 @@ export function useIncompleteRoundResumption(
     // Screen-initialization will fetch fresh messages and properly handle the completed round.
     const assistantMsgCount = messages.filter(m => m.role === MessageRoles.ASSISTANT).length;
     if (assistantMsgCount === 0 && resumptionRoundNumber !== null) {
-      console.error(`[modResume] ABORT: 0 assistant msgs but server says moderator phase - SSR stale, transitioning to IDLE`);
+      rlog.moderator('abort-ssr', `0 assist msgs but moderator phase - transitioning to IDLE`);
       actions.setCurrentResumptionPhase(RoundPhases.IDLE);
       actions.setWaitingToStartStreaming(false);
       actions.setIsCreatingModerator(false);
@@ -1191,7 +1192,7 @@ export function useIncompleteRoundResumption(
       }
       // ✅ FIX: No moderator message exists - clear isCreatingModerator to allow re-trigger
       // This handles the case where SSR stale data means messages=[] but prefill set isModeratorStreaming=true
-      console.error(`[modResume] failed status, no msg - clearing flags to retry`);
+      rlog.moderator('retry', `failed status, no msg - clearing flags`);
       actions.setIsCreatingModerator(false);
       // Don't return - let the effect continue to re-trigger moderator
     }

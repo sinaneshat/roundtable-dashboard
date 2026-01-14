@@ -19,6 +19,7 @@ import {
   RoundFeedbackValueSchema,
 } from '@/api/core/enums';
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
+import { STRING_LIMITS } from '@/constants/validation';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 
 // ============================================================================
@@ -415,7 +416,7 @@ export const AddParticipantInputSchema = z.object({
  */
 export const GenerateResponsesInputSchema = z.object({
   threadId: CoreSchemas.id(),
-  messageContent: z.string().min(1).max(10000),
+  messageContent: z.string().min(STRING_LIMITS.MESSAGE_MIN).max(STRING_LIMITS.MESSAGE_MAX),
   enableWebSearch: z.boolean().default(false),
 }).openapi('GenerateResponsesInput');
 
