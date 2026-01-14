@@ -17,7 +17,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RoundPhase } from '@/api/core/enums';
-import { FinishReasons, MessageStatuses, RoundPhases } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses, RoundPhases } from '@/api/core/enums';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -539,7 +539,7 @@ describe('signature-Based Re-check Detection', () => {
 describe('duplicate Message Prevention', () => {
   it('checks for existing message ID before triggering participant', () => {
     const messages = [
-      { id: 'thread-123_r0_p0', role: 'assistant', content: 'Existing' },
+      { id: 'thread-123_r0_p0', role: MessageRoles.ASSISTANT, content: 'Existing' },
     ];
 
     const expectedMessageId = 'thread-123_r0_p0';
@@ -552,7 +552,7 @@ describe('duplicate Message Prevention', () => {
 
   it('allows triggering when message ID does not exist', () => {
     const messages = [
-      { id: 'thread-123_r0_p0', role: 'assistant', content: 'P0' },
+      { id: 'thread-123_r0_p0', role: MessageRoles.ASSISTANT, content: 'P0' },
     ];
 
     const expectedMessageId = 'thread-123_r0_p1';
@@ -567,7 +567,7 @@ describe('duplicate Message Prevention', () => {
     const messages = [
       {
         id: 'thread-123_r0_p0',
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         parts: [],
         metadata: { finishReason: FinishReasons.UNKNOWN },
       },
@@ -630,7 +630,7 @@ describe('submission In Progress Guard', () => {
     const messages = [
       {
         id: 'optimistic-123',
-        role: 'user',
+        role: MessageRoles.USER,
         metadata: { isOptimistic: true },
       },
     ];

@@ -650,7 +650,7 @@ describe('participant Completion Race', () => {
       const messages = [
         {
           id: 'p0-r0',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'Streaming...' }],
           metadata: {
             role: MessageRoles.ASSISTANT,

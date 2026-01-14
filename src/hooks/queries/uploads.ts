@@ -52,6 +52,7 @@ export function useUploadsQuery(status?: ChatAttachmentStatus) {
     getNextPageParam: lastPage => lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
     enabled: isAuthenticated,
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
     retry: false,
     throwOnError: false,
   });

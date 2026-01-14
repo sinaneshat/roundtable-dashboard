@@ -152,6 +152,7 @@ export function WebSearchResultItem({
           <div className="mt-2.5 flex gap-1.5 flex-wrap">
             {allImages.slice(0, 4).map((img, idx) => (
               <a
+                // eslint-disable-next-line react/no-array-index-key -- images may have duplicate URLs, idx ensures uniqueness
                 key={`${img.url}-${idx}`}
                 href={result.url}
                 target="_blank"

@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { MessageStatuses } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses } from '@/api/core/enums';
 
 import { createChatStore } from '../store';
 
@@ -250,28 +250,28 @@ describe('streaming Completion Optimization', () => {
       store.getState().setMessages([
         {
           id: 'msg-user',
-          role: 'user' as const,
+          role: MessageRoles.USER as const,
           parts: [{ type: 'text' as const, text: 'Hello' }],
           metadata: { roundNumber: 0 },
           createdAt: new Date(),
         },
         {
           id: 'thread-1_r0_p0',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'Response 1' }],
           metadata: { roundNumber: 0, participantIndex: 0 },
           createdAt: new Date(),
         },
         {
           id: 'thread-1_r0_p1',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'Response 2' }],
           metadata: { roundNumber: 0, participantIndex: 1 },
           createdAt: new Date(),
         },
         {
           id: 'thread-1_r0_p2',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'Response 3' }],
           metadata: { roundNumber: 0, participantIndex: 2 },
           createdAt: new Date(),

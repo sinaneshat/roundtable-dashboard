@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FinishReason } from '@/api/core/enums';
+import { UIMessageRoles } from '@/api/core/enums';
 
 /**
  * Participant Streaming Sequence Tests
@@ -35,7 +36,7 @@ type ParticipantMetadata = {
 
 type StreamingMessage = {
   id: string;
-  role: 'assistant';
+  role: UIMessageRoles.ASSISTANT;
   content: string;
   parts: Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>;
   metadata: ParticipantMetadata;
@@ -131,7 +132,7 @@ function buildMessageFromState(
 
   return {
     id: state.messageId,
-    role: 'assistant',
+    role: UIMessageRoles.ASSISTANT,
     content,
     parts,
     metadata,

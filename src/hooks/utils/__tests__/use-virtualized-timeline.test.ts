@@ -22,6 +22,7 @@
 import type { UIMessage } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageRoles } from '@/api/core/enums';
 import { act, renderHook } from '@/lib/testing';
 
 import type { TimelineItem } from '../use-thread-timeline';
@@ -87,7 +88,7 @@ function createMockTimelineItem(
       data: [
         {
           id: `msg-${roundNumber}`,
-          role: 'user',
+          role: MessageRoles.USER,
           content: 'Test message',
           parts: [{ type: 'text', text: 'Test message' }],
         } satisfies UIMessage,

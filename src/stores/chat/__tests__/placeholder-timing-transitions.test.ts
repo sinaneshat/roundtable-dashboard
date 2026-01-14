@@ -91,7 +91,7 @@ function createStreamingMessage(
 ): UIMessage {
   return {
     id: `thread_r${roundNumber}_p${participantIndex}`,
-    role: 'assistant' as const,
+    role: MessageRoles.ASSISTANT as const,
     parts: textContent
       ? [{ type: MessagePartTypes.TEXT as const, text: textContent }]
       : [],
@@ -115,7 +115,7 @@ function createModeratorStreamingMessage(
 ): UIMessage {
   return {
     id: `thread_r${roundNumber}_moderator`,
-    role: 'assistant' as const,
+    role: MessageRoles.ASSISTANT as const,
     parts: textContent
       ? [{ type: MessagePartTypes.TEXT as const, text: textContent }]
       : [],

@@ -52,7 +52,6 @@ type ChatInputProps = {
   isHydrating?: boolean;
   isSubmitting?: boolean;
   isModelsLoading?: boolean;
-  hasHeaderToggle?: boolean;
   hideInternalAlerts?: boolean;
   borderVariant?: BorderVariant;
 };
@@ -85,7 +84,6 @@ export const ChatInput = memo(({
   isHydrating = false,
   isSubmitting = false,
   isModelsLoading = false,
-  hasHeaderToggle = false,
   hideInternalAlerts = false,
   borderVariant = BorderVariants.DEFAULT,
 }: ChatInputProps) => {
@@ -261,16 +259,14 @@ export const ChatInput = memo(({
         {enableAttachments && <ChatInputDropzoneOverlay isDragging={isDragging} />}
 
         <div className="flex flex-col overflow-hidden h-full">
-          {showCreditAlert && !hideInternalAlerts && <QuotaAlertExtension hasHeaderToggle={hasHeaderToggle} />}
-          {isFreeUser && !hideInternalAlerts && <FreeTrialAlert hasHeaderToggle={hasHeaderToggle} />}
+          {showCreditAlert && !hideInternalAlerts && <QuotaAlertExtension />}
+          {isFreeUser && !hideInternalAlerts && <FreeTrialAlert />}
           {showNoModelsError && (
             <div
               className={cn(
                 'flex items-center gap-3 px-3 py-2',
                 'border-0 border-b border-destructive/20',
                 'bg-destructive/10',
-                // No top rounding when header is present (hideInternalAlerts means header handles top)
-                hideInternalAlerts ? 'rounded-none' : 'rounded-t-2xl',
               )}
             >
               <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
@@ -285,8 +281,6 @@ export const ChatInput = memo(({
                 'flex items-center gap-3 px-3 py-2',
                 'border-0 border-b border-destructive/20',
                 'bg-destructive/10',
-                // No top rounding when header is present
-                hideInternalAlerts ? 'rounded-none' : 'rounded-t-2xl',
               )}
             >
               <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
@@ -299,7 +293,6 @@ export const ChatInput = memo(({
             <VoiceVisualization
               isActive={isListening}
               audioLevels={audioLevels}
-              hasAlertAbove={hideInternalAlerts || showCreditAlert || isFreeUser || showNoModelsError || isOverLimit}
             />
           )}
 

@@ -15,8 +15,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageRoles } from '@/api/core/enums';
 import { checkFreeUserHasCompletedRound } from '@/api/services/billing';
-// Import the mocked module
 import { getDbAsync } from '@/db';
 
 // Mock the database module with all required exports
@@ -149,8 +149,8 @@ describe('checkFreeUserHasCompletedRound', () => {
         [], // No transaction
         [
           // Only 2 out of 3 participants have responded
-          { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-          { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+          { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
         ],
       );
 
@@ -178,7 +178,7 @@ describe('checkFreeUserHasCompletedRound', () => {
       beforeEach(() => {
         setupSelectMock(
           [], // No transaction
-          [{ id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 }],
+          [{ id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 }],
         );
 
         mockDb.query.chatThread.findFirst.mockResolvedValue({
@@ -203,8 +203,8 @@ describe('checkFreeUserHasCompletedRound', () => {
         setupSelectMock(
           [], // No transaction
           [
-            { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-            { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+            { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+            { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
           ],
         );
 
@@ -222,7 +222,7 @@ describe('checkFreeUserHasCompletedRound', () => {
         mockDb.query.chatMessage.findFirst.mockResolvedValue({
           id: 'thread-123_r0_moderator',
           threadId: 'thread-123',
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           parts: [{ type: 'text', text: 'Moderator summary...' }],
           roundNumber: 0,
         });
@@ -240,10 +240,10 @@ describe('checkFreeUserHasCompletedRound', () => {
         setupSelectMock(
           [], // No transaction
           [
-            { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-            { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
-            { id: 'msg-3', participantId: 'p3', role: 'assistant', roundNumber: 0 },
-            { id: 'msg-4', participantId: 'p4', role: 'assistant', roundNumber: 0 },
+            { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+            { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+            { id: 'msg-3', participantId: 'p3', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+            { id: 'msg-4', participantId: 'p4', role: MessageRoles.ASSISTANT, roundNumber: 0 },
           ],
         );
 
@@ -263,7 +263,7 @@ describe('checkFreeUserHasCompletedRound', () => {
         mockDb.query.chatMessage.findFirst.mockResolvedValue({
           id: 'thread-123_r0_moderator',
           threadId: 'thread-123',
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           parts: [{ type: 'text', text: 'Moderator summary...' }],
           roundNumber: 0,
         });
@@ -284,8 +284,8 @@ describe('checkFreeUserHasCompletedRound', () => {
           [], // No transaction
           [
             // Only enabled participants have responded
-            { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-            { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+            { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+            { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
           ],
         );
 
@@ -304,7 +304,7 @@ describe('checkFreeUserHasCompletedRound', () => {
         mockDb.query.chatMessage.findFirst.mockResolvedValue({
           id: 'thread-123_r0_moderator',
           threadId: 'thread-123',
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           parts: [{ type: 'text', text: 'Moderator summary...' }],
           roundNumber: 0,
         });
@@ -323,7 +323,7 @@ describe('checkFreeUserHasCompletedRound', () => {
           [], // No transaction
           [
             // Only disabled participant has responded
-            { id: 'msg-1', participantId: 'p3', role: 'assistant', roundNumber: 0 },
+            { id: 'msg-1', participantId: 'p3', role: MessageRoles.ASSISTANT, roundNumber: 0 },
           ],
         );
 
@@ -390,9 +390,9 @@ describe('checkFreeUserHasCompletedRound', () => {
         [], // No transaction
         [
           // Participant 1 has responded twice, participant 2 once
-          { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-          { id: 'msg-2', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-          { id: 'msg-3', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+          { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          { id: 'msg-2', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          { id: 'msg-3', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
         ],
       );
 
@@ -410,7 +410,7 @@ describe('checkFreeUserHasCompletedRound', () => {
       mockDb.query.chatMessage.findFirst.mockResolvedValue({
         id: 'thread-123_r0_moderator',
         threadId: 'thread-123',
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         parts: [{ type: 'text', text: 'Moderator summary...' }],
         roundNumber: 0,
       });
@@ -454,8 +454,8 @@ describe('checkFreeUserHasCompletedRound', () => {
         [], // No transaction
         [
           // User message (null participantId) and only one participant response
-          { id: 'msg-user', participantId: null, role: 'user', roundNumber: 0 },
-          { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
+          { id: 'msg-user', participantId: null, role: MessageRoles.USER, roundNumber: 0 },
+          { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
         ],
       );
 
@@ -484,10 +484,10 @@ describe('checkFreeUserHasCompletedRound', () => {
           [], // No transaction
           [
             // Both participants responded in round 0, plus messages in other rounds
-            { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-            { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
-            { id: 'msg-3', participantId: 'p1', role: 'assistant', roundNumber: 1 },
-            { id: 'msg-4', participantId: null, role: 'user', roundNumber: 0 },
+            { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+            { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+            { id: 'msg-3', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 1 },
+            { id: 'msg-4', participantId: null, role: MessageRoles.USER, roundNumber: 0 },
           ],
         );
 
@@ -505,7 +505,7 @@ describe('checkFreeUserHasCompletedRound', () => {
         mockDb.query.chatMessage.findFirst.mockResolvedValue({
           id: 'thread-123_r0_moderator',
           threadId: 'thread-123',
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           parts: [{ type: 'text', text: 'Moderator summary...' }],
           roundNumber: 0,
         });

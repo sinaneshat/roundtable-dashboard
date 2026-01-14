@@ -36,7 +36,7 @@ function createStreamingMessage(opts: {
     role: UIMessageRoles.ASSISTANT,
     parts: [{ type: MessagePartTypes.TEXT, text: opts.content }],
     metadata: {
-      role: 'assistant',
+      role: UIMessageRoles.ASSISTANT,
       roundNumber: opts.roundNumber,
       participantIndex: opts.participantIndex,
       participantId: `participant-${opts.participantIndex}`,

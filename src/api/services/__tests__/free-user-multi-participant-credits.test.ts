@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreditActions, PlanTypes } from '@/api/core/enums';
+import { CreditActions, MessageRoles, PlanTypes } from '@/api/core/enums';
 import { checkFreeUserHasCompletedRound, zeroOutFreeUserCredits } from '@/api/services/billing';
 import { getDbAsync } from '@/db';
 
@@ -116,7 +116,7 @@ describe('1 Participant Round', () => {
   it('completes after participant responds', async () => {
     setupSelectMock(
       [],
-      [{ id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 }],
+      [{ id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 }],
     );
 
     mockDb.query.chatThread.findFirst.mockResolvedValue({
@@ -179,7 +179,7 @@ describe('2 Participants Round', () => {
   it('not complete after 1st participant', async () => {
     setupSelectMock(
       [],
-      [{ id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 }],
+      [{ id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 }],
     );
 
     mockDb.query.chatThread.findFirst.mockResolvedValue({
@@ -201,8 +201,8 @@ describe('2 Participants Round', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 
@@ -219,7 +219,7 @@ describe('2 Participants Round', () => {
     mockDb.query.chatMessage.findFirst.mockResolvedValue({
       id: 'thread-2_r0_moderator',
       threadId: 'thread-2',
-      role: 'assistant',
+      role: MessageRoles.ASSISTANT,
       parts: [{ type: 'text', text: 'Moderator summary' }],
       roundNumber: 0,
     });
@@ -234,7 +234,7 @@ describe('3 Participants Round', () => {
   it('not complete after 1st participant', async () => {
     setupSelectMock(
       [],
-      [{ id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 }],
+      [{ id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 }],
     );
 
     mockDb.query.chatThread.findFirst.mockResolvedValue({
@@ -257,8 +257,8 @@ describe('3 Participants Round', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 
@@ -282,9 +282,9 @@ describe('3 Participants Round', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-3', participantId: 'p3', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-3', participantId: 'p3', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 
@@ -302,7 +302,7 @@ describe('3 Participants Round', () => {
     mockDb.query.chatMessage.findFirst.mockResolvedValue({
       id: 'thread-3_r0_moderator',
       threadId: 'thread-3',
-      role: 'assistant',
+      role: MessageRoles.ASSISTANT,
       parts: [{ type: 'text', text: 'Moderator summary' }],
       roundNumber: 0,
     });
@@ -318,9 +318,9 @@ describe('4 Participants Round', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-3', participantId: 'p3', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-3', participantId: 'p3', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 
@@ -345,10 +345,10 @@ describe('4 Participants Round', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-3', participantId: 'p3', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-4', participantId: 'p4', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-3', participantId: 'p3', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-4', participantId: 'p4', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 
@@ -367,7 +367,7 @@ describe('4 Participants Round', () => {
     mockDb.query.chatMessage.findFirst.mockResolvedValue({
       id: 'thread-4_r0_moderator',
       threadId: 'thread-4',
-      role: 'assistant',
+      role: MessageRoles.ASSISTANT,
       parts: [{ type: 'text', text: 'Moderator summary' }],
       roundNumber: 0,
     });
@@ -406,8 +406,8 @@ describe('disabled participants', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 
@@ -462,9 +462,9 @@ describe('edge cases', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1a', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-1b', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1a', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-1b', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 

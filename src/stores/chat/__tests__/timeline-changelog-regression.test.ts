@@ -435,10 +435,10 @@ describe('bug #4: Progressive UI Updates During Streaming', () => {
       // Initial streaming message (partial content)
       const streamingMessage: UIMessage = {
         id: 'streaming-msg',
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         parts: [{ type: 'text', text: 'Partial...' }],
         metadata: {
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           roundNumber: 0,
           participantId: 'p0',
           participantIndex: 0,
@@ -454,7 +454,7 @@ describe('bug #4: Progressive UI Updates During Streaming', () => {
         ...streamingMessage,
         parts: [{ type: 'text', text: 'Complete response with all content' }],
         metadata: {
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           roundNumber: streamingMessage.metadata?.roundNumber ?? 0,
           participantId: streamingMessage.metadata?.participantId as string,
           participantIndex: streamingMessage.metadata?.participantIndex as number,

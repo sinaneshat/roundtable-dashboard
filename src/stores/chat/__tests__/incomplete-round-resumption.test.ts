@@ -161,7 +161,7 @@ function createStreamingAssistantMessage(
 ): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: 'assistant' as const,
+    role: MessageRoles.ASSISTANT as const,
     parts: hasContent
       ? [{ type: 'text' as const, text: 'Partial response...', state: 'streaming' as const }]
       : [],
@@ -190,7 +190,7 @@ function createEmptyInterruptedMessage(
 ): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: 'assistant' as const,
+    role: MessageRoles.ASSISTANT as const,
     parts: [], // Empty - no content generated before interrupt
     metadata: {
       role: MessageRoles.ASSISTANT,

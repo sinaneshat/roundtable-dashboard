@@ -24,6 +24,7 @@ import { useStore } from 'zustand';
 
 import { MessageRoles } from '@/api/core/enums';
 import { getRoundNumber, getUserMetadata, isModeratorMessage } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseMinimalMessageSyncParams = {
@@ -112,7 +113,7 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
 
     // Build merged messages:
     // 1. Start with chat messages (AI SDK source of truth for streaming)
-    // 2. Preserve any store-only messages (e.g., moderator messages during streaming)
+    // 2. Preserve any store-only messages (e.g., moderator messages, persisted participants)
     const chatMessageIds = new Set(filteredChatMessages.map(m => m.id));
     const storeOnlyMessages = storeMessages.filter((m) => {
       // Keep messages that are in store but not in AI SDK
@@ -136,11 +137,20 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
         }
       }
 
-      // Preserve messages from different rounds (they might have been filtered by AI SDK)
-      const chatRounds = new Set(filteredChatMessages.map(cm => getRoundNumber(cm.metadata)));
-      const msgRound = getRoundNumber(m.metadata);
-      if (msgRound !== null && !chatRounds.has(msgRound))
-        return true;
+      // ✅ REFRESH FIX: Preserve assistant messages from previous rounds
+      // After page refresh, AI SDK may have only the SSR user message (e.g., round 0 user).
+      // The store has participant messages fetched from API (e.g., round 0 participants).
+      // These participant messages MUST be preserved - they represent completed work.
+      //
+      // Previous bug: Only preserved messages from rounds NOT in chatRounds.
+      // If chatRounds={0} (from user message), round 0 participants were DROPPED.
+      //
+      // Fix: Preserve ALL assistant messages not in AI SDK by ID.
+      // AI SDK only tracks the CURRENT streaming message. Store is source of truth
+      // for completed messages from previous participants.
+      if (m.role === MessageRoles.ASSISTANT) {
+        return true; // Preserve all assistant messages not in AI SDK
+      }
 
       return false;
     });
@@ -153,6 +163,17 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
     // when AI SDK tries to push streaming parts to a frozen parts array.
     // structuredClone breaks the reference link, ensuring only copies get frozen.
     const mergedMessages = structuredClone([...filteredChatMessages, ...storeOnlyMessages]);
+
+    // ✅ DEBUG: Log sync details to diagnose message loss
+    if (mergedMessages.length !== storeMessages.length) {
+      rlog.sync('merge', `chat=${filteredChatMessages.length} storeOnly=${storeOnlyMessages.length} merged=${mergedMessages.length} store=${storeMessages.length} chatRounds=[${[...new Set(filteredChatMessages.map(m => getRoundNumber(m.metadata)))]}]`);
+      // Log dropped messages
+      const mergedIds = new Set(mergedMessages.map(m => m.id));
+      const droppedMsgs = storeMessages.filter(m => !mergedIds.has(m.id));
+      if (droppedMsgs.length > 0) {
+        rlog.sync('dropped', `count=${droppedMsgs.length} ids=[${droppedMsgs.map(m => m.id.slice(-20)).join(',')}] rounds=[${droppedMsgs.map(m => getRoundNumber(m.metadata)).join(',')}]`);
+      }
+    }
 
     // Update store (store's setMessages handles deduplication)
     store.getState().setMessages(mergedMessages);

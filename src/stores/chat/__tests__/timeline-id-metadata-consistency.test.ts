@@ -361,7 +361,7 @@ describe('participant Index Consistency', () => {
       createTestUserMessage({ id: 'user-0', content: 'Q', roundNumber: 0 }),
       {
         id: 'msg-no-index',
-        role: 'assistant' as const,
+        role: MessageRoles.ASSISTANT as const,
         parts: [{ type: 'text' as const, text: 'Response' }],
         metadata: {
           role: MessageRoles.ASSISTANT,

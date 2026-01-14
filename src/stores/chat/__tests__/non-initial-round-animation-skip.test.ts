@@ -135,16 +135,14 @@ describe('non-Initial Round Animation Skip', () => {
 
   describe('optimistic to DB ID Transition (Critical Edge Case)', () => {
     /**
-     * This scenario tests the exact bug that was discovered:
      * 1. User submits round 1 message
      * 2. Optimistic message added with ID `optimistic-user-1736128000000`
      * 3. Animation skipped (optimistic- prefix) - message visible
      * 4. DB response arrives, ID changes to `01KE5W6ER2Q1SFYSXNDZ0YZZVJ`
      * 5. Component remounts
-     * 6. OLD BUG: Animation triggers, opacity: 0, message invisible
-     * 7. FIX: roundNumber > 0 still skips animation, message remains visible
+     * 6. roundNumber > 0 skips animation, message remains visible
      */
-    it('cRITICAL: should skip animation after optimistic ID replaced by DB ID', () => {
+    it('should skip animation after optimistic ID replaced by DB ID', () => {
       // Step 1: Optimistic message (animation skipped via optimistic- prefix)
       const optimisticMessage: UIMessage = {
         id: 'optimistic-user-1736128000000',

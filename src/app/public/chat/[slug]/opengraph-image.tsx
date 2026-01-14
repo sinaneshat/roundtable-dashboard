@@ -15,7 +15,7 @@ import {
 import { BRAND } from '@/constants';
 import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { getOGFonts } from '@/lib/ui/og-fonts.server';
+import { getOGFontsSync } from '@/lib/ui/og-fonts.server';
 import {
   createGradient,
   getLogoBase64,
@@ -136,7 +136,7 @@ async function generateThreadOgImage(
   messages: Array<{ role: string; content?: unknown; parts?: unknown[] }>,
 ) {
   const [fonts, logoBase64, robotIconBase64, messageIconBase64] = await Promise.all([
-    getOGFonts(),
+    getOGFontsSync(),
     getLogoBase64().catch(() => ''),
     getUIIconBase64('robot').catch(() => ''),
     getUIIconBase64('message').catch(() => ''),
@@ -442,7 +442,7 @@ async function generateThreadOgImage(
 
 async function generateFallbackImage() {
   const [fonts, logoBase64] = await Promise.all([
-    getOGFonts(),
+    getOGFontsSync(),
     getLogoBase64().catch(() => ''),
   ]);
 

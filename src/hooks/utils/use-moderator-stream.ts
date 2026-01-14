@@ -213,8 +213,8 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
         staleTime: 0,
       });
 
-      if (result.success && result.data?.messages) {
-        const uiMessages = chatMessagesToUIMessages(result.data.messages, participants);
+      if (result.success && result.data?.items) {
+        const uiMessages = chatMessagesToUIMessages(result.data.items, participants);
         setMessages(uiMessages);
       }
 

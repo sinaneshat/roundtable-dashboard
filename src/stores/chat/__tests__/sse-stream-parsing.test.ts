@@ -623,7 +623,7 @@ describe('sSE Error Handling', () => {
   describe('stream Interruption', () => {
     it('handles stream ending without done event', () => {
       const events = [
-        createSSEEventString('start', { messageMetadata: { role: 'assistant' } }),
+        createSSEEventString('start', { messageMetadata: { role: MessageRoles.ASSISTANT } }),
         createSSEEventString('text-delta', { delta: 'Partial content...' }),
         // No finish or done event
       ];
@@ -639,7 +639,7 @@ describe('sSE Error Handling', () => {
 
     it('handles error event mid-stream', () => {
       const events = [
-        createSSEEventString('start', { messageMetadata: { role: 'assistant' } }),
+        createSSEEventString('start', { messageMetadata: { role: MessageRoles.ASSISTANT } }),
         createSSEEventString('text-delta', { delta: 'Partial...' }),
         createSSEEventString('error', { message: 'Connection timeout', code: 'timeout' }),
       ];
@@ -662,7 +662,7 @@ describe('state Updates from SSE Events', () => {
     it('builds message from stream events', () => {
       const message = {
         id: '',
-        role: 'assistant' as const,
+        role: MessageRoles.ASSISTANT as const,
         content: '',
         metadata: null as DbAssistantMessageMetadata | null,
       };

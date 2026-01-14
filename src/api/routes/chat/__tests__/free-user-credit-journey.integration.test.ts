@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import type { MessageRoles } from '@/api/core/enums';
 import { CreditActions, CreditTransactionTypes, PlanTypes } from '@/api/core/enums';
 
 /**
@@ -59,7 +60,7 @@ type MockThread = {
 type MockMessage = {
   id: string;
   threadId: string;
-  role: 'user' | 'assistant' | 'system';
+  role: MessageRoles.USER | 'assistant' | 'system';
   roundIndex: number;
   participantId?: string | null;
   content: string;
@@ -233,7 +234,7 @@ class MockDatabase {
 
   addMessage(
     threadId: string,
-    role: 'user' | 'assistant',
+    role: MessageRoles.USER | 'assistant',
     content: string,
     roundIndex: number,
     participantId?: string,

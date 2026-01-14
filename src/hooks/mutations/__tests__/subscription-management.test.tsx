@@ -159,9 +159,22 @@ describe('useSwitchSubscriptionMutation', () => {
         },
       };
 
+      const mockUsageData = {
+        success: true as const,
+        data: { creditsUsed: 0, creditsLimit: 1000, modelsUsed: 0, modelsLimit: 10 },
+      };
+
+      const mockModelsData = {
+        success: true as const,
+        data: { items: [], count: 0 },
+      };
+
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
+      vi.spyOn(apiServices, 'getUserUsageStatsService').mockResolvedValue(mockUsageData);
+      vi.spyOn(apiServices, 'listModelsService').mockResolvedValue(mockModelsData);
 
       const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+      const setQueryDataSpy = vi.spyOn(queryClient, 'setQueryData');
 
       const { result } = renderHook(() => useSwitchSubscriptionMutation(), {
         wrapper: createWrapper(queryClient),
@@ -185,19 +198,13 @@ describe('useSwitchSubscriptionMutation', () => {
         }),
       );
 
-      // Verify usage invalidated (quota limits tied to tier)
-      expect(invalidateSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          queryKey: queryKeys.usage.all,
-        }),
-      );
+      // Verify usage data fetched and set (quota limits tied to tier)
+      expect(apiServices.getUserUsageStatsService).toHaveBeenCalledWith({ bypassCache: true });
+      expect(setQueryDataSpy).toHaveBeenCalledWith(queryKeys.usage.stats(), mockUsageData);
 
-      // Verify models invalidated (model access tier-based)
-      expect(invalidateSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          queryKey: queryKeys.models.all,
-        }),
-      );
+      // Verify models data fetched and set (model access tier-based)
+      expect(apiServices.listModelsService).toHaveBeenCalledWith({ bypassCache: true });
+      expect(setQueryDataSpy).toHaveBeenCalledWith(queryKeys.models.list(), mockModelsData);
     });
 
     it('should handle upgrade (immediate proration)', async () => {
@@ -602,9 +609,22 @@ describe('useCancelSubscriptionMutation', () => {
         },
       };
 
+      const mockUsageData = {
+        success: true as const,
+        data: { creditsUsed: 0, creditsLimit: 100, modelsUsed: 0, modelsLimit: 1 },
+      };
+
+      const mockModelsData = {
+        success: true as const,
+        data: { items: [], count: 0 },
+      };
+
       vi.spyOn(apiServices, 'cancelSubscriptionService').mockResolvedValue(mockResponse);
+      vi.spyOn(apiServices, 'getUserUsageStatsService').mockResolvedValue(mockUsageData);
+      vi.spyOn(apiServices, 'listModelsService').mockResolvedValue(mockModelsData);
 
       const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+      const setQueryDataSpy = vi.spyOn(queryClient, 'setQueryData');
 
       const { result } = renderHook(() => useCancelSubscriptionMutation(), {
         wrapper: createWrapper(queryClient),
@@ -628,19 +648,13 @@ describe('useCancelSubscriptionMutation', () => {
         }),
       );
 
-      // Verify usage invalidated (reverts to free tier limits)
-      expect(invalidateSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          queryKey: queryKeys.usage.all,
-        }),
-      );
+      // Verify usage data fetched and set (reverts to free tier limits)
+      expect(apiServices.getUserUsageStatsService).toHaveBeenCalledWith({ bypassCache: true });
+      expect(setQueryDataSpy).toHaveBeenCalledWith(queryKeys.usage.stats(), mockUsageData);
 
-      // Verify models invalidated (loses premium model access)
-      expect(invalidateSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          queryKey: queryKeys.models.all,
-        }),
-      );
+      // Verify models data fetched and set (loses premium model access)
+      expect(apiServices.listModelsService).toHaveBeenCalledWith({ bypassCache: true });
+      expect(setQueryDataSpy).toHaveBeenCalledWith(queryKeys.models.list(), mockModelsData);
     });
   });
 

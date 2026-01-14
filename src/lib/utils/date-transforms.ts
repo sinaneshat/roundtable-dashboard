@@ -169,7 +169,7 @@ export function transformChatParticipant(
  *
  * @example
  * ```typescript
- * const messages = apiResponse.data.messages.map(transformChatMessage);
+ * const messages = apiResponse.data.items.map(transformChatMessage);
  * ```
  */
 export function transformChatMessage(
@@ -236,7 +236,7 @@ export function transformChatParticipants(
  *
  * @example
  * ```typescript
- * const messages = transformChatMessages(apiResponse.data.messages);
+ * const messages = transformChatMessages(apiResponse.data.items);
  * ```
  */
 export function transformChatMessages(
@@ -252,17 +252,22 @@ export function transformChatMessages(
  * Converts string dates to Date objects for type safety
  *
  * @param preSearch - Raw pre-search from API (validated against StoredPreSearchSchema)
- * @returns Pre-search with Date objects
+ * @returns Pre-search with Date objects, or null if validation fails
  */
 export function transformPreSearch(
   preSearch: unknown,
-): StoredPreSearch {
-  const validated = StoredPreSearchSchema.parse(preSearch);
+): StoredPreSearch | null {
+  const result = StoredPreSearchSchema.safeParse(preSearch);
+
+  if (!result.success) {
+    console.error('Failed to validate pre-search schema:', result.error);
+    return null;
+  }
 
   return {
-    ...validated,
-    createdAt: ensureDate(validated.createdAt),
-    completedAt: validated.completedAt ? ensureDate(validated.completedAt) : null,
+    ...result.data,
+    createdAt: ensureDate(result.data.createdAt),
+    completedAt: result.data.completedAt ? ensureDate(result.data.completedAt) : null,
   };
 }
 
@@ -273,7 +278,7 @@ export function transformPreSearch(
  * ✅ FOLLOWS: transformModerators pattern exactly
  *
  * @param preSearches - Array of raw pre-searches from API (validated against schema)
- * @returns Array of pre-searches with Date objects
+ * @returns Array of pre-searches with Date objects (filters out validation failures)
  *
  * @example
  * ```typescript
@@ -283,7 +288,9 @@ export function transformPreSearch(
 export function transformPreSearches(
   preSearches: unknown[],
 ): StoredPreSearch[] {
-  return preSearches.map(transformPreSearch);
+  return preSearches
+    .map(transformPreSearch)
+    .filter((item): item is StoredPreSearch => item !== null);
 }
 
 // ============================================================================
@@ -332,7 +339,7 @@ export type TransformedThreadDataBundle = {
  * // Instead of:
  * const thread = transformChatThread(apiResponse.data.thread);
  * const participants = transformChatParticipants(apiResponse.data.participants);
- * const messages = transformChatMessages(apiResponse.data.messages);
+ * const messages = transformChatMessages(apiResponse.data.items);
  *
  * // Use:
  * const { thread, participants, messages } = transformThreadBundle(apiResponse.data);

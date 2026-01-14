@@ -238,7 +238,7 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
       // P1 STREAMING with partial response
       {
         id: 'thread-123_r0_p1',
-        role: 'assistant' as const,
+        role: MessageRoles.ASSISTANT as const,
         parts: [
           { type: 'step-start' as const },
           {
@@ -465,7 +465,7 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
         }),
         {
           id: 'p1-msg',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'P1 partial...', state: TextPartStates.STREAMING }],
           metadata: {
             role: MessageRoles.ASSISTANT,
@@ -553,7 +553,7 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
         }),
         {
           id: 'p1-msg',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'P1 partial...', state: TextPartStates.STREAMING }],
           metadata: {
             role: MessageRoles.ASSISTANT,
@@ -821,7 +821,7 @@ describe('message Merging Edge Cases', () => {
       // P1: Partial streaming message
       {
         id: 'p1-partial',
-        role: 'assistant' as const,
+        role: MessageRoles.ASSISTANT as const,
         parts: [{ type: 'text' as const, text: 'Partial...', state: TextPartStates.STREAMING }],
         metadata: {
           role: MessageRoles.ASSISTANT,

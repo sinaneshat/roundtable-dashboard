@@ -30,10 +30,10 @@
 
 export const STALE_TIMES = {
   // ============================================================================
-  // Products & Billing (SSG-like caching: matches server cache)
+  // Products & Billing
   // ============================================================================
   products: 24 * 3600 * 1000, // 24 hours - matches server unstable_cache duration
-  subscriptions: 2 * 60 * 1000, // 2 minutes - subscription status changes occasionally
+  subscriptions: 0, // ⚠️ NO CACHE - subscription status must always be fresh after plan changes
 
   // ============================================================================
   // AI Models (Aggressive caching: HTTP + KV + client cache)
@@ -44,10 +44,10 @@ export const STALE_TIMES = {
   providers: 10 * 60 * 1000, // 10 minutes - provider list changes infrequently
 
   // ============================================================================
-  // Usage & Quota (invalidated after mutations, longer cache OK)
+  // Usage & Quota
   // ============================================================================
-  usage: 2 * 60 * 1000, // 2 minutes - invalidated after chat operations
-  quota: 2 * 60 * 1000, // 2 minutes - invalidated after messages/upgrades, no need for polling
+  usage: 0, // ⚠️ NO CACHE - usage stats must always be fresh after plan changes and chat operations
+  quota: 0, // ⚠️ NO CACHE - quota must always be fresh to ensure accurate UI blocking
 
   // ============================================================================
   // Chat & Messages (optimized for navigation speed)

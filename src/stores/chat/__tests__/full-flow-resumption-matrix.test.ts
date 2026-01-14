@@ -21,7 +21,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageStatuses, RoundPhases, UIMessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessageStatuses, RoundPhases, TextPartStates, UIMessageRoles } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import {
@@ -79,7 +79,7 @@ function createStreamingMessage(
     id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     role: UIMessageRoles.ASSISTANT,
     parts: hasPartialContent
-      ? [{ type: 'text' as const, text: 'Partial response...', state: 'streaming' as const }]
+      ? [{ type: 'text' as const, text: 'Partial response...', state: TextPartStates.STREAMING }]
       : [],
     metadata: {
       role: UIMessageRoles.ASSISTANT,

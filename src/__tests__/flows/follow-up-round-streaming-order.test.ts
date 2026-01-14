@@ -17,7 +17,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { createMockParticipant, createMockStoredPreSearch, createMockThread } from '@/lib/testing';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
@@ -28,7 +28,7 @@ import { createChatStore } from '@/stores/chat';
 
 function createTestUIMessage(options: {
   id?: string;
-  role: 'user' | 'assistant';
+  role: MessageRoles.USER | 'assistant';
   content?: string;
   metadata?: { roundNumber: number; participantIndex?: number };
 }): UIMessage {
@@ -56,17 +56,17 @@ function setupFollowUpRoundState(store: ChatStoreApi, options: {
 
   // Round 0 messages (completed)
   const round0UserMessage = createTestUIMessage({
-    role: 'user',
+    role: MessageRoles.USER,
     metadata: { roundNumber: 0 },
   });
   const round0AssistantMessage = createTestUIMessage({
-    role: 'assistant',
+    role: MessageRoles.ASSISTANT,
     metadata: { roundNumber: 0, participantIndex: 0 },
   });
 
   // Round 1 user message (follow-up)
   const round1UserMessage = createTestUIMessage({
-    role: 'user',
+    role: MessageRoles.USER,
     metadata: { roundNumber: 1 },
   });
 

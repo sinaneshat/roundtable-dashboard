@@ -21,7 +21,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessagePartTypes } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 
 // Track store update frequency
@@ -304,14 +304,14 @@ describe('participant Transition Flashing', () => {
       // Create mock messages directly without utilities
       const userMessage = {
         id: 'user_r0',
-        role: 'user' as const,
+        role: MessageRoles.USER as const,
         parts: [{ type: 'text' as const, text: 'Hello' }],
         metadata: { roundNumber: 0 },
       };
 
       const assistantMessage = {
         id: 'assistant_r0_p0',
-        role: 'assistant' as const,
+        role: MessageRoles.ASSISTANT as const,
         parts: [{ type: 'text' as const, text: 'Response' }],
         metadata: { roundNumber: 0, participantIndex: 0 },
       };

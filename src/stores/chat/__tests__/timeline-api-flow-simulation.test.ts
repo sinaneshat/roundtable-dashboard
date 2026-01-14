@@ -82,7 +82,7 @@ function createStreamingAssistantMessage(
   const msgId = `${threadId}_r${roundNumber}_p${participantIndex}_${messageIdCounter}`;
   return {
     id: msgId,
-    role: 'assistant' as const,
+    role: MessageRoles.ASSISTANT as const,
     parts: [{ type: 'text' as const, text: partialContent }],
     metadata: {
       role: MessageRoles.ASSISTANT,

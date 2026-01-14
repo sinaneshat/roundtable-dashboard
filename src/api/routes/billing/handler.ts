@@ -385,11 +385,7 @@ export const listSubscriptionsHandler: RouteHandler<typeof listSubscriptionsRout
     try {
       const db = await getDbAsync();
 
-      // ✅ CACHING ENABLED: Relational query with 2-minute TTL for user subscriptions
-      // User-specific data with short cache to balance freshness and performance
-      // Cache automatically invalidates when subscriptions, prices, or products are updated
-      // @see https://orm.drizzle.team/docs/cache
-
+      // ⚠️ NO CACHING: Subscription data must always be fresh after plan changes
       // Fetch user subscriptions with nested price data via Drizzle relations
       const subscriptions = await db.query.stripeSubscription.findMany({
         where: eq(tables.stripeSubscription.userId, user.id),
@@ -402,6 +398,9 @@ export const listSubscriptionsHandler: RouteHandler<typeof listSubscriptionsRout
 
       // ✅ DATE SERIALIZATION: Use helper to convert Date objects to ISO strings
       const serializedSubscriptions = subscriptions.map(serializeSubscriptionDates);
+
+      // ⚠️ NO CACHING: Subscription status must always reflect current state
+      c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
 
       return Responses.collection(c, serializedSubscriptions);
     } catch {
@@ -423,11 +422,7 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
     const db = await getDbAsync();
 
     try {
-      // ✅ CACHING ENABLED: Relational query with 2-minute TTL for single subscription
-      // User-specific data with short cache to balance freshness and performance
-      // Cache automatically invalidates when subscription, price, or product is updated
-      // @see https://orm.drizzle.team/docs/cache
-
+      // ⚠️ NO CACHING: Subscription data must always be fresh after plan changes
       // Fetch single subscription with nested price data via Drizzle relations
       const subscription = await db.query.stripeSubscription.findFirst({
         where: eq(tables.stripeSubscription.id, id),
@@ -445,6 +440,9 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
       if (!validateSubscriptionOwnership(subscription, user)) {
         throw createError.unauthorized('You do not have access to this subscription', ErrorContextBuilders.authorization('subscription', id, user.id));
       }
+
+      // ⚠️ NO CACHING: Subscription status must always reflect current state
+      c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
 
       // ✅ DATE SERIALIZATION: Use helper to convert Date objects to ISO strings
       return Responses.ok(c, { subscription: serializeSubscriptionDates(subscription) });

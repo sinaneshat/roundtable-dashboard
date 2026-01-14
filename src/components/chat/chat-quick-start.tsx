@@ -1,6 +1,6 @@
 'use client';
 import { motion } from 'motion/react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
 import { AvatarSizes, ChatModes, PlanTypes, SubscriptionTiers } from '@/api/core/enums';
@@ -210,13 +210,23 @@ export function ChatQuickStart({
   onSuggestionClick,
   className,
 }: ChatQuickStartProps) {
-  // Use daily seed for deterministic selection across server/client hydration
-  const [randomPrompts] = useState(() => getRandomPrompts(3));
-  const [initialProviderOffset] = useState(() => getDailyOffset());
+  // ✅ HYDRATION FIX: Initialize with null, set on client via useEffect
+  // Previously used useState initializers with new Date() which caused hydration
+  // mismatch when server and client were in different timezones or time rolled over
+  const [randomPrompts, setRandomPrompts] = useState<PromptTemplate[] | null>(null);
+  const [initialProviderOffset, setInitialProviderOffset] = useState<number | null>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Hydration: null on server, set on client
+    setRandomPrompts(getRandomPrompts(3));
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Hydration: null on server, set on client
+    setInitialProviderOffset(getDailyOffset());
+  }, []);
   const { data: usageData, isLoading: isUsageLoading } = useUsageStatsQuery();
   const { data: modelsResponse, isLoading: isModelsLoading } = useModelsQuery();
 
-  const isLoading = isModelsLoading || isUsageLoading;
+  // Include null randomPrompts in loading check to avoid hydration mismatch
+  const isLoading = isModelsLoading || isUsageLoading || randomPrompts === null;
 
   const userTier: SubscriptionTier = usageData?.data?.plan?.type === PlanTypes.PAID
     ? SubscriptionTiers.PRO
@@ -306,13 +316,17 @@ export function ChatQuickStart({
   );
 
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
-    if (accessibleModels.length === 0) {
+    // Guard against null during initial hydration - must be before any usage
+    if (accessibleModels.length === 0 || !randomPrompts || initialProviderOffset === null) {
       return [];
     }
 
     const idealCount = userTier === SubscriptionTiers.FREE
       ? MIN_PARTICIPANTS_REQUIRED
       : 4;
+
+    // Capture checked offset for TypeScript narrowing
+    const providerOffset = initialProviderOffset;
 
     // Build each suggestion with a DIFFERENT provider offset for maximum diversity
     const buildSuggestion = (
@@ -321,7 +335,7 @@ export function ChatQuickStart({
     ): QuickStartSuggestion => {
       // Combine initial random offset with suggestion index for variety on each page load
       // while still ensuring diversity across the 3 suggestions
-      const models = selectUniqueProviderModels(idealCount, initialProviderOffset + suggestionIndex);
+      const models = selectUniqueProviderModels(idealCount, providerOffset + suggestionIndex);
 
       return {
         title: template.title,

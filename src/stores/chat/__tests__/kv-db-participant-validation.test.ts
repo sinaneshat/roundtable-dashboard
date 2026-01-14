@@ -292,7 +292,7 @@ describe('kV/DB Participant Mismatch Bug', () => {
         // Moderator message (should be excluded)
         {
           id: 'moderator-msg',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'Summary' }],
           metadata: {
             role: MessageRoles.ASSISTANT,

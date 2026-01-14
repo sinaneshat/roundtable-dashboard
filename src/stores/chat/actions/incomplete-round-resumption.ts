@@ -466,12 +466,18 @@ export function useIncompleteRoundResumption(
     && !streamResumptionPrefilled
     && !preSearchIndicatesSubmissionReceived;
 
+  // ✅ REFRESH FIX: When server prefills currentResumptionPhase=COMPLETE, the round is done
+  // Don't consider it "incomplete" even if messages haven't loaded yet (stale SSR)
+  const isCompletedByServer = streamResumptionPrefilled
+    && (currentResumptionPhase === RoundPhases.COMPLETE || currentResumptionPhase === RoundPhases.IDLE);
+
   const isIncomplete
     = enabled
       && !isStreaming
       && !waitingToStartStreaming
       && !isSubmissionInProgress // Don't interfere with normal submissions
       && !blockOnOptimistic // Don't resume active optimistic, but allow stale during resumption
+      && !isCompletedByServer // Don't resume completed rounds even with stale SSR
       && currentRoundNumber !== null
       && enabledParticipants.length > 0
       && accountedParticipants < enabledParticipants.length

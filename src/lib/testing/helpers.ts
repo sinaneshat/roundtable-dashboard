@@ -10,7 +10,7 @@ import type { AbstractIntlMessages } from 'next-intl';
 import type { UIMessageRole } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, ModelIds, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import { getParticipantIndex, getRoundNumber } from '@/lib/utils';
+import { getRoundNumber } from '@/lib/utils';
 
 // Type aliases for test messages - these are UIMessage with specific metadata shapes
 export type TestUserMessage = UIMessage;
@@ -198,7 +198,7 @@ export function createMockDate(dateString = '2024-01-01T00:00:00.000Z'): Date {
  */
 export function filterMessagesByRound(messages: UIMessage[], roundNumber: number): UIMessage[] {
   return messages.filter((m) => {
-    const round = getRoundNumberFromMessage(m);
+    const round = getRoundNumber(m.metadata);
     return round === roundNumber;
   });
 }
@@ -212,7 +212,7 @@ export function filterUserMessagesByRound(messages: UIMessage[], roundNumber: nu
     if (m.role !== UIMessageRoles.USER) {
       return false;
     }
-    const round = getRoundNumberFromMessage(m);
+    const round = getRoundNumber(m.metadata);
     return round === roundNumber;
   });
 }
@@ -226,26 +226,9 @@ export function filterAssistantMessagesByRound(messages: UIMessage[], roundNumbe
     if (m.role !== UIMessageRoles.ASSISTANT) {
       return false;
     }
-    const round = getRoundNumberFromMessage(m);
+    const round = getRoundNumber(m.metadata);
     return round === roundNumber;
   });
-}
-
-/**
- * Type-safe round number extraction from message
- * REPLACES: `(m.metadata as { roundNumber: number }).roundNumber`
- */
-export function getRoundNumberFromMessage(message: UIMessage): number | null {
-  // Use the re-exported metadata utility
-  return getRoundNumber(message.metadata);
-}
-
-/**
- * Type-safe participant index extraction from message
- * REPLACES: `(m.metadata as { participantIndex: number }).participantIndex`
- */
-export function getParticipantIndexFromMessage(message: UIMessage): number | null {
-  return getParticipantIndex(message.metadata);
 }
 
 /**

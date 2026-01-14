@@ -38,10 +38,13 @@ export type GetSubscriptionResponse = InferResponseType<
 /**
  * Get all subscriptions for authenticated user
  * Protected endpoint - requires authentication
+ *
+ * @param options - Service options
+ * @param options.bypassCache - If true, bypasses HTTP cache to get fresh data
  */
-export async function getSubscriptionsService(args?: GetSubscriptionsRequest) {
-  const client = await createApiClient();
-  return parseResponse(client.billing.subscriptions.$get(args ?? {}));
+export async function getSubscriptionsService(options?: { bypassCache?: boolean }) {
+  const client = await createApiClient({ bypassCache: options?.bypassCache });
+  return parseResponse(client.billing.subscriptions.$get({}));
 }
 
 /**

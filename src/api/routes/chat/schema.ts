@@ -813,8 +813,9 @@ export const StreamChatRequestSchema = z.object({
     example: ['01HXYZ123ABC', '01HXYZ456DEF'],
   }),
 }).openapi('StreamChatRequest');
+// Note: Uses 'items' to match Responses.collection() standard format
 const MessagesListPayloadSchema = z.object({
-  messages: z.array(ChatMessageSchema),
+  items: z.array(ChatMessageSchema),
   count: z.number().int().nonnegative(),
 }).openapi('MessagesListPayload');
 export const MessagesListResponseSchema = createApiResponseSchema(MessagesListPayloadSchema).openapi('MessagesListResponse');

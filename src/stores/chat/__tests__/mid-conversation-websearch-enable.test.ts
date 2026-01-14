@@ -666,10 +666,6 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === 1);
       expect(preSearchForRound).toBeDefined();
       expect(preSearchForRound?.status).toBe(MessageStatuses.PENDING);
-
-      // This is the condition that would block the old code:
-      // The main effect in usePendingMessage requires pendingMessage to be set
-      // The new effect handles this case when pendingMessage is null
     });
 
     it('should detect web search toggle WITHOUT mode or participant changes', () => {

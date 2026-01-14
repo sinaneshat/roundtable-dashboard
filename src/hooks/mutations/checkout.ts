@@ -9,7 +9,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import { createCheckoutSessionService, getUserUsageStatsService, listModelsService, syncAfterCheckoutService } from '@/services/api';
+import { createCheckoutSessionService, getSubscriptionsService, getUserUsageStatsService, listModelsService, syncAfterCheckoutService } from '@/services/api';
 
 /**
  * Hook to create Stripe checkout session
@@ -54,17 +54,25 @@ export function useSyncAfterCheckoutMutation() {
       // Using refetchType: 'all' to refetch both active and inactive queries
       // This ensures queries on the success page refetch even if not yet active
 
-      // Subscription queries - critical for success page
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.subscriptions.all,
-        refetchType: 'all', // Refetch all queries, not just active
-      });
-
       // Product queries
       queryClient.invalidateQueries({
         queryKey: queryKeys.products.all,
         refetchType: 'all',
       });
+
+      // Subscription queries - critical for success page
+      // ⚠️ CRITICAL: Must bypass HTTP cache to get fresh subscription data
+      try {
+        const freshSubscriptionsData = await getSubscriptionsService({ bypassCache: true });
+        queryClient.setQueryData(queryKeys.subscriptions.list(), freshSubscriptionsData);
+      } catch (error) {
+        console.error('[Checkout] Failed to refresh subscriptions after checkout:', error);
+        // Fallback: invalidate and let normal refetch handle it
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.subscriptions.all,
+          refetchType: 'all',
+        });
+      }
 
       // Usage queries - reflect new quota limits from subscription
       // ⚠️ CRITICAL: Usage stats API has HTTP caching (2min browser)

@@ -6,11 +6,11 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
-import { ScreenModes } from '@/api/core/enums';
+import { MessageRoles, ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -67,7 +67,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
 
   const initializedThreadIdRef = useRef<string | null>(null);
   const staleFetchAttemptedRef = useRef<string | null>(null);
-  const [isFetchingFreshMessages, setIsFetchingFreshMessages] = useState(false);
+  const isFetchingFreshMessagesRef = useRef(false);
 
   useEffect(() => {
     actions.setScreenMode(mode);
@@ -164,11 +164,11 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
       return;
     if (staleFetchAttemptedRef.current === threadId)
       return;
-    if (isFetchingFreshMessages)
+    if (isFetchingFreshMessagesRef.current)
       return;
 
     staleFetchAttemptedRef.current = threadId;
-    setIsFetchingFreshMessages(true);
+    isFetchingFreshMessagesRef.current = true;
 
     rlog.init('fetch-fresh', 'fetching msgs for stale SSR');
 
@@ -178,22 +178,24 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
       staleTime: 0,
     })
       .then((response) => {
-        if (response.success && response.data && Array.isArray(response.data)) {
+        // API returns { success, data: { items: [...], count } } via Responses.collection
+        const messagesArray = response.data?.items;
+        if (response.success && messagesArray && Array.isArray(messagesArray)) {
           // Convert DB messages to UIMessage format - filter tool messages
-          const freshMessages: UIMessage[] = response.data
-            .filter(m => m.role === 'user' || m.role === 'assistant')
+          const freshMessages: UIMessage[] = messagesArray
+            .filter(m => m.role === MessageRoles.USER || m.role === MessageRoles.ASSISTANT)
             .map(chatMessageToUIMessage);
           rlog.init('fetch-done', `got ${freshMessages.length} msgs`);
           actions.setMessages(freshMessages);
         }
       })
-      .catch(() => {
-        rlog.init('fetch-fail', 'failed to get fresh msgs');
+      .catch((err) => {
+        rlog.init('fetch-fail', `${err?.message ?? 'unknown'}`);
       })
       .finally(() => {
-        setIsFetchingFreshMessages(false);
+        isFetchingFreshMessagesRef.current = false;
       });
-  }, [thread?.id, streamResumptionState, initialMessages, actions, isFetchingFreshMessages, queryClient]);
+  }, [thread?.id, streamResumptionState, initialMessages, actions, queryClient]);
 
   const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD && Boolean(thread?.id) && enableOrchestrator;
   getPreSearchOrchestrator({

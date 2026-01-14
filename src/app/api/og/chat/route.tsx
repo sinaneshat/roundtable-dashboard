@@ -12,7 +12,7 @@ import { ImageResponse } from 'next/og';
 import { getTranslations } from 'next-intl/server';
 
 import { BRAND } from '@/constants';
-import { getOGFonts } from '@/lib/ui/og-fonts.server';
+import { getOGFontsSync } from '@/lib/ui/og-fonts.server';
 import {
   createGradient,
   getLogoBase64,
@@ -27,7 +27,7 @@ const size = {
 export async function GET() {
   const [t, fonts, logoBase64] = await Promise.all([
     getTranslations(),
-    getOGFonts(),
+    getOGFontsSync(),
     getLogoBase64().catch(() => ''),
   ]);
 

@@ -13,6 +13,40 @@ import {
 
 import { getRoundNumber } from './metadata';
 
+/**
+ * Extract round number from message or metadata with default fallback
+ *
+ * CONVENIENCE WRAPPER: Delegates to getRoundNumber() from metadata.ts
+ * - Accepts UIMessage or raw metadata
+ * - Provides default value fallback
+ *
+ * @param messageOrMetadata - UIMessage object or raw metadata
+ * @param defaultValue - Default value if roundNumber not found (default: DEFAULT_ROUND_NUMBER)
+ * @returns Round number or default value
+ *
+ * @example
+ * const round = getRoundNumberFromMetadata(message); // Uses DEFAULT_ROUND_NUMBER
+ * const round = getRoundNumberFromMetadata(message, 0); // Uses 0 as fallback
+ * const round = getRoundNumberFromMetadata(message.metadata); // Direct metadata access
+ */
+export function getRoundNumberFromMetadata(
+  messageOrMetadata: UIMessage | unknown,
+  defaultValue = DEFAULT_ROUND_NUMBER,
+): number {
+  if (
+    messageOrMetadata
+    && typeof messageOrMetadata === 'object'
+    && 'metadata' in messageOrMetadata
+    && messageOrMetadata.metadata !== null
+    && typeof messageOrMetadata.metadata === 'object'
+  ) {
+    const roundNumber = getRoundNumber(messageOrMetadata.metadata);
+    return roundNumber ?? defaultValue;
+  }
+  const roundNumber = getRoundNumber(messageOrMetadata);
+  return roundNumber ?? defaultValue;
+}
+
 export function calculateNextRoundNumber(messages: UIMessage[]): number {
   let maxRoundNumber = NO_ROUND_SENTINEL;
 
@@ -41,30 +75,13 @@ export function getMaxRoundNumber(messages: UIMessage[]): number {
   return max >= 0 ? max : DEFAULT_ROUND_NUMBER;
 }
 
-export function getRoundNumberFromMetadata(
-  messageOrMetadata: UIMessage | unknown,
-  defaultValue = DEFAULT_ROUND_NUMBER,
-): number {
-  if (
-    messageOrMetadata
-    && typeof messageOrMetadata === 'object'
-    && 'metadata' in messageOrMetadata
-    && messageOrMetadata.metadata !== null
-    && typeof messageOrMetadata.metadata === 'object'
-  ) {
-    const roundNumber = getRoundNumber(messageOrMetadata.metadata);
-    return roundNumber ?? defaultValue;
-  }
-  const roundNumber = getRoundNumber(messageOrMetadata);
-  return roundNumber ?? defaultValue;
-}
-
 export function getCurrentRoundNumber(messages: readonly UIMessage[]): number {
   const lastUserMessage = messages.findLast(m => m.role === MessageRoles.USER);
   if (!lastUserMessage) {
     return DEFAULT_ROUND_NUMBER;
   }
-  return getRoundNumberFromMetadata(lastUserMessage);
+  const roundNumber = getRoundNumber(lastUserMessage.metadata);
+  return roundNumber ?? DEFAULT_ROUND_NUMBER;
 }
 
 export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessage[]> {

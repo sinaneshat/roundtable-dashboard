@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StoreApi } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 
-import { MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { act } from '@/lib/testing';
 
@@ -19,7 +19,7 @@ type MockChatStoreState = {
   }>;
   messages: Array<{
     id: string;
-    role: 'user' | 'assistant';
+    role: MessageRoles.USER | 'assistant';
     metadata?: { roundNumber?: number };
   }>;
   preSearches: StoredPreSearch[];
@@ -81,7 +81,7 @@ function createMockParticipant(index: number) {
 function createMockUserMessage(roundNumber: number) {
   return {
     id: `msg-user-r${roundNumber}`,
-    role: 'user' as const,
+    role: MessageRoles.USER as const,
     metadata: { roundNumber },
   };
 }
@@ -479,12 +479,12 @@ describe('edge cases from debug output', () => {
         { id: 'p1', threadId: 't', modelId: 'm1', role: 'R1', priority: 1 },
       ],
       messages: [
-        { id: 'm1', role: 'user', metadata: { roundNumber: 0 } },
-        { id: 'm2', role: 'assistant', metadata: { roundNumber: 0 } },
-        { id: 'm3', role: 'assistant', metadata: { roundNumber: 0 } },
-        { id: 'm4', role: 'user', metadata: { roundNumber: 1 } },
-        { id: 'm5', role: 'assistant', metadata: { roundNumber: 1 } },
-        { id: 'm6', role: 'assistant', metadata: { roundNumber: 1 } },
+        { id: 'm1', role: MessageRoles.USER, metadata: { roundNumber: 0 } },
+        { id: 'm2', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
+        { id: 'm3', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
+        { id: 'm4', role: MessageRoles.USER, metadata: { roundNumber: 1 } },
+        { id: 'm5', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1 } },
+        { id: 'm6', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1 } },
       ],
     });
 
@@ -506,11 +506,11 @@ describe('edge cases from debug output', () => {
         { id: 'p1', threadId: 't', modelId: 'm1', role: 'R1', priority: 1 },
       ],
       messages: [
-        { id: 'm1', role: 'user', metadata: { roundNumber: 0 } },
-        { id: 'm2', role: 'assistant', metadata: { roundNumber: 0 } },
-        { id: 'm3', role: 'assistant', metadata: { roundNumber: 0 } },
-        { id: 'm4', role: 'user', metadata: { roundNumber: 1 } },
-        { id: 'm5', role: 'assistant', metadata: { roundNumber: 1 } },
+        { id: 'm1', role: MessageRoles.USER, metadata: { roundNumber: 0 } },
+        { id: 'm2', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
+        { id: 'm3', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
+        { id: 'm4', role: MessageRoles.USER, metadata: { roundNumber: 1 } },
+        { id: 'm5', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1 } },
       ],
     });
 

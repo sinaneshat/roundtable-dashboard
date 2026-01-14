@@ -302,8 +302,6 @@ function determineCurrentPhase(
   }
 
   // Phase 2: Participants (if not all complete)
-  // ✅ FIX: This MUST return PARTICIPANTS if participants aren't done
-  // The old code would fall through to MODERATOR as default
   if (!participantStatus.allComplete) {
     return RoundPhases.PARTICIPANTS;
   }

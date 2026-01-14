@@ -62,6 +62,7 @@ export function useProjectsQuery(search?: string) {
     getNextPageParam: lastPage => lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
     enabled: isAuthenticated,
     staleTime: STALE_TIMES.threads, // 30 seconds - match threads pattern
+    gcTime: 5 * 60 * 1000, // 5 minutes
     retry: false,
     throwOnError: false,
   });
@@ -124,6 +125,7 @@ export function useProjectAttachmentsQuery(
     getNextPageParam: lastPage => lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
     retry: false,
     throwOnError: false,
   });
@@ -167,6 +169,7 @@ export function useProjectMemoriesQuery(
     getNextPageParam: lastPage => lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
     retry: false,
     throwOnError: false,
   });

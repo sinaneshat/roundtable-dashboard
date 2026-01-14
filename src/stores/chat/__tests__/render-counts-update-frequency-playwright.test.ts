@@ -107,7 +107,7 @@ function createModeratorStreamingMessage(
       ? [{ type: MessagePartTypes.TEXT, text: textContent }]
       : [],
     metadata: {
-      role: 'assistant',
+      role: UIMessageRoles.ASSISTANT,
       roundNumber,
       isModerator: true,
       finishReason,

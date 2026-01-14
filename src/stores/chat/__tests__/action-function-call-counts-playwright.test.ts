@@ -17,7 +17,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
 
-import { MessagePartTypes, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { createTestChatStore } from '@/lib/testing';
 
@@ -61,7 +61,7 @@ function createMockParticipant(overrides?: Partial<ChatParticipant>): ChatPartic
 
 function createMockUIMessage(opts: {
   id: string;
-  role: 'user' | 'assistant';
+  role: MessageRoles.USER | 'assistant';
   text: string;
   roundNumber: number;
   participantIndex?: number;
@@ -98,7 +98,7 @@ describe('handleUpdateThreadAndSend Action Call Counts', () => {
     // Simulate handleUpdateThreadAndSend logic (optimistic message)
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
-      role: 'user',
+      role: MessageRoles.USER,
       text: 'Test message',
       roundNumber: 1,
     });
@@ -213,7 +213,7 @@ describe('handleUpdateThreadAndSend Action Call Counts', () => {
     // Simulate handleUpdateThreadAndSend sequence
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
-      role: 'user',
+      role: MessageRoles.USER,
       text: 'Test',
       roundNumber: 1,
     });
@@ -292,7 +292,7 @@ describe('pATCH Response Processing Action Counts', () => {
     // Add optimistic message
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
-      role: 'user',
+      role: MessageRoles.USER,
       text: 'Test',
       roundNumber: 1,
     });
@@ -304,7 +304,7 @@ describe('pATCH Response Processing Action Counts', () => {
     // Simulate PATCH response replacing optimistic message
     const persistedMessage = createMockUIMessage({
       id: 'thread-123_r1_user',
-      role: 'user',
+      role: MessageRoles.USER,
       text: 'Test',
       roundNumber: 1,
     });
@@ -326,7 +326,7 @@ describe('pATCH Response Processing Action Counts', () => {
     // Add optimistic message
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
-      role: 'user',
+      role: MessageRoles.USER,
       text: 'Test',
       roundNumber: 1,
     });
@@ -338,7 +338,7 @@ describe('pATCH Response Processing Action Counts', () => {
     // Simulate PATCH response - should only replace once
     const persistedMessage = createMockUIMessage({
       id: 'thread-123_r1_user',
-      role: 'user',
+      role: MessageRoles.USER,
       text: 'Test',
       roundNumber: 1,
     });
@@ -462,14 +462,14 @@ describe('setMessages Call Frequency', () => {
     // Simulate streaming: optimistic message → participant messages
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
-      role: 'user',
+      role: MessageRoles.USER,
       text: 'Test',
       roundNumber: 1,
     });
 
     const participant1Message = createMockUIMessage({
       id: 'thread-123_r1_p0',
-      role: 'assistant',
+      role: MessageRoles.ASSISTANT,
       text: 'Response 1',
       roundNumber: 1,
       participantIndex: 0,
@@ -477,7 +477,7 @@ describe('setMessages Call Frequency', () => {
 
     const participant2Message = createMockUIMessage({
       id: 'thread-123_r1_p1',
-      role: 'assistant',
+      role: MessageRoles.ASSISTANT,
       text: 'Response 2',
       roundNumber: 1,
       participantIndex: 1,
@@ -500,7 +500,7 @@ describe('setMessages Call Frequency', () => {
 
     const message = createMockUIMessage({
       id: 'msg-1',
-      role: 'user',
+      role: MessageRoles.USER,
       text: 'Test',
       roundNumber: 0,
     });
@@ -522,7 +522,7 @@ describe('setMessages Call Frequency', () => {
 
     const messageWithContent = createMockUIMessage({
       id: 'msg-1',
-      role: 'assistant',
+      role: MessageRoles.ASSISTANT,
       text: 'Existing content',
       roundNumber: 0,
     });
@@ -532,9 +532,9 @@ describe('setMessages Call Frequency', () => {
     // Simulate update with empty content
     const messageWithoutContent: UIMessage = {
       id: 'msg-1',
-      role: 'assistant',
+      role: MessageRoles.ASSISTANT,
       parts: [],
-      metadata: { role: 'assistant', roundNumber: 0 },
+      metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0 },
     };
 
     store.getState().setMessages([messageWithoutContent]);
@@ -876,7 +876,7 @@ describe('action Sequencing', () => {
     // Simulate submission flow
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
-      role: 'user',
+      role: MessageRoles.USER,
       text: 'Test',
       roundNumber: 1,
     });

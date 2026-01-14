@@ -7,6 +7,5 @@
  * Regenerate: npx tsx scripts/generate-og-assets.ts
  */
 
-// Re-export from generated assets file
 export type { OGFontConfig } from './og-assets.generated';
-export { getOGFontsSync as getOGFonts } from './og-assets.generated';
+export { getOGFontsSync } from './og-assets.generated';

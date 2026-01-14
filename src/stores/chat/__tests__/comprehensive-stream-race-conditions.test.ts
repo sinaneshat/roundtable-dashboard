@@ -17,7 +17,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MessageRoles } from '@/api/core/enums';
+import { MessageRoles, TextPartStates } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 
 import {
@@ -82,7 +82,7 @@ function createAssistantMessage(
     id: `msg-${participantId}-r${roundNumber}`,
     role: MessageRoles.ASSISTANT,
     parts: hasText
-      ? [{ type: 'text', text: 'Response content', state: partState as 'streaming' | 'done' }]
+      ? [{ type: 'text', text: 'Response content', state: partState }]
       : [],
     metadata: {
       role: MessageRoles.ASSISTANT,
@@ -108,7 +108,7 @@ function createStreamingMessage(
     id: `msg-${participantId}-r${roundNumber}`,
     role: MessageRoles.ASSISTANT,
     parts: [
-      { type: 'text', text: textContent, state: 'streaming' as const },
+      { type: 'text', text: textContent, state: TextPartStates.STREAMING },
     ],
     metadata: {
       role: MessageRoles.ASSISTANT,
@@ -222,7 +222,7 @@ describe('core Invariant: Moderator Never Triggers During Streaming', () => {
         id: 'msg-1',
         role: MessageRoles.ASSISTANT,
         parts: [
-          { type: 'text', text: 'A'.repeat(10000), state: 'streaming' as const },
+          { type: 'text', text: 'A'.repeat(10000), state: TextPartStates.STREAMING },
         ],
         metadata: {
           role: MessageRoles.ASSISTANT,
@@ -239,7 +239,7 @@ describe('core Invariant: Moderator Never Triggers During Streaming', () => {
       const message: UIMessage = {
         id: 'msg-1',
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Content', state: 'streaming' as const }],
+        parts: [{ type: 'text', text: 'Content', state: TextPartStates.STREAMING }],
         metadata: {
           role: MessageRoles.ASSISTANT,
           roundNumber: 0,

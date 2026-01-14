@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { MessageRoles } from '@/api/core/enums';
+
 /**
  * Optimistic Update and Replacement Tests
  *
@@ -14,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 // Types for optimistic message handling
 type BaseMessage = {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: MessageRoles.USER | 'assistant' | 'system';
   content: string;
   createdAt: Date;
 };
@@ -45,7 +47,7 @@ function createOptimisticMessage(content: string, tempId: string): OptimisticMes
   return {
     id: tempId,
     tempId,
-    role: 'user',
+    role: MessageRoles.USER,
     content,
     createdAt: new Date(),
     isOptimistic: true,
@@ -62,7 +64,7 @@ function createConfirmedMessage(
   return {
     id: serverId,
     serverId,
-    role: 'user',
+    role: MessageRoles.USER,
     content,
     createdAt: new Date(),
     isOptimistic: false,

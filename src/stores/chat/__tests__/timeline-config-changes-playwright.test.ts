@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ChangelogChangeTypes,
+  ChatModes,
   FinishReasons,
   MessageRoles,
   MessageStatuses,
@@ -31,7 +32,7 @@ import { createChatStore } from '../store';
 // TYPES
 // ============================================================================
 
-type ConversationMode = 'brainstorm' | 'analyzing' | 'debate' | 'problem_solve';
+type ConversationMode = typeof ChatModes[keyof typeof ChatModes];
 
 type ChangelogEntry = {
   id: string;
@@ -65,7 +66,7 @@ type RoundConfiguration = {
 
 function createMockThread(
   id: string,
-  mode: ConversationMode = 'analyzing',
+  mode: ConversationMode = ChatModes.ANALYZING,
   enableWebSearch = false,
 ): ChatThread {
   return {
@@ -278,7 +279,7 @@ describe('mode Change Timeline Tests', () => {
       // Round 0: Brainstorm mode
       const config0: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'brainstorm',
+        mode: ChatModes.BRAINSTORMING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'Ideator', priority: 0, isEnabled: true },
@@ -297,7 +298,7 @@ describe('mode Change Timeline Tests', () => {
       // Round 1: Analyze mode (changed)
       const config1: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: config0.participants,
         hasAttachments: false,
@@ -311,8 +312,8 @@ describe('mode Change Timeline Tests', () => {
       expect(changelog).toHaveLength(1);
       expect(changelog[0]?.changeType).toBe(ChangelogChangeTypes.MODE_CHANGED);
       expect(changelog[0]?.changeData).toEqual({
-        previousMode: 'brainstorm',
-        newMode: 'analyzing',
+        previousMode: ChatModes.BRAINSTORMING,
+        newMode: ChatModes.ANALYZING,
       });
 
       // Complete round 1
@@ -340,7 +341,7 @@ describe('mode Change Timeline Tests', () => {
     });
 
     it('should handle all mode transitions', () => {
-      const modes: ConversationMode[] = ['brainstorm', 'analyzing', 'debate', 'problem_solve'];
+      const modes: ConversationMode[] = [ChatModes.BRAINSTORMING, ChatModes.ANALYZING, ChatModes.DEBATING, ChatModes.SOLVING];
 
       for (let i = 0; i < modes.length - 1; i++) {
         const fromMode = modes[i]!;
@@ -372,7 +373,7 @@ describe('mode Change Timeline Tests', () => {
     it('should not create changelog when mode stays the same', () => {
       const config0: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [],
         hasAttachments: false,
@@ -381,7 +382,7 @@ describe('mode Change Timeline Tests', () => {
 
       const config1: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing', // Same mode
+        mode: ChatModes.ANALYZING, // Same mode
         enableWebSearch: false,
         participants: [],
         hasAttachments: false,
@@ -399,11 +400,11 @@ describe('mode Change Timeline Tests', () => {
       const threadId = 'thread-123';
 
       const configs: RoundConfiguration[] = [
-        { roundNumber: 0, mode: 'brainstorm', enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 1, mode: 'analyzing', enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 2, mode: 'debate', enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 3, mode: 'debate', enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 }, // No change
-        { roundNumber: 4, mode: 'problem_solve', enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
+        { roundNumber: 0, mode: ChatModes.BRAINSTORMING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
+        { roundNumber: 1, mode: ChatModes.ANALYZING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
+        { roundNumber: 2, mode: ChatModes.DEBATING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
+        { roundNumber: 3, mode: ChatModes.DEBATING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 }, // No change
+        { roundNumber: 4, mode: ChatModes.SOLVING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
       ];
 
       const allChangelog: ChangelogEntry[] = [];
@@ -432,7 +433,7 @@ describe('web Search Toggle Timeline Tests', () => {
     it('should create changelog when web search enabled', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [],
         hasAttachments: false,
@@ -441,7 +442,7 @@ describe('web Search Toggle Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: true, // Enabled
         participants: [],
         hasAttachments: false,
@@ -463,7 +464,7 @@ describe('web Search Toggle Timeline Tests', () => {
     it('should add pre-search to timeline when enabled', () => {
       const store = createChatStore();
 
-      store.getState().setThread(createMockThread('thread-123', 'analyzing', true));
+      store.getState().setThread(createMockThread('thread-123', ChatModes.ANALYZING, true));
       store.getState().setParticipants([createMockParticipant(0, 'gpt-4o')]);
 
       // Add pre-search
@@ -479,7 +480,7 @@ describe('web Search Toggle Timeline Tests', () => {
     it('should create changelog when web search disabled', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: true,
         participants: [],
         hasAttachments: false,
@@ -488,7 +489,7 @@ describe('web Search Toggle Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false, // Disabled
         participants: [],
         hasAttachments: false,
@@ -508,7 +509,7 @@ describe('web Search Toggle Timeline Tests', () => {
     it('should not add pre-search to timeline when disabled', () => {
       const store = createChatStore();
 
-      store.getState().setThread(createMockThread('thread-123', 'analyzing', false));
+      store.getState().setThread(createMockThread('thread-123', ChatModes.ANALYZING, false));
       store.getState().setParticipants([createMockParticipant(0, 'gpt-4o')]);
 
       // No pre-search added
@@ -520,10 +521,10 @@ describe('web Search Toggle Timeline Tests', () => {
   describe('web Search Toggle Across Multiple Rounds', () => {
     it('should track toggle pattern: off → on → off → on', () => {
       const configs: RoundConfiguration[] = [
-        { roundNumber: 0, mode: 'analyzing', enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 1, mode: 'analyzing', enableWebSearch: true, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 2, mode: 'analyzing', enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 3, mode: 'analyzing', enableWebSearch: true, participants: [], hasAttachments: false, attachmentCount: 0 },
+        { roundNumber: 0, mode: ChatModes.ANALYZING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
+        { roundNumber: 1, mode: ChatModes.ANALYZING, enableWebSearch: true, participants: [], hasAttachments: false, attachmentCount: 0 },
+        { roundNumber: 2, mode: ChatModes.ANALYZING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
+        { roundNumber: 3, mode: ChatModes.ANALYZING, enableWebSearch: true, participants: [], hasAttachments: false, attachmentCount: 0 },
       ];
 
       const allChangelog: ChangelogEntry[] = [];
@@ -551,7 +552,7 @@ describe('participant Change Timeline Tests', () => {
     it('should detect single participant addition', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'Analyst', priority: 0, isEnabled: true },
@@ -562,7 +563,7 @@ describe('participant Change Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'Analyst', priority: 0, isEnabled: true },
@@ -580,7 +581,7 @@ describe('participant Change Timeline Tests', () => {
     it('should detect multiple participant additions', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -591,7 +592,7 @@ describe('participant Change Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -613,7 +614,7 @@ describe('participant Change Timeline Tests', () => {
       // Round 0: 1 participant
       const config0: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
@@ -629,7 +630,7 @@ describe('participant Change Timeline Tests', () => {
       // Round 1: 3 participants
       const config1: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
@@ -667,7 +668,7 @@ describe('participant Change Timeline Tests', () => {
     it('should detect single participant removal', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'A', priority: 0, isEnabled: true },
@@ -679,7 +680,7 @@ describe('participant Change Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'A', priority: 0, isEnabled: true },
@@ -697,7 +698,7 @@ describe('participant Change Timeline Tests', () => {
     it('should handle complete participant replacement', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -709,7 +710,7 @@ describe('participant Change Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p2', modelId: 'gemini-pro', role: null, priority: 0, isEnabled: true },
@@ -729,7 +730,7 @@ describe('participant Change Timeline Tests', () => {
     it('should detect priority swap', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -741,7 +742,7 @@ describe('participant Change Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: null, priority: 1, isEnabled: true }, // Was 0, now 1
@@ -803,7 +804,7 @@ describe('participant Change Timeline Tests', () => {
     it('should detect role change', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'Analyst', priority: 0, isEnabled: true },
@@ -814,7 +815,7 @@ describe('participant Change Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'Critic', priority: 0, isEnabled: true }, // Role changed
@@ -831,7 +832,7 @@ describe('participant Change Timeline Tests', () => {
     it('should detect null to role assignment', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -842,7 +843,7 @@ describe('participant Change Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'Expert', priority: 0, isEnabled: true },
@@ -858,7 +859,7 @@ describe('participant Change Timeline Tests', () => {
     it('should detect role removal (to null)', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'Expert', priority: 0, isEnabled: true },
@@ -869,7 +870,7 @@ describe('participant Change Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true }, // Role removed
@@ -887,7 +888,7 @@ describe('participant Change Timeline Tests', () => {
     it('should detect model replacement as add + remove', () => {
       const prevConfig: RoundConfiguration = {
         roundNumber: 0,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
@@ -898,7 +899,7 @@ describe('participant Change Timeline Tests', () => {
 
       const currConfig: RoundConfiguration = {
         roundNumber: 1,
-        mode: 'analyzing',
+        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
         participants: [
           { id: 'p1', modelId: 'claude-3-opus', role: 'Lead', priority: 0, isEnabled: true }, // Different ID, different model
@@ -924,7 +925,7 @@ describe('combined Changes Timeline Tests', () => {
   it('should handle mode + web search + participant changes together', () => {
     const prevConfig: RoundConfiguration = {
       roundNumber: 0,
-      mode: 'brainstorm',
+      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
       participants: [
         { id: 'p0', modelId: 'gpt-4o', role: 'Ideator', priority: 0, isEnabled: true },
@@ -935,7 +936,7 @@ describe('combined Changes Timeline Tests', () => {
 
     const currConfig: RoundConfiguration = {
       roundNumber: 1,
-      mode: 'analyzing', // Changed
+      mode: ChatModes.ANALYZING, // Changed
       enableWebSearch: true, // Changed
       participants: [
         { id: 'p0', modelId: 'gpt-4o', role: 'Analyst', priority: 0, isEnabled: true }, // Role changed
@@ -963,7 +964,7 @@ describe('combined Changes Timeline Tests', () => {
     const threadId = 'thread-123';
 
     // Round 0: Initial state
-    store.getState().setThread(createMockThread(threadId, 'brainstorm', false));
+    store.getState().setThread(createMockThread(threadId, ChatModes.BRAINSTORMING, false));
     store.getState().setParticipants([createMockParticipant(0, 'gpt-4o', 'Lead')]);
     simulateRoundCompletion(store, 0, [
       { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
@@ -972,8 +973,8 @@ describe('combined Changes Timeline Tests', () => {
     // Round 1: Multiple changes
     const changelog = [
       createChangelogEntry(threadId, 1, ChangelogChangeTypes.MODE_CHANGED, {
-        previousMode: 'brainstorm',
-        newMode: 'analyzing',
+        previousMode: ChatModes.BRAINSTORMING,
+        newMode: ChatModes.ANALYZING,
       }),
       createChangelogEntry(threadId, 1, ChangelogChangeTypes.WEB_SEARCH_TOGGLED, {
         previousValue: false,
@@ -985,7 +986,7 @@ describe('combined Changes Timeline Tests', () => {
       }),
     ];
 
-    store.getState().setThread(createMockThread(threadId, 'analyzing', true));
+    store.getState().setThread(createMockThread(threadId, ChatModes.ANALYZING, true));
     store.getState().setParticipants([
       createMockParticipant(0, 'gpt-4o', 'Lead'),
       createMockParticipant(1, 'claude-3-opus', 'Support'),
@@ -1036,7 +1037,7 @@ describe('combined Changes Timeline Tests', () => {
   it('should handle no changes (identical config)', () => {
     const config: RoundConfiguration = {
       roundNumber: 0,
-      mode: 'analyzing',
+      mode: ChatModes.ANALYZING,
       enableWebSearch: true,
       participants: [
         { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
@@ -1069,7 +1070,7 @@ describe('changelog Placement in Timeline', () => {
     const threadId = 'thread-123';
 
     // Round 0
-    store.getState().setThread(createMockThread(threadId, 'brainstorm'));
+    store.getState().setThread(createMockThread(threadId, ChatModes.BRAINSTORMING));
     store.getState().setParticipants([createMockParticipant(0, 'gpt-4o')]);
     simulateRoundCompletion(store, 0, [
       { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -1078,12 +1079,12 @@ describe('changelog Placement in Timeline', () => {
     // Round 1 with changelog
     const changelog = [
       createChangelogEntry(threadId, 1, ChangelogChangeTypes.MODE_CHANGED, {
-        previousMode: 'brainstorm',
-        newMode: 'analyzing',
+        previousMode: ChatModes.BRAINSTORMING,
+        newMode: ChatModes.ANALYZING,
       }),
     ];
 
-    store.getState().setThread(createMockThread(threadId, 'analyzing'));
+    store.getState().setThread(createMockThread(threadId, ChatModes.ANALYZING));
     simulateRoundCompletion(store, 1, [
       { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
     ]);
@@ -1122,7 +1123,7 @@ describe('changelog Placement in Timeline', () => {
     // First round has no "previous" config to compare against
     const config0: RoundConfiguration = {
       roundNumber: 0,
-      mode: 'analyzing',
+      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
       participants: [
         { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -1155,7 +1156,7 @@ describe('edge Cases', () => {
   it('should handle empty participants list', () => {
     const prevConfig: RoundConfiguration = {
       roundNumber: 0,
-      mode: 'analyzing',
+      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
       participants: [],
       hasAttachments: false,
@@ -1164,7 +1165,7 @@ describe('edge Cases', () => {
 
     const currConfig: RoundConfiguration = {
       roundNumber: 1,
-      mode: 'analyzing',
+      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
       participants: [
         { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -1181,7 +1182,7 @@ describe('edge Cases', () => {
   it('should handle all participants removed', () => {
     const prevConfig: RoundConfiguration = {
       roundNumber: 0,
-      mode: 'analyzing',
+      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
       participants: [
         { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -1193,7 +1194,7 @@ describe('edge Cases', () => {
 
     const currConfig: RoundConfiguration = {
       roundNumber: 1,
-      mode: 'analyzing',
+      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
       participants: [],
       hasAttachments: false,
@@ -1208,7 +1209,7 @@ describe('edge Cases', () => {
   it('should handle large number of participants', () => {
     const createLargeConfig = (count: number): RoundConfiguration => ({
       roundNumber: 0,
-      mode: 'analyzing',
+      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
       participants: Array.from({ length: count }, (_, i) => ({
         id: `p${i}`,
@@ -1231,7 +1232,7 @@ describe('edge Cases', () => {
   it('should handle disabled participants', () => {
     const prevConfig: RoundConfiguration = {
       roundNumber: 0,
-      mode: 'analyzing',
+      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
       participants: [
         { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -1243,7 +1244,7 @@ describe('edge Cases', () => {
 
     const currConfig: RoundConfiguration = {
       roundNumber: 1,
-      mode: 'analyzing',
+      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
       participants: [
         { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
@@ -1272,7 +1273,7 @@ describe('round Number Consistency', () => {
     const threadId = 'thread-123';
     const roundNumber = 2;
 
-    store.getState().setThread(createMockThread(threadId, 'analyzing', true));
+    store.getState().setThread(createMockThread(threadId, ChatModes.ANALYZING, true));
     store.getState().setParticipants([createMockParticipant(0, 'gpt-4o')]);
 
     // Add elements for round 2

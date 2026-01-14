@@ -78,14 +78,14 @@ function createRound0Messages(threadId: string): UIMessage[] {
       id: `${threadId}_r0_user`,
       role: MessageRoles.USER,
       parts: [{ type: 'text', text: 'Initial question' }],
-      metadata: { role: 'user', roundNumber: 0 },
+      metadata: { role: MessageRoles.USER, roundNumber: 0 },
     },
     {
       id: `${threadId}_r0_p0`,
       role: MessageRoles.ASSISTANT,
       parts: [{ type: 'text', text: 'GPT-4 response' }],
       metadata: {
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         model: 'gpt-4',
         participantIndex: 0,
         roundNumber: 0,
@@ -97,7 +97,7 @@ function createRound0Messages(threadId: string): UIMessage[] {
       role: MessageRoles.ASSISTANT,
       parts: [{ type: 'text', text: 'Claude response' }],
       metadata: {
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         model: 'claude-3',
         participantIndex: 1,
         roundNumber: 0,
@@ -124,7 +124,7 @@ function createOptimisticUserMessage(roundNumber: number, text: string): UIMessa
     role: MessageRoles.USER,
     parts: [{ type: 'text', text }],
     metadata: {
-      role: 'user',
+      role: MessageRoles.USER,
       roundNumber,
       isOptimistic: true,
     },

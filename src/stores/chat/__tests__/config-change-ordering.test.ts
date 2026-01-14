@@ -771,21 +771,14 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       const state = store.getState();
 
-      // OLD BUGGY LOGIC: isInitialThreadCreation = OVERVIEW && waitingToStart = true (BUG!)
-      // This would bypass the blocking check even for round 2
-      const buggyIsInitialThreadCreation = state.waitingToStartStreaming; // Missing configChangeRoundNumber check
+      // isInitialThreadCreation requires OVERVIEW && waitingToStart && configChangeRoundNumber === null
+      const isInitialThreadCreation = state.waitingToStartStreaming && state.configChangeRoundNumber === null;
 
-      // NEW FIXED LOGIC: isInitialThreadCreation = OVERVIEW && waitingToStart && configChangeRoundNumber === null
-      const fixedIsInitialThreadCreation = state.waitingToStartStreaming && state.configChangeRoundNumber === null;
+      // Verify initial thread check is false for round 2 config changes
+      expect(isInitialThreadCreation).toBe(false);
 
-      // The buggy logic would return true, allowing bypass
-      expect(buggyIsInitialThreadCreation).toBe(true);
-
-      // The fixed logic returns false, blocking check works correctly
-      expect(fixedIsInitialThreadCreation).toBe(false);
-
-      // With fixed logic, blocking condition should work
-      const shouldBlock = (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) && !fixedIsInitialThreadCreation;
+      // Blocking condition should work
+      const shouldBlock = (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) && !isInitialThreadCreation;
       expect(shouldBlock).toBe(true);
     });
 
