@@ -84,14 +84,14 @@ describe('non-initial round placeholder disappearance', () => {
         id: `${threadId}_r0_user`,
         role: MessageRoles.USER,
         parts: [{ type: 'text', text: 'Initial question' }],
-        metadata: { role: 'user', roundNumber: 0 },
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
       },
       {
         id: `${threadId}_r0_p0`,
         role: MessageRoles.ASSISTANT,
         parts: [{ type: 'text', text: 'GPT-4 response' }],
         metadata: {
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           model: 'gpt-4',
           participantIndex: 0,
           roundNumber: 0,
@@ -103,7 +103,7 @@ describe('non-initial round placeholder disappearance', () => {
         role: MessageRoles.ASSISTANT,
         parts: [{ type: 'text', text: 'Claude response' }],
         metadata: {
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           model: 'claude-3',
           participantIndex: 1,
           roundNumber: 0,
@@ -144,7 +144,7 @@ describe('non-initial round placeholder disappearance', () => {
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'Follow-up question' }],
           metadata: {
-            role: 'user',
+            role: MessageRoles.USER,
             roundNumber: nextRoundNumber,
             isOptimistic: true,
           },
@@ -330,7 +330,7 @@ describe('non-initial round placeholder disappearance', () => {
           id: optimisticUserId,
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'Round 1 question' }],
-          metadata: { role: 'user', roundNumber: nextRoundNumber, isOptimistic: true },
+          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber, isOptimistic: true },
         },
       ]);
 
@@ -375,7 +375,7 @@ describe('non-initial round placeholder disappearance', () => {
           id: optimisticUserId,
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'Round 1 question' }],
-          metadata: { role: 'user', roundNumber: nextRoundNumber, isOptimistic: true },
+          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber, isOptimistic: true },
         },
       ]);
 
@@ -408,7 +408,7 @@ describe('non-initial round placeholder disappearance', () => {
           id: optimisticUserId,
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'Round 1 question' }],
-          metadata: { role: 'user', roundNumber: nextRoundNumber, isOptimistic: true },
+          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber, isOptimistic: true },
         },
       ]);
 
@@ -442,7 +442,7 @@ describe('non-initial round placeholder disappearance', () => {
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'Follow-up question for round 1' }],
           metadata: {
-            role: 'user',
+            role: MessageRoles.USER,
             roundNumber: nextRoundNumber,
             isOptimistic: true,
           },
@@ -490,7 +490,7 @@ describe('non-initial round placeholder disappearance', () => {
           id: optimisticUserId,
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'Second round question' }],
-          metadata: { role: 'user', roundNumber: nextRoundNumber, isOptimistic: true },
+          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber, isOptimistic: true },
         },
       ]);
 
@@ -528,7 +528,7 @@ describe('non-initial round placeholder disappearance', () => {
           id: optimisticUserId,
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'My follow-up' }],
-          metadata: { role: 'user', roundNumber: nextRoundNumber, isOptimistic: true },
+          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber, isOptimistic: true },
         },
       ]);
 
@@ -544,7 +544,7 @@ describe('non-initial round placeholder disappearance', () => {
           id: `persisted-user-r${nextRoundNumber}`, // Different ID from optimistic
           role: MessageRoles.USER,
           parts: [{ type: 'text', text: 'My follow-up' }],
-          metadata: { role: 'user', roundNumber: nextRoundNumber },
+          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber },
         },
       ];
 

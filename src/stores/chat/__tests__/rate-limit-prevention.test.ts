@@ -28,9 +28,9 @@ describe('rate limit prevention', () => {
       expect(STALE_TIMES.threadModerators).toBe(Infinity);
     });
 
-    it('usage should have reasonable staleTime to prevent abuse', () => {
-      // Usage stats don't need to be fetched more than once per minute
-      expect(STALE_TIMES.usage).toBeGreaterThanOrEqual(60 * 1000);
+    it('usage should always fetch fresh data after plan changes', () => {
+      // Usage stats must always be fresh after plan changes and chat operations
+      expect(STALE_TIMES.usage).toBe(0);
     });
 
     it('models should have long staleTime (SSG-like caching)', () => {

@@ -13,8 +13,6 @@ type VoiceVisualizationProps = {
   audioLevels?: number[];
   /** Number of visualization bars */
   barCount?: number;
-  /** Whether an alert banner is shown above this component */
-  hasAlertAbove?: boolean;
 };
 
 const EMPTY_AUDIO_LEVELS: number[] = [];
@@ -27,7 +25,6 @@ export function VoiceVisualization({
   isActive,
   audioLevels = EMPTY_AUDIO_LEVELS,
   barCount = 40,
-  hasAlertAbove = false,
 }: VoiceVisualizationProps) {
   const t = useTranslations();
   const bars = useMemo(() => {
@@ -54,7 +51,6 @@ export function VoiceVisualization({
           className={cn(
             'flex items-center gap-3 px-3 py-3',
             'border-0 border-b border-blue-500/20',
-            hasAlertAbove ? 'rounded-none' : 'rounded-t-2xl',
             'bg-blue-500/10 backdrop-blur-xl',
           )}
         >

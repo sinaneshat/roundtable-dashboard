@@ -13,14 +13,14 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
 
-import { FinishReasons, MessagePartTypes } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { createTestAssistantMessage, createTestChatStore, createTestUserMessage } from '@/lib/testing';
 
 // ============================================================================
 // Test Message Helpers
 // ============================================================================
 
-function mockMessage(opts: { id: string; role: 'user' | 'assistant'; text: string; metadata?: Record<string, unknown> }): UIMessage {
+function mockMessage(opts: { id: string; role: MessageRoles.USER | 'assistant'; text: string; metadata?: Record<string, unknown> }): UIMessage {
   return {
     id: opts.id,
     role: opts.role,
@@ -32,9 +32,9 @@ function mockMessage(opts: { id: string; role: 'user' | 'assistant'; text: strin
 function mockModeratorMessage(opts: { id: string; text: string; roundNumber: number }): UIMessage {
   return {
     id: opts.id,
-    role: 'assistant',
+    role: MessageRoles.ASSISTANT,
     parts: [{ type: 'text' as const, text: opts.text }],
-    metadata: { role: 'assistant', roundNumber: opts.roundNumber, isModerator: true },
+    metadata: { role: MessageRoles.ASSISTANT, roundNumber: opts.roundNumber, isModerator: true },
   };
 }
 
@@ -45,8 +45,8 @@ describe('store Update Frequency', () => {
       const spy = vi.spyOn(store.getState(), 'setMessages');
 
       const messages = [
-        mockMessage({ id: 'msg1', role: 'user', text: 'Hello' }),
-        mockMessage({ id: 'msg2', role: 'assistant', text: 'Hi there' }),
+        mockMessage({ id: 'msg1', role: MessageRoles.USER, text: 'Hello' }),
+        mockMessage({ id: 'msg2', role: MessageRoles.ASSISTANT, text: 'Hi there' }),
       ];
 
       // First call
@@ -66,23 +66,23 @@ describe('store Update Frequency', () => {
 
       const userMessage = mockMessage({
         id: 'user1',
-        role: 'user',
+        role: MessageRoles.USER,
         text: 'Hello',
-        metadata: { role: 'user', roundNumber: 0 },
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
       });
 
       const triggerMessage = mockMessage({
         id: 'trigger1',
-        role: 'user',
+        role: MessageRoles.USER,
         text: 'Hello',
-        metadata: { role: 'user', roundNumber: 0, isParticipantTrigger: true },
+        metadata: { role: MessageRoles.USER, roundNumber: 0, isParticipantTrigger: true },
       });
 
       const assistantMessage = mockMessage({
         id: 'asst1',
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         text: 'Hi',
-        metadata: { role: 'assistant', roundNumber: 0, participantIndex: 0 },
+        metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 0 },
       });
 
       // Set messages including trigger
@@ -178,9 +178,9 @@ describe('store Update Frequency', () => {
     it('should not have duplicate message IDs after updates', () => {
       const store = createTestChatStore();
 
-      const msg1 = mockMessage({ id: 'msg1', role: 'user', text: 'Hello' });
-      const msg2 = mockMessage({ id: 'msg2', role: 'assistant', text: 'Hi' });
-      const msg1Updated = mockMessage({ id: 'msg1', role: 'user', text: 'Hello updated' });
+      const msg1 = mockMessage({ id: 'msg1', role: MessageRoles.USER, text: 'Hello' });
+      const msg2 = mockMessage({ id: 'msg2', role: MessageRoles.ASSISTANT, text: 'Hi' });
+      const msg1Updated = mockMessage({ id: 'msg1', role: MessageRoles.USER, text: 'Hello updated' });
 
       store.getState().setMessages([msg1, msg2]);
       store.getState().setMessages([msg1Updated, msg2]);
@@ -197,16 +197,16 @@ describe('store Update Frequency', () => {
 
       const userMsg = mockMessage({
         id: 'user1',
-        role: 'user',
+        role: MessageRoles.USER,
         text: 'Hello',
-        metadata: { role: 'user', roundNumber: 0 },
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
       });
 
       const assistantMsg = mockMessage({
         id: 'thread_r0_p0',
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         text: 'Hi there',
-        metadata: { role: 'assistant', roundNumber: 0, participantIndex: 0 },
+        metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 0 },
       });
 
       const moderatorMsg = mockModeratorMessage({

@@ -19,7 +19,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { MessageStatuses, RoundPhases } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses, RoundPhases } from '@/api/core/enums';
 
 // ============================================================================
 // Server-side Phase Detection Tests
@@ -190,12 +190,9 @@ describe('determineCurrentPhase logic', () => {
     });
   });
 
-  describe('bug scenario: phase mismatch', () => {
-    it('oLD BUG: would return MODERATOR when participants incomplete', () => {
-      // This was the bug: allComplete=true incorrectly set, falls through to MODERATOR
-      // The old code had: return RoundPhases.MODERATOR as default
-
-      // With fix: Now returns PARTICIPANTS when allComplete is false
+  describe('phase mismatch scenario', () => {
+    it('should return PARTICIPANTS when participants incomplete', () => {
+      // Returns PARTICIPANTS when allComplete is false
       const result = determineCurrentPhase(
         { enabled: true, status: MessageStatuses.COMPLETE },
         { allComplete: false, totalParticipants: 1 }, // Participants NOT complete
@@ -238,32 +235,32 @@ describe('participant completion counting', () => {
 
   it('counts only participant messages, not moderators', () => {
     const messages: Message[] = [
-      { id: 'p0', role: 'assistant', metadata: { roundNumber: 0 } },
-      { id: 'mod', role: 'assistant', metadata: { roundNumber: 0, isModerator: true } },
+      { id: 'p0', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
+      { id: 'mod', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0, isModerator: true } },
     ];
     expect(countParticipantMessages(messages, 0)).toBe(1);
   });
 
   it('handles round with no participants', () => {
     const messages: Message[] = [
-      { id: 'user', role: 'user', metadata: { roundNumber: 1 } },
+      { id: 'user', role: MessageRoles.USER, metadata: { roundNumber: 1 } },
     ];
     expect(countParticipantMessages(messages, 1)).toBe(0);
   });
 
   it('counts multiple participants correctly', () => {
     const messages: Message[] = [
-      { id: 'p0', role: 'assistant', metadata: { roundNumber: 0 } },
-      { id: 'p1', role: 'assistant', metadata: { roundNumber: 0 } },
-      { id: 'mod', role: 'assistant', metadata: { roundNumber: 0, isModerator: true } },
+      { id: 'p0', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
+      { id: 'p1', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
+      { id: 'mod', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0, isModerator: true } },
     ];
     expect(countParticipantMessages(messages, 0)).toBe(2);
   });
 
   it('filters by round number', () => {
     const messages: Message[] = [
-      { id: 'p0_r0', role: 'assistant', metadata: { roundNumber: 0 } },
-      { id: 'p0_r1', role: 'assistant', metadata: { roundNumber: 1 } },
+      { id: 'p0_r0', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
+      { id: 'p0_r1', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1 } },
     ];
     expect(countParticipantMessages(messages, 0)).toBe(1);
     expect(countParticipantMessages(messages, 1)).toBe(1);
@@ -312,7 +309,7 @@ describe('client-side phase validation', () => {
       currentResumptionPhase: RoundPhases.MODERATOR,
       resumptionRoundNumber: 1,
       messages: [
-        { role: 'user', metadata: { roundNumber: 1 } },
+        { role: MessageRoles.USER, metadata: { roundNumber: 1 } },
         // No participant messages for round 1
       ],
       participants: [{ id: 'p1', isEnabled: true }],
@@ -326,8 +323,8 @@ describe('client-side phase validation', () => {
       currentResumptionPhase: RoundPhases.MODERATOR,
       resumptionRoundNumber: 1,
       messages: [
-        { role: 'user', metadata: { roundNumber: 1 } },
-        { role: 'assistant', metadata: { roundNumber: 1, participantId: 'p1' } },
+        { role: MessageRoles.USER, metadata: { roundNumber: 1 } },
+        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1, participantId: 'p1' } },
       ],
       participants: [{ id: 'p1', isEnabled: true }],
     };
@@ -340,8 +337,8 @@ describe('client-side phase validation', () => {
       currentResumptionPhase: RoundPhases.MODERATOR,
       resumptionRoundNumber: 1,
       messages: [
-        { role: 'user', metadata: { roundNumber: 1 } },
-        { role: 'assistant', metadata: { roundNumber: 1, participantId: 'p1' } },
+        { role: MessageRoles.USER, metadata: { roundNumber: 1 } },
+        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1, participantId: 'p1' } },
         // Missing p2
       ],
       participants: [
@@ -358,8 +355,8 @@ describe('client-side phase validation', () => {
       currentResumptionPhase: RoundPhases.MODERATOR,
       resumptionRoundNumber: 1,
       messages: [
-        { role: 'user', metadata: { roundNumber: 1 } },
-        { role: 'assistant', metadata: { roundNumber: 1, participantId: 'p1' } },
+        { role: MessageRoles.USER, metadata: { roundNumber: 1 } },
+        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1, participantId: 'p1' } },
       ],
       participants: [
         { id: 'p1', isEnabled: true },

@@ -20,7 +20,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ScreenModes } from '@/api/core/enums';
+import { MessageRoles, ScreenModes } from '@/api/core/enums';
 import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 
 // ============================================================================
@@ -820,7 +820,7 @@ describe('moderator Completion Detection', () => {
         }),
         {
           id: 'moderator-r0',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'Moderator analysis' }],
           metadata: {
             isModerator: true,
@@ -854,7 +854,7 @@ describe('moderator Completion Detection', () => {
         createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
         {
           id: 'moderator-r1',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'Moderator analysis' }],
           metadata: {
             isModerator: true,
@@ -872,7 +872,7 @@ describe('moderator Completion Detection', () => {
         createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
         {
           id: 'not-moderator-r0',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'Not moderator' }],
           metadata: {
             isModerator: false,

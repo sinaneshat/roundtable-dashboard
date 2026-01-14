@@ -18,7 +18,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import {
   createMockParticipants,
   createMockThread,
@@ -337,10 +337,10 @@ describe('partial Response Handling', () => {
     // Empty message (failed before any content)
     const emptyMessage: UIMessage = {
       id: 'thread-error-123_r0_p0',
-      role: 'assistant',
+      role: MessageRoles.ASSISTANT,
       parts: [],
       metadata: {
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         roundNumber: 0,
         participantId: 'participant-0',
         participantIndex: 0,

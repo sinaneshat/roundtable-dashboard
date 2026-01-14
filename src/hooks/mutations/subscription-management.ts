@@ -17,6 +17,8 @@ import { queryKeys } from '@/lib/data/query-keys';
 import type { GetSubscriptionsResponse } from '@/services/api';
 import {
   cancelSubscriptionService,
+  getUserUsageStatsService,
+  listModelsService,
   switchSubscriptionService,
 } from '@/services/api';
 
@@ -35,7 +37,7 @@ export function useSwitchSubscriptionMutation() {
 
   return useMutation({
     mutationFn: switchSubscriptionService,
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       // Immediately update the subscriptions list cache with the updated subscription
       if (response.success && response.data?.subscription) {
         const updatedSubscription = response.data.subscription;
@@ -62,19 +64,26 @@ export function useSwitchSubscriptionMutation() {
         );
       }
 
-      // Invalidate related queries
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.usage.all,
-      });
-
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.models.all,
-      });
-
       // Invalidate subscriptions all queries
       void queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
       });
+
+      // ⚠️ CRITICAL: Bypass HTTP cache for usage and models after plan switch
+      // Tier changes affect quotas and available models
+      try {
+        const freshUsageData = await getUserUsageStatsService({ bypassCache: true });
+        queryClient.setQueryData(queryKeys.usage.stats(), freshUsageData);
+      } catch {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
+      }
+
+      try {
+        const freshModelsData = await listModelsService({ bypassCache: true });
+        queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
+      } catch {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
+      }
     },
     retry: false,
     throwOnError: false,
@@ -95,7 +104,7 @@ export function useCancelSubscriptionMutation() {
 
   return useMutation({
     mutationFn: cancelSubscriptionService,
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       // Immediately update the subscriptions list cache with the updated subscription
       if (response.success && response.data?.subscription) {
         const updatedSubscription = response.data.subscription;
@@ -122,19 +131,26 @@ export function useCancelSubscriptionMutation() {
         );
       }
 
-      // Invalidate related queries
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.usage.all,
-      });
-
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.models.all,
-      });
-
       // Invalidate subscriptions all queries
       void queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
       });
+
+      // ⚠️ CRITICAL: Bypass HTTP cache for usage and models after cancellation
+      // Cancellation affects quotas and available models
+      try {
+        const freshUsageData = await getUserUsageStatsService({ bypassCache: true });
+        queryClient.setQueryData(queryKeys.usage.stats(), freshUsageData);
+      } catch {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
+      }
+
+      try {
+        const freshModelsData = await listModelsService({ bypassCache: true });
+        queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
+      } catch {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
+      }
     },
     retry: false,
     throwOnError: false,

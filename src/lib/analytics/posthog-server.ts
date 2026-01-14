@@ -35,6 +35,13 @@ import 'server-only';
  * Pattern: src/lib/posthog-server.ts
  */
 import { PostHog } from 'posthog-node';
+import { z } from 'zod';
+
+// ============================================================================
+// Analytics Constants
+// ============================================================================
+
+const ANONYMOUS_USER_ID = 'anonymous' as const;
 
 let posthogClient: PostHog | null = null;
 
@@ -75,6 +82,14 @@ export function getPostHogClient(): PostHog | null {
 }
 
 /**
+ * Zod schema for PostHog cookie structure
+ * PostHog stores distinct_id in cookie JSON payload
+ */
+const PostHogCookieSchema = z.object({
+  distinct_id: z.string(),
+}).passthrough();
+
+/**
  * Extract PostHog distinct ID from request cookies
  *
  * PostHog stores the distinct ID in a cookie with the format:
@@ -87,12 +102,12 @@ export function getPostHogClient(): PostHog | null {
  */
 export function getDistinctIdFromCookie(cookieHeader: string | null): string {
   if (!cookieHeader) {
-    return 'anonymous';
+    return ANONYMOUS_USER_ID;
   }
 
   const apiKey = process.env.NEXT_PUBLIC_POSTHOG_API_KEY;
   if (!apiKey) {
-    return 'anonymous';
+    return ANONYMOUS_USER_ID;
   }
 
   const cookieName = `ph_${apiKey}_posthog`;
@@ -109,27 +124,22 @@ export function getDistinctIdFromCookie(cookieHeader: string | null): string {
 
     const cookieValue = cookies.get(cookieName);
     if (!cookieValue) {
-      return 'anonymous';
+      return ANONYMOUS_USER_ID;
     }
 
-    // Decode and parse cookie value with runtime validation
+    // Decode and parse cookie value with Zod validation
     const decodedValue = decodeURIComponent(cookieValue);
     const parsed: unknown = JSON.parse(decodedValue);
 
-    // Type guard: validate PostHog cookie structure
-    if (
-      parsed !== null
-      && typeof parsed === 'object'
-      && 'distinct_id' in parsed
-      && typeof parsed.distinct_id === 'string'
-    ) {
-      return parsed.distinct_id;
+    const result = PostHogCookieSchema.safeParse(parsed);
+    if (!result.success) {
+      return ANONYMOUS_USER_ID;
     }
 
-    return 'anonymous';
+    return result.data.distinct_id;
   } catch (error) {
     console.error('Failed to get PostHog distinct ID from cookie:', error);
-    return 'anonymous';
+    return ANONYMOUS_USER_ID;
   }
 }
 
@@ -174,7 +184,7 @@ export async function captureServerException(
     return;
 
   const distinctId = options?.distinctId
-    ?? (options?.cookieHeader ? getDistinctIdFromCookie(options.cookieHeader) : 'anonymous');
+    ?? (options?.cookieHeader ? getDistinctIdFromCookie(options.cookieHeader) : ANONYMOUS_USER_ID);
 
   await posthog.captureException(error, distinctId, {
     $exception_source: 'backend',

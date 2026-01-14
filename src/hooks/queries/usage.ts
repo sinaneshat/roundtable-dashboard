@@ -38,8 +38,7 @@ import {
  *
  * Protected endpoint - requires authentication
  *
- * Stale time: 10 seconds (fresh data for UI blocking)
- * Refetch interval: 30 seconds (automatic background updates)
+ * ⚠️ NO CACHE - usage data must always be fresh after plan changes and chat operations
  *
  * @param options - Optional query options
  * @param options.forceEnabled - Force enable query regardless of auth state
@@ -58,16 +57,15 @@ export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.usage.stats(),
     queryFn: () => getUserUsageStatsService(),
-    staleTime: STALE_TIMES.quota, // 10 seconds - fresh data for UI blocking
-    // ✅ PERFORMANCE FIX: Reduce polling frequency and pause when tab hidden
-    // Original: 30s always - wasteful when user not looking
-    // New: 60s when visible, false when hidden
+    staleTime: STALE_TIMES.quota, // ⚠️ NO CACHE (0) - always fresh for accurate UI blocking
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep in memory for instant UI
+    // ✅ PERFORMANCE: Polling pauses when tab hidden
     refetchInterval: () => {
       // Don't poll if tab is hidden
       if (typeof document !== 'undefined' && document.hidden) {
         return false;
       }
-      // Poll every 60s when tab is visible (reduced from 30s)
+      // Poll every 60s when tab is visible
       return 60 * 1000;
     },
     retry: false,

@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 
 import { BRAND } from '@/constants';
-import { getOGFonts } from '@/lib/ui/og-fonts.server';
+import { getOGFontsSync } from '@/lib/ui/og-fonts.server';
 import {
   createGradient,
   getLogoBase64,
@@ -29,7 +29,7 @@ const FEATURED_PROVIDERS = [
 
 export default async function Image() {
   const [fonts, logoBase64, ...modelIcons] = await Promise.all([
-    getOGFonts(),
+    getOGFontsSync(),
     getLogoBase64().catch(() => ''),
     ...FEATURED_PROVIDERS.map(provider =>
       getModelIconBase64(provider).catch(() => ''),

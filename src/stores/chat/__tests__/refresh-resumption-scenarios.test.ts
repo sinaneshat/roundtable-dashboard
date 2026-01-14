@@ -84,7 +84,7 @@ function createPartialRoundMessages(
       // Empty message (interrupted before content)
       messages.push({
         id: `thread-123_r${roundNumber}_p${i}`,
-        role: 'assistant' as const,
+        role: MessageRoles.ASSISTANT as const,
         parts: [],
         metadata: {
           role: MessageRoles.ASSISTANT,
@@ -170,7 +170,7 @@ describe('refresh During Pre-Search', () => {
       // Should create optimistic user message from userQuery
       const recoveredMessage = {
         id: `optimistic-user-${Date.now()}-r0`,
-        role: 'user',
+        role: MessageRoles.USER,
         parts: [{ type: 'text', text: preSearch.userQuery }],
         metadata: { role: MessageRoles.USER, roundNumber: 0, isOptimistic: true },
       };
@@ -303,7 +303,7 @@ describe('refresh During Participant Streaming', () => {
         // P1 has partial content but no complete finishReason
         {
           id: 'p1',
-          role: 'assistant' as const,
+          role: MessageRoles.ASSISTANT as const,
           parts: [{ type: 'text' as const, text: 'Partial response...' }],
           metadata: {
             role: MessageRoles.ASSISTANT,
@@ -808,7 +808,7 @@ describe('edge Cases', () => {
       const messages = [
         {
           id: 'optimistic-user-123',
-          role: 'user',
+          role: MessageRoles.USER,
           metadata: { isOptimistic: true },
         },
       ];

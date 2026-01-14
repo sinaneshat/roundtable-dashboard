@@ -24,7 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles, MessageStatuses, ModelIds } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses, ModelIds, TextPartStates } from '@/api/core/enums';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 
 // Type definitions for the test
@@ -36,7 +36,7 @@ type MessagePart = {
 
 type UIMessage = {
   id: string;
-  role: 'user' | 'assistant';
+  role: MessageRoles.USER | 'assistant';
   parts: MessagePart[];
   metadata?: DbMessageMetadata;
 };
@@ -150,7 +150,7 @@ function createMockPreSearch(
 function createUserMessage(roundNumber: number): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_user`,
-    role: 'user',
+    role: MessageRoles.USER,
     parts: [{ type: 'text', text: 'Is Mars colonization humanity\'s backup plan or escapism?' }],
     metadata: {
       role: MessageRoles.USER,
@@ -170,7 +170,7 @@ function createEmptyParticipantMessage(
 ): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: 'assistant',
+    role: MessageRoles.ASSISTANT,
     parts: [], // Empty - no content received yet
     metadata: {
       role: MessageRoles.ASSISTANT,
@@ -292,7 +292,7 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Simulate AI SDK receiving stream data (from curl response)
       const streamEvents = [
-        { type: 'start', messageMetadata: { role: 'assistant', roundNumber: 0, participantIndex: 0 } },
+        { type: 'start', messageMetadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 0 } },
         { type: 'start-step' },
         { type: 'text-start', id: 'gen-123' },
         { type: 'text-delta', id: 'gen-123', delta: 'Mars' },
@@ -304,7 +304,7 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Expected: After processing these events, the store should have updated parts
       // The bug is that parts stay empty because isStreaming is never set to true
-      const expectedParts = [{ type: 'text', text: 'Mars colonization is neither pure', state: 'streaming' }];
+      const expectedParts = [{ type: 'text', text: 'Mars colonization is neither pure', state: TextPartStates.STREAMING }];
 
       // This assertion will FAIL with the current bug
       // After the fix, it should pass
@@ -517,13 +517,13 @@ describe('stream Resumption with Prefilled State', () => {
         currentParticipantIndex: 0,
         nextParticipantToTrigger: 0, // Should retry participant 0
         messages: [
-          { id: 'user-msg', role: 'user', parts: [{ type: 'text', text: 'Question?' }] },
+          { id: 'user-msg', role: MessageRoles.USER, parts: [{ type: 'text', text: 'Question?' }] },
           {
             id: 'p0-msg',
-            role: 'assistant',
+            role: MessageRoles.ASSISTANT,
             parts: [
               { type: 'step-start' },
-              { type: 'text', text: 'Mars colonization is neither pure', state: 'streaming' },
+              { type: 'text', text: 'Mars colonization is neither pure', state: TextPartStates.STREAMING },
             ],
             metadata: { participantIndex: 0, finishReason: 'unknown' },
           },
@@ -568,13 +568,13 @@ describe('stream Resumption with Prefilled State', () => {
         currentParticipantIndex: 0,
         nextParticipantToTrigger: 1, // Move to next participant
         messages: [
-          { id: 'user-msg', role: 'user', parts: [{ type: 'text', text: 'Question?' }] },
+          { id: 'user-msg', role: MessageRoles.USER, parts: [{ type: 'text', text: 'Question?' }] },
           {
             id: 'p0-msg',
-            role: 'assistant',
+            role: MessageRoles.ASSISTANT,
             parts: [
               { type: 'step-start' },
-              { type: 'text', text: 'Complete response from participant 0', state: 'done' },
+              { type: 'text', text: 'Complete response from participant 0', state: TextPartStates.DONE },
             ],
             metadata: { participantIndex: 0, finishReason: 'stop' },
           },
@@ -652,13 +652,13 @@ describe('stream Resumption with Prefilled State', () => {
 
       const participantMessage = {
         id: 'p0-msg',
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         parts: [
           { type: 'step-start' },
           {
             type: 'text',
             text: 'The debate around nuclear power\'s role in climate change mitigation...',
-            state: 'streaming',
+            state: TextPartStates.STREAMING,
           },
         ],
         metadata: {

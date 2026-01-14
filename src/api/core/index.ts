@@ -24,7 +24,6 @@ export { AIModels } from './ai-models';
 export { createOpenApiApp } from './app';
 export { APP_CONFIG, FEATURE_FLAGS, STREAMING_CONFIG } from './config';
 export {
-  ApiErrors,
   formatErrorResponse,
   isAppError,
 } from './errors';

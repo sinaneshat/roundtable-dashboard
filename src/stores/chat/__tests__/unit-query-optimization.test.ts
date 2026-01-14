@@ -617,8 +617,8 @@ describe('stale Time Configuration', () => {
     expect(STALE_TIMES.publicThreadDetail).toBe(24 * 3600 * 1000);
   });
 
-  it('should balance freshness vs performance for subscriptions', () => {
-    expect(STALE_TIMES.subscriptions).toBe(2 * 60 * 1000);
+  it('should always fetch fresh subscription data after plan changes', () => {
+    expect(STALE_TIMES.subscriptions).toBe(0);
   });
 });
 

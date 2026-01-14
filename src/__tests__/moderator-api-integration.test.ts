@@ -11,7 +11,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
+import { MessageRoles, MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
 import { act, createMockMessagesListResponse, createMockParticipant, createMockThread } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
 
@@ -142,19 +142,19 @@ describe('moderator API Integration', () => {
         store.getState().setMessages([
           {
             id: `${threadId}_r${roundNumber}_user`,
-            role: 'user',
+            role: MessageRoles.USER,
             parts: [{ type: 'text', text: 'Test question' }],
             metadata: { roundNumber },
           },
           {
             id: participantMessageIds[0],
-            role: 'assistant',
+            role: MessageRoles.ASSISTANT,
             parts: [{ type: 'text', text: 'Participant 1 response' }],
             metadata: { roundNumber, participantIndex: 0 },
           },
           {
             id: participantMessageIds[1],
-            role: 'assistant',
+            role: MessageRoles.ASSISTANT,
             parts: [{ type: 'text', text: 'Participant 2 response' }],
             metadata: { roundNumber, participantIndex: 1 },
           },
@@ -353,7 +353,7 @@ describe('moderator API Integration', () => {
         store.getState().setMessages([
           {
             id: moderatorId,
-            role: 'assistant',
+            role: MessageRoles.ASSISTANT,
             parts: [],
             metadata: {
               isModerator: true,
@@ -383,7 +383,7 @@ describe('moderator API Integration', () => {
         store.getState().setMessages([
           {
             id: moderatorId,
-            role: 'assistant',
+            role: MessageRoles.ASSISTANT,
             parts: [],
             metadata: { isModerator: true, roundNumber },
           },

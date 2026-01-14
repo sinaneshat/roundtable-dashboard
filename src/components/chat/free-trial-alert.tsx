@@ -8,10 +8,6 @@ import { Button } from '@/components/ui/button';
 import { useFreeTrialState } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
-type FreeTrialAlertProps = {
-  hasHeaderToggle?: boolean;
-};
-
 /**
  * Free Trial Alert - Shows upgrade prompt for free users
  *
@@ -24,7 +20,7 @@ type FreeTrialAlertProps = {
  * - 'available': Fresh user, no thread created yet (green)
  * - 'used': User has created a thread (amber warning)
  */
-export function FreeTrialAlert({ hasHeaderToggle = false }: FreeTrialAlertProps) {
+export function FreeTrialAlert() {
   const t = useTranslations();
   const { isFreeUser, hasUsedTrial, isWarningState, isLoadingStats } = useFreeTrialState();
 
@@ -51,8 +47,7 @@ export function FreeTrialAlert({ hasHeaderToggle = false }: FreeTrialAlertProps)
         <div
           className={cn(
             'flex items-center justify-between gap-3 px-3 py-2',
-            'border-0 border-b rounded-none',
-            hasHeaderToggle ? 'rounded-tr-2xl' : 'rounded-t-2xl',
+            'border-0 border-b',
             isWarningState
               ? 'border-amber-500/20 bg-amber-500/10'
               : 'border-green-500/20 bg-green-500/10',

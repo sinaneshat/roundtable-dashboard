@@ -18,7 +18,6 @@
  * ```
  */
 
-export { usePostHogIdentify } from './use-posthog-identify';
 export {
   useActiveFeatureFlags,
   useFeatureFlagEnabled,

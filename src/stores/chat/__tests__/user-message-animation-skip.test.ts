@@ -212,23 +212,17 @@ describe('user Message Animation Skip Logic', () => {
       });
     });
 
-    describe('iD Transition Bug (Optimistic to DB) - THE CRITICAL EDGE CASE', () => {
+    describe('iD Transition (Optimistic to DB) - Critical Edge Case', () => {
       /**
-       * This is the exact bug scenario that was discovered and fixed.
-       *
        * Flow:
        * 1. User submits round 1 message
        * 2. Optimistic message created: ID = 'optimistic-user-1736128000000'
        * 3. skipUserMsgAnimation = true (optimistic prefix) → message visible
        * 4. DB persists, ID changes to 'thread_r1_user'
        * 5. Component remounts (new key from new ID)
-       * 6. OLD BUG: skipUserMsgAnimation = false (no optimistic prefix)
-       * 7. Animation triggers with initial={{ opacity: 0 }}
-       * 8. whileInView doesn't trigger (outside viewport)
-       * 9. Message stays invisible (opacity: 0)
-       * 10. FIX: roundNumber > 0 still returns true → message stays visible
+       * 6. roundNumber > 0 maintains skip → message stays visible
        */
-      it('cRITICAL BUG FIX: should maintain skip when optimistic ID replaced by DB ID', () => {
+      it('should maintain skip when optimistic ID replaced by DB ID', () => {
         // Phase 1: Optimistic message (animation skipped via optimistic prefix)
         const optimisticMessage: UIMessage = {
           id: 'optimistic-user-1736128000000',

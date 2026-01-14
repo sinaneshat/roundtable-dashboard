@@ -87,6 +87,33 @@ export const PreSearchQueryStateStatuses = {
 } as const;
 
 // ============================================================================
+// PRE-SEARCH EXECUTION RESULT (Execution helper return status)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const PRE_SEARCH_EXECUTION_RESULTS = ['started', 'in_progress', 'complete', 'failed'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_PRE_SEARCH_EXECUTION_RESULT = 'in_progress' as const;
+
+// 3. ZOD SCHEMA
+export const PreSearchExecutionResultSchema = z.enum(PRE_SEARCH_EXECUTION_RESULTS).openapi({
+  description: 'Result status from executePreSearch helper indicating execution outcome',
+  example: 'started',
+});
+
+// 4. TYPESCRIPT TYPE
+export type PreSearchExecutionResult = z.infer<typeof PreSearchExecutionResultSchema>;
+
+// 5. CONSTANT OBJECT
+export const PreSearchExecutionResults = {
+  STARTED: 'started' as const,
+  IN_PROGRESS: 'in_progress' as const,
+  COMPLETE: 'complete' as const,
+  FAILED: 'failed' as const,
+} as const;
+
+// ============================================================================
 // SEARCH RESULT STATUS
 // ============================================================================
 

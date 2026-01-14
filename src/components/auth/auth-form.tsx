@@ -9,7 +9,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { AuthStep } from '@/api/core/enums';
-import { AuthSteps, DEFAULT_AUTH_STEP } from '@/api/core/enums';
+import { AuthSteps, DEFAULT_AUTH_STEP, ErrorSeverities } from '@/api/core/enums';
 import { RHFTextField } from '@/components/forms/rhf-text-field';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -40,9 +40,9 @@ function AuthFormContent() {
     const message = searchParams.get('message');
 
     if (toastType && message) {
-      if (toastType === 'failed') {
+      if (toastType === ErrorSeverities.FAILED) {
         showApiErrorToast(t('auth.errors.threadNotFound'), new Error(message));
-      } else if (toastType === 'info') {
+      } else if (toastType === ErrorSeverities.INFO) {
         showApiInfoToast(t('auth.errors.threadUnavailable'), message);
       } else {
         showApiInfoToast(t('auth.errors.notice'), message);

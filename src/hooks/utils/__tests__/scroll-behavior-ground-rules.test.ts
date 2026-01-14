@@ -27,6 +27,7 @@
 import type { UIMessage } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageRoles } from '@/api/core/enums';
 import { act, renderHook } from '@/lib/testing';
 
 import { useChatScroll } from '../use-chat-scroll';
@@ -41,7 +42,7 @@ import { useChatScroll } from '../use-chat-scroll';
 function createMockMessage(id: string, content: string): UIMessage {
   return {
     id,
-    role: 'user',
+    role: MessageRoles.USER,
     content,
     parts: [{ type: 'text', text: content }],
   };

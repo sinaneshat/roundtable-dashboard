@@ -57,6 +57,8 @@ import {
   isPreSearch,
 } from './metadata';
 
+const UNKNOWN_FALLBACK = 'unknown' as const;
+
 // ============================================================================
 // Type Guards
 // ============================================================================
@@ -152,11 +154,7 @@ export function chatMessageToUIMessage(
       ? message.createdAt.toISOString()
       : message.createdAt;
 
-  const isPreSearchMsg
-    = message.metadata !== null
-      && typeof message.metadata === 'object'
-      && 'isPreSearch' in message.metadata
-      && message.metadata.isPreSearch === true;
+  const isPreSearchMsg = isPreSearch(message.metadata);
 
   const metadata = isPreSearchMsg
     ? message.metadata
@@ -631,17 +629,17 @@ export function mergeParticipantMetadata(
     totalTokens: usageResult.success ? (usageResult.data.totalTokens ?? 0) : 0,
   };
 
-  const finishReasonRaw = validatedMetadata?.finishReason ? String(validatedMetadata.finishReason) : 'unknown';
+  const finishReasonRaw = validatedMetadata?.finishReason ? String(validatedMetadata.finishReason) : UNKNOWN_FALLBACK;
   const finishReasonResult = FinishReasonSchema.safeParse(finishReasonRaw);
-  const safeFinishReason: FinishReason = finishReasonResult.success ? finishReasonResult.data : 'unknown';
+  const safeFinishReason: FinishReason = finishReasonResult.success ? finishReasonResult.data : UNKNOWN_FALLBACK;
 
   const errorTypeRaw = typeof validatedMetadata?.errorType === 'string'
     ? validatedMetadata.errorType
     : !hasAnyContent && hasError
         ? 'empty_response'
-        : 'unknown';
+        : UNKNOWN_FALLBACK;
   const errorTypeResult = ErrorTypeSchema.safeParse(errorTypeRaw);
-  const safeErrorType: ErrorType = errorTypeResult.success ? errorTypeResult.data : 'unknown';
+  const safeErrorType: ErrorType = errorTypeResult.success ? errorTypeResult.data : UNKNOWN_FALLBACK;
 
   const backendParticipantId = validatedMetadata?.participantId;
   const effectiveParticipantId = (typeof backendParticipantId === 'string' && backendParticipantId.length > 0)

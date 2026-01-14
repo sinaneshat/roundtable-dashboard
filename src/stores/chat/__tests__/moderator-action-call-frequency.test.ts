@@ -120,7 +120,7 @@ function simulateModeratorStreaming(
   // Create placeholder
   const placeholder: UIMessage = {
     id: moderatorId,
-    role: 'assistant',
+    role: MessageRoles.ASSISTANT,
     parts: [],
     metadata: {
       isModerator: true,
@@ -212,7 +212,7 @@ describe('moderator Action Call Frequency', () => {
 
       const message: UIMessage = {
         id: 'thread-1_r0_moderator',
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         parts: [{ type: MessagePartTypes.TEXT, text: 'Same content' }],
         metadata: { isModerator: true, roundNumber: 0 },
       };
@@ -278,7 +278,7 @@ describe('moderator Action Call Frequency', () => {
 
       const placeholder: UIMessage = {
         id: 'thread-1_r0_moderator',
-        role: 'assistant',
+        role: MessageRoles.ASSISTANT,
         parts: [],
         metadata: { isModerator: true, roundNumber: 0 },
       };
@@ -376,19 +376,19 @@ describe('moderator Action Call Frequency', () => {
       const participantMessages: UIMessage[] = [
         {
           id: 'thread-1_r0_p0',
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           parts: [{ type: MessagePartTypes.TEXT, text: 'Participant 0' }],
           metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
         },
         {
           id: 'thread-1_r0_p1',
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           parts: [{ type: MessagePartTypes.TEXT, text: 'Participant 1' }],
           metadata: { roundNumber: 0, participantIndex: 1, role: MessageRoles.ASSISTANT },
         },
         {
           id: 'thread-1_r0_p2',
-          role: 'assistant',
+          role: MessageRoles.ASSISTANT,
           parts: [{ type: MessagePartTypes.TEXT, text: 'Participant 2' }],
           metadata: { roundNumber: 0, participantIndex: 2, role: MessageRoles.ASSISTANT },
         },

@@ -44,7 +44,8 @@ export function useProductQuery(productId: string) {
   return useQuery({
     queryKey: queryKeys.products.detail(productId),
     queryFn: async () => getProductService({ param: { id: productId } }),
-    staleTime: 3600 * 1000, // 1 hour
+    staleTime: STALE_TIMES.products,
+    gcTime: Infinity, // Match useProductsQuery pattern
     enabled: !!productId, // Only fetch when productId is available
     retry: false,
     throwOnError: false,

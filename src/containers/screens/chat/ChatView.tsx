@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
-import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, RoundPhases, ScreenModes } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputHeader } from '@/components/chat/chat-input-header';
 import { ChatInputUpgradeBanner } from '@/components/chat/chat-input-upgrade-banner';
@@ -108,6 +108,8 @@ export function ChatView({
     autoMode,
     setAutoMode,
     isAnalyzingPrompt,
+    currentResumptionPhase,
+    resumptionRoundNumber,
   } = useChatStore(
     useShallow(s => ({
       messages: s.messages,
@@ -136,6 +138,8 @@ export function ChatView({
       autoMode: s.autoMode,
       setAutoMode: s.setAutoMode,
       isAnalyzingPrompt: s.isAnalyzingPrompt,
+      currentResumptionPhase: s.currentResumptionPhase,
+      resumptionRoundNumber: s.resumptionRoundNumber,
     })),
   );
 
@@ -206,8 +210,14 @@ export function ChatView({
         }
       }
     });
+    // ✅ REFRESH FIX: When server prefills currentResumptionPhase=COMPLETE after SSR refresh,
+    // treat that round as complete even before fresh messages load (moderator msg may be absent)
+    // This prevents participants from entering "thinking mode" on page refresh
+    if (currentResumptionPhase === RoundPhases.COMPLETE && resumptionRoundNumber !== null) {
+      completed.add(resumptionRoundNumber);
+    }
     return completed;
-  }, [messages]);
+  }, [messages, currentResumptionPhase, resumptionRoundNumber]);
 
   const orderedModels = useOrderedModels({
     selectedParticipants,

@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { permanentRedirect, redirect } from 'next/navigation';
 
-import { MessageRoles, ResourceUnavailableReasons } from '@/api/core/enums';
+import { ErrorSeverities, MessageRoles, ResourceUnavailableReasons } from '@/api/core/enums';
 import { BRAND } from '@/constants';
 import PublicChatThreadScreen from '@/containers/screens/chat/PublicChatThreadScreen';
 import { getCachedPublicThreadForMetadata } from '@/lib/cache/thread-cache';
@@ -152,7 +152,7 @@ export default async function PublicChatThreadPage({ params }: PageParams) {
 
     if (!response.success) {
       const searchParams = new URLSearchParams({
-        toast: 'failed',
+        toast: ErrorSeverities.FAILED,
         message: 'This conversation no longer exists. Create your own to get started!',
         action: 'create',
       });
@@ -175,7 +175,7 @@ export default async function PublicChatThreadPage({ params }: PageParams) {
     const { message, action } = getErrorMessage(statusCode, reason);
 
     const searchParams = new URLSearchParams({
-      toast: 'info',
+      toast: ErrorSeverities.INFO,
       message,
       action,
       from: `/public/chat/${slug}`,

@@ -6,6 +6,12 @@ import type { ValidationError } from '@/api/core/schemas';
 import { ValidationErrorSchema } from '@/api/core/schemas';
 
 // ============================================================================
+// ERROR MESSAGE CONSTANTS
+// ============================================================================
+
+const UNKNOWN_ERROR_MESSAGE = 'An unknown error occurred' as const;
+
+// ============================================================================
 // ERROR DETAILS SCHEMA
 // ============================================================================
 
@@ -101,7 +107,7 @@ function extractErrorDetails(context: unknown): ErrorDetails | undefined {
 
 export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   if (!error) {
-    return { message: 'An unknown error occurred' };
+    return { message: UNKNOWN_ERROR_MESSAGE };
   }
 
   if (typeof error === 'string') {
@@ -113,7 +119,7 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   }
 
   const result: ApiErrorDetails = {
-    message: 'An unknown error occurred',
+    message: UNKNOWN_ERROR_MESSAGE,
   };
 
   if ('status' in error && typeof error.status === 'number') {
@@ -156,7 +162,7 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
     }
   }
 
-  if (result.message === 'An unknown error occurred' && 'message' in error && typeof error.message === 'string' && error.message.length > 0) {
+  if (result.message === UNKNOWN_ERROR_MESSAGE && 'message' in error && typeof error.message === 'string' && error.message.length > 0) {
     if (!error.message.startsWith('HTTP error!')) {
       result.message = error.message;
     }
@@ -166,7 +172,7 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
     }
   }
 
-  if (result.message === 'An unknown error occurred' && 'statusText' in error && typeof error.statusText === 'string' && error.statusText.length > 0) {
+  if (result.message === UNKNOWN_ERROR_MESSAGE && 'statusText' in error && typeof error.statusText === 'string' && error.statusText.length > 0) {
     result.message = error.statusText;
   }
 
@@ -179,14 +185,14 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
     };
   }
 
-  if (result.status && result.message === 'An unknown error occurred') {
+  if (result.status && result.message === UNKNOWN_ERROR_MESSAGE) {
     result.message = `Request failed with status ${result.status}`;
   }
 
   return result;
 }
 
-export function getApiErrorMessage(error: unknown, fallback = 'An unknown error occurred'): string {
+export function getApiErrorMessage(error: unknown, fallback: string = UNKNOWN_ERROR_MESSAGE): string {
   const details = getApiErrorDetails(error);
   return details.message || fallback;
 }

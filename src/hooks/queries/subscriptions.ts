@@ -23,7 +23,7 @@ import {
  * Hook to fetch all user subscriptions
  * Protected endpoint - requires authentication (handled by backend)
  *
- * Stale time: 2 minutes (subscription data moderately fresh)
+ * ⚠️ NO CACHE - subscription data must always be fresh after plan changes
  */
 export function useSubscriptionsQuery() {
   const { isAuthenticated } = useAuthCheck();
@@ -31,7 +31,8 @@ export function useSubscriptionsQuery() {
   return useQuery({
     queryKey: queryKeys.subscriptions.list(),
     queryFn: () => getSubscriptionsService(),
-    staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
+    staleTime: STALE_TIMES.subscriptions, // ⚠️ NO CACHE (0) - always fresh
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep in memory for instant UI
     enabled: isAuthenticated,
     retry: false,
   });
@@ -41,6 +42,8 @@ export function useSubscriptionsQuery() {
  * Hook to fetch a specific subscription by ID
  * Protected endpoint - requires authentication and ownership (handled by backend)
  *
+ * ⚠️ NO CACHE - subscription data must always be fresh after plan changes
+ *
  * @param subscriptionId - Subscription ID
  */
 export function useSubscriptionQuery(subscriptionId: string) {
@@ -49,7 +52,8 @@ export function useSubscriptionQuery(subscriptionId: string) {
   return useQuery({
     queryKey: queryKeys.subscriptions.detail(subscriptionId),
     queryFn: () => getSubscriptionService({ param: { id: subscriptionId } }),
-    staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
+    staleTime: STALE_TIMES.subscriptions, // ⚠️ NO CACHE (0) - always fresh
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep in memory for instant UI
     enabled: isAuthenticated && !!subscriptionId,
     retry: false,
   });

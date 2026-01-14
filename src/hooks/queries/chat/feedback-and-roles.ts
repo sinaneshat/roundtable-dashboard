@@ -14,7 +14,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
+import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getCustomRoleService,
   getThreadFeedbackService,
@@ -42,6 +42,7 @@ export function useThreadFeedbackQuery(threadId: string, enabled = true) {
     queryKey: queryKeys.threads.feedback(threadId),
     queryFn: () => getThreadFeedbackService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadFeedback, // Never stale - invalidated only on mutation
+    gcTime: Infinity, // Match staleTime: Infinity pattern
     placeholderData: previousData => previousData,
     enabled: isAuthenticated && !!threadId && enabled,
     refetchOnMount: false,
@@ -103,7 +104,8 @@ export function useCustomRolesQuery(enabled = true) {
       }
       return undefined;
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: STALE_TIME_PRESETS.medium,
+    gcTime: 5 * 60 * 1000, // 5 minutes
     retry: false,
     enabled: isAuthenticated && enabled, // Only fetch when authenticated and explicitly enabled
     throwOnError: false,
@@ -126,7 +128,8 @@ export function useCustomRoleQuery(roleId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.customRoles.detail(roleId),
     queryFn: () => getCustomRoleService({ param: { id: roleId } }),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: STALE_TIME_PRESETS.long,
+    gcTime: 5 * 60 * 1000, // 5 minutes
     enabled: isAuthenticated && !!roleId && enabled, // Only fetch when authenticated and roleId exists
     retry: false,
     throwOnError: false,
@@ -165,7 +168,8 @@ export function useUserPresetsQuery(enabled = true) {
       }
       return undefined;
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: STALE_TIME_PRESETS.medium,
+    gcTime: 5 * 60 * 1000, // 5 minutes
     retry: false,
     enabled: isAuthenticated && enabled,
     throwOnError: false,
@@ -187,7 +191,8 @@ export function useUserPresetQuery(presetId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.userPresets.detail(presetId),
     queryFn: () => getUserPresetService({ param: { id: presetId } }),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: STALE_TIME_PRESETS.long,
+    gcTime: 5 * 60 * 1000, // 5 minutes
     enabled: isAuthenticated && !!presetId && enabled,
     retry: false,
     throwOnError: false,

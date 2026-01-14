@@ -27,7 +27,7 @@ type MessagePart = {
 
 type UIMessage = {
   id: string;
-  role: 'user' | 'assistant';
+  role: MessageRoles.USER | 'assistant';
   parts: MessagePart[];
   metadata?: Record<string, unknown>;
 };
@@ -82,7 +82,7 @@ function createMockParticipantMessage(
   const { hasContent = true, finishReason = 'stop', state = 'done' } = options;
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: 'assistant',
+    role: MessageRoles.ASSISTANT,
     parts: hasContent
       ? [
           { type: 'step-start' },
@@ -102,7 +102,7 @@ function createMockParticipantMessage(
 function createMockUserMessage(roundNumber: number): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_user`,
-    role: 'user',
+    role: MessageRoles.USER,
     parts: [{ type: 'text', text: 'Test question' }],
     metadata: {
       role: MessageRoles.USER,

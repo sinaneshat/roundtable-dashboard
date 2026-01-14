@@ -167,7 +167,7 @@ export function createMockMessagesListResponse(
   return {
     success: true,
     data: {
-      messages,
+      items: messages,
       count: messages.length,
     },
   };

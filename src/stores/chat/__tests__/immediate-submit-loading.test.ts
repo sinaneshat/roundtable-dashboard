@@ -530,10 +530,7 @@ describe('submit Loading - State Transition Timing', () => {
      * CRITICAL: There must be NO gap where input is enabled
      * between submit click and loading state appearing.
      *
-     * OLD BUG: Loading depended on mutation.isPending which only became
-     * true AFTER async operations started, creating a timing gap.
-     *
-     * FIX: Set waitingToStartStreaming synchronously at function start.
+     * waitingToStartStreaming is set synchronously at function start.
      */
     const store = createChatStore();
 

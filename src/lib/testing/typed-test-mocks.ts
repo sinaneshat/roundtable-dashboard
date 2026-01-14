@@ -1,3 +1,5 @@
+import { MessageRoles } from '@/api/core/enums';
+
 /**
  * Typed Test Mock Factories
  *
@@ -430,7 +432,7 @@ export function createInvalidMetadata(type: InvalidMetadataType): unknown {
     'null': null,
     'undefined': undefined,
     'empty': {},
-    'missing-round': { role: 'user' } satisfies InvalidMetadataObject,
+    'missing-round': { role: MessageRoles.USER } satisfies InvalidMetadataObject,
   };
 
   return variants[type];

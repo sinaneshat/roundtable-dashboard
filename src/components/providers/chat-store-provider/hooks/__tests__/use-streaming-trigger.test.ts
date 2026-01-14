@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 
-import { MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { act } from '@/lib/testing';
 
@@ -15,7 +15,7 @@ type MockParticipant = {
 
 type MockMessage = {
   id: string;
-  role: 'user' | 'assistant';
+  role: MessageRoles.USER | 'assistant';
   metadata?: { roundNumber?: number };
 };
 
@@ -95,7 +95,7 @@ function createMockParticipant(index: number): MockParticipant {
 function createMockUserMessage(roundNumber: number): MockMessage {
   return {
     id: `msg-user-r${roundNumber}`,
-    role: 'user',
+    role: MessageRoles.USER,
     metadata: { roundNumber },
   };
 }
@@ -503,9 +503,9 @@ describe('useStreamingTrigger - Thread Screen (Round 2+) - FAILING TESTS', () =>
       participants: [createMockParticipant(0), createMockParticipant(1)],
       messages: [
         createMockUserMessage(0),
-        { id: 'msg-assist-r0-p1', role: 'assistant', metadata: { roundNumber: 0 } },
+        { id: 'msg-assist-r0-p1', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
         createMockUserMessage(1),
-        { id: 'msg-assist-r1-p1', role: 'assistant', metadata: { roundNumber: 1 } },
+        { id: 'msg-assist-r1-p1', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1 } },
         createMockUserMessage(2),
       ],
       thread: { id: 'thread-123', enableWebSearch: false },

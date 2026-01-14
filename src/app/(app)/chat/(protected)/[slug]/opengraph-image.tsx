@@ -4,7 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import type { ChatMode } from '@/api/core/enums';
 import { ChatModes, DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { BRAND } from '@/constants';
-import { getOGFonts } from '@/lib/ui/og-fonts.server';
+import { getOGFontsSync } from '@/lib/ui/og-fonts.server';
 import {
   createGradient,
   OG_COLORS,
@@ -38,7 +38,7 @@ export default async function Image({
   // Load translations and fonts in parallel
   const [t, fonts] = await Promise.all([
     getTranslations(),
-    getOGFonts(),
+    getOGFontsSync(),
   ]);
 
   // Default fallback values

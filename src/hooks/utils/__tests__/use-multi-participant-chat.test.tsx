@@ -16,6 +16,7 @@
 import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { renderHook } from '@/lib/testing';
 
@@ -606,7 +607,7 @@ describe('useMultiParticipantChat', () => {
       const testMessages = [
         {
           id: 'msg-1',
-          role: 'user' as const,
+          role: MessageRoles.USER as const,
           content: 'Test message',
         },
       ];

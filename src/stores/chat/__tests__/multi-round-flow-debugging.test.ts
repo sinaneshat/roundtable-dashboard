@@ -106,7 +106,7 @@ function createMockUserMessage(roundNumber: number, text: string) {
     role: MessageRoles.USER as const,
     parts: [{ type: 'text' as const, text }],
     metadata: {
-      role: 'user' as const,
+      role: MessageRoles.USER as const,
       roundNumber,
       createdAt: new Date().toISOString(),
     },
@@ -128,7 +128,7 @@ function createMockAssistantMessage(
       { type: 'text' as const, text: `Response from ${modelId}`, state: 'done' as const },
     ],
     metadata: {
-      role: 'assistant' as const,
+      role: MessageRoles.ASSISTANT as const,
       roundNumber,
       participantIndex,
       participantId: `participant-${participantIndex}`,
@@ -146,7 +146,7 @@ function createMockModeratorMessage(threadId: string, roundNumber: number) {
     role: MessageRoles.ASSISTANT as const,
     parts: [{ type: 'text' as const, text: 'Summary...', state: 'done' as const }],
     metadata: {
-      role: 'assistant' as const,
+      role: MessageRoles.ASSISTANT as const,
       isModerator: true,
       roundNumber,
       participantIndex: -99,

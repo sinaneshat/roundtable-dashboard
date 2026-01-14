@@ -32,6 +32,7 @@ export function useThreadMessagesQuery(threadId: string, enabled?: boolean) {
     queryKey: queryKeys.threads.messages(threadId),
     queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadMessages, // 5 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
     throwOnError: false,

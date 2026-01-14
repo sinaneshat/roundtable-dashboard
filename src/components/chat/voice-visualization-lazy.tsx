@@ -9,7 +9,6 @@ type VoiceVisualizationProps = {
   isActive: boolean;
   audioLevels?: number[];
   barCount?: number;
-  hasAlertAbove?: boolean;
 };
 
 function VoiceVisualizationSkeleton() {
@@ -18,7 +17,7 @@ function VoiceVisualizationSkeleton() {
       <div
         className={cn(
           'flex items-center gap-3 px-3 py-3',
-          'border-0 border-b border-blue-500/20 rounded-none rounded-t-2xl',
+          'border-0 border-b border-blue-500/20',
           'bg-blue-500/10 backdrop-blur-xl',
         )}
       >

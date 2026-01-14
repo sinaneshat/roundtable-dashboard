@@ -35,6 +35,7 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
     queryKey: queryKeys.threads.changelog(threadId),
     queryFn: () => getThreadChangelogService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadChangelog, // Infinity - ONE-WAY DATA FLOW
+    gcTime: Infinity, // Match staleTime: Infinity pattern
     // ✅ STREAMING PROTECTION: All refetch settings now handled globally
     // See query-client.ts for global defaults (all disabled)
     // Preserve previous data during refetches to prevent flickering
@@ -73,6 +74,7 @@ export function useThreadRoundChangelogQuery(
       param: { threadId, roundNumber: String(roundNumber) },
     }),
     staleTime: STALE_TIMES.threadChangelog, // Infinity - never stale
+    gcTime: Infinity, // Match staleTime: Infinity pattern
     // ⚠️ NO placeholderData - prevents stale data from previous rounds causing race conditions
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,

@@ -14,7 +14,7 @@ import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractValidFileParts, isRenderableContent, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, mergeParticipantMetadata } from '@/lib/utils';
+import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, isPreSearch, mergeParticipantMetadata } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 
 import { useSyncedRefs } from './use-synced-refs';
@@ -1151,13 +1151,9 @@ export function useMultiParticipantChat(
         // ✅ CRITICAL FIX: Skip metadata merge for pre-search messages
         // Pre-search messages have isPreSearch: true and complete metadata from backend
         // They should NOT be modified with participant metadata
-        // ✅ TYPE-SAFE: Check for pre-search metadata without force casting
-        const isPreSearch = data.message.metadata !== null
-          && typeof data.message.metadata === 'object'
-          && 'isPreSearch' in data.message.metadata
-          && data.message.metadata.isPreSearch === true;
+        const isPreSearchMsg = isPreSearch(data.message.metadata);
 
-        if (isPreSearch) {
+        if (isPreSearchMsg) {
           // Pre-search messages already have complete metadata - skip this flow entirely
           return;
         }

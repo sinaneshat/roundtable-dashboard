@@ -10,7 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FinishReasons, ModelIds, ParticipantStreamStatuses } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, ModelIds, ParticipantStreamStatuses } from '@/api/core/enums';
 import { act, createMockParticipant, createMockThread } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
 
@@ -167,7 +167,7 @@ describe('streaming Telemetry E2E', () => {
                 id: threadId,
                 message: {
                   id: `${threadId}_r${roundNumber}_user`,
-                  role: 'user',
+                  role: MessageRoles.USER,
                   parts: [{ type: 'text', text: 'Test question for E2E' }],
                 },
                 participantIndex: i,
@@ -370,7 +370,7 @@ describe('streaming Telemetry E2E', () => {
             regenerateRound: roundNumber,
             message: {
               id: `${threadId}_r${roundNumber}_user`,
-              role: 'user',
+              role: MessageRoles.USER,
               parts: [{ type: 'text', text: 'Original question' }],
             },
           }),
@@ -434,13 +434,13 @@ describe('streaming Telemetry E2E', () => {
         store.getState().setMessages([
           {
             id: `${threadId}_r0_user`,
-            role: 'user',
+            role: MessageRoles.USER,
             parts: [{ type: 'text', text: 'Round 0 question' }],
             metadata: { roundNumber: 0 },
           },
           {
             id: `${threadId}_r0_p0`,
-            role: 'assistant',
+            role: MessageRoles.ASSISTANT,
             parts: [{ type: 'text', text: 'Round 0 response' }],
             metadata: { roundNumber: 0, participantIndex: 0 },
           },
@@ -453,7 +453,7 @@ describe('streaming Telemetry E2E', () => {
           ...current,
           {
             id: `${threadId}_r1_user`,
-            role: 'user',
+            role: MessageRoles.USER,
             parts: [{ type: 'text', text: 'Round 1 question' }],
             metadata: { roundNumber: 1 },
           },
@@ -489,7 +489,7 @@ describe('streaming Telemetry E2E', () => {
             id: threadId,
             message: {
               id: `${threadId}_r0_user`,
-              role: 'user',
+              role: MessageRoles.USER,
               parts: [{ type: 'text', text: 'Test' }],
             },
             participantIndex: 0,

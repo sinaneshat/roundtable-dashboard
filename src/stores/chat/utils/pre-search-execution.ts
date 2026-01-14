@@ -7,7 +7,13 @@
  * @module stores/chat/utils/pre-search-execution
  */
 
-import { MessageStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
+import type { PreSearchExecutionResult } from '@/api/core/enums';
+import {
+  MessageStatuses,
+  PreSearchExecutionResults,
+  PreSearchSseEvents,
+  WebSearchDepths,
+} from '@/api/core/enums';
 import type { ChatThread, PartialPreSearchData, PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 
@@ -197,15 +203,13 @@ export type ExecutePreSearchOptions = {
 /**
  * Execute pre-search creation and streaming in a single, idempotent operation.
  *
- * This consolidates the duplicate logic that was in both handleComplete and
- * pendingMessage effects. Returns true if pre-search was started, false if
- * already complete or in progress.
+ * Consolidates duplicate logic from handleComplete and pendingMessage effects.
  *
- * @returns Promise<'started' | 'in_progress' | 'complete' | 'failed'>
+ * @returns Promise<PreSearchExecutionResult> - Execution outcome status
  */
 export async function executePreSearch(
   options: ExecutePreSearchOptions,
-): Promise<'started' | 'in_progress' | 'complete' | 'failed'> {
+): Promise<PreSearchExecutionResult> {
   const {
     store,
     threadId,
@@ -221,21 +225,21 @@ export async function executePreSearch(
 
   // Already complete - nothing to do
   if (existingPreSearch?.status === MessageStatuses.COMPLETE) {
-    return 'complete';
+    return PreSearchExecutionResults.COMPLETE;
   }
 
   // Already failed - nothing to do
   if (existingPreSearch?.status === MessageStatuses.FAILED) {
-    return 'failed';
+    return PreSearchExecutionResults.FAILED;
   }
 
   // Check if already triggered (prevents duplicate execution)
   if (state.hasPreSearchBeenTriggered(roundNumber)) {
     // Check if streaming
     if (existingPreSearch?.status === MessageStatuses.STREAMING) {
-      return 'in_progress';
+      return PreSearchExecutionResults.IN_PROGRESS;
     }
-    return 'in_progress';
+    return PreSearchExecutionResults.IN_PROGRESS;
   }
 
   // Mark as triggered BEFORE any async operations
@@ -259,14 +263,14 @@ export async function executePreSearch(
     });
 
     // ✅ POLLING: 202 means stream active but KV buffer not available
-    // Return 'in_progress' so caller knows to poll for completion
+    // Return IN_PROGRESS so caller knows to poll for completion
     if (response.status === 202) {
-      return 'in_progress';
+      return PreSearchExecutionResults.IN_PROGRESS;
     }
 
     // ✅ CONFLICT: 409 means another stream already active
     if (response.status === 409) {
-      return 'in_progress';
+      return PreSearchExecutionResults.IN_PROGRESS;
     }
 
     if (!response.ok) {
@@ -276,7 +280,7 @@ export async function executePreSearch(
       store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.FAILED);
       store.getState().clearPreSearchActivity(roundNumber);
       store.getState().clearPreSearchTracking(roundNumber);
-      return 'failed';
+      return PreSearchExecutionResults.FAILED;
     }
 
     // Parse SSE stream and extract data with progressive UI updates
@@ -304,14 +308,14 @@ export async function executePreSearch(
     // Invalidate queries for sync
     onQueryInvalidate();
 
-    return 'complete';
+    return PreSearchExecutionResults.COMPLETE;
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
       console.error('[executePreSearch] Failed:', error);
     }
     store.getState().clearPreSearchActivity(roundNumber);
     store.getState().clearPreSearchTracking(roundNumber);
-    return 'failed';
+    return PreSearchExecutionResults.FAILED;
   }
 }
 

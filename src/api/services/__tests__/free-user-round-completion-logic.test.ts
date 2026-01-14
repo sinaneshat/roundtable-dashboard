@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreditActions, CreditTransactionTypes, PlanTypes } from '@/api/core/enums';
+import { CreditActions, CreditTransactionTypes, MessageRoles, PlanTypes } from '@/api/core/enums';
 import {
   checkFreeUserHasCompletedRound,
   enforceCredits,
@@ -102,7 +102,7 @@ describe('round completion - single participant', () => {
   it('detects completion after participant responds', async () => {
     setupSelectMock(
       [],
-      [{ id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 }],
+      [{ id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 }],
     );
 
     mockDb.query.chatThread.findFirst.mockResolvedValue({
@@ -141,7 +141,7 @@ describe('round completion - multiple participants', () => {
   it('does not detect completion after 1st of 2 participants', async () => {
     setupSelectMock(
       [],
-      [{ id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 }],
+      [{ id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 }],
     );
 
     mockDb.query.chatThread.findFirst.mockResolvedValue({
@@ -165,8 +165,8 @@ describe('round completion - multiple participants', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 
@@ -194,8 +194,8 @@ describe('round completion - multiple participants', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 
@@ -487,8 +487,8 @@ describe('edge cases', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 
@@ -516,8 +516,8 @@ describe('edge cases', () => {
     setupSelectMock(
       [],
       [
-        { id: 'msg-1', participantId: 'p1', role: 'assistant', roundNumber: 0 },
-        { id: 'msg-2', participantId: 'p2', role: 'assistant', roundNumber: 0 },
+        { id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        { id: 'msg-2', participantId: 'p2', role: MessageRoles.ASSISTANT, roundNumber: 0 },
       ],
     );
 

@@ -2,7 +2,6 @@ import type { StoragePurpose } from '@/api/core/enums';
 import type { Session, User } from '@/lib/auth/types';
 
 declare module 'hono' {
-  // eslint-disable-next-line ts/consistent-type-definitions
   interface ContextVariableMap {
     session: Session | null;
     user: User | null;
