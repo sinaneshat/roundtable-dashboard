@@ -40,6 +40,7 @@ import {
 } from '@/api/services/prompts';
 import {
   appendParticipantStreamChunk,
+  clearActiveParticipantStream,
   clearThreadActiveStream,
   completeParticipantStreamBuffer,
   failParticipantStreamBuffer,
@@ -204,6 +205,16 @@ function generateCouncilModerator(
         // ✅ RESUMABLE STREAMS: Clear thread active stream now that moderator is complete
         // This marks the round as fully complete (participants + moderator done)
         await clearThreadActiveStream(threadId, env);
+
+        // ✅ FIX: Mark stream buffer as COMPLETED and clear active key immediately
+        // The consumeSseStream callback runs in waitUntil (background), so if user refreshes
+        // before it completes, KV metadata is still ACTIVE. This causes server to return
+        // phase=moderator instead of complete, triggering participant re-execution.
+        // By calling these here (in onFinish which runs before response ends), we ensure
+        // KV state is correct even if consumeSseStream hasn't finished buffering.
+        console.error(`[moderator] onFinish: marking stream complete and clearing active key for r${roundNumber}`);
+        await completeParticipantStreamBuffer(messageId, env);
+        await clearActiveParticipantStream(threadId, roundNumber, MODERATOR_PARTICIPANT_INDEX, env);
 
         // =========================================================================
         // ✅ FREE USER SINGLE-ROUND: Zero out credits after moderator completes

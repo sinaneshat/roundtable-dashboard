@@ -157,6 +157,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const handleComplete = useCallback(async (sdkMessages: readonly UIMessage[]) => {
     const currentState = store.getState();
 
+    const roundNumber = sdkMessages.length > 0 ? getCurrentRoundNumber(sdkMessages) : null;
+    const effectiveThreadId = currentState.thread?.id || currentState.createdThreadId || '';
+    const moderatorTriggered = roundNumber !== null && effectiveThreadId
+      ? currentState.hasModeratorStreamBeenTriggered(`${effectiveThreadId}_r${roundNumber}_moderator`, roundNumber)
+      : null;
+    console.error(`[handleComplete] r${roundNumber} msgs=${sdkMessages.length} thread=${!!currentState.thread} waiting=${currentState.waitingToStartStreaming} nextP=${currentState.nextParticipantToTrigger} modTriggered=${moderatorTriggered}`);
+
     if (currentState.thread || currentState.createdThreadId) {
       const { thread: storeThread, selectedMode, createdThreadId: storeCreatedThreadId } = currentState;
       const threadId = storeThread?.id || storeCreatedThreadId;
@@ -164,23 +171,46 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
       if (threadId && mode && sdkMessages.length > 0) {
         try {
-          const roundNumber = getCurrentRoundNumber(sdkMessages);
+          const effectiveRoundNumber = getCurrentRoundNumber(sdkMessages);
 
-          if (currentState.hasModeratorBeenCreated(roundNumber)) {
+          // ✅ RACE FIX: Check if moderator stream was TRIGGERED, not just created
+          // flow-state-machine.ts calls tryMarkModeratorCreated() for UI purposes (flash prevention)
+          // but does NOT trigger the actual moderator stream.
+          // We should only skip if the stream was actually triggered by another path.
+          const moderatorId = `${threadId}_r${effectiveRoundNumber}_moderator`;
+          if (currentState.hasModeratorStreamBeenTriggered(moderatorId, effectiveRoundNumber)) {
             return;
           }
 
-          if (currentState.waitingToStartStreaming || currentState.nextParticipantToTrigger !== null) {
-            return;
+          // ✅ CRITICAL FIX: Before checking nextParticipantToTrigger, verify if all participants
+          // actually have complete messages. If so, we should trigger moderator even if
+          // nextParticipantToTrigger wasn't cleared (happens when incomplete-round-resumption
+          // triggers a participant but the flag isn't cleared after completion).
+          const participantCount = currentState.participants.filter(p => p.isEnabled).length;
+          const assistantMsgsInRound = sdkMessages.filter((m) => {
+            const meta = getMessageMetadata(m.metadata);
+            return meta?.role === MessageRoles.ASSISTANT
+              && 'roundNumber' in meta && meta.roundNumber === effectiveRoundNumber
+              && !('isModerator' in meta);
+          });
+          const allParticipantsComplete = assistantMsgsInRound.length >= participantCount;
+
+          if (!allParticipantsComplete) {
+            if (currentState.waitingToStartStreaming || currentState.nextParticipantToTrigger !== null) {
+              return;
+            }
           }
 
-          await waitForStoreSync(sdkMessages, roundNumber);
+          await waitForStoreSync(sdkMessages, effectiveRoundNumber);
           await currentState.waitForAllAnimations();
 
           const latestState = store.getState();
 
-          if (latestState.waitingToStartStreaming || latestState.nextParticipantToTrigger !== null) {
-            return;
+          // Re-check with latest state (but skip if all participants already complete)
+          if (!allParticipantsComplete) {
+            if (latestState.waitingToStartStreaming || latestState.nextParticipantToTrigger !== null) {
+              return;
+            }
           }
 
           const storeIsStreaming = latestState.isStreaming;
@@ -199,13 +229,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           // ✅ FIX: Form state is the source of truth for current round web search decision
           const webSearchEnabled = latestState.enableWebSearch;
           if (webSearchEnabled) {
-            const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === roundNumber);
+            const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === effectiveRoundNumber);
             if (preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE) {
               return;
             }
           }
 
-          currentState.markModeratorCreated(roundNumber);
+          currentState.markModeratorCreated(effectiveRoundNumber);
 
           const participantMessageIds = sdkMessages
             .filter((m) => {
@@ -216,7 +246,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               return (
                 meta.role === MessageRoles.ASSISTANT
                 && 'roundNumber' in meta
-                && meta.roundNumber === roundNumber
+                && meta.roundNumber === effectiveRoundNumber
                 && !('isModerator' in meta)
               );
             })
@@ -224,7 +254,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
           if (participantMessageIds.length > 0) {
             currentState.setIsModeratorStreaming(true);
-            triggerModeratorRef.current?.(roundNumber, participantMessageIds);
+            triggerModeratorRef.current?.(effectiveRoundNumber, participantMessageIds);
           }
         } catch {
         }

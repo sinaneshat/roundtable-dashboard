@@ -15,7 +15,7 @@
 import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
-import type { FeedbackType } from '@/api/core/enums';
+import type { FeedbackType, RoundPhase } from '@/api/core/enums';
 import {
   ChatModeSchema,
   FeedbackTypeSchema,
@@ -512,6 +512,7 @@ export const StreamResumptionActionsSchema = z.object({
   prefillStreamResumptionState: z.custom<PrefillStreamResumptionState>(),
   transitionToParticipantsPhase: z.custom<() => void>(),
   transitionToModeratorPhase: z.custom<(roundNumber?: number) => void>(),
+  setCurrentResumptionPhase: z.custom<(phase: RoundPhase) => void>(),
 });
 
 export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);

@@ -92,6 +92,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setIsWaitingForChangelog: s.setIsWaitingForChangelog,
     setConfigChangeRoundNumber: s.setConfigChangeRoundNumber,
     setIsPatchInProgress: s.setIsPatchInProgress,
+    clearStreamResumption: s.clearStreamResumption,
   })));
 
   const createThreadMutation = useCreateThreadMutation();
@@ -234,6 +235,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     if (!trimmed || formState.selectedParticipants.length === 0 || !formState.selectedMode) {
       return;
     }
+
+    // ✅ CRITICAL FIX: Clear stale resumption state from previous rounds
+    // Without this, currentResumptionPhase='complete' from round N persists into round N+1
+    // This causes initializeThread to wipe pendingMessage because preserveStreamingState=false
+    actions.clearStreamResumption();
 
     const freshState = storeApi.getState();
     const freshThread = freshState.thread;

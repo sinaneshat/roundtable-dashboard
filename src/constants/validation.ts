@@ -69,9 +69,11 @@ export const STRING_LIMITS = {
   BIO_MAX: 500,
 
   // Chat message limits - MUST match backend MessageContentSchema
-  // 4k chars matches ChatGPT's per-message input limit
+  // 100k chars (~25k tokens) - 4x more generous than ChatGPT's ~25k char limit
+  // Supports large documents, code blocks, detailed prompts
+  // Claude/GPT-4o context windows: 128k-200k tokens, so 100k chars is well within limits
   MESSAGE_MIN: 1,
-  MESSAGE_MAX: 4000,
+  MESSAGE_MAX: 100_000,
 
   // URLs
   URL_MAX: 2048,

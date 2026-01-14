@@ -99,10 +99,21 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
       return;
     }
 
+    // ✅ CRITICAL FIX: Filter out participant trigger messages from AI SDK
+    // These are internal messages created when triggering each participant.
+    // They should NOT be persisted to the store - only the original user message matters.
+    // Without this filter, trigger messages accumulate and pollute the messages array.
+    const filteredChatMessages = chatMessages.filter((m) => {
+      if (m.role !== MessageRoles.USER)
+        return true;
+      const userMeta = getUserMetadata(m.metadata);
+      return !userMeta?.isParticipantTrigger;
+    });
+
     // Build merged messages:
     // 1. Start with chat messages (AI SDK source of truth for streaming)
     // 2. Preserve any store-only messages (e.g., moderator messages during streaming)
-    const chatMessageIds = new Set(chatMessages.map(m => m.id));
+    const chatMessageIds = new Set(filteredChatMessages.map(m => m.id));
     const storeOnlyMessages = storeMessages.filter((m) => {
       // Keep messages that are in store but not in AI SDK
       if (chatMessageIds.has(m.id))
@@ -126,7 +137,7 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
       }
 
       // Preserve messages from different rounds (they might have been filtered by AI SDK)
-      const chatRounds = new Set(chatMessages.map(cm => getRoundNumber(cm.metadata)));
+      const chatRounds = new Set(filteredChatMessages.map(cm => getRoundNumber(cm.metadata)));
       const msgRound = getRoundNumber(m.metadata);
       if (msgRound !== null && !chatRounds.has(msgRound))
         return true;
@@ -141,7 +152,7 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
     // This causes "Cannot add property 0, object is not extensible" errors
     // when AI SDK tries to push streaming parts to a frozen parts array.
     // structuredClone breaks the reference link, ensuring only copies get frozen.
-    const mergedMessages = structuredClone([...chatMessages, ...storeOnlyMessages]);
+    const mergedMessages = structuredClone([...filteredChatMessages, ...storeOnlyMessages]);
 
     // Update store (store's setMessages handles deduplication)
     store.getState().setMessages(mergedMessages);
@@ -157,7 +168,17 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
       store.getState().setMessages((prev) => {
         // Merge any remaining messages
         const prevIds = new Set(prev.map(m => m.id));
-        const newMessages = chatMessages.filter(m => !prevIds.has(m.id));
+        // ✅ CRITICAL FIX: Filter out participant trigger messages
+        const newMessages = chatMessages.filter((m) => {
+          if (prevIds.has(m.id))
+            return false;
+          if (m.role === MessageRoles.USER) {
+            const userMeta = getUserMetadata(m.metadata);
+            if (userMeta?.isParticipantTrigger)
+              return false;
+          }
+          return true;
+        });
         if (newMessages.length === 0)
           return prev;
         // ✅ CRITICAL FIX: Clone newMessages to prevent Immer from freezing AI SDK's objects
