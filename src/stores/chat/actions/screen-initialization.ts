@@ -4,19 +4,15 @@
 
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
-import { MessageRoles, ScreenModes } from '@/api/core/enums';
+import { ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
-import { queryKeys } from '@/lib/data/query-keys';
-import { chatMessageToUIMessage } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import { getThreadMessagesService } from '@/services/api';
 
 import { useIncompleteRoundResumption } from './incomplete-round-resumption';
 import { getPreSearchOrchestrator } from './pre-search-orchestrator';
@@ -44,8 +40,6 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     streamResumptionState,
   } = options;
 
-  const queryClient = useQueryClient();
-
   const actions = useChatStore(useShallow(s => ({
     setScreenMode: s.setScreenMode,
     initializeThread: s.initializeThread,
@@ -66,8 +60,6 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   })));
 
   const initializedThreadIdRef = useRef<string | null>(null);
-  const staleFetchAttemptedRef = useRef<string | null>(null);
-  const isFetchingFreshMessagesRef = useRef(false);
 
   useEffect(() => {
     actions.setScreenMode(mode);
@@ -118,21 +110,8 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
       = (freshPendingMessage !== null || hasActiveFormSubmission || freshIsPatchInProgress)
         && !isResumption;
 
-    // ✅ DB CONSISTENCY CHECK: Detect when server says round is further than SSR data shows
-    // Race condition: stream-status queries FRESH data, SSR queries STALE data
-    // Example: Server says participants complete (3 msgs), but SSR returns only user msg (1)
-    // In this case, SSR data is stale - do NOT initialize with incomplete data
-    const serverSaysParticipantsComplete = streamResumptionState?.participants?.allComplete === true;
-    const serverTotalParticipants = streamResumptionState?.participants?.totalParticipants ?? 0;
-    const ssrAssistantMsgCount = initialMessages?.filter(m => m.role === 'assistant').length ?? 0;
-    const ssrHasIncompleteData = serverSaysParticipantsComplete
-      && serverTotalParticipants > 0
-      && ssrAssistantMsgCount < serverTotalParticipants;
-
-    // ✅ FIX: When SSR has stale data, initialize with SSR data then fetch fresh from API
-    if (ssrHasIncompleteData && isResumption && threadId) {
-      rlog.init('ssr-stale', `assist=${ssrAssistantMsgCount} vs server=${serverTotalParticipants}`);
-    }
+    // ✅ SSR CONSISTENCY: Stale data detection moved to server-side (verifyAndFetchFreshMessages)
+    // Server retries DB reads until consistent with KV stream-status before SSR completes
 
     if (isReady && !alreadyInitialized && !isFormActionsSubmission) {
       initializedThreadIdRef.current = threadId;
@@ -144,58 +123,9 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     }
   }, [thread, participants, initialMessages, actions, streamingStateSet, streamResumptionState, storeApi]);
 
-  // ✅ SSR STALE DATA FIX: Fetch fresh messages from API when SSR is stale
-  // This handles the race condition where:
-  // 1. Stream-status (KV) says participants are complete
-  // 2. But SSR (DB) returns stale data (messages not committed yet)
-  // Solution: Fetch fresh messages from API after client loads
-  useEffect(() => {
-    const threadId = thread?.id;
-    if (!threadId)
-      return;
-
-    // Check if SSR data is stale
-    const serverSaysComplete = streamResumptionState?.participants?.allComplete === true;
-    const serverTotal = streamResumptionState?.participants?.totalParticipants ?? 0;
-    const ssrAssistantCount = initialMessages?.filter(m => m.role === 'assistant').length ?? 0;
-    const isStale = serverSaysComplete && serverTotal > 0 && ssrAssistantCount < serverTotal;
-
-    if (!isStale)
-      return;
-    if (staleFetchAttemptedRef.current === threadId)
-      return;
-    if (isFetchingFreshMessagesRef.current)
-      return;
-
-    staleFetchAttemptedRef.current = threadId;
-    isFetchingFreshMessagesRef.current = true;
-
-    rlog.init('fetch-fresh', 'fetching msgs for stale SSR');
-
-    queryClient.fetchQuery({
-      queryKey: queryKeys.threads.messages(threadId),
-      queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
-      staleTime: 0,
-    })
-      .then((response) => {
-        // API returns { success, data: { items: [...], count } } via Responses.collection
-        const messagesArray = response.data?.items;
-        if (response.success && messagesArray && Array.isArray(messagesArray)) {
-          // Convert DB messages to UIMessage format - filter tool messages
-          const freshMessages: UIMessage[] = messagesArray
-            .filter(m => m.role === MessageRoles.USER || m.role === MessageRoles.ASSISTANT)
-            .map(chatMessageToUIMessage);
-          rlog.init('fetch-done', `got ${freshMessages.length} msgs`);
-          actions.setMessages(freshMessages);
-        }
-      })
-      .catch((err) => {
-        rlog.init('fetch-fail', `${err?.message ?? 'unknown'}`);
-      })
-      .finally(() => {
-        isFetchingFreshMessagesRef.current = false;
-      });
-  }, [thread?.id, streamResumptionState, initialMessages, actions, queryClient]);
+  // ✅ SSR CONSISTENCY: Stale data handling moved to server-side in page.tsx
+  // verifyAndFetchFreshMessages() retries DB reads before SSR completes
+  // No client-side fetch-fresh needed - proper SSR paint guaranteed
 
   const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD && Boolean(thread?.id) && enableOrchestrator;
   getPreSearchOrchestrator({

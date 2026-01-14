@@ -77,6 +77,8 @@ export function ChatView({
   const isModelModalOpen = useBoolean(false);
 
   const attachmentClickRef = useRef<(() => void) | null>(null);
+  // Track initial mount to skip showing "models deselected" toast on page load
+  const hasCompletedInitialMountRef = useRef(false);
   const handleAttachmentClick = useCallback(() => {
     attachmentClickRef.current?.();
   }, []);
@@ -297,27 +299,40 @@ export function ChatView({
   });
 
   useEffect(() => {
-    // Skip incompatible filter when autoMode is enabled in OVERVIEW mode
-    // Server validates model accessibility in auto mode - trust those results
-    if (mode === ScreenModes.OVERVIEW && autoMode)
-      return;
+    // Mark initial mount as complete after first run
+    // This prevents showing toast on page load for pre-existing incompatible models
+    const isInitialMount = !hasCompletedInitialMountRef.current;
+    if (isInitialMount) {
+      hasCompletedInitialMountRef.current = true;
+    }
 
     const hasVisionAttachments = chatAttachments.attachments.some(att =>
       isVisionRequiredMimeType(att.file.type),
     );
 
+    // Skip incompatible filter when autoMode is enabled in OVERVIEW mode
+    // Server validates model accessibility in auto mode - trust those results
+    // ✅ VISION FIX: ALWAYS check vision incompatibility when files are attached
+    // Even in auto mode, we need to filter out non-vision models before submission
+    if (mode === ScreenModes.OVERVIEW && autoMode && !hasVisionAttachments) {
+      return;
+    }
+
     // Skip in OVERVIEW mode with no messages and no vision files
-    if (mode === ScreenModes.OVERVIEW && messages.length === 0 && !hasVisionAttachments)
+    if (mode === ScreenModes.OVERVIEW && messages.length === 0 && !hasVisionAttachments) {
       return;
-    if (incompatibleModelIds.size === 0)
+    }
+    if (incompatibleModelIds.size === 0) {
       return;
+    }
 
     const incompatibleSelected = selectedParticipants.filter(p =>
       incompatibleModelIds.has(p.modelId),
     );
 
-    if (incompatibleSelected.length === 0)
+    if (incompatibleSelected.length === 0) {
       return;
+    }
 
     // Only show toast for models deselected due to vision incompatibility (not access control)
     const visionDeselected = incompatibleSelected.filter(
@@ -338,8 +353,10 @@ export function ChatView({
       setSelectedParticipants(compatibleParticipants);
     }
 
-    // Only show "images/PDFs" toast when models are actually deselected due to vision incompatibility
-    if (visionModelNames.length > 0) {
+    // Only show "images/PDFs" toast when:
+    // 1. Models are actually deselected due to vision incompatibility
+    // 2. NOT on initial page load (only when user adds new files)
+    if (visionModelNames.length > 0 && !isInitialMount) {
       const modelList = visionModelNames.length <= 2
         ? visionModelNames.join(' and ')
         : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;
