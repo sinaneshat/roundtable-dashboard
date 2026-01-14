@@ -171,7 +171,7 @@ export function ModelItem({
                 displayRole={participant?.role ?? pendingRole?.role}
                 onOpenRolePanel={onOpenRolePanel}
                 onClearRole={onClearRole}
-                tModels={t}
+                tModels={t as (key: string) => string}
               />
             )}
           </div>

@@ -178,7 +178,7 @@ function SubscriptionChangedContent() {
             <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
               {t('billing.subscriptionChanged.title')}
             </h1>
-            {changeType && <ChangeBadge changeType={changeType} t={t} />}
+            {changeType && <ChangeBadge changeType={changeType} t={t as (key: string, values?: Record<string, string | number>) => string} />}
           </div>
           <p className="text-sm text-muted-foreground md:text-base">
             {isUpgrade

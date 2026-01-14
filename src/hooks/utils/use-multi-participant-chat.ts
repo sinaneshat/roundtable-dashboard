@@ -15,6 +15,7 @@ import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractValidFileParts, isRenderableContent, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, mergeParticipantMetadata } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 
 import { useSyncedRefs } from './use-synced-refs';
 
@@ -450,7 +451,7 @@ export function useMultiParticipantChat(
       const msgRound = 'roundNumber' in md ? md.roundNumber : null;
       return msgRound === currentRound;
     });
-    console.error(`[triggerNext] r${currentRound} curIdx=${currentIndexRef.current} total=${totalParticipants} msgs=${allMsgs.length} assistInRnd=${assistantMsgsInRound.length}`);
+    rlog.trigger('check', `r${currentRound} idx=${currentIndexRef.current} total=${totalParticipants} assistInRnd=${assistantMsgsInRound.length}`);
 
     const participantIndicesWithCompleteMessages = new Set<number>();
     for (const msg of messagesRef.current) {
@@ -533,7 +534,7 @@ export function useMultiParticipantChat(
     }
 
     // More participants to process - trigger next one
-    console.error(`[triggerNext] TRIGGER P${nextIndex} r${currentRound} complete=[${[...participantIndicesWithCompleteMessages]}]`);
+    rlog.trigger('next', `P${nextIndex} r${currentRound} done=[${[...participantIndicesWithCompleteMessages]}]`);
     isTriggeringRef.current = true;
 
     // Race condition fix: Check if participant is already queued
@@ -992,7 +993,7 @@ export function useMultiParticipantChat(
       const msgId = data.message?.id;
       const pIdxMatch = msgId?.match(/_p(\d+)$/);
       const rndMatch = msgId?.match(/_r(\d+)_/);
-      console.error(`[onFinish] ${msgId?.slice(-20)} r${rndMatch?.[1]} p${pIdxMatch?.[1]} finish=${data.finishReason} parts=${data.message?.parts?.length ?? 0} curIdx=${currentIndexRef.current} curRnd=${currentRoundRef.current}`);
+      rlog.stream('end', `r${rndMatch?.[1] ?? '-'} p${pIdxMatch?.[1] ?? '-'} reason=${data.finishReason ?? '-'} parts=${data.message?.parts?.length ?? 0}`);
 
       // ✅ Skip phantom resume completions (no active stream to resume)
       const notOurMessageId = !data.message?.id?.includes('_r');
@@ -1124,7 +1125,7 @@ export function useMultiParticipantChat(
         // ✅ PHANTOM GUARD: Check if we've already triggered next for this (round, participant)
         const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
         if (triggeredNextForRef.current.has(triggerKey)) {
-          console.error(`[onFinish] SKIP dup ${triggerKey}`);
+          rlog.gate('dup-skip', triggerKey);
           return;
         }
         triggeredNextForRef.current.add(triggerKey);
@@ -1944,7 +1945,7 @@ export function useMultiParticipantChat(
     // Messages are now persisted via PATCH before streaming starts (round 1+)
     const roundNumber = getCurrentRoundNumber(messagesToSearch);
 
-    console.error(`[continueFrom] P${fromIndex} r${roundNumber} msgs=${messages.length} search=${messagesToSearch.length} enabled=${enabled.length}`);
+    rlog.resume('continue', `P${fromIndex} r${roundNumber} msgs=${messages.length} search=${messagesToSearch.length} enabled=${enabled.length}`);
 
     // =========================================================================
     // ✅ MISSING EARLIER PARTICIPANT FIX: Validate all earlier participants have messages
@@ -1974,7 +1975,7 @@ export function useMultiParticipantChat(
         );
 
         if (!existingMsg || !hasContent) {
-          console.error(`[continueFrom] P${i} missing (expected P${fromIndex}), starting from P${i}`);
+          rlog.resume('gap', `P${i} missing (wanted P${fromIndex}) → start P${i}`);
           actualFromIndex = i;
           break;
         }

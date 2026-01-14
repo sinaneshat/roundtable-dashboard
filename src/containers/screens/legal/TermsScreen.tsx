@@ -45,7 +45,7 @@ export default async function TermsScreen() {
         </CardHeader>
         <CardContent className="prose prose-sm dark:prose-invert max-w-none">
           <section className="space-y-6">
-            {TERMS_SECTIONS.map((section) => (
+            {TERMS_SECTIONS.map(section => (
               <div key={section}>
                 <h2 className="text-xl font-semibold mb-3">
                   {t(`${section}.title`)}

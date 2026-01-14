@@ -11,6 +11,7 @@ import { MessageRoles, MessageStatuses, TextPartStates } from '@/api/core/enums'
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { showApiErrorToast } from '@/lib/toast';
 import { getCurrentRoundNumber, getMessageMetadata, getRoundNumber } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 
@@ -150,7 +151,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       await new Promise(resolve => setTimeout(resolve, checkInterval));
     }
 
-    console.error('[handleComplete] Store sync timed out, proceeding anyway');
+    rlog.sync('timeout', 'store sync timed out, proceeding');
     return false;
   }, [store]);
 
@@ -162,7 +163,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     const moderatorTriggered = roundNumber !== null && effectiveThreadId
       ? currentState.hasModeratorStreamBeenTriggered(`${effectiveThreadId}_r${roundNumber}_moderator`, roundNumber)
       : null;
-    console.error(`[handleComplete] r${roundNumber} msgs=${sdkMessages.length} thread=${!!currentState.thread} waiting=${currentState.waitingToStartStreaming} nextP=${currentState.nextParticipantToTrigger} modTriggered=${moderatorTriggered}`);
+    rlog.stream('end', `r${roundNumber} msgs=${sdkMessages.length} wait=${currentState.waitingToStartStreaming ? 1 : 0} nextP=${currentState.nextParticipantToTrigger !== null ? currentState.nextParticipantToTrigger : '-'} modTrig=${moderatorTriggered ? 1 : 0}`);
 
     if (currentState.thread || currentState.createdThreadId) {
       const { thread: storeThread, selectedMode, createdThreadId: storeCreatedThreadId } = currentState;

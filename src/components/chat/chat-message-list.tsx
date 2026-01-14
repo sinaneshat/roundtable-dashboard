@@ -1446,7 +1446,7 @@ export const ChatMessageList = memo(
                   findModel={findModel}
                   demoMode={demoMode}
                   hideMetadata={hideMetadata}
-                  t={t}
+                  t={t as (key: string) => string}
                   keyForMessage={keyForMessage}
                   maxContentHeight={maxContentHeight}
                 />

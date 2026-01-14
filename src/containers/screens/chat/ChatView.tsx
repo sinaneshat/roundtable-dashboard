@@ -376,7 +376,9 @@ export function ChatView({
   const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming || isAnalyzingPrompt;
 
   const handleAutoModeSubmit = useCallback(async (e: React.FormEvent) => {
-    if (mode === ScreenModes.OVERVIEW && autoMode && inputValue.trim()) {
+    // ✅ FIX: Auto mode analysis should run for BOTH overview (initial) AND thread (mid-conversation)
+    // Previously only ran for OVERVIEW, causing mid-conversation submissions to skip AI config
+    if (autoMode && inputValue.trim()) {
       // Check if visual files are attached to restrict model selection to vision-capable models
       const hasVisualFiles = chatAttachments.attachments.some(att =>
         isVisionRequiredMimeType(att.file.type),
@@ -395,7 +397,7 @@ export function ChatView({
       });
     }
     await onSubmit(e);
-  }, [mode, autoMode, inputValue, chatAttachments.attachments, allEnabledModels, analyzeAndApply, onSubmit]);
+  }, [autoMode, inputValue, chatAttachments.attachments, allEnabledModels, analyzeAndApply, onSubmit]);
 
   const keyboardOffset = useVisualViewportPosition();
 
@@ -517,7 +519,7 @@ export function ChatView({
     const result = filterPresetParticipants(
       preset,
       incompatibleModelIdsRef.current,
-      t,
+      t as (key: string, values?: { count: number }) => string,
       ToastNamespaces.MODELS,
     );
 
