@@ -14,7 +14,7 @@
 
 import { z } from 'zod';
 
-import { DEFAULT_CHAT_MODE, ModelIds, ScreenModes } from '@/api/core/enums';
+import { ChatModes, DEFAULT_CHAT_MODE, ModelIds, ScreenModes } from '@/api/core/enums';
 
 import type {
   AnimationState,
@@ -36,10 +36,23 @@ import type {
 // FORM SLICE DEFAULTS
 // ============================================================================
 
+/**
+ * Default preset configuration from first FREE preset (Quick Perspectives)
+ * ✅ SINGLE SOURCE OF TRUTH: Matches MODEL_PRESETS[0] in model-presets.ts
+ * This ensures new users see the first preset's config pre-selected
+ */
+export const DEFAULT_PRESET_MODE = ChatModes.ANALYZING; // Matches Quick Perspectives preset
+
+export const DEFAULT_PRESET_PARTICIPANTS = [
+  { id: ModelIds.OPENAI_GPT_4O_MINI, modelId: ModelIds.OPENAI_GPT_4O_MINI, role: 'Analyst', priority: 0 },
+  { id: ModelIds.GOOGLE_GEMINI_2_5_FLASH, modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: 'Challenger', priority: 1 },
+  { id: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, role: 'Synthesizer', priority: 2 },
+];
+
 export const FORM_DEFAULTS = {
   inputValue: '',
-  selectedMode: DEFAULT_CHAT_MODE, // 'debating' - single source of truth from enums
-  selectedParticipants: [],
+  selectedMode: DEFAULT_PRESET_MODE, // ✅ Matches first preset (Quick Perspectives)
+  selectedParticipants: DEFAULT_PRESET_PARTICIPANTS, // ✅ First preset models pre-selected
   enableWebSearch: false, // ⚠️ NOTE: This is ONLY used for new chats - thread screen syncs from thread.enableWebSearch
   modelOrder: [], // Visual order of models for drag-and-drop
   autoMode: true, // ✅ Auto mode ON by default - AI selects models/roles/mode based on prompt

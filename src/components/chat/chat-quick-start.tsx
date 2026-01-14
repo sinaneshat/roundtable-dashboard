@@ -176,7 +176,7 @@ type ChatQuickStartProps = {
   ) => void;
   className?: string;
 };
-function QuickStartSkeleton({ className }: { className?: string }) {
+export function QuickStartSkeleton({ className }: { className?: string }) {
   return (
     <div className={cn('w-full relative z-20', className)}>
       <div className="flex flex-col">

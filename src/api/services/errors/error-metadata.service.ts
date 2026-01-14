@@ -321,12 +321,28 @@ export function extractErrorMetadata(
   const hasGeneratedReasoning = (reasoningData?.trim().length || 0) > 0;
   const hasGeneratedContent = hasGeneratedText || hasGeneratedReasoning;
 
-  // Empty response detection: no output tokens AND no generated content
-  // Detects regardless of finishReason - 'unknown' with no content is a failed stream
-  const isEmptyResponse = outputTokens === 0 && !hasGeneratedContent;
+  // ✅ FIX: DeepSeek and some models don't return usage/finishReason but DO generate content
+  // Only mark as empty response if we're CERTAIN there's no content:
+  // - If text/reasoning exists, it's NOT empty (regardless of token counts)
+  // - If finishReason is undefined AND tokens are 0, only mark empty if no content
+  // - finishReason 'stop' with 0 tokens but WITH content = successful (some models don't report usage)
+  const isKnownFailureReason = reason === FinishReasons.FAILED
+    || reason === FinishReasons.ERROR
+    || reason === FinishReasons.CONTENT_FILTER;
 
-  // Error occurred if we have provider error OR empty response
-  const hasError = isEmptyResponse || !!rawError;
+  // ✅ FIX: Interrupted stream detection (page refresh mid-stream)
+  // When reason is undefined/null with 0 tokens and no content, this indicates
+  // an interrupted stream (e.g., page refresh), NOT an actual error.
+  // DeepSeek and other models may return 200 status with empty body during interruption.
+  // The incomplete-round-resumption logic handles retry - don't show as error.
+  const isInterruptedStream = !reason && outputTokens === 0 && !hasGeneratedContent;
+
+  // Empty response = no generated content AND known failure reason
+  // Don't treat interrupted streams (undefined reason) as empty response errors
+  const isEmptyResponse = !hasGeneratedContent && isKnownFailureReason;
+
+  // Error occurred if we have provider error OR empty response (NOT interrupted stream)
+  const hasError = (isEmptyResponse || !!rawError) && !isInterruptedStream;
 
   // Build error metadata based on error type
   if (!hasError) {

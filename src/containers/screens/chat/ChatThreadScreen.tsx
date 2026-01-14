@@ -101,7 +101,6 @@ export default function ChatThreadScreen({
     selectedMode,
     inputValue,
     selectedParticipants,
-    prefillStreamResumptionState,
     messages,
     setSelectedParticipants,
     waitingToStartStreaming,
@@ -113,18 +112,14 @@ export default function ChatThreadScreen({
       selectedMode: s.selectedMode,
       inputValue: s.inputValue,
       selectedParticipants: s.selectedParticipants,
-      prefillStreamResumptionState: s.prefillStreamResumptionState,
       messages: s.messages,
       setSelectedParticipants: s.setSelectedParticipants,
       waitingToStartStreaming: s.waitingToStartStreaming,
     })),
   );
 
-  useEffect(() => {
-    if (streamResumptionState && thread?.id) {
-      prefillStreamResumptionState(thread.id, streamResumptionState);
-    }
-  }, [streamResumptionState, thread?.id, prefillStreamResumptionState]);
+  // ✅ MOVED: prefillStreamResumptionState is now called synchronously in useScreenInitialization
+  // to fix the timing race where initializeThread read streamResumptionPrefilled=false
 
   const uiMessages = useMemo(
     () => chatMessagesToUIMessages(initialMessages, participants),
@@ -234,6 +229,7 @@ export default function ChatThreadScreen({
     isRegeneration: regeneratingRoundNumber !== null,
     regeneratingRoundNumber,
     enableOrchestrator: !isRegenerating && !isModeratorStreaming,
+    streamResumptionState,
   });
 
   const isAwaitingModerator = useMemo(() => {

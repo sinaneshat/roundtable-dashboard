@@ -280,6 +280,9 @@
         "modified": "Modified",
         "removed": "Removed"
       },
+      "added": "Added",
+      "modified": "Modified",
+      "removed": "Removed",
       "configurationChanged": "Configuration changed",
       "webSearchDisabled": "Web search disabled",
       "webSearchEnabled": "Web search enabled"
@@ -665,37 +668,105 @@
     "legal": {
       "privacy": {
         "description": "Learn how Roundtable protects your data and respects your privacy",
-        "keywords": ["privacy policy", "data protection", "GDPR", "user privacy"],
+        "keywords": "privacy policy, data protection, GDPR, user privacy",
         "title": "Privacy Policy"
       },
       "terms": {
         "description": "Read the terms and conditions for using Roundtable",
-        "keywords": ["terms of service", "user agreement", "terms and conditions"],
+        "keywords": "terms of service, user agreement, terms and conditions",
         "title": "Terms of Service"
       }
     },
     "signIn": {
       "description": "Sign in to your Roundtable account to continue AI collaboration",
-      "keywords": ["sign in", "login", "AI chat login"],
+      "keywords": "sign in, login, AI chat login",
       "title": "Sign In"
     },
     "signUp": {
       "description": "Create a free Roundtable account and start collaborating with multiple AI models",
-      "keywords": ["sign up", "create account", "register", "free AI chat"],
+      "keywords": "sign up, create account, register, free AI chat",
       "title": "Create Account"
     }
   },
   "legal": {
     "privacy": {
+      "changes": {
+        "content": "We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new policy on this page and updating the effective date.",
+        "title": "Changes to Privacy Policy"
+      },
+      "children": {
+        "content": "Our service is not intended for users under 13 years of age. We do not knowingly collect personal information from children under 13.",
+        "title": "Children's Privacy"
+      },
+      "collection": {
+        "content": "We collect information you provide directly, such as when you create an account, use our services, or contact us. This includes your email address, usage data, and conversation history.",
+        "title": "Information We Collect"
+      },
+      "contact": {
+        "content": "If you have questions about this Privacy Policy, please contact us at support@roundtable.now.",
+        "title": "Contact Us"
+      },
+      "cookies": {
+        "content": "We use cookies and similar technologies to provide, protect, and improve our services. You can control cookies through your browser settings.",
+        "title": "Cookies and Tracking"
+      },
       "lastUpdated": "Last updated: {date}",
       "lastUpdatedYear": "Last updated: {year}",
+      "rights": {
+        "content": "You have the right to access, correct, or delete your personal information. You can also request a copy of your data or opt out of certain data processing activities.",
+        "title": "Your Rights"
+      },
+      "security": {
+        "content": "We implement appropriate technical and organizational measures to protect your personal information against unauthorized access, alteration, or destruction.",
+        "title": "Data Security"
+      },
+      "sharing": {
+        "content": "We do not sell your personal information. We may share data with service providers who help us operate our platform, subject to confidentiality agreements.",
+        "title": "Information Sharing"
+      },
       "tagline": "Your privacy and data protection matter to us",
-      "title": "Privacy Policy"
+      "title": "Privacy Policy",
+      "usage": {
+        "content": "We use collected information to provide and improve our services, personalize your experience, communicate with you, and ensure platform security.",
+        "title": "How We Use Information"
+      }
     },
     "terms": {
+      "acceptance": {
+        "content": "By accessing or using Roundtable, you agree to be bound by these Terms of Service. If you do not agree, please do not use our services.",
+        "title": "Acceptance of Terms"
+      },
+      "billing": {
+        "content": "Paid subscriptions are billed in advance. You can cancel at any time, and your subscription will remain active until the end of the billing period.",
+        "title": "Billing and Payments"
+      },
+      "contact": {
+        "content": "For questions about these Terms, please contact us at support@roundtable.now.",
+        "title": "Contact Us"
+      },
       "effectiveYear": "Effective: {year}",
+      "governing": {
+        "content": "These Terms shall be governed by the laws of the jurisdiction in which Roundtable operates, without regard to conflict of law principles.",
+        "title": "Governing Law"
+      },
       "lastUpdated": "Last updated: {date}",
+      "liability": {
+        "content": "To the maximum extent permitted by law, Roundtable shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of the service.",
+        "title": "Limitation of Liability"
+      },
+      "privacy": {
+        "content": "Your use of our services is also governed by our Privacy Policy. Please review it to understand how we collect and use your information.",
+        "title": "Privacy"
+      },
+      "services": {
+        "content": "Roundtable provides AI collaboration tools. We reserve the right to modify, suspend, or discontinue any part of the service at any time.",
+        "title": "Description of Services"
+      },
       "tagline": "Guidelines for using our AI collaboration platform",
+      "termination": {
+        "content": "We may terminate or suspend your access immediately, without prior notice, for any breach of these Terms or for any other reason at our discretion.",
+        "title": "Termination"
+      },
       "title": "Terms of Service"
     },
     "trustBadges": {
@@ -865,9 +936,11 @@
     "planLabel": "Plan",
     "tiers": {
       "free": {
+        "description": "Basic access with limited features",
         "name": "Free"
       },
       "pro": {
+        "description": "Full access to all features and models",
         "name": "Pro"
       }
     }

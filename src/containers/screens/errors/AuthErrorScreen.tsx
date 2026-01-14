@@ -19,7 +19,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 
-const AUTH_ERROR_I18N_KEYS: Record<AuthErrorType, { title: string; desc: string }> = {
+const AUTH_ERROR_I18N_KEYS = {
   [AuthErrorTypes.CONFIGURATION]: { title: 'auth.errors.configuration', desc: 'auth.errors.configurationDesc' },
   [AuthErrorTypes.ACCESS_DENIED]: { title: 'auth.errors.accessDenied', desc: 'auth.errors.accessDeniedDesc' },
   [AuthErrorTypes.VERIFICATION]: { title: 'auth.errors.verification', desc: 'auth.errors.verificationDesc' },
@@ -32,7 +32,7 @@ const AUTH_ERROR_I18N_KEYS: Record<AuthErrorType, { title: string; desc: string 
   [AuthErrorTypes.DOMAIN_RESTRICTED]: { title: 'auth.errors.domainRestricted', desc: 'auth.errors.domainRestrictedDesc' },
   [AuthErrorTypes.UNABLE_TO_CREATE_USER]: { title: 'auth.errors.domainRestricted', desc: 'auth.errors.domainRestrictedDesc' },
   [AuthErrorTypes.DEFAULT]: { title: 'auth.errors.default', desc: 'auth.errors.defaultDesc' },
-};
+} as const satisfies Record<AuthErrorType, { title: string; desc: string }>;
 
 function AuthErrorContent() {
   const t = useTranslations();

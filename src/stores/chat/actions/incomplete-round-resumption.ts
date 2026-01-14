@@ -7,12 +7,12 @@
 'use client';
 
 /* eslint-disable perfectionist/sort-named-imports -- alias causes circular conflict */
-import { useEffect, useRef, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { RoundPhase } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
 import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getModeratorMetadata, getParticipantIndex, getParticipantModelIds, getRoundNumber, hasError as checkHasError } from '@/lib/utils';
 
 import {
@@ -61,6 +61,10 @@ export function useIncompleteRoundResumption(
   options: UseIncompleteRoundResumptionOptions,
 ): UseIncompleteRoundResumptionReturn {
   const { threadId, enabled = true } = options;
+
+  // ✅ FIX: Get store reference for imperative access in effects
+  // This allows reading CURRENT state inside effects, not stale closure values
+  const store = use(ChatStoreContext);
 
   const {
     messages,
@@ -124,6 +128,8 @@ export function useIncompleteRoundResumption(
     transitionToParticipantsPhase: s.transitionToParticipantsPhase,
     // ✅ FIX: Add moderator phase transition for P2M resumption
     transitionToModeratorPhase: s.transitionToModeratorPhase,
+    // ✅ FIX: Set phase directly for SSR stale abort handling
+    setCurrentResumptionPhase: s.setCurrentResumptionPhase,
   })));
 
   // ============================================================================
@@ -773,25 +779,45 @@ export function useIncompleteRoundResumption(
     }
 
     // ✅ UNIFIED PHASES: Skip if server prefilled a different phase
-    // When currentResumptionPhase is set, we let phase-specific effects handle resumption
-    // This prevents overlapping triggers (e.g., triggering participants while pre-search is streaming)
+    // When prefilled, phase-specific effects handle resumption
     if (streamResumptionPrefilled && currentResumptionPhase) {
-      // If prefilled phase is pre_search or moderator, don't run participant resumption here
-      // Those phases have their own effects that will transition to participants when ready
+      // ✅ FIX: Only skip PARTICIPANTS phase here - provider handles via prefilled nextParticipantToTrigger
+      // Previously we let 'participants' phase continue here, but that caused duplicate triggers:
+      // - Server says P0 done (nextP=1), but DB race means store has no P0 message
+      // - This effect calculates responded=[] and triggers P0 again
+      // - Provider's trigger effect also triggers based on prefilled nextP=1
+      // - Result: P0 triggered twice, messages duplicated
+      if (currentResumptionPhase === RoundPhases.PARTICIPANTS) {
+        return;
+      }
+      // Pre-search and moderator have their own effects below - let them handle
       if (currentResumptionPhase === RoundPhases.PRE_SEARCH || currentResumptionPhase === RoundPhases.MODERATOR) {
         return;
       }
-      // If phase is 'idle' or 'complete', no resumption needed
+      // Idle/complete - no resumption needed
       if (currentResumptionPhase === RoundPhases.IDLE || currentResumptionPhase === RoundPhases.COMPLETE) {
         return;
       }
-      // If phase is 'participants', this effect should handle it (continue below)
     }
 
     // ✅ OPTIMIZED: Wait for initial check to complete (no longer makes network call)
     // ✅ FIX: Using state instead of ref ensures effect re-runs after 100ms timeout
     if (!activeStreamCheckComplete) {
       return;
+    }
+
+    // ✅ CRITICAL FIX: Re-check phase from CURRENT store state (not stale closure)
+    // Race condition: On first render, closure captures phase=null. Then prefillStreamResumptionState
+    // runs in a previous effect and sets phase='complete'. But this effect still has the stale
+    // closure value. By reading current store state, we get the latest phase value.
+    // This prevents triggering participants for already-complete rounds.
+    if (store) {
+      const latestState = store.getState();
+      if (latestState.currentResumptionPhase === RoundPhases.COMPLETE
+        || latestState.currentResumptionPhase === RoundPhases.IDLE) {
+        console.error(`[incompleteResume] SKIP: current store phase=${latestState.currentResumptionPhase} (closure was stale)`);
+        return;
+      }
     }
 
     // ✅ CHANGELOG BLOCKING FIX: Don't resume until changelog is fetched
@@ -909,7 +935,6 @@ export function useIncompleteRoundResumption(
     const existingMessage = messages.find(msg => msg.id === expectedMessageId);
 
     if (existingMessage) {
-      // Check if the existing message is complete (has content and valid finish reason)
       const existingMetadata = getAssistantMetadata(existingMessage.metadata);
       const hasContent = existingMessage.parts?.some(
         p => p.type === MessagePartTypes.TEXT && typeof p.text === 'string' && p.text.trim().length > 0,
@@ -917,24 +942,20 @@ export function useIncompleteRoundResumption(
       const isComplete = hasContent && existingMetadata?.finishReason !== FinishReasons.UNKNOWN;
 
       if (isComplete) {
-        // Message already exists and is complete - skip this participant
-        // The incomplete round detection will find the NEXT participant that needs to respond
         return;
       }
-
-      // Message exists but is incomplete (empty or interrupted)
-      // Allow triggering to resume/retry this participant
     }
 
+    // Log what we detected before triggering
+    console.error(`[incompleteResume] TRIGGER P${effectiveNextParticipant} r${currentRoundNumber} responded=[${[...respondedParticipantIndices]}] inProgress=[${[...inProgressParticipantIndices]}] total=${enabledParticipants.length}`);
+
     // ✅ DOUBLE-TRIGGER FIX: Set round-level guard SYNCHRONOUSLY before ANY state updates
-    // This prevents React batching race where effect re-runs before waitingToStartStreaming propagates
     roundTriggerInProgressRef.current = roundKey;
 
     // Mark as attempted to prevent duplicate triggers for this specific participant
     resumptionAttemptedRef.current = resumptionKey;
 
     // Set up store state for resumption
-    // The provider's effect watching nextParticipantToTrigger will trigger the participant
     actions.setStreamingRoundNumber(currentRoundNumber);
     actions.setNextParticipantToTrigger(effectiveNextParticipant);
     actions.setCurrentParticipantIndex(effectiveNextParticipant);
@@ -970,6 +991,8 @@ export function useIncompleteRoundResumption(
     configChangeRoundNumber,
     isWaitingForChangelog,
     actions,
+    // ✅ FIX: Include store for imperative access to current phase
+    store,
   ]);
 
   // ============================================================================
@@ -1115,24 +1138,34 @@ export function useIncompleteRoundResumption(
   // - All participants have finished their responses
   // - The moderator message was interrupted mid-stream
   // - useModeratorTrigger hook handles resumption programmatically (NOT AI SDK)
-  //
-  // Flow:
-  // 1. Server prefills moderatorResumption with status='pending' or 'streaming'
-  // 2. AI SDK resume receives 204 (non-participant phase) - does nothing
-  // 3. useModeratorTrigger hook triggers POST /api/v1/chat/moderator programmatically
-  // 4. Backend streams response, moderator message saved with isModerator: true
-  // 5. Frontend displays moderator message inline via ChatMessageList
   useEffect(() => {
     // Only run if we have a moderator phase to resume
     if (currentResumptionPhase !== RoundPhases.MODERATOR || !streamResumptionPrefilled) {
       return;
     }
 
-    // ✅ FIX: Handle failed resumption with complete moderator message
-    // When moderator resumption fails but the moderator message is actually complete,
-    // we need to clear the streaming state flags to unstick the UI.
-    // This check MUST come BEFORE the isCreatingModerator guard because in the stuck
-    // state, isModeratorStreaming (which maps to isCreatingModerator) is true.
+    // ✅ FIX: Guard against SSR stale data - can't resume moderator without participant messages
+    // When server says "moderator phase, 3 participants complete" but we have 0 assistant messages,
+    // the participant messages are in DB but weren't fetched (SSR race).
+    //
+    // ✅ FIX: Transition to IDLE instead of clearing resumption entirely.
+    // If we clearStreamResumption(), it sets streamResumptionPrefilled=false, which allows
+    // incomplete-round-resumption hook to run. That hook sees responded=[] (no messages yet)
+    // and incorrectly triggers P0 again. By transitioning to IDLE with prefilled=true,
+    // the incomplete-round-resumption guard blocks: `if (phase === IDLE) return`.
+    // Screen-initialization will fetch fresh messages and properly handle the completed round.
+    const assistantMsgCount = messages.filter(m => m.role === MessageRoles.ASSISTANT).length;
+    if (assistantMsgCount === 0 && resumptionRoundNumber !== null) {
+      console.error(`[modResume] ABORT: 0 assistant msgs but server says moderator phase - SSR stale, transitioning to IDLE`);
+      actions.setCurrentResumptionPhase(RoundPhases.IDLE);
+      actions.setWaitingToStartStreaming(false);
+      actions.setIsCreatingModerator(false);
+      return;
+    }
+
+    // ✅ FIX: Handle failed resumption - clear flags to allow retry
+    // When moderator resumption fails, we need to clear flags so the effect can re-trigger
+    // This check MUST come BEFORE the isCreatingModerator guard
     if (
       moderatorResumption?.status === MessageStatuses.FAILED
       && resumptionRoundNumber !== null
@@ -1142,14 +1175,12 @@ export function useIncompleteRoundResumption(
         resumptionRoundNumber,
       );
       if (moderatorMessageForRound) {
-        // Check for valid finishReason (not UNKNOWN) - this means stream completed properly
-        // Use getModeratorMetadata since moderator messages have isModerator: true metadata
+        // Check for valid finishReason - if complete, clear all state
         const metadata = getModeratorMetadata(moderatorMessageForRound.metadata);
         const hasValidFinishReason = metadata?.finishReason
           && metadata.finishReason !== FinishReasons.UNKNOWN;
 
         if (hasValidFinishReason) {
-          // Moderator resumption failed but message is complete - clear all state
           const resumptionKey = `${threadId}_moderator_${resumptionRoundNumber}`;
           moderatorPhaseResumptionAttemptedRef.current = resumptionKey;
           actions.clearStreamResumption();
@@ -1158,6 +1189,11 @@ export function useIncompleteRoundResumption(
           return;
         }
       }
+      // ✅ FIX: No moderator message exists - clear isCreatingModerator to allow re-trigger
+      // This handles the case where SSR stale data means messages=[] but prefill set isModeratorStreaming=true
+      console.error(`[modResume] failed status, no msg - clearing flags to retry`);
+      actions.setIsCreatingModerator(false);
+      // Don't return - let the effect continue to re-trigger moderator
     }
 
     // Skip if already creating moderator (prevents double triggers)

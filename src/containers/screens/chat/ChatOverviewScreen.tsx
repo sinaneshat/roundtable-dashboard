@@ -20,7 +20,7 @@ import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputHeader } from '@/components/chat/chat-input-header';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatInputUpgradeBanner } from '@/components/chat/chat-input-upgrade-banner';
-import { ChatQuickStart } from '@/components/chat/chat-quick-start';
+import { QuickStartSkeleton } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
@@ -65,6 +65,12 @@ import {
 } from '@/stores/chat';
 
 import { ChatView } from './ChatView';
+
+// Dynamic imports with ssr:false prevent hydration mismatch from React Query cache
+const ChatQuickStart = dynamic(
+  () => import('@/components/chat/chat-quick-start').then(m => m.ChatQuickStart),
+  { ssr: false, loading: () => <QuickStartSkeleton /> },
+);
 
 const ChatDeleteDialog = dynamic(
   () => import('@/components/chat/chat-delete-dialog').then(m => m.ChatDeleteDialog),

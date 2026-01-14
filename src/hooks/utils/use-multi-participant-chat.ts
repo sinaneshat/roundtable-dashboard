@@ -387,7 +387,6 @@ export function useMultiParticipantChat(
       return;
     }
 
-    const nextIndex = currentIndexRef.current + 1;
     let totalParticipants = roundParticipantsRef.current.length;
 
     // ✅ CRITICAL GUARD: Prevent premature round completion
@@ -431,6 +430,80 @@ export function useMultiParticipantChat(
       return;
     }
 
+    // ✅ CRITICAL FIX: Check for missing/incomplete participants before incrementing
+    // Bug: During stream resumption, P1 might finish but P0 never responded
+    // Bug 2: P1 might have a partial message (interrupted stream) that looks like it responded
+    // Old logic: nextIndex = currentIndex + 1 (blindly skips P0)
+    // New logic: Find first participant without a COMPLETE message in current round
+    const currentRound = currentRoundRef.current;
+
+    // ✅ DEBUG: Log message state before recovery check
+    const allMsgs = messagesRef.current;
+    const assistantMsgsInRound = allMsgs.filter((m) => {
+      if (m.role !== MessageRoles.ASSISTANT)
+        return false;
+      const md = m.metadata;
+      if (!md || typeof md !== 'object')
+        return false;
+      if ('isModerator' in md && md.isModerator === true)
+        return false;
+      const msgRound = 'roundNumber' in md ? md.roundNumber : null;
+      return msgRound === currentRound;
+    });
+    console.error(`[triggerNext] r${currentRound} curIdx=${currentIndexRef.current} total=${totalParticipants} msgs=${allMsgs.length} assistInRnd=${assistantMsgsInRound.length}`);
+
+    const participantIndicesWithCompleteMessages = new Set<number>();
+    for (const msg of messagesRef.current) {
+      if (msg.role !== MessageRoles.ASSISTANT)
+        continue;
+      const metadata = msg.metadata;
+      if (!metadata || typeof metadata !== 'object')
+        continue;
+      // Skip moderator messages
+      if ('isModerator' in metadata && metadata.isModerator === true)
+        continue;
+      // Check if message is for current round
+      const msgRound = 'roundNumber' in metadata ? metadata.roundNumber : null;
+      if (msgRound !== currentRound)
+        continue;
+
+      // ✅ FIX: Check if message is COMPLETE, not just exists
+      // A message is incomplete ONLY if:
+      // - Any text part has state='streaming' (still actively streaming)
+      // - hasError is true (explicit error from backend)
+      // NOTE: finishReason='unknown' is NOT a reliable indicator - many complete
+      // messages have this value. Only rely on explicit signals.
+      const hasError = 'hasError' in metadata ? metadata.hasError : false;
+      const hasStreamingParts = msg.parts?.some(
+        p => 'state' in p && p.state === TextPartStates.STREAMING,
+      );
+      // Only explicit errors or active streaming indicate incompleteness
+      const isIncomplete = hasError === true || hasStreamingParts === true;
+
+      if (isIncomplete) {
+        continue;
+      }
+
+      // Get participant index for complete messages only
+      if ('participantIndex' in metadata && typeof metadata.participantIndex === 'number') {
+        participantIndicesWithCompleteMessages.add(metadata.participantIndex);
+      }
+    }
+
+    // Find first participant without a COMPLETE message (0 to totalParticipants-1)
+    let nextIndex = currentIndexRef.current + 1; // Default: increment
+    for (let i = 0; i < totalParticipants; i++) {
+      if (!participantIndicesWithCompleteMessages.has(i)) {
+        // Found a participant without a complete message - trigger them
+        // Clear from queue if they were previously queued but message is missing
+        if (queuedParticipantsThisRoundRef.current.has(i)) {
+          queuedParticipantsThisRoundRef.current.delete(i);
+        }
+        nextIndex = i;
+        break;
+      }
+    }
+
     // Round complete - reset state
     // Moderator triggering now handled automatically by store subscription
     if (nextIndex >= totalParticipants) {
@@ -460,10 +533,10 @@ export function useMultiParticipantChat(
     }
 
     // More participants to process - trigger next one
+    console.error(`[triggerNext] TRIGGER P${nextIndex} r${currentRound} complete=[${[...participantIndicesWithCompleteMessages]}]`);
     isTriggeringRef.current = true;
 
-    // ✅ RACE CONDITION FIX: Check if this participant is already queued
-    // This prevents duplicate network requests when multiple callbacks trigger concurrently
+    // Race condition fix: Check if participant is already queued
     if (queuedParticipantsThisRoundRef.current.has(nextIndex)) {
       isTriggeringRef.current = false;
       return;
@@ -890,10 +963,9 @@ export function useMultiParticipantChat(
         completeAnimation(currentIndex);
       }
 
-      // ✅ PHANTOM GUARD: Check if we've already triggered next for this (round, participant)
+      // Phantom guard: Check if we've already triggered next for this (round, participant)
       const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
       if (triggeredNextForRef.current.has(triggerKey)) {
-        console.error(`[flow] SKIP duplicate error trigger ${triggerKey}`);
         return;
       }
       triggeredNextForRef.current.add(triggerKey);
@@ -917,6 +989,11 @@ export function useMultiParticipantChat(
      * AI SDK v6 Pattern: Trust the SDK's built-in deduplication
      */
     onFinish: async (data) => {
+      const msgId = data.message?.id;
+      const pIdxMatch = msgId?.match(/_p(\d+)$/);
+      const rndMatch = msgId?.match(/_r(\d+)_/);
+      console.error(`[onFinish] ${msgId?.slice(-20)} r${rndMatch?.[1]} p${pIdxMatch?.[1]} finish=${data.finishReason} parts=${data.message?.parts?.length ?? 0} curIdx=${currentIndexRef.current} curRnd=${currentRoundRef.current}`);
+
       // ✅ Skip phantom resume completions (no active stream to resume)
       const notOurMessageId = !data.message?.id?.includes('_r');
       const emptyParts = data.message?.parts?.length === 0;
@@ -991,7 +1068,6 @@ export function useMultiParticipantChat(
         // skip setting isStreaming=true. Otherwise, we'd ignore the message data entirely
         // and cause a stuck stream!
         const isFormSubmissionInProgress = callbackRefs.hasEarlyOptimisticMessage.current;
-        console.error(`[flow] isResumedStream=true: overwriting refs from metadata (idx:${metadataParticipantIndex}, round:${metadataRoundNumber}), prevRoundRef:${currentRoundRef.current}`);
 
         // Update refs from metadata for resumed stream (even during submission - safe)
         currentIndex = metadataParticipantIndex;
@@ -1048,7 +1124,7 @@ export function useMultiParticipantChat(
         // ✅ PHANTOM GUARD: Check if we've already triggered next for this (round, participant)
         const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
         if (triggeredNextForRef.current.has(triggerKey)) {
-          console.error(`[flow] SKIP duplicate trigger ${triggerKey} (missing message)`);
+          console.error(`[onFinish] SKIP dup ${triggerKey}`);
           return;
         }
         triggeredNextForRef.current.add(triggerKey);
@@ -1364,21 +1440,17 @@ export function useMultiParticipantChat(
         const hasErrorInMetadata = completeMetadata?.hasError === true;
 
         if (hasErrorInMetadata) {
-          // ✅ PHANTOM GUARD: Check if we've already triggered next for this (round, participant)
+          // Phantom guard: Check if already triggered for this (round, participant)
           const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
           if (triggeredNextForRef.current.has(triggerKey)) {
-            console.error(`[flow] SKIP duplicate error trigger ${triggerKey}`);
             return;
           }
           triggeredNextForRef.current.add(triggerKey);
 
-          // Error messages don't animate - trigger next participant after frame
-          // ✅ FIX: Must await to block onFinish from returning before next trigger
-          // ✅ CRITICAL FIX: Double RAF ensures React has flushed all state updates
+          // Error messages don't animate - trigger next after double RAF
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-          // ✅ PHANTOM GUARD: Skip trigger if message is from a previous round
+          // Skip if from a previous round
           if (finalRoundNumber < currentRoundRef.current) {
-            console.error(`[flow] SKIP phantom r${finalRoundNumber} (current:r${currentRoundRef.current})`);
             return;
           }
           // ✅ CRITICAL FIX: Reset AI SDK state before triggering next participant
@@ -1872,6 +1944,45 @@ export function useMultiParticipantChat(
     // Messages are now persisted via PATCH before streaming starts (round 1+)
     const roundNumber = getCurrentRoundNumber(messagesToSearch);
 
+    console.error(`[continueFrom] P${fromIndex} r${roundNumber} msgs=${messages.length} search=${messagesToSearch.length} enabled=${enabled.length}`);
+
+    // =========================================================================
+    // ✅ MISSING EARLIER PARTICIPANT FIX: Validate all earlier participants have messages
+    // =========================================================================
+    // Race condition: Server says "start from P1" (P0 completed in DB), but SSR returns
+    // messages WITHOUT P0's response (DB propagation delay). If we blindly start P1,
+    // P0's message is lost and never re-triggered.
+    //
+    // Fix: Before proceeding, verify all participants 0..(fromIndex-1) have messages.
+    // If any are missing, start from the first missing participant instead.
+    let actualFromIndex = fromIndex;
+
+    // ✅ FIX: Check BOTH messages AND messagesToSearch to find earlier participants
+    // messages = hook state, messagesToSearch = persisted messages from PATCH
+    // Either source having the message is sufficient
+    if (effectiveThreadId && fromIndex > 0) {
+      for (let i = 0; i < fromIndex; i++) {
+        const expectedMsgId = `${effectiveThreadId}_r${roundNumber}_p${i}`;
+        const existingInMessages = messages.find(m => m.id === expectedMsgId);
+        const existingInSearch = messagesToSearch.find(m => m.id === expectedMsgId);
+        const existingInRef = messagesRef.current.find(m => m.id === expectedMsgId);
+        const existingMsg = existingInMessages || existingInSearch || existingInRef;
+
+        // Check if message exists and has actual content
+        const hasContent = existingMsg?.parts?.some(
+          p => p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
+        );
+
+        if (!existingMsg || !hasContent) {
+          console.error(`[continueFrom] P${i} missing (expected P${fromIndex}), starting from P${i}`);
+          actualFromIndex = i;
+          break;
+        }
+      }
+    }
+
+    const fromIndexToUse = actualFromIndex;
+
     // =========================================================================
     // ✅ DUPLICATE MESSAGE FIX: Check if participant already has a complete message
     // =========================================================================
@@ -1883,9 +1994,9 @@ export function useMultiParticipantChat(
     // 4. Without this check, a NEW message would be created (duplicate)
     //
     // The deterministic message ID format is: {threadId}_r{roundNumber}_p{participantIndex}
-    const participant = enabled[fromIndex];
+    const participant = enabled[fromIndexToUse];
     if (participant && threadId) {
-      const expectedMessageId = `${threadId}_r${roundNumber}_p${fromIndex}`;
+      const expectedMessageId = `${threadId}_r${roundNumber}_p${fromIndexToUse}`;
       const existingMessage = messages.find(m => m.id === expectedMessageId);
 
       if (existingMessage) {
@@ -1908,7 +2019,7 @@ export function useMultiParticipantChat(
           isTriggeringRef.current = false;
           // Notify store that this participant was "completed" (already had content)
           // Store will then find and trigger the NEXT incomplete participant
-          onResumedStreamComplete?.(roundNumber, fromIndex);
+          onResumedStreamComplete?.(roundNumber, fromIndexToUse);
           return;
         }
 
@@ -1936,7 +2047,7 @@ export function useMultiParticipantChat(
     }
 
     // CRITICAL: Update refs to start from the specified participant index
-    currentIndexRef.current = fromIndex;
+    currentIndexRef.current = fromIndexToUse;
     roundParticipantsRef.current = enabled;
     currentRoundRef.current = roundNumber;
     lastUsedParticipantIndex.current = null; // Reset for new continuation
@@ -1948,23 +2059,23 @@ export function useMultiParticipantChat(
 
     // Reset state for continuation
     setIsExplicitlyStreaming(true);
-    setCurrentParticipantIndex(fromIndex);
+    setCurrentParticipantIndex(fromIndexToUse);
     setCurrentRound(roundNumber);
     resetErrorTracking();
     clearAnimations?.(); // Clear any pending animations
 
     // ✅ CRITICAL FIX: Push participant index to queue before calling aiSendMessage
     // Guard against double-push if continueFromParticipant is called concurrently
-    if (!queuedParticipantsThisRoundRef.current.has(fromIndex)) {
-      queuedParticipantsThisRoundRef.current.add(fromIndex);
-      participantIndexQueue.current.push(fromIndex);
+    if (!queuedParticipantsThisRoundRef.current.has(fromIndexToUse)) {
+      queuedParticipantsThisRoundRef.current.add(fromIndexToUse);
+      participantIndexQueue.current.push(fromIndexToUse);
     }
 
     // ✅ CRITICAL FIX: Store expected user message ID for backend DB lookup
     // Only needed when this is triggering the first participant (index 0)
     // AI SDK's sendMessage will create a message with its own ID, but we need
     // the backend to look up by the correct pre-persisted message ID.
-    if (fromIndex === 0) {
+    if (fromIndexToUse === 0) {
       expectedUserMessageIdRef.current = lastUserMessage.id;
     }
 

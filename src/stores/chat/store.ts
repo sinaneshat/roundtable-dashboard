@@ -789,9 +789,30 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       ...(roundNumber !== undefined && { resumptionRoundNumber: roundNumber }),
     }, false, 'streamResumption/transitionToModeratorPhase'),
 
+  // ✅ FIX: Allow setting phase directly for SSR stale abort handling
+  // When moderator resumption aborts due to SSR stale data, we transition to IDLE
+  // while keeping streamResumptionPrefilled=true to block incomplete-round-resumption
+  setCurrentResumptionPhase: phase =>
+    set({
+      currentResumptionPhase: phase,
+    }, false, 'streamResumption/setCurrentResumptionPhase'),
+
   prefillStreamResumptionState: (threadId, serverState) => {
-    // If round is complete or idle, no prefill needed
+    console.error(`[prefill] thread=${threadId.slice(-8)} phase=${serverState.currentPhase} r${serverState.roundNumber} complete=${serverState.roundComplete} nextP=${serverState.participants?.nextParticipantToTrigger ?? 'null'}`);
+
+    // ✅ FIX: For complete/idle phases, still set prefilled state to block incomplete-round-resumption
+    // Previously we skipped entirely, leaving streamResumptionPrefilled=false and currentResumptionPhase=null.
+    // This caused the guard `streamResumptionPrefilled && currentResumptionPhase` to be falsy,
+    // allowing incomplete-round-resumption to run and re-trigger participants for completed rounds.
+    // Now we set the phase to COMPLETE/IDLE so the guard works: `if (phase === COMPLETE) return`.
     if (serverState.roundComplete || serverState.currentPhase === RoundPhases.COMPLETE || serverState.currentPhase === RoundPhases.IDLE) {
+      console.error(`[prefill] round complete/idle - setting phase to block resumption`);
+      set({
+        streamResumptionPrefilled: true,
+        prefilledForThreadId: threadId,
+        currentResumptionPhase: serverState.currentPhase === RoundPhases.IDLE ? RoundPhases.IDLE : RoundPhases.COMPLETE,
+        resumptionRoundNumber: serverState.roundNumber,
+      }, false, 'streamResumption/prefillStreamResumptionState_complete');
       return;
     }
 
@@ -1012,6 +1033,15 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const storeMessages = currentState.messages;
     const newMessages = initialMessages || [];
 
+    // ✅ CRITICAL FIX: Check resumption state BEFORE deciding messages
+    // If server detected incomplete round (streamResumptionPrefilled=true), we MUST
+    // preserve store messages - they contain the latest round data that might not
+    // be in DB yet. Without this, round 2 messages get replaced with round 0-1 DB data.
+    const isResumingStream = currentState.streamResumptionPrefilled;
+    const resumptionRound = currentState.resumptionRoundNumber;
+
+    console.error(`[initThread] resum=${isResumingStream} same=${isSameThread} store=${storeMessages.length} db=${newMessages.length} resumR=${resumptionRound ?? 'null'}`);
+
     let messagesToSet: UIMessage[];
 
     if (isSameThread && storeMessages.length > 0) {
@@ -1025,9 +1055,68 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
         msg.parts?.some(p => 'state' in p && p.state === TextPartStates.STREAMING),
       );
 
-      if (hasStaleStreamingParts && newMessages.length > 0) {
-        // Store has stale streaming state - use fresh DB messages
-        messagesToSet = newMessages;
+      // ✅ FIX: During stream resumption, keep store messages even if they have stale parts
+      // The store has the latest round data that might not be in DB yet
+      // We only replace with DB messages if NOT resuming
+      if (hasStaleStreamingParts && newMessages.length > 0 && !isResumingStream) {
+        // ✅ RACE CONDITION FIX: Don't blindly replace - MERGE messages
+        // Race condition: P0 completes → backend saves → user refreshes immediately
+        // SSR might fetch BEFORE the transaction commits, missing the latest message.
+        // Solution: Use DB as base but preserve store messages that aren't in DB yet.
+        const dbMessageIds = new Set(newMessages.map(m => m.id));
+        const storeMsgsNotInDb = storeMessages.filter(m => !dbMessageIds.has(m.id));
+
+        if (storeMsgsNotInDb.length > 0) {
+          messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort((a, b) => {
+            const aRound = getRoundNumber(a.metadata) ?? 0;
+            const bRound = getRoundNumber(b.metadata) ?? 0;
+            if (aRound !== bRound)
+              return aRound - bRound;
+            if (a.role !== b.role)
+              return a.role === 'user' ? -1 : 1;
+            const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
+            const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
+            return aPIdx - bPIdx;
+          });
+        } else {
+          messagesToSet = newMessages;
+        }
+      } else if (isResumingStream) {
+        // ✅ FIX: During resumption, compare round numbers but prefer store messages for resumption round
+        const storeMaxRound = storeMessages.reduce((max, m) => {
+          const round = getRoundNumber(m.metadata) ?? 0;
+          return Math.max(max, round);
+        }, 0);
+
+        const newMaxRound = newMessages.reduce((max, m) => {
+          const round = getRoundNumber(m.metadata) ?? 0;
+          return Math.max(max, round);
+        }, 0);
+
+        // During resumption: keep store if it has resumption round data OR has more/equal messages
+        if (storeMaxRound >= (resumptionRound ?? 0) || storeMaxRound >= newMaxRound) {
+          messagesToSet = storeMessages;
+        } else {
+          // ✅ RACE CONDITION FIX: Even during resumption, merge if store has messages DB doesn't
+          const dbMessageIds = new Set(newMessages.map(m => m.id));
+          const storeMsgsNotInDb = storeMessages.filter(m => !dbMessageIds.has(m.id));
+
+          if (storeMsgsNotInDb.length > 0) {
+            messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort((a, b) => {
+              const aRound = getRoundNumber(a.metadata) ?? 0;
+              const bRound = getRoundNumber(b.metadata) ?? 0;
+              if (aRound !== bRound)
+                return aRound - bRound;
+              if (a.role !== b.role)
+                return a.role === 'user' ? -1 : 1;
+              const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
+              const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
+              return aPIdx - bPIdx;
+            });
+          } else {
+            messagesToSet = newMessages;
+          }
+        }
       } else {
         // Original logic: Compare round numbers for active streaming scenarios
         const storeMaxRound = storeMessages.reduce((max, m) => {
@@ -1043,7 +1132,25 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
         if (storeMaxRound > newMaxRound || (storeMaxRound === newMaxRound && storeMessages.length >= newMessages.length)) {
           messagesToSet = storeMessages;
         } else {
-          messagesToSet = newMessages;
+          // ✅ RACE CONDITION FIX: Merge if store has messages DB doesn't
+          const dbMessageIds = new Set(newMessages.map(m => m.id));
+          const storeMsgsNotInDb = storeMessages.filter(m => !dbMessageIds.has(m.id));
+
+          if (storeMsgsNotInDb.length > 0) {
+            messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort((a, b) => {
+              const aRound = getRoundNumber(a.metadata) ?? 0;
+              const bRound = getRoundNumber(b.metadata) ?? 0;
+              if (aRound !== bRound)
+                return aRound - bRound;
+              if (a.role !== b.role)
+                return a.role === 'user' ? -1 : 1;
+              const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
+              const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
+              return aPIdx - bPIdx;
+            });
+          } else {
+            messagesToSet = newMessages;
+          }
         }
       }
     } else {
@@ -1076,11 +1183,18 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     //
     // Without this guard, PATCH response updating thread/participants can trigger
     // initializeThread which would reset all streaming state and break placeholders.
-    const isResumption = currentState.streamResumptionPrefilled;
+    //
+    // ✅ FIX: For COMPLETE/IDLE phases, streamResumptionPrefilled=true is ONLY used
+    // to block incomplete-round-resumption hook from triggering. We should NOT preserve
+    // streaming state (like streamingRoundNumber) because there's nothing to resume.
+    const resumptionPhase = currentState.currentResumptionPhase;
+    const isActiveResumption = currentState.streamResumptionPrefilled
+      && resumptionPhase !== RoundPhases.COMPLETE
+      && resumptionPhase !== RoundPhases.IDLE;
     const hasActiveFormSubmission
       = currentState.configChangeRoundNumber !== null
         || currentState.isWaitingForChangelog;
-    const preserveStreamingState = isResumption || hasActiveFormSubmission;
+    const preserveStreamingState = isActiveResumption || hasActiveFormSubmission;
     const resumptionRoundNumber = currentState.resumptionRoundNumber;
 
     set({
@@ -1173,6 +1287,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       draft.streamResumptionState = null;
       draft.resumptionAttempts = new Set<string>();
       draft.nextParticipantToTrigger = null;
+      // ✅ FIX: Clear stale resumption state from previous round
+      // Without this, new submissions are blocked by stale COMPLETE phase
+      draft.currentResumptionPhase = null;
+      draft.streamResumptionPrefilled = false;
 
       draft.isModeratorStreaming = false;
       // ⚠️ NOTE: Do NOT set changelog flags here!

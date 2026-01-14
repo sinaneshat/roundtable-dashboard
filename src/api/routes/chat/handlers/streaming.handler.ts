@@ -80,6 +80,7 @@ import { processParticipantChanges } from '@/api/services/participants';
 import { buildParticipantSystemPrompt } from '@/api/services/prompts';
 import {
   appendParticipantStreamChunk,
+  clearActiveParticipantStream,
   completeParticipantStreamBuffer,
   failParticipantStreamBuffer,
   initializeParticipantStreamBuffer,
@@ -1242,6 +1243,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // =========================================================================
           // ✅ PARALLELIZED STREAM COMPLETION: Mark stream as completed for resume detection
           // =========================================================================
+          // ✅ FIX: Mark stream buffer as COMPLETED and clear active key immediately
+          // The consumeSseStream callback runs in waitUntil (background), so if user refreshes
+          // before it completes, KV metadata is still ACTIVE. This causes server to return
+          // phase=participants instead of next phase, triggering participant re-execution.
+          // By calling these here (in onFinish which runs before response ends), we ensure
+          // KV state is correct even if consumeSseStream hasn't finished buffering.
+          console.error(`[participant] onFinish: marking stream complete and clearing active key for r${currentRoundNumber} p${participantIndex ?? DEFAULT_PARTICIPANT_INDEX}`);
           await Promise.all([
             markStreamCompleted(
               threadId,
@@ -1258,6 +1266,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               currentRoundNumber,
               participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
               ParticipantStreamStatuses.COMPLETED,
+              c.env,
+            ),
+            // ✅ FIX: Mark buffer as COMPLETED (same fix as moderator.handler.ts)
+            completeParticipantStreamBuffer(streamMessageId, c.env),
+            // ✅ FIX: Clear active key for this participant (same fix as moderator.handler.ts)
+            clearActiveParticipantStream(
+              threadId,
+              currentRoundNumber,
+              participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
               c.env,
             ),
           ]);
