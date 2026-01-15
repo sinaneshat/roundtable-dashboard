@@ -171,6 +171,7 @@ function AssistantGroupCard({
   keyForMessage,
   maxContentHeight,
   roundAvailableSources,
+  skipTransitions = false,
 }: {
   group: Extract<MessageGroup, { type: 'assistant-group' }>;
   groupIndex: number;
@@ -182,6 +183,8 @@ function AssistantGroupCard({
   maxContentHeight?: number;
   /** Fallback sources from all messages in the round (for moderator which doesn't have its own sources) */
   roundAvailableSources?: AvailableSource[];
+  /** Skip opacity transitions for SSR/read-only pages to prevent hydration delay */
+  skipTransitions?: boolean;
 }) {
   // Determine if any message in group is streaming or has error
   const hasStreamingMessage = group.messages.some(({ participantInfo }) => participantInfo.isStreaming);
@@ -285,6 +288,7 @@ function AssistantGroupCard({
                   maxContentHeight={maxContentHeight}
                   loadingText={isModerator ? t('chat.participant.moderatorObserving') : undefined}
                   groupAvailableSources={groupAvailableSources}
+                  skipTransitions={skipTransitions}
                 />
                 {sourceParts.length > 0 && (
                   <div className="mt-2 ml-12 space-y-1">
@@ -1496,6 +1500,7 @@ export const ChatMessageList = memo(
                   keyForMessage={keyForMessage}
                   maxContentHeight={maxContentHeight}
                   roundAvailableSources={roundSources}
+                  skipTransitions={isReadOnly}
                 />
               </ScrollAwareParticipant>
             );
