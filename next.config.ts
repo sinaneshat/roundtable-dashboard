@@ -307,6 +307,39 @@ const nextConfig: NextConfig = {
       config.optimization.chunkIds = 'named';
     }
 
+    // Server-side: Externalize React Email packages to avoid edge runtime issues
+    // React Email uses react-dom/server which has Node.js APIs (MessageChannel)
+    // that aren't available in Cloudflare Workers edge runtime during build
+    // @see https://github.com/resend/react-email/issues/1630
+    if (isServer) {
+      config.externals = config.externals || [];
+      // Add React Email related packages as externals
+      const emailExternals = [
+        '@react-email/components',
+        '@react-email/render',
+        '@react-email/html',
+        '@react-email/tailwind',
+        '@react-email/code-block',
+        'react-email',
+      ];
+
+      if (Array.isArray(config.externals)) {
+        config.externals.push(...emailExternals);
+      }
+
+      // Add function-based external to handle local email templates
+      // This prevents webpack from bundling email templates into server bundle
+      // which would cause createContext errors in edge runtime
+      config.externals.push(({ request }: { request: string }, callback: (err?: Error | null, result?: string) => void) => {
+        // Match local email imports (both relative and aliased)
+        if (request.includes('/emails/') || request.startsWith('@/emails')) {
+          // Mark as external - will be resolved at runtime via dynamic import
+          return callback(null, `commonjs ${request}`);
+        }
+        callback();
+      });
+    }
+
     // Client-side optimizations
     if (!isServer) {
       // Better chunk splitting for lazy loading
