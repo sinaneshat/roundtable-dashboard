@@ -6,7 +6,6 @@ import { render } from '@react-email/render';
 import { AwsClient } from 'aws4fetch';
 
 import { BRAND } from '@/constants';
-import { MagicLink } from '@/emails/templates';
 
 /**
  * Get SES credentials using OpenNext.js pattern
@@ -159,9 +158,8 @@ class EmailService {
   }
 
   async sendMagicLink(to: string, magicLink: string, expirationMinutes = 15) {
-    // Render React Email template to HTML
-    // Note: Using @react-email/components instead of @react-email/render
-    // to avoid edge runtime export resolution issues in Cloudflare Workers
+    // Dynamic import to avoid bundling React email components in API route
+    const { MagicLink } = await import('@/emails/templates');
     const html = await render(MagicLink({
       loginUrl: magicLink,
       expirationTime: `${expirationMinutes} minutes`,
