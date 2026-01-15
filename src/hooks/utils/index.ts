@@ -82,5 +82,5 @@ export { useIsFirstRender, useTimelineAnimations } from './use-timeline-animatio
 // For application code, use toastManager/showApiErrorToast from @/lib/toast
 export { toast, useToast } from './use-toast';
 export type { UseVirtualizedTimelineOptions, UseVirtualizedTimelineResult } from './use-virtualized-timeline';
-export { useVirtualizedTimeline } from './use-virtualized-timeline';
+export { TIMELINE_BOTTOM_PADDING_PX, useVirtualizedTimeline } from './use-virtualized-timeline';
 export { useVisualViewportPosition } from './use-visual-viewport-position';

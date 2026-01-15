@@ -587,7 +587,7 @@ export function ChatView({
     <>
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div className="flex flex-col relative flex-1 min-h-full">
-          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-96 sm:pb-[36rem]">
+          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-[20rem]">
             <ThreadTimeline
               timelineItems={timelineItems}
               user={user}

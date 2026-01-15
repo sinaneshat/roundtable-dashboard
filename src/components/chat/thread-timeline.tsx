@@ -80,6 +80,10 @@ export function ThreadTimeline({
   const isActivelyStreaming = isStreaming || isModeratorStreaming;
   const mountTimeRef = useRef(Date.now());
 
+  // ✅ Official TanStack Virtual pattern: listRef for scrollMargin calculation
+  // scrollMargin: listRef.current?.offsetTop ?? 0
+  const listRef = useRef<HTMLDivElement>(null);
+
   // Debug logging for timeline render
   useEffect(() => {
     const msgCount = timelineItems.filter(i => i.type === 'messages').reduce((sum, i) => sum + i.data.length, 0);
@@ -94,14 +98,18 @@ export function ThreadTimeline({
   }, [timelineItems]);
 
   const {
+    virtualizer,
     virtualItems,
     totalSize,
-    scrollMargin,
     measureElement,
   } = useVirtualizedTimeline({
     timelineItems,
+    listRef,
     estimateSize: 200,
     overscan: 5,
+    // paddingEnd: 0 for virtualized mode - CSS pb-[20rem] on wrapper handles bottom spacing
+    // This keeps virtualizer's totalSize at actual content height, CSS creates scroll space
+    // demoMode uses small padding for compact embedded layout
     paddingEnd: demoMode ? 24 : 0,
     isDataReady: disableVirtualization ? false : isDataReady,
     isStreaming: isActivelyStreaming,
@@ -257,17 +265,17 @@ export function ThreadTimeline({
   }
 
   // Virtualized render: absolute positioning with measured heights
-  // Following TanStack Virtual official pattern:
-  // - Container: height (not minHeight) = getTotalSize()
-  // - Items: position absolute, transform translateY(start - scrollMargin)
-  // - Items: explicit height for smooth layout before measurement
+  // Following TanStack Virtual official pattern exactly:
+  // https://tanstack.com/virtual/latest/docs/framework/react/examples/window
+  // - Container: ref={listRef} for scrollMargin calculation
+  // - Container: height = getTotalSize()
+  // - Items: position absolute, transform translateY(start - virtualizer.options.scrollMargin)
   return (
     <div
+      ref={listRef}
       data-virtualized-timeline
       style={{
-        // ✅ PATTERN FIX: Use exact height from virtualizer (not minHeight)
-        // TanStack Virtual docs: "height: ${virtualizer.getTotalSize()}px"
-        // minHeight was causing positioning issues when content changed
+        // Official pattern: height: `${virtualizer.getTotalSize()}px`
         height: `${totalSize}px`,
         width: '100%',
         position: 'relative',
@@ -288,13 +296,9 @@ export function ThreadTimeline({
               top: 0,
               left: 0,
               width: '100%',
-              // ✅ PATTERN FIX: Explicit height prevents layout shifts
-              // Before measureElement measures actual size, use virtualItem.size
-              // This ensures container space is reserved even before measurement
-              minHeight: `${virtualItem.size}px`,
-              // ✅ CORRECT: scrollMargin subtraction required per TanStack Virtual docs
-              // "transform: translateY(${item.start - virtualizer.options.scrollMargin}px)"
-              transform: `translateY(${virtualItem.start - scrollMargin}px)`,
+              // NO height set - let content determine height for dynamic measurement
+              // measureElement will capture actual height and update virtualItem.size
+              transform: `translateY(${virtualItem.start - virtualizer.options.scrollMargin}px)`,
             }}
           >
             {renderTimelineItemContent(item, virtualItem.index)}

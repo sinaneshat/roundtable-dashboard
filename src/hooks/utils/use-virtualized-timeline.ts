@@ -2,9 +2,18 @@
 
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
+import type { RefObject } from 'react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { TimelineItem } from './use-thread-timeline';
+
+/**
+ * Bottom padding for virtualized timeline in pixels.
+ * Matches Tailwind's pb-[20rem] (20 * 16 = 320px) used on wrapper containers.
+ * This ensures TanStack Virtual's scroll calculations account for the space
+ * needed to scroll content above the fixed input at the bottom of the viewport.
+ */
+export const TIMELINE_BOTTOM_PADDING_PX = 320;
 
 /**
  * Options for useVirtualizedTimeline hook
@@ -13,6 +22,12 @@ import type { TimelineItem } from './use-thread-timeline';
 export type UseVirtualizedTimelineOptions = {
   /** Timeline items to virtualize */
   timelineItems: TimelineItem[];
+
+  /**
+   * Ref to the list container element - REQUIRED for proper scrollMargin calculation
+   * Official TanStack Virtual pattern: scrollMargin: listRef.current?.offsetTop ?? 0
+   */
+  listRef: RefObject<HTMLDivElement | null>;
 
   /** Estimated size per item in pixels (default: 200) */
   estimateSize?: number;
@@ -23,7 +38,7 @@ export type UseVirtualizedTimelineOptions = {
   /** Padding at start of scroll area (default: 0) */
   paddingStart?: number;
 
-  /** Padding at end of scroll area (default: 0) */
+  /** Padding at end of scroll area (default: TIMELINE_BOTTOM_PADDING_PX = 576px) */
   paddingEnd?: number;
 
   /** Data is ready for rendering (prevents premature render) */
@@ -138,17 +153,18 @@ function createSSRVirtualItems(
  */
 export function useVirtualizedTimeline({
   timelineItems,
+  listRef,
   estimateSize = 200,
   overscan = 5,
   paddingStart = 0,
-  paddingEnd = 0,
+  paddingEnd = 0, // CSS pb-[36rem] on wrapper handles bottom spacing, not virtualizer
   isDataReady = true,
   isStreaming = false,
   getIsStreamingFromStore,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
-  // Scroll margin (offset from top of page to list start)
+  // Track scrollMargin for re-render triggering when container position changes
+  // Official TanStack Virtual pattern: scrollMargin: listRef.current?.offsetTop ?? 0
   const [scrollMargin, setScrollMargin] = useState(0);
-  const scrollMarginMeasuredRef = useRef(false);
 
   // ✅ SSR FIX: Initialize with estimated items for server-side rendering
   // On server, create virtual items based on estimates so first paint has content.
@@ -283,23 +299,39 @@ export function useVirtualizedTimeline({
     syncVirtualizerState(instance);
   }, [syncVirtualizerState]);
 
-  // Measure scroll margin when container exists
+  // Measure scrollMargin from listRef - official TanStack Virtual pattern
+  // Uses ResizeObserver to update when container position changes (e.g., navigation transitions)
   useLayoutEffect(() => {
-    if (!shouldEnable)
+    if (!shouldEnable || !listRef.current)
       return;
 
-    // Only measure once per mount
-    if (scrollMarginMeasuredRef.current)
-      return;
+    const measureScrollMargin = () => {
+      if (listRef.current) {
+        const newMargin = listRef.current.offsetTop;
+        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- DOM measurement requires effect
+        setScrollMargin(newMargin);
+      }
+    };
 
-    const container = document.querySelector('[data-virtualized-timeline]');
-    if (container) {
-      const rect = container.getBoundingClientRect();
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- DOM measurement requires effect
-      setScrollMargin(Math.max(0, rect.top + window.scrollY));
-      scrollMarginMeasuredRef.current = true;
+    // Initial measurement
+    measureScrollMargin();
+
+    // Update on resize/layout changes using ResizeObserver
+    // Per TanStack Virtual docs: "For dynamically measuring scrollMargin, you can use ResizeObserver"
+    const resizeObserver = new ResizeObserver(() => {
+      measureScrollMargin();
+    });
+
+    // Observe the container and its parent for layout changes
+    resizeObserver.observe(listRef.current);
+    if (listRef.current.parentElement) {
+      resizeObserver.observe(listRef.current.parentElement);
     }
-  }, [shouldEnable]);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [shouldEnable, listRef]);
 
   // Initialize window virtualizer
   // PATTERN: enabled=false prevents any calculation until data ready
@@ -519,10 +551,12 @@ export function useVirtualizedTimeline({
     [virtualizer, timelineItems.length],
   );
 
-  // Reset scroll margin measurement flag when items become empty (navigation)
+  // Reset scrollMargin when items become empty (navigation)
+  // ResizeObserver will remeasure when new content arrives
   useLayoutEffect(() => {
     if (timelineItems.length === 0) {
-      scrollMarginMeasuredRef.current = false;
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Reset on unmount/navigation
+      setScrollMargin(0);
     }
   }, [timelineItems.length]);
 

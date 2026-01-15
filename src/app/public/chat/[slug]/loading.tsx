@@ -8,7 +8,7 @@ export default function PublicChatThreadLoading() {
       <div className="flex flex-col min-h-screen relative">
         <div
           id="public-chat-scroll-container"
-          className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-8 flex-1"
+          className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-16 flex-1"
         >
           <div className="mb-4 flex justify-end">
             <div className="max-w-[80%]">
