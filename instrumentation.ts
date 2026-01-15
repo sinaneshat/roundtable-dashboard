@@ -17,6 +17,8 @@
 
 import type { Instrumentation } from 'next';
 
+import { APP_VERSION } from '@/constants/version';
+
 export async function register() {
   // =========================================================================
   // OpenTelemetry Registration
@@ -47,7 +49,7 @@ export async function register() {
       serviceName: 'roundtable-dashboard',
       // Attributes added to all spans
       attributes: {
-        'service.version': process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
+        'service.version': APP_VERSION,
         'deployment.environment': process.env.NEXT_PUBLIC_WEBAPP_ENV || 'local',
       },
     });

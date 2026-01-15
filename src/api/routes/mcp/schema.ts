@@ -20,6 +20,7 @@ import {
 } from '@/api/core/enums';
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 import { STRING_LIMITS } from '@/constants/validation';
+import { APP_VERSION } from '@/constants/version';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 
 // ============================================================================
@@ -946,7 +947,7 @@ export const MCP_TOOLS: MCPTool[] = [
 
 export const MCP_SERVER_INFO = {
   name: 'roundtable',
-  version: '1.0.0',
+  version: APP_VERSION,
   protocolVersion: MCP_PROTOCOL_VERSION,
   capabilities: {
     tools: { listChanged: false },

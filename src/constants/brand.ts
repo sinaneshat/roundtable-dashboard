@@ -5,6 +5,8 @@
  * All constants immutable with 'as const' assertion.
  */
 
+import { APP_VERSION } from './version';
+
 // ============================================================================
 // CORE BRAND IDENTITY
 // ============================================================================
@@ -104,7 +106,7 @@ export function getCopyrightText(): string {
 export const API_BRAND = {
   apiName: `${BRAND.name} API`,
   apiDescription: `${BRAND.description} - Application API`,
-  apiVersion: '1.0.0',
+  apiVersion: APP_VERSION,
   supportEmail: BRAND.support,
   docsUrl: `${BRAND.website}docs`,
 

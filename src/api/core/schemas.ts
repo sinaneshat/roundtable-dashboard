@@ -22,6 +22,7 @@
 import { z } from '@hono/zod-openapi';
 
 import { API } from '@/constants';
+import { APP_VERSION } from '@/constants/version';
 
 import {
   AuthFailureReasonSchema,
@@ -866,7 +867,7 @@ export const HealthDependencySchema = z.object({
   }),
   details: z.unknown().optional().openapi({
     description: 'Additional health details',
-    example: { version: '1.0.0' },
+    example: { version: APP_VERSION },
   }),
 }).openapi('HealthDependency');
 

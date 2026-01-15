@@ -22,6 +22,7 @@ import { timing } from 'hono/timing';
 import { trimTrailingSlash } from 'hono/trailing-slash';
 import notFound from 'stoker/middlewares/not-found';
 
+import { APP_VERSION } from '@/constants/version';
 import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
 
 import { createOpenApiApp } from './core/app';
@@ -787,7 +788,7 @@ export type AppType = typeof appRoutes;
 appRoutes.doc('/doc', c => ({
   openapi: '3.0.0',
   info: {
-    version: '1.0.0',
+    version: APP_VERSION,
     title: 'Roundtable API',
     description: 'roundtable.now API - Collaborative AI brainstorming platform. Built with Hono, Zod, and OpenAPI.',
     contact: { name: 'Roundtable', url: 'https://roundtable.now' },
@@ -884,7 +885,7 @@ appRoutes.get('/llms.txt', async (c) => {
       openapi: '3.1.0',
       info: {
         title: 'Application API',
-        version: '1.0.0',
+        version: APP_VERSION,
       },
     });
     const markdown = await createMarkdownFromOpenApi(JSON.stringify(document));
