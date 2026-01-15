@@ -6,17 +6,6 @@ import doQueue from '@opennextjs/cloudflare/overrides/queue/do-queue';
 import doShardedTagCache from '@opennextjs/cloudflare/overrides/tag-cache/do-sharded-tag-cache';
 
 export default defineCloudflareConfig({
-  // Exclude React Email packages from edge bundle
-  // These packages use react-dom/server which has Node.js APIs (MessageChannel)
-  // that aren't available in Cloudflare Workers edge runtime
-  // @see https://github.com/resend/react-email/issues/1630
-  edgeExternals: [
-    '@react-email/render',
-    '@react-email/components',
-    '@react-email/tailwind',
-    'react-email',
-  ],
-
   // R2 Incremental Cache with Regional Cache for optimal ISR performance
   incrementalCache: withRegionalCache(r2IncrementalCache, {
     mode: 'long-lived',
