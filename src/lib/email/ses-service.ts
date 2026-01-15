@@ -1,8 +1,5 @@
 import 'server-only';
 
-// IMPORTANT: Import render directly from @react-email/render, NOT from @react-email/components
-// The barrel export pulls in shiki (9.8MB) and prettier (256KB) which bloats the bundle
-import { render } from '@react-email/render';
 import { AwsClient } from 'aws4fetch';
 
 import { BRAND } from '@/constants';
@@ -158,8 +155,12 @@ class EmailService {
   }
 
   async sendMagicLink(to: string, magicLink: string, expirationMinutes = 15) {
-    // Dynamic import to avoid bundling React email components in API route
-    const { MagicLink } = await import('@/emails/templates');
+    // Dynamic imports with webpackIgnore to avoid bundling React email in API route
+    // (createContext not available in server-side API route context)
+    const [{ render }, { MagicLink }] = await Promise.all([
+      import(/* webpackIgnore: true */ '@react-email/render'),
+      import(/* webpackIgnore: true */ '@/emails/templates'),
+    ]);
     const html = await render(MagicLink({
       loginUrl: magicLink,
       expirationTime: `${expirationMinutes} minutes`,
