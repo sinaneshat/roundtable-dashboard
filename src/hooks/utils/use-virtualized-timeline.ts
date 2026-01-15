@@ -394,21 +394,26 @@ export function useVirtualizedTimeline({
   // Use requestAnimationFrame to schedule after React's commit phase completes
   // This avoids "flushSync called during lifecycle" warning
   //
-  // NOTE: onChange now handles ResizeObserver measurements directly,
-  // so this effect just sets the initial sync flag and does a single read.
-  // The actual measurements will come through onChange when ResizeObserver fires.
+  // ✅ FIX: Use double-RAF to ensure ResizeObserver has measured before reading.
+  // First RAF: Let React commit and ResizeObserver attach
+  // Second RAF: ResizeObserver has fired, measurements are available
   useLayoutEffect(() => {
     if (!shouldEnable || hasInitialSyncRef.current) {
       return;
     }
-    // Schedule initial sync for next frame - outside React's lifecycle
+    // Schedule initial sync - first RAF lets ResizeObserver attach
     pendingRafRef.current = requestAnimationFrame(() => {
-      pendingRafRef.current = null;
-      hasInitialSyncRef.current = true;
-      // Initial read - onChange will update with actual measurements
-      setVirtualizerState({
-        virtualItems: virtualizer.getVirtualItems(),
-        totalSize: virtualizer.getTotalSize(),
+      // Second RAF ensures ResizeObserver has measured
+      pendingRafRef.current = requestAnimationFrame(() => {
+        pendingRafRef.current = null;
+        hasInitialSyncRef.current = true;
+        // Force virtualizer to read from ResizeObserver cache
+        virtualizer.measure();
+        // Now measurements should be available
+        setVirtualizerState({
+          virtualItems: virtualizer.getVirtualItems(),
+          totalSize: virtualizer.getTotalSize(),
+        });
       });
     });
     return () => {
@@ -492,14 +497,19 @@ export function useVirtualizedTimeline({
       cancelAnimationFrame(pendingRafRef.current);
     }
 
-    // Schedule sync for next frame - outside React's lifecycle
-    // This will refine with actual measured sizes from the virtualizer
+    // ✅ FIX: Use double-RAF to ensure ResizeObserver has measured new items
+    // First RAF: Let React commit and ResizeObserver attach to new items
+    // Second RAF: ResizeObserver has fired, measurements are available
     pendingRafRef.current = requestAnimationFrame(() => {
-      pendingRafRef.current = null;
-      const newVirtualItems = virtualizer.getVirtualItems();
-      setVirtualizerState({
-        virtualItems: newVirtualItems,
-        totalSize: virtualizer.getTotalSize(),
+      pendingRafRef.current = requestAnimationFrame(() => {
+        pendingRafRef.current = null;
+        // Force virtualizer to read from ResizeObserver cache
+        virtualizer.measure();
+        const newVirtualItems = virtualizer.getVirtualItems();
+        setVirtualizerState({
+          virtualItems: newVirtualItems,
+          totalSize: virtualizer.getTotalSize(),
+        });
       });
     });
   }, [shouldEnable, timelineItems.length, virtualizer, estimateSize]);
