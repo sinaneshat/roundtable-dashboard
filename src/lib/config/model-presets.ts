@@ -12,7 +12,6 @@ import { ChatModes, ChatModeSchema, ModelIds, SUBSCRIPTION_TIERS, SubscriptionTi
 import type { Icon } from '@/components/icons';
 import { Icons } from '@/components/icons';
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
-import { toastManager } from '@/lib/toast';
 
 // ============================================================================
 // PRESET MODEL ROLE (5-part enum pattern for preset IDs)
@@ -357,12 +356,22 @@ export function getModelIdsForPreset(preset: ModelPreset): string[] {
 
 type TranslationFn = (key: string, values?: { count: number }) => string;
 
-export function filterPresetParticipants(
+/**
+ * Filter preset participants by model compatibility
+ *
+ * NOTE: This function uses dynamic import for toastManager to avoid bundling
+ * React into server-side API routes. The @/lib/toast module imports React for
+ * toast state management, which causes build errors in API routes.
+ */
+export async function filterPresetParticipants(
   preset: ModelPreset,
   incompatibleModelIds: Set<string>,
   t: TranslationFn,
   toastNamespace: ToastNamespace = DEFAULT_TOAST_NAMESPACE,
-): PresetFilterResult {
+): Promise<PresetFilterResult> {
+  // Dynamic import to avoid bundling React (via toastManager) into API routes
+  const { toastManager } = await import('@/lib/toast');
+
   const presetModelIds = preset.modelRoles.map(mr => mr.modelId);
 
   const compatibleModelIds = incompatibleModelIds.size > 0

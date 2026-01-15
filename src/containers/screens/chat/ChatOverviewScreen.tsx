@@ -743,8 +743,8 @@ export default function ChatOverviewScreen() {
     setPersistedWebSearch(enabled);
   }, [setEnableWebSearch, setPersistedWebSearch]);
 
-  const handlePresetSelect = useCallback((preset: ModelPreset) => {
-    const result = filterPresetParticipants(
+  const handlePresetSelect = useCallback(async (preset: ModelPreset) => {
+    const result = await filterPresetParticipants(
       preset,
       incompatibleModelIdsRef.current,
       t as (key: string, values?: { count: number }) => string,
