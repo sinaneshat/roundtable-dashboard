@@ -20,6 +20,7 @@ type MockDb = {
     chatThread: { findFirst: ReturnType<typeof vi.fn> };
     chatParticipant: { findMany: ReturnType<typeof vi.fn> };
     chatMessage: { findFirst: ReturnType<typeof vi.fn> };
+    creditTransaction: { findFirst: ReturnType<typeof vi.fn> };
   };
 };
 
@@ -40,6 +41,7 @@ function setupMockDb() {
       chatThread: { findFirst: vi.fn() },
       chatParticipant: { findMany: vi.fn() },
       chatMessage: { findFirst: vi.fn() },
+      creditTransaction: { findFirst: vi.fn() },
     },
   };
 
@@ -73,7 +75,25 @@ function setupMockDb() {
   (getDbAsync as ReturnType<typeof vi.fn>).mockResolvedValue(mockDb);
 }
 
-function setupSelectMock(transactionResult: unknown[], messageResult: unknown[]) {
+function setupSelectMock(
+  transactionResult: unknown[],
+  messageResult: unknown[],
+  participantCount: number = 2,
+) {
+  // Mock db.query.creditTransaction.findFirst for the transaction check
+  if (transactionResult.length > 0) {
+    mockDb.query.creditTransaction.findFirst.mockResolvedValue(transactionResult[0]);
+  } else {
+    mockDb.query.creditTransaction.findFirst.mockResolvedValue(null);
+  }
+
+  // Create participant array based on count
+  const participantArray = Array.from({ length: participantCount }, (_, i) => ({
+    id: `p${i + 1}`,
+    threadId: 'thread-1',
+    isEnabled: true,
+  }));
+
   const fromMock = vi.fn();
   let callCount = 0;
 
@@ -81,10 +101,9 @@ function setupSelectMock(transactionResult: unknown[], messageResult: unknown[])
     callCount++;
     const whereMock = vi.fn();
 
+    // First select call is for participant count, second is for message count
     if (callCount === 1) {
-      whereMock.mockReturnValue({
-        limit: vi.fn().mockImplementation(() => withCache(Promise.resolve(transactionResult))),
-      });
+      whereMock.mockResolvedValue(participantArray);
     } else {
       whereMock.mockResolvedValue(messageResult);
     }
@@ -114,19 +133,17 @@ afterEach(() => {
 
 describe('1 Participant Round', () => {
   it('completes after participant responds', async () => {
+    // Single participant (participantCount = 1) - no moderator check needed
     setupSelectMock(
       [],
       [{ id: 'msg-1', participantId: 'p1', role: MessageRoles.ASSISTANT, roundNumber: 0 }],
+      1,
     );
 
     mockDb.query.chatThread.findFirst.mockResolvedValue({
       id: 'thread-1',
       userId: 'user-1',
     });
-
-    mockDb.query.chatParticipant.findMany.mockResolvedValue([
-      { id: 'p1', modelId: 'model-1', isEnabled: true },
-    ]);
 
     const result = await checkFreeUserHasCompletedRound('user-1');
 
@@ -380,18 +397,11 @@ describe('4 Participants Round', () => {
 
 describe('transaction marker', () => {
   it('returns true immediately when transaction exists', async () => {
-    (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([
-            {
-              id: 'tx-complete',
-              userId: 'user-tx',
-              action: CreditActions.FREE_ROUND_COMPLETE,
-            },
-          ]),
-        }),
-      }),
+    // Mock db.query.creditTransaction.findFirst to return a transaction
+    mockDb.query.creditTransaction.findFirst.mockResolvedValue({
+      id: 'tx-complete',
+      userId: 'user-tx',
+      action: CreditActions.FREE_ROUND_COMPLETE,
     });
 
     const result = await checkFreeUserHasCompletedRound('user-tx');

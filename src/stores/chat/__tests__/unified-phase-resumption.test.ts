@@ -25,11 +25,17 @@ type MessagePart = {
   state?: 'streaming' | 'done';
 };
 
+type MessageMetadata = {
+  roundNumber?: number;
+  participantIndex?: number;
+  participantId?: string;
+};
+
 type UIMessage = {
   id: string;
-  role: MessageRoles.USER | 'assistant';
+  role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT;
   parts: MessagePart[];
-  metadata?: Record<string, unknown>;
+  metadata?: MessageMetadata;
 };
 
 type ParticipantPhaseStatus = {

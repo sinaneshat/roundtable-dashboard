@@ -5,6 +5,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { shouldRetryMutation } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import type {
+  CreateApiKeyResponse,
+  DeleteApiKeyResponse,
   ListApiKeysResponse,
 } from '@/services/api';
 import {
@@ -15,13 +17,10 @@ import {
 export function useCreateApiKeyMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<CreateApiKeyResponse, Error, Parameters<typeof createApiKeyService>[0]>({
     mutationFn: createApiKeyService,
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.apiKeys.all,
-        refetchType: 'active',
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all });
     },
     retry: false,
     throwOnError: false,
@@ -33,7 +32,7 @@ export function useDeleteApiKeyMutation() {
 
   type Context = { previousApiKeys?: ListApiKeysResponse };
 
-  return useMutation<unknown, Error, Parameters<typeof deleteApiKeyService>[0], Context>({
+  return useMutation<DeleteApiKeyResponse, Error, Parameters<typeof deleteApiKeyService>[0], Context>({
     mutationFn: deleteApiKeyService,
     onMutate: async (data) => {
       const keyId = data.param?.keyId;

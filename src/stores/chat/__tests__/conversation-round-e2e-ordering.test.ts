@@ -169,7 +169,7 @@ describe('round Start Behavior', () => {
 
       const messages = store.getState().messages;
       expect(messages).toHaveLength(1);
-      expect(messages[0]?.role).toBe('user');
+      expect(messages[0]?.role).toBe(MessageRoles.USER);
       expect(getRoundNumber(messages[0]?.metadata)).toBe(0);
     });
 
@@ -743,7 +743,7 @@ describe('complete Round Timeline Order', () => {
       const messagesItem = timeline.find(item => item.type === 'messages');
       const roundMessages = messagesItem?.type === 'messages' ? messagesItem.data : [];
       expect(roundMessages).toHaveLength(4); // user + 2 participants + moderator
-      expect(roundMessages[0]?.role).toBe('user');
+      expect(roundMessages[0]?.role).toBe(MessageRoles.USER);
       expect(roundMessages[3]?.metadata).toHaveProperty('isModerator', true);
     });
 

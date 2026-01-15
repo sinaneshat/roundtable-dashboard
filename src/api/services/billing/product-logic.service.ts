@@ -18,7 +18,7 @@ import {
 } from '@/api/core/enums';
 // Direct import to avoid barrel export pulling in server-only slug-generator.service.ts
 import { TITLE_GENERATION_PROMPT } from '@/api/services/prompts/prompts.service';
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 
 const _ModelForPricingSchema = z.object({
   id: z.string(),
@@ -100,26 +100,14 @@ function deriveTierRecord<T>(
   ) as Record<SubscriptionTier, T>;
 }
 
-export const SUBSCRIPTION_TIER_NAMES: Record<SubscriptionTier, string>
-  = deriveTierRecord(config => config.name);
-
 export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number>
   = deriveTierRecord(config => config.maxOutputTokens);
 
 export const MAX_MODEL_PRICING_BY_TIER: Record<SubscriptionTier, number | null>
   = deriveTierRecord(config => config.maxModelPricing);
 
-export const MIN_PARTICIPANTS_REQUIRED = 2;
-
 export const MAX_MODELS_BY_TIER: Record<SubscriptionTier, number>
   = deriveTierRecord(config => config.maxModels);
-
-/**
- * Absolute maximum participants allowed across all tiers.
- * Derived from pro tier's maxModels limit.
- * Used as literal value in Zod schemas that require compile-time constants.
- */
-export const MAX_PARTICIPANTS_LIMIT = 12;
 
 export const TIER_QUOTAS: Record<
   SubscriptionTier,

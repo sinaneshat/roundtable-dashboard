@@ -7,6 +7,8 @@
 
 import type { z } from 'zod';
 
+import { MessagePartTypes } from '@/api/core/enums';
+
 // ============================================================================
 // BASIC TYPE GUARDS
 // ============================================================================
@@ -114,9 +116,9 @@ export function hasShape<T extends Record<string, unknown>>(
 
 export function isTextPart(
   value: unknown,
-): value is { type: 'text'; text: string } {
+): value is { type: typeof MessagePartTypes.TEXT; text: string } {
   return hasShape(value, {
-    type: (v): v is 'text' => v === 'text',
+    type: (v): v is typeof MessagePartTypes.TEXT => v === MessagePartTypes.TEXT,
     text: isNonEmptyString,
   });
 }

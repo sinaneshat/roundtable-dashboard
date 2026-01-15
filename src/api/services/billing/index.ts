@@ -9,3 +9,4 @@ export * from './credit.service';
 export * from './product-logic.service';
 export * from './stripe.service';
 export * from './stripe-sync.service';
+export * from './stripe-sync-schemas';

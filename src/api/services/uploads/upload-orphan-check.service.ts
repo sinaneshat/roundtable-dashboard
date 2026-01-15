@@ -9,6 +9,7 @@
 
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
+import { z } from 'zod';
 
 import * as chatTables from '@/db/tables/chat';
 import * as projectTables from '@/db/tables/project';
@@ -26,12 +27,14 @@ const schema = {
 
 type DrizzleD1Database = ReturnType<typeof drizzle<typeof schema>>;
 
-export type OrphanCheckResult = {
-  isOrphaned: boolean;
-  messageCount: number;
-  threadCount: number;
-  projectCount: number;
-};
+export const OrphanCheckResultSchema = z.object({
+  isOrphaned: z.boolean(),
+  messageCount: z.number().int().nonnegative(),
+  threadCount: z.number().int().nonnegative(),
+  projectCount: z.number().int().nonnegative(),
+});
+
+export type OrphanCheckResult = z.infer<typeof OrphanCheckResultSchema>;
 
 // ============================================================================
 // DATABASE FACTORY

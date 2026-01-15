@@ -194,14 +194,17 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
 }
 
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    const byte = bytes[i];
-    if (byte !== undefined) {
-      binary += String.fromCharCode(byte);
-    }
+  // O(n) chunked approach - avoids O(n²) string concatenation memory exhaustion
+  // Process in 32KB chunks to avoid stack overflow with String.fromCharCode.apply
+  const CHUNK_SIZE = 0x8000; // 32KB
+  const chunks: string[] = [];
+
+  for (let i = 0; i < bytes.byteLength; i += CHUNK_SIZE) {
+    const slice = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.byteLength));
+    chunks.push(String.fromCharCode.apply(null, Array.from(slice)));
   }
-  return btoa(binary);
+
+  return btoa(chunks.join(''));
 }
 
 export function arrayBufferToBase64(buffer: ArrayBuffer): string {

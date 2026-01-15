@@ -40,7 +40,7 @@ import {
   buildParticipantSystemPrompt,
   PARTICIPANT_ROSTER_PLACEHOLDER,
 } from '@/api/services/prompts';
-import { buildSearchContext } from '@/api/services/search';
+import { buildSearchContextWithCitations } from '@/api/services/search';
 import { getFile } from '@/api/services/uploads';
 import type {
   AttachmentCitationInfo,
@@ -64,6 +64,7 @@ import {
   isFilePart,
 } from '@/lib/schemas/message-schemas';
 import { filterNonEmptyMessages, getRoundNumber } from '@/lib/utils';
+import { getExtractedText } from '@/lib/utils/metadata';
 
 type FileDataEntry = {
   data: Uint8Array;
@@ -183,6 +184,12 @@ export async function loadThreadAttachmentContext(
   let withContent = 0;
   let skipped = 0;
 
+  // ✅ DEBUG: Log entry into loadThreadAttachmentContext
+  logger?.info(`loadThreadAttachmentContext called: threadId=${threadId}, currentAttachmentIds=${JSON.stringify(currentAttachmentIds)}, maxAttachments=${maxAttachments}`, LogHelpers.operation({
+    operationName: 'loadThreadAttachmentContext',
+    threadId,
+  }));
+
   try {
     // Parallelize independent queries
     const [threadMessages, unprocessedUploads] = await Promise.all([
@@ -195,11 +202,13 @@ export async function loadThreadAttachmentContext(
         },
       }),
       // Pre-load current attachments in parallel if they exist
+      // ✅ FIX: Check for both 'uploaded' AND 'ready' statuses
+      // Status flow: uploading → uploaded → processing → ready
       currentAttachmentIds.length > 0
         ? db.query.upload.findMany({
             where: and(
               inArray(tables.upload.id, currentAttachmentIds),
-              eq(tables.upload.status, 'uploaded'),
+              inArray(tables.upload.status, ['uploaded', 'ready']),
             ),
             columns: {
               id: true,
@@ -208,6 +217,7 @@ export async function loadThreadAttachmentContext(
               fileSize: true,
               r2Key: true,
               status: true,
+              metadata: true,
             },
           })
         : Promise.resolve([]),
@@ -257,8 +267,11 @@ export async function loadThreadAttachmentContext(
 
           attachments.push(attachment);
 
-          const contentPreview = textContent
-            ? textContent.slice(0, 500) + (textContent.length > 500 ? '...' : '')
+          // Use extracted text from metadata for PDFs and processed files
+          const extractedText = getExtractedText(upload.metadata);
+          const availableText = textContent ?? extractedText;
+          const contentPreview = availableText
+            ? availableText.slice(0, 500) + (availableText.length > 500 ? '...' : '')
             : `File: ${upload.filename} (${upload.mimeType}, ${(upload.fileSize / 1024).toFixed(1)}KB)`;
 
           const downloadUrl = `/api/v1/uploads/${upload.id}/download`;
@@ -311,21 +324,14 @@ export async function loadThreadAttachmentContext(
       .where(
         and(
           inArray(tables.messageUpload.messageId, messageIds),
-          eq(tables.upload.status, 'uploaded'),
+          // ✅ FIX: Check for both 'uploaded' AND 'ready' statuses
+          inArray(tables.upload.status, ['uploaded', 'ready']),
         ),
       )
       .orderBy(asc(tables.messageUpload.createdAt))
       .limit(maxAttachments);
 
     const processedUploadIds = new Set<string>();
-
-    logger?.info('Loading thread attachment context', LogHelpers.operation({
-      operationName: 'loadThreadAttachmentContext',
-      threadId,
-      messageCount: threadMessages.length,
-      attachmentCount: messageUploadsRaw.length,
-      currentAttachmentCount: currentAttachmentIds.length,
-    }));
 
     for (const row of messageUploadsRaw) {
       processedUploadIds.add(row.upload.id);
@@ -379,8 +385,11 @@ export async function loadThreadAttachmentContext(
 
       attachments.push(attachment);
 
-      const contentPreview = textContent
-        ? textContent.slice(0, 500) + (textContent.length > 500 ? '...' : '')
+      // Use extracted text from metadata for PDFs and processed files
+      const extractedText = getExtractedText(upload.metadata);
+      const availableText = textContent ?? extractedText;
+      const contentPreview = availableText
+        ? availableText.slice(0, 500) + (availableText.length > 500 ? '...' : '')
         : `File: ${upload.filename} (${upload.mimeType}, ${(upload.fileSize / 1024).toFixed(1)}KB)`;
 
       const downloadUrl = `/api/v1/uploads/${upload.id}/download`;
@@ -457,8 +466,11 @@ export async function loadThreadAttachmentContext(
 
         attachments.push(attachment);
 
-        const contentPreview = textContent
-          ? textContent.slice(0, 500) + (textContent.length > 500 ? '...' : '')
+        // Use extracted text from metadata for PDFs and processed files
+        const extractedText = getExtractedText(upload.metadata);
+        const availableText = textContent ?? extractedText;
+        const contentPreview = availableText
+          ? availableText.slice(0, 500) + (availableText.length > 500 ? '...' : '')
           : `File: ${upload.filename} (${upload.mimeType}, ${(upload.fileSize / 1024).toFixed(1)}KB)`;
 
         const downloadUrl = `/api/v1/uploads/${upload.id}/download`;
@@ -481,12 +493,6 @@ export async function loadThreadAttachmentContext(
     }
 
     const formattedPrompt = formatThreadAttachmentPrompt(attachments);
-
-    logger?.info('Thread attachment context loaded', LogHelpers.operation({
-      operationName: 'loadThreadAttachmentContext',
-      threadId,
-      stats: { total: attachments.length, withContent, skipped },
-    }));
 
     return {
       attachments,
@@ -598,7 +604,7 @@ export async function buildSystemPromptWithContext(
 ): Promise<BuildSystemPromptResult> {
   const { participant, allParticipants, thread, userQuery, previousDbMessages, currentRoundNumber, env, db, logger, attachmentIds } = params;
 
-  let citationSourceMap: CitationSourceMap = new Map();
+  const citationSourceMap: CitationSourceMap = new Map();
   let citableSources: CitableSource[] = [];
 
   let systemPrompt
@@ -693,7 +699,14 @@ export async function buildSystemPromptWithContext(
                 ? `### AI Analysis\n${ragResponse.response}\n\n### Source Files\n${sourceFiles}`
                 : `### Relevant Files\n${sourceFiles}`;
 
-              systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Indexed Files)\n\n${ragContext}\n\n---\n\nUse the above knowledge from indexed project files when relevant. Cite sources using [rag_xxxxx] markers when referencing specific files.`;
+              // Build source list for citation emphasis
+              const ragSourceList = citableSources
+                .filter(s => s.type === CitationSourceTypes.RAG)
+                .slice(0, 10)
+                .map(s => `  • "${s.title}" → cite as [${s.id}]`)
+                .join('\n');
+
+              systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Indexed Files)\n\n${ragContext}\n\n---\n\n## 🚨 MANDATORY: RAG Knowledge Citation Requirements\n\n**YOU MUST CITE indexed files when using their information. This is NOT optional.**\n\n### Available RAG Sources:\n${ragSourceList}\n\n### Citation Rules:\n1. **EVERY fact from indexed files needs a citation** - Use [rag_xxxxxxxx] immediately after.\n2. **Quote or paraphrase specific content** - Show WHAT you're citing.\n\n✅ GOOD: "The document states the API uses REST architecture [rag_abc12345]."\n❌ BAD: "The API uses REST architecture." ← MISSING CITATION\n\n**NO citation = INCOMPLETE RESPONSE.**`;
 
               logger?.info('AutoRAG retrieved context', LogHelpers.operation({
                 operationName: 'buildSystemPromptWithContext',
@@ -739,8 +752,12 @@ export async function buildSystemPromptWithContext(
 
         if (citableContextResult.status === 'fulfilled') {
           const citableContext = citableContextResult.value;
-          citationSourceMap = citableContext.sourceMap;
-          citableSources = citableContext.sources;
+
+          // MERGE sources (not replace) - preserve RAG sources added earlier
+          for (const [id, source] of citableContext.sourceMap) {
+            citationSourceMap.set(id, source);
+          }
+          citableSources = [...citableSources, ...citableContext.sources];
 
           if (citableContext.formattedPrompt) {
             systemPrompt = `${systemPrompt}${citableContext.formattedPrompt}`;
@@ -762,6 +779,12 @@ export async function buildSystemPromptWithContext(
 
         if (threadAttachmentResult.status === 'fulfilled') {
           const threadAttachmentContext = threadAttachmentResult.value;
+
+          // ✅ DEBUG: Always log attachment result even when empty
+          logger?.info(`Thread attachment context (project path): found=${threadAttachmentContext.attachments.length}, sources=${threadAttachmentContext.citableSources.length}`, LogHelpers.operation({
+            operationName: 'buildSystemPromptWithContext',
+            threadId: thread.id,
+          }));
 
           if (threadAttachmentContext.attachments.length > 0) {
             systemPrompt = `${systemPrompt}${threadAttachmentContext.formattedPrompt}`;
@@ -795,16 +818,22 @@ export async function buildSystemPromptWithContext(
     }
   }
 
-  // Web search context (only runs if no project, since project path handles attachments)
+  // Web search context with citation support
   if (thread.enableWebSearch) {
     try {
-      const searchContext = buildSearchContext(previousDbMessages, {
+      const searchResult = buildSearchContextWithCitations(previousDbMessages, {
         currentRoundNumber,
         includeFullResults: true,
       });
 
-      if (searchContext) {
-        systemPrompt = `${systemPrompt}${searchContext}`;
+      if (searchResult.formattedPrompt) {
+        systemPrompt = `${systemPrompt}${searchResult.formattedPrompt}`;
+
+        // Merge search sources into citation map
+        for (const source of searchResult.citableSources) {
+          citableSources.push(source);
+          citationSourceMap.set(source.id, source);
+        }
       }
     } catch (error) {
       logger?.warn('Search context building failed', LogHelpers.operation({
@@ -815,8 +844,19 @@ export async function buildSystemPromptWithContext(
   }
 
   // If no project context, load thread attachments separately
+  // ✅ DEBUG: Log entry conditions for attachment loading
+  logger?.info(`Attachment loading check: hasProject=${!!thread.projectId}, hasQuery=${!!userQuery.trim()}, attachmentIds=${JSON.stringify(attachmentIds || [])}`, LogHelpers.operation({
+    operationName: 'buildSystemPromptWithContext',
+    threadId: thread.id,
+  }));
+
   if (!thread.projectId || !userQuery.trim()) {
     try {
+      logger?.info(`Loading thread attachments (non-project path): ids=${JSON.stringify(attachmentIds || [])}`, LogHelpers.operation({
+        operationName: 'buildSystemPromptWithContext',
+        threadId: thread.id,
+      }));
+
       const threadAttachmentContext = await loadThreadAttachmentContext({
         threadId: thread.id,
         r2Bucket: env.UPLOADS_R2_BUCKET,
@@ -826,6 +866,11 @@ export async function buildSystemPromptWithContext(
         extractContent: true,
         currentAttachmentIds: attachmentIds || [],
       });
+
+      logger?.info(`Thread attachment result: found=${threadAttachmentContext.attachments.length}, sources=${threadAttachmentContext.citableSources.length}`, LogHelpers.operation({
+        operationName: 'buildSystemPromptWithContext',
+        threadId: thread.id,
+      }));
 
       if (threadAttachmentContext.attachments.length > 0) {
         systemPrompt = `${systemPrompt}${threadAttachmentContext.formattedPrompt}`;
@@ -850,6 +895,11 @@ export async function buildSystemPromptWithContext(
       }));
     }
   }
+
+  logger?.info(`Built system prompt with context: sources=${citableSources.length}, types=[${citableSources.map(s => s.type).join(',')}], hasProject=${!!thread.projectId}`, LogHelpers.operation({
+    operationName: 'buildSystemPromptWithContext',
+    threadId: thread.id,
+  }));
 
   return {
     systemPrompt,
@@ -962,16 +1012,8 @@ function injectFileDataIntoModelMessages(
         const hasValidUrl = partUrl && (partUrl.startsWith('data:') || partUrl.startsWith('http://') || partUrl.startsWith('https://'));
 
         if (!hasValidUrl) {
-          const logFilename = getFilenameFromPart(part) ?? 'unknown';
-          console.error(
-            '[AI Streaming] Filtering out file part with invalid URL:',
-            {
-              filename: logFilename,
-              url: partUrl || '(empty)',
-              reason:
-                'File parts must have data URLs or valid HTTP(S) URLs for AI providers',
-            },
-          );
+          // Filtering out file part with invalid URL
+          // File parts must have data URLs or valid HTTP(S) URLs for AI providers
           return null;
         }
 
@@ -1032,11 +1074,6 @@ export async function prepareValidatedMessages(
       }
 
       if (errors.length > 0) {
-        console.error('[Streaming] Some attachments failed to load:', {
-          errorCount: errors.length,
-          errors: errors.slice(0, 5),
-          attachmentIds,
-        });
         logger?.warn('Some attachments failed to load', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
           errors,
@@ -1044,11 +1081,6 @@ export async function prepareValidatedMessages(
       }
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      console.error('[Streaming] Failed to load attachment content:', {
-        error: errorMessage,
-        attachmentIds,
-        stack: error instanceof Error ? error.stack : undefined,
-      });
       logger?.error('Failed to load attachment content', LogHelpers.operation({
         operationName: 'prepareValidatedMessages',
         error: errorMessage,
@@ -1093,7 +1125,7 @@ export async function prepareValidatedMessages(
         );
 
         try {
-          const { fileParts, stats, errors: loadErrors } = await loadAttachmentContent({
+          const { fileParts, stats } = await loadAttachmentContent({
             attachmentIds: uploadIdsFromUrls,
             r2Bucket,
             db,
@@ -1119,26 +1151,8 @@ export async function prepareValidatedMessages(
               }),
             );
           }
-
-          if (loadErrors.length > 0) {
-            console.error(
-              '[Streaming] Some participant 1+ attachments failed to load:',
-              {
-                errorCount: loadErrors.length,
-                errors: loadErrors.slice(0, 5),
-                uploadIds: uploadIdsFromUrls,
-              },
-            );
-          }
         } catch (error) {
           const errorMessage = getErrorMessage(error);
-          console.error(
-            '[Streaming] Failed to load participant 1+ attachment content:',
-            {
-              error: errorMessage,
-              uploadIds: uploadIdsFromUrls,
-            },
-          );
           logger?.error(
             'Failed to load participant 1+ attachment content',
             LogHelpers.operation({
@@ -1175,7 +1189,7 @@ export async function prepareValidatedMessages(
         );
 
         try {
-          const { fileParts, stats, errors: loadErrors } = await loadAttachmentContent({
+          const { fileParts, stats } = await loadAttachmentContent({
             attachmentIds: uploadIdsFromParts,
             r2Bucket,
             db,
@@ -1201,26 +1215,8 @@ export async function prepareValidatedMessages(
               }),
             );
           }
-
-          if (loadErrors.length > 0) {
-            console.error(
-              '[Streaming] Some participant 1+ uploadId attachments failed to load:',
-              {
-                errorCount: loadErrors.length,
-                errors: loadErrors.slice(0, 5),
-                uploadIds: uploadIdsFromParts,
-              },
-            );
-          }
         } catch (error) {
           const errorMessage = getErrorMessage(error);
-          console.error(
-            '[Streaming] Failed to load participant 1+ uploadId attachment content:',
-            {
-              error: errorMessage,
-              uploadIds: uploadIdsFromParts,
-            },
-          );
           logger?.error(
             'Failed to load participant 1+ uploadId attachment content',
             LogHelpers.operation({

@@ -351,6 +351,7 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
       return newMsg;
     });
 
+    // ✅ DEBUG: Log message content changes during streaming
     set({ messages: mergedMessages }, false, 'thread/setMessages');
   },
   setIsStreaming: (isStreaming: boolean) =>
@@ -1253,8 +1254,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants');
   },
 
-  prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[], providedFileParts?: ExtendedFilePart[]) =>
-    set((draft) => {
+  prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[], providedFileParts?: ExtendedFilePart[]) => {
+    // ✅ DEBUG: Log attachment IDs being prepared
+    rlog.msg('cite-prepare', `msgLen=${message.length} parts=${participantIds.length} attIds=${attachmentIds?.length ?? 0} fileParts=${providedFileParts?.length ?? 0}`);
+
+    return set((draft) => {
       const messageCount = draft.messages.length;
       const lastMessage = messageCount > 0 ? draft.messages[messageCount - 1] : null;
       const lastRoundNum = lastMessage ? getRoundNumber(lastMessage.metadata) : null;
@@ -1326,7 +1330,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
           },
         });
       }
-    }, false, 'operations/prepareForNewMessage'),
+    }, false, 'operations/prepareForNewMessage');
+  },
 
   completeStreaming: () => {
     const currentState = get();

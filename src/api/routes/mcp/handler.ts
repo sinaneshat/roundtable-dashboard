@@ -18,6 +18,8 @@ import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses } from '@/api/core';
 import {
   DEFAULT_CHAT_MODE,
+  MCPProtocolMethods,
+  MCPToolMethods,
   MessagePartTypes,
   MessageRoles,
   MessageStatuses,
@@ -152,7 +154,7 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
         // ====================================================================
         // Protocol Methods
         // ====================================================================
-        case 'initialize': {
+        case MCPProtocolMethods.INITIALIZE: {
           return jsonRpcResponse({
             protocolVersion: MCP_PROTOCOL_VERSION,
             capabilities: MCP_SERVER_INFO.capabilities,
@@ -160,11 +162,11 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
           });
         }
 
-        case 'tools/list': {
+        case MCPProtocolMethods.TOOLS_LIST: {
           return jsonRpcResponse({ tools: MCP_TOOLS });
         }
 
-        case 'resources/list': {
+        case MCPProtocolMethods.RESOURCES_LIST: {
           const db = await getDbAsync();
           const threads = await db.query.chatThread.findMany({
             where: eq(tables.chatThread.userId, user.id),
@@ -183,7 +185,7 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
           return jsonRpcResponse({ resources });
         }
 
-        case 'resources/read': {
+        case MCPProtocolMethods.RESOURCES_READ: {
           const resourceParams = ResourceReadParamsSchema.safeParse(request.params);
           if (!resourceParams.success) {
             return jsonRpcResponse(undefined, {
@@ -228,7 +230,7 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
           });
         }
 
-        case 'tools/call': {
+        case MCPProtocolMethods.TOOLS_CALL: {
           const params = ToolCallParamsSchema.safeParse(request.params);
           if (!params.success) {
             return jsonRpcResponse(undefined, {
@@ -348,28 +350,28 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       // Thread Management
       // ----------------------------------------------------------------------
-      case 'create_thread': {
+      case MCPToolMethods.CREATE_THREAD: {
         const parsed = CreateThreadInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolCreateThread(parsed.data, user, db);
       }
 
-      case 'get_thread': {
+      case MCPToolMethods.GET_THREAD: {
         const parsed = GetThreadInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolGetThread(parsed.data, user, db);
       }
 
-      case 'list_threads': {
+      case MCPToolMethods.LIST_THREADS: {
         const parsed = ListThreadsInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolListThreads(parsed.data, user, db);
       }
 
-      case 'delete_thread': {
+      case MCPToolMethods.DELETE_THREAD: {
         const parsed = DeleteThreadInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
@@ -379,42 +381,42 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       // Project Management
       // ----------------------------------------------------------------------
-      case 'create_project': {
+      case MCPToolMethods.CREATE_PROJECT: {
         const parsed = CreateProjectInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolCreateProject(parsed.data, user, db, env);
       }
 
-      case 'get_project': {
+      case MCPToolMethods.GET_PROJECT: {
         const parsed = GetProjectInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolGetProject(parsed.data, user, db);
       }
 
-      case 'list_projects': {
+      case MCPToolMethods.LIST_PROJECTS: {
         const parsed = ListProjectsInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolListProjects(parsed.data, user, db);
       }
 
-      case 'update_project': {
+      case MCPToolMethods.UPDATE_PROJECT: {
         const parsed = UpdateProjectInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolUpdateProject(parsed.data, user, db);
       }
 
-      case 'delete_project': {
+      case MCPToolMethods.DELETE_PROJECT: {
         const parsed = DeleteProjectInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolDeleteProject(parsed.data, user, db, env);
       }
 
-      case 'list_project_threads': {
+      case MCPToolMethods.LIST_PROJECT_THREADS: {
         const parsed = ListProjectThreadsInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
@@ -424,14 +426,14 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       // Knowledge Files
       // ----------------------------------------------------------------------
-      case 'list_knowledge_files': {
+      case MCPToolMethods.LIST_KNOWLEDGE_FILES: {
         const parsed = ListKnowledgeFilesInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolListKnowledgeFiles(parsed.data, user, db);
       }
 
-      case 'delete_knowledge_file': {
+      case MCPToolMethods.DELETE_KNOWLEDGE_FILE: {
         const parsed = DeleteKnowledgeFileInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
@@ -441,14 +443,14 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       // Messages & Responses
       // ----------------------------------------------------------------------
-      case 'send_message': {
+      case MCPToolMethods.SEND_MESSAGE: {
         const parsed = SendMessageInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolSendMessage(parsed.data, user, db);
       }
 
-      case 'generate_responses': {
+      case MCPToolMethods.GENERATE_RESPONSES: {
         const parsed = GenerateResponsesInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
@@ -458,21 +460,21 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       // Rounds
       // ----------------------------------------------------------------------
-      case 'list_rounds': {
+      case MCPToolMethods.LIST_ROUNDS: {
         const parsed = ListRoundsInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolListRounds(parsed.data, user, db);
       }
 
-      case 'regenerate_round': {
+      case MCPToolMethods.REGENERATE_ROUND: {
         const parsed = RegenerateRoundInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolRegenerateRound(parsed.data, user, db, env);
       }
 
-      case 'round_feedback': {
+      case MCPToolMethods.ROUND_FEEDBACK: {
         const parsed = RoundFeedbackInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
@@ -482,14 +484,14 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       // Summary
       // ----------------------------------------------------------------------
-      case 'generate_analysis': {
+      case MCPToolMethods.GENERATE_ANALYSIS: {
         const parsed = GenerateAnalysisInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolGenerateSummary(parsed.data, user, db);
       }
 
-      case 'get_round_analysis': {
+      case MCPToolMethods.GET_ROUND_ANALYSIS: {
         const parsed = GetRoundAnalysisInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
@@ -499,21 +501,21 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       // Participants
       // ----------------------------------------------------------------------
-      case 'add_participant': {
+      case MCPToolMethods.ADD_PARTICIPANT: {
         const parsed = AddParticipantInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolAddParticipant(parsed.data, user, db);
       }
 
-      case 'update_participant': {
+      case MCPToolMethods.UPDATE_PARTICIPANT: {
         const parsed = UpdateParticipantInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
         return await toolUpdateParticipant(parsed.data, user, db);
       }
 
-      case 'remove_participant': {
+      case MCPToolMethods.REMOVE_PARTICIPANT: {
         const parsed = RemoveParticipantInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
@@ -523,7 +525,7 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       // Models
       // ----------------------------------------------------------------------
-      case 'list_models': {
+      case MCPToolMethods.LIST_MODELS: {
         const parsed = ListModelsInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
@@ -549,6 +551,8 @@ async function toolCreateThread(
 ): Promise<ToolCallResult> {
   const userTier = await getUserTier(user.id);
   const allModels = getAllModels();
+  // ✅ PERF: Build Map once for O(1) lookups instead of O(n) find() in loop
+  const modelById = new Map(allModels.map(m => [m.id as string, m]));
 
   // ✅ FREE ROUND BYPASS: Free users who haven't completed their free round
   // can use ANY models for their first experience.
@@ -557,7 +561,7 @@ async function toolCreateThread(
 
   // Validate model access (skip for free round users)
   for (const p of input.participants) {
-    const model = allModels.find(m => m.id === p.modelId);
+    const model = modelById.get(p.modelId);
     if (!model)
       throw createError.badRequest(`Model not found: ${p.modelId}`, ErrorContextBuilders.resourceNotFound('model', p.modelId));
     if (!isFreeUserWithFreeRound && !canAccessModelByPricing(userTier, model)) {
@@ -594,26 +598,27 @@ async function toolCreateThread(
     updatedAt: new Date(),
   });
 
-  const participantIds: string[] = [];
-  for (let i = 0; i < input.participants.length; i++) {
-    const p = input.participants[i];
-    if (!p)
-      continue;
-    const participantId = ulid();
-    participantIds.push(participantId);
-
-    await db.insert(tables.chatParticipant).values({
-      id: participantId,
+  // ✅ PERF: Batch insert all participants in single query instead of sequential inserts
+  const now = new Date();
+  const participantValues = input.participants
+    .filter((p): p is NonNullable<typeof p> => p !== null && p !== undefined)
+    .map((p, i) => ({
+      id: ulid(),
       threadId,
       modelId: p.modelId,
       role: p.role || null,
       priority: p.priority ?? i,
       isEnabled: true,
       settings: p.systemPrompt ? { systemPrompt: p.systemPrompt } : null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+  if (participantValues.length > 0) {
+    await db.insert(tables.chatParticipant).values(participantValues);
   }
+
+  const participantIds = participantValues.map(p => p.id);
 
   return mcpResult({
     threadId,
@@ -1233,35 +1238,30 @@ async function toolListProjects(
     filters.push(like(tables.chatProject.name, `%${input.search}%`));
   }
 
+  // ✅ PERF: Fetch projects with relations in single query using Drizzle relational
   const projects = await db.query.chatProject.findMany({
     where: and(...filters),
     orderBy: [desc(tables.chatProject.updatedAt)],
     limit: input.limit || 20,
+    with: {
+      attachments: {
+        columns: { id: true },
+      },
+      threads: {
+        columns: { id: true },
+      },
+    },
   });
 
-  // Get counts for each project
-  const projectsWithCounts = await Promise.all(
-    projects.map(async (project) => {
-      const attachments = await db.query.projectAttachment.findMany({
-        where: eq(tables.projectAttachment.projectId, project.id),
-        columns: { id: true },
-      });
-
-      const threads = await db.query.chatThread.findMany({
-        where: eq(tables.chatThread.projectId, project.id),
-        columns: { id: true },
-      });
-
-      return {
-        id: project.id,
-        name: project.name,
-        description: project.description,
-        attachmentCount: attachments.length,
-        threadCount: threads.length,
-        updatedAt: project.updatedAt.toISOString(),
-      };
-    }),
-  );
+  // Transform to include counts
+  const projectsWithCounts = projects.map(project => ({
+    id: project.id,
+    name: project.name,
+    description: project.description,
+    attachmentCount: project.attachments?.length ?? 0,
+    threadCount: project.threads?.length ?? 0,
+    updatedAt: project.updatedAt.toISOString(),
+  }));
 
   return mcpResult({
     projects: projectsWithCounts,

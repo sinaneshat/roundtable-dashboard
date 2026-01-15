@@ -24,8 +24,7 @@ import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
-// Direct import to avoid barrel export pulling in server-only credit.service.ts
-import { MIN_PARTICIPANTS_REQUIRED } from '@/api/services/billing/product-logic.service';
+import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
 
 // ============================================================================
 // CONSTANTS (Official Pattern)

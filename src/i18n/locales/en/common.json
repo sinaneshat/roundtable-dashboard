@@ -257,6 +257,7 @@
     }
   },
   "chat": {
+    "aiSummary": "AI Summary",
     "attachments": {
       "defaultFileType": "File",
       "defaultName": "File",
@@ -272,7 +273,10 @@
       "tooltip": "AI automatically selects the best models and settings for your prompt"
     },
     "citations": {
-      "download": "Download"
+      "download": "Download",
+      "pending": "loading...",
+      "searchPending": "Source details available after generation",
+      "sources": "Sources"
     },
     "configuration": {
       "actionSummary": {
@@ -809,7 +813,9 @@
     }
   },
   "plans": {
-    "errorDescription": "There was an error loading subscription plans. Please try again."
+    "error": "Error",
+    "errorDescription": "There was an error loading subscription plans. Please try again.",
+    "noPlansAvailable": "No plans available"
   },
   "pricing": {
     "card": {

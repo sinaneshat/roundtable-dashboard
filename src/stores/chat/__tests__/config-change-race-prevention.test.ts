@@ -312,7 +312,6 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       store.getState().setWaitingToStartStreaming(true);
 
       // ✅ Simulate useStreamingTrigger condition check (line 112-115)
-      // if (configChangeRoundNumber !== null || isWaitingForChangelog) return;
       const configChangeRoundNumber = store.getState().configChangeRoundNumber;
       const isWaitingForChangelog = store.getState().isWaitingForChangelog;
 

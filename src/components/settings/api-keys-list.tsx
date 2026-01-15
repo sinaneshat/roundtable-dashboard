@@ -25,12 +25,16 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import type { useApiKeysQuery } from '@/hooks';
 import { useDeleteApiKeyMutation } from '@/hooks';
 import { showApiErrorToast } from '@/lib/toast';
-import type { ListApiKeysResponse } from '@/services/api';
 
-// RPC-inferred type for API keys from service response
-type ApiKeyItem = NonNullable<Extract<ListApiKeysResponse, { success: true }>['data']>['items'][number];
+// Infer API key type from hook return
+type ApiKeyItem = NonNullable<
+  NonNullable<
+    Awaited<ReturnType<typeof useApiKeysQuery>>['data']
+  >['data']
+>['items'][number];
 
 type ApiKeysListProps = {
   apiKeys: ApiKeyItem[];

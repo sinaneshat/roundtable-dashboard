@@ -388,17 +388,23 @@ export function ChatView({
 
   const isRoundInProgress = streamingRoundNumber !== null;
 
-  const isInputBlocked = isStreaming
+  // Core blocking state for operations in progress
+  const isOperationBlocked = isStreaming
     || isCreatingThread
     || waitingToStartStreaming
     || showLoader
     || isModeratorStreaming
     || Boolean(pendingMessage)
-    || isModelsLoading
     || isResumptionActive
     || formActions.isSubmitting
     || isRoundInProgress
     || isAnalyzingPrompt;
+
+  // Full input blocking includes loading states
+  const isInputBlocked = isOperationBlocked || isModelsLoading;
+
+  // Toggle can work even while models load - only block during active operations
+  const isToggleDisabled = isOperationBlocked;
 
   const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming || isAnalyzingPrompt;
 
@@ -581,7 +587,7 @@ export function ChatView({
     <>
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div className="flex flex-col relative flex-1 min-h-full">
-          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-[36rem]">
+          <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 pb-[20rem]">
             <ThreadTimeline
               timelineItems={timelineItems}
               user={user}
@@ -618,7 +624,7 @@ export function ChatView({
                   autoMode={autoMode}
                   onAutoModeChange={setAutoMode}
                   isAnalyzing={isAnalyzingPrompt}
-                  disabled={isInputBlocked && !isAnalyzingPrompt}
+                  disabled={isToggleDisabled && !isAnalyzingPrompt}
                   borderVariant={borderVariant}
                 />
                 <ChatInput

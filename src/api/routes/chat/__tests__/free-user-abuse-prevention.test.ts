@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CreditActions, CreditTransactionTypes, PlanTypes } from '@/api/core/enums';
+import { CreditActions, CreditTransactionTypes, MessageRoles, PlanTypes } from '@/api/core/enums';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 describe('free User Abuse Prevention', () => {
@@ -133,11 +133,11 @@ describe('free User Abuse Prevention', () => {
     });
 
     it('only assistant messages count for round completion', () => {
-      const isAssistantMessage = (role: string) => role === 'assistant';
+      const isAssistantMessage = (role: string) => role === MessageRoles.ASSISTANT;
 
-      expect(isAssistantMessage('assistant')).toBe(true);
-      expect(isAssistantMessage('user')).toBe(false);
-      expect(isAssistantMessage('system')).toBe(false);
+      expect(isAssistantMessage(MessageRoles.ASSISTANT)).toBe(true);
+      expect(isAssistantMessage(MessageRoles.USER)).toBe(false);
+      expect(isAssistantMessage(MessageRoles.SYSTEM)).toBe(false);
     });
   });
 

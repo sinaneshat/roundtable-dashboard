@@ -10,7 +10,7 @@ import type { UIMessage } from 'ai';
 import type { FinishReason } from '@/api/core/enums';
 import { FinishReasonSchema, MessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import { getParticipantId, getParticipantIndex, getRoundNumber } from '@/lib/utils';
+import { getParticipantIndex, getRoundNumber } from '@/lib/utils';
 
 /**
  * Type guard: check if message has user metadata
@@ -87,15 +87,6 @@ export function getMetadataFinishReason(metadata: unknown): FinishReason | null 
     return result.success ? result.data : null;
   }
   return null;
-}
-
-/**
- * Safely extract participant ID from message metadata
- * REPLACES: `(m.metadata as { participantId: string }).participantId`
- * @deprecated Use getParticipantId from @/lib/utils instead
- */
-export function getMetadataParticipantId(metadata: unknown): string | null {
-  return getParticipantId(metadata);
 }
 
 /**

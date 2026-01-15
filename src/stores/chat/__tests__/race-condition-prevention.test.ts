@@ -635,7 +635,7 @@ describe('submission In Progress Guard', () => {
       },
     ];
 
-    const lastUserMessage = messages.findLast(m => m.role === 'user');
+    const lastUserMessage = messages.findLast(m => m.role === MessageRoles.USER);
     const isOptimistic = lastUserMessage?.metadata?.isOptimistic === true;
 
     expect(isOptimistic).toBe(true);

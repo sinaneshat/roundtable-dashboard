@@ -205,7 +205,7 @@ describe('stream Message Arrival Patterns', () => {
       expect(r0Messages?.type).toBe('messages');
 
       const messagesData = r0Messages?.type === 'messages' ? r0Messages.data : [];
-      const assistantMsgs = messagesData.filter(m => m.role === 'assistant');
+      const assistantMsgs = messagesData.filter(m => m.role === MessageRoles.ASSISTANT);
       // Should be sorted by participantIndex: 0, 1, 2
       expect((assistantMsgs[0]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(0);
       expect((assistantMsgs[1]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(1);

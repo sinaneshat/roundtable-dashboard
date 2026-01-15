@@ -51,6 +51,12 @@ export {
   ToastNamespaceSchema,
 } from './model-presets';
 
+// Participant limits configuration
+export {
+  MAX_PARTICIPANTS_LIMIT,
+  MIN_PARTICIPANTS_REQUIRED,
+} from './participant-limits';
+
 // Participant settings configuration
 export type { ParticipantSettings } from './participant-settings';
 export {
@@ -58,3 +64,12 @@ export {
   normalizeParticipantSettings,
   ParticipantSettingsSchema,
 } from './participant-settings';
+
+// Role prompts configuration
+export { createRoleSystemPrompt } from './role-prompts';
+
+// Tier names configuration
+export {
+  getTierDisplayName,
+  SUBSCRIPTION_TIER_NAMES,
+} from './tier-names';

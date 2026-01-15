@@ -20,6 +20,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { queryKeys } from '@/lib/data/query-keys';
 import {
   createEmptyProductsListResponse,
   createMockEnterpriseProduct,
@@ -364,7 +365,7 @@ describe('useProductsQuery', () => {
       expect(result.current.data?.data?.items).toHaveLength(1);
 
       // Invalidate cache
-      await queryClient.invalidateQueries({ queryKey: ['products', 'list'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
 
       await waitFor(() => {
         expect(result.current.data?.data?.items).toHaveLength(3);
@@ -662,7 +663,7 @@ describe('useProductQuery', () => {
       expect(serviceSpy).toHaveBeenCalledTimes(1);
 
       // Invalidate specific product cache and wait for refetch
-      await queryClient.invalidateQueries({ queryKey: ['products', 'detail', 'prod_test'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.products.detail('prod_test') });
 
       // Wait for the query to refetch after invalidation
       await waitFor(() => {

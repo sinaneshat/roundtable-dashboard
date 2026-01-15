@@ -8,18 +8,23 @@ import { PlanTypes } from '@/api/core/enums';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { cn } from '@/lib/ui/cn';
 
+type QuotaAlertExtensionProps = {
+  /** Minimum credits threshold - show alert when available credits fall below this */
+  minCreditsThreshold?: number;
+};
+
 /**
- * Quota Alert Extension - Shows ONLY for PAID users who are out of credits.
+ * Quota Alert Extension - Shows for PAID users with insufficient credits.
  *
  * Free users see FreeTrialAlert (amber warning) instead.
  * This component shows a simple message without an upgrade button since
  * paid users cannot purchase the same plan again.
  */
-export function QuotaAlertExtension() {
+export function QuotaAlertExtension({ minCreditsThreshold = 0 }: QuotaAlertExtensionProps) {
   const t = useTranslations();
   const { data: statsData, isLoading } = useUsageStatsQuery();
 
-  // Only show for PAID users who are out of credits
+  // Only show for PAID users who have insufficient credits
   // Free users see FreeTrialAlert instead
   const shouldShow = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
@@ -30,8 +35,9 @@ export function QuotaAlertExtension() {
     if (plan?.type !== PlanTypes.PAID) {
       return false;
     }
-    return credits.available <= 0;
-  }, [statsData]);
+    // Show when credits fall below the threshold
+    return credits.available < minCreditsThreshold || credits.available <= 0;
+  }, [statsData, minCreditsThreshold]);
 
   if (isLoading || !shouldShow) {
     return null;

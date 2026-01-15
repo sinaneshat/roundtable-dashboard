@@ -148,6 +148,7 @@
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.8.3",
+    "embla-carousel-react": "^8.6.0",
     "fuse.js": "^7.1.0",
     "geist": "^1.5.1",
     "hono": "^4.11.3",

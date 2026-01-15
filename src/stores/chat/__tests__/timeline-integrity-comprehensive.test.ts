@@ -20,12 +20,16 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
+import type {
+  TimelineItemTypes,
+} from '@/api/core/enums';
 import {
   FinishReasons,
   MessagePartTypes,
   MessageRoles,
   MessageStatuses,
   StreamStatuses,
+  TimelineElementTypes,
 } from '@/api/core/enums';
 import type {
   DbAssistantMessageMetadata,
@@ -43,15 +47,15 @@ import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
 
 // ============================================================================
-// TIMELINE ELEMENT TYPES
+// TIMELINE ELEMENT TYPES (test-specific - mixes item types and element types)
 // ============================================================================
 
 type TimelineElementType
-  = | 'changelog'
-    | 'user_message'
-    | 'pre_search'
-    | 'participant_message'
-    | 'moderator';
+  = | typeof TimelineItemTypes.CHANGELOG // 'changelog' from TimelineItemTypes
+    | typeof TimelineElementTypes.USER_MESSAGE // 'user_message'
+    | typeof TimelineElementTypes.PRE_SEARCH // 'pre_search'
+    | typeof TimelineElementTypes.PARTICIPANT_MESSAGE // 'participant_message'
+    | typeof TimelineElementTypes.MODERATOR; // 'moderator'
 
 type TimelineElement = {
   type: TimelineElementType;
@@ -148,7 +152,7 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
 
     if (userMsg) {
       timeline.push({
-        type: 'user_message',
+        type: TimelineElementTypes.USER_MESSAGE,
         roundNumber,
         timestamp: timestamp++,
       });
@@ -158,7 +162,7 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
     const preSearch = state.preSearches.find(ps => ps.roundNumber === roundNumber);
     if (preSearch) {
       timeline.push({
-        type: 'pre_search',
+        type: TimelineElementTypes.PRE_SEARCH,
         roundNumber,
         timestamp: timestamp++,
       });
@@ -188,7 +192,7 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
     for (const msg of participantMsgs) {
       const metadata = msg.metadata as DbAssistantMessageMetadata;
       timeline.push({
-        type: 'participant_message',
+        type: TimelineElementTypes.PARTICIPANT_MESSAGE,
         roundNumber,
         participantIndex: metadata.participantIndex,
         timestamp: timestamp++,
@@ -205,7 +209,7 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
     });
     if (moderatorMsg) {
       timeline.push({
-        type: 'moderator',
+        type: TimelineElementTypes.MODERATOR,
         roundNumber,
         timestamp: timestamp++,
       });
@@ -234,19 +238,19 @@ function validateTimelineOrder(timeline: TimelineElement[]): {
     const sortedElements = [...elements].sort((a, b) => a.timestamp - b.timestamp);
 
     const expectedOrder: TimelineElementType[] = [];
-    const hasPreSearch = sortedElements.some(e => e.type === 'pre_search');
-    const hasModerator = sortedElements.some(e => e.type === 'moderator');
-    const participantCount = sortedElements.filter(e => e.type === 'participant_message').length;
+    const hasPreSearch = sortedElements.some(e => e.type === TimelineElementTypes.PRE_SEARCH);
+    const hasModerator = sortedElements.some(e => e.type === TimelineElementTypes.MODERATOR);
+    const participantCount = sortedElements.filter(e => e.type === TimelineElementTypes.PARTICIPANT_MESSAGE).length;
 
     // Build expected order
-    expectedOrder.push('user_message');
+    expectedOrder.push(TimelineElementTypes.USER_MESSAGE);
     if (hasPreSearch)
-      expectedOrder.push('pre_search');
+      expectedOrder.push(TimelineElementTypes.PRE_SEARCH);
     for (let i = 0; i < participantCount; i++) {
-      expectedOrder.push('participant_message');
+      expectedOrder.push(TimelineElementTypes.PARTICIPANT_MESSAGE);
     }
     if (hasModerator)
-      expectedOrder.push('moderator');
+      expectedOrder.push(TimelineElementTypes.MODERATOR);
 
     // Validate
     const actualOrder = sortedElements.map(e => e.type);
@@ -260,7 +264,7 @@ function validateTimelineOrder(timeline: TimelineElement[]): {
     }
 
     // Validate participant order within round
-    const participantElements = sortedElements.filter(e => e.type === 'participant_message');
+    const participantElements = sortedElements.filter(e => e.type === TimelineElementTypes.PARTICIPANT_MESSAGE);
     for (let i = 0; i < participantElements.length; i++) {
       if (participantElements[i]?.participantIndex !== i) {
         errors.push(
@@ -383,11 +387,11 @@ describe('multi-Round Timeline Integrity', () => {
 
     // Round 0 should have pre-search
     const round0 = timeline.filter(e => e.roundNumber === 0);
-    expect(round0.some(e => e.type === 'pre_search')).toBe(true);
+    expect(round0.some(e => e.type === TimelineElementTypes.PRE_SEARCH)).toBe(true);
 
     // Round 1 should NOT have pre-search
     const round1 = timeline.filter(e => e.roundNumber === 1);
-    expect(round1.some(e => e.type === 'pre_search')).toBe(false);
+    expect(round1.some(e => e.type === TimelineElementTypes.PRE_SEARCH)).toBe(false);
 
     // Both rounds should be valid
     const validation = validateTimelineOrder(timeline);
@@ -1068,9 +1072,9 @@ describe('complete Conversation Flow', () => {
 
     // Verify element counts
     expect(timeline.filter(e => e.type === 'user_message')).toHaveLength(3);
-    expect(timeline.filter(e => e.type === 'pre_search')).toHaveLength(3);
-    expect(timeline.filter(e => e.type === 'participant_message')).toHaveLength(6);
-    expect(timeline.filter(e => e.type === 'moderator')).toHaveLength(3);
+    expect(timeline.filter(e => e.type === TimelineElementTypes.PRE_SEARCH)).toHaveLength(3);
+    expect(timeline.filter(e => e.type === TimelineElementTypes.PARTICIPANT_MESSAGE)).toHaveLength(6);
+    expect(timeline.filter(e => e.type === TimelineElementTypes.MODERATOR)).toHaveLength(3);
   });
 
   it('should handle conversation with participant count change', () => {
@@ -1139,13 +1143,13 @@ describe('complete Conversation Flow', () => {
 
     // Round 0 has 2 participant messages
     const round0Participants = timeline.filter(
-      e => e.type === 'participant_message' && e.roundNumber === 0,
+      e => e.type === TimelineElementTypes.PARTICIPANT_MESSAGE && e.roundNumber === 0,
     );
     expect(round0Participants).toHaveLength(2);
 
     // Round 1 has 3 participant messages
     const round1Participants = timeline.filter(
-      e => e.type === 'participant_message' && e.roundNumber === 1,
+      e => e.type === TimelineElementTypes.PARTICIPANT_MESSAGE && e.roundNumber === 1,
     );
     expect(round1Participants).toHaveLength(3);
   });

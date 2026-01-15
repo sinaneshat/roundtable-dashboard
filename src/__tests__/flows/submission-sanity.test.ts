@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import {
   createTestAssistantMessage,
   createTestChatStore,
@@ -405,10 +405,10 @@ describe('submission Flow Sanity - Message Ordering', () => {
     const storedMessages = store.getState().messages;
 
     // First message should be user message
-    expect(storedMessages[0]?.role).toBe('user');
+    expect(storedMessages[0]?.role).toBe(MessageRoles.USER);
 
     // Second message should be assistant
-    expect(storedMessages[1]?.role).toBe('assistant');
+    expect(storedMessages[1]?.role).toBe(MessageRoles.ASSISTANT);
   });
 
   it('should maintain participant index order within round', () => {
@@ -451,7 +451,7 @@ describe('submission Flow Sanity - Message Ordering', () => {
     const participantIndices: number[] = [];
     storedMessages.forEach((msg) => {
       if (
-        msg.role === 'assistant'
+        msg.role === MessageRoles.ASSISTANT
         && msg.metadata
         && typeof msg.metadata === 'object'
         && 'participantIndex' in msg.metadata

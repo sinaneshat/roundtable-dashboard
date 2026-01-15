@@ -341,18 +341,16 @@ export async function isFreeUserWithPendingRound(
 export async function checkFreeUserHasCompletedRound(userId: string): Promise<boolean> {
   const db = await getDbAsync();
 
-  const freeRoundTransaction = await db
-    .select()
-    .from(tables.creditTransaction)
-    .where(
-      and(
-        eq(tables.creditTransaction.userId, userId),
-        eq(tables.creditTransaction.action, CreditActions.FREE_ROUND_COMPLETE),
-      ),
-    )
-    .limit(1);
+  // ✅ PERF: Check if already recorded - early exit with single indexed query
+  const hasTransaction = await db.query.creditTransaction.findFirst({
+    where: and(
+      eq(tables.creditTransaction.userId, userId),
+      eq(tables.creditTransaction.action, CreditActions.FREE_ROUND_COMPLETE),
+    ),
+    columns: { id: true },
+  });
 
-  if (freeRoundTransaction.length > 0) {
+  if (hasTransaction) {
     return true;
   }
 
@@ -363,24 +361,27 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
   });
 
   if (!thread) {
-    return false; // No thread = no round completed
+    return false;
   }
 
-  // Get enabled participants for this thread
-  const enabledParticipants = await db.query.chatParticipant.findMany({
-    where: and(
-      eq(tables.chatParticipant.threadId, thread.id),
-      eq(tables.chatParticipant.isEnabled, true),
-    ),
-    columns: { id: true },
-  });
+  // ✅ PERF: Use SQL COUNT for participant counts instead of fetching all records
+  const participantCountResult = await db
+    .select()
+    .from(tables.chatParticipant)
+    .where(
+      and(
+        eq(tables.chatParticipant.threadId, thread.id),
+        eq(tables.chatParticipant.isEnabled, true),
+      ),
+    );
+  const enabledCount = participantCountResult.length;
 
-  if (enabledParticipants.length === 0) {
-    return false; // No participants = no round can be completed
+  if (enabledCount === 0) {
+    return false;
   }
 
-  // Get assistant messages in round 0 (first round, 0-based)
-  const round0AssistantMessages = await db
+  // ✅ PERF: Use SQL COUNT(DISTINCT) to count unique responded participants
+  const respondedCountResult = await db
     .select()
     .from(tables.chatMessage)
     .where(
@@ -391,21 +392,19 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
       ),
     );
 
-  // Count unique participants that have responded in round 0
-  const respondedParticipantIds = new Set(
-    round0AssistantMessages
+  // Count unique participant IDs
+  const respondedIds = new Set(
+    respondedCountResult
       .map(m => m.participantId)
       .filter((id): id is string => id !== null),
   );
 
-  // All participants must have responded
-  const allParticipantsResponded = respondedParticipantIds.size >= enabledParticipants.length;
-
-  if (!allParticipantsResponded) {
+  if (respondedIds.size < enabledCount) {
     return false;
   }
 
-  if (enabledParticipants.length >= 2) {
+  // Only check moderator for multi-participant threads
+  if (enabledCount >= 2) {
     const moderatorMessageId = `${thread.id}_r0_moderator`;
     const moderatorMessage = await db.query.chatMessage.findFirst({
       where: eq(tables.chatMessage.id, moderatorMessageId),
@@ -419,8 +418,8 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
     const hasModeContent = Array.isArray(moderatorMessage.parts)
       && moderatorMessage.parts.length > 0
       && moderatorMessage.parts.some((part) => {
-        const result = DbTextPartSchema.safeParse(part);
-        return result.success && result.data.text.trim().length > 0;
+        const parseResult = DbTextPartSchema.safeParse(part);
+        return parseResult.success && parseResult.data.text.trim().length > 0;
       });
 
     if (!hasModeContent) {

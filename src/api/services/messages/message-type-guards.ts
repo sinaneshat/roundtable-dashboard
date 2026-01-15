@@ -8,8 +8,9 @@
  * - Separates database concerns from frontend transforms
  */
 
+import { MessageRoles } from '@/api/core/enums';
 import type { ChatMessage } from '@/db/validation';
-import { getParticipantMetadata, getPreSearchMetadata } from '@/lib/utils';
+import { getMessageMetadata, getParticipantId, getPreSearchMetadata, isModeratorMessage } from '@/lib/utils/metadata';
 
 // ============================================================================
 // Type Guards
@@ -27,12 +28,34 @@ export function isDbPreSearchMessage(message: ChatMessage): boolean {
 
 /**
  * Check if database message is participant message
- * Must have participantId column AND valid participant metadata
+ * Must have participantId column AND metadata indicating participant (not moderator)
+ *
+ * ✅ LENIENT CHECK: Doesn't require full Zod validation
+ * Just checks essential fields to allow persisted messages to be found
  */
 export function isDbParticipantMessage(message: ChatMessage): boolean {
   if (!message.participantId || !message.metadata)
     return false;
-  return getParticipantMetadata(message.metadata) !== null;
+
+  // Use type-safe metadata extraction helpers
+  const metadata = getMessageMetadata(message.metadata);
+  if (!metadata)
+    return false;
+
+  // Must be assistant role
+  if (metadata.role !== MessageRoles.ASSISTANT)
+    return false;
+
+  // Must have participantId in metadata
+  const participantId = getParticipantId(message.metadata);
+  if (!participantId)
+    return false;
+
+  // Must NOT be a moderator message
+  if (isModeratorMessage(message))
+    return false;
+
+  return true;
 }
 
 // ============================================================================

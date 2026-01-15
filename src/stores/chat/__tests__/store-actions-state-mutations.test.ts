@@ -21,7 +21,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes, FinishReasons, MessageStatuses, ScreenModes, StreamStatuses } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes, StreamStatuses } from '@/api/core/enums';
 import {
   createMockParticipant,
   createMockStoredPreSearch,
@@ -583,7 +583,7 @@ describe('operations Slice Actions', () => {
 
       const messages = store.getState().messages;
       expect(messages).toHaveLength(1);
-      expect(messages[0]?.role).toBe('user');
+      expect(messages[0]?.role).toBe(MessageRoles.USER);
       expect((messages[0]?.metadata as { isOptimistic?: boolean }).isOptimistic).toBe(true);
     });
 

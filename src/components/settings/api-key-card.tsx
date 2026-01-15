@@ -15,10 +15,19 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { cn } from '@/lib/ui/cn';
-import type { ListApiKeysResponse } from '@/services/api';
 
-// RPC-inferred type for API keys from service response
-type ApiKeyItem = NonNullable<Extract<ListApiKeysResponse, { success: true }>['data']>['items'][number];
+// Type will be provided by parent component
+type ApiKeyItem = {
+  id: string;
+  name: string | null;
+  prefix: string | null;
+  start: string | null;
+  enabled: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+  remaining: number | null;
+  rateLimitMax: number | null;
+};
 
 type ApiKeyCardProps = {
   apiKey: ApiKeyItem;

@@ -12,7 +12,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageRoles, MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
-import { act, createMockMessagesListResponse, createMockParticipant, createMockThread } from '@/lib/testing';
+import { act, createMockMessagesListResponse, createMockParticipant, createMockStreamingResponse, createMockThread } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
@@ -30,26 +30,9 @@ let fetchCalls: FetchCall[] = [];
 let originalFetch: typeof global.fetch;
 
 function createMockStreamResponse(text: string) {
-  return {
-    ok: true,
-    status: 200,
-    headers: new Headers({
-      'content-type': 'text/event-stream',
-    }),
-    body: {
-      getReader: () => ({
-        read: vi.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode(`0:${JSON.stringify(text)}\n`),
-          })
-          .mockResolvedValueOnce({
-            done: true,
-            value: undefined,
-          }),
-      }),
-    },
-  } as unknown as Response;
+  return createMockStreamingResponse({
+    chunks: [`0:${JSON.stringify(text)}\n`],
+  });
 }
 
 function mockFetchImplementation(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

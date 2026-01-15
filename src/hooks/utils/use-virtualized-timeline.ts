@@ -90,6 +90,33 @@ type VirtualizerState = {
 };
 
 /**
+ * SSR FIX: Create estimated virtual items for server-side rendering.
+ *
+ * Problem: Virtualizer needs browser APIs (window, DOM) to calculate visible items.
+ * On server, these don't exist, so virtualItems is empty → first paint has no content.
+ *
+ * Solution: Create estimated items based on item count and estimated size.
+ * This ensures server renders with content, preventing hydration flash.
+ *
+ * Client-side RAF will refine with actual measurements after hydration.
+ */
+function createSSRVirtualItems(
+  itemCount: number,
+  estimateSize: number,
+  maxItems = 15, // Render up to 15 items for SSR (covers most viewports)
+): VirtualItem[] {
+  const count = Math.min(itemCount, maxItems);
+  return Array.from({ length: count }, (_, index) => ({
+    index,
+    key: index,
+    start: index * estimateSize,
+    end: (index + 1) * estimateSize,
+    size: estimateSize,
+    lane: 0,
+  }));
+}
+
+/**
  * useVirtualizedTimeline - Window-level virtualization for chat timeline
  *
  * TanStack Virtual official pattern:
@@ -123,11 +150,33 @@ export function useVirtualizedTimeline({
   const [scrollMargin, setScrollMargin] = useState(0);
   const scrollMarginMeasuredRef = useRef(false);
 
-  // CRITICAL FIX: Store virtualizer output in state to avoid calling methods during render
-  // getVirtualItems() and getTotalSize() both trigger flushSync internally
-  const [virtualizerState, setVirtualizerState] = useState<VirtualizerState>({
-    virtualItems: [],
-    totalSize: 0,
+  // ✅ SSR FIX: Initialize with estimated items for server-side rendering
+  // On server, create virtual items based on estimates so first paint has content.
+  // On client, RAF will refine with actual measurements after hydration.
+  //
+  // This fixes the "flash of empty content" issue where:
+  // 1. Server rendered empty (virtualItems: []) because virtualizer needs browser APIs
+  // 2. Client hydration showed empty content initially
+  // 3. Content only appeared after RAF callback ran
+  //
+  // Now: Server renders with estimated items → Client hydrates with same → RAF refines
+  //
+  // IMPORTANT: useState initializer function is called once on mount.
+  // We pass timelineItems.length and estimateSize as closure values,
+  // which are captured at mount time. Subsequent updates are handled by
+  // the existing RAF-based sync logic in useLayoutEffects below.
+  const [virtualizerState, setVirtualizerState] = useState<VirtualizerState>(() => {
+    // Only create SSR items if data is ready and we have items
+    if (!isDataReady || timelineItems.length === 0) {
+      return { virtualItems: [], totalSize: 0 };
+    }
+
+    // On server OR initial client render, use estimated items
+    // Client RAF will replace with actual measurements
+    const ssrItems = createSSRVirtualItems(timelineItems.length, estimateSize);
+    const ssrTotalSize = timelineItems.length * estimateSize;
+
+    return { virtualItems: ssrItems, totalSize: ssrTotalSize };
   });
 
   // Track if we've done initial sync to prevent duplicate updates
@@ -225,12 +274,12 @@ export function useVirtualizedTimeline({
   }, [getIsStreamingFromStore]);
 
   // Stable onChange callback using useMemo to prevent virtualizer recreation
+  // CRITICAL FIX: Always process onChange even during initial setup.
+  // ResizeObserver measurements fire via onChange, and skipping them
+  // causes totalSize to stay at the estimated value (200px) instead
+  // of the actual measured size. syncVirtualizerState uses RAF so
+  // it's safe to call during any phase.
   const onChange = useMemo(() => (instance: Virtualizer<Window, Element>) => {
-    // Skip during initial sync - useLayoutEffect handles the first update
-    // This callback handles subsequent scroll/resize updates
-    if (!hasInitialSyncRef.current) {
-      return;
-    }
     syncVirtualizerState(instance);
   }, [syncVirtualizerState]);
 
@@ -312,6 +361,10 @@ export function useVirtualizedTimeline({
   // Initial sync of virtualizer state when virtualizer becomes enabled
   // Use requestAnimationFrame to schedule after React's commit phase completes
   // This avoids "flushSync called during lifecycle" warning
+  //
+  // NOTE: onChange now handles ResizeObserver measurements directly,
+  // so this effect just sets the initial sync flag and does a single read.
+  // The actual measurements will come through onChange when ResizeObserver fires.
   useLayoutEffect(() => {
     if (!shouldEnable || hasInitialSyncRef.current) {
       return;
@@ -320,6 +373,7 @@ export function useVirtualizedTimeline({
     pendingRafRef.current = requestAnimationFrame(() => {
       pendingRafRef.current = null;
       hasInitialSyncRef.current = true;
+      // Initial read - onChange will update with actual measurements
       setVirtualizerState({
         virtualItems: virtualizer.getVirtualItems(),
         totalSize: virtualizer.getTotalSize(),
@@ -334,14 +388,24 @@ export function useVirtualizedTimeline({
   }, [shouldEnable, virtualizer]);
 
   // Reset initial sync flag when virtualizer is disabled (e.g., navigation)
+  // ✅ SSR FIX: When shouldEnable becomes true again, immediately populate SSR items
+  // This prevents the "flash of empty content" during the gap before RAF runs
   useLayoutEffect(() => {
     if (!shouldEnable) {
       hasInitialSyncRef.current = false;
       // Reset state to prevent stale data
       // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional cleanup/reset when virtualizer is disabled
       setVirtualizerState({ virtualItems: [], totalSize: 0 });
+    } else if (!hasInitialSyncRef.current && timelineItems.length > 0) {
+      // ✅ SSR FIX: shouldEnable just became true with items - immediately set SSR items
+      // This bridges the gap between shouldEnable=true and RAF callback
+      // RAF will refine with actual measurements later
+      const ssrItems = createSSRVirtualItems(timelineItems.length, estimateSize);
+      const ssrTotalSize = timelineItems.length * estimateSize;
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- SSR fix: populate items immediately when enabled
+      setVirtualizerState({ virtualItems: ssrItems, totalSize: ssrTotalSize });
     }
-  }, [shouldEnable]);
+  }, [shouldEnable, timelineItems.length, estimateSize]);
 
   // ✅ FIX: Sync virtualizer state when timeline item COUNT changes
   // TanStack Virtual's onChange callback only fires on scroll/resize events, NOT on count changes.

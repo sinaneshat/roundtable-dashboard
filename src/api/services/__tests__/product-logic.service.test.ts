@@ -9,10 +9,10 @@ import {
   MAX_MODEL_PRICING_BY_TIER,
   MAX_MODELS_BY_TIER,
   MAX_OUTPUT_TOKENS_BY_TIER,
-  SUBSCRIPTION_TIER_NAMES,
   TIER_CONFIG,
   TIER_QUOTAS,
 } from '@/api/services/billing';
+import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 // Mock Stripe IDs for tests - pattern matches "pro" word boundaries

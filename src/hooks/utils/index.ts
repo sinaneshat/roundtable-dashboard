@@ -47,7 +47,7 @@ export {
   useFileValidation,
   UseFileValidationOptionsSchema,
 } from './use-file-validation';
-export type { FreeTrialState, FreeTrialStateReturn } from './use-free-trial-state';
+export type { FreeTrialStateReturn } from './use-free-trial-state';
 export { useFreeTrialState } from './use-free-trial-state';
 export { useIsMounted } from './use-is-mounted';
 export type { UseMediaQueryReturn } from './use-media-query';
@@ -69,6 +69,7 @@ export {
   usePostHog,
 } from './use-posthog';
 export { usePostHogIdentify } from './use-posthog-identify';
+export { useExecutePreSearchStream, useGetThreadPreSearchesForPolling } from './use-pre-search-stream';
 export type { ProjectAnalyticsHook } from './use-project-analytics';
 export { useProjectAnalytics } from './use-project-analytics';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';

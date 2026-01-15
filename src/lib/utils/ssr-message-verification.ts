@@ -9,17 +9,16 @@
  * ensuring proper SSR paint without client-side fallback fetches.
  */
 
+import { MessageRoles } from '@/api/core/enums';
 import type { ThreadStreamResumptionState } from '@/api/routes/chat/schema';
 import type { ChatMessage } from '@/db/validation/chat';
 import { getThreadMessagesService } from '@/services/api';
 
 import { transformChatMessage } from './date-transforms';
+import type { ApiMessage } from './ssr-message-verification-schemas';
 
 const SSR_RETRY_DELAYS = [50, 100, 150]; // ms delays between retries
 const MAX_RETRIES = 3;
-
-// API response messages have string dates, need transformation
-type ApiMessage = Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date };
 
 type VerifyMessagesParams = {
   threadId: string;
@@ -61,7 +60,7 @@ export async function verifyAndFetchFreshMessages({
   const expectedParticipants = streamResumptionState.participants?.totalParticipants ?? 0;
 
   // Count assistant messages in current data
-  const currentAssistantCount = currentMessages.filter(m => m.role === 'assistant').length;
+  const currentAssistantCount = currentMessages.filter(m => m.role === MessageRoles.ASSISTANT).length;
 
   // Data is consistent - no retry needed, just transform dates
   if (!serverSaysComplete || expectedParticipants === 0 || currentAssistantCount >= expectedParticipants) {
@@ -80,7 +79,7 @@ export async function verifyAndFetchFreshMessages({
 
       if (freshResult.success && freshResult.data?.items) {
         const freshMessages = freshResult.data.items;
-        const freshAssistantCount = freshMessages.filter(m => m.role === 'assistant').length;
+        const freshAssistantCount = freshMessages.filter(m => m.role === MessageRoles.ASSISTANT).length;
 
         if (freshAssistantCount >= expectedParticipants) {
           console.error(`[SSR] D1 consistent after ${i + 1} retries: ${freshAssistantCount} assistant msgs`);

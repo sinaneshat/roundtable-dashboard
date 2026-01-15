@@ -48,12 +48,18 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
   const lastSyncRef = useRef<number>(0);
   const prevMessagesRef = useRef<UIMessage[]>([]);
   const hasHydratedRef = useRef<string | null>(null);
+  // ✅ FIX: Use ref to always access latest chatMessages in interval callback
+  // AI SDK mutates parts in-place without changing array reference, so closure captures stale data
+  const chatMessagesRef = useRef<UIMessage[]>([]);
 
   const storeMessages = useStore(store, s => s.messages);
   const threadId = useStore(store, s => s.thread?.id);
   const isStreaming = useStore(store, s => s.isStreaming);
 
   const { messages: chatMessages, isStreaming: chatIsStreaming } = chat;
+
+  // Keep ref in sync with latest chatMessages
+  chatMessagesRef.current = chatMessages;
 
   // Hydration: On mount or thread change, sync store messages to AI SDK
   useEffect(() => {
@@ -79,6 +85,64 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
     }
   }, [threadId]);
 
+  // ✅ FIX: Interval-based sync during streaming to capture in-place mutations
+  // AI SDK mutates chatMessages[i].parts in place without changing array reference,
+  // which means React won't trigger re-render and useEffect won't re-run.
+  // Use interval to poll and sync during active streaming.
+  // ✅ FIX: Check both chatIsStreaming (from hook) AND isStreaming (from store)
+  // because they might be out of sync during state transitions.
+  const shouldSync = chatIsStreaming || isStreaming;
+  useEffect(() => {
+    if (!shouldSync || chatMessages.length === 0) {
+      return;
+    }
+
+    rlog.sync('interval-start', `msgs=${chatMessages.length}`);
+    const syncToStore = () => {
+      // ✅ FIX: Read from ref to get latest messages (not stale closure)
+      const currentChatMessages = chatMessagesRef.current;
+
+      const filteredChatMessages = currentChatMessages.filter((m) => {
+        if (m.role !== MessageRoles.USER)
+          return true;
+        const userMeta = getUserMetadata(m.metadata);
+        return !userMeta?.isParticipantTrigger;
+      });
+
+      const chatMessageIds = new Set(filteredChatMessages.map(m => m.id));
+      const currentStoreMessages = store.getState().messages;
+      const storeOnlyMessages = currentStoreMessages.filter((m) => {
+        if (chatMessageIds.has(m.id))
+          return false;
+        if (isModeratorMessage(m))
+          return true;
+        if (m.role === MessageRoles.USER) {
+          const userMeta = getUserMetadata(m.metadata);
+          if (!userMeta?.isParticipantTrigger) {
+            return true;
+          }
+        }
+        if (m.role === MessageRoles.ASSISTANT) {
+          return true;
+        }
+        return false;
+      });
+
+      const mergedMessages = structuredClone([...filteredChatMessages, ...storeOnlyMessages]);
+      store.getState().setMessages(mergedMessages);
+    };
+
+    // Initial sync
+    syncToStore();
+
+    // Poll every 100ms during streaming
+    const intervalId = setInterval(syncToStore, STREAM_SYNC_THROTTLE_MS);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [shouldSync, chatIsStreaming, isStreaming, chatMessages.length, store]);
+
   // Main sync: AI SDK messages → Store
   useEffect(() => {
     // Skip if no messages
@@ -87,9 +151,12 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
       return;
     }
 
-    // Detect if messages actually changed (by reference or length)
+    // Detect if messages actually changed
+    // ✅ FIX: During streaming, AI SDK mutates parts array in-place without changing
+    // array reference or length. Check streaming status to force sync during active streams.
     const messagesChanged = chatMessages !== prevMessagesRef.current
-      || chatMessages.length !== prevMessagesRef.current.length;
+      || chatMessages.length !== prevMessagesRef.current.length
+      || chatIsStreaming; // Force sync during streaming to capture in-place part updates
 
     if (!messagesChanged)
       return;

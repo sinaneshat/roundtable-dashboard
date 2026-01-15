@@ -6,7 +6,7 @@ import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
-import { invalidatePublicThreadCache, invalidateThreadCache } from '@/api/common/cache-utils';
+import { invalidateMessagesCache, invalidatePublicThreadCache, invalidateThreadCache } from '@/api/common/cache-utils';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
@@ -33,13 +33,13 @@ import {
   getRequiredTierForModel,
   getUserCreditBalance,
   isFreeUserWithPendingRound,
-  SUBSCRIPTION_TIER_NAMES,
 } from '@/api/services/billing';
 import { trackThreadCreated } from '@/api/services/errors';
 import { getModelById } from '@/api/services/models';
 import { generateTitleFromMessage, generateUniqueSlug, updateThreadTitleAndSlug } from '@/api/services/prompts';
 import { logModeChange, logWebSearchToggle } from '@/api/services/threads';
-import { cancelUploadCleanup, generateSignedDownloadPath, isCleanupSchedulerAvailable } from '@/api/services/uploads';
+import { cancelUploadCleanup, generateBatchSignedPaths, isCleanupSchedulerAvailable } from '@/api/services/uploads';
+import type { BatchSignOptions } from '@/api/services/uploads/signed-url.service';
 import {
   getUserTier,
 } from '@/api/services/usage';
@@ -52,6 +52,7 @@ import { isModeChange, isWebSearchChange, safeParseChangelogData } from '@/db/sc
 import type {
   ChatCustomRole,
 } from '@/db/validation';
+import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { sortByPriority } from '@/lib/utils';
@@ -355,7 +356,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       .returning();
     // ✅ CREDITS: Deduct for thread creation (includes first message)
     await deductCreditsForAction(user.id, 'threadCreation', { threadId });
-    await invalidateThreadCache(db, user.id);
+    await invalidateThreadCache(db, user.id, threadId);
+    await invalidateMessagesCache(db, threadId);
 
     // ✅ Associate attachments with the first user message and add file parts
     let messageWithFileParts = firstMessage;
@@ -390,26 +392,33 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       // use them without needing the junction table lookup.
       // Note: These URLs will be converted to base64 by prepareValidatedMessages.
       const baseUrlForDb = new URL(c.req.url).origin;
-      const filePartsForDb: ExtendedFilePart[] = await Promise.all(
-        body.attachmentIds.map(async (uploadId): Promise<ExtendedFilePart | null> => {
+
+      // ✅ PERF: Batch sign all attachments with single key import
+      const dbSignOptions: BatchSignOptions[] = body.attachmentIds
+        .filter(uploadId => uploadMap.has(uploadId))
+        .map(uploadId => ({
+          uploadId,
+          userId: user.id,
+          threadId,
+          expirationMs: 7 * 24 * 60 * 60 * 1000,
+        }));
+      const dbSignedPaths = await generateBatchSignedPaths(c, dbSignOptions);
+
+      const filePartsForDb: ExtendedFilePart[] = body.attachmentIds
+        .map((uploadId): ExtendedFilePart | null => {
           const upload = uploadMap.get(uploadId);
-          if (!upload)
+          const signedPath = dbSignedPaths.get(uploadId);
+          if (!upload || !signedPath)
             return null;
-          const signedPath = await generateSignedDownloadPath(c, {
-            uploadId,
-            userId: user.id,
-            threadId,
-            expirationMs: 7 * 24 * 60 * 60 * 1000, // 7 days for DB storage
-          });
           return {
             type: MessagePartTypes.FILE,
             url: `${baseUrlForDb}${signedPath}`,
             filename: upload.filename,
             mediaType: upload.mimeType,
-            uploadId, // ✅ ExtendedFilePart: uploadId for participant 1+ to load content from R2
+            uploadId,
           };
-        }),
-      ).then(parts => parts.filter((p): p is ExtendedFilePart => p !== null));
+        })
+        .filter((p): p is ExtendedFilePart => p !== null);
 
       if (filePartsForDb.length > 0) {
         const existingTextParts = (firstMessage.parts ?? []).filter(
@@ -438,29 +447,33 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       // don't show until full page refresh loads thread via getThreadBySlugHandler
       // ✅ SECURITY: Use signed URLs for secure, time-limited download access
       const baseUrl = new URL(c.req.url).origin;
-      const filePartPromises = body.attachmentIds.map(async (uploadId): Promise<ExtendedFilePart | null> => {
-        const upload = uploadMap.get(uploadId);
-        if (!upload)
-          return null;
 
-        // Generate signed download URL with 1 hour expiration
-        const signedPath = await generateSignedDownloadPath(c, {
+      // ✅ PERF: Batch sign all attachments with single key import (1 hour for UI display)
+      const uiSignOptions: BatchSignOptions[] = body.attachmentIds
+        .filter(uploadId => uploadMap.has(uploadId))
+        .map(uploadId => ({
           uploadId,
           userId: user.id,
           threadId,
-          expirationMs: 60 * 60 * 1000, // 1 hour
-        });
+          expirationMs: 60 * 60 * 1000,
+        }));
+      const uiSignedPaths = await generateBatchSignedPaths(c, uiSignOptions);
 
-        return {
-          type: MessagePartTypes.FILE,
-          url: `${baseUrl}${signedPath}`,
-          filename: upload.filename,
-          mediaType: upload.mimeType,
-          uploadId, // ✅ ExtendedFilePart: uploadId for participant 1+ file loading
-        };
-      });
-      const filePartsWithNulls = await Promise.all(filePartPromises);
-      const fileParts: ExtendedFilePart[] = filePartsWithNulls.filter((p): p is ExtendedFilePart => p !== null);
+      const fileParts: ExtendedFilePart[] = body.attachmentIds
+        .map((uploadId): ExtendedFilePart | null => {
+          const upload = uploadMap.get(uploadId);
+          const signedPath = uiSignedPaths.get(uploadId);
+          if (!upload || !signedPath)
+            return null;
+          return {
+            type: MessagePartTypes.FILE,
+            url: `${baseUrl}${signedPath}`,
+            filename: upload.filename,
+            mediaType: upload.mimeType,
+            uploadId,
+          };
+        })
+        .filter((p): p is ExtendedFilePart => p !== null);
 
       const existingParts = firstMessage.parts ?? [];
       const combinedParts = [...fileParts, ...existingParts];
@@ -508,7 +521,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
         await updateThreadTitleAndSlug(threadId, aiTitle);
         const db = await getDbAsync();
-        await invalidateThreadCache(db, user.id);
+        await invalidateThreadCache(db, user.id, threadId);
       } catch {
         // Silent failure - thread created with default "New Chat" title
       }
@@ -1220,17 +1233,24 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
         // Generate signed URLs and add file parts to message
         const baseUrl = new URL(c.req.url).origin;
-        const filePartsForDb: ExtendedFilePart[] = await Promise.all(
-          body.newMessage.attachmentIds.map(async (uploadId): Promise<ExtendedFilePart | null> => {
+
+        // ✅ PERF: Batch sign all attachments with single key import
+        const signOptions: BatchSignOptions[] = body.newMessage.attachmentIds
+          .filter(uploadId => uploadMap.has(uploadId))
+          .map(uploadId => ({
+            uploadId,
+            userId: user.id,
+            threadId: id,
+            expirationMs: 7 * 24 * 60 * 60 * 1000,
+          }));
+        const signedPaths = await generateBatchSignedPaths(c, signOptions);
+
+        const filePartsForDb: ExtendedFilePart[] = body.newMessage.attachmentIds
+          .map((uploadId): ExtendedFilePart | null => {
             const upload = uploadMap.get(uploadId);
-            if (!upload)
+            const signedPath = signedPaths.get(uploadId);
+            if (!upload || !signedPath)
               return null;
-            const signedPath = await generateSignedDownloadPath(c, {
-              uploadId,
-              userId: user.id,
-              threadId: id,
-              expirationMs: 7 * 24 * 60 * 60 * 1000, // 7 days for DB storage
-            });
             return {
               type: MessagePartTypes.FILE,
               url: `${baseUrl}${signedPath}`,
@@ -1238,8 +1258,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               mediaType: upload.mimeType,
               uploadId,
             };
-          }),
-        ).then(parts => parts.filter((p): p is ExtendedFilePart => p !== null));
+          })
+          .filter((p): p is ExtendedFilePart => p !== null);
 
         // Update message parts to include file parts
         if (filePartsForDb.length > 0 && message) {
@@ -1275,6 +1295,9 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       await db.update(tables.chatThread)
         .set({ lastMessageAt: now })
         .where(eq(tables.chatThread.id, id));
+
+      // Invalidate message cache after new user message
+      await invalidateMessagesCache(db, id);
     }
 
     return Responses.ok(c, {
@@ -1712,42 +1735,43 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     // ✅ Transform messages to include file parts for user messages with attachments
     // ✅ SECURITY: Use signed URLs for secure, time-limited download access
     const baseUrl = new URL(c.req.url).origin;
-    const messages = await Promise.all(
-      rawMessages.map(async (msg) => {
-        const attachments = attachmentsByMessage.get(msg.id);
-        if (!attachments || attachments.length === 0 || msg.role !== MessageRoles.USER) {
-          return msg;
-        }
 
-        const existingParts = msg.parts ?? [];
-        const nonFileParts = existingParts.filter(p => p.type !== MessagePartTypes.FILE);
-        const fileParts: ExtendedFilePart[] = await Promise.all(
-          attachments.map(async (att): Promise<ExtendedFilePart> => {
-            const signedPath = await generateSignedDownloadPath(c, {
-              uploadId: att.uploadId,
-              userId: thread.userId,
-              threadId: thread.id,
-              expirationMs: 60 * 60 * 1000, // 1 hour
-            });
+    // ✅ PERF: Batch sign all attachments with single key import
+    const allUploads: BatchSignOptions[] = messageAttachments.map(att => ({
+      uploadId: att.uploadId,
+      userId: thread.userId,
+      threadId: thread.id,
+      expirationMs: 60 * 60 * 1000,
+    }));
+    const signedPaths = await generateBatchSignedPaths(c, allUploads);
 
-            return {
-              type: MessagePartTypes.FILE,
-              url: `${baseUrl}${signedPath}`,
-              filename: att.filename,
-              mediaType: att.mimeType,
-              uploadId: att.uploadId, // ✅ ExtendedFilePart: uploadId for participant 1+ file loading
-            };
-          }),
-        );
+    const messages = rawMessages.map((msg) => {
+      const attachments = attachmentsByMessage.get(msg.id);
+      if (!attachments || attachments.length === 0 || msg.role !== MessageRoles.USER) {
+        return msg;
+      }
+
+      const existingParts = msg.parts ?? [];
+      const nonFileParts = existingParts.filter(p => p.type !== MessagePartTypes.FILE);
+      const fileParts: ExtendedFilePart[] = attachments.map((att): ExtendedFilePart => {
+        const signedPath = signedPaths.get(att.uploadId);
+        if (!signedPath)
+          throw new Error(`Missing signed path for upload ${att.uploadId}`);
 
         return {
-          ...msg,
-          // ✅ FIX: Replace file parts instead of appending to prevent duplication
-          // Fresh signed URLs replace any expired ones from initial save
-          parts: [...fileParts, ...nonFileParts],
+          type: MessagePartTypes.FILE,
+          url: `${baseUrl}${signedPath}`,
+          filename: att.filename,
+          mediaType: att.mimeType,
+          uploadId: att.uploadId,
         };
-      }),
-    );
+      });
+
+      return {
+        ...msg,
+        parts: [...fileParts, ...nonFileParts],
+      };
+    });
 
     // ✅ USER TIER CONFIG: Include subscription info for frontend access control
     // This allows the UI to show upgrade prompts and disable inaccessible models

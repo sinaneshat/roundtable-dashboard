@@ -45,11 +45,11 @@ function createUIMessage(overrides: {
   content?: string;
   parts?: UIMessage['parts'];
   createdAt?: Date;
-  metadata?: Record<string, unknown>;
+  metadata?: UIMessage['metadata'];
 }): UIMessage {
   return {
     id: overrides.id,
-    role: overrides.role as 'user' | 'assistant' | 'system',
+    role: overrides.role as typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT | 'system',
     content: overrides.content ?? '',
     parts: overrides.parts ?? [],
     createdAt: overrides.createdAt ?? new Date(),

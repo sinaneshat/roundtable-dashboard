@@ -55,6 +55,7 @@ import {
   getUserMetadata,
   hasParticipantEnrichment,
   isPreSearch,
+  normalizeOpenRouterError,
 } from './metadata';
 
 const UNKNOWN_FALLBACK = 'unknown' as const;
@@ -376,24 +377,6 @@ export function filterByRound(
   );
 }
 
-/**
- * Filter to participant messages only (excludes pre-search)
- */
-export function filterToParticipantMessages(
-  messages: UIMessage[],
-): Array<UIMessage & { metadata: DbAssistantMessageMetadata }> {
-  return messages.filter(isParticipantMessage);
-}
-
-/**
- * Filter to pre-search messages only
- */
-export function filterToPreSearchMessages(
-  messages: UIMessage[],
-): Array<UIMessage & { metadata: DbPreSearchMessageMetadata }> {
-  return messages.filter(isPreSearchMessage);
-}
-
 export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
   return messages.filter((message) => {
     if (message.role === MessageRoles.ASSISTANT)
@@ -469,23 +452,6 @@ export function getParticipantMessageIds(messages: UIMessage[]): string[] {
   );
 }
 
-/**
- * Get participant messages with IDs for a specific round
- *
- * Combined operation for filtering and ID extraction.
- */
-export function getParticipantMessagesWithIds(
-  messages: UIMessage[],
-  roundNumber: number,
-): { messages: UIMessage[]; ids: string[] } {
-  const filteredMessages = getParticipantMessagesForRound(
-    messages,
-    roundNumber,
-  );
-  const ids = getParticipantMessageIds(filteredMessages);
-  return { messages: filteredMessages, ids };
-}
-
 // ============================================================================
 // Convenience Filters
 // ============================================================================
@@ -502,16 +468,6 @@ export function getUserMessages(messages: UIMessage[]): UIMessage[] {
  */
 export function getAssistantMessages(messages: UIMessage[]): UIMessage[] {
   return filterByRole(messages, MessageRoles.ASSISTANT);
-}
-
-/**
- * Count messages in a specific round
- */
-export function countMessagesInRound(
-  messages: UIMessage[],
-  roundNumber: number,
-): number {
-  return getParticipantMessagesForRound(messages, roundNumber).length;
 }
 
 /**
@@ -549,6 +505,9 @@ export function createErrorUIMessage(
 
   const metadata = validatedMetadata.success ? validatedMetadata.data : errorMetadata;
 
+  // openRouterError can be string or record from error schema, normalize to record format
+  const openRouterError = normalizeOpenRouterError(metadata?.openRouterError);
+
   const errorMeta = buildAssistantMetadata(
     {},
     {
@@ -560,17 +519,15 @@ export function createErrorUIMessage(
       hasError: true,
       errorType,
       errorMessage,
-      additionalFields: {
-        errorCategory: metadata?.errorCategory || errorType,
-        statusCode: metadata?.statusCode,
-        rawErrorMessage: metadata?.rawErrorMessage,
-        providerMessage:
-          metadata?.providerMessage
-          || metadata?.rawErrorMessage
-          || errorMessage,
-        openRouterError: metadata?.openRouterError,
-        openRouterCode: metadata?.openRouterCode,
-      },
+      errorCategory: metadata?.errorCategory || errorType,
+      statusCode: metadata?.statusCode,
+      rawErrorMessage: metadata?.rawErrorMessage,
+      providerMessage:
+        metadata?.providerMessage
+        || metadata?.rawErrorMessage
+        || errorMessage,
+      openRouterError,
+      openRouterCode: metadata?.openRouterCode,
     },
   );
 
@@ -655,6 +612,16 @@ export function mergeParticipantMetadata(
       ...(validatedMetadata?.createdAt && typeof validatedMetadata.createdAt === 'string' && {
         createdAt: validatedMetadata.createdAt,
       }),
+      // Citation fields - preserve from backend streaming metadata
+      ...(validatedMetadata?.availableSources && {
+        availableSources: validatedMetadata.availableSources,
+      }),
+      ...(validatedMetadata?.citations && {
+        citations: validatedMetadata.citations,
+      }),
+      ...(validatedMetadata?.reasoningDuration !== undefined && {
+        reasoningDuration: validatedMetadata.reasoningDuration,
+      }),
     },
     {
       participantId: effectiveParticipantId,
@@ -666,97 +633,4 @@ export function mergeParticipantMetadata(
       ...(hasError && { errorType: safeErrorType, errorMessage }),
     },
   );
-}
-
-// ============================================================================
-// Message Validation
-// ============================================================================
-
-/**
- * Validation result for message order checks
- */
-export type MessageOrderValidation = {
-  isValid: boolean;
-  errors: string[];
-};
-
-/**
- * Validate message order for conversation flow
- *
- * Validates proper round-based structure:
- * - Round numbers in ascending order
- * - Each round starts with exactly one user message
- * - User message appears before assistant messages
- * - No round skipping
- */
-export function validateMessageOrder(
-  messages: UIMessage[],
-): MessageOrderValidation {
-  const errors: string[] = [];
-
-  let lastRound = 0;
-  let userMessageSeenInCurrentRound = false;
-  let expectedNextRound = 0;
-  const roundsEncountered = new Set<number>();
-
-  for (let i = 0; i < messages.length; i++) {
-    const msg = messages[i];
-    if (!msg)
-      continue;
-
-    const round = getRoundNumber(msg.metadata) ?? 0;
-
-    // Check round progression
-    if (round < lastRound) {
-      errors.push(
-        `Message ${i} (id: ${msg.id}, role: ${msg.role}): Round ${round} appears after round ${lastRound}`,
-      );
-    }
-
-    // Detect round transition
-    if (round > lastRound) {
-      if (round > expectedNextRound) {
-        errors.push(
-          `Message ${i} (id: ${msg.id}): Round ${round} skips from ${lastRound} (expected ${expectedNextRound})`,
-        );
-      }
-
-      lastRound = round;
-      userMessageSeenInCurrentRound = false;
-      expectedNextRound = round + 1;
-    }
-
-    roundsEncountered.add(round);
-
-    if (msg.role === MessageRoles.USER) {
-      if (userMessageSeenInCurrentRound) {
-        errors.push(
-          `Message ${i} (id: ${msg.id}): Multiple user messages in round ${round}`,
-        );
-      }
-      userMessageSeenInCurrentRound = true;
-    } else if (msg.role === MessageRoles.ASSISTANT) {
-      if (!userMessageSeenInCurrentRound) {
-        errors.push(
-          `Message ${i} (id: ${msg.id}): Assistant message before user message in round ${round}`,
-        );
-      }
-    }
-  }
-
-  const sortedRounds = Array.from(roundsEncountered).sort((a, b) => a - b);
-  for (let i = 0; i < sortedRounds.length - 1; i++) {
-    const current = sortedRounds[i];
-    const next = sortedRounds[i + 1];
-    if (next && current && next !== current + 1) {
-      errors.push(
-        `Round gap: ${current} followed by ${next} (missing ${current + 1})`,
-      );
-    }
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
 }

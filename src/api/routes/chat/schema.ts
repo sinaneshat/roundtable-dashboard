@@ -1743,3 +1743,23 @@ export type AnalyzePromptPayload = z.infer<typeof AnalyzePromptPayloadSchema>;
 export const AnalyzePromptResponseSchema = createApiResponseSchema(AnalyzePromptPayloadSchema).openapi('AnalyzePromptResponse');
 
 export type AnalyzePromptResponse = z.infer<typeof AnalyzePromptResponseSchema>;
+
+// ============================================================================
+// SHARED RESPONSE SCHEMAS
+// ============================================================================
+
+export const DeletedResponseSchema = z.object({
+  deleted: z.boolean().openapi({ example: true }),
+}).openapi('DeletedResponse');
+
+export type DeletedResponse = z.infer<typeof DeletedResponseSchema>;
+
+export const ExistingModeratorMessageSchema = z.object({
+  id: z.string(),
+  role: z.string(),
+  parts: z.array(z.any()),
+  metadata: z.any(),
+  roundNumber: z.number(),
+}).openapi('ExistingModeratorMessage');
+
+export type ExistingModeratorMessage = z.infer<typeof ExistingModeratorMessageSchema>;

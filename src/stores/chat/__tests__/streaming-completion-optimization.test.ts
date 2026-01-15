@@ -339,8 +339,6 @@ describe('streaming Completion Optimization', () => {
       expect(changedFields).toContain('streamingRoundNumber');
 
       // These should NOT cause re-renders if already empty/null
-      // After optimization, pendingAnimations and animationResolvers
-      // should NOT be in changedFields if they were already empty
     });
   });
 

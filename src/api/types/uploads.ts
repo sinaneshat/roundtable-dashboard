@@ -343,8 +343,19 @@ export function isModelFilePartWithData(
 // CONSTANTS
 // ============================================================================
 
-/** Maximum file size to convert to base64 (10MB) */
-export const MAX_BASE64_FILE_SIZE = 10 * 1024 * 1024;
+/**
+ * Maximum file size to convert to base64
+ *
+ * Memory calculation for Cloudflare Workers (128MB limit):
+ * - 4MB file → ~5.3MB base64 string (33% larger)
+ * - Plus Uint8Array copy: ~4MB
+ * - Plus ArrayBuffer: ~4MB
+ * - Total per file: ~13.3MB
+ *
+ * Reduced from 10MB to 4MB to prevent memory exhaustion
+ * when processing multiple attachments per request.
+ */
+export const MAX_BASE64_FILE_SIZE = 4 * 1024 * 1024;
 
 /** Default URL expiration time (1 hour) */
 export const DEFAULT_URL_EXPIRATION_MS = 60 * 60 * 1000;

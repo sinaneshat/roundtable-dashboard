@@ -17,8 +17,7 @@
 
 import type { UIMessage } from 'ai';
 
-import { MessagePartTypes } from '@/api/core/enums';
-import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
+import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/db/validation/chat';
 
 import {
@@ -77,8 +76,17 @@ export function buildParticipantMessageMaps(
   const byModelId = new Map<string, UIMessage>();
 
   for (const message of assistantMessages) {
+    // Extract metadata - may be partial during streaming
     const meta = getMessageMetadata(message.metadata);
-    if (!meta || !isAssistantMessageMetadata(meta)) {
+
+    // ✅ FIX: Include messages with partial metadata during streaming
+    // Strict validation (isAssistantMessageMetadata) skipped streaming messages
+    // because they may not have all required fields yet
+    const isAssistant = meta?.role === MessageRoles.ASSISTANT
+      || (message.metadata && typeof message.metadata === 'object'
+        && 'role' in message.metadata && message.metadata.role === MessageRoles.ASSISTANT);
+
+    if (!isAssistant) {
       continue;
     }
 

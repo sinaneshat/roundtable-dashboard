@@ -7,8 +7,7 @@
  *
  * Coverage:
  * - Mutation execution
- * - Cache updates (optimistic and on success)
- * - Query invalidation
+ * - Query invalidation (server is source of truth)
  * - Error handling
  * - Related query updates (usage, models)
  */
@@ -77,7 +76,7 @@ describe('useSwitchSubscriptionMutation', () => {
   });
 
   describe('successful Subscription Switch', () => {
-    it('should switch subscription and update cache', async () => {
+    it('should switch subscription and invalidate cache', async () => {
       const oldSubscription = createActiveSubscription({
         id: 'sub_old',
         priceId: 'price_monthly_basic',
@@ -116,6 +115,7 @@ describe('useSwitchSubscriptionMutation', () => {
       });
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
       const { result } = renderHook(() => useSwitchSubscriptionMutation(), {
         wrapper: createWrapper(queryClient),
@@ -133,12 +133,12 @@ describe('useSwitchSubscriptionMutation', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      // Verify cache was updated
-      const cachedData = queryClient.getQueryData<GetSubscriptionsResponse>(
-        queryKeys.subscriptions.list(),
+      // Verify cache was invalidated (not directly updated - will refetch on next access)
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queryKey: queryKeys.subscriptions.all,
+        }),
       );
-
-      expect(cachedData?.data?.items[0].priceId).toBe('price_monthly_pro');
       expect(apiServices.switchSubscriptionService).toHaveBeenCalledWith(
         expect.objectContaining({
           param: { id: 'sub_old' },
@@ -378,8 +378,8 @@ describe('useSwitchSubscriptionMutation', () => {
     });
   });
 
-  describe('cache Update Logic', () => {
-    it('should update subscription in list cache', async () => {
+  describe('cache Invalidation Logic', () => {
+    it('should invalidate subscription cache after switch', async () => {
       const subscription1 = createActiveSubscription({ id: 'sub_1', priceId: 'price_old_1' });
       const subscription2 = createActiveSubscription({ id: 'sub_2', priceId: 'price_old_2' });
       const subscription3 = createActiveSubscription({ id: 'sub_3', priceId: 'price_old_3' });
@@ -404,6 +404,7 @@ describe('useSwitchSubscriptionMutation', () => {
       });
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
       const { result } = renderHook(() => useSwitchSubscriptionMutation(), {
         wrapper: createWrapper(queryClient),
@@ -420,17 +421,15 @@ describe('useSwitchSubscriptionMutation', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      // Verify only sub_2 was updated
-      const cachedData = queryClient.getQueryData<GetSubscriptionsResponse>(
-        queryKeys.subscriptions.list(),
+      // Verify invalidation was called (cache will be refetched on next access)
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queryKey: queryKeys.subscriptions.all,
+        }),
       );
 
-      expect(cachedData?.data?.items[0].id).toBe('sub_1');
-      expect(cachedData?.data?.items[0].priceId).toBe('price_old_1');
-      expect(cachedData?.data?.items[1].id).toBe('sub_2');
-      expect(cachedData?.data?.items[1].priceId).toBe('price_new_2');
-      expect(cachedData?.data?.items[2].id).toBe('sub_3');
-      expect(cachedData?.data?.items[2].priceId).toBe('price_old_3');
+      // Mutation response contains updated subscription
+      expect(result.current.data?.data?.subscription.priceId).toBe('price_new_2');
     });
 
     it('should handle cache update when no existing cache', async () => {
@@ -552,7 +551,7 @@ describe('useCancelSubscriptionMutation', () => {
       expect(result.current.data?.data?.subscription.canceledAt).toBeTruthy();
     });
 
-    it('should update cache with canceled subscription', async () => {
+    it('should invalidate cache after subscription cancellation', async () => {
       const activeSubscription = createActiveSubscription({ id: 'sub_test' });
       const canceledSubscription = createCanceledSubscription({ id: 'sub_test' });
 
@@ -574,6 +573,7 @@ describe('useCancelSubscriptionMutation', () => {
       });
 
       vi.spyOn(apiServices, 'cancelSubscriptionService').mockResolvedValue(mockResponse);
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
       const { result } = renderHook(() => useCancelSubscriptionMutation(), {
         wrapper: createWrapper(queryClient),
@@ -590,12 +590,15 @@ describe('useCancelSubscriptionMutation', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      // Verify cache was updated
-      const cachedData = queryClient.getQueryData<GetSubscriptionsResponse>(
-        queryKeys.subscriptions.list(),
+      // Verify cache was invalidated (will refetch on next access)
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queryKey: queryKeys.subscriptions.all,
+        }),
       );
 
-      expect(cachedData?.data?.items[0].cancelAtPeriodEnd).toBe(true);
+      // Mutation response contains canceled subscription
+      expect(result.current.data?.data?.subscription.cancelAtPeriodEnd).toBe(true);
     });
 
     it('should invalidate related queries after cancellation', async () => {

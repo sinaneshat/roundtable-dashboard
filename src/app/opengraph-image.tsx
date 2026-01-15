@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 
 import { BRAND } from '@/constants';
-import { getOGFontsSync } from '@/lib/ui/og-fonts.server';
+import { getOGFontsSync } from '@/lib/ui/og-assets.generated';
 import {
   createGradient,
   getLogoBase64,

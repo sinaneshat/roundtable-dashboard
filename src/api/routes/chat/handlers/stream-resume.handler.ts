@@ -30,7 +30,7 @@ async function getDbValidatedNextParticipant(
   threadId: string,
   roundNumber: number,
   totalParticipants: number,
-  kvNextParticipant: { roundNumber: number; participantIndex: number; totalParticipants: number } | null,
+  _kvNextParticipant: { roundNumber: number; participantIndex: number; totalParticipants: number } | null,
 ): Promise<{ participantIndex: number } | null> {
   const db = await getDbAsync();
 
@@ -58,32 +58,14 @@ async function getDbValidatedNextParticipant(
     }
   }
 
-  // ✅ DEBUG: Log KV vs DB comparison
-  console.error(`[RESUMPTION-DEBUG] getDbValidatedNextParticipant:`, {
-    threadId: threadId.slice(-8),
-    roundNumber,
-    totalParticipants,
-    kvNextParticipantIndex: kvNextParticipant?.participantIndex ?? 'null',
-    dbParticipantIndicesWithMessages: Array.from(participantIndicesWithMessages),
-    dbAssistantMessageCount: assistantMessages.length,
-  });
-
   // Find first participant without a DB message
   for (let i = 0; i < totalParticipants; i++) {
     if (!participantIndicesWithMessages.has(i)) {
-      const result = { participantIndex: i };
-      // ✅ DEBUG: Log when we find a participant without DB message
-      console.error(`[RESUMPTION-DEBUG] DB validation found missing participant:`, {
-        missingParticipantIndex: i,
-        kvSaidIndex: kvNextParticipant?.participantIndex ?? 'null',
-        mismatch: kvNextParticipant?.participantIndex !== i,
-      });
-      return result;
+      return { participantIndex: i };
     }
   }
 
   // All participants have messages
-  console.error(`[RESUMPTION-DEBUG] All participants have DB messages, returning null`);
   return null;
 }
 
@@ -494,15 +476,6 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
         const kvNextParticipant = await getNextParticipantToStream(threadId, c.env);
 
-        // ✅ DEBUG: Log KV state before DB validation
-        console.error(`[RESUMPTION-DEBUG] KV state for thread ${threadId.slice(-8)}:`, {
-          roundNumber: currentRoundNumber,
-          kvActiveStreamParticipantIndex: activeStream.participantIndex,
-          kvParticipantStatuses: activeStream.participantStatuses,
-          kvNextParticipantIndex: kvNextParticipant?.participantIndex ?? 'null (all done in KV)',
-          isStale: stale,
-        });
-
         // ✅ FIX: Cross-validate KV statuses against actual DB messages
         // KV can have stale data (e.g., participant marked completed but message never saved)
         // Query DB to find which participants actually have messages
@@ -548,15 +521,6 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
             break;
           }
         }
-
-        // ✅ DEBUG: Log final result after DB validation
-        console.error(`[RESUMPTION-DEBUG] After DB validation for thread ${threadId.slice(-8)}:`, {
-          dbParticipantIndicesWithMessages: Array.from(participantIndicesWithMessages),
-          kvSaidNextIndex: kvNextParticipant?.participantIndex ?? 'null',
-          finalNextIndex: nextParticipant?.participantIndex ?? 'null',
-          wasOverridden: kvNextParticipant?.participantIndex !== nextParticipant?.participantIndex,
-          totalParticipants: activeStream.totalParticipants,
-        });
 
         const allComplete = !nextParticipant;
 

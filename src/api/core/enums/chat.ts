@@ -283,6 +283,36 @@ export const TimelineElementTypes = {
 } as const;
 
 // ============================================================================
+// TIMELINE ITEM TYPE (for useThreadTimeline hook)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const TIMELINE_ITEM_TYPES = [
+  'messages',
+  'changelog',
+  'pre-search',
+] as const;
+
+// 2. ZOD SCHEMA
+export const TimelineItemTypeSchema = z.enum(TIMELINE_ITEM_TYPES).openapi({
+  description: 'Timeline item type for grouping messages, changelogs, and pre-searches',
+  example: 'messages',
+});
+
+// 3. TYPESCRIPT TYPE
+export type TimelineItemType = z.infer<typeof TimelineItemTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_TIMELINE_ITEM_TYPE: TimelineItemType = 'messages';
+
+// 5. CONSTANT OBJECT
+export const TimelineItemTypes = {
+  MESSAGES: 'messages' as const,
+  CHANGELOG: 'changelog' as const,
+  PRE_SEARCH: 'pre-search' as const,
+} as const;
+
+// ============================================================================
 // SHARED ASSUMPTION TYPE (Moderator Summary - Areas of Agreement)
 // ============================================================================
 

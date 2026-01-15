@@ -20,7 +20,7 @@
  *   }, [project, identifyProject]);
  *
  *   const handleAction = () => {
- *     trackProjectEvent('action_performed', { actionType: 'example' });
+ *     trackProjectEvent('project_action', { eventType: 'milestone_completed', milestoneId: 'abc' });
  *   };
  * }
  * ```
@@ -30,6 +30,7 @@
 
 import { usePostHog } from 'posthog-js/react';
 import { useCallback } from 'react';
+import { z } from 'zod';
 
 type ProjectInfo = {
   id: string;
@@ -48,9 +49,62 @@ type ProjectGroupProperties = {
   owner_id: string;
 };
 
+// ============================================================================
+// PROJECT EVENT PROPERTY SCHEMAS - Discriminated Union by eventType
+// ============================================================================
+
+const ProjectMilestoneEventPropertiesSchema = z.object({
+  eventType: z.literal('milestone_completed'),
+  milestoneId: z.string(),
+  milestoneName: z.string().optional(),
+  completedAt: z.string().datetime().optional(),
+});
+
+const ProjectMemberEventPropertiesSchema = z.object({
+  eventType: z.literal('member_added'),
+  memberId: z.string(),
+  memberRole: z.string().optional(),
+  invitedBy: z.string().optional(),
+});
+
+const ProjectStatusEventPropertiesSchema = z.object({
+  eventType: z.literal('status_changed'),
+  previousStatus: z.string(),
+  newStatus: z.string(),
+  reason: z.string().optional(),
+});
+
+const ProjectTaskEventPropertiesSchema = z.object({
+  eventType: z.literal('task_created'),
+  taskId: z.string(),
+  taskTitle: z.string().optional(),
+  assignedTo: z.string().optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+});
+
+const ProjectActionEventPropertiesSchema = z.object({
+  eventType: z.literal('project_action'),
+  actionType: z.string(),
+  actionDetails: z.string().optional(),
+  metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+});
+
+export const ProjectEventPropertiesSchema = z.discriminatedUnion('eventType', [
+  ProjectMilestoneEventPropertiesSchema,
+  ProjectMemberEventPropertiesSchema,
+  ProjectStatusEventPropertiesSchema,
+  ProjectTaskEventPropertiesSchema,
+  ProjectActionEventPropertiesSchema,
+]);
+
+export type ProjectEventProperties = z.infer<typeof ProjectEventPropertiesSchema>;
+
 export type ProjectAnalyticsHook = {
   identifyProject: (project: ProjectInfo) => void;
-  trackProjectEvent: (eventName: string, properties?: Record<string, unknown>) => void;
+  trackProjectEvent: <T extends ProjectEventProperties['eventType']>(
+    eventName: string,
+    properties: Extract<ProjectEventProperties, { eventType: T }>,
+  ) => void;
   clearProjectGroup: () => void;
 };
 
@@ -101,14 +155,22 @@ export function useProjectAnalytics(): ProjectAnalyticsHook {
    * Events will be linked to both the user and the project
    */
   const trackProjectEvent = useCallback(
-    (eventName: string, properties?: Record<string, unknown>) => {
+    <T extends ProjectEventProperties['eventType']>(
+      eventName: string,
+      properties: Extract<ProjectEventProperties, { eventType: T }>,
+    ) => {
       if (!posthog)
         return;
 
+      const validationResult = ProjectEventPropertiesSchema.safeParse(properties);
+
+      if (!validationResult.success) {
+        console.error('Invalid project event properties:', validationResult.error);
+        return;
+      }
+
       posthog.capture(eventName, {
-        ...properties,
-        // Group events are automatically associated with the current group(s)
-        // via posthog.group() calls
+        ...validationResult.data,
       });
     },
     [posthog],

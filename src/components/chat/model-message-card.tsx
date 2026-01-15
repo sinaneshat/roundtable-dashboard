@@ -2,12 +2,14 @@
 
 import { useTranslations } from 'next-intl';
 import { memo, useLayoutEffect, useRef } from 'react';
+import Markdown from 'react-markdown';
 import { Streamdown } from 'streamdown';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { MessageStatus } from '@/api/core/enums';
 import { MessagePartTypes, MessageStatuses, TextPartStates } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
+import type { AvailableSource } from '@/api/types/citations';
 import { Actions } from '@/components/ai-elements/actions';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
@@ -16,7 +18,6 @@ import { CitedMessageContent } from '@/components/chat/cited-message-content';
 import { MessageCopyAction } from '@/components/chat/copy-actions';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
-import { MessageSources } from '@/components/chat/message-sources';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
@@ -62,6 +63,14 @@ type ModelMessageCardProps = {
   loadingText?: string;
   /** Max height for scrollable content area. When set, wraps content in ScrollArea */
   maxContentHeight?: number;
+  /**
+   * Fallback sources from group messages for streaming citation display
+   * When streaming, message metadata isn't populated yet, so we use sources
+   * collected from all messages in the same group as fallback.
+   */
+  groupAvailableSources?: AvailableSource[];
+  /** Skip opacity transitions for SSR/read-only pages to prevent hydration delay */
+  skipTransitions?: boolean;
 };
 const DEFAULT_PARTS: MessagePart[] = [];
 
@@ -82,6 +91,8 @@ export const ModelMessageCard = memo(({
   hideActions = false,
   loadingText,
   maxContentHeight,
+  groupAvailableSources,
+  skipTransitions = false,
 }: ModelMessageCardProps) => {
   const t = useTranslations();
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
@@ -194,7 +205,8 @@ export const ModelMessageCard = memo(({
               <div
                 style={{ gridArea: '1/1' }}
                 className={cn(
-                  'py-2 text-muted-foreground text-base transition-opacity duration-200 ease-out',
+                  'py-2 text-muted-foreground text-base',
+                  !skipTransitions && 'transition-opacity duration-200 ease-out',
                   showShimmer ? 'opacity-100' : 'opacity-0 pointer-events-none',
                 )}
               >
@@ -213,7 +225,7 @@ export const ModelMessageCard = memo(({
               <div
                 style={{ gridArea: '1/1' }}
                 className={cn(
-                  'transition-opacity duration-200 ease-out',
+                  !skipTransitions && 'transition-opacity duration-200 ease-out',
                   renderableParts.length > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none',
                 )}
               >
@@ -233,10 +245,6 @@ export const ModelMessageCard = memo(({
                 </StreamingMessageContent>
               </div>
             </div>
-
-            {assistantMetadata?.availableSources && assistantMetadata.availableSources.length > 0 && (
-              <MessageSources sources={assistantMetadata.availableSources} />
-            )}
 
             {!hideActions && (() => {
               const isComplete = status === MessageStatuses.COMPLETE;
@@ -276,33 +284,53 @@ export const ModelMessageCard = memo(({
     const sortedParts = [...renderableParts].sort((a, b) => {
       return getOrder(a.type) - getOrder(b.type);
     });
-
     return sortedParts.map((part, partIndex) => {
       if (part.type === MessagePartTypes.TEXT) {
         const textHasCitations = hasCitations(part.text);
         const resolvedCitations = assistantMetadata?.citations;
 
         if (textHasCitations) {
+          // ✅ FIX: Use groupAvailableSources as fallback when metadata.availableSources is empty
+          // During streaming, AI SDK doesn't populate message.metadata until stream finishes
+          // So we use sources collected from all messages in the same group
+          const effectiveSources = assistantMetadata?.availableSources?.length
+            ? assistantMetadata.availableSources
+            : groupAvailableSources;
+
           return (
             <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`} dir="auto">
               <CitedMessageContent
                 text={part.text}
                 citations={resolvedCitations}
+                availableSources={effectiveSources}
                 isStreaming={isStreaming}
                 className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                skipTransitions={skipTransitions}
               />
             </div>
           );
         }
 
+        // Use ReactMarkdown for SSR/read-only pages, Streamdown for interactive streaming
         return (
-          <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`} dir="auto">
-            <Streamdown
-              className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-              components={streamdownComponents}
-            >
-              {part.text}
-            </Streamdown>
+          <div
+            key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
+            dir="auto"
+            className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+          >
+            {skipTransitions
+              ? (
+                  // SSR-friendly: Use ReactMarkdown with shared components
+                  <Markdown components={streamdownComponents}>{part.text}</Markdown>
+                )
+              : (
+                  <Streamdown
+                    className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                    components={streamdownComponents}
+                  >
+                    {part.text}
+                  </Streamdown>
+                )}
           </div>
         );
       }

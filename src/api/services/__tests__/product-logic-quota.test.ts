@@ -33,11 +33,11 @@ import {
   MAX_MODELS_BY_TIER,
   MAX_OUTPUT_TOKENS_BY_TIER,
   parsePrice,
-  SUBSCRIPTION_TIER_NAMES,
   TIER_CONFIG,
   TIER_QUOTAS,
   tokensToCredits,
 } from '@/api/services/billing';
+import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 describe('product Logic - Quota and Tier Configuration', () => {

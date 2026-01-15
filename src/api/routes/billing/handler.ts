@@ -29,6 +29,7 @@ import type {
   syncAfterCheckoutRoute,
   syncCreditsAfterCheckoutRoute,
 } from './route';
+import type { SubscriptionDateFields } from './schema';
 import {
   CancelSubscriptionRequestSchema,
   CheckoutRequestSchema,
@@ -43,15 +44,7 @@ function validateSubscriptionOwnership(
   return subscription.userId === user.id;
 }
 
-type SerializableSubscriptionDates = {
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  canceledAt: Date | null;
-  trialStart: Date | null;
-  trialEnd: Date | null;
-};
-
-function serializeSubscriptionDates<T extends SerializableSubscriptionDates>(subscription: T) {
+function serializeSubscriptionDates<T extends SubscriptionDateFields>(subscription: T) {
   return {
     ...subscription,
     currentPeriodStart: subscription.currentPeriodStart.toISOString(),
@@ -499,15 +492,19 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
         });
       }
 
+      // ✅ PERF: Only fetch subscriptionTier field instead of full record
       const previousUsage = await db.query.userChatUsage.findFirst({
         where: eq(tables.userChatUsage.userId, user.id),
+        columns: { subscriptionTier: true },
       });
       const previousTier = previousUsage?.subscriptionTier || SubscriptionTiers.FREE;
 
       const syncedState = await syncStripeDataFromStripe(customerId);
 
+      // ✅ PERF: Only fetch subscriptionTier field instead of full record
       const newUsage = await db.query.userChatUsage.findFirst({
         where: eq(tables.userChatUsage.userId, user.id),
+        columns: { subscriptionTier: true },
       });
       const newTier = newUsage?.subscriptionTier || SubscriptionTiers.FREE;
 

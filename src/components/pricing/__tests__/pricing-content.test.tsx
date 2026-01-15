@@ -111,7 +111,7 @@ describe('pricingContent', () => {
       expect(screen.getByText('Error')).toBeInTheDocument();
     });
 
-    it('shows retry button in error state', () => {
+    it('shows try again button in error state', () => {
       const error = new Error('Failed to load products');
 
       render(
@@ -126,10 +126,10 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
     });
 
-    it('calls router.refresh when retry button clicked', async () => {
+    it('calls router.refresh when try again button clicked', async () => {
       const user = userEvent.setup();
       const error = new Error('Failed to load products');
 
@@ -145,7 +145,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      await user.click(screen.getByRole('button', { name: /retry/i }));
+      await user.click(screen.getByRole('button', { name: /try again/i }));
       expect(mockRouter.refresh).toHaveBeenCalled();
     });
   });

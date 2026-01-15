@@ -5,11 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
 import { AvatarSizes, ChatModes, PlanTypes, SubscriptionTiers } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-import { MIN_PARTICIPANTS_REQUIRED } from '@/api/services/billing/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
-import { getChatModeLabel } from '@/lib/config/chat-modes';
+import { getChatModeLabel, MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 

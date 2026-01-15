@@ -23,6 +23,34 @@ import {
 // SIGNATURE GENERATION
 // ============================================================================
 
+const encoder = new TextEncoder();
+
+export async function importSigningKey(secret: string): Promise<CryptoKey> {
+  const keyData = encoder.encode(secret);
+  return crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+}
+
+async function generateSignatureWithKey(
+  key: CryptoKey,
+  uploadId: string,
+  expiration: number,
+  userId: string,
+  threadId?: string,
+): Promise<string> {
+  const payload = [uploadId, expiration.toString(), userId, threadId || ''].join(':');
+  const payloadData = encoder.encode(payload);
+  const signature = await crypto.subtle.sign('HMAC', key, payloadData);
+  const signatureArray = new Uint8Array(signature);
+  const base64 = btoa(String.fromCharCode(...signatureArray));
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 async function generateSignature(
   secret: string,
   uploadId: string,
@@ -30,24 +58,8 @@ async function generateSignature(
   userId: string,
   threadId?: string,
 ): Promise<string> {
-  const payload = [uploadId, expiration.toString(), userId, threadId || ''].join(':');
-
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret);
-  const key = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-
-  const payloadData = encoder.encode(payload);
-  const signature = await crypto.subtle.sign('HMAC', key, payloadData);
-
-  const signatureArray = new Uint8Array(signature);
-  const base64 = btoa(String.fromCharCode(...signatureArray));
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const key = await importSigningKey(secret);
+  return generateSignatureWithKey(key, uploadId, expiration, userId, threadId);
 }
 
 async function verifySignature(
@@ -114,6 +126,68 @@ export async function generateSignedDownloadPath(
   const fullUrl = await generateSignedDownloadUrl(c, options);
   const url = new URL(fullUrl);
   return `${url.pathname}${url.search}`;
+}
+
+// ============================================================================
+// BATCH SIGNING (PERF OPTIMIZED)
+// ============================================================================
+
+export type BatchSignOptions = {
+  uploadId: string;
+  userId: string;
+  threadId?: string;
+  expirationMs?: number;
+  isPublic?: boolean;
+};
+
+export async function generateBatchSignedPaths(
+  c: Context<ApiEnv>,
+  items: BatchSignOptions[],
+): Promise<Map<string, string>> {
+  if (items.length === 0)
+    return new Map();
+
+  const secret = c.env.BETTER_AUTH_SECRET;
+  if (!secret) {
+    const errorContext: ErrorContext = {
+      errorType: 'validation',
+      field: 'BETTER_AUTH_SECRET',
+    };
+    throw createError.internal('BETTER_AUTH_SECRET not configured', errorContext);
+  }
+
+  const key = await importSigningKey(secret);
+  const now = Date.now();
+  const results = new Map<string, string>();
+
+  await Promise.all(
+    items.map(async (item) => {
+      const {
+        uploadId,
+        userId,
+        threadId,
+        expirationMs = DEFAULT_URL_EXPIRATION_MS,
+        isPublic = false,
+      } = item;
+
+      const clampedExpiration = Math.min(Math.max(expirationMs, MIN_URL_EXPIRATION_MS), MAX_URL_EXPIRATION_MS);
+      const expiration = now + clampedExpiration;
+      const effectiveUserId = isPublic ? 'public' : userId;
+
+      const signature = await generateSignatureWithKey(key, uploadId, expiration, effectiveUserId, threadId);
+
+      const params = new URLSearchParams();
+      params.set('exp', expiration.toString());
+      params.set('uid', effectiveUserId);
+      if (threadId)
+        params.set('tid', threadId);
+      params.set('sig', signature);
+
+      results.set(uploadId, `/api/v1/uploads/${encodeURIComponent(uploadId)}/download?${params.toString()}`);
+    }),
+  );
+
+  return results;
 }
 
 // ============================================================================

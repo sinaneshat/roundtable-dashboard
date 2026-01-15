@@ -16,9 +16,8 @@ import { Badge } from '@/components/ui/badge';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
 import { PreSearchQuerySkeleton, PreSearchResultsSkeleton, PreSearchSkeleton } from '@/components/ui/skeleton';
-import { useBoolean } from '@/hooks/utils';
+import { useBoolean, useExecutePreSearchStream, useGetThreadPreSearchesForPolling } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
-import { executePreSearchStreamService, getThreadPreSearchesService } from '@/services/api';
 
 import { WebSearchResultItem } from './web-search-result-item';
 
@@ -101,6 +100,9 @@ function PreSearchStreamComponent({
   const isAutoRetryingOnFalseRef = useRef(isAutoRetrying.onFalse);
   isAutoRetryingOnFalseRef.current = isAutoRetrying.onFalse;
 
+  const executePreSearchStream = useExecutePreSearchStream();
+  const getThreadPreSearchesForPolling = useGetThreadPreSearchesForPolling();
+
   useEffect(() => {
     if (isWaitingForChangelog || configChangeRoundNumber !== null) {
       return;
@@ -131,7 +133,7 @@ function PreSearchStreamComponent({
           throw new Error('userQuery is required but was not provided');
         }
 
-        const response = await executePreSearchStreamService({
+        const response = await executePreSearchStream({
           param: {
             threadId,
             roundNumber: String(preSearch.roundNumber),
@@ -361,7 +363,7 @@ function PreSearchStreamComponent({
     });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, store, tryMarkPreSearchTriggered, clearPreSearchTracking, forceRetryCount, isWaitingForChangelog, configChangeRoundNumber]);
+  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, store, tryMarkPreSearchTriggered, clearPreSearchTracking, forceRetryCount, isWaitingForChangelog, configChangeRoundNumber, executePreSearchStream]);
 
   const isPollingRef = useRef(false);
 
@@ -386,7 +388,7 @@ function PreSearchStreamComponent({
 
     const poll = async () => {
       try {
-        const result = await getThreadPreSearchesService({ param: { id: threadId } });
+        const result = await getThreadPreSearchesForPolling(threadId);
 
         if (!result.data?.items) {
           if (isMounted) {
@@ -396,7 +398,7 @@ function PreSearchStreamComponent({
         }
 
         const preSearchList = result.data.items;
-        const current = preSearchList.find(ps => ps.id === preSearch.id);
+        const current = preSearchList.find((ps: StoredPreSearch) => ps.id === preSearch.id);
 
         if (current) {
           if (current.status === MessageStatuses.COMPLETE && current.searchData) {
@@ -465,7 +467,7 @@ function PreSearchStreamComponent({
       clearTimeout(timeoutId);
       isAutoRetryingOnFalseRef.current();
     };
-  }, [is409Conflict.value, threadId, preSearch.id, preSearch.roundNumber, clearPreSearchTracking]);
+  }, [is409Conflict.value, threadId, preSearch.id, preSearch.roundNumber, clearPreSearchTracking, getThreadPreSearchesForPolling]);
 
   useEffect(() => {
     const currentState = store?.getState();

@@ -68,16 +68,21 @@ function createMockParticipants(): ChatParticipant[] {
   ];
 }
 
+type PatchPayload = {
+  mode?: ChatModes;
+  enableWebSearch?: boolean;
+};
+
 type NetworkCall = {
   type: 'PATCH' | 'changelog' | 'pre-search' | 'stream';
   round: number;
-  payload?: Record<string, unknown>;
+  payload?: PatchPayload;
 };
 
 class NetworkTracker {
   private calls: NetworkCall[] = [];
 
-  log(type: NetworkCall['type'], round: number, payload?: Record<string, unknown>) {
+  log(type: NetworkCall['type'], round: number, payload?: PatchPayload) {
     this.calls.push({ type, round, payload });
   }
 
@@ -89,7 +94,7 @@ class NetworkTracker {
     return this.getCallsForRound(round).map(c => c.type);
   }
 
-  getPatchPayload(round: number): Record<string, unknown> | undefined {
+  getPatchPayload(round: number): PatchPayload | undefined {
     const patch = this.calls.find(c => c.type === 'PATCH' && c.round === round);
     return patch?.payload;
   }
@@ -238,7 +243,7 @@ describe('3-Round E2E: PATCH → changelog → streaming', () => {
       || (options.changeWebSearch !== undefined && options.changeWebSearch !== currentWebSearch);
 
     // Build PATCH payload based on actual changes
-    const payload: Record<string, unknown> = {};
+    const payload: PatchPayload = {};
     if (options.changeMode && options.changeMode !== currentMode) {
       payload.mode = options.changeMode;
       state.setSelectedMode(options.changeMode);
@@ -508,7 +513,7 @@ describe('stale Closure Prevention', () => {
     expect(webSearchChanged).toBe(false);
 
     // PATCH payload should NOT include mode or enableWebSearch
-    const patchPayload: Record<string, unknown> = {};
+    const patchPayload: PatchPayload = {};
     if (modeChanged)
       patchPayload.mode = freshSelectedMode;
     if (webSearchChanged)

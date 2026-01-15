@@ -94,20 +94,27 @@ function createMockPreSearch(roundNumber: number): StoredPreSearch {
   };
 }
 
+type NetworkPayload = {
+  mode?: ChatModes;
+  enableWebSearch?: boolean;
+};
+
+type NetworkRequest = {
+  type: string;
+  timestamp: number;
+  payload?: NetworkPayload;
+};
+
 /**
  * Network request simulator for E2E testing
  * Tracks the order of simulated network requests
  */
 class NetworkSimulator {
-  private requestLog: Array<{
-    type: string;
-    timestamp: number;
-    payload?: Record<string, unknown>;
-  }> = [];
+  private requestLog: NetworkRequest[] = [];
 
   private timestamp = 0;
 
-  log(type: string, payload?: Record<string, unknown>) {
+  log(type: string, payload?: NetworkPayload) {
     this.requestLog.push({
       type,
       timestamp: this.timestamp++,
@@ -857,7 +864,7 @@ describe('config Change + Pre-Search Ordering E2E', () => {
       expect(webSearchChanged).toBe(false);
 
       // PATCH payload should be empty (no config changes)
-      const payload: Record<string, unknown> = {};
+      const payload: NetworkPayload = {};
       if (modeChanged)
         payload.mode = freshSelectedMode;
       if (webSearchChanged)

@@ -349,6 +349,20 @@ export const SyncCreditsAfterCheckoutResponseSchema = createApiResponseSchema(
 
 export type Subscription = z.infer<typeof SubscriptionSchema>;
 
+// ============================================================================
+// Internal Type Schemas (for handler serialization)
+// ============================================================================
+
+export const SubscriptionDateFieldsSchema = stripeSubscriptionSelectSchema.pick({
+  currentPeriodStart: true,
+  currentPeriodEnd: true,
+  canceledAt: true,
+  trialStart: true,
+  trialEnd: true,
+});
+
+export type SubscriptionDateFields = z.infer<typeof SubscriptionDateFieldsSchema>;
+
 export type SwitchSubscriptionRequest = z.infer<typeof SwitchSubscriptionRequestSchema>;
 export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequestSchema>;
 export type SyncAfterCheckoutPayload = z.infer<typeof SyncAfterCheckoutPayloadSchema>;

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { ComponentVariants, ErrorBoundaryContexts } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
@@ -15,6 +15,7 @@ import { usePublicThreadQuery } from '@/hooks/queries';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
 import { chatMessagesToUIMessages, transformChatParticipants, transformPreSearches } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { GetPublicThreadResponse } from '@/services/api';
 
 // Extract the data payload type from the API response
@@ -28,6 +29,8 @@ type PublicChatThreadScreenProps = {
 
 export default function PublicChatThreadScreen({ slug, initialData }: PublicChatThreadScreenProps) {
   const t = useTranslations();
+  const mountTimeRef = useRef(Date.now());
+  const hasLoggedRef = useRef(false);
 
   // ✅ SSR HYDRATION: Use initialData from props first, fallback to React Query
   // This ensures immediate server render with content - no loading flash
@@ -60,6 +63,19 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
 
   // Data is ready when we have SSR props or React Query data
   const isStoreReady = !isActuallyPending && messages.length > 0;
+
+  // Debug logging for hydration
+  useEffect(() => {
+    if (!hasLoggedRef.current) {
+      hasLoggedRef.current = true;
+      rlog.init('public-mount', `initial=${initialData?.messages?.length ?? 0} query=${queryResponse?.messages?.length ?? 0} pending=${isPending ? 1 : 0}`);
+    }
+  }, [initialData, queryResponse, isPending]);
+
+  useEffect(() => {
+    const elapsed = Date.now() - mountTimeRef.current;
+    rlog.init('public-data', `msgs=${messages.length} timeline=${timeline.length} ready=${isStoreReady ? 1 : 0} elapsed=${elapsed}ms`);
+  }, [messages.length, timeline.length, isStoreReady]);
 
   useChatScroll({
     messages,
@@ -128,7 +144,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div
           id="public-chat-scroll-container"
-          className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-96 sm:pb-[36rem]"
+          className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-8"
         >
           {timeline.length === 0
             ? (
@@ -157,6 +173,8 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
                     isReadOnly={true}
                     preSearches={preSearches}
                     isDataReady={isStoreReady}
+                    disableVirtualization={true}
+                    skipEntranceAnimations={true}
                   />
 
                   <div className="mt-8 mb-8">

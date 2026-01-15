@@ -7,10 +7,10 @@ import {
   canAccessModelByPricing,
   getRequiredTierForModel,
   MAX_MODELS_BY_TIER,
-  SUBSCRIPTION_TIER_NAMES,
 } from '@/api/services/billing';
 import { getModelById } from '@/api/services/models';
 import type { getDbAsync } from '@/db';
+import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 
 import { getEnabledParticipantCount } from './participant-query.service';
 

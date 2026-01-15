@@ -19,6 +19,7 @@ import {
   MCPResourcesListResponseSchema,
   MCPToolCallResponseSchema,
   MCPToolsListResponseSchema,
+  OpenAIFunctionsResponseSchema,
   ToolCallParamsSchema,
 } from './schema';
 
@@ -217,29 +218,7 @@ export const openAIFunctionsRoute = createRoute({
       description: 'OpenAI functions array',
       content: {
         'application/json': {
-          schema: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              data: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    type: { type: 'string', enum: ['function'] },
-                    function: {
-                      type: 'object',
-                      properties: {
-                        name: { type: 'string' },
-                        description: { type: 'string' },
-                        parameters: { type: 'object' },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          } as const,
+          schema: OpenAIFunctionsResponseSchema,
         },
       },
     },

@@ -13,7 +13,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ChatModes, FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
 import {
   createMockParticipant,
@@ -269,7 +269,7 @@ describe('pipeline Data Flow', () => {
 
     // All participant messages are in the store and available for moderator
     expect(getStoreState(store).messages).toHaveLength(4); // 1 user + 3 participants
-    expect(getStoreState(store).messages.filter(m => m.role === 'assistant')).toHaveLength(3);
+    expect(getStoreState(store).messages.filter(m => m.role === MessageRoles.ASSISTANT)).toHaveLength(3);
   });
 
   it('userQuestion preserved through pipeline', () => {
@@ -294,7 +294,7 @@ describe('pipeline Data Flow', () => {
     state.setMessages(round0Messages);
 
     // User question is available in messages
-    const userMessage = getStoreState(store).messages.find(m => m.role === 'user');
+    const userMessage = getStoreState(store).messages.find(m => m.role === MessageRoles.USER);
     // Content is in parts array
     const textPart = userMessage?.parts.find(p => p.type === 'text');
     expect(textPart && 'text' in textPart ? textPart.text : undefined).toBe(userQuestion);

@@ -28,7 +28,7 @@ import { createChatStore } from '@/stores/chat';
 
 function createTestUIMessage(options: {
   id?: string;
-  role: MessageRoles.USER | 'assistant';
+  role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT;
   content?: string;
   metadata?: { roundNumber: number; participantIndex?: number };
 }): UIMessage {

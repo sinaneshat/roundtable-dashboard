@@ -122,12 +122,6 @@ describe('participant Placeholders - Immediate Visibility', () => {
     // Verify: streamingRoundNumber is set
     expect(state.streamingRoundNumber).toBe(0);
 
-    // UI Rendering Logic (from chat-message-list.tsx:1198):
-    // const isStreamingRound = roundNumber === _streamingRoundNumber;
-    //
-    // For Round 0: isStreamingRound = true
-    // This enables the pending cards section to render ALL participant placeholders
-    //
     // Verification: The store state allows UI to render placeholders
     // (Actual rendering tested in component tests, but state is correct here)
   });
@@ -432,11 +426,6 @@ describe('moderator Placeholder - Immediate Visibility', () => {
     const state = store.getState();
     expect(state.streamingRoundNumber).toBe(0);
 
-    // UI Logic (chat-message-list.tsx:1423-1425):
-    // const shouldShowModerator = isActuallyLatestRound
-    //   && !isRoundComplete
-    //   && isStreamingRound; // Show immediately when streaming round starts
-    //
     // When streamingRoundNumber=0, isStreamingRound=true for round 0
     // Moderator placeholder renders immediately
   });

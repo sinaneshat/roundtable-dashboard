@@ -16,6 +16,7 @@ import {
   UIMessageRoles,
 } from '@/api/core/enums';
 import { getRoundNumber, isObject } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatStoreApi } from '@/stores/chat';
 import { isRoundComplete } from '@/stores/chat';
 
@@ -74,16 +75,23 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
   const triggerModerator = useCallback(async (
     roundNumber: number,
     participantMessageIds: string[],
+    isRetry = false,
   ) => {
     const state = store.getState();
     const freshThreadId = state.thread?.id || state.createdThreadId || '';
 
+    rlog.sync('moderator-trigger', `r${roundNumber} threadId=${freshThreadId.slice(-8)} isRetry=${isRetry} triggeringRef=${triggeringRoundRef.current}`);
+
     if (!freshThreadId) {
+      rlog.sync('moderator-skip', 'no threadId');
       return;
     }
 
     const moderatorId = `${freshThreadId}_r${roundNumber}_moderator`;
-    if (state.hasModeratorStreamBeenTriggered(moderatorId, roundNumber)) {
+    const alreadyTriggered = state.hasModeratorStreamBeenTriggered(moderatorId, roundNumber);
+    rlog.sync('moderator-check', `alreadyTriggered=${alreadyTriggered} isRetry=${isRetry}`);
+
+    if (alreadyTriggered && !isRetry) {
       if (state.streamingRoundNumber === roundNumber) {
         const roundComplete = isRoundComplete(state.messages, state.participants, roundNumber);
         if (roundComplete) {
@@ -94,7 +102,8 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       return;
     }
 
-    if (triggeringRoundRef.current !== null) {
+    if (triggeringRoundRef.current !== null && !isRetry) {
+      rlog.sync('moderator-skip', `triggeringRef=${triggeringRoundRef.current}`);
       return;
     }
     state.markModeratorStreamTriggered(moderatorId, roundNumber);
@@ -147,6 +156,22 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       let accumulatedText = '';
 
       if (contentType.includes('application/json')) {
+        // Could be either: existing moderator message OR 202 polling response
+        // Parse JSON to check if it's a polling response that needs retry
+        const jsonData = await response.json() as { data?: { status?: string; retryAfterMs?: number } };
+        if (response.status === 202 || jsonData?.data?.status === 'pending') {
+          // 202 Accepted - messages not persisted yet, retry after delay
+          const retryAfterMs = jsonData?.data?.retryAfterMs || 1000;
+          rlog.sync('moderator-retry', `202 polling response, will retry in ${retryAfterMs}ms`);
+          await new Promise(resolve => setTimeout(resolve, retryAfterMs));
+          // Retry the request - clear tracking and reset ref so we can trigger again
+          rlog.sync('moderator-retry', `retrying now after ${retryAfterMs}ms delay`);
+          triggeringRoundRef.current = null;
+          store.getState().clearModeratorStreamTracking(roundNumber);
+          // Pass isRetry=true to bypass the already-triggered check
+          await triggerModerator(roundNumber, participantMessageIds, true);
+          return;
+        }
         // Message already exists - no streaming needed
       } else {
         const reader = response.body?.getReader();

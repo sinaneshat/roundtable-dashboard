@@ -12,17 +12,19 @@ import { ValidationErrorSchema } from '@/api/core/schemas';
 const UNKNOWN_ERROR_MESSAGE = 'An unknown error occurred' as const;
 
 // ============================================================================
-// ERROR DETAILS SCHEMA
+// CLIENT ERROR DETAILS SCHEMA
 // ============================================================================
 
-export const ErrorDetailsSchema = z.object({
+// ClientErrorDetailsSchema: Used for parsing error responses on the frontend/client-side
+// Note: Different from @/api/common/error-handling ErrorDetailsSchema which uses discriminated unions for API error construction
+export const ClientErrorDetailsSchema = z.object({
   errorName: z.string().optional(),
   stack: z.string().optional(),
   errorType: z.string().optional(),
   context: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 }).optional();
 
-export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
+export type ClientErrorDetails = z.infer<typeof ClientErrorDetailsSchema>;
 
 type ErrorContextValue = string | number | boolean | null;
 
@@ -47,7 +49,7 @@ export const ApiErrorDetailsSchema = z.object({
   code: z.string().optional(),
   status: z.number().int().positive().optional(),
   validationErrors: z.array(ValidationErrorSchema).optional(),
-  details: ErrorDetailsSchema,
+  details: ClientErrorDetailsSchema,
   meta: RequestMetaSchema.optional(),
 });
 
@@ -71,12 +73,12 @@ function isNonNullObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function extractErrorDetails(context: unknown): ErrorDetails | undefined {
+function extractErrorDetails(context: unknown): ClientErrorDetails | undefined {
   if (!isNonNullObject(context)) {
     return undefined;
   }
 
-  const details: NonNullable<ErrorDetails> = {};
+  const details: NonNullable<ClientErrorDetails> = {};
 
   if (hasStringProperty(context, 'errorType')) {
     // context is already validated as Record<string, unknown> by isNonNullObject

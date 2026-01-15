@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
@@ -10,6 +10,7 @@ import { useVirtualizedTimeline } from '@/hooks/utils';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
 import { getModeratorMetadata, isModeratorMessage } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
@@ -45,6 +46,12 @@ type ThreadTimelineProps = {
   isModeratorStreaming?: boolean;
   demoMode?: boolean;
   getIsStreamingFromStore?: () => boolean;
+  /**
+   * Disable virtualization and render content in normal document flow.
+   * Use this for read-only pages (like public threads) where SSR hydration
+   * can cause measurement issues with virtualization.
+   */
+  disableVirtualization?: boolean;
 };
 
 export function ThreadTimeline({
@@ -68,8 +75,16 @@ export function ThreadTimeline({
   isModeratorStreaming = false,
   demoMode = false,
   getIsStreamingFromStore,
+  disableVirtualization = false,
 }: ThreadTimelineProps) {
   const isActivelyStreaming = isStreaming || isModeratorStreaming;
+  const mountTimeRef = useRef(Date.now());
+
+  // Debug logging for timeline render
+  useEffect(() => {
+    const msgCount = timelineItems.filter(i => i.type === 'messages').reduce((sum, i) => sum + i.data.length, 0);
+    rlog.init('timeline-render', `items=${timelineItems.length} msgs=${msgCount} virt=${disableVirtualization ? 0 : 1} ready=${isDataReady ? 1 : 0} elapsed=${Date.now() - mountTimeRef.current}ms`);
+  }, [timelineItems.length, disableVirtualization, isDataReady]);
 
   // Collect all messages from timeline for thread-level copy action
   const allMessages = useMemo(() => {
@@ -88,7 +103,7 @@ export function ThreadTimeline({
     estimateSize: 200,
     overscan: 5,
     paddingEnd: demoMode ? 24 : 0,
-    isDataReady,
+    isDataReady: disableVirtualization ? false : isDataReady,
     isStreaming: isActivelyStreaming,
     getIsStreamingFromStore,
   });
@@ -117,11 +132,139 @@ export function ThreadTimeline({
     return true;
   };
 
+  // Helper to render a single timeline item's content
+  const renderTimelineItemContent = (item: TimelineItem, index: number) => {
+    if (item.type === 'changelog' && item.data.length > 0) {
+      return (
+        <ScrollFadeEntrance
+          index={index}
+          skipAnimation={!shouldAnimate(item.key)}
+          enableScrollEffect
+          scrollIntensity={0.08}
+        >
+          <div className="mb-6">
+            <UnifiedErrorBoundary context="configuration">
+              <ConfigurationChangesGroup
+                group={{
+                  timestamp: new Date(item.data[0]!.createdAt),
+                  changes: item.data,
+                }}
+                isReadOnly={isReadOnly}
+              />
+            </UnifiedErrorBoundary>
+          </div>
+        </ScrollFadeEntrance>
+      );
+    }
+
+    if (item.type === 'pre-search') {
+      return (
+        <ScrollFromTop skipAnimation={skipEntranceAnimations}>
+          <div className="w-full mb-6">
+            <UnifiedErrorBoundary context="pre-search">
+              <PreSearchCard
+                threadId={threadId}
+                preSearch={item.data}
+                streamingRoundNumber={streamingRoundNumber}
+                demoOpen={demoPreSearchOpen}
+                demoShowContent={demoPreSearchOpen ? item.data.searchData !== undefined : undefined}
+              />
+            </UnifiedErrorBoundary>
+          </div>
+        </ScrollFromTop>
+      );
+    }
+
+    if (item.type === 'messages') {
+      return (
+        <ScrollFadeEntrance
+          index={index}
+          skipAnimation={!shouldAnimate(item.key)}
+          enableScrollEffect={false}
+        >
+          <div className="space-y-6 pb-4">
+            <UnifiedErrorBoundary context="message-list" onReset={onRetry}>
+              <ChatMessageList
+                messages={item.data}
+                user={user}
+                participants={participants}
+                isStreaming={isStreaming}
+                currentParticipantIndex={currentParticipantIndex}
+                currentStreamingParticipant={currentStreamingParticipant}
+                threadId={threadId}
+                preSearches={preSearches}
+                streamingRoundNumber={streamingRoundNumber}
+                demoPreSearchOpen={demoPreSearchOpen}
+                maxContentHeight={maxContentHeight}
+                skipEntranceAnimations={skipEntranceAnimations}
+                completedRoundNumbers={completedRoundNumbers}
+                isModeratorStreaming={isModeratorStreaming}
+                roundNumber={item.roundNumber}
+                demoMode={demoMode}
+                isReadOnly={isReadOnly}
+              />
+            </UnifiedErrorBoundary>
+
+            {!isStreaming && !isReadOnly && (() => {
+              const moderatorMessage = item.data.find(msg => isModeratorMessage(msg));
+
+              if (!moderatorMessage) {
+                return null;
+              }
+
+              const moderatorMeta = getModeratorMetadata(moderatorMessage.metadata);
+              if (!moderatorMeta?.finishReason) {
+                return null;
+              }
+
+              const moderatorText = extractTextFromMessage(moderatorMessage);
+
+              return (
+                <Actions className="mt-3 mb-2">
+                  <ModeratorCopyAction
+                    key={`copy-summary-${threadId}-${item.roundNumber}`}
+                    moderatorText={moderatorText}
+                  />
+                  <ThreadSummaryCopyAction
+                    key={`copy-thread-${threadId}`}
+                    messages={allMessages}
+                    participants={participants}
+                    threadTitle={threadTitle}
+                  />
+                </Actions>
+              );
+            })()}
+          </div>
+        </ScrollFadeEntrance>
+      );
+    }
+
+    return null;
+  };
+
+  // Non-virtualized render: normal document flow, no absolute positioning
+  // Use this for read-only pages where SSR hydration causes measurement issues
+  if (disableVirtualization) {
+    return (
+      <div data-timeline-container className="w-full">
+        {timelineItems.map((item, index) => (
+          <div key={item.key} data-index={index}>
+            {renderTimelineItemContent(item, index)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Virtualized render: absolute positioning with measured heights
   return (
     <div
       data-virtualized-timeline
       style={{
-        height: `${totalSize}px`,
+        // Use minHeight instead of height to prevent content clipping
+        // when measurement calculations fail during SSR hydration.
+        // The container can grow beyond totalSize if actual content is larger.
+        minHeight: `${totalSize}px`,
         width: '100%',
         position: 'relative',
       }}
@@ -144,104 +287,7 @@ export function ThreadTimeline({
               transform: `translateY(${virtualItem.start - scrollMargin}px)`,
             }}
           >
-            {item.type === 'changelog' && item.data.length > 0 && (
-              <ScrollFadeEntrance
-                index={virtualItem.index}
-                skipAnimation={!shouldAnimate(virtualItem.key)}
-                enableScrollEffect
-                scrollIntensity={0.08}
-              >
-                <div className="mb-6">
-                  <UnifiedErrorBoundary context="configuration">
-                    <ConfigurationChangesGroup
-                      group={{
-                        timestamp: new Date(item.data[0]!.createdAt),
-                        changes: item.data,
-                      }}
-                      isReadOnly={isReadOnly}
-                    />
-                  </UnifiedErrorBoundary>
-                </div>
-              </ScrollFadeEntrance>
-            )}
-
-            {item.type === 'pre-search' && (
-              <ScrollFromTop skipAnimation={skipEntranceAnimations}>
-                <div className="w-full mb-6">
-                  <UnifiedErrorBoundary context="pre-search">
-                    <PreSearchCard
-                      threadId={threadId}
-                      preSearch={item.data}
-                      streamingRoundNumber={streamingRoundNumber}
-                      demoOpen={demoPreSearchOpen}
-                      demoShowContent={demoPreSearchOpen ? item.data.searchData !== undefined : undefined}
-                    />
-                  </UnifiedErrorBoundary>
-                </div>
-              </ScrollFromTop>
-            )}
-
-            {item.type === 'messages' && (
-              <ScrollFadeEntrance
-                index={virtualItem.index}
-                skipAnimation={!shouldAnimate(virtualItem.key)}
-                enableScrollEffect={false}
-              >
-                <div className="space-y-6 pb-4">
-                  <UnifiedErrorBoundary context="message-list" onReset={onRetry}>
-                    <ChatMessageList
-                      messages={item.data}
-                      user={user}
-                      participants={participants}
-                      isStreaming={isStreaming}
-                      currentParticipantIndex={currentParticipantIndex}
-                      currentStreamingParticipant={currentStreamingParticipant}
-                      threadId={threadId}
-                      preSearches={preSearches}
-                      streamingRoundNumber={streamingRoundNumber}
-                      demoPreSearchOpen={demoPreSearchOpen}
-                      maxContentHeight={maxContentHeight}
-                      skipEntranceAnimations={skipEntranceAnimations}
-                      completedRoundNumbers={completedRoundNumbers}
-                      isModeratorStreaming={isModeratorStreaming}
-                      roundNumber={item.roundNumber}
-                      demoMode={demoMode}
-                      isReadOnly={isReadOnly}
-                    />
-                  </UnifiedErrorBoundary>
-
-                  {!isStreaming && !isReadOnly && (() => {
-                    const moderatorMessage = item.data.find(msg => isModeratorMessage(msg));
-
-                    if (!moderatorMessage) {
-                      return null;
-                    }
-
-                    const moderatorMeta = getModeratorMetadata(moderatorMessage.metadata);
-                    if (!moderatorMeta?.finishReason) {
-                      return null;
-                    }
-
-                    const moderatorText = extractTextFromMessage(moderatorMessage);
-
-                    return (
-                      <Actions className="mt-3 mb-2">
-                        <ModeratorCopyAction
-                          key={`copy-summary-${threadId}-${item.roundNumber}`}
-                          moderatorText={moderatorText}
-                        />
-                        <ThreadSummaryCopyAction
-                          key={`copy-thread-${threadId}`}
-                          messages={allMessages}
-                          participants={participants}
-                          threadTitle={threadTitle}
-                        />
-                      </Actions>
-                    );
-                  })()}
-                </div>
-              </ScrollFadeEntrance>
-            )}
+            {renderTimelineItemContent(item, virtualItem.index)}
           </div>
         );
       })}

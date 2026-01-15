@@ -2,12 +2,17 @@
  * Citation Parser Utility
  *
  * Parses AI response text to extract and process citation markers.
- * Citations are in the format [source_id] where source_id follows the pattern:
+ * Citations can be in two formats:
+ * - Single: [source_id] e.g., [sch_q0r0]
+ * - Multiple (comma-separated): [id1, id2] e.g., [sch_q0r0, sch_q0r1]
+ *
+ * Source IDs follow the pattern prefix_id where prefix is:
  * - mem_abc123 (memory)
  * - thd_abc123 (thread)
  * - att_abc123 (attachment)
  * - sch_abc123 (search)
- * - sum_abc123 (summary)
+ * - mod_abc123 (moderator)
+ * - rag_abc123 (indexed file)
  *
  * @module lib/utils/citation-parser
  */
@@ -71,12 +76,30 @@ export type ParsedCitationResult = {
 // ============================================================================
 
 /**
- * Regular expression to match citation markers
+ * Regular expression to match single citation markers
  * Matches patterns like: [mem_abc12345], [thd_xyz456], etc.
  * Pattern is built from CITATION_PREFIXES enum (single source of truth)
  */
 const CITATION_PATTERN = new RegExp(
   `\\[(${CITATION_PREFIXES.join('|')})_[a-zA-Z0-9]+\\]`,
+  'g',
+);
+
+/**
+ * Regular expression to match comma-separated citation markers
+ * Matches patterns like: [sch_q0r0, sch_q0r1] or [sch_q0r0,sch_q0r1]
+ * Used to normalize multi-citations into individual markers before parsing
+ */
+const MULTI_CITATION_PATTERN = new RegExp(
+  `\\[((${CITATION_PREFIXES.join('|')})_[a-zA-Z0-9]+(?:\\s*,\\s*(${CITATION_PREFIXES.join('|')})_[a-zA-Z0-9]+)+)\\]`,
+  'g',
+);
+
+/**
+ * Single citation ID pattern for extracting IDs from multi-citation matches
+ */
+const SINGLE_ID_PATTERN = new RegExp(
+  `(${CITATION_PREFIXES.join('|')})_[a-zA-Z0-9]+`,
   'g',
 );
 
@@ -87,59 +110,43 @@ function isValidPrefix(prefix: string): prefix is CitationPrefix {
   return (CITATION_PREFIXES as readonly string[]).includes(prefix);
 }
 
+/**
+ * Normalize text by splitting comma-separated citations into individual markers
+ * Converts [sch_q0r0, sch_q0r1] into [sch_q0r0][sch_q0r1]
+ * This ensures consistent parsing regardless of citation format
+ */
+function normalizeMultipleCitations(text: string): string {
+  MULTI_CITATION_PATTERN.lastIndex = 0;
+  return text.replace(MULTI_CITATION_PATTERN, (match) => {
+    // Extract all individual citation IDs from the match
+    SINGLE_ID_PATTERN.lastIndex = 0;
+    const ids = match.match(SINGLE_ID_PATTERN);
+    if (!ids || ids.length === 0)
+      return match;
+    // Convert to individual bracketed citations
+    return ids.map(id => `[${id}]`).join('');
+  });
+}
+
 // ============================================================================
 // Parser Functions
 // ============================================================================
-
-/**
- * Extract citation markers from text
- *
- * Returns unique source IDs found in the text, in order of first appearance.
- *
- * @param text - AI response text containing citation markers
- * @returns Array of unique source IDs (e.g., ["mem_abc123", "thd_xyz456"])
- */
-export function extractCitationIds(text: string): string[] {
-  const matches = text.match(CITATION_PATTERN) || [];
-  const seen = new Set<string>();
-  const ids: string[] = [];
-
-  for (const match of matches) {
-    // Remove brackets to get source ID
-    const sourceId = match.slice(1, -1);
-    if (!seen.has(sourceId)) {
-      seen.add(sourceId);
-      ids.push(sourceId);
-    }
-  }
-
-  return ids;
-}
-
-/**
- * Get source type from source ID prefix
- *
- * @param sourceId - Source ID (e.g., "mem_abc123")
- * @returns Source type or undefined if prefix not recognized
- */
-export function getSourceTypeFromId(sourceId: string): CitationSourceType | undefined {
-  const prefix = sourceId.split('_')[0] ?? '';
-  if (!isValidPrefix(prefix)) {
-    return undefined;
-  }
-  return CitationPrefixToSourceType[prefix];
-}
 
 /**
  * Parse text into segments of plain text and citations
  *
  * This is the main parsing function that breaks down AI response text
  * into segments that can be rendered with inline citations.
+ * Handles both single citations [id] and comma-separated [id1, id2] formats.
  *
  * @param text - AI response text containing citation markers
  * @returns Parsed result with segments, citations, and plain text
  */
 export function parseCitations(text: string): ParsedCitationResult {
+  // First normalize any comma-separated citations into individual markers
+  // [sch_q0r0, sch_q0r1] becomes [sch_q0r0][sch_q0r1]
+  const normalizedText = normalizeMultipleCitations(text);
+
   const segments: TextSegment[] = [];
   const citations: ParsedCitation[] = [];
   const seenIds = new Set<string>();
@@ -155,7 +162,7 @@ export function parseCitations(text: string): ParsedCitationResult {
   let match: RegExpExecArray | null;
 
   // eslint-disable-next-line no-cond-assign
-  while ((match = CITATION_PATTERN.exec(text)) !== null) {
+  while ((match = CITATION_PATTERN.exec(normalizedText)) !== null) {
     const marker = match[0];
     const sourceId = marker.slice(1, -1);
     const prefix = sourceId.split('_')[0] ?? '';
@@ -172,7 +179,7 @@ export function parseCitations(text: string): ParsedCitationResult {
     if (match.index > lastIndex) {
       segments.push({
         type: CitationSegmentTypes.TEXT,
-        content: text.slice(lastIndex, match.index),
+        content: normalizedText.slice(lastIndex, match.index),
       });
     }
 
@@ -211,10 +218,10 @@ export function parseCitations(text: string): ParsedCitationResult {
   }
 
   // Add remaining text as segment
-  if (lastIndex < text.length) {
+  if (lastIndex < normalizedText.length) {
     segments.push({
       type: CitationSegmentTypes.TEXT,
-      content: text.slice(lastIndex),
+      content: normalizedText.slice(lastIndex),
     });
   }
 
@@ -280,31 +287,57 @@ export function toDbCitations(
 
 /**
  * Check if text contains any citation markers
+ * Handles both single [id] and comma-separated [id1, id2] formats
  *
  * @param text - Text to check
  * @returns True if text contains at least one citation marker
  */
 export function hasCitations(text: string): boolean {
   CITATION_PATTERN.lastIndex = 0;
-  return CITATION_PATTERN.test(text);
+  MULTI_CITATION_PATTERN.lastIndex = 0;
+  return CITATION_PATTERN.test(text) || MULTI_CITATION_PATTERN.test(text);
 }
 
 /**
- * Remove all citation markers from text
+ * Clean and format raw content for citation excerpt display
+ * Removes HTML entities, excess whitespace, and normalizes text
  *
- * @param text - Text containing citation markers
- * @returns Text with all citation markers removed
+ * @param content - Raw content from scraped source
+ * @param maxLength - Maximum length of excerpt (default 200)
+ * @returns Cleaned and truncated excerpt
  */
-export function stripCitations(text: string): string {
-  return text.replace(CITATION_PATTERN, '');
-}
+export function cleanCitationExcerpt(content: string, maxLength = 200): string {
+  if (!content) {
+    return '';
+  }
 
-/**
- * Count unique citations in text
- *
- * @param text - Text containing citation markers
- * @returns Number of unique citations
- */
-export function countCitations(text: string): number {
-  return extractCitationIds(text).length;
+  let cleaned = content
+    // Decode common HTML entities
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, '\'')
+    .replace(/&nbsp;/g, ' ')
+    // Remove any remaining HTML tags
+    .replace(/<[^>]*>/g, ' ')
+    // Normalize whitespace (collapse multiple spaces, newlines, tabs)
+    .replace(/\s+/g, ' ')
+    // Remove leading/trailing whitespace
+    .trim();
+
+  // Add sentence breaks for readability if content is long
+  // Look for patterns like "wordWord" (camelCase joins from bad HTML parsing)
+  cleaned = cleaned.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+  // Truncate to max length at word boundary
+  if (cleaned.length > maxLength) {
+    const truncated = cleaned.slice(0, maxLength);
+    const lastSpace = truncated.lastIndexOf(' ');
+    cleaned = lastSpace > maxLength * 0.7
+      ? `${truncated.slice(0, lastSpace)}...`
+      : `${truncated}...`;
+  }
+
+  return cleaned;
 }

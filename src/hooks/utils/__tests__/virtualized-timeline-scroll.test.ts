@@ -605,7 +605,7 @@ describe('useVirtualizedTimeline - Scroll Behavior', () => {
   // ============================================================================
 
   describe('rAF-deferred state updates prevent scroll jumps', () => {
-    it('does not update virtualItems during render (defers via RAF)', () => {
+    it('has SSR items immediately, RAF refines with actual measurements', () => {
       mockGetVirtualItems.mockReturnValue([
         { index: 0, key: '0', start: 0, end: 200, size: 200, lane: 0 },
       ]);
@@ -617,15 +617,16 @@ describe('useVirtualizedTimeline - Scroll Behavior', () => {
         }),
       );
 
-      // Before RAF: state should be empty (default)
-      expect(result.current.virtualItems).toEqual([]);
-      expect(result.current.totalSize).toBe(0);
+      // ✅ SSR FIX: Before RAF, SSR items are present for hydration
+      // Items have estimated positions based on count and estimateSize
+      expect(result.current.virtualItems).toHaveLength(1);
+      expect(result.current.totalSize).toBe(200); // 1 item * 200px estimate
 
-      // RAF callback should be scheduled
+      // RAF callback should be scheduled to refine with actual measurements
       expect(rafCallbacks.length).toBeGreaterThan(0);
     });
 
-    it('updates virtualItems after RAF executes', () => {
+    it('updates virtualItems with actual measurements after RAF executes', () => {
       const mockVirtualItems = [
         { index: 0, key: '0', start: 0, end: 200, size: 200, lane: 0 },
         { index: 1, key: '1', start: 200, end: 400, size: 200, lane: 0 },
@@ -641,15 +642,16 @@ describe('useVirtualizedTimeline - Scroll Behavior', () => {
         }),
       );
 
-      // Before RAF
-      expect(result.current.virtualItems).toEqual([]);
+      // ✅ SSR FIX: Before RAF, SSR items exist for hydration
+      expect(result.current.virtualItems).toHaveLength(2);
+      expect(result.current.totalSize).toBe(400); // 2 items * 200px estimate
 
       // Execute RAF
       act(() => {
         rafCallbacks.forEach(cb => cb());
       });
 
-      // After RAF: state populated
+      // After RAF: state refined with actual virtualizer measurements
       expect(result.current.virtualItems).toEqual(mockVirtualItems);
       expect(result.current.totalSize).toBe(400);
     });

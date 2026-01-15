@@ -15,7 +15,7 @@ import {
   streamText,
   wrapLanguageModel,
 } from 'ai';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
@@ -83,6 +83,7 @@ import {
   clearActiveParticipantStream,
   completeParticipantStreamBuffer,
   failParticipantStreamBuffer,
+  getThreadActiveStream,
   initializeParticipantStreamBuffer,
   markStreamActive,
   markStreamCompleted,
@@ -100,16 +101,32 @@ import {
   getUserTier,
 } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
-import type { CitableSource } from '@/api/types/citations';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { completeStreamingMetadata, createStreamingMetadata, getRoundNumber } from '@/lib/utils';
+import { cleanCitationExcerpt, completeStreamingMetadata, createStreamingMetadata, getRoundNumber } from '@/lib/utils';
 
 import type { streamChatRoute } from '../route';
 import { StreamChatRequestSchema } from '../schema';
 import { chatMessagesToUIMessages } from './helpers';
+
+// ============================================================================
+// Memory Safety Constants
+// ============================================================================
+
+/**
+ * Maximum messages to load from DB per streaming request
+ *
+ * Prevents memory exhaustion in Cloudflare Workers (128MB limit)
+ * by limiting conversation context. The most recent N messages are kept.
+ *
+ * 150 messages × ~2KB avg = ~300KB, leaving headroom for:
+ * - System prompts with RAG context (~50KB)
+ * - Attachment content (~20MB limit via separate constant)
+ * - Response buffering and SDK overhead
+ */
+const MAX_CONTEXT_MESSAGES = 150;
 
 // ============================================================================
 // Streaming Chat Handler
@@ -144,20 +161,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       } = c.validated.body;
 
       // 🔍 DEBUG: Log incoming request for troubleshooting 400 errors
-      // Enable with DEBUG_REQUESTS=true
-      if (process.env.DEBUG_REQUESTS === 'true') {
-        console.error('[STREAM-DEBUG] Request body:', {
-          hasMessage: !!message,
-          messageId: message?.id,
-          messageRole: message?.role,
-          hasParts: !!message?.parts,
-          partsLength: message?.parts?.length,
-          threadId,
-          participantIndex,
-          participantCount: providedParticipants?.length,
-          enableWebSearch: providedEnableWebSearch,
-        });
-      }
+      // Debug logging removed - use proper logger if needed
 
       // =========================================================================
       // STEP 1: Validate incoming message
@@ -410,17 +414,23 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // =========================================================================
       // STEP 8: Load Previous Messages and Prepare for Streaming (parallelized with user tier check)
       // =========================================================================
-      const [allDbMessages, userTier] = await Promise.all([
+      // ✅ MEMORY SAFETY: Limit messages to prevent Worker memory exhaustion
+      // Query in descending order to get most recent messages, then reverse for chronological context
+      const [recentDbMessages, userTier] = await Promise.all([
         db.query.chatMessage.findMany({
           where: eq(tables.chatMessage.threadId, threadId),
           orderBy: [
-            asc(tables.chatMessage.roundNumber),
-            asc(tables.chatMessage.createdAt),
-            asc(tables.chatMessage.id),
+            desc(tables.chatMessage.roundNumber),
+            desc(tables.chatMessage.createdAt),
+            desc(tables.chatMessage.id),
           ],
+          limit: MAX_CONTEXT_MESSAGES,
         }),
         getUserTier(user.id),
       ]);
+
+      // Reverse to restore chronological order for AI context
+      const allDbMessages = recentDbMessages.reverse();
 
       // ✅ FIX: Filter out moderator messages from conversation context
       // Moderator messages are round summaries that should not be included in
@@ -455,13 +465,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         if (!existsInDb) {
           // Check if this is an optimistic message (created by frontend before PATCH)
           // Optimistic messages have format: "optimistic-user-{roundNumber}-{timestamp}"
-          const isOptimisticMessage = lookupMessageId.startsWith('optimistic-');
-          if (!isOptimisticMessage) {
-            // Only warn for non-optimistic messages - those should have been persisted via PATCH
-            console.error(`[stream] User message not found in DB, expected pre-persisted: ${lookupMessageId} (userMessageId=${userMessageId}, message.id=${message.id})`);
-          }
           // For optimistic messages, this is a timing race between store update and streaming
           // The message will be persisted by the PATCH that's running concurrently
+          // Note: Non-optimistic messages should have been persisted via PATCH
         }
       }
 
@@ -481,13 +487,23 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           }
         : undefined;
 
+      // ✅ FIX: Resolve attachmentIds from KV for subsequent participants (P1+)
+      // P0 receives attachmentIds from request body, P1+ need to fetch from KV
+      let resolvedAttachmentIds = attachmentIds;
+      if (!resolvedAttachmentIds?.length && (participantIndex ?? 0) > 0) {
+        const activeStream = await getThreadActiveStream(threadId, c.env);
+        if (activeStream?.attachmentIds?.length) {
+          resolvedAttachmentIds = activeStream.attachmentIds;
+        }
+      }
+
       // Prepare and validate messages
       const modelMessages = await prepareValidatedMessages({
         previousDbMessages,
         newMessage: message,
         r2Bucket: c.env.UPLOADS_R2_BUCKET,
         db,
-        attachmentIds,
+        attachmentIds: resolvedAttachmentIds,
       }).then(result => result.modelMessages);
 
       // Build system prompt with RAG context and citation support
@@ -512,20 +528,33 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             UPLOADS_R2_BUCKET: c.env.UPLOADS_R2_BUCKET,
           },
           db,
-          attachmentIds,
+          attachmentIds: resolvedAttachmentIds, // ✅ FIX: Use resolved attachmentIds (includes KV lookup for P1+)
         });
 
-      const availableSources = citableSources
-        .filter((source): source is CitableSource => source.type === 'attachment')
-        .map(source => ({
-          id: source.id,
-          sourceType: source.type,
-          title: source.title,
+      // Include ALL citable sources in metadata (not just attachments)
+      // This enables frontend to show citation sources for all types during streaming
+      const availableSources = citableSources.map(source => ({
+        id: source.id,
+        sourceType: source.type,
+        title: source.title,
+        // Sanitize content excerpt - removes HTML tags, iframes, scripts from scraped content
+        ...(source.content && { excerpt: cleanCitationExcerpt(source.content, 300) }),
+        // Attachment-specific fields (optional for other types)
+        ...(source.type === 'attachment' && {
           downloadUrl: source.metadata.downloadUrl,
           filename: source.metadata.filename,
           mimeType: source.metadata.mimeType,
           fileSize: source.metadata.fileSize,
-        }));
+        }),
+        // Search-specific fields
+        ...(source.type === 'search' && {
+          url: source.metadata.url,
+          domain: source.metadata.domain,
+        }),
+        // Memory/thread fields
+        ...(source.metadata.threadTitle && { threadTitle: source.metadata.threadTitle }),
+        ...(source.metadata.description && { description: source.metadata.description }),
+      }));
 
       // Calculate token limits
       const systemPromptTokens = Math.ceil(systemPrompt.length / 4);
@@ -743,11 +772,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       if (!firstParticipant) {
         throw createError.badRequest('No participants configured for thread', ErrorContextBuilders.validation('participants'));
       }
-      const highestMultiplierModel = participants.reduce((max, p) => {
+      // ✅ PERF: Single pass to find highest multiplier (O(n) instead of O(2n))
+      let highestMultiplierModel = firstParticipant;
+      let maxMultiplier = getModelCreditMultiplierById(firstParticipant.modelId, getModelById);
+      for (let i = 1; i < participants.length; i++) {
+        const p = participants[i]!;
         const multiplier = getModelCreditMultiplierById(p.modelId, getModelById);
-        const maxMultiplier = getModelCreditMultiplierById(max.modelId, getModelById);
-        return multiplier > maxMultiplier ? p : max;
-      }, firstParticipant);
+        if (multiplier > maxMultiplier) {
+          maxMultiplier = multiplier;
+          highestMultiplierModel = p;
+        }
+      }
       const estimatedCredits = estimateWeightedCredits(
         participants.length,
         highestMultiplierModel.modelId,
@@ -782,6 +817,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // ✅ RESUMABLE STREAMS: Set thread-level active stream for AI SDK resume pattern
         // This enables the frontend to detect and resume this stream after page reload
         // ✅ FIX: Pass total participants count for proper round-level tracking
+        // ✅ FIX: Pass attachmentIds for sharing across all participants in the round
         setThreadActiveStream(
           threadId,
           streamMessageId,
@@ -789,6 +825,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
           participants.length, // ✅ FIX: Track total participants for round completion detection
           c.env,
+          undefined, // logger
+          attachmentIds, // ✅ FIX: Store attachmentIds in KV for P1+ participants
         ),
       ]);
 
@@ -909,20 +947,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // We don't know how many credits were reserved, so we pass estimatedCredits
           try {
             await releaseReservation(user.id, streamMessageId, estimatedCredits);
-          } catch (releaseError) {
-            console.error('[StreamText onError] Failed to release credit reservation:', releaseError);
+          } catch {
+            // Failed to release credit reservation - will be handled by cleanup
           }
-
-          // ✅ ERROR LOGGING: Log error for debugging
-          console.error('[StreamText onError]', {
-            errorName: error instanceof Error ? error.name : 'Unknown',
-            errorMessage:
-              error instanceof Error ? error.message : String(error),
-            modelId: participant.modelId,
-            participantId: participant.id,
-            threadId,
-            roundNumber: currentRoundNumber,
-          });
 
           // ✅ BACKGROUND STREAMING: Detect timeout aborts
           // Abort errors come from AbortSignal.timeout() when stream exceeds time limit
@@ -1249,7 +1276,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // phase=participants instead of next phase, triggering participant re-execution.
           // By calling these here (in onFinish which runs before response ends), we ensure
           // KV state is correct even if consumeSseStream hasn't finished buffering.
-          console.error(`[participant] onFinish: marking stream complete and clearing active key for r${currentRoundNumber} p${participantIndex ?? DEFAULT_PARTICIPANT_INDEX}`);
           await Promise.all([
             markStreamCompleted(
               threadId,
@@ -1410,23 +1436,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // ✅ TYPE-SAFE ERROR EXTRACTION: Use error utility for consistent error handling
           const streamErrorMessage = getErrorMessage(error);
           const errorName = getErrorName(error);
-          const statusCode = getErrorStatusCode(error);
-
-          // ✅ ERROR LOGGING: Log full error details for debugging
-          // ✅ TYPE-SAFE: Use extractAISdkError for responseBody extraction
-          const aiSdkError = extractAISdkError(error);
-          console.error('[Streaming Error]', {
-            errorName,
-            errorMessage: streamErrorMessage,
-            statusCode,
-            modelId: participant.modelId,
-            participantId: participant.id,
-            threadId,
-            roundNumber: currentRoundNumber,
-            traceId: llmTraceId,
-            // Include response body for provider errors (type-safe extraction)
-            responseBody: aiSdkError?.responseBody?.substring(0, 500),
-          });
 
           // ✅ BACKGROUND STREAMING: Detect ONLY actual timeout aborts
           // Abort errors come from AbortSignal.timeout() when stream exceeds time limit

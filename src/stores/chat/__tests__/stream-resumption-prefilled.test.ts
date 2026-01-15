@@ -36,7 +36,7 @@ type MessagePart = {
 
 type UIMessage = {
   id: string;
-  role: MessageRoles.USER | 'assistant';
+  role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT;
   parts: MessagePart[];
   metadata?: DbMessageMetadata;
 };
@@ -119,7 +119,7 @@ function createMockThread(): ChatThread {
  */
 function createMockPreSearch(
   roundNumber: number,
-  status: string,
+  status: typeof MessageStatuses[keyof typeof MessageStatuses],
 ): PreSearch {
   return {
     id: `presearch-${roundNumber}`,
@@ -525,7 +525,7 @@ describe('stream Resumption with Prefilled State', () => {
               { type: 'step-start' },
               { type: 'text', text: 'Mars colonization is neither pure', state: TextPartStates.STREAMING },
             ],
-            metadata: { participantIndex: 0, finishReason: 'unknown' },
+            metadata: { participantIndex: 0, finishReason: FinishReasons.UNKNOWN },
           },
         ],
       };
@@ -535,7 +535,7 @@ describe('stream Resumption with Prefilled State', () => {
       const participantFinishReason = stateAfterDeadStream.messages[1]?.metadata?.finishReason;
 
       // Expected: Detect stream ended without completion
-      const streamEndedWithoutCompletion = aiSdkStatus === 'ready' && participantFinishReason === 'unknown';
+      const streamEndedWithoutCompletion = aiSdkStatus === 'ready' && participantFinishReason === FinishReasons.UNKNOWN;
       expect(streamEndedWithoutCompletion).toBe(true);
 
       // Expected: isExplicitlyStreaming should be cleared
@@ -576,13 +576,13 @@ describe('stream Resumption with Prefilled State', () => {
               { type: 'step-start' },
               { type: 'text', text: 'Complete response from participant 0', state: TextPartStates.DONE },
             ],
-            metadata: { participantIndex: 0, finishReason: 'stop' },
+            metadata: { participantIndex: 0, finishReason: FinishReasons.STOP },
           },
         ],
       };
 
       const participantFinishReason = stateAfterCompletion.messages[1]?.metadata?.finishReason;
-      const participantCompleted = participantFinishReason === 'stop' || participantFinishReason === 'length';
+      const participantCompleted = participantFinishReason === FinishReasons.STOP || participantFinishReason === FinishReasons.LENGTH;
 
       expect(participantCompleted).toBe(true);
       expect(stateAfterCompletion.nextParticipantToTrigger).toBe(1);
@@ -670,7 +670,7 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Determine if participant is complete
       const finishReason = participantMessage.metadata.finishReason;
-      const isComplete = finishReason === 'stop' || finishReason === 'length';
+      const isComplete = finishReason === FinishReasons.STOP || finishReason === FinishReasons.LENGTH;
       const hasContent = participantMessage.parts.length > 0;
       const hasTextPart = participantMessage.parts.some(p => p.type === 'text' && p.text);
 
@@ -694,9 +694,9 @@ describe('stream Resumption with Prefilled State', () => {
        */
 
       const participantStatuses = [
-        { index: 0, hasContent: true, finishReason: 'unknown' }, // Incomplete
-        { index: 1, hasContent: false, finishReason: 'unknown' }, // Not started
-        { index: 2, hasContent: false, finishReason: 'unknown' }, // Not started
+        { index: 0, hasContent: true, finishReason: FinishReasons.UNKNOWN }, // Incomplete
+        { index: 1, hasContent: false, finishReason: FinishReasons.UNKNOWN }, // Not started
+        { index: 2, hasContent: false, finishReason: FinishReasons.UNKNOWN }, // Not started
       ];
 
       // Wrong logic: skip if has content
@@ -705,7 +705,7 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Correct logic: skip if completed
       const isParticipantComplete = (p: typeof participantStatuses[0]) =>
-        p.finishReason === 'stop' || p.finishReason === 'length';
+        p.finishReason === FinishReasons.STOP || p.finishReason === FinishReasons.LENGTH;
       const correctNextParticipant = participantStatuses.findIndex(p => !isParticipantComplete(p));
       expect(correctNextParticipant).toBe(0); // Correct: starts at 0
 
@@ -730,25 +730,25 @@ describe('stream Resumption with Prefilled State', () => {
     it('should never have status=complete with searchData=null', () => {
       /**
        * Valid states for pre-search:
-       * - status='pending', searchData=null (waiting to start)
-       * - status='streaming', searchData=null (in progress)
-       * - status='complete', searchData={...} (finished successfully)
-       * - status='failed', searchData=null, errorMessage='...' (error)
+       * - status=MessageStatuses.PENDING, searchData=null (waiting to start)
+       * - status=MessageStatuses.STREAMING, searchData=null (in progress)
+       * - status=MessageStatuses.COMPLETE, searchData={...} (finished successfully)
+       * - status=MessageStatuses.FAILED, searchData=null, errorMessage='...' (error)
        *
        * Invalid states:
-       * - status='complete', searchData=null (BUG!)
-       * - status='complete', completedAt=null (BUG!)
+       * - status=MessageStatuses.COMPLETE, searchData=null (BUG!)
+       * - status=MessageStatuses.COMPLETE, completedAt=null (BUG!)
        */
 
       const invalidPreSearch = {
-        status: 'complete',
+        status: MessageStatuses.COMPLETE,
         searchData: null,
         completedAt: null,
       };
 
       // Validate: if status is complete, must have searchData and completedAt
       const isValidComplete
-        = invalidPreSearch.status !== 'complete'
+        = invalidPreSearch.status !== MessageStatuses.COMPLETE
           || (invalidPreSearch.searchData !== null && invalidPreSearch.completedAt !== null);
 
       expect(isValidComplete).toBe(false); // Shows the bug - invalid state exists
@@ -785,12 +785,12 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Frontend should update both status AND searchData together
       const correctUpdate = {
-        status: 'complete',
+        status: MessageStatuses.COMPLETE,
         searchData: parsed,
         completedAt: new Date(),
       };
 
-      expect(correctUpdate.status).toBe('complete');
+      expect(correctUpdate.status).toBe(MessageStatuses.COMPLETE);
       expect(correctUpdate.searchData).not.toBeNull();
       expect(correctUpdate.completedAt).not.toBeNull();
     });

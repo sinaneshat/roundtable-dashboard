@@ -376,6 +376,45 @@ export function hasError(metadata: unknown): boolean {
 }
 
 /**
+ * Extract availableSources from metadata (streaming-safe)
+ *
+ * During streaming, the metadata might not pass full DbAssistantMessageMetadataSchema
+ * validation because some required fields (like finishReason, usage) are only
+ * populated at the 'finish' event. This function extracts availableSources even
+ * when full validation fails, enabling citation display during streaming.
+ *
+ * **PURPOSE**: Enable citation display during streaming before metadata is complete
+ */
+export function getAvailableSources(
+  metadata: unknown,
+): DbAssistantMessageMetadata['availableSources'] | null {
+  // Try full validation first
+  const validated = getAssistantMetadata(metadata);
+  if (validated?.availableSources) {
+    return validated.availableSources;
+  }
+
+  // Fallback: Extract availableSources even when full schema validation fails
+  // This handles streaming metadata that has availableSources but is missing
+  // required fields like finishReason or usage
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  if ('availableSources' in metadata && Array.isArray(metadata.availableSources)) {
+    // Validate the availableSources array structure minimally
+    const sources = metadata.availableSources;
+    if (sources.length > 0 && sources.every((s: unknown) =>
+      s && typeof s === 'object' && 'id' in s && 'sourceType' in s && 'title' in s,
+    )) {
+      return sources as DbAssistantMessageMetadata['availableSources'];
+    }
+  }
+
+  return null;
+}
+
+/**
  * Check if message is pre-search
  * Returns true only if metadata validates as PreSearchMessageMetadata
  *
@@ -384,6 +423,113 @@ export function hasError(metadata: unknown): boolean {
 export function isPreSearch(metadata: unknown): boolean {
   const validated = getPreSearchMetadata(metadata);
   return validated !== null;
+}
+
+// ============================================================================
+// Upload Metadata Extraction
+// ============================================================================
+
+/**
+ * Extract extractedText from upload metadata
+ *
+ * Upload metadata may contain text extracted from documents (PDFs, text files, etc.)
+ * during processing. This helper provides type-safe access to that text.
+ *
+ * **REPLACES**: `(upload.metadata as { extractedText?: string } | null)?.extractedText`
+ *
+ * @param metadata - Upload metadata object (from upload.metadata field)
+ * @returns Extracted text or null if not available
+ *
+ * @example
+ * ```typescript
+ * const text = getExtractedText(upload.metadata);
+ * if (text) {
+ *   // Use extracted text for citation or context
+ *   const preview = text.slice(0, 500);
+ * }
+ * ```
+ */
+export function getExtractedText(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  // Use minimal Zod schema for extractedText field extraction
+  const ExtractedTextSchema = z.object({
+    extractedText: z.string().min(1),
+  });
+
+  const result = ExtractedTextSchema.partial().safeParse(metadata);
+  if (result.success && result.data.extractedText) {
+    return result.data.extractedText;
+  }
+
+  return null;
+}
+
+/**
+ * Normalize openRouterError to record format
+ *
+ * ErrorMetadataSchema allows openRouterError to be string or record,
+ * but buildAssistantMetadata requires a record with specific value types.
+ * This helper safely converts the union type to the expected record format.
+ *
+ * **REPLACES**: `metadata.openRouterError as Record<string, string | number | boolean | null>`
+ *
+ * @param openRouterError - OpenRouter error from ErrorMetadataSchema (string | record | undefined)
+ * @returns Type-safe record or undefined
+ *
+ * @example
+ * ```typescript
+ * const normalized = normalizeOpenRouterError(errorMetadata?.openRouterError);
+ * const metadata = buildAssistantMetadata({}, {
+ *   openRouterError: normalized,
+ * });
+ * ```
+ */
+export function normalizeOpenRouterError(
+  openRouterError: unknown,
+): Record<string, string | number | boolean | null> | undefined {
+  if (!openRouterError) {
+    return undefined;
+  }
+
+  // If it's a string, wrap it in a record
+  if (typeof openRouterError === 'string') {
+    return { message: openRouterError };
+  }
+
+  // If it's an object, validate and filter to allowed types
+  if (typeof openRouterError === 'object' && openRouterError !== null) {
+    const OpenRouterErrorRecordSchema = z.record(
+      z.string(),
+      z.union([z.string(), z.number(), z.boolean(), z.null()]),
+    );
+
+    const result = OpenRouterErrorRecordSchema.safeParse(openRouterError);
+    if (result.success) {
+      return result.data;
+    }
+
+    // Fallback: filter unknown values to null
+    const filtered: Record<string, string | number | boolean | null> = {};
+    for (const [key, value] of Object.entries(openRouterError)) {
+      if (
+        typeof value === 'string'
+        || typeof value === 'number'
+        || typeof value === 'boolean'
+        || value === null
+      ) {
+        filtered[key] = value;
+      } else {
+        // Convert unsupported types to null
+        filtered[key] = null;
+      }
+    }
+    return filtered;
+  }
+
+  return undefined;
 }
 
 // ============================================================================
@@ -471,7 +617,12 @@ export function requirePreSearchMetadata(
  * @param options.hasError - Whether message has error
  * @param options.errorType - Type of error if present
  * @param options.errorMessage - Error message if present
- * @param options.additionalFields - Additional metadata fields to include
+ * @param options.errorCategory - Error category for grouping
+ * @param options.rawErrorMessage - Raw error message from provider
+ * @param options.providerMessage - Provider-specific error message
+ * @param options.statusCode - HTTP status code if applicable
+ * @param options.openRouterError - OpenRouter-specific error details
+ * @param options.openRouterCode - OpenRouter error code
  * @returns Fully constructed AssistantMessageMetadata
  *
  * @example
@@ -509,7 +660,12 @@ export function buildAssistantMetadata(
     hasError?: boolean;
     errorType?: string;
     errorMessage?: string;
-    additionalFields?: Record<string, unknown>;
+    errorCategory?: string;
+    rawErrorMessage?: string;
+    providerMessage?: string;
+    statusCode?: number;
+    openRouterError?: Record<string, string | number | boolean | null>;
+    openRouterCode?: string | number;
   },
 ): DbAssistantMessageMetadata {
   // Build the metadata object with role as discriminator
@@ -533,8 +689,22 @@ export function buildAssistantMetadata(
     ...(options.hasError !== undefined && { hasError: options.hasError }),
     ...(options.errorType && { errorType: options.errorType }),
     ...(options.errorMessage && { errorMessage: options.errorMessage }),
-    // Additional fields (spread at end to allow overrides)
-    ...options.additionalFields,
+    ...(options.errorCategory && { errorCategory: options.errorCategory }),
+    ...(options.rawErrorMessage && { rawErrorMessage: options.rawErrorMessage }),
+    ...(options.providerMessage && { providerMessage: options.providerMessage }),
+    ...(options.statusCode !== undefined && { statusCode: options.statusCode }),
+    ...(options.openRouterError && { openRouterError: options.openRouterError }),
+    ...(options.openRouterCode !== undefined && { openRouterCode: options.openRouterCode }),
+    // Citation fields - preserve from backend streaming metadata
+    ...(baseMetadata.availableSources && baseMetadata.availableSources.length > 0 && {
+      availableSources: baseMetadata.availableSources,
+    }),
+    ...(baseMetadata.citations && baseMetadata.citations.length > 0 && {
+      citations: baseMetadata.citations,
+    }),
+    ...(baseMetadata.reasoningDuration !== undefined && baseMetadata.reasoningDuration > 0 && {
+      reasoningDuration: baseMetadata.reasoningDuration,
+    }),
   } as DbAssistantMessageMetadata;
 
   return metadata;

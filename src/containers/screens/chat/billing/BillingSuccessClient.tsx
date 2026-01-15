@@ -24,7 +24,7 @@ export function BillingSuccessClient() {
   const syncMutation = useSyncAfterCheckoutMutation();
 
   const subscriptionsQuery = useSubscriptionsQuery();
-  const usageStatsQuery = useUsageStatsQuery({ forceEnabled: true });
+  const usageStatsQuery = useUsageStatsQuery();
 
   const hasInitiatedSync = useRef(false);
   const readyTimeoutRef = useRef<NodeJS.Timeout | null>(null);

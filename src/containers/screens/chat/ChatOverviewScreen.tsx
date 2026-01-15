@@ -548,7 +548,15 @@ export default function ChatOverviewScreen() {
   });
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
-  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting || isModelsLoading || isAnalyzingPrompt;
+
+  // Core operation blocking (excludes loading states for hydration safety)
+  const isOperationBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting || isAnalyzingPrompt;
+
+  // Full UI blocking includes loading states
+  const isInitialUIInputBlocked = isOperationBlocked || isModelsLoading;
+
+  // Toggle can work even while models load - only block during active operations
+  const isToggleDisabled = isOperationBlocked;
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
 
   const lastResetPathRef = useRef<string | null>(null);
@@ -772,9 +780,10 @@ export default function ChatOverviewScreen() {
       onWebSearchToggle={handleWebSearchToggle}
       onAttachmentClick={handleAttachmentClick}
       attachmentCount={chatAttachments.attachments.length}
-      enableAttachments={!isInitialUIInputBlocked}
-      disabled={isInitialUIInputBlocked}
+      enableAttachments={!isOperationBlocked}
+      disabled={isOperationBlocked}
       autoMode={autoMode}
+      isModelsLoading={isModelsLoading}
     />
   ), [
     selectedParticipants,
@@ -786,12 +795,15 @@ export default function ChatOverviewScreen() {
     handleWebSearchToggle,
     handleAttachmentClick,
     chatAttachments.attachments.length,
-    isInitialUIInputBlocked,
+    isOperationBlocked,
+    isModelsLoading,
     autoMode,
   ]);
 
   const sharedChatInputProps = useMemo(() => {
-    const status: ChatStatus = isInitialUIInputBlocked ? 'submitted' : 'ready';
+    // Use isOperationBlocked (not isInitialUIInputBlocked) to avoid hydration mismatch
+    // isModelsLoading differs SSR/client but shouldn't block showing ready UI
+    const status: ChatStatus = isOperationBlocked ? 'submitted' : 'ready';
     return {
       value: inputValue,
       onChange: setInputValue,
@@ -799,21 +811,23 @@ export default function ChatOverviewScreen() {
       status,
       placeholder: t('chat.input.placeholder'),
       participants: selectedParticipants,
-      onRemoveParticipant: isInitialUIInputBlocked ? undefined : removeParticipant,
+      onRemoveParticipant: isOperationBlocked ? undefined : removeParticipant,
       attachments: chatAttachments.attachments,
       onAddAttachments: chatAttachments.addFiles,
       onRemoveAttachment: chatAttachments.removeAttachment,
-      enableAttachments: !isInitialUIInputBlocked,
+      enableAttachments: !isOperationBlocked,
       attachmentClickRef,
       toolbar: chatInputToolbar,
       isSubmitting: formActions.isSubmitting,
       isUploading: chatAttachments.isUploading,
+      isModelsLoading, // Pass loading state for internal UI updates
     };
   }, [
     inputValue,
     setInputValue,
     handlePromptSubmit,
-    isInitialUIInputBlocked,
+    isOperationBlocked,
+    isModelsLoading,
     t,
     selectedParticipants,
     removeParticipant,
@@ -930,7 +944,7 @@ export default function ChatOverviewScreen() {
                               autoMode={autoMode}
                               onAutoModeChange={setAutoMode}
                               isAnalyzing={isAnalyzingPrompt}
-                              disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
+                              disabled={isToggleDisabled && !isAnalyzingPrompt}
                               borderVariant={headerBorderVariant}
                             />
                             <ChatInput {...sharedChatInputProps} className="rounded-t-none border-t-0" hideInternalAlerts borderVariant={headerBorderVariant} />
@@ -957,7 +971,7 @@ export default function ChatOverviewScreen() {
                           autoMode={autoMode}
                           onAutoModeChange={setAutoMode}
                           isAnalyzing={isAnalyzingPrompt}
-                          disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
+                          disabled={isToggleDisabled && !isAnalyzingPrompt}
                           borderVariant={headerBorderVariant}
                         />
                         <ChatInput {...sharedChatInputProps} className="rounded-t-none border-t-0" hideInternalAlerts borderVariant={headerBorderVariant} />

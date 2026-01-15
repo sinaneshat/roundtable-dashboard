@@ -1187,30 +1187,58 @@ ${att.textContent}
     } else {
       // Binary files (images, PDFs) - metadata only, content passed as multimodal
       return `<file id="${att.citationId}" index="${index + 1}" name="${att.filename}" type="${att.mimeType}" size="${sizeKB}KB">
-[Visual content - analyze directly from the image/document above]
+[Visual/document content provided as multimodal input - cite this file when referencing its content]
 </file>`;
     }
   });
 
+  // Build citation ID list with emphasis
+  const citationList = attachments
+    .map((att, i) => `  ${i + 1}. "${att.filename}" → cite as [${att.citationId}]`)
+    .join('\n');
+
+  // Strong citation requirements with specific excerpt instructions
   return `
+
+## 🚨 MANDATORY: File Citation Requirements
+
+**YOU MUST CITE uploaded files when using their content. This is NOT optional.**
+
+### Available Files to Cite:
+${citationList}
+
+### Citation Rules (MUST FOLLOW):
+
+1. **EVERY claim from a file needs a citation**
+   When you state ANY fact, name, date, number, or detail from a file, add the citation marker immediately after.
+
+2. **Use the EXACT citation format: [att_xxxxxxxx]**
+   Do NOT abbreviate, modify, or skip the citation ID. Copy it exactly as shown above.
+
+3. **Quote or paraphrase specific content**
+   Don't just cite - show WHAT you're citing by quoting or describing the specific part.
+
+### Correct Citation Examples:
+
+✅ GOOD (shows specific content + citation):
+- "According to the document, the user's first workplace was 'Company ABC' [${attachments[0]?.citationId || 'att_example'}]."
+- "The resume states: 'Worked at XYZ Corp from 2018-2020' [${attachments[0]?.citationId || 'att_example'}]."
+- "The file shows the configuration uses port 3000 [${attachments[0]?.citationId || 'att_example'}]."
+
+❌ BAD (no citation or no specific content):
+- "The first workplace was Company ABC." ← MISSING CITATION
+- "Based on the document, they worked somewhere." ← TOO VAGUE
+- "The file mentions some experience." ← NOT SPECIFIC
+
+### For PDFs and Images:
+When referencing visual content (PDFs, images), you MUST still cite:
+- "The PDF shows the user worked at Company X from 2017-2020 [${attachments[0]?.citationId || 'att_example'}]."
+- "Looking at the resume image, the education section lists MIT [${attachments[0]?.citationId || 'att_example'}]."
 
 <uploaded-files>
 ${fileEntries.join('\n\n')}
 </uploaded-files>
 
-## Citation Instructions
-When you use information from the uploaded files above, you MUST cite the source using its exact ID in square brackets.
-
-**Format**: Place the citation marker [att_xxxxxxxx] immediately after the information you're referencing.
-
-**Examples**:
-- "The configuration shows port 3000 [att_abc12345]"
-- "According to the document [att_xyz98765], the API endpoint is..."
-- "The code implements a retry mechanism [att_def45678] with exponential backoff"
-
-**Rules**:
-1. Use the EXACT citation ID from the file's "id" attribute (e.g., att_abc12345)
-2. Place citations inline, right after the relevant statement
-3. You may cite the same source multiple times if referencing different parts
-4. Do NOT modify or abbreviate the citation ID`;
+---
+**Remember: NO citation = INCOMPLETE RESPONSE. Always cite your sources from the uploaded files.**`;
 }

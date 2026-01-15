@@ -225,9 +225,10 @@ describe('useVirtualizedTimeline', () => {
       // Instead, RAF should be scheduled
       expect(rafCallbacks.length).toBeGreaterThan(0);
 
-      // State should be default (empty) until RAF fires
-      expect(result.current.virtualItems).toEqual([]);
-      expect(result.current.totalSize).toBe(0);
+      // ✅ SSR FIX: State has estimated SSR items immediately (prevents hydration flash)
+      // RAF will refine with actual virtualizer measurements
+      expect(result.current.virtualItems).toHaveLength(3);
+      expect(result.current.totalSize).toBe(600); // 3 items * 200px estimate
 
       // No flushSync warning should have been logged
       const flushSyncError = consoleErrorSpy.mock.calls.find(
@@ -236,7 +237,7 @@ describe('useVirtualizedTimeline', () => {
       expect(flushSyncError).toBeUndefined();
     });
 
-    it('should NOT call getTotalSize during initial render - defers via RAF', () => {
+    it('uses SSR estimated size initially, RAF refines with actual measurements', () => {
       const timelineItems = [createMockTimelineItem(0, 'messages')];
 
       mockGetTotalSize.mockClear();
@@ -249,19 +250,19 @@ describe('useVirtualizedTimeline', () => {
         }),
       );
 
-      // totalSize should be 0 (default) until RAF fires
-      expect(result.current.totalSize).toBe(0);
+      // ✅ SSR FIX: totalSize has estimated value for SSR (1 item * 200px)
+      expect(result.current.totalSize).toBe(200);
 
       // Execute RAF callbacks
       act(() => {
         rafCallbacks.forEach(cb => cb());
       });
 
-      // Now totalSize should be populated
+      // Now totalSize should be refined with actual virtualizer measurement
       expect(result.current.totalSize).toBe(500);
     });
 
-    it('should populate state after RAF callback fires', () => {
+    it('should refine state with actual measurements after RAF fires', () => {
       const timelineItems = [createMockTimelineItem(0, 'messages')];
 
       mockGetVirtualItems.mockReturnValue([
@@ -277,15 +278,16 @@ describe('useVirtualizedTimeline', () => {
         }),
       );
 
-      // Before RAF: empty state
-      expect(result.current.virtualItems).toEqual([]);
+      // ✅ SSR FIX: Before RAF, SSR items exist for hydration
+      expect(result.current.virtualItems).toHaveLength(1);
+      expect(result.current.totalSize).toBe(200); // 1 item * 200px estimate
 
       // Execute RAF callbacks
       act(() => {
         rafCallbacks.forEach(cb => cb());
       });
 
-      // After RAF: state should be populated
+      // After RAF: state refined with actual virtualizer measurements
       expect(result.current.virtualItems).toHaveLength(2);
       expect(result.current.totalSize).toBe(400);
     });

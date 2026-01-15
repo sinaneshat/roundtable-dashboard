@@ -447,7 +447,7 @@ describe('participant Streaming Sequence', () => {
       const message = buildMessageFromState(state, metadata);
 
       expect(message.id).toBe('thread-123_r0_p0');
-      expect(message.role).toBe('assistant');
+      expect(message.role).toBe(UIMessageRoles.ASSISTANT);
       expect(message.content).toBe('Hello world!');
       expect(message.parts).toHaveLength(1);
       expect(message.parts[0].type).toBe('text');

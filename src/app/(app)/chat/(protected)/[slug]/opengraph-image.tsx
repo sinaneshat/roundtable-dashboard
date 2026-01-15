@@ -4,7 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import type { ChatMode } from '@/api/core/enums';
 import { ChatModes, DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { BRAND } from '@/constants';
-import { getOGFontsSync } from '@/lib/ui/og-fonts.server';
+import { getOGFontsSync } from '@/lib/ui/og-assets.generated';
 import {
   createGradient,
   OG_COLORS,

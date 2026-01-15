@@ -134,12 +134,10 @@ const nextConfig: NextConfig = {
     'elkjs',
     'langium',
     'chevrotain',
-    // KaTeX math rendering (~600KB)
-    'katex',
+    // NOTE: katex removed from serverExternalPackages because streamdown imports
+    // katex/dist/katex.min.css which can't be externalized (Node.js only handles .js/.json/.node)
     // Heavy unified/remark/rehype plugins
     'unified',
-    'remark-math',
-    'rehype-katex',
     'marked',
   ],
 

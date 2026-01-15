@@ -54,4 +54,6 @@ export * from './typed-test-mocks';
 // Testing Library Utilities (imported from canonical sources)
 // ============================================================================
 export { act, screen, waitFor, within } from '@testing-library/react';
+// Exception: Re-exporting default export as named export is acceptable for testing utilities
+// This centralizes test imports and follows testing-library community conventions
 export { default as userEvent } from '@testing-library/user-event';

@@ -109,15 +109,15 @@ async function analyzeImagesForSearchContext(
     const filePartsList = imageFileParts
       .filter(part => part.data && part.mimeType)
       .map((part) => {
-        // Convert Uint8Array to base64 using chunked approach
+        // ✅ PERF: Convert Uint8Array to base64 using array collect pattern (O(n) vs O(n²))
         const bytes = part.data!;
-        let binary = '';
+        const chunks: string[] = [];
         const chunkSize = 8192;
         for (let i = 0; i < bytes.length; i += chunkSize) {
           const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-          binary += String.fromCharCode(...chunk);
+          chunks.push(String.fromCharCode(...chunk));
         }
-        const base64 = btoa(binary);
+        const base64 = btoa(chunks.join(''));
         const dataUrl = `data:${part.mimeType};base64,${base64}`;
         return {
           type: 'file' as const,

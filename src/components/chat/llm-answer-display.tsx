@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import ReactMarkdown from 'react-markdown';
 import { Streamdown } from 'streamdown';
 
@@ -17,6 +18,8 @@ type LLMAnswerDisplayProps = {
 };
 
 export function LLMAnswerDisplay({ answer, isStreaming = false, className, sources }: LLMAnswerDisplayProps) {
+  const t = useTranslations('chat');
+
   if (!answer) {
     return null;
   }
@@ -25,7 +28,7 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
     <div className={cn('space-y-3 mt-3', className)}>
       <FadeInText delay={0.05}>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-          <span>AI Summary</span>
+          <span>{t('aiSummary')}</span>
         </div>
       </FadeInText>
 

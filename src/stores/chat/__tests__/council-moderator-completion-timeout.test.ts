@@ -38,6 +38,12 @@ const COUNCIL_MODERATOR_TIMEOUT_MS = 60000; // 60 seconds (from moderator-utils.
 // TEST HELPERS - Council Moderator Completion Detection Logic
 // ============================================================================
 
+// Test-only type that allows null/undefined createdAt for defensive edge case testing
+type TestModeratorInput = {
+  status: StoredModeratorData['status'];
+  createdAt: Date | string | null | undefined;
+};
+
 /**
  * Simulate the moderator completion detection logic
  * Mirrors the logic in moderator-utils.ts filterModeratorsByValidity()
@@ -48,7 +54,7 @@ const COUNCIL_MODERATOR_TIMEOUT_MS = 60000; // 60 seconds (from moderator-utils.
  * 3. status === 'pending' && !isStreaming && elapsed > 60s → stuck in pending
  */
 function isCouncilModeratorCompleted(
-  moderator: Pick<StoredModeratorData, 'status' | 'createdAt'>,
+  moderator: TestModeratorInput,
   now: number = Date.now(),
   isCurrentlyStreaming: boolean = false,
 ): boolean {
@@ -386,29 +392,36 @@ describe('council moderator completion detection with 60-second timeout', () => 
     });
   });
 
-  describe('missing createdAt timestamp', () => {
+  describe('missing createdAt timestamp (defensive edge cases)', () => {
+    // These tests verify graceful handling of malformed data that could arrive
+    // from corrupted storage or unexpected API responses
+    type ModeratorWithNullableCreatedAt = {
+      status: typeof MessageStatuses[keyof typeof MessageStatuses];
+      createdAt: Date | string | null | undefined;
+    };
+
     it('should NOT apply timeout when createdAt is null', () => {
-      const moderator = {
+      const moderator: ModeratorWithNullableCreatedAt = {
         status: MessageStatuses.STREAMING,
-        createdAt: null as unknown as Date,
+        createdAt: null,
       };
 
       expect(isCouncilModeratorCompleted(moderator, Date.now())).toBe(false);
     });
 
     it('should NOT apply timeout when createdAt is undefined', () => {
-      const moderator = {
+      const moderator: ModeratorWithNullableCreatedAt = {
         status: MessageStatuses.STREAMING,
-        createdAt: undefined as unknown as Date,
+        createdAt: undefined,
       };
 
       expect(isCouncilModeratorCompleted(moderator, Date.now())).toBe(false);
     });
 
     it('should still detect completion when status is complete without createdAt', () => {
-      const moderator = {
+      const moderator: ModeratorWithNullableCreatedAt = {
         status: MessageStatuses.COMPLETE,
-        createdAt: null as unknown as Date,
+        createdAt: null,
       };
 
       expect(isCouncilModeratorCompleted(moderator, Date.now())).toBe(true);
@@ -516,9 +529,10 @@ describe('council moderator completion detection with 60-second timeout', () => 
 
     it('should handle string createdAt (ISO format)', () => {
       const now = Date.now();
-      const moderator = {
+      // ISO string is valid per schema - no cast needed
+      const moderator: TestModeratorInput = {
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(now - 70000).toISOString() as unknown as Date,
+        createdAt: new Date(now - 70000).toISOString(),
       };
 
       expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);

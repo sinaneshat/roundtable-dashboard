@@ -256,6 +256,7 @@ export {
   DEFAULT_THREAD_PUBLISH_ACTION,
   DEFAULT_THREAD_STATUS,
   DEFAULT_TIMELINE_ELEMENT_TYPE,
+  DEFAULT_TIMELINE_ITEM_TYPE,
   LIMITATION_IMPORTANCE_LEVELS,
   type LimitationImportance,
   LimitationImportances,
@@ -310,9 +311,13 @@ export {
   ThreadStatuses,
   ThreadStatusSchema,
   TIMELINE_ELEMENT_TYPES,
+  TIMELINE_ITEM_TYPES,
   type TimelineElementType,
   TimelineElementTypes,
   TimelineElementTypeSchema,
+  type TimelineItemType,
+  TimelineItemTypes,
+  TimelineItemTypeSchema,
 } from './chat';
 
 // Common/shared enums (includes config: Environment, SortDirection)
@@ -644,6 +649,20 @@ export {
   RlogStreamActions,
   RlogStreamActionSchema,
 } from './logging';
+
+// MCP (Model Context Protocol) tool enums
+export {
+  DEFAULT_MCP_PROTOCOL_METHOD,
+  DEFAULT_MCP_TOOL_METHOD,
+  MCP_PROTOCOL_METHODS,
+  MCP_TOOL_METHODS,
+  type MCPProtocolMethod,
+  MCPProtocolMethods,
+  MCPProtocolMethodSchema,
+  type MCPToolMethod,
+  MCPToolMethods,
+  MCPToolMethodSchema,
+} from './mcp-tools';
 
 // Model enums
 export {

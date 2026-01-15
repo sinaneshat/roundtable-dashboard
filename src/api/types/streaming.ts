@@ -274,6 +274,8 @@ export const ThreadActiveStreamSchema = z.object({
   createdAt: z.string(),
   totalParticipants: z.number(),
   participantStatuses: z.record(z.string(), ParticipantStreamStatusSchema),
+  /** Attachment IDs from the original request - shared across all participants in the round */
+  attachmentIds: z.array(z.string()).optional(),
 });
 
 export type ThreadActiveStream = z.infer<typeof ThreadActiveStreamSchema>;

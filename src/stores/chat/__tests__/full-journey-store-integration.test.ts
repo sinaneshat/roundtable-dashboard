@@ -19,7 +19,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { FinishReasons, ScreenModes } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, ScreenModes } from '@/api/core/enums';
 import {
   createMockParticipants,
   createMockThread,
@@ -196,10 +196,10 @@ describe('message Accumulation', () => {
     state.setMessages(messages);
 
     expect(getStoreState(store).messages).toHaveLength(4);
-    expect(getStoreState(store).messages[0]!.role).toBe('user');
-    expect(getStoreState(store).messages[1]!.role).toBe('assistant');
-    expect(getStoreState(store).messages[2]!.role).toBe('assistant');
-    expect(getStoreState(store).messages[3]!.role).toBe('assistant');
+    expect(getStoreState(store).messages[0]!.role).toBe(MessageRoles.USER);
+    expect(getStoreState(store).messages[1]!.role).toBe(MessageRoles.ASSISTANT);
+    expect(getStoreState(store).messages[2]!.role).toBe(MessageRoles.ASSISTANT);
+    expect(getStoreState(store).messages[3]!.role).toBe(MessageRoles.ASSISTANT);
   });
 
   it('preserves message metadata through updates', () => {

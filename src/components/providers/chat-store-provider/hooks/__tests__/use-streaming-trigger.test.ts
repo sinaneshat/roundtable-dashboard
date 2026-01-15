@@ -15,7 +15,7 @@ type MockParticipant = {
 
 type MockMessage = {
   id: string;
-  role: MessageRoles.USER | 'assistant';
+  role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT;
   metadata?: { roundNumber?: number };
 };
 
@@ -513,9 +513,6 @@ describe('useStreamingTrigger - Thread Screen (Round 2+) - FAILING TESTS', () =>
 
     const state = store.getState();
 
-    // BUG: Current implementation returns early at line 81-82:
-    // if (currentScreenMode !== ScreenModes.OVERVIEW) return;
-    // This completely blocks round 2+ streaming on thread screen
     const currentlyIgnoresThreadScreen = state.screenMode === ScreenModes.THREAD;
 
     // This documents the BUG - hook ignores thread screen
@@ -563,8 +560,6 @@ describe('useStreamingTrigger - Thread Screen (Round 2+) - FAILING TESTS', () =>
 
     expect(isBlocked).toBe(true);
 
-    // BUG: startRound is never called because hook returns early for THREAD screen
-    // After fix, startRound should not be called while pre-search is streaming
     expect(startRound).not.toHaveBeenCalled();
   });
 

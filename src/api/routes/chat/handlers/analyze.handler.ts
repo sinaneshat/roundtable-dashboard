@@ -35,13 +35,13 @@ import {
   checkFreeUserHasCompletedRound,
   deductCreditsForAction,
   MAX_MODELS_BY_TIER,
-  MIN_PARTICIPANTS_REQUIRED,
 } from '@/api/services/billing';
 import { HARDCODED_MODELS, initializeOpenRouter, openRouterService } from '@/api/services/models';
 import type { AnalyzeModelInfo } from '@/api/services/prompts';
 import { buildAnalyzeSystemPrompt } from '@/api/services/prompts';
 import { getUserTier } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
+import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
 import { AUTO_MODE_FALLBACK_CONFIG } from '@/stores/chat/store-defaults';
 
 import type { analyzePromptRoute } from '../route';

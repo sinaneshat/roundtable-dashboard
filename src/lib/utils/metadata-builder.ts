@@ -73,10 +73,19 @@ export type ParticipantMetadataParams = {
     id: string;
     sourceType: CitationSourceType;
     title: string;
+    // Attachment-specific fields
     downloadUrl?: string;
     filename?: string;
     mimeType?: string;
     fileSize?: number;
+    // Search-specific fields
+    url?: string;
+    domain?: string;
+    // Context fields
+    threadTitle?: string;
+    description?: string;
+    // Content excerpt for quote display in Sources tooltip
+    excerpt?: string;
   }>;
 
   // Reasoning duration in seconds (for "Thought for X seconds" display on page refresh)

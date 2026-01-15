@@ -541,6 +541,29 @@ export const MCPToolCallResponseSchema = createApiResponseSchema(
   }),
 ).openapi('MCPToolCallResponse');
 
+/**
+ * OpenAI Function Schema
+ */
+export const OpenAIFunctionSchema = z.object({
+  type: z.literal('function'),
+  function: z.object({
+    name: z.string(),
+    description: z.string(),
+    parameters: z.object({
+      type: z.literal('object'),
+      properties: z.record(z.string(), z.unknown()),
+      required: z.array(z.string()).optional(),
+    }),
+  }),
+}).openapi('OpenAIFunction');
+
+/**
+ * OpenAI Functions Response
+ */
+export const OpenAIFunctionsResponseSchema = createApiResponseSchema(
+  z.array(OpenAIFunctionSchema),
+).openapi('OpenAIFunctionsResponse');
+
 // ============================================================================
 // Type Exports
 // ============================================================================
@@ -580,6 +603,7 @@ export type GetRoundAnalysisInput = z.infer<typeof GetRoundAnalysisInputSchema>;
 export type ListRoundsInput = z.infer<typeof ListRoundsInputSchema>;
 export type ListThreadsInput = z.infer<typeof ListThreadsInputSchema>;
 export type DeleteThreadInput = z.infer<typeof DeleteThreadInputSchema>;
+export type OpenAIFunction = z.infer<typeof OpenAIFunctionSchema>;
 
 // ============================================================================
 // JSON-RPC Error Codes (MCP Standard)

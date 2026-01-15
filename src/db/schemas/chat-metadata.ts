@@ -334,6 +334,7 @@ export const DbAssistantMessageMetadataSchema = z.object({
   errorType: ErrorTypeSchema.optional(),
   errorMessage: z.string().optional(),
   errorCategory: z.string().optional(),
+  rawErrorMessage: z.string().optional(),
 
   // Optional backend/debugging fields
   providerMessage: z.string().optional(),
@@ -343,6 +344,7 @@ export const DbAssistantMessageMetadataSchema = z.object({
     z.boolean(),
     z.null(),
   ])).optional(),
+  openRouterCode: z.union([z.string(), z.number()]).optional(),
   retryAttempts: z.number().int().nonnegative().optional(),
   isEmptyResponse: z.boolean().optional(),
   statusCode: z.number().int().optional(),
@@ -358,13 +360,21 @@ export const DbAssistantMessageMetadataSchema = z.object({
   // Available sources - files/context that were available to AI (shown even without inline citations)
   // This enables "Sources" UI to display what files the AI had access to
   availableSources: z.array(z.object({
-    id: z.string(), // Citation ID (e.g., att_abc12345)
+    id: z.string(), // Citation ID (e.g., att_abc12345, sch_q0r0)
     sourceType: CitationSourceTypeSchema,
     title: z.string(), // Filename or source title
+    // Attachment-specific fields
     downloadUrl: z.string().url().optional(),
     filename: z.string().optional(),
     mimeType: z.string().optional(),
     fileSize: z.number().int().nonnegative().optional(),
+    // Search-specific fields
+    url: z.string().optional(), // Source URL for search results
+    domain: z.string().optional(), // Domain for search results
+    // Context fields
+    threadTitle: z.string().optional(),
+    description: z.string().optional(), // Short description
+    excerpt: z.string().optional(), // Content excerpt/quote for citation display
   })).optional(),
 
   // Timestamp

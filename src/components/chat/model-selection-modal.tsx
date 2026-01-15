@@ -8,8 +8,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ModelSelectionTab, SubscriptionTier } from '@/api/core/enums';
 import { ChatModes, DEFAULT_MODEL_SELECTION_TAB, ModelSelectionTabs, PlanTypes, PREDEFINED_ROLE_TEMPLATES, SubscriptionTiers } from '@/api/core/enums';
-// Direct import to avoid barrel export pulling in server-only slug-generator.service.ts
-import { createRoleSystemPrompt } from '@/api/services/prompts/prompts.service';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,8 +32,8 @@ import {
 import type { useCustomRolesQuery } from '@/hooks/queries';
 import { useUsageStatsQuery, useUserPresetsQuery } from '@/hooks/queries';
 import { useBoolean } from '@/hooks/utils';
+import { canAccessPreset, createRoleSystemPrompt, MODEL_PRESETS } from '@/lib/config';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
-import { canAccessPreset, MODEL_PRESETS } from '@/lib/config/model-presets';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { toastManager } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';

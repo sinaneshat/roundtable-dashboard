@@ -4,10 +4,7 @@ import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import {
-  StripeSubscriptionStatuses,
-  UIBillingIntervals,
-} from '@/api/core/enums';
+import { UIBillingIntervals } from '@/api/core/enums';
 import type { Price, Product, Subscription } from '@/api/routes/billing/schema';
 import { Icons } from '@/components/icons';
 import { PricingContentSkeleton } from '@/components/pricing/pricing-content-skeleton';
@@ -15,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PricingCard } from '@/components/ui/pricing-card';
 import { useIsMounted } from '@/hooks/utils';
+import { isSubscriptionActive } from '@/lib/utils';
 
 type PricingContentProps = {
   products: Product[];
@@ -61,17 +59,13 @@ export function PricingContent({
   const router = useRouter();
   const isMounted = useIsMounted();
 
-  const activeSubscription = subscriptions.find(
-    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
-  );
+  const activeSubscription = subscriptions.find(isSubscriptionActive);
 
-  const hasAnyActiveSubscription = subscriptions.some(
-    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
-  );
+  const hasAnyActiveSubscription = subscriptions.some(isSubscriptionActive);
 
   const getSubscriptionForPrice = (priceId: string) => {
     return subscriptions.find(
-      sub => sub.priceId === priceId && (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
+      sub => sub.priceId === priceId && isSubscriptionActive(sub),
     );
   };
 
@@ -107,10 +101,10 @@ export function PricingContent({
     return (
       <div className="flex items-center justify-center py-16">
         <div className="text-center space-y-3">
-          <p className="text-sm font-medium text-destructive">Error</p>
+          <p className="text-sm font-medium text-destructive">{t('plans.error')}</p>
           <p className="text-xs text-muted-foreground">{t('plans.errorDescription')}</p>
           <Button variant="outline" size="sm" onClick={() => router.refresh()}>
-            Retry
+            {t('actions.tryAgain')}
           </Button>
         </div>
       </div>
@@ -186,13 +180,14 @@ function ProductGrid({
   onManageBilling,
   showSubscriptionBanner,
 }: ProductGridProps) {
+  const t = useTranslations();
   const isMounted = useIsMounted();
 
   if (products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
         <p className="text-sm text-muted-foreground">
-          No plans available
+          {t('plans.noPlansAvailable')}
         </p>
       </div>
     );

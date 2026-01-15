@@ -131,7 +131,7 @@ export function PreSearchCard({
   }, [demoOpen, isStreamingOrPending, isManualControlValid, manualControl]);
 
   return (
-    <div className={cn('w-full mb-14', className)}>
+    <div className={cn('w-full mb-5', className)}>
       <div className="flex items-center gap-3 mb-6">
         <div className="size-8 flex items-center justify-center rounded-full bg-blue-500/20 shrink-0">
           <Icons.globe className="size-4 text-blue-300" />

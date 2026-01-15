@@ -94,6 +94,15 @@ export const ChatInput = memo(({
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
   const { isFreeUser, hasUsedTrial } = useFreeTrialState();
 
+  // Estimate minimum credits needed based on participant count
+  // Conservative estimate: 250 credits per participant covers most models
+  // Pro/flagship models need more, but this catches obvious insufficient credit cases
+  const estimatedMinCredits = useMemo(() => {
+    const participantCount = participants.length || 1;
+    const baseCreditsPerParticipant = 250; // Conservative estimate for mixed model tiers
+    return participantCount * baseCreditsPerParticipant;
+  }, [participants.length]);
+
   const isQuotaExceeded = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
       return false;
@@ -103,8 +112,9 @@ export const ChatInput = memo(({
     if (plan?.type !== PlanTypes.PAID) {
       return false;
     }
-    return credits.available <= 0;
-  }, [statsData]);
+    // Block if credits are below estimated minimum needed for this conversation
+    return credits.available < estimatedMinCredits;
+  }, [statsData, estimatedMinCredits]);
 
   const isFreeUserBlocked = isFreeUser && hasUsedTrial;
 
@@ -212,11 +222,10 @@ export const ChatInput = memo(({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!isSubmitDisabled && hasValidInput) {
-        const form = e.currentTarget.form || e.currentTarget;
-        const submitEvent = new Event('submit', { bubbles: true, cancelable: true }) as unknown as FormEvent<HTMLFormElement>;
-        Object.defineProperty(submitEvent, 'currentTarget', { value: form, writable: false });
-        Object.defineProperty(submitEvent, 'target', { value: form, writable: false });
-        onSubmit(submitEvent);
+        const form = e.currentTarget.form;
+        if (form) {
+          form.requestSubmit();
+        }
       }
     }
   };
@@ -225,16 +234,16 @@ export const ChatInput = memo(({
 
   return (
     <div className="w-full">
-      {enableAttachments && onAddAttachments && (
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          onChange={handleFileInputChange}
-          className="hidden"
-          accept="image/*,application/pdf,text/*,.md,.json,.csv,.xml,.html,.css,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.go,.rs,.rb,.php"
-        />
-      )}
+      {/* Always render file input to prevent hydration mismatch - it's hidden anyway */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        onChange={enableAttachments && onAddAttachments ? handleFileInputChange : undefined}
+        className="hidden"
+        accept="image/*,application/pdf,text/*,.md,.json,.csv,.xml,.html,.css,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.go,.rs,.rb,.php"
+        disabled={!enableAttachments || !onAddAttachments}
+      />
 
       <div
         className={cn(
@@ -259,7 +268,7 @@ export const ChatInput = memo(({
         {enableAttachments && <ChatInputDropzoneOverlay isDragging={isDragging} />}
 
         <div className="flex flex-col overflow-hidden h-full">
-          {showCreditAlert && !hideInternalAlerts && <QuotaAlertExtension />}
+          {showCreditAlert && !hideInternalAlerts && <QuotaAlertExtension minCreditsThreshold={estimatedMinCredits} />}
           {isFreeUser && !hideInternalAlerts && <FreeTrialAlert />}
           {showNoModelsError && (
             <div
@@ -305,8 +314,8 @@ export const ChatInput = memo(({
 
           <form
             onSubmit={(e) => {
+              e.preventDefault();
               if (isSubmitDisabled || !hasValidInput) {
-                e.preventDefault();
                 return;
               }
               onSubmit(e);

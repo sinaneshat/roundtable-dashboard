@@ -12,7 +12,9 @@ import {
   CreateUserPresetRequestSchema,
   CustomRoleDetailResponseSchema,
   CustomRoleListResponseSchema,
+  DeletedResponseSchema,
   DeleteThreadResponseSchema,
+  ExistingModeratorMessageSchema,
   GetThreadFeedbackResponseSchema,
   MessagesListResponseSchema,
   ParticipantDetailResponseSchema,
@@ -309,9 +311,7 @@ export const deleteParticipantRoute = createRoute({
       description: 'Participant removed successfully',
       content: {
         'application/json': {
-          schema: createApiResponseSchema(z.object({
-            deleted: z.boolean().openapi({ example: true }),
-          })),
+          schema: createApiResponseSchema(DeletedResponseSchema),
         },
       },
     },
@@ -732,9 +732,7 @@ export const deleteCustomRoleRoute = createRoute({
       description: 'Custom role deleted successfully',
       content: {
         'application/json': {
-          schema: createApiResponseSchema(z.object({
-            deleted: z.boolean().openapi({ example: true }),
-          })),
+          schema: createApiResponseSchema(DeletedResponseSchema),
         },
       },
     },
@@ -846,9 +844,7 @@ export const deleteUserPresetRoute = createRoute({
       description: 'User preset deleted successfully',
       content: {
         'application/json': {
-          schema: createApiResponseSchema(z.object({
-            deleted: z.boolean().openapi({ example: true }),
-          })),
+          schema: createApiResponseSchema(DeletedResponseSchema),
         },
       },
     },
@@ -882,15 +878,7 @@ export const councilModeratorRoundRoute = createRoute({
           }),
         },
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            role: z.string(),
-            parts: z.array(z.any()),
-            metadata: z.any(),
-            roundNumber: z.number(),
-          }).openapi({
-            description: 'Existing council moderator message (if already persisted)',
-          }),
+          schema: ExistingModeratorMessageSchema,
         },
       },
     },
@@ -998,12 +986,7 @@ This is the **preferred endpoint** for stream resumption. The frontend doesn't n
 
 **Example**: GET /chat/threads/thread_123/stream`,
   request: {
-    params: z.object({
-      threadId: z.string().openapi({
-        description: 'Thread ID',
-        example: 'thread_abc123',
-      }),
-    }),
+    params: ThreadIdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {

@@ -14,7 +14,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ChatModes, FinishReasons, ScreenModes } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageRoles, ScreenModes } from '@/api/core/enums';
 import {
   createMockParticipant,
   createMockParticipants,
@@ -114,7 +114,7 @@ describe('participant Configuration Changes', () => {
       expect(round0MessagesInStore).toHaveLength(3);
       // 2 participant messages in round 0
       const round0ParticipantMessages = round0MessagesInStore.filter(
-        m => m.role === 'assistant',
+        m => m.role === MessageRoles.ASSISTANT,
       );
       expect(round0ParticipantMessages).toHaveLength(2);
     });
@@ -139,7 +139,7 @@ describe('participant Configuration Changes', () => {
         m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 1,
       );
       const round1ParticipantMessages = round1MessagesInStore.filter(
-        m => m.role === 'assistant',
+        m => m.role === MessageRoles.ASSISTANT,
       );
       expect(round1ParticipantMessages).toHaveLength(3);
 
@@ -187,7 +187,7 @@ describe('participant Configuration Changes', () => {
         m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 0,
       );
       const round0ParticipantMessages = round0MessagesInStore.filter(
-        m => m.role === 'assistant',
+        m => m.role === MessageRoles.ASSISTANT,
       );
       expect(round0ParticipantMessages).toHaveLength(3);
     });
@@ -212,7 +212,7 @@ describe('participant Configuration Changes', () => {
         m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 1,
       );
       const round1ParticipantMessages = round1MessagesInStore.filter(
-        m => m.role === 'assistant',
+        m => m.role === MessageRoles.ASSISTANT,
       );
       expect(round1ParticipantMessages).toHaveLength(2);
 
@@ -423,17 +423,17 @@ describe('complete Configuration Change Journey', () => {
 
     // Each round has correct participant count
     const round0Participants = finalState.messages.filter(
-      m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 0 && m.role === 'assistant',
+      m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 0 && m.role === MessageRoles.ASSISTANT,
     );
     expect(round0Participants).toHaveLength(2);
 
     const round1Participants = finalState.messages.filter(
-      m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 1 && m.role === 'assistant',
+      m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 1 && m.role === MessageRoles.ASSISTANT,
     );
     expect(round1Participants).toHaveLength(3);
 
     const round2Participants = finalState.messages.filter(
-      m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 2 && m.role === 'assistant',
+      m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 2 && m.role === MessageRoles.ASSISTANT,
     );
     expect(round2Participants).toHaveLength(3);
 

@@ -17,11 +17,6 @@ export type FreeTrialStateReturn = {
 };
 
 /**
- * @deprecated Use FreeTrialStateReturn instead
- */
-export type FreeTrialState = FreeTrialStateReturn;
-
-/**
  * Hook to determine free trial state for a user.
  *
  * Free users get ONE thread + ONE round upon signup.

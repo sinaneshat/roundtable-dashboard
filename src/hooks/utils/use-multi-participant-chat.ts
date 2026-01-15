@@ -14,7 +14,7 @@ import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractValidFileParts, isRenderableContent, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, isPreSearch, mergeParticipantMetadata } from '@/lib/utils';
+import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getAvailableSources, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, isPreSearch, mergeParticipantMetadata } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 
 import { useSyncedRefs } from './use-synced-refs';
@@ -492,7 +492,8 @@ export function useMultiParticipantChat(
     }
 
     // Find first participant without a COMPLETE message (0 to totalParticipants-1)
-    let nextIndex = currentIndexRef.current + 1; // Default: increment
+    // ✅ FIX: Default to totalParticipants (round complete) - only set lower if incomplete found
+    let nextIndex = totalParticipants;
     for (let i = 0; i < totalParticipants; i++) {
       if (!participantIndicesWithCompleteMessages.has(i)) {
         // Found a participant without a complete message - trigger them
@@ -681,6 +682,9 @@ export function useMultiParticipantChat(
         ? (callbackRefs.pendingAttachmentIds.current || undefined)
         : undefined;
 
+      // ✅ DEBUG: Log attachment IDs being sent
+      rlog.msg('cite-send', `pIdx=${participantIndexToUse} pending=${callbackRefs.pendingAttachmentIds.current?.length ?? 0} sending=${attachmentIdsForRequest?.length ?? 0}`);
+
       // ✅ SANITIZATION: Filter message parts for backend transmission
       // Uses shared isValidFilePartForTransmission type guard for consistent handling
       // - Keeps all non-file parts (text, etc.)
@@ -792,6 +796,12 @@ export function useMultiParticipantChat(
     // in Chat.makeRequest because internal state initialization fails
     id: useChatId,
     transport,
+
+    // ✅ DEBUG: Log all streaming data parts to trace when metadata arrives
+    onData: (dataPart) => {
+      rlog.msg('cite-data', `type=${dataPart?.type} keys=[${dataPart && typeof dataPart === 'object' ? Object.keys(dataPart).join(',') : 'null'}]`);
+    },
+
     // ✅ AI SDK RESUME PATTERN: Enable automatic stream resumption after page reload
     // When true, AI SDK calls prepareReconnectToStreamRequest on mount to check for active streams
     // GET endpoint at /api/v1/chat/threads/{threadId}/stream serves buffered chunks
@@ -993,7 +1003,10 @@ export function useMultiParticipantChat(
       const msgId = data.message?.id;
       const pIdxMatch = msgId?.match(/_p(\d+)$/);
       const rndMatch = msgId?.match(/_r(\d+)_/);
-      rlog.stream('end', `r${rndMatch?.[1] ?? '-'} p${pIdxMatch?.[1] ?? '-'} reason=${data.finishReason ?? '-'} parts=${data.message?.parts?.length ?? 0}`);
+      // ✅ DEBUG: Log metadata to trace availableSources (only for real messages)
+      const availableSources = getAvailableSources(data.message?.metadata);
+      const hasAvail = availableSources?.length ?? 0;
+      rlog.stream('end', `r${rndMatch?.[1] ?? '-'} p${pIdxMatch?.[1] ?? '-'} reason=${data.finishReason ?? '-'} parts=${data.message?.parts?.length ?? 0} avail=${hasAvail}`);
 
       // ✅ Skip phantom resume completions (no active stream to resume)
       const notOurMessageId = !data.message?.id?.includes('_r');
