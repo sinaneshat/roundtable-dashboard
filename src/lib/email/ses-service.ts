@@ -159,6 +159,9 @@ class EmailService {
   }
 
   async sendMagicLink(to: string, magicLink: string, expirationMinutes = 15) {
+    // Render React Email template to HTML
+    // Note: Using @react-email/components instead of @react-email/render
+    // to avoid edge runtime export resolution issues in Cloudflare Workers
     const html = await render(MagicLink({
       loginUrl: magicLink,
       expirationTime: `${expirationMinutes} minutes`,
