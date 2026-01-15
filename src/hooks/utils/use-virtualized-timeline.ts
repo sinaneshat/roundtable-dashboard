@@ -437,13 +437,31 @@ export function useVirtualizedTimeline({
     // Update ref for next comparison
     prevCountRef.current = newCount;
 
+    // ✅ CRITICAL FIX: When count INCREASES, immediately update with SSR items
+    // This prevents the "flash of missing content" where:
+    // 1. User submits message → timeline items increase from N to N+1
+    // 2. RAF is scheduled but hasn't run yet
+    // 3. During this gap, virtualItems still has N items (stale)
+    // 4. New timeline item exists but has no corresponding virtual item to render
+    //
+    // By immediately setting SSR items for the new count, we ensure:
+    // - New timeline items are immediately visible (with estimated sizes)
+    // - Container height (totalSize) expands to fit new items
+    // - RAF will refine with actual measurements afterward
+    if (newCount > prevCount) {
+      const ssrItems = createSSRVirtualItems(newCount, estimateSize);
+      const ssrTotalSize = newCount * estimateSize;
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- SSR fix: populate items immediately when count increases
+      setVirtualizerState({ virtualItems: ssrItems, totalSize: ssrTotalSize });
+    }
+
     // Cancel any pending RAF to avoid stale updates
     if (pendingRafRef.current !== null) {
       cancelAnimationFrame(pendingRafRef.current);
     }
 
     // Schedule sync for next frame - outside React's lifecycle
-
+    // This will refine with actual measured sizes from the virtualizer
     pendingRafRef.current = requestAnimationFrame(() => {
       pendingRafRef.current = null;
       const newVirtualItems = virtualizer.getVirtualItems();
@@ -452,7 +470,7 @@ export function useVirtualizedTimeline({
         totalSize: virtualizer.getTotalSize(),
       });
     });
-  }, [shouldEnable, timelineItems.length, virtualizer]);
+  }, [shouldEnable, timelineItems.length, virtualizer, estimateSize]);
 
   // Cleanup pending RAF on unmount
   useLayoutEffect(() => {

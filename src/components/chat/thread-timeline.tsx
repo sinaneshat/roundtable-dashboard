@@ -257,14 +257,18 @@ export function ThreadTimeline({
   }
 
   // Virtualized render: absolute positioning with measured heights
+  // Following TanStack Virtual official pattern:
+  // - Container: height (not minHeight) = getTotalSize()
+  // - Items: position absolute, transform translateY(start - scrollMargin)
+  // - Items: explicit height for smooth layout before measurement
   return (
     <div
       data-virtualized-timeline
       style={{
-        // Use minHeight instead of height to prevent content clipping
-        // when measurement calculations fail during SSR hydration.
-        // The container can grow beyond totalSize if actual content is larger.
-        minHeight: `${totalSize}px`,
+        // ✅ PATTERN FIX: Use exact height from virtualizer (not minHeight)
+        // TanStack Virtual docs: "height: ${virtualizer.getTotalSize()}px"
+        // minHeight was causing positioning issues when content changed
+        height: `${totalSize}px`,
         width: '100%',
         position: 'relative',
       }}
@@ -284,6 +288,12 @@ export function ThreadTimeline({
               top: 0,
               left: 0,
               width: '100%',
+              // ✅ PATTERN FIX: Explicit height prevents layout shifts
+              // Before measureElement measures actual size, use virtualItem.size
+              // This ensures container space is reserved even before measurement
+              minHeight: `${virtualItem.size}px`,
+              // ✅ CORRECT: scrollMargin subtraction required per TanStack Virtual docs
+              // "transform: translateY(${item.start - virtualizer.options.scrollMargin}px)"
               transform: `translateY(${virtualItem.start - scrollMargin}px)`,
             }}
           >
