@@ -99,7 +99,7 @@ export const StreamStatuses = {
 // ============================================================================
 
 // 1. ARRAY CONSTANT
-export const PARTICIPANT_STREAM_STATUSES = ['active', 'completed', 'failed'] as const;
+export const PARTICIPANT_STREAM_STATUSES = ['pending', 'active', 'completed', 'failed'] as const;
 
 // 2. ZOD SCHEMA
 export const ParticipantStreamStatusSchema = z.enum(PARTICIPANT_STREAM_STATUSES).openapi({
@@ -111,13 +111,68 @@ export const ParticipantStreamStatusSchema = z.enum(PARTICIPANT_STREAM_STATUSES)
 export type ParticipantStreamStatus = z.infer<typeof ParticipantStreamStatusSchema>;
 
 // 4. DEFAULT VALUE
-export const DEFAULT_PARTICIPANT_STREAM_STATUS: ParticipantStreamStatus = 'active';
+export const DEFAULT_PARTICIPANT_STREAM_STATUS: ParticipantStreamStatus = 'pending';
 
 // 5. CONSTANT OBJECT
 export const ParticipantStreamStatuses = {
+  PENDING: 'pending' as const,
   ACTIVE: 'active' as const,
   COMPLETED: 'completed' as const,
   FAILED: 'failed' as const,
+} as const;
+
+// ============================================================================
+// ROUND EXECUTION STATUS (Server-side orchestration status)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ROUND_EXECUTION_STATUSES = ['not_started', 'running', 'completed', 'failed', 'incomplete'] as const;
+
+// 2. ZOD SCHEMA
+export const RoundExecutionStatusSchema = z.enum(ROUND_EXECUTION_STATUSES).openapi({
+  description: 'Status of server-side round execution orchestration',
+  example: 'running',
+});
+
+// 3. TYPESCRIPT TYPE
+export type RoundExecutionStatus = z.infer<typeof RoundExecutionStatusSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ROUND_EXECUTION_STATUS: RoundExecutionStatus = 'not_started';
+
+// 5. CONSTANT OBJECT
+export const RoundExecutionStatuses = {
+  NOT_STARTED: 'not_started' as const,
+  RUNNING: 'running' as const,
+  COMPLETED: 'completed' as const,
+  FAILED: 'failed' as const,
+  INCOMPLETE: 'incomplete' as const,
+} as const;
+
+// ============================================================================
+// ROUND EXECUTION PHASE (Server-side orchestration phase)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ROUND_EXECUTION_PHASES = ['participants', 'moderator', 'complete'] as const;
+
+// 2. ZOD SCHEMA
+export const RoundExecutionPhaseSchema = z.enum(ROUND_EXECUTION_PHASES).openapi({
+  description: 'Current phase of server-side round execution',
+  example: 'participants',
+});
+
+// 3. TYPESCRIPT TYPE
+export type RoundExecutionPhase = z.infer<typeof RoundExecutionPhaseSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ROUND_EXECUTION_PHASE: RoundExecutionPhase = 'participants';
+
+// 5. CONSTANT OBJECT
+export const RoundExecutionPhases = {
+  PARTICIPANTS: 'participants' as const,
+  MODERATOR: 'moderator' as const,
+  COMPLETE: 'complete' as const,
 } as const;
 
 // ============================================================================

@@ -79,6 +79,11 @@ import {
 import { processParticipantChanges } from '@/api/services/participants';
 import { buildParticipantSystemPrompt } from '@/api/services/prompts';
 import {
+  markParticipantCompleted,
+  markParticipantFailed,
+  markParticipantStarted,
+} from '@/api/services/round-orchestration';
+import {
   appendParticipantStreamChunk,
   clearActiveParticipantStream,
   completeParticipantStreamBuffer,
@@ -814,6 +819,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
           c.env,
         ),
+        // ✅ ROUND ORCHESTRATION: Mark participant as started for tracking
+        markParticipantStarted(
+          threadId,
+          currentRoundNumber,
+          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          c.env,
+        ),
         // ✅ RESUMABLE STREAMS: Set thread-level active stream for AI SDK resume pattern
         // This enables the frontend to detect and resume this stream after page reload
         // ✅ FIX: Pass total participants count for proper round-level tracking
@@ -971,22 +983,32 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // ✅ RESUMABLE STREAMS: Clean up stream state on REAL errors only
           // This ensures failed streams don't block future streaming attempts
           try {
-            await markStreamFailed(
-              threadId,
-              currentRoundNumber,
-              participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-              error instanceof Error ? error.message : String(error),
-              c.env,
-            );
-            // ✅ FIX: Update participant status to 'failed' instead of clearing entirely
-            // Only clears thread active stream when ALL participants have finished
-            await updateParticipantStatus(
-              threadId,
-              currentRoundNumber,
-              participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-              ParticipantStreamStatuses.FAILED,
-              c.env,
-            );
+            await Promise.all([
+              markStreamFailed(
+                threadId,
+                currentRoundNumber,
+                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+                error instanceof Error ? error.message : String(error),
+                c.env,
+              ),
+              // ✅ FIX: Update participant status to 'failed' instead of clearing entirely
+              // Only clears thread active stream when ALL participants have finished
+              updateParticipantStatus(
+                threadId,
+                currentRoundNumber,
+                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+                ParticipantStreamStatuses.FAILED,
+                c.env,
+              ),
+              // ✅ ROUND ORCHESTRATION: Mark participant as failed for round state tracking
+              markParticipantFailed(
+                threadId,
+                currentRoundNumber,
+                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+                error instanceof Error ? error.message : String(error),
+                c.env,
+              ),
+            ]);
           } catch {
             // Cleanup errors shouldn't break error handling flow
           }
@@ -1304,6 +1326,168 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               c.env,
             ),
           ]);
+
+          // =========================================================================
+          // ✅ SERVER-SIDE ROUND ORCHESTRATION: Continue round in background
+          // =========================================================================
+          // This is the key fix for "user navigates away" problem:
+          // - After each participant completes, server triggers the next one
+          // - Uses waitUntil() to run in background, independent of client connection
+          // - Client can disconnect - round continues to completion
+          //
+          // FLOW:
+          // 1. Participant N completes → mark completed in round state
+          // 2. Check if all participants done
+          // 3. If not done → trigger participant N+1 via internal fetch
+          // 4. If all done → trigger moderator (for 2+ participants)
+          // =========================================================================
+
+          const currentParticipantIdx = participantIndex ?? DEFAULT_PARTICIPANT_INDEX;
+
+          // Update round execution state
+          const { allParticipantsComplete } = await markParticipantCompleted(
+            threadId,
+            currentRoundNumber,
+            currentParticipantIdx,
+            c.env,
+          );
+
+          // Determine next action based on round state
+          const nextParticipantIndex = currentParticipantIdx + 1;
+          const hasMoreParticipants = nextParticipantIndex < participants.length;
+          const needsModerator = participants.length >= 2 && allParticipantsComplete;
+
+          // Build base URL for internal API calls
+          const baseUrl = c.req.url.split('/api/')[0];
+
+          if (hasMoreParticipants) {
+            // ✅ TRIGGER NEXT PARTICIPANT: Server-side continuation
+            // Uses waitUntil() to run in background - client can disconnect
+            const triggerNextParticipant = async () => {
+              try {
+                const nextParticipant = participants[nextParticipantIndex];
+                if (!nextParticipant)
+                  return;
+
+                // Build request for next participant
+                // Note: We pass a trigger message (empty text) to continue the round
+                const requestBody = {
+                  id: threadId,
+                  message: {
+                    id: `trigger-${threadId}-r${currentRoundNumber}-p${nextParticipantIndex}`,
+                    role: UIMessageRoles.USER,
+                    content: '', // Trigger message - no new user input
+                    parts: [{ type: MessagePartTypes.TEXT, text: '' }],
+                  },
+                  participantIndex: nextParticipantIndex,
+                  // Pass attachmentIds for consistent context
+                  attachmentIds: resolvedAttachmentIds,
+                };
+
+                // Get auth cookie/header from current request to forward
+                const authCookie = c.req.header('cookie') || '';
+                const authHeader = c.req.header('authorization') || '';
+
+                const response = await fetch(`${baseUrl}/api/v1/chat`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(authCookie && { cookie: authCookie }),
+                    ...(authHeader && { authorization: authHeader }),
+                  },
+                  body: JSON.stringify(requestBody),
+                });
+
+                if (!response.ok) {
+                  // Log but don't throw - this is background work
+                  console.error(`[RoundOrchestration] Failed to trigger participant ${nextParticipantIndex}: ${response.status}`);
+                }
+
+                // Consume the stream response to complete the request
+                // The stream handler will handle persistence and next triggers
+                const reader = response.body?.getReader();
+                if (reader) {
+                  try {
+                    // Just drain the stream - we don't need the content
+                    while (true) {
+                      const { done } = await reader.read();
+                      if (done)
+                        break;
+                    }
+                  } finally {
+                    reader.releaseLock();
+                  }
+                }
+              } catch (error) {
+                console.error(`[RoundOrchestration] Error triggering participant ${nextParticipantIndex}:`, error);
+                // Mark as failed so status endpoint reflects the issue
+                await markParticipantFailed(
+                  threadId,
+                  currentRoundNumber,
+                  nextParticipantIndex,
+                  error instanceof Error ? error.message : 'Unknown error',
+                  c.env,
+                );
+              }
+            };
+
+            // Run in background via waitUntil
+            if (executionCtx) {
+              executionCtx.waitUntil(triggerNextParticipant());
+            } else {
+              triggerNextParticipant().catch(console.error);
+            }
+          } else if (needsModerator) {
+            // ✅ TRIGGER MODERATOR: Server-side completion of round
+            // All participants done, now trigger moderator for summary
+            const triggerModerator = async () => {
+              try {
+                // Get auth cookie/header from current request to forward
+                const authCookie = c.req.header('cookie') || '';
+                const authHeader = c.req.header('authorization') || '';
+
+                const response = await fetch(
+                  `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${currentRoundNumber}/moderator`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(authCookie && { cookie: authCookie }),
+                      ...(authHeader && { authorization: authHeader }),
+                    },
+                    body: JSON.stringify({}),
+                  },
+                );
+
+                if (!response.ok) {
+                  console.error(`[RoundOrchestration] Failed to trigger moderator: ${response.status}`);
+                }
+
+                // Consume the stream response to complete the request
+                const reader = response.body?.getReader();
+                if (reader) {
+                  try {
+                    while (true) {
+                      const { done } = await reader.read();
+                      if (done)
+                        break;
+                    }
+                  } finally {
+                    reader.releaseLock();
+                  }
+                }
+              } catch (error) {
+                console.error('[RoundOrchestration] Error triggering moderator:', error);
+              }
+            };
+
+            // Run in background via waitUntil
+            if (executionCtx) {
+              executionCtx.waitUntil(triggerModerator());
+            } else {
+              triggerModerator().catch(console.error);
+            }
+          }
         },
       });
 

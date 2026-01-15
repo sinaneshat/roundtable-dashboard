@@ -2,6 +2,7 @@
 import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
 import { memo, useMemo, useRef } from 'react';
+import Markdown from 'react-markdown';
 import { Streamdown } from 'streamdown';
 
 import type { MessageStatus } from '@/api/core/enums';
@@ -946,18 +947,27 @@ export const ChatMessageList = memo(
                             />
                           )}
 
-                          {/* Text content */}
+                          {/* Text content - use ReactMarkdown for SSR/read-only, Streamdown for interactive */}
                           {textParts.map((part) => {
                             if (part.type === MessagePartTypes.TEXT) {
-                              return (
-                                <Streamdown
-                                  key={`${message.id}-text-${part.text.substring(0, 20)}`}
-                                  className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                                  components={streamdownComponents}
-                                >
-                                  {part.text}
-                                </Streamdown>
-                              );
+                              return isReadOnly
+                                ? (
+                                    <Markdown
+                                      key={`${message.id}-text-${part.text.substring(0, 20)}`}
+                                      components={streamdownComponents}
+                                    >
+                                      {part.text}
+                                    </Markdown>
+                                  )
+                                : (
+                                    <Streamdown
+                                      key={`${message.id}-text-${part.text.substring(0, 20)}`}
+                                      className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                      components={streamdownComponents}
+                                    >
+                                      {part.text}
+                                    </Streamdown>
+                                  );
                             }
                             return null;
                           })}

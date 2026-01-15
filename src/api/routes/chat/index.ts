@@ -33,6 +33,10 @@ export {
   updateCustomRoleHandler,
 } from './handlers/role.handler';
 export {
+  executeRoundHandler,
+  getRoundStatusHandler,
+} from './handlers/round-execution.handler';
+export {
   getThreadStreamResumptionStateHandler,
   resumeThreadStreamHandler,
 } from './handlers/stream-resume.handler';

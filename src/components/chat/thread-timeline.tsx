@@ -97,10 +97,9 @@ export function ThreadTimeline({
       .flatMap(item => item.data);
   }, [timelineItems]);
 
+  // Official TanStack Virtual pattern: get virtualizer, call methods directly in render
   const {
     virtualizer,
-    virtualItems,
-    totalSize,
     measureElement,
   } = useVirtualizedTimeline({
     timelineItems,
@@ -108,7 +107,6 @@ export function ThreadTimeline({
     estimateSize: 200,
     overscan: 5,
     // paddingEnd: 0 for virtualized mode - CSS pb-[20rem] on wrapper handles bottom spacing
-    // This keeps virtualizer's totalSize at actual content height, CSS creates scroll space
     // demoMode uses small padding for compact embedded layout
     paddingEnd: demoMode ? 24 : 0,
     isDataReady: disableVirtualization ? false : isDataReady,
@@ -116,17 +114,8 @@ export function ThreadTimeline({
     getIsStreamingFromStore,
   });
 
-  const stableMeasureElement = measureElement;
-
   const animatedItemsRef = useRef<Set<string>>(new Set());
   const isInitialLoadRef = useRef(true);
-
-  if (isInitialLoadRef.current && virtualItems.length > 0) {
-    isInitialLoadRef.current = false;
-    virtualItems.forEach((vi) => {
-      animatedItemsRef.current.add(String(vi.key));
-    });
-  }
 
   const shouldAnimate = (itemKey: React.Key): boolean => {
     if (skipEntranceAnimations) {
@@ -268,15 +257,33 @@ export function ThreadTimeline({
   // Following TanStack Virtual official pattern exactly:
   // https://tanstack.com/virtual/latest/docs/framework/react/examples/window
   // - Container: ref={listRef} for scrollMargin calculation
-  // - Container: height = getTotalSize()
-  // - Items: position absolute, transform translateY(start - virtualizer.options.scrollMargin)
+  // - Container: height = getTotalSize() - called DIRECTLY in render
+  // - Items: getVirtualItems() called DIRECTLY in render - never stale
+  // - Items: position absolute, transform translateY(start - scrollMargin)
+
+  // OFFICIAL PATTERN: Call getVirtualItems() and getTotalSize() directly in render
+  // This ensures positions are ALWAYS current, never stale during streaming
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+
+  // Track animated items on first render for entrance animations
+  if (isInitialLoadRef.current && virtualItems.length > 0) {
+    isInitialLoadRef.current = false;
+    virtualItems.forEach((vi) => {
+      animatedItemsRef.current.add(String(vi.key));
+    });
+  }
+
   return (
     <div
       ref={listRef}
       data-virtualized-timeline
       style={{
-        // Official pattern: height: `${virtualizer.getTotalSize()}px`
-        height: `${totalSize}px`,
+        // During streaming: minHeight allows container to grow as content streams
+        // When stable: height ensures proper virtualization behavior
+        ...(isActivelyStreaming
+          ? { minHeight: `${totalSize}px` }
+          : { height: `${totalSize}px` }),
         width: '100%',
         position: 'relative',
       }}
@@ -290,7 +297,7 @@ export function ThreadTimeline({
           <div
             key={virtualItem.key}
             data-index={virtualItem.index}
-            ref={stableMeasureElement}
+            ref={measureElement}
             style={{
               position: 'absolute',
               top: 0,

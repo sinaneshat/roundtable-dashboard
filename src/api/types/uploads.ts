@@ -67,7 +67,7 @@ export type StoredObject = z.infer<typeof StoredObjectSchema>;
 // ============================================================================
 
 /**
- * File part ready for AI model consumption
+ * File part ready for AI model consumption (non-image files like PDF)
  *
  * The flow:
  * 1. File parts are added to UIMessage with url/mediaType (for UI compatibility)
@@ -92,6 +92,40 @@ export const ModelFilePartSchema = z.object({
 
 /** File part ready for AI model consumption */
 export type ModelFilePart = z.infer<typeof ModelFilePartSchema>;
+
+/**
+ * Image part ready for AI model consumption
+ *
+ * AI SDK v6 PATTERN: Images must use type:'image' with raw base64 in 'image' field
+ * This fixes Bedrock error: "URL sources are not supported"
+ * Bedrock requires raw base64, not data URLs
+ *
+ * Matches AI SDK's ImageUIPart structure for compatibility:
+ * - type: 'image'
+ * - image: string (base64 or data URL)
+ * - mimeType: string (optional in AI SDK, required here for provider compatibility)
+ */
+export const ModelImagePartSchema = z.object({
+  type: z.literal('image'),
+  /** Raw base64 string (NOT data URL) - required for Bedrock compatibility */
+  image: z.string(),
+  /** MIME type of the image - matches AI SDK's ImageUIPart.mimeType */
+  mimeType: z.string(),
+});
+
+/** Image part ready for AI model consumption */
+export type ModelImagePart = z.infer<typeof ModelImagePartSchema>;
+
+/**
+ * Union type for model-ready media parts (images or files)
+ */
+export const ModelMediaPartSchema = z.discriminatedUnion('type', [
+  ModelFilePartSchema,
+  ModelImagePartSchema,
+]);
+
+/** Union type for model-ready media parts */
+export type ModelMediaPart = z.infer<typeof ModelMediaPartSchema>;
 
 /**
  * Minimal file part with binary data (used in streaming orchestration)
@@ -337,6 +371,20 @@ export function isModelFilePartWithData(
   value: unknown,
 ): value is ModelFilePartWithData {
   return ModelFilePartWithDataSchema.safeParse(value).success;
+}
+
+/**
+ * Type guard: Check if value is a ModelImagePart
+ */
+export function isModelImagePart(value: unknown): value is ModelImagePart {
+  return ModelImagePartSchema.safeParse(value).success;
+}
+
+/**
+ * Type guard: Check if value is a ModelMediaPart (image or file)
+ */
+export function isModelMediaPart(value: unknown): value is ModelMediaPart {
+  return ModelMediaPartSchema.safeParse(value).success;
 }
 
 // ============================================================================

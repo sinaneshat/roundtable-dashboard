@@ -22,6 +22,7 @@ import { getErrorMessage } from '@/api/common/error-types';
 import {
   CitationSourcePrefixes,
   CitationSourceTypes,
+  IMAGE_MIME_TYPES,
   MAX_TEXT_CONTENT_SIZE,
   MessagePartTypes,
   MessageRoles,
@@ -998,6 +999,21 @@ function injectFileDataIntoModelMessages(
 
         if (fileData) {
           const base64 = uint8ArrayToBase64(fileData.data);
+          const isImage = IMAGE_MIME_TYPES.includes(fileData.mimeType as typeof IMAGE_MIME_TYPES[number]);
+
+          // ✅ AI SDK v6 PATTERN: Use correct part type for provider compatibility
+          // Images must use type:'image' with raw base64 in 'image' field
+          // Files (PDF, etc.) use type:'file' with data URL in 'url' field
+          // This fixes Bedrock error: "URL sources are not supported"
+          if (isImage) {
+            return {
+              type: 'image' as const,
+              image: base64, // Raw base64 string (NOT data URL)
+              mimeType: fileData.mimeType, // Matches AI SDK's ImageUIPart.mimeType
+            };
+          }
+
+          // Non-image files use 'file' type with data URL
           return {
             type: 'file' as const,
             data: fileData.data,

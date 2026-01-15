@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 
 import { ComponentVariants, ErrorBoundaryContexts } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
@@ -15,10 +15,8 @@ import { usePublicThreadQuery } from '@/hooks/queries';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
 import { chatMessagesToUIMessages, transformChatParticipants, transformPreSearches } from '@/lib/utils';
-import { rlog } from '@/lib/utils/dev-logger';
 import type { GetPublicThreadResponse } from '@/services/api';
 
-// Extract the data payload type from the API response
 type PublicThreadData = Extract<GetPublicThreadResponse, { success: true }>['data'];
 
 type PublicChatThreadScreenProps = {
@@ -29,11 +27,8 @@ type PublicChatThreadScreenProps = {
 
 export default function PublicChatThreadScreen({ slug, initialData }: PublicChatThreadScreenProps) {
   const t = useTranslations();
-  const mountTimeRef = useRef(Date.now());
-  const hasLoggedRef = useRef(false);
 
-  // ✅ SSR HYDRATION: Use initialData from props first, fallback to React Query
-  // This ensures immediate server render with content - no loading flash
+  // SSR HYDRATION: Use initialData from props first, fallback to React Query
   const { data: threadData, isPending } = usePublicThreadQuery(slug);
   const queryResponse = threadData?.success ? threadData.data : null;
 
@@ -64,26 +59,12 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
   // Data is ready when we have SSR props or React Query data
   const isStoreReady = !isActuallyPending && messages.length > 0;
 
-  // Debug logging for hydration
-  useEffect(() => {
-    if (!hasLoggedRef.current) {
-      hasLoggedRef.current = true;
-      rlog.init('public-mount', `initial=${initialData?.messages?.length ?? 0} query=${queryResponse?.messages?.length ?? 0} pending=${isPending ? 1 : 0}`);
-    }
-  }, [initialData, queryResponse, isPending]);
-
-  useEffect(() => {
-    const elapsed = Date.now() - mountTimeRef.current;
-    rlog.init('public-data', `msgs=${messages.length} timeline=${timeline.length} ready=${isStoreReady ? 1 : 0} elapsed=${elapsed}ms`);
-  }, [messages.length, timeline.length, isStoreReady]);
-
   useChatScroll({
     messages,
     enableNearBottomDetection: true,
   });
 
   // Show loading only when truly pending (no SSR data AND no React Query data)
-  // With SSR props passed directly, this should never show on initial load
   if (isActuallyPending) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
@@ -96,7 +77,6 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
   }
 
   // Error cases are handled by the server page (redirects to sign-in)
-  // This is a fallback for edge cases
   if (!thread) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">

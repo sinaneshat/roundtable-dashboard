@@ -14,6 +14,8 @@ import {
   CustomRoleListResponseSchema,
   DeletedResponseSchema,
   DeleteThreadResponseSchema,
+  ExecuteRoundRequestSchema,
+  ExecuteRoundResponseSchema,
   ExistingModeratorMessageSchema,
   GetThreadFeedbackResponseSchema,
   MessagesListResponseSchema,
@@ -25,6 +27,7 @@ import {
   RoundFeedbackParamSchema,
   RoundFeedbackRequestSchema,
   RoundModeratorRequestSchema,
+  RoundStatusResponseSchema,
   SetRoundFeedbackResponseSchema,
   StreamChatRequestSchema,
   StreamStatusResponseSchema,
@@ -885,6 +888,77 @@ export const councilModeratorRoundRoute = createRoute({
     ...createMutationRouteResponses(),
   },
 });
+
+/**
+ * POST Execute Round Route - Server-Side Round Orchestration
+ * Triggers all participants and moderator in background.
+ * Client can disconnect - round continues server-side.
+ */
+export const executeRoundRoute = createRoute({
+  method: 'post',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/execute',
+  tags: ['chat'],
+  summary: 'Execute round server-side (background)',
+  description: `Start server-side round execution. Triggers all participants and moderator in background via waitUntil().
+Client can disconnect - round continues server-side. Poll GET /status for progress.
+
+**Server-Side Orchestration**: Solves the "user navigates away" problem where rounds never completed.
+- Returns 202 Accepted immediately
+- Client polls GET .../status for progress
+- Round completes even if client disconnects`,
+  request: {
+    params: ThreadRoundParamSchema,
+    body: {
+      required: false,
+      content: {
+        'application/json': {
+          schema: ExecuteRoundRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.ACCEPTED]: {
+      description: 'Round execution started in background',
+      content: {
+        'application/json': { schema: ExecuteRoundResponseSchema },
+      },
+    },
+    [HttpStatusCodes.OK]: {
+      description: 'Round execution already in progress or completed',
+      content: {
+        'application/json': { schema: ExecuteRoundResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+
+/**
+ * GET Round Status Route - Check round execution progress
+ * Poll this to track server-side round execution.
+ */
+export const getRoundStatusRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/status',
+  tags: ['chat'],
+  summary: 'Get round execution status',
+  description: `Get current status of round execution. Poll this endpoint to track progress.
+Returns participant statuses, moderator status, and completion state.`,
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Round status retrieved',
+      content: {
+        'application/json': { schema: RoundStatusResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
 /**
  * GET Thread Pre-Searches Route - List all pre-searches for thread
  * ✅ FOLLOWS: getThreadSummariesRoute pattern
