@@ -32,6 +32,8 @@ import { usePostHog } from 'posthog-js/react';
 import { useCallback } from 'react';
 import { z } from 'zod';
 
+import { TaskPrioritySchema } from '@/api/core/enums';
+
 type ProjectInfo = {
   id: string;
   name: string;
@@ -79,7 +81,7 @@ const ProjectTaskEventPropertiesSchema = z.object({
   taskId: z.string(),
   taskTitle: z.string().optional(),
   assignedTo: z.string().optional(),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+  priority: TaskPrioritySchema.optional(),
 });
 
 const ProjectActionEventPropertiesSchema = z.object({

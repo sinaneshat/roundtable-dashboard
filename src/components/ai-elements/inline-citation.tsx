@@ -6,6 +6,7 @@ import { createContext, use, useCallback, useMemo, useState } from 'react';
 
 import type { CitationSourceType } from '@/api/core/enums';
 import { CitationSourceTypes } from '@/api/core/enums';
+import type { AvailableSource } from '@/api/types/citations';
 import type { Icon } from '@/components/icons';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +22,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { formatFileSize } from '@/lib/format';
 import { cn } from '@/lib/ui/cn';
 import { rlog } from '@/lib/utils/dev-logger';
+
+import { extractHostname, formatCitationIdForDisplay } from './citation-utils';
 
 // ============================================================================
 // Context for Citation State
@@ -129,20 +132,6 @@ function InlineCitationCard({ children }: InlineCitationCardProps) {
 }
 
 // ============================================================================
-// Helper: Extract hostname from URL
-// ============================================================================
-
-function extractHostname(url: string): string | null {
-  try {
-    const hostname = new URL(url).hostname;
-    // Remove www. prefix for cleaner display
-    return hostname.replace(/^www\./, '');
-  } catch {
-    return null;
-  }
-}
-
-// ============================================================================
 // InlineCitationCardTrigger (Badge Button)
 // ============================================================================
 
@@ -227,48 +216,6 @@ function InlineCitationCardBody({ children, className }: InlineCitationCardBodyP
       <div className="p-3 space-y-3">{children}</div>
     </PopoverContent>
   );
-}
-
-// ============================================================================
-// Helper: Format citation ID for display
-// ============================================================================
-
-function formatCitationIdForDisplay(citationId: string, sourceType: CitationSourceType): string {
-  // Parse search citations like "sch_q0r1" → "Search Result #2"
-  if (sourceType === CitationSourceTypes.SEARCH) {
-    const match = citationId.match(/^sch_q(\d+)r(\d+)$/);
-    if (match) {
-      const resultNum = Number.parseInt(match[2] ?? '0', 10) + 1;
-      return `Web Search Result #${resultNum}`;
-    }
-  }
-
-  // Parse memory citations like "mem_abc123" → "Memory"
-  if (sourceType === CitationSourceTypes.MEMORY) {
-    return 'Project Memory';
-  }
-
-  // Parse thread citations
-  if (sourceType === CitationSourceTypes.THREAD) {
-    return 'Previous Conversation';
-  }
-
-  // Parse moderator citations like "mod_round0" → "Round Summary"
-  if (sourceType === CitationSourceTypes.MODERATOR) {
-    const match = citationId.match(/^mod_round(\d+)/);
-    if (match) {
-      const roundNum = Number.parseInt(match[1] ?? '0', 10) + 1;
-      return `Round ${roundNum} Summary`;
-    }
-  }
-
-  // Parse RAG citations
-  if (sourceType === CitationSourceTypes.RAG) {
-    return 'Indexed Document';
-  }
-
-  // Fallback to citation ID
-  return citationId;
 }
 
 // ============================================================================
@@ -566,21 +513,13 @@ function InlineCitationCarouselItem({ children, className }: InlineCitationCarou
 // SourcesFooter - Unified Sources Display at End of Response
 // ============================================================================
 
-type SourceData = {
-  id: string;
-  sourceType: CitationSourceType;
-  title?: string;
-  url?: string;
-  /** Short description of the source */
-  description?: string;
-  /** Content excerpt/quote that was cited */
-  excerpt?: string;
-  downloadUrl?: string;
-  filename?: string;
-  mimeType?: string;
-  fileSize?: number;
-  threadTitle?: string;
-};
+/**
+ * SourceData - Type alias for AvailableSource from Zod schema
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: Uses AvailableSourceSchema from @/api/types/citations
+ * This ensures the citation data structure is consistent across the codebase.
+ */
+type SourceData = AvailableSource;
 
 type SourcesFooterProps = {
   readonly sources: SourceData[];
@@ -694,8 +633,6 @@ function SourcesFooter({ sources, className }: SourcesFooterProps) {
 // ============================================================================
 
 export {
-  extractHostname,
-  formatCitationIdForDisplay,
   InlineCitation,
   InlineCitationCard,
   InlineCitationCardBody,

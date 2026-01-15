@@ -635,6 +635,33 @@ export function getModelTierMultiplier(tier: ModelPricingTier): number {
 }
 
 // ============================================================================
+// MODEL COST CATEGORY (UI-facing cost display)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const MODEL_COST_CATEGORIES = ['free', 'low', 'medium', 'high'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_MODEL_COST_CATEGORY: ModelCostCategory = 'low';
+
+// 3. ZOD SCHEMA
+export const ModelCostCategorySchema = z.enum(MODEL_COST_CATEGORIES).openapi({
+  description: 'UI-facing model cost category for display purposes',
+  example: 'medium',
+});
+
+// 4. TYPESCRIPT TYPE
+export type ModelCostCategory = z.infer<typeof ModelCostCategorySchema>;
+
+// 5. CONSTANT OBJECT
+export const ModelCostCategories = {
+  FREE: 'free' as const,
+  LOW: 'low' as const,
+  MEDIUM: 'medium' as const,
+  HIGH: 'high' as const,
+} as const;
+
+// ============================================================================
 // INVOICE STATUS
 // ============================================================================
 

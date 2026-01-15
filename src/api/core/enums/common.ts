@@ -471,3 +471,30 @@ export const DATE_FORMAT_VARIANT_OPTIONS: Record<DateFormatVariant, Intl.DateTim
   [DateFormatVariants.MEDIUM]: { year: 'numeric', month: 'long', day: 'numeric' },
   [DateFormatVariants.LONG]: { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' },
 } as const;
+
+// ============================================================================
+// TASK PRIORITY
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_TASK_PRIORITY: TaskPriority = 'medium';
+
+// 3. ZOD SCHEMA
+export const TaskPrioritySchema = z.enum(TASK_PRIORITIES).openapi({
+  description: 'Task priority level',
+  example: 'medium',
+});
+
+// 4. TYPESCRIPT TYPE
+export type TaskPriority = z.infer<typeof TaskPrioritySchema>;
+
+// 5. CONSTANT OBJECT
+export const TaskPriorities = {
+  LOW: 'low' as const,
+  MEDIUM: 'medium' as const,
+  HIGH: 'high' as const,
+  URGENT: 'urgent' as const,
+} as const;

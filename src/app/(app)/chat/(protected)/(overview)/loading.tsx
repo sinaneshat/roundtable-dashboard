@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { LogoGlow } from '@/components/ui/logo-glow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
-import { cn } from '@/lib/ui';
+import { cn } from '@/lib/ui/cn';
 
 /**
  * Overview-specific loading skeleton

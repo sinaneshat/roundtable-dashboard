@@ -6,7 +6,7 @@ import {
   CREDIT_TRANSACTION_TYPES,
   PLAN_TYPES,
   PlanTypes,
-} from '@/api/core/enums/billing';
+} from '@/api/core/enums';
 import type { CreditTransactionMetadata } from '@/db/validation/credits';
 
 import { user } from './auth';

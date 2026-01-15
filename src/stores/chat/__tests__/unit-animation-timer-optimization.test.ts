@@ -5,7 +5,7 @@
  *
  * Coverage:
  * 1. requestAnimationFrame patterns (triple RAF in flow-state-machine)
- * 2. setTimeout/setInterval cleanup (TypewriterTitle, polling, delays)
+ * 2. setTimeout/setInterval cleanup (polling, delays)
  * 3. Animation state management (pendingAnimations, animationResolvers)
  * 4. Debounce/throttle patterns (slug polling interval)
  * 5. Memory leak prevention (uncleaned timers, unresolved promises)

@@ -44,19 +44,19 @@ type CancelCleanupRequest = {
 function isValidScheduleRequest(data: unknown): data is ScheduleCleanupRequest {
   if (typeof data !== 'object' || data === null)
     return false;
-  const obj = data as Record<string, unknown>;
+  // Type-safe property checks without Record<string, unknown> cast
   return (
-    typeof obj.uploadId === 'string' && obj.uploadId.length > 0
-    && typeof obj.userId === 'string' && obj.userId.length > 0
-    && typeof obj.r2Key === 'string' && obj.r2Key.length > 0
+    'uploadId' in data && typeof data.uploadId === 'string' && data.uploadId.length > 0
+    && 'userId' in data && typeof data.userId === 'string' && data.userId.length > 0
+    && 'r2Key' in data && typeof data.r2Key === 'string' && data.r2Key.length > 0
   );
 }
 
 function isValidCancelRequest(data: unknown): data is CancelCleanupRequest {
   if (typeof data !== 'object' || data === null)
     return false;
-  const obj = data as Record<string, unknown>;
-  return typeof obj.uploadId === 'string' && obj.uploadId.length > 0;
+  // Type-safe property check without Record<string, unknown> cast
+  return 'uploadId' in data && typeof data.uploadId === 'string' && data.uploadId.length > 0;
 }
 
 // Cleanup delay in milliseconds (15 minutes)

@@ -1,9 +1,9 @@
-import type { PlanType } from '@/api/core/enums/billing';
+import type { PlanType } from '@/api/core/enums';
 import {
   MODEL_TIER_CREDIT_MULTIPLIERS,
   ModelPricingTiers,
   PlanTypes,
-} from '@/api/core/enums/billing';
+} from '@/api/core/enums';
 
 export const CREDIT_CONFIG = {
   TOKENS_PER_CREDIT: 1000,

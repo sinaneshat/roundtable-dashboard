@@ -181,5 +181,3 @@ export const test = base.extend<AuthFixtures>({
     await context.close();
   },
 });
-
-export { expect } from '@playwright/test';

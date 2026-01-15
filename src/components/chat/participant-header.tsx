@@ -1,10 +1,10 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { cn, extractColorFromImage, getCachedImageColor, hasColorCached } from '@/lib/ui';
+import { cn, useImageColor } from '@/lib/ui';
 import { getRoleBadgeStyle } from '@/lib/utils';
 
 export type ParticipantHeaderProps = {
@@ -29,30 +29,7 @@ export const ParticipantHeader = memo(({
   hasError = false,
 }: ParticipantHeaderProps) => {
   const t = useTranslations();
-  // Always use consistent default for SSR hydration - update via useEffect
-  const [colorClass, setColorClass] = useState<string>('muted-foreground');
-
-  useEffect(() => {
-    // Check cache first for instant update
-    if (hasColorCached(avatarSrc)) {
-      setColorClass(getCachedImageColor(avatarSrc));
-      return;
-    }
-
-    let mounted = true;
-    extractColorFromImage(avatarSrc, false)
-      .then((color: string) => {
-        if (mounted)
-          setColorClass(color);
-      })
-      .catch(() => {
-        if (mounted)
-          setColorClass('muted-foreground');
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [avatarSrc]);
+  const colorClass = useImageColor(avatarSrc);
 
   return (
     <div className="flex items-center gap-3 mb-6">

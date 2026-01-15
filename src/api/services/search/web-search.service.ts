@@ -1,32 +1,5 @@
 /**
- * Web Search Service (Browser-Based)
- *
- * **BACKEND SERVICE**: Performs web searches using headless browser (Puppeteer)
- * Following backend-patterns.md: Service layer for business logic, external integrations
- *
- * **PURPOSE**:
- * - Browser-based web search using DuckDuckGo
- * - Works in both local development and Cloudflare Workers
- * - AI-powered query generation and answer summaries
- * - Enhanced content extraction for detailed results
- *
- * **BROWSER STRATEGY**:
- * - LOCAL: Uses `puppeteer` package with bundled Chromium
- * - CLOUDFLARE: Uses `@cloudflare/puppeteer` with Browser binding
- *
- * **CONTENT EXTRACTION**:
- * - LOCAL: Browser-based full page rendering
- * - LIVE: Cloudflare Browser binding via @cloudflare/puppeteer
- *
- * **FEATURES**:
- * - Enhanced search parameters (topic, timeRange, domain filtering)
- * - Image search with AI-generated descriptions
- * - LLM-generated answer summaries (basic/advanced modes)
- * - Raw content extraction in markdown/text formats
- * - Auto-parameters mode (intelligent parameter detection)
- * - Country-based search prioritization
- *
- * @module api/services/web-search
+ * Web Search Service - Browser-based search using Puppeteer
  */
 
 import {
@@ -40,8 +13,6 @@ import { z } from 'zod';
 import { createError, normalizeError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { AIModels } from '@/api/core';
-import { LogTypes } from '@/api/core/enums';
-import { UIMessageRoles } from '@/api/core/enums/ai-sdk';
 import type {
   WebSearchActiveAnswerMode,
   WebSearchComplexity,
@@ -49,18 +20,20 @@ import type {
   WebSearchRawContentFormat,
   WebSearchTimeRange,
   WebSearchTopic,
-} from '@/api/core/enums/web-search';
+} from '@/api/core/enums';
 import {
   BrowserEnvironments,
   DEFAULT_ACTIVE_ANSWER_MODE,
   DEFAULT_BLOCKED_RESOURCE_TYPES,
+  LogTypes,
   PageWaitStrategies,
   PageWaitStrategySchema,
+  UIMessageRoles,
   WebSearchActiveAnswerModes,
   WebSearchAnswerModes,
   WebSearchRawContentFormats,
   WebSearchStreamEventTypes,
-} from '@/api/core/enums/web-search';
+} from '@/api/core/enums';
 import type {
   WebSearchParameters,
   WebSearchResult,
@@ -95,22 +68,8 @@ type PuppeteerRequestHandler = {
   abort: () => void;
   continue: () => void;
 };
-
-// ============================================================================
-// Type Definitions - All imported from schema.ts (Zod inference)
-// ============================================================================
-// NO manual type definitions - all types come from Zod schemas
-
-// ============================================================================
-// HTML → Markdown Conversion (Simple Implementation)
-// ============================================================================
-
-/**
- * Convert HTML to markdown (simplified version without external dependencies)
- */
 function htmlToMarkdown(html: string): string {
   try {
-    // Basic HTML to Markdown conversion
     const markdown = html
       // Headers
       .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n')
@@ -147,41 +106,16 @@ function htmlToMarkdown(html: string): string {
 
     return markdown;
   } catch {
-    // Fallback: strip HTML tags if conversion fails
     return html.replace(/<[^>]*>/g, '').trim();
   }
 }
-
-// ============================================================================
-// Query Generation
-// ============================================================================
-
-/**
- * Stream search query generation (gradual)
- *
- * Uses streamText with Output.object() for progressive query generation like summary streaming.
- * Returns stream iterator that yields partial query as it's generated.
- *
- * Pattern from: /src/api/routes/chat/handlers/summary.handler.ts:91-120
- *
- * ✅ ERROR HANDLING: Comprehensive error context following error-metadata.service.ts pattern
- *
- * @param userMessage - User's question to generate query for
- * @param env - Cloudflare environment bindings
- * @param logger - Optional logger for error tracking
- * @returns Stream object with partialObjectStream
- * @throws HttpException with error context if query generation fails
- */
 export function streamSearchQuery(
   userMessage: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ) {
-  const modelId = AIModels.WEB_SEARCH;
-
   try {
-    // ✅ VALIDATE: Check model supports structured output
-    validateModelForOperation(modelId, 'web-search-query-generation', {
+    validateModelForOperation(AIModels.WEB_SEARCH, 'web-search-query-generation', {
       structuredOutput: true,
       streaming: true,
       minJsonQuality: 'good',
@@ -191,7 +125,7 @@ export function streamSearchQuery(
     const client = openRouterService.getClient();
 
     return streamText({
-      model: client.chat(modelId),
+      model: client.chat(AIModels.WEB_SEARCH),
       output: Output.object({ schema: MultiQueryGenerationSchema }),
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),
@@ -207,26 +141,16 @@ export function streamSearchQuery(
       },
     });
   } catch (error) {
-    // ✅ LOG: Query generation failure with detailed context
-    const errorDetails = {
-      modelId,
-      errorType: error instanceof Error ? error.constructor.name : 'Unknown',
-      errorMessage: error instanceof Error ? error.message : 'Unknown error',
-      userMessage: userMessage.substring(0, 100),
-    };
-
     if (logger) {
       logger.error('Search query generation failed', {
         logType: LogTypes.OPERATION,
         operationName: 'streamSearchQuery',
         error: normalizeError(error).message,
-        ...errorDetails,
       });
     }
 
-    // ✅ ERROR CONTEXT: External service error for AI query generation
     throw createError.internal(
-      `Failed to generate search query using ${modelId}. Try using a more capable model.`,
+      'Failed to generate search query. Try using a more capable model.',
       {
         errorType: 'external_service',
         service: 'openrouter',
@@ -260,7 +184,6 @@ export async function generateSearchQuery(
   const modelId = AIModels.WEB_SEARCH;
 
   try {
-    // ✅ VALIDATE: Check model supports structured output
     validateModelForOperation(modelId, 'web-search-query-generation-sync', {
       structuredOutput: true,
       minJsonQuality: 'good',
@@ -277,7 +200,6 @@ export async function generateSearchQuery(
       maxRetries: 3,
     });
 
-    // ✅ VALIDATE: Ensure result matches schema and constraints
     if (
       !result.output
       || !result.output.queries
@@ -290,7 +212,6 @@ export async function generateSearchQuery(
       throw createError.badRequest('Generated object does not contain valid queries', errorContext);
     }
 
-    // ✅ VALIDATE: Clamp totalQueries to valid range (1-3)
     // Anthropic doesn't support min/max in schema, so validate after generation
     // Coerce string to number if needed
     const totalQueriesNum
@@ -301,12 +222,10 @@ export async function generateSearchQuery(
     // Clamp totalQueries to valid range (1-3)
     result.output.totalQueries = Math.max(1, Math.min(3, totalQueriesNum || 1));
 
-    // ✅ VALIDATE: Trim queries array if exceeds limit (max 3 queries)
     if (result.output.queries.length > 3) {
       result.output.queries = result.output.queries.slice(0, 3);
     }
 
-    // ✅ VALIDATE: Clamp sourceCount per query to max 3
     result.output.queries = result.output.queries.map((q) => {
       const sourceCount
         = typeof q.sourceCount === 'string'
@@ -320,7 +239,6 @@ export async function generateSearchQuery(
 
     return result.output;
   } catch (error) {
-    // ✅ LOG: Query generation failure with full context
     const errorDetails = {
       modelId,
       errorType: error instanceof Error ? error.constructor.name : 'Unknown',
@@ -337,7 +255,6 @@ export async function generateSearchQuery(
       });
     }
 
-    // ✅ ERROR CONTEXT: External service error for AI query generation
     throw createError.internal(
       `Failed to generate search query using ${modelId}. The model may not support structured output properly.`,
       {
@@ -349,9 +266,7 @@ export async function generateSearchQuery(
   }
 }
 
-// ============================================================================
 // Browser Initialization (Search & Content Extraction)
-// ============================================================================
 
 /**
  * Initialize browser for search and content extraction
@@ -369,9 +284,7 @@ export async function generateSearchQuery(
  * @param env - Cloudflare environment bindings
  * @returns Browser instance or null
  */
-// ============================================================================
 // Browser Type Definitions (Zod-derived types)
-// ============================================================================
 
 const _CloudflareBrowserSchema = z.custom<Awaited<ReturnType<typeof import('@cloudflare/puppeteer').default.launch>>>();
 type CloudflareBrowser = z.infer<typeof _CloudflareBrowserSchema>;
@@ -432,9 +345,7 @@ const _ExtractedSearchResultSchema = z.object({
 
 type ExtractedSearchResult = z.infer<typeof _ExtractedSearchResultSchema>;
 
-// ============================================================================
 // Browser Operation Helpers
-// ============================================================================
 
 async function extractWithCloudflareBrowser(
   browser: CloudflareBrowser,
@@ -786,9 +697,7 @@ function createSearchExtractor(): (max: number) => ExtractedSearchResult[] {
 }
 
 async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
-  // =========================================================================
   // CLOUDFLARE WORKERS: Use @cloudflare/puppeteer with BROWSER binding
-  // =========================================================================
   if (env.BROWSER) {
     try {
       const cfPuppeteer = await import('@cloudflare/puppeteer');
@@ -804,10 +713,8 @@ async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
     }
   }
 
-  // =========================================================================
   // LOCAL DEVELOPMENT ONLY: Use standard puppeteer with bundled Chromium
   // Skip in production/Cloudflare to avoid bundling 8MB+ of puppeteer/typescript
-  // =========================================================================
   if (process.env.NODE_ENV === 'development') {
     try {
       // Use variable to prevent static analysis by bundler
@@ -833,9 +740,7 @@ async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
   return null;
 }
 
-// ============================================================================
 // Lightweight Metadata Extraction (Fallback when browser unavailable)
-// ============================================================================
 
 /**
  * Extract metadata from HTML using regex (no browser required)
@@ -941,9 +846,7 @@ async function extractLightweightMetadata(url: string): Promise<{
   }
 }
 
-// ============================================================================
 // Page Content Extraction (Enhanced with Markdown/Text Modes)
-// ============================================================================
 
 /**
  * Extract full content from a webpage using Puppeteer
@@ -1048,9 +951,7 @@ async function extractPageContent(
   }
 }
 
-// ============================================================================
 // Browser-Based Web Search (DuckDuckGo)
-// ============================================================================
 
 /**
  * Perform web search using headless browser (DuckDuckGo)
@@ -1227,9 +1128,7 @@ async function searchWithFetch(
   }
 }
 
-// ============================================================================
 // Image Description Generation (AI-Powered)
-// ============================================================================
 
 /**
  * Generate AI descriptions for images using OpenRouter vision model
@@ -1265,7 +1164,6 @@ async function generateImageDescriptions(
       const descriptions = await Promise.all(
         batch.map(async (image) => {
           try {
-            // ✅ CACHE: Check cache first for image description
             const cached = await getCachedImageDescription(
               image.url,
               env,
@@ -1279,10 +1177,7 @@ async function generateImageDescriptions(
               };
             }
 
-            // ✅ FIX: Use AI SDK v6 multimodal pattern with actual vision API
-            // Reference: AI SDK v6 documentation - multimodal messages
             // https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#multi-modal-messages
-            // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
             const result = await generateText({
               model: client.chat(AIModels.WEB_SEARCH), // Use vision-capable model
               messages: [
@@ -1304,7 +1199,6 @@ async function generateImageDescriptions(
               // Note: maxTokens not supported in AI SDK v6 generateText with messages
             });
 
-            // ✅ CACHE: Store generated description for future use
             await cacheImageDescription(image.url, result.text, env, logger);
 
             return {
@@ -1346,9 +1240,7 @@ async function generateImageDescriptions(
   }
 }
 
-// ============================================================================
 // Answer Summary Generation (AI-Powered)
-// ============================================================================
 
 /**
  * Stream AI answer summary from search results (STREAMING VERSION)
@@ -1393,10 +1285,8 @@ export function streamAnswerSummary(
       })
       .join('\n\n---\n\n');
 
-    // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
     const systemPrompt = getAnswerSummaryPrompt(mode);
 
-    // ✅ FIX: Use streamText() for progressive streaming
     return streamText({
       model: client.chat(AIModels.WEB_SEARCH),
       system: systemPrompt,
@@ -1459,7 +1349,6 @@ async function generateAnswerSummary(
       })
       .join('\n\n---\n\n');
 
-    // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
     const systemPrompt = getAnswerSummaryPrompt(mode);
 
     const result = await openRouterService.generateText({
@@ -1495,9 +1384,7 @@ async function generateAnswerSummary(
   }
 }
 
-// ============================================================================
 // Auto-Parameters Detection (AI-Powered)
-// ============================================================================
 
 /**
  * Auto-detect optimal search parameters based on query analysis
@@ -1522,7 +1409,6 @@ async function detectSearchParameters(
   try {
     initializeOpenRouter(env);
 
-    // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
     const result = await openRouterService.generateText({
       modelId: AIModels.WEB_SEARCH,
       messages: [
@@ -1562,9 +1448,7 @@ async function detectSearchParameters(
   }
 }
 
-// ============================================================================
 // Utility: Retry Logic with Exponential Backoff
-// ============================================================================
 
 /**
  * Retry wrapper with exponential backoff for reliability
@@ -1587,7 +1471,6 @@ async function withRetry<T>(
     try {
       return await fn();
     } catch (error) {
-      // ✅ TYPE-SAFE: Use normalizeError instead of type assertion
       lastError = normalizeError(error);
 
       // Don't retry on last attempt
@@ -1603,9 +1486,7 @@ async function withRetry<T>(
   throw lastError;
 }
 
-// ============================================================================
 // Progressive Result Streaming (AsyncGenerator Pattern)
-// ============================================================================
 
 /**
  * Stream search results progressively as they're discovered
@@ -1675,9 +1556,7 @@ export async function* streamSearchResults(
   const requestId = generateId();
 
   try {
-    // ============================================================================
     // PHASE 1: Yield Metadata Immediately
-    // ============================================================================
     yield {
       type: WebSearchStreamEventTypes.METADATA,
       data: {
@@ -1689,9 +1568,7 @@ export async function* streamSearchResults(
       },
     };
 
-    // ============================================================================
     // PHASE 2: Get Basic Search Results
-    // ============================================================================
     logger?.info('Starting progressive search', {
       logType: LogTypes.OPERATION,
       operationName: 'streamSearchResults',
@@ -1724,17 +1601,13 @@ export async function* streamSearchResults(
     // Take only requested number of sources
     const resultsToProcess = searchResults.slice(0, maxResults);
 
-    // ============================================================================
     // PHASE 3: Stream Each Result Progressively
-    // ============================================================================
-    // ✅ KEY OPTIMIZATION: Yield basic result FIRST (fast), then enhance (slower)
     for (let i = 0; i < resultsToProcess.length; i++) {
       const result = resultsToProcess[i];
       if (!result)
         continue; // Skip if undefined
       const domain = extractDomain(result.url);
 
-      // ✅ YIELD BASIC RESULT IMMEDIATELY (500-800ms to first result)
       const basicResult: WebSearchResultItem = {
         title: result.title,
         url: result.url,
@@ -1756,10 +1629,8 @@ export async function* streamSearchResults(
         },
       };
 
-      // ✅ ENHANCE ASYNCHRONOUSLY (non-blocking)
       // Extract full content in background - if it fails, basic result already sent
       try {
-        // ✅ TYPE-SAFE: Determine content format without type casting
         // TypeScript narrows the union type based on boolean check
         let rawContentFormat: WebSearchRawContentFormat | undefined;
         if (params.includeRawContent) {
@@ -1776,7 +1647,6 @@ export async function* streamSearchResults(
           10000, // 10s timeout per page
         );
 
-        // ✅ FIX: Check for metadata even when content is empty (lightweight extraction case)
         const hasContent = !!extracted.content;
         const hasMetadata = !!(
           extracted.metadata.imageUrl
@@ -1831,7 +1701,6 @@ export async function* streamSearchResults(
             }
           }
 
-          // ✅ YIELD ENHANCED VERSION (even if only metadata available)
           yield {
             type: WebSearchStreamEventTypes.RESULT,
             data: {
@@ -1854,9 +1723,7 @@ export async function* streamSearchResults(
       }
     }
 
-    // ============================================================================
     // PHASE 4: Yield Completion
-    // ============================================================================
     yield {
       type: WebSearchStreamEventTypes.COMPLETE,
       data: {
@@ -1885,9 +1752,7 @@ export async function* streamSearchResults(
   }
 }
 
-// ============================================================================
 // Web Search Execution (Tavily-Enhanced)
-// ============================================================================
 
 /**
  * Perform web search with Tavily-like features
@@ -1912,14 +1777,12 @@ export async function performWebSearch(
 ): Promise<WebSearchResult> {
   const startTime = performance.now();
 
-  // ✅ P0 FIX: Generate unique request ID for tracking
   const requestId = generateId();
 
   // Determine max results (default 10, max 20)
   const maxResults = Math.min(params.maxResults || 10, 20);
   const searchDepth = params.searchDepth || 'advanced';
 
-  // ✅ CACHE: Try cache first for performance boost
   const cached = await getCachedSearch(
     params.query,
     maxResults,
@@ -1963,7 +1826,6 @@ export async function performWebSearch(
       }
     }
 
-    // ✅ P0 FIX: Fetch search results with retry logic for reliability
     const searchResults = await withRetry(
       () =>
         searchWithBrowser(
@@ -1975,7 +1837,6 @@ export async function performWebSearch(
       3, // 3 retries
     );
 
-    // ✅ LOG: Empty search results (edge case)
     if (searchResults.length === 0) {
       if (logger) {
         logger.warn('Web search returned no results', {
@@ -2000,7 +1861,6 @@ export async function performWebSearch(
     // Take only requested number of sources
     const sourcesToProcess = searchResults.slice(0, maxResults);
 
-    // ✅ TYPE-SAFE: Determine content extraction format without type casting
     // TypeScript narrows the union type based on boolean check
     let rawContentFormat: WebSearchRawContentFormat | undefined;
     if (params.includeRawContent) {
@@ -2016,7 +1876,6 @@ export async function performWebSearch(
       sourcesToProcess.map(async (result, index) => {
         const domain = extractDomain(result.url);
 
-        // ✅ FIX: Calculate actual relevance score based on query match
         // Split query into terms for matching
         const queryTerms = params.query
           .toLowerCase()
@@ -2071,7 +1930,6 @@ export async function performWebSearch(
             10000,
           );
 
-          // ✅ FIX: Apply metadata even when content is empty (lightweight extraction case)
           // When browser is unavailable, extractLightweightMetadata still provides
           // imageUrl, faviconUrl, title, and description - these should be applied
           const hasContent = !!extracted.content;
@@ -2088,7 +1946,6 @@ export async function performWebSearch(
             baseResult.rawContent = extracted.rawContent;
           }
 
-          // ✅ ALWAYS apply metadata if we have any useful data
           if (hasContent || hasMetadata) {
             // Add metadata - apply even without full content (lightweight extraction)
             baseResult.metadata = {
@@ -2201,7 +2058,6 @@ export async function performWebSearch(
       _meta: complexity ? { complexity } : undefined,
     };
 
-    // ✅ CACHE: Store result for future queries
     await cacheSearchResult(
       params.query,
       maxResults,
@@ -2213,7 +2069,6 @@ export async function performWebSearch(
 
     return finalResult;
   } catch (error) {
-    // ✅ LOG: Complete search failure (critical edge case)
     if (logger) {
       logger.error('Web search failed completely', {
         logType: LogTypes.EDGE_CASE,
@@ -2236,9 +2091,7 @@ export async function performWebSearch(
   }
 }
 
-// ============================================================================
 // Utility Functions
-// ============================================================================
 
 /**
  * Extract domain from URL

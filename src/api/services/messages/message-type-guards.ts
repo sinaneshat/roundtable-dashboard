@@ -1,66 +1,22 @@
 /**
- * Database Message Type Guards
+ * Message Type Guards - Zod-based validation
  *
- * Following backend-patterns.md: Service layer for business logic
- *
- * Provides Zod-validated type guards for database ChatMessage records:
- * - Type-safe filtering for handlers and services
- * - Separates database concerns from frontend transforms
+ * ✅ ZOD-FIRST PATTERN: Uses .safeParse() from existing schemas
+ * ✅ SINGLE SOURCE OF TRUTH: Delegates to metadata.ts utilities
  */
 
-import { MessageRoles } from '@/api/core/enums';
 import type { ChatMessage } from '@/db/validation';
-import { getMessageMetadata, getParticipantId, getPreSearchMetadata, isModeratorMessage } from '@/lib/utils/metadata';
+import { getParticipantMetadata, getPreSearchMetadata } from '@/lib/utils';
 
-// ============================================================================
-// Type Guards
-// ============================================================================
-
-/**
- * Check if database message is pre-search message
- * Uses Zod schema validation for runtime type safety
- */
 export function isDbPreSearchMessage(message: ChatMessage): boolean {
-  if (!message.metadata)
-    return false;
   return getPreSearchMetadata(message.metadata) !== null;
 }
 
-/**
- * Check if database message is participant message
- * Must have participantId column AND metadata indicating participant (not moderator)
- *
- * ✅ LENIENT CHECK: Doesn't require full Zod validation
- * Just checks essential fields to allow persisted messages to be found
- */
 export function isDbParticipantMessage(message: ChatMessage): boolean {
-  if (!message.participantId || !message.metadata)
+  if (!message.participantId)
     return false;
-
-  // Use type-safe metadata extraction helpers
-  const metadata = getMessageMetadata(message.metadata);
-  if (!metadata)
-    return false;
-
-  // Must be assistant role
-  if (metadata.role !== MessageRoles.ASSISTANT)
-    return false;
-
-  // Must have participantId in metadata
-  const participantId = getParticipantId(message.metadata);
-  if (!participantId)
-    return false;
-
-  // Must NOT be a moderator message
-  if (isModeratorMessage(message))
-    return false;
-
-  return true;
+  return getParticipantMetadata(message.metadata) !== null;
 }
-
-// ============================================================================
-// Bulk Filtering
-// ============================================================================
 
 export function filterDbToParticipantMessages(messages: ChatMessage[]): ChatMessage[] {
   return messages.filter(isDbParticipantMessage);

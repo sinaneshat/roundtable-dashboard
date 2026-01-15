@@ -25,8 +25,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { MessageStatuses } from '@/api/core/enums/chat';
-import { RoundPhases } from '@/api/core/enums/streaming';
+import { MessageStatuses, RoundPhases } from '@/api/core/enums';
 
 import { createChatStore } from '../../stores/chat/store';
 

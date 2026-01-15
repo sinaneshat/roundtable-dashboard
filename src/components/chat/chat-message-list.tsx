@@ -23,7 +23,7 @@ import { useModelLookup } from '@/hooks/utils';
 import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
 import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
-import { cn } from '@/lib/ui';
+import { cn } from '@/lib/ui/cn';
 import { allParticipantsHaveVisibleContent, buildParticipantMessageMaps, getAvailableSources, getAvatarPropsFromModelId, getEnabledParticipants, getMessageMetadata, getMessageStatus, getModeratorMetadata, getParticipantMessageFromMaps, getRoundNumber, getUserMetadata, isModeratorMessage, isPreSearch as isPreSearchMessage, participantHasVisibleContent } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 
@@ -181,12 +181,9 @@ function AssistantGroupCard({
   t: (key: string) => string;
   keyForMessage: (message: UIMessage, index: number) => string;
   maxContentHeight?: number;
-  /** Fallback sources from all messages in the round (for moderator which doesn't have its own sources) */
   roundAvailableSources?: AvailableSource[];
-  /** Skip opacity transitions for SSR/read-only pages to prevent hydration delay */
   skipTransitions?: boolean;
 }) {
-  // Determine if any message in group is streaming or has error
   const hasStreamingMessage = group.messages.some(({ participantInfo }) => participantInfo.isStreaming);
   const hasErrorMessage = group.messages.some(({ message }) => {
     const metadata = getMessageMetadata(message.metadata);
@@ -194,16 +191,9 @@ function AssistantGroupCard({
     return assistantMetadata?.hasError;
   });
 
-  // ✅ FIX: Collect availableSources from ALL messages in the group (streaming-safe)
-  // This allows streaming messages to access sources from completed messages
-  // Sources are shared across all participants in a round (same pre-search results)
-  // ✅ MODERATOR FIX: Fall back to roundAvailableSources for moderator groups
-  // Moderator messages don't have their own availableSources - they cite participant sources
-  // Uses getAvailableSources() which extracts sources even when full schema validation fails
   const groupAvailableSources = useMemo((): AvailableSource[] | undefined => {
     const allSources = new Map<string, AvailableSource>();
     for (const { message } of group.messages) {
-      // ✅ STREAMING-SAFE: Use getAvailableSources which handles incomplete streaming metadata
       const availableSourcesFromMsg = getAvailableSources(message.metadata);
       if (availableSourcesFromMsg) {
         for (const source of availableSourcesFromMsg) {
@@ -213,8 +203,6 @@ function AssistantGroupCard({
         }
       }
     }
-    // Use group's own sources if available, otherwise fall back to round-level sources
-    // This is critical for moderator groups which don't have their own sources
     return allSources.size > 0 ? Array.from(allSources.values()) : roundAvailableSources;
   }, [group.messages, roundAvailableSources]);
 
@@ -240,8 +228,6 @@ function AssistantGroupCard({
             const messageKey = keyForMessage(message, index);
             const metadata = getMessageMetadata(message.metadata);
             const model = findModel(participantInfo.modelId);
-            // ✅ Use backend-computed is_accessible_to_user (respects actual tier)
-            // In demo mode, all models are accessible
             const isAccessible = demoMode || (model?.is_accessible_to_user ?? true);
 
             const safeParts = message.parts || [];
@@ -265,8 +251,6 @@ function AssistantGroupCard({
             const sourceParts = safeParts.filter(p =>
               p && 'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
             );
-
-            // Check if this is a moderator message for custom loading text
             const isModerator = participantInfo.participantIndex === MODERATOR_PARTICIPANT_INDEX;
 
             return (
@@ -680,14 +664,8 @@ export const ChatMessageList = memo(
           return { message, index, participantInfo: null };
         }
 
-        // ✅ MODERATOR DETECTION: Messages with isModerator metadata flag
-        // Detected via isModeratorMessage(metadata) utility
-        // Moderator uses special MODERATOR_PARTICIPANT_INDEX (-99) for sorting
-        // Renders inline via ModelMessageCard after all participant responses
         if (isModeratorMessage(message)) {
           const moderatorMeta = getModeratorMetadata(message.metadata);
-          // ✅ BUG FIX: Check finishReason for ACTUAL completion, not just presence
-          // 'unknown' is a placeholder during streaming - NOT a completion reason
           const finishReason = moderatorMeta?.finishReason;
           const hasActuallyFinished = isCompletionFinishReason(finishReason);
           return {
@@ -703,20 +681,11 @@ export const ChatMessageList = memo(
         }
 
         const metadata = getMessageMetadata(message.metadata);
-        // ✅ STRICT TYPING: Use type guard to access assistant-specific fields
         const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
-
-        // ✅ BUG FIX: Check BOTH model AND ACTUAL finishReason to determine completion
-        // A message is complete when it has:
-        // 1. model (set during onFinish callback)
-        // 2. finishReason that indicates ACTUAL completion (not 'unknown' placeholder)
-        // 'unknown' is set during streaming before actual completion
         const finishReason = assistantMetadata?.finishReason;
         const hasActualFinishReason = isCompletionFinishReason(finishReason);
         const isComplete = !!(assistantMetadata?.model && hasActualFinishReason);
 
-        // ✅ For completed messages, return frozen metadata immediately without dependencies
-        // This prevents re-rendering with wrong participant info when participants change
         if (isComplete && assistantMetadata) {
           return {
             message,
@@ -730,7 +699,6 @@ export const ChatMessageList = memo(
           };
         }
 
-        // Only for streaming messages, calculate participant info from current state
         const participantInfo = getParticipantInfoForMessage({
           message,
           messageIndex: index,
@@ -746,14 +714,6 @@ export const ChatMessageList = memo(
       });
     }, [deduplicatedMessages, isStreaming, currentParticipantIndex, participants, currentStreamingParticipant, isModeratorStreaming]);
 
-    // ✅ CRITICAL FIX: Pre-calculate if all participants have content for the streaming round
-    // This is needed to decide whether to skip messages from messageGroups or render them there
-    // When all participants have content, we should NOT skip messages (render in messageGroups)
-    // When not all have content, we SHOULD skip messages (render in pending cards section)
-    //
-    // ✅ BUG FIX: Must check content even when isStreaming=false but streamingRoundNumber is set
-    // After page refresh with completed round, isStreaming=false but streamingRoundNumber may still
-    // be set (not cleared). If we return false here, messages get skipped incorrectly.
     const allStreamingRoundParticipantsHaveContent = useMemo(() => {
       if (_streamingRoundNumber === null || participants.length === 0) {
         return false;
@@ -767,37 +727,29 @@ export const ChatMessageList = memo(
         return roundNum === _streamingRoundNumber;
       });
 
-      // ✅ Use reusable utility for multi-strategy participant message lookup
       const participantMaps = buildParticipantMessageMaps(streamingRoundMessages);
-      // Filter to enabled only - store guarantees sorted order
       const enabledParticipants = getEnabledParticipants(participants);
 
       return allParticipantsHaveVisibleContent(participantMaps, enabledParticipants);
     }, [deduplicatedMessages, _streamingRoundNumber, participants]);
 
-    // Group consecutive messages by participant for sticky headers
     const messageGroups = useMemo((): MessageGroup[] => {
       const groups: MessageGroup[] = [];
       let currentAssistantGroup: Extract<MessageGroup, { type: 'assistant-group' }> | null = null;
       let currentUserGroup: Extract<MessageGroup, { type: 'user-group' }> | null = null;
 
       for (const { message, index, participantInfo } of messagesWithParticipantInfo) {
-        // ✅ DEDUPLICATION FIX: Skip pre-search messages entirely
-        // Pre-searches are rendered in ThreadTimeline based on preSearches store array
-        // to avoid duplicate rendering
         const isPreSearch = isPreSearchMessage(message.metadata);
         if (isPreSearch) {
           continue;
         }
 
         if (message.role === MessageRoles.USER) {
-          // Close any open assistant group
           if (currentAssistantGroup) {
             groups.push(currentAssistantGroup);
             currentAssistantGroup = null;
           }
 
-          // Group consecutive user messages with shared header
           if (!currentUserGroup) {
             currentUserGroup = {
               type: 'user-group',
@@ -809,75 +761,44 @@ export const ChatMessageList = memo(
               },
             };
           } else {
-            // Add to existing user group
             currentUserGroup.messages.push({ message, index });
           }
           continue;
         }
 
-        // Assistant message
         if (!participantInfo) {
           continue;
         }
 
-        // ✅ STREAMING ROUND LOGIC: Skip participant messages for current streaming round
-        // Participants render via pending cards section to maintain stable priority positioning
-        // Pending cards section shows ALL participants in sort order, replacing shimmer
-        // with actual content as it streams in. This prevents completed messages from
-        // appearing at bottom (after pending cards) instead of in their priority position.
-        //
-        // EXCEPTION 1: When ALL participants have content, DON'T skip - render in messageGroups
-        // This prevents messages from disappearing when all complete but isStreaming is still true
-        //
-        // EXCEPTION 2: MODERATOR MESSAGES ARE NEVER SKIPPED
-        // - Moderator has no pending card placeholder
-        // - Moderator renders inline after all participants complete
-        // - Never included in participant pending card logic
         const messageMetadata = getMessageMetadata(message.metadata);
         const messageRoundNumber = getRoundNumber(messageMetadata);
         const isCurrentStreamingRound = messageRoundNumber === _streamingRoundNumber;
         const messageIsModerator = isModeratorMessage(message);
 
-        // Skip participants for streaming round (pending cards handle them)
-        // ✅ BUG FIX: Only skip when isStreaming is true
-        // When streaming ends, isStreaming becomes false BEFORE streamingRoundNumber is cleared
-        // (due to useStateSync running before completeStreaming callback)
-        // Without the isStreaming check, messages get skipped but pending cards don't render,
-        // causing a flash where all participants briefly disappear.
-        // Always allow moderator through - it renders inline, not via pending cards
         if (isStreaming && isCurrentStreamingRound && !allStreamingRoundParticipantsHaveContent && !messageIsModerator) {
-          continue; // Let pending cards section handle participants for streaming round
+          continue;
         }
 
-        // Close any open user group
         if (currentUserGroup) {
           groups.push(currentUserGroup);
           currentUserGroup = null;
         }
 
-        // ✅ MODERATOR DISPLAY: Check if this is a moderator message
-        // Moderator is identified by MODERATOR_PARTICIPANT_INDEX (-99)
         const isModerator = participantInfo.participantIndex === MODERATOR_PARTICIPANT_INDEX;
-
         const metadata = getMessageMetadata(message.metadata);
         const model = findModel(participantInfo.modelId);
-        // ✅ Use backend-computed is_accessible_to_user (respects actual tier)
-        // In demo mode, all models are accessible
         const isAccessible = demoMode || (model?.is_accessible_to_user ?? true);
 
-        // ✅ MODERATOR RENDERING: Uses BRAND.logos.main avatar and MODERATOR_NAME
-        // Moderator has no role badge (role: null)
-        // Moderator has no tier requirement (requiredTierName: undefined)
         let avatarSrc: string;
         let avatarName: string;
         let displayName: string;
         let requiredTierName: string | undefined;
 
         if (isModerator) {
-          avatarSrc = BRAND.logos.main; // Brand logo for moderator avatar
-          avatarName = MODERATOR_NAME; // "Roundtable" fallback text
-          displayName = MODERATOR_NAME; // "Roundtable" header text
-          requiredTierName = undefined; // No tier badge for moderator
+          avatarSrc = BRAND.logos.main;
+          avatarName = MODERATOR_NAME;
+          displayName = MODERATOR_NAME;
+          requiredTierName = undefined;
         } else {
           const avatarProps = getAvatarPropsFromModelId(
             MessageRoles.ASSISTANT,
@@ -892,7 +813,6 @@ export const ChatMessageList = memo(
           requiredTierName = model?.required_tier_name;
         }
 
-        // Create participant key for grouping
         const participantKey = `${participantInfo.participantIndex}-${participantInfo.modelId || 'unknown'}`;
 
         if (

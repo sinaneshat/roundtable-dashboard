@@ -84,7 +84,7 @@ export function ThreadTimeline({
   useEffect(() => {
     const msgCount = timelineItems.filter(i => i.type === 'messages').reduce((sum, i) => sum + i.data.length, 0);
     rlog.init('timeline-render', `items=${timelineItems.length} msgs=${msgCount} virt=${disableVirtualization ? 0 : 1} ready=${isDataReady ? 1 : 0} elapsed=${Date.now() - mountTimeRef.current}ms`);
-  }, [timelineItems.length, disableVirtualization, isDataReady]);
+  }, [timelineItems, disableVirtualization, isDataReady]);
 
   // Collect all messages from timeline for thread-level copy action
   const allMessages = useMemo(() => {

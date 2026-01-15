@@ -106,7 +106,8 @@ export function CitedMessageContent({
         sources.push({
           id: citation.sourceId,
           sourceType: citation.sourceType,
-          title: resolvedCitation?.title || fallbackSource?.title,
+          // ✅ REQUIRED FIELD: AvailableSource.title is required per Zod schema
+          title: resolvedCitation?.title || fallbackSource?.title || citation.sourceId,
           url: resolvedCitation?.url || fallbackSource?.url,
           description: fallbackSource?.description,
           // ✅ FIX: Use excerpt from resolved citation OR fallback source for quote display

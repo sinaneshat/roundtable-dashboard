@@ -15,7 +15,8 @@ import {
 } from '@/components/seo';
 import { LiquidGlassFilters } from '@/components/ui/liquid-glass-filters';
 import { BRAND } from '@/constants';
-import { cn, spaceGrotesk } from '@/lib/ui';
+import { cn } from '@/lib/ui/cn';
+import { spaceGrotesk } from '@/lib/ui/fonts';
 import { createMetadata } from '@/utils';
 
 export const viewport: Viewport = {

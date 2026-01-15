@@ -22,7 +22,8 @@ export type ErrorWithStatus = z.infer<typeof ErrorWithStatusSchema>;
 
 /**
  * Type guard for ErrorWithStatus
+ * ✅ TYPE-SAFE: Uses in-operator for type narrowing without Record<string, unknown> cast
  */
 export function isErrorWithStatus(error: Error): error is ErrorWithStatus {
-  return 'status' in error && typeof (error as Record<string, unknown>).status === 'number';
+  return 'status' in error && typeof error.status === 'number';
 }

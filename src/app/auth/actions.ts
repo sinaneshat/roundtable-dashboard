@@ -4,8 +4,8 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import type { ThreadPublishAction } from '@/api/core/enums/chat';
-import { ThreadPublishActions } from '@/api/core/enums/chat';
+import type { ThreadPublishAction } from '@/api/core/enums';
+import { ThreadPublishActions } from '@/api/core/enums';
 import { auth } from '@/lib/auth';
 import { THREAD_CACHE_TAGS } from '@/lib/cache/thread-cache';
 

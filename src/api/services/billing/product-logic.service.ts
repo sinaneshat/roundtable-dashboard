@@ -7,12 +7,13 @@
 
 import { z } from 'zod';
 
-import type { ChatMode, ModelPricingTier, SubscriptionTier } from '@/api/core/enums';
+import type { ChatMode, ModelCostCategory, ModelPricingTier, SubscriptionTier } from '@/api/core/enums';
 import {
   ChatModes,
   getModelTierMultiplier,
   MODEL_PRICING_TIERS,
   MODEL_TIER_THRESHOLDS,
+  ModelCostCategories,
   SUBSCRIPTION_TIERS,
   SubscriptionTiers,
 } from '@/api/core/enums';
@@ -292,17 +293,17 @@ export function isModelFree(model: ModelForPricing): boolean {
   return freeLimit !== null && inputPricePerMillion <= freeLimit;
 }
 
-export function getModelCostCategory(model: ModelForPricing): 'free' | 'low' | 'medium' | 'high' {
+export function getModelCostCategory(model: ModelForPricing): ModelCostCategory {
   if (isModelFree(model))
-    return 'free';
+    return ModelCostCategories.FREE;
 
   const inputPrice = parsePrice(model.pricing_display?.input || 0);
 
   if (inputPrice <= 1.0)
-    return 'low';
+    return ModelCostCategories.LOW;
   if (inputPrice <= 10.0)
-    return 'medium';
-  return 'high';
+    return ModelCostCategories.MEDIUM;
+  return ModelCostCategories.HIGH;
 }
 
 export function getModelPricingDisplay(model: ModelForPricing): string {
