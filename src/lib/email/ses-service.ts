@@ -1,12 +1,8 @@
 import 'server-only';
 
-// IMPORTANT: Import render directly from @react-email/render, NOT from @react-email/components
-// The barrel export pulls in shiki (9.8MB) and prettier (256KB) which bloats the bundle
-import { render } from '@react-email/render';
 import { AwsClient } from 'aws4fetch';
 
 import { BRAND } from '@/constants';
-import { MagicLink } from '@/emails/templates';
 
 /**
  * Get SES credentials using OpenNext.js pattern
@@ -159,9 +155,14 @@ class EmailService {
   }
 
   async sendMagicLink(to: string, magicLink: string, expirationMinutes = 15) {
-    // Render React Email template to HTML
-    // Note: Using @react-email/components instead of @react-email/render
-    // to avoid edge runtime export resolution issues in Cloudflare Workers
+    // Dynamic imports to defer React Email initialization until runtime
+    // This prevents edge runtime startup CPU limit issues on Cloudflare Workers
+    // @see https://github.com/resend/react-email/issues/1508
+    const [{ render }, { MagicLink }] = await Promise.all([
+      import('@react-email/render'),
+      import('@/emails/templates'),
+    ]);
+
     const html = await render(MagicLink({
       loginUrl: magicLink,
       expirationTime: `${expirationMinutes} minutes`,

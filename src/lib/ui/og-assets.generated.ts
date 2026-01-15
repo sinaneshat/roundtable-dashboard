@@ -37,8 +37,7 @@ let cachedFonts: OGFontConfig[] | null = null;
  * Get OG fonts (cached, instant - no network calls)
  */
 export function getOGFontsSync(): OGFontConfig[] {
-  if (cachedFonts)
-    return cachedFonts;
+  if (cachedFonts) return cachedFonts;
 
   cachedFonts = [
     { name: 'Geist', data: base64ToArrayBuffer(FONT_400), style: 'normal', weight: 400 },
@@ -72,19 +71,19 @@ const IMG_MODEL_OPENROUTER = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAA
  * Pre-embedded images for instant access (no network calls)
  */
 export const OG_IMAGES = {
-  logo: IMG_LOGO,
-  mode_analyzing: IMG_MODE_ANALYZING,
-  mode_brainstorming: IMG_MODE_BRAINSTORMING,
-  mode_debating: IMG_MODE_DEBATING,
-  mode_solving: IMG_MODE_SOLVING,
-  ui_robot: IMG_UI_ROBOT,
-  ui_message: IMG_UI_MESSAGE,
-  model_openai: IMG_MODEL_OPENAI,
-  model_anthropic: IMG_MODEL_ANTHROPIC,
-  model_google: IMG_MODEL_GOOGLE,
-  model_deepseek: IMG_MODEL_DEEPSEEK,
-  model_meta: IMG_MODEL_META,
-  model_openrouter: IMG_MODEL_OPENROUTER,
+  'logo': IMG_LOGO,
+  'mode_analyzing': IMG_MODE_ANALYZING,
+  'mode_brainstorming': IMG_MODE_BRAINSTORMING,
+  'mode_debating': IMG_MODE_DEBATING,
+  'mode_solving': IMG_MODE_SOLVING,
+  'ui_robot': IMG_UI_ROBOT,
+  'ui_message': IMG_UI_MESSAGE,
+  'model_openai': IMG_MODEL_OPENAI,
+  'model_anthropic': IMG_MODEL_ANTHROPIC,
+  'model_google': IMG_MODEL_GOOGLE,
+  'model_deepseek': IMG_MODEL_DEEPSEEK,
+  'model_meta': IMG_MODEL_META,
+  'model_openrouter': IMG_MODEL_OPENROUTER,
 } as const;
 
 /**
