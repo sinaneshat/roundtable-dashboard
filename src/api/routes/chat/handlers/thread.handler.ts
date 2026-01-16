@@ -130,7 +130,9 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
     );
 
     // ✅ PERF: Cache sidebar thread list for faster navigation
-    c.header('Cache-Control', 'private, max-age=60, stale-while-revalidate=120');
+    // CDN-Cache-Control: no-store prevents Cloudflare edge caching for mutable user data
+    c.header('Cache-Control', 'private, no-cache, must-revalidate');
+    c.header('CDN-Cache-Control', 'no-store');
 
     return Responses.cursorPaginated(c, items, pagination);
   },
@@ -198,7 +200,9 @@ export const listSidebarThreadsHandler: RouteHandler<typeof listSidebarThreadsRo
       thread => createTimestampCursor(thread.updatedAt),
     );
 
-    c.header('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+    // CDN-Cache-Control: no-store prevents Cloudflare edge caching for mutable user data
+    c.header('Cache-Control', 'private, no-cache, must-revalidate');
+    c.header('CDN-Cache-Control', 'no-store');
     return Responses.cursorPaginated(c, items, pagination);
   },
 );
@@ -1856,9 +1860,11 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       tier_name: SUBSCRIPTION_TIER_NAMES[userTier],
     };
 
-    // ✅ PERF: Add cache headers for faster navigation
-    // private = browser cache only (not CDN), stale-while-revalidate for instant loads
-    c.header('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
+    // ✅ CACHE: Prevent stale HTTP cache for mutable user data
+    // KV cache with tags handles server-side caching (invalidated on title/thread updates)
+    // HTTP no-cache ensures browser revalidates - server responds fast from KV if tags valid
+    c.header('Cache-Control', 'private, no-cache, must-revalidate');
+    c.header('CDN-Cache-Control', 'no-store');
 
     return Responses.ok(c, {
       thread,
