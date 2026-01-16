@@ -460,6 +460,7 @@ app.use('*', async (c, next) => {
     || path.endsWith('.svg')
     // Routes with createHandler auth - handlers do their own session lookup
     // These routes all use createHandler with auth:'session' which does its own getSession()
+    || path === '/chat'
     || path.startsWith('/chat/threads/')
     || path.startsWith('/chat/roles/')
     || path.startsWith('/chat/presets/')
@@ -468,6 +469,7 @@ app.use('*', async (c, next) => {
     || path.startsWith('/api-keys/')
     || path.startsWith('/projects/')
     || path.startsWith('/mcp/')
+    || path.startsWith('/billing/')
   ) {
     c.set('session', null);
     c.set('user', null);
