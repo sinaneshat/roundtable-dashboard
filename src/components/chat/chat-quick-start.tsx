@@ -135,29 +135,20 @@ const PROMPT_POOL: PromptTemplate[] = [
   },
 ];
 
-// Simple seeded random for deterministic selection across server/client
-function seededRandom(seed: number): () => number {
-  return () => {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  };
-}
-
-// Get daily seed to rotate prompts each day while keeping server/client in sync
-function getDailySeed(): number {
-  const now = new Date();
-  return now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-}
-
 function getRandomPrompts(count: number): PromptTemplate[] {
-  const seed = getDailySeed();
-  const random = seededRandom(seed);
-  const shuffled = [...PROMPT_POOL].sort(() => random() - 0.5);
+  // Fisher-Yates shuffle - uniform distribution, fresh on every visit
+  const shuffled = [...PROMPT_POOL];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = shuffled[i]!;
+    shuffled[i] = shuffled[j]!;
+    shuffled[j] = temp;
+  }
   return shuffled.slice(0, count);
 }
 
-function getDailyOffset(): number {
-  return getDailySeed() % 10;
+function getRandomOffset(): number {
+  return Math.floor(Math.random() * 10);
 }
 
 type QuickStartSuggestion = {
@@ -219,7 +210,7 @@ export function ChatQuickStart({
     // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Hydration: null on server, set on client
     setRandomPrompts(getRandomPrompts(3));
     // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Hydration: null on server, set on client
-    setInitialProviderOffset(getDailyOffset());
+    setInitialProviderOffset(getRandomOffset());
   }, []);
   const { data: usageData, isLoading: isUsageLoading } = useUsageStatsQuery();
   const { data: modelsResponse, isLoading: isModelsLoading } = useModelsQuery();
