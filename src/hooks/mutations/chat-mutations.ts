@@ -52,132 +52,16 @@ export function useUpdateThreadMutation() {
 
   return useMutation({
     mutationFn: updateThreadService,
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(variables.param.id) });
-      await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
+    // No optimistic updates - wait for server response and show loading state
+    onSuccess: (_data, variables) => {
+      // Invalidate all caches that might contain the thread title
+      // This ensures fresh data is fetched after rename
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.detail(variables.param.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
+
+      // Also invalidate slug-based cache if slug was provided
       if ('slug' in variables.json && typeof variables.json.slug === 'string') {
-        await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.json.slug) });
-      }
-
-      const previousThread = queryClient.getQueryData(queryKeys.threads.detail(variables.param.id));
-      const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
-      const previousBySlug = ('slug' in variables.json && typeof variables.json.slug === 'string')
-        ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.json.slug))
-        : null;
-
-      queryClient.setQueryData(
-        queryKeys.threads.detail(variables.param.id),
-        (old) => {
-          const parsedData = validateThreadDetailPayloadCache(old);
-          if (!parsedData)
-            return old;
-
-          const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
-          if (!updatePayload.success)
-            return old;
-
-          return {
-            success: true,
-            data: {
-              ...parsedData,
-              thread: {
-                ...parsedData.thread,
-                ...updatePayload.data,
-              },
-            },
-          };
-        },
-      );
-
-      queryClient.setQueriesData(
-        {
-          queryKey: queryKeys.threads.all,
-          predicate: (query) => {
-            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
-              return false;
-            return query.queryKey[1] === 'list';
-          },
-        },
-        (old) => {
-          const parsedQuery = validateInfiniteQueryCache(old);
-          if (!parsedQuery)
-            return old;
-
-          const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
-          if (!updatePayload.success)
-            return old;
-
-          return {
-            ...parsedQuery,
-            pages: parsedQuery.pages.map((page) => {
-              if (!page.success || !page.data?.items)
-                return page;
-
-              return {
-                ...page,
-                data: {
-                  ...page.data,
-                  items: page.data.items.map((thread) => {
-                    const threadData = ChatThreadCacheSchema.safeParse(thread);
-                    if (!threadData.success)
-                      return thread;
-
-                    return threadData.data.id === variables.param.id
-                      ? { ...threadData.data, ...updatePayload.data }
-                      : thread;
-                  }),
-                },
-              };
-            }),
-          };
-        },
-      );
-
-      if ('slug' in variables.json && variables.json.slug) {
-        const slug = variables.json.slug;
-        if (typeof slug === 'string') {
-          queryClient.setQueryData(
-            queryKeys.threads.bySlug(slug),
-            (old) => {
-              const parsedData = validateThreadDetailPayloadCache(old);
-              if (!parsedData)
-                return old;
-
-              const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
-              if (!updatePayload.success)
-                return old;
-
-              return {
-                success: true,
-                data: {
-                  ...parsedData,
-                  thread: {
-                    ...parsedData.thread,
-                    ...updatePayload.data,
-                  },
-                },
-              };
-            },
-          );
-        }
-      }
-
-      return {
-        previousThread,
-        previousThreads,
-        previousBySlug,
-        slug: ('slug' in variables.json && typeof variables.json.slug === 'string') ? variables.json.slug : null,
-      };
-    },
-    onError: (_error, variables, context) => {
-      if (context?.previousThread) {
-        queryClient.setQueryData(queryKeys.threads.detail(variables.param.id), context.previousThread);
-      }
-      if (context?.previousThreads) {
-        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
-      }
-      if (context?.slug && context?.previousBySlug) {
-        queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(variables.json.slug) });
       }
     },
     retry: false,
