@@ -638,8 +638,7 @@ export function useMultiParticipantChat(
     }
     // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
     // Note: callbackRefs not in deps - we use callbackRefs.onComplete.current to always get latest value
-    // hasResponded, markAsResponded, resetErrorTracking are stable functions
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.onComplete accessed via .current (ref pattern)
   }, [resetErrorTracking]);
 
   /**
@@ -1614,12 +1613,12 @@ export function useMultiParticipantChat(
       // Reset hydration flag to allow re-hydration on next thread
       hasHydratedRef.current = false;
 
-      // Reset React state as well (intentional direct setState for sync reset)
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional sync state reset on navigation
+      // Reset state synchronously on navigation - legitimate useLayoutEffect pattern
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
       setCurrentRound(0);
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional sync state reset on navigation
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
       setCurrentParticipantIndex(0);
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional sync state reset on navigation
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
       setIsExplicitlyStreaming(false);
     }
 
@@ -2388,7 +2387,7 @@ export function useMultiParticipantChat(
     // The sendMessage function will handle participant orchestration properly
     sendMessage(userPromptText);
     // Note: callbackRefs not in deps - we use callbackRefs.onRetry.current to always get latest value
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.onRetry/pendingFileParts accessed via .current (ref pattern)
   }, [messages, sendMessage, status, setMessages, resetErrorTracking, clearAnimations]);
 
   // ✅ RESUMABLE STREAMS: Stop functionality removed
@@ -2427,7 +2426,7 @@ export function useMultiParticipantChat(
     // This ensures store.isStreaming reflects the actual state for message sync
     // Must happen BEFORE the streamResumptionPrefilled check so message sync works
     isStreamingRef.current = true;
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Valid React 19 pattern: useEffectEvent callback for stream state sync
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- called from useEffectEvent in response to AI SDK status
     setIsExplicitlyStreaming(true);
 
     // ✅ CRITICAL FIX: When server has prefilled resumption state, DON'T trigger custom resumption

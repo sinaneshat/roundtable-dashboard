@@ -40,5 +40,5 @@ export const CURSOR_DIRECTION_LABELS: Record<CursorDirection, string> = {
 // ============================================================================
 
 export function isValidCursorDirection(value: unknown): value is CursorDirection {
-  return typeof value === 'string' && CURSOR_DIRECTIONS.includes(value as CursorDirection);
+  return CursorDirectionSchema.safeParse(value).success;
 }

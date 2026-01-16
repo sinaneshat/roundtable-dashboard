@@ -3,17 +3,21 @@ import {
   MODEL_TIER_CREDIT_MULTIPLIERS,
   ModelPricingTiers,
   PlanTypes,
+  SIGNUP_BONUS_CREDITS,
+  SubscriptionTiers,
+  TIER_MONTHLY_CREDITS,
+  TIER_PRICE_CENTS,
 } from '@/api/core/enums';
 
 export const CREDIT_CONFIG = {
   TOKENS_PER_CREDIT: 1000,
-  SIGNUP_CREDITS: 5_000,
+  SIGNUP_CREDITS: SIGNUP_BONUS_CREDITS,
 
   PLANS: {
     [PlanTypes.PAID]: {
       signupCredits: 0,
-      monthlyCredits: 100_000,
-      priceInCents: 5900,
+      monthlyCredits: TIER_MONTHLY_CREDITS[SubscriptionTiers.PRO],
+      priceInCents: TIER_PRICE_CENTS[SubscriptionTiers.PRO],
     },
   } satisfies Record<Exclude<PlanType, 'free'>, {
     signupCredits: number;

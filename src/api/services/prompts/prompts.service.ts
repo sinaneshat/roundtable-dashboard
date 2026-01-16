@@ -778,29 +778,6 @@ ${JSON.stringify(MODERATOR_JSON_STRUCTURE, null, 2)}`;
  */
 
 // ============================================================================
-// Role Template Helpers
-// ============================================================================
-
-/**
- * Create system prompt for custom participant roles
- * ✅ SINGLE SOURCE: Used for user-defined participant roles
- *
- * Used by:
- * - /src/components/chat/role-selector.tsx - Custom role system prompts
- *
- * @param roleName - The role name to create a system prompt for
- * @param mode - Optional conversation mode
- * @returns System prompt string for the role with roundtable instructions
- *
- * @example
- * createRoleSystemPrompt('Security Expert', 'debating')
- * // Returns full roundtable-aware prompt for Security Expert role in debate mode
- */
-export function createRoleSystemPrompt(roleName: string, mode?: ChatMode | null): string {
-  return buildParticipantSystemPrompt(roleName, mode);
-}
-
-// ============================================================================
 // Analyze Prompt - Auto Mode Configuration Analysis
 // ============================================================================
 

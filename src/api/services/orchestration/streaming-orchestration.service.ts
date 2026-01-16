@@ -120,6 +120,7 @@ export const BuildSystemPromptParamsSchema = z.object({
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
   logger: z.custom<TypedLogger>().optional(),
   attachmentIds: z.array(z.string()).optional(),
+  baseUrl: z.string().url(), // Base URL for generating absolute download URLs
 });
 
 export const BuildSystemPromptResultSchema = z.object({
@@ -171,6 +172,7 @@ export const LoadThreadAttachmentContextParamsSchema = z.object({
   maxAttachments: z.number().int().positive().default(20),
   extractContent: z.boolean().default(true),
   currentAttachmentIds: z.array(z.string()).default([]),
+  baseUrl: z.string().url(), // Base URL for generating absolute download URLs
 });
 
 export type LoadThreadAttachmentContextParams = z.infer<typeof LoadThreadAttachmentContextParamsSchema>;
@@ -178,7 +180,7 @@ export type LoadThreadAttachmentContextParams = z.infer<typeof LoadThreadAttachm
 export async function loadThreadAttachmentContext(
   params: LoadThreadAttachmentContextParams,
 ): Promise<ThreadAttachmentContextResult> {
-  const { threadId, r2Bucket, db, logger, maxAttachments, extractContent, currentAttachmentIds } = params;
+  const { threadId, r2Bucket, db, logger, maxAttachments, extractContent, currentAttachmentIds, baseUrl } = params;
 
   const attachments: ThreadAttachmentWithContent[] = [];
   const citableSources: CitableSource[] = [];
@@ -275,7 +277,7 @@ export async function loadThreadAttachmentContext(
             ? availableText.slice(0, 500) + (availableText.length > 500 ? '...' : '')
             : `File: ${upload.filename} (${upload.mimeType}, ${(upload.fileSize / 1024).toFixed(1)}KB)`;
 
-          const downloadUrl = `/api/v1/uploads/${upload.id}/download`;
+          const downloadUrl = `${baseUrl}/api/v1/uploads/${upload.id}/download`;
 
           citableSources.push({
             id: citationId,
@@ -393,7 +395,7 @@ export async function loadThreadAttachmentContext(
         ? availableText.slice(0, 500) + (availableText.length > 500 ? '...' : '')
         : `File: ${upload.filename} (${upload.mimeType}, ${(upload.fileSize / 1024).toFixed(1)}KB)`;
 
-      const downloadUrl = `/api/v1/uploads/${upload.id}/download`;
+      const downloadUrl = `${baseUrl}/api/v1/uploads/${upload.id}/download`;
 
       citableSources.push({
         id: citationId,
@@ -474,7 +476,7 @@ export async function loadThreadAttachmentContext(
           ? availableText.slice(0, 500) + (availableText.length > 500 ? '...' : '')
           : `File: ${upload.filename} (${upload.mimeType}, ${(upload.fileSize / 1024).toFixed(1)}KB)`;
 
-        const downloadUrl = `/api/v1/uploads/${upload.id}/download`;
+        const downloadUrl = `${baseUrl}/api/v1/uploads/${upload.id}/download`;
 
         citableSources.push({
           id: citationId,
@@ -603,7 +605,7 @@ export async function loadParticipantConfiguration(
 export async function buildSystemPromptWithContext(
   params: BuildSystemPromptParams,
 ): Promise<BuildSystemPromptResult> {
-  const { participant, allParticipants, thread, userQuery, previousDbMessages, currentRoundNumber, env, db, logger, attachmentIds } = params;
+  const { participant, allParticipants, thread, userQuery, previousDbMessages, currentRoundNumber, env, db, logger, attachmentIds, baseUrl } = params;
 
   const citationSourceMap: CitationSourceMap = new Map();
   let citableSources: CitableSource[] = [];
@@ -739,6 +741,7 @@ export async function buildSystemPromptWithContext(
             maxSearchResults: 5,
             maxModerators: 3,
             db,
+            baseUrl,
           }),
           loadThreadAttachmentContext({
             threadId: thread.id,
@@ -748,6 +751,7 @@ export async function buildSystemPromptWithContext(
             maxAttachments: 20,
             extractContent: true,
             currentAttachmentIds: attachmentIds || [],
+            baseUrl,
           }),
         ]);
 
@@ -866,6 +870,7 @@ export async function buildSystemPromptWithContext(
         maxAttachments: 20,
         extractContent: true,
         currentAttachmentIds: attachmentIds || [],
+        baseUrl,
       });
 
       logger?.info(`Thread attachment result: found=${threadAttachmentContext.attachments.length}, sources=${threadAttachmentContext.citableSources.length}`, LogHelpers.operation({

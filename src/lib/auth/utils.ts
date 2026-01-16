@@ -69,17 +69,20 @@ export function isRestrictedEnvironment(): boolean {
     const { env } = getCloudflareContext();
     const cfEnv = env?.NEXT_PUBLIC_WEBAPP_ENV;
     if (typeof cfEnv === 'string' && isWebappEnv(cfEnv)) {
-      return cfEnv === WEBAPP_ENVS.LOCAL || cfEnv === WEBAPP_ENVS.PREVIEW;
+      // Only restrict PREVIEW - LOCAL/localhost should allow any email
+      return cfEnv === WEBAPP_ENVS.PREVIEW;
     }
   } catch {
   }
 
   const processEnv = process.env.NEXT_PUBLIC_WEBAPP_ENV;
   if (processEnv && isWebappEnv(processEnv)) {
-    return processEnv === WEBAPP_ENVS.LOCAL || processEnv === WEBAPP_ENVS.PREVIEW;
+    // Only restrict PREVIEW - LOCAL/localhost should allow any email
+    return processEnv === WEBAPP_ENVS.PREVIEW;
   }
 
-  return process.env.NODE_ENV === 'development';
+  // Default: no restriction for local development
+  return false;
 }
 
 /**

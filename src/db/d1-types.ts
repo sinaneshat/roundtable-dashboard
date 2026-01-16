@@ -7,12 +7,12 @@
 
 import type { DrizzleD1Database } from 'drizzle-orm/d1';
 
-export type D1BatchDatabase<TSchema extends Record<string, unknown> = Record<string, never>>
+export type D1BatchDatabase<TSchema extends { [key: string]: unknown } = Record<string, never>>
   = Omit<DrizzleD1Database<TSchema>, 'transaction'> & {
     transaction: never;
   };
 
-export type BatchableOperation<TSchema extends Record<string, unknown> = Record<string, never>>
+export type BatchableOperation<TSchema extends { [key: string]: unknown } = Record<string, never>>
   = | ReturnType<DrizzleD1Database<TSchema>['insert']>
     | ReturnType<DrizzleD1Database<TSchema>['update']>
     | ReturnType<DrizzleD1Database<TSchema>['delete']>
@@ -79,7 +79,7 @@ export const handler = createHandlerWithBatch({ auth: 'session' }, async (c, bat
 export type InferD1Schema<T> = T extends D1BatchDatabase<infer S> ? S : never;
 
 export type BatchResults<T extends readonly unknown[]> = {
-  [K in keyof T]: T[K] extends { execute: (...args: never[]) => unknown }
-    ? Awaited<ReturnType<T[K]['execute']>>
-    : unknown;
+  [K in keyof T]: T[K] extends { execute: (...args: never[]) => infer R }
+    ? Awaited<R>
+    : never;
 };

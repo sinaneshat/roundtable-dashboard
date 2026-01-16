@@ -14,6 +14,7 @@ type ChatInputHeaderProps = {
   isAnalyzing?: boolean;
   disabled?: boolean;
   borderVariant?: BorderVariant;
+  className?: string;
 };
 
 export const ChatInputHeader = memo(({
@@ -22,6 +23,7 @@ export const ChatInputHeader = memo(({
   isAnalyzing = false,
   disabled = false,
   borderVariant = BorderVariants.DEFAULT,
+  className,
 }: ChatInputHeaderProps) => {
   const { isFreeUser } = useFreeTrialState();
 
@@ -39,6 +41,7 @@ export const ChatInputHeader = memo(({
         borderVariant === BorderVariants.SUCCESS && 'border-green-500/30',
         borderVariant === BorderVariants.WARNING && 'border-amber-500/30',
         borderVariant === BorderVariants.ERROR && 'border-destructive',
+        className,
       )}
     >
       <ChatAutoModeToggle

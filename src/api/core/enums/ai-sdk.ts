@@ -78,13 +78,15 @@ export const FinishReasons = {
   UNKNOWN: 'unknown' as const, // ⚠️ Application-level: interrupted stream (not AI SDK return value)
 } as const;
 
+// Subset schema for completion finish reasons (successful completions)
+const COMPLETION_FINISH_REASONS = ['stop', 'length', 'tool-calls', 'content-filter'] as const;
+const CompletionFinishReasonSchema = z.enum(COMPLETION_FINISH_REASONS);
+export type CompletionFinishReason = z.infer<typeof CompletionFinishReasonSchema>;
+
 export function isCompletionFinishReason(
-  finishReason: FinishReason | null | undefined,
-): finishReason is 'stop' | 'length' | 'tool-calls' | 'content-filter' {
-  if (!finishReason) {
-    return false;
-  }
-  return (['stop', 'length', 'tool-calls', 'content-filter'] as const).includes(finishReason as 'stop' | 'length' | 'tool-calls' | 'content-filter');
+  finishReason: unknown,
+): finishReason is CompletionFinishReason {
+  return CompletionFinishReasonSchema.safeParse(finishReason).success;
 }
 
 // ============================================================================
@@ -112,7 +114,16 @@ export const UIMessageRoles = {
 // MESSAGE PART TYPE (AI SDK v6 message part types)
 // ============================================================================
 
-export const MESSAGE_PART_TYPES = ['text', 'reasoning', 'tool-call', 'tool-result', 'file', 'step-start'] as const;
+export const MESSAGE_PART_TYPES = [
+  'text',
+  'reasoning',
+  'tool-call',
+  'tool-result',
+  'file',
+  'step-start',
+  'source-url',
+  'source-document',
+] as const;
 
 export const MessagePartTypeSchema = z.enum(MESSAGE_PART_TYPES).openapi({
   description: 'Types of message content parts',
@@ -130,6 +141,8 @@ export const MessagePartTypes = {
   TOOL_RESULT: 'tool-result' as const,
   FILE: 'file' as const,
   STEP_START: 'step-start' as const,
+  SOURCE_URL: 'source-url' as const,
+  SOURCE_DOCUMENT: 'source-document' as const,
 } as const;
 
 // ============================================================================

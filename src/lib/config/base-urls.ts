@@ -53,7 +53,7 @@ export const WEBAPP_ENVS = {
  * Type guard to check if value is a valid WebappEnv
  */
 export function isWebappEnv(value: unknown): value is WebappEnv {
-  return typeof value === 'string' && WEBAPP_ENV_VALUES.includes(value as WebappEnv);
+  return WebappEnvSchema.safeParse(value).success;
 }
 
 /**

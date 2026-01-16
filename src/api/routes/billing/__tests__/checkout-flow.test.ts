@@ -67,7 +67,7 @@ describe('checkout Flow', () => {
       const proPlanCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       expect(proPlanPriceInCents).toBe(5900);
-      expect(proPlanCredits).toBe(100_000);
+      expect(proPlanCredits).toBe(2_000_000);
     });
   });
 

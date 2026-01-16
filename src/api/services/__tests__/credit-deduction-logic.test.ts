@@ -356,7 +356,7 @@ describe('plan Type Credit Allocation', () => {
     it('receives monthly credit allocation', () => {
       const paidPlanMonthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
-      expect(paidPlanMonthlyCredits).toBe(100000);
+      expect(paidPlanMonthlyCredits).toBe(2_000_000);
     });
 
     it('costs $59/month', () => {
@@ -1361,8 +1361,8 @@ describe('subscription Tier Credit Allocation', () => {
       const initialBalance = 0;
       const balanceAfterRefill = initialBalance + monthlyCredits;
 
-      expect(monthlyCredits).toBe(100000);
-      expect(balanceAfterRefill).toBe(100000);
+      expect(monthlyCredits).toBe(2_000_000);
+      expect(balanceAfterRefill).toBe(2_000_000);
     });
 
     it('does not grant signup credits to paid users', () => {
@@ -1386,7 +1386,7 @@ describe('subscription Tier Credit Allocation', () => {
       const monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
       const balanceAfterUpgrade = freeUserBalance + monthlyCredits;
 
-      expect(balanceAfterUpgrade).toBe(102000);
+      expect(balanceAfterUpgrade).toBe(2_002_000);
     });
 
     it('handles zero balance upgrade', () => {
@@ -1394,7 +1394,7 @@ describe('subscription Tier Credit Allocation', () => {
       const monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
       const balanceAfterUpgrade = freeUserBalance + monthlyCredits;
 
-      expect(balanceAfterUpgrade).toBe(100000);
+      expect(balanceAfterUpgrade).toBe(2_000_000);
     });
   });
 });
@@ -1435,7 +1435,7 @@ describe('complex Multi-Step Scenarios', () => {
     });
 
     it('simulates multi-participant round with 3 participants', () => {
-      let balance = 100000; // Paid user
+      let balance = 2_000_000; // Paid user
       let reserved = 0;
 
       const participantCount = 3;
@@ -1455,7 +1455,7 @@ describe('complex Multi-Step Scenarios', () => {
         reserved -= reservationPerParticipant;
       }
 
-      expect(balance).toBe(99880); // 100000 - 120 = 99880
+      expect(balance).toBe(1_999_880); // 2_000_000 - 120 = 1_999_880
       expect(reserved).toBe(0);
     });
   });

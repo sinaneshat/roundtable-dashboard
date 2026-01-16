@@ -638,16 +638,17 @@ describe('maximum Deduction Caps', () => {
       const monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
       const paidPlanBalance = monthlyCredits;
 
-      expect(monthlyCredits).toBe(100000);
-      expect(paidPlanBalance).toBe(100000);
+      expect(monthlyCredits).toBe(2_000_000);
+      expect(paidPlanBalance).toBe(2_000_000);
     });
 
     it('allows paid users to deplete monthly credits', () => {
       const monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
-      const creditsUsed = 95000;
+      // Test 95% depletion - remaining should be 5% of monthly credits
+      const creditsUsed = Math.floor(monthlyCredits * 0.95);
       const remainingCredits = monthlyCredits - creditsUsed;
 
-      expect(remainingCredits).toBe(5000);
+      expect(remainingCredits).toBe(Math.floor(monthlyCredits * 0.05));
       expect(remainingCredits).toBeGreaterThan(0);
     });
 

@@ -266,10 +266,30 @@ export const VisualMimeTypeSchema = z.enum(VISUAL_MIME_TYPES).openapi({
 
 export type VisualMimeType = z.infer<typeof VisualMimeTypeSchema>;
 
-const VISUAL_MIME_SET = new Set<string>(VISUAL_MIME_TYPES);
+export function isVisualMimeType(mimeType: unknown): mimeType is VisualMimeType {
+  return VisualMimeTypeSchema.safeParse(mimeType).success;
+}
 
-export function isVisualMimeType(mimeType: string): mimeType is VisualMimeType {
-  return VISUAL_MIME_SET.has(mimeType);
+// ============================================================================
+// AI MODEL PROCESSABLE MIME TYPES
+// All file types that should be converted to data URLs for AI consumption.
+// External AI providers cannot access localhost URLs, so ALL attachments
+// must be converted to base64 data URLs before sending to models.
+// ============================================================================
+
+export const AI_PROCESSABLE_MIME_TYPES = [
+  // Visual types (images + PDF)
+  ...IMAGE_MIME_TYPES,
+  'application/pdf',
+  // Text extractable types
+  ...TEXT_EXTRACTABLE_MIME_TYPES,
+] as const;
+
+// De-duplicated set for runtime checks
+export const AI_PROCESSABLE_MIME_SET = new Set<string>(AI_PROCESSABLE_MIME_TYPES);
+
+export function isAiProcessableMimeType(mimeType: string): boolean {
+  return AI_PROCESSABLE_MIME_SET.has(mimeType);
 }
 
 // ============================================================================
@@ -347,6 +367,24 @@ export const RECOMMENDED_PART_SIZE = 10 * 1024 * 1024;
 export const MAX_TOTAL_FILE_SIZE = 5 * 1024 * 1024 * 1024;
 export const MAX_FILENAME_LENGTH = 255;
 export const MAX_MULTIPART_PARTS = 10000;
+
+/**
+ * Maximum file size for visual content (images + PDFs) that AI models can process.
+ *
+ * This limit exists because visual files are converted to base64 for AI consumption,
+ * which requires significant memory in Cloudflare Workers (128MB limit):
+ * - 4MB file → ~5.3MB base64 string (33% larger)
+ * - Plus Uint8Array copy: ~4MB
+ * - Plus ArrayBuffer: ~4MB
+ * - Total per file: ~13.3MB
+ *
+ * Files exceeding this size can still be uploaded for storage but will be
+ * silently skipped during AI processing. To prevent user confusion, we
+ * validate this limit at upload time for visual file types.
+ *
+ * @see MAX_BASE64_FILE_SIZE in src/api/types/uploads.ts (backend equivalent)
+ */
+export const MAX_VISUAL_FILE_SIZE = 4 * 1024 * 1024; // 4MB
 
 // ============================================================================
 // UPLOAD STATUS (Frontend Upload Lifecycle)
@@ -471,6 +509,7 @@ export const FileCategories = {
 
 export const FILE_VALIDATION_ERROR_CODES = [
   'file_too_large',
+  'visual_file_too_large',
   'invalid_type',
   'empty_file',
   'filename_too_long',
@@ -485,6 +524,7 @@ export type FileValidationErrorCode = z.infer<typeof FileValidationErrorCodeSche
 
 export const FileValidationErrorCodes = {
   FILE_TOO_LARGE: 'file_too_large' as const,
+  VISUAL_FILE_TOO_LARGE: 'visual_file_too_large' as const,
   INVALID_TYPE: 'invalid_type' as const,
   EMPTY_FILE: 'empty_file' as const,
   FILENAME_TOO_LONG: 'filename_too_long' as const,

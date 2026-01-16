@@ -263,6 +263,13 @@
       "defaultName": "File",
       "dropDescription": "Upload files to include in your message",
       "dropHere": "Drop files here",
+      "errors": {
+        "emptyFile": "File is empty",
+        "filenameTooLong": "Filename must be 255 characters or less",
+        "fileTooLarge": "File is too large. Maximum size is {maxSize}",
+        "invalidType": "File type \"{fileType}\" is not allowed",
+        "visualFileTooLarge": "{fileType} files must be {maxSize} or smaller for AI processing"
+      },
       "loadingPreview": "Loading preview...",
       "previewUnavailable": "Preview unavailable"
     },
@@ -354,7 +361,10 @@
       "label": "Message input",
       "listeningPlaceholder": "Listening... speak now",
       "messageTooLong": "Message too long. Please shorten to send.",
-      "noModelsSelected": "Select at least 1 model to send a message",
+      "minModelsRequired": "Select at least {min} models to start a roundtable",
+      "maxModelsExceeded": "Maximum {max} models allowed. Please deselect some models.",
+      "insufficientCredits": "Not enough credits. Estimated: {estimated}, available: {available}",
+      "lowCredits": "Low credits ({remaining} remaining after ~{estimated} for this round)",
       "placeholder": "Message Roundtable...",
       "recording": "Recording...",
       "send": "Send message",

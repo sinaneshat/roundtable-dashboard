@@ -11,129 +11,68 @@
  * Pattern: Extract customerId → Sync from Stripe API → Update database
  */
 
-import type Stripe from 'stripe';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
+import type { StripeSubscriptionStatus } from '@/api/core/enums';
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import type {
+  MockStripeEvent,
+  MockStripeInvoice,
+  MockStripeSubscription,
+} from '@/lib/testing';
+import {
+  createMockStripeEvent,
+  createMockStripeInvoice,
+  createMockStripeSubscription,
+} from '@/lib/testing';
+
+// Stripe invoice status type (matches Zod schema)
+type StripeInvoiceStatus = 'draft' | 'open' | 'paid' | 'uncollectible' | 'void';
 
 // Mock Stripe webhook event factory
 function createMockWebhookEvent(
-  type: Stripe.Event.Type,
+  type: string,
   customerId: string,
-  data: Record<string, unknown> = {},
-): Stripe.Event {
-  const baseEvent = {
-    id: `evt_${Math.random().toString(36).substring(7)}`,
-    object: 'event' as const,
-    api_version: '2025-12-15.clover' as const,
-    created: Math.floor(Date.now() / 1000),
-    type,
-    livemode: false,
-    pending_webhooks: 0,
-    request: null,
-    data: {
-      object: {
-        id: `obj_${Math.random().toString(36).substring(7)}`,
-        customer: customerId,
-        ...data,
-      },
-    },
+  data: Record<string, string | number | boolean | null> = {},
+): MockStripeEvent {
+  const eventData = {
+    id: `obj_${Math.random().toString(36).substring(7)}`,
+    customer: customerId,
+    ...data,
   };
 
-  return baseEvent as Stripe.Event;
+  return createMockStripeEvent(type, eventData);
 }
 
-// Mock subscription data factory
+// Mock subscription data factory (uses lib/testing mock)
 function createMockSubscription(
   customerId: string,
-  status: Stripe.Subscription.Status = StripeSubscriptionStatuses.ACTIVE,
+  status: StripeSubscriptionStatus = StripeSubscriptionStatuses.ACTIVE,
   priceId: string = 'price_pro_monthly',
-  overrides: Partial<Stripe.Subscription> = {},
-): Stripe.Subscription {
-  const now = Math.floor(Date.now() / 1000);
-  const periodEnd = now + 30 * 24 * 60 * 60; // 30 days from now
-
-  return {
-    id: `sub_${Math.random().toString(36).substring(7)}`,
-    object: 'subscription',
+  overrides: Partial<MockStripeSubscription> = {},
+): MockStripeSubscription {
+  return createMockStripeSubscription({
     customer: customerId,
     status,
-    created: now - 86400, // Created 1 day ago
-    current_period_start: now,
-    current_period_end: periodEnd,
-    cancel_at_period_end: false,
-    canceled_at: null,
-    cancel_at: null,
-    ended_at: null,
-    trial_start: null,
-    trial_end: null,
-    items: {
-      object: 'list',
-      data: [
-        {
-          id: `si_${Math.random().toString(36).substring(7)}`,
-          object: 'subscription_item',
-          subscription: `sub_${Math.random().toString(36).substring(7)}`,
-          price: {
-            id: priceId,
-            object: 'price',
-            active: true,
-            currency: 'usd',
-            unit_amount: 5900,
-            type: 'recurring',
-            recurring: {
-              interval: 'month',
-              interval_count: 1,
-            },
-            product: 'prod_pro_plan',
-          } as Stripe.Price,
-          quantity: 1,
-        } as Stripe.SubscriptionItem,
-      ],
-      has_more: false,
-      url: '/v1/subscription_items',
-    },
-    metadata: {},
+    priceId,
     ...overrides,
-  } as unknown as Stripe.Subscription;
+  });
 }
 
-// Mock invoice data factory
+// Mock invoice data factory (uses lib/testing mock)
 function createMockInvoice(
   customerId: string,
   subscriptionId: string,
   amountPaid: number = 5900,
-  status: Stripe.Invoice.Status = 'paid',
-): Stripe.Invoice {
-  const now = Math.floor(Date.now() / 1000);
-
-  return {
-    id: `in_${Math.random().toString(36).substring(7)}`,
-    object: 'invoice',
+  status: StripeInvoiceStatus = 'paid',
+): MockStripeInvoice {
+  return createMockStripeInvoice({
     customer: customerId,
     subscription: subscriptionId,
+    amountPaid,
     status,
-    amount_paid: amountPaid,
-    amount_due: status === 'paid' ? 0 : amountPaid,
-    currency: 'usd',
-    created: now,
-    period_start: now - 30 * 24 * 60 * 60,
-    period_end: now,
-    paid: status === 'paid',
-    attempt_count: status === 'paid' ? 1 : 0,
-    billing_reason: 'subscription_create',
-    lines: {
-      object: 'list',
-      data: [
-        {
-          id: `il_${Math.random().toString(36).substring(7)}`,
-          object: 'line_item',
-          description: 'Pro Plan - Monthly',
-          amount: amountPaid,
-        },
-      ],
-    },
-  } as unknown as Stripe.Invoice;
+  });
 }
 
 describe('stripe Webhook Event Processing', () => {
@@ -319,10 +258,10 @@ describe('stripe Webhook Event Processing', () => {
     });
 
     it('grants monthly credits for Pro subscription', () => {
-      const proPlanCredits = 100_000;
+      const proPlanCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
       const expectedGrant = proPlanCredits;
 
-      expect(expectedGrant).toBe(100_000);
+      expect(expectedGrant).toBe(CREDIT_CONFIG.PLANS.paid.monthlyCredits);
     });
   });
 
@@ -500,12 +439,12 @@ describe('stripe Webhook Event Processing', () => {
 
     it('grants monthly credits on successful renewal', () => {
       const billingReason = 'subscription_cycle';
-      const monthlyCredits = 100_000;
+      const monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       const shouldGrantCredits = billingReason === 'subscription_cycle';
       const creditsToGrant = shouldGrantCredits ? monthlyCredits : 0;
 
-      expect(creditsToGrant).toBe(100_000);
+      expect(creditsToGrant).toBe(CREDIT_CONFIG.PLANS.paid.monthlyCredits);
     });
 
     it('does not duplicate credits for initial subscription', () => {
@@ -695,10 +634,10 @@ describe('stripe Webhook Event Processing', () => {
   describe('credit Balance Updates', () => {
     it('grants credits for new Pro subscription', () => {
       const subscriptionTier = 'pro';
-      const monthlyCredits = 100_000;
+      const monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       const creditsToGrant = subscriptionTier === 'pro' ? monthlyCredits : 0;
-      expect(creditsToGrant).toBe(100_000);
+      expect(creditsToGrant).toBe(CREDIT_CONFIG.PLANS.paid.monthlyCredits);
     });
 
     it('does not grant credits for free tier', () => {
@@ -717,10 +656,10 @@ describe('stripe Webhook Event Processing', () => {
 
     it('preserves existing credits when upgrading', () => {
       const existingCredits = 50_000;
-      const upgradeGrant = 100_000;
+      const upgradeGrant = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
       const totalCredits = existingCredits + upgradeGrant;
 
-      expect(totalCredits).toBe(150_000);
+      expect(totalCredits).toBe(existingCredits + CREDIT_CONFIG.PLANS.paid.monthlyCredits);
     });
   });
 

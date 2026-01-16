@@ -142,7 +142,7 @@ describe('product Logic - Quota and Tier Configuration', () => {
     });
 
     it('pro tier has 100,000 monthly credits', () => {
-      expect(getMonthlyCreditsForTier(SubscriptionTiers.PRO)).toBe(100_000);
+      expect(getMonthlyCreditsForTier(SubscriptionTiers.PRO)).toBe(2_000_000);
     });
 
     it('monthly credits match CREDIT_CONFIG', () => {
@@ -544,7 +544,7 @@ describe('product Logic - Quota and Tier Configuration', () => {
     it('getPlanConfig returns paid plan configuration', () => {
       const config = getPlanConfig('paid');
 
-      expect(config.monthlyCredits).toBe(100_000);
+      expect(config.monthlyCredits).toBe(2_000_000);
       expect(config.priceInCents).toBe(5900);
     });
   });

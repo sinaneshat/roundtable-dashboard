@@ -228,8 +228,8 @@ describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
     // Assertions
     const balance = mockState.userCreditBalances.get(userId)!;
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
-    expect(balance.balance).toBe(100_500); // 500 existing + 100K new
-    expect(balance.monthlyCredits).toBe(100_000);
+    expect(balance.balance).toBe(2_000_500); // 500 existing + 100K new
+    expect(balance.monthlyCredits).toBe(2_000_000);
     expect(balance.lastRefillAt).toBeTruthy();
     expect(balance.nextRefillAt).toBeTruthy();
 
@@ -244,8 +244,8 @@ describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
       t => t.userId === userId && t.type === CreditTransactionTypes.CREDIT_GRANT,
     );
     expect(tx).toBeTruthy();
-    expect(tx!.amount).toBe(100_000);
-    expect(tx!.balanceAfter).toBe(100_500);
+    expect(tx!.amount).toBe(2_000_000);
+    expect(tx!.balanceAfter).toBe(2_000_500);
     expect(tx!.description).toContain('Upgraded to Pro plan');
   });
 
@@ -272,7 +272,7 @@ describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
 
     // Assertions
     const balance = mockState.userCreditBalances.get(userId)!;
-    expect(balance.balance).toBe(102_500); // 2,500 existing + 100K new
+    expect(balance.balance).toBe(2_002_500); // 2,500 existing + 100K new
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
   });
 
@@ -297,7 +297,7 @@ describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
 
     const balance = mockState.userCreditBalances.get(userId)!;
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
-    expect(balance.monthlyCredits).toBe(100_000);
+    expect(balance.monthlyCredits).toBe(2_000_000);
   });
 
   it('sets lastRefillAt and nextRefillAt on upgrade', () => {
@@ -340,7 +340,7 @@ describe('subscription-Credit Sync: Plan Downgrade (Pro → Free)', () => {
       balance: 500_000,
       reservedCredits: 0,
       planType: SubscriptionTiers.PRO,
-      monthlyCredits: 100_000,
+      monthlyCredits: 2_000_000,
       lastRefillAt: new Date(),
       nextRefillAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       version: 1,
@@ -365,10 +365,10 @@ describe('subscription-Credit Sync: Plan Downgrade (Pro → Free)', () => {
     mockState.userCreditBalances.set(userId, {
       id: 'balance_6',
       userId,
-      balance: 100_000,
+      balance: 2_000_000,
       reservedCredits: 0,
       planType: SubscriptionTiers.PRO,
-      monthlyCredits: 100_000,
+      monthlyCredits: 2_000_000,
       lastRefillAt: new Date(),
       nextRefillAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       version: 1,
@@ -392,7 +392,7 @@ describe('subscription-Credit Sync: Plan Downgrade (Pro → Free)', () => {
       balance: 200_000,
       reservedCredits: 0,
       planType: SubscriptionTiers.PRO,
-      monthlyCredits: 100_000,
+      monthlyCredits: 2_000_000,
       lastRefillAt: new Date(),
       nextRefillAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       version: 1,
@@ -424,7 +424,7 @@ describe('subscription-Credit Sync: Plan Cancellation', () => {
       balance: 750_000,
       reservedCredits: 0,
       planType: SubscriptionTiers.PRO,
-      monthlyCredits: 100_000,
+      monthlyCredits: 2_000_000,
       lastRefillAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
       nextRefillAt: periodEnd,
       version: 1,
@@ -454,7 +454,7 @@ describe('subscription-Credit Sync: Plan Cancellation', () => {
     const balance = mockState.userCreditBalances.get(userId)!;
     expect(balance.planType).toBe(SubscriptionTiers.PRO); // Still paid until period end
     expect(balance.balance).toBe(750_000); // Credits preserved
-    expect(balance.monthlyCredits).toBe(100_000); // Still has monthly credits
+    expect(balance.monthlyCredits).toBe(2_000_000); // Still has monthly credits
   });
 
   it('after period ends, no new credits are granted', () => {
@@ -470,7 +470,7 @@ describe('subscription-Credit Sync: Plan Cancellation', () => {
       balance: 50_000,
       reservedCredits: 0,
       planType: SubscriptionTiers.PRO,
-      monthlyCredits: 100_000,
+      monthlyCredits: 2_000_000,
       lastRefillAt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
       nextRefillAt: periodEnd, // Period ended
       version: 1,
@@ -495,7 +495,7 @@ describe('subscription-Credit Sync: Plan Cancellation', () => {
     mockState.userCreditBalances.set(userId, {
       id: 'balance_10',
       userId,
-      balance: 100_000,
+      balance: 2_000_000,
       reservedCredits: 0,
       planType: SubscriptionTiers.FREE, // Already downgraded
       monthlyCredits: 0,
@@ -529,7 +529,7 @@ describe('subscription-Credit Sync: Monthly Refill', () => {
       balance: 50_000,
       reservedCredits: 0,
       planType: SubscriptionTiers.PRO,
-      monthlyCredits: 100_000,
+      monthlyCredits: 2_000_000,
       lastRefillAt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
       nextRefillAt: nextRefill,
       version: 1,
@@ -540,7 +540,7 @@ describe('subscription-Credit Sync: Monthly Refill', () => {
     simulateProcessMonthlyRefill(userId);
 
     const balance = mockState.userCreditBalances.get(userId)!;
-    expect(balance.balance).toBe(150_000); // 50K + 100K refill
+    expect(balance.balance).toBe(2_050_000); // 50K + 100K refill
   });
 
   it('unused credits roll over to next month', () => {
@@ -556,7 +556,7 @@ describe('subscription-Credit Sync: Monthly Refill', () => {
       balance: 80_000,
       reservedCredits: 0,
       planType: SubscriptionTiers.PRO,
-      monthlyCredits: 100_000,
+      monthlyCredits: 2_000_000,
       lastRefillAt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
       nextRefillAt: nextRefill,
       version: 1,
@@ -567,7 +567,7 @@ describe('subscription-Credit Sync: Monthly Refill', () => {
     simulateProcessMonthlyRefill(userId);
 
     const balance = mockState.userCreditBalances.get(userId)!;
-    expect(balance.balance).toBe(180_000); // 80K + 100K = 180K (rollover)
+    expect(balance.balance).toBe(2_080_000); // 80K + 100K = 180K (rollover)
   });
 
   it('lastRefillAt and nextRefillAt update correctly', () => {
@@ -579,10 +579,10 @@ describe('subscription-Credit Sync: Monthly Refill', () => {
     mockState.userCreditBalances.set(userId, {
       id: 'balance_13',
       userId,
-      balance: 100_000,
+      balance: 2_000_000,
       reservedCredits: 0,
       planType: SubscriptionTiers.PRO,
-      monthlyCredits: 100_000,
+      monthlyCredits: 2_000_000,
       lastRefillAt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
       nextRefillAt: nextRefill,
       version: 1,
@@ -644,8 +644,8 @@ describe('subscription-Credit Sync: Sync Recovery', () => {
 
     const balance = mockState.userCreditBalances.get(userId)!;
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
-    expect(balance.balance).toBe(100_000);
-    expect(balance.monthlyCredits).toBe(100_000);
+    expect(balance.balance).toBe(2_000_000);
+    expect(balance.monthlyCredits).toBe(2_000_000);
 
     // Check transaction
     const tx = mockState.creditTransactions.find(
@@ -697,7 +697,7 @@ describe('subscription-Credit Sync: Sync Recovery', () => {
     // Verify credits were provisioned
     const balance = mockState.userCreditBalances.get(userId)!;
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
-    expect(balance.balance).toBe(100_000);
+    expect(balance.balance).toBe(2_000_000);
   });
 
   it('checkHasActiveSubscription returns true for active subscriptions', () => {
@@ -822,7 +822,7 @@ describe('subscription-Credit Sync: Credit Enforcement', () => {
 
     // Verify credits were auto-provisioned
     const balance = mockState.userCreditBalances.get(userId)!;
-    expect(balance.balance).toBe(100_000);
+    expect(balance.balance).toBe(2_000_000);
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
   });
 });
@@ -872,8 +872,8 @@ describe('subscription-Credit Sync: Edge Cases', () => {
 
     const balance = mockState.userCreditBalances.get(userId)!;
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
-    expect(balance.balance).toBe(100_000);
-    expect(balance.monthlyCredits).toBe(100_000);
+    expect(balance.balance).toBe(2_000_000);
+    expect(balance.monthlyCredits).toBe(2_000_000);
   });
 
   it('user cancels then resubscribes', () => {
@@ -899,8 +899,8 @@ describe('subscription-Credit Sync: Edge Cases', () => {
 
     const balance = mockState.userCreditBalances.get(userId)!;
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
-    expect(balance.balance).toBe(105_000); // 5K old + 100K new
-    expect(balance.monthlyCredits).toBe(100_000);
+    expect(balance.balance).toBe(2_005_000); // 5K old + 100K new
+    expect(balance.monthlyCredits).toBe(2_000_000);
   });
 
   it('subscription status changes (active → past_due → active)', () => {
@@ -946,7 +946,7 @@ describe('credit Configuration Validation', () => {
   });
 
   it('paid plan has 100,000 monthly credits', () => {
-    expect(CREDIT_CONFIG.PLANS.paid.monthlyCredits).toBe(100_000);
+    expect(CREDIT_CONFIG.PLANS.paid.monthlyCredits).toBe(2_000_000);
   });
 
   it('paid plan costs $59/month', () => {

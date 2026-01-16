@@ -231,7 +231,7 @@ export const BorderVariants = {
 } as const;
 
 export function isValidBorderVariant(value: unknown): value is BorderVariant {
-  return typeof value === 'string' && BORDER_VARIANTS.includes(value as BorderVariant);
+  return BorderVariantSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -857,115 +857,115 @@ export const MODEL_SELECTION_TAB_LABELS: Record<ModelSelectionTab, string> = {
 // ============================================================================
 
 export function isValidComponentVariant(value: unknown): value is ComponentVariant {
-  return typeof value === 'string' && COMPONENT_VARIANTS.includes(value as ComponentVariant);
+  return ComponentVariantSchema.safeParse(value).success;
 }
 
 export function isValidComponentSize(value: unknown): value is ComponentSize {
-  return typeof value === 'string' && COMPONENT_SIZES.includes(value as ComponentSize);
+  return ComponentSizeSchema.safeParse(value).success;
 }
 
 export function isValidTextAlignment(value: unknown): value is TextAlignment {
-  return typeof value === 'string' && TEXT_ALIGNMENTS.includes(value as TextAlignment);
+  return TextAlignmentSchema.safeParse(value).success;
 }
 
 export function isValidToastVariant(value: unknown): value is ToastVariant {
-  return typeof value === 'string' && TOAST_VARIANTS.includes(value as ToastVariant);
+  return ToastVariantSchema.safeParse(value).success;
 }
 
 export function isValidReasoningState(value: unknown): value is ReasoningState {
-  return typeof value === 'string' && REASONING_STATES.includes(value as ReasoningState);
+  return ReasoningStateSchema.safeParse(value).success;
 }
 
 export function isValidStatusVariant(value: unknown): value is StatusVariant {
-  return typeof value === 'string' && STATUS_VARIANTS.includes(value as StatusVariant);
+  return StatusVariantSchema.safeParse(value).success;
 }
 
 export function isValidNetworkErrorType(value: unknown): value is NetworkErrorType {
-  return typeof value === 'string' && NETWORK_ERROR_TYPES.includes(value as NetworkErrorType);
+  return NetworkErrorTypeSchema.safeParse(value).success;
 }
 
 export function isValidErrorSeverity(value: unknown): value is ErrorSeverity {
-  return typeof value === 'string' && ERROR_SEVERITIES.includes(value as ErrorSeverity);
+  return ErrorSeveritySchema.safeParse(value).success;
 }
 
 export function isValidImageState(value: unknown): value is ImageState {
-  return typeof value === 'string' && IMAGE_STATES.includes(value as ImageState);
+  return ImageStateSchema.safeParse(value).success;
 }
 
 export function isValidMarkdownPreset(value: unknown): value is MarkdownPreset {
-  return typeof value === 'string' && MARKDOWN_PRESETS.includes(value as MarkdownPreset);
+  return MarkdownPresetSchema.safeParse(value).success;
 }
 
 export function isValidConfirmationDialogVariant(value: unknown): value is ConfirmationDialogVariant {
-  return typeof value === 'string' && CONFIRMATION_DIALOG_VARIANTS.includes(value as ConfirmationDialogVariant);
+  return ConfirmationDialogVariantSchema.safeParse(value).success;
 }
 
 export function isValidErrorBoundaryContext(value: unknown): value is ErrorBoundaryContext {
-  return typeof value === 'string' && ERROR_BOUNDARY_CONTEXTS.includes(value as ErrorBoundaryContext);
+  return ErrorBoundaryContextSchema.safeParse(value).success;
 }
 
 export function isValidIconType(value: unknown): value is IconType {
-  return typeof value === 'string' && ICON_TYPES.includes(value as IconType);
+  return IconTypeSchema.safeParse(value).success;
 }
 
 export function isValidBorderGradientDirection(value: unknown): value is BorderGradientDirection {
-  return typeof value === 'string' && BORDER_GRADIENT_DIRECTIONS.includes(value as BorderGradientDirection);
+  return BorderGradientDirectionSchema.safeParse(value).success;
 }
 
 export function isValidLogoSize(value: unknown): value is LogoSize {
-  return typeof value === 'string' && LOGO_SIZES.includes(value as LogoSize);
+  return LogoSizeSchema.safeParse(value).success;
 }
 
 export function isValidLogoVariant(value: unknown): value is LogoVariant {
-  return typeof value === 'string' && LOGO_VARIANTS.includes(value as LogoVariant);
+  return LogoVariantSchema.safeParse(value).success;
 }
 
 export function isValidLoadingStateVariant(value: unknown): value is LoadingStateVariant {
-  return typeof value === 'string' && LOADING_STATE_VARIANTS.includes(value as LoadingStateVariant);
+  return LoadingStateVariantSchema.safeParse(value).success;
 }
 
 export function isValidErrorStateVariant(value: unknown): value is ErrorStateVariant {
-  return typeof value === 'string' && ERROR_STATE_VARIANTS.includes(value as ErrorStateVariant);
+  return ErrorStateVariantSchema.safeParse(value).success;
 }
 
 export function isValidEmptyStateVariant(value: unknown): value is EmptyStateVariant {
-  return typeof value === 'string' && EMPTY_STATE_VARIANTS.includes(value as EmptyStateVariant);
+  return EmptyStateVariantSchema.safeParse(value).success;
 }
 
 export function isValidSuccessStateVariant(value: unknown): value is SuccessStateVariant {
-  return typeof value === 'string' && SUCCESS_STATE_VARIANTS.includes(value as SuccessStateVariant);
+  return SuccessStateVariantSchema.safeParse(value).success;
 }
 
 export function isValidGlowingEffectVariant(value: unknown): value is GlowingEffectVariant {
-  return typeof value === 'string' && GLOWING_EFFECT_VARIANTS.includes(value as GlowingEffectVariant);
+  return GlowingEffectVariantSchema.safeParse(value).success;
 }
 
 export function isValidCitationSegmentType(value: unknown): value is CitationSegmentType {
-  return typeof value === 'string' && CITATION_SEGMENT_TYPES.includes(value as CitationSegmentType);
+  return CitationSegmentTypeSchema.safeParse(value).success;
 }
 
 export function isValidSpacingVariant(value: unknown): value is SpacingVariant {
-  return typeof value === 'string' && SPACING_VARIANTS.includes(value as SpacingVariant);
+  return SpacingVariantSchema.safeParse(value).success;
 }
 
 export function isValidEmptyStateStyle(value: unknown): value is EmptyStateStyle {
-  return typeof value === 'string' && EMPTY_STATE_STYLES.includes(value as EmptyStateStyle);
+  return EmptyStateStyleSchema.safeParse(value).success;
 }
 
 export function isValidScrollButtonVariant(value: unknown): value is ScrollButtonVariant {
-  return typeof value === 'string' && SCROLL_BUTTON_VARIANTS.includes(value as ScrollButtonVariant);
+  return ScrollButtonVariantSchema.safeParse(value).success;
 }
 
 export function isValidAvatarSize(value: unknown): value is AvatarSize {
-  return typeof value === 'string' && AVATAR_SIZES.includes(value as AvatarSize);
+  return AvatarSizeSchema.safeParse(value).success;
 }
 
 export function isValidModelSelectionTab(value: unknown): value is ModelSelectionTab {
-  return typeof value === 'string' && MODEL_SELECTION_TABS.includes(value as ModelSelectionTab);
+  return ModelSelectionTabSchema.safeParse(value).success;
 }
 
 export function isValidCardVariant(value: unknown): value is CardVariant {
-  return typeof value === 'string' && CARD_VARIANTS.includes(value as CardVariant);
+  return CardVariantSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -991,7 +991,7 @@ export const ToastPositions = {
 } as const;
 
 export function isValidToastPosition(value: unknown): value is ToastPosition {
-  return typeof value === 'string' && TOAST_POSITIONS.includes(value as ToastPosition);
+  return ToastPositionSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1018,7 +1018,7 @@ export const BaseToastVariants = {
 } as const;
 
 export function isValidBaseToastVariant(value: unknown): value is BaseToastVariant {
-  return typeof value === 'string' && BASE_TOAST_VARIANTS.includes(value as BaseToastVariant);
+  return BaseToastVariantSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1042,7 +1042,7 @@ export const SidebarStates = {
 } as const;
 
 export function isValidSidebarState(value: unknown): value is SidebarState {
-  return typeof value === 'string' && SIDEBAR_STATES.includes(value as SidebarState);
+  return SidebarStateSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1069,7 +1069,7 @@ export const ServiceWorkerStates = {
 } as const;
 
 export function isValidServiceWorkerState(value: unknown): value is ServiceWorkerState {
-  return typeof value === 'string' && SERVICE_WORKER_STATES.includes(value as ServiceWorkerState);
+  return ServiceWorkerStateSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1092,7 +1092,7 @@ export const ServiceWorkerMessageTypes = {
 } as const;
 
 export function isValidServiceWorkerMessageType(value: unknown): value is ServiceWorkerMessageType {
-  return typeof value === 'string' && SERVICE_WORKER_MESSAGE_TYPES.includes(value as ServiceWorkerMessageType);
+  return ServiceWorkerMessageTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1124,7 +1124,7 @@ export const KeyboardKeys = {
 } as const;
 
 export function isValidKeyboardKey(value: unknown): value is KeyboardKey {
-  return typeof value === 'string' && KEYBOARD_KEYS.includes(value as KeyboardKey);
+  return KeyboardKeySchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1152,7 +1152,7 @@ export const SeoContentTypes = {
 } as const;
 
 export function isValidSeoContentType(value: unknown): value is SeoContentType {
-  return typeof value === 'string' && SEO_CONTENT_TYPES.includes(value as SeoContentType);
+  return SeoContentTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1177,7 +1177,7 @@ export const SeoContentLevels = {
 } as const;
 
 export function isValidSeoContentLevel(value: unknown): value is SeoContentLevel {
-  return typeof value === 'string' && SEO_CONTENT_LEVELS.includes(value as SeoContentLevel);
+  return SeoContentLevelSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1201,7 +1201,7 @@ export const SidebarSides = {
 } as const;
 
 export function isValidSidebarSide(value: unknown): value is SidebarSide {
-  return typeof value === 'string' && SIDEBAR_SIDES.includes(value as SidebarSide);
+  return SidebarSideSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1226,7 +1226,7 @@ export const SidebarVariants = {
 } as const;
 
 export function isValidSidebarVariant(value: unknown): value is SidebarVariant {
-  return typeof value === 'string' && SIDEBAR_VARIANTS.includes(value as SidebarVariant);
+  return SidebarVariantSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1251,7 +1251,7 @@ export const SidebarCollapsibles = {
 } as const;
 
 export function isValidSidebarCollapsible(value: unknown): value is SidebarCollapsible {
-  return typeof value === 'string' && SIDEBAR_COLLAPSIBLES.includes(value as SidebarCollapsible);
+  return SidebarCollapsibleSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1275,7 +1275,7 @@ export const SidebarMenuButtonSizes = {
 } as const;
 
 export function isValidSidebarMenuButtonSize(value: unknown): value is SidebarMenuButtonSize {
-  return typeof value === 'string' && SIDEBAR_MENU_BUTTON_SIZES.includes(value as SidebarMenuButtonSize);
+  return SidebarMenuButtonSizeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1299,7 +1299,7 @@ export const DropdownMenuVariants = {
 } as const;
 
 export function isValidDropdownMenuVariant(value: unknown): value is DropdownMenuVariant {
-  return typeof value === 'string' && DROPDOWN_MENU_VARIANTS.includes(value as DropdownMenuVariant);
+  return DropdownMenuVariantSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1323,7 +1323,7 @@ export const ImageLoadings = {
 } as const;
 
 export function isValidImageLoading(value: unknown): value is ImageLoading {
-  return typeof value === 'string' && IMAGE_LOADINGS.includes(value as ImageLoading);
+  return ImageLoadingSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1349,7 +1349,7 @@ export const FieldTypes = {
 } as const;
 
 export function isValidFieldType(value: unknown): value is FieldType {
-  return typeof value === 'string' && FIELD_TYPES.includes(value as FieldType);
+  return FieldTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1373,7 +1373,7 @@ export const ScrollBehaviors = {
 } as const;
 
 export function isValidScrollBehavior(value: unknown): value is ScrollBehavior {
-  return typeof value === 'string' && SCROLL_BEHAVIORS.includes(value as ScrollBehavior);
+  return ScrollBehaviorSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1399,7 +1399,7 @@ export const ScrollAligns = {
 } as const;
 
 export function isValidScrollAlign(value: unknown): value is ScrollAlign {
-  return typeof value === 'string' && SCROLL_ALIGNS.includes(value as ScrollAlign);
+  return ScrollAlignSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1428,7 +1428,7 @@ export const ApiKeysModalTabs = {
 } as const;
 
 export function isValidApiKeysModalTab(value: unknown): value is ApiKeysModalTab {
-  return typeof value === 'string' && API_KEYS_MODAL_TABS.includes(value as ApiKeysModalTab);
+  return ApiKeysModalTabSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1457,7 +1457,7 @@ export const SkeletonUsecases = {
 } as const;
 
 export function isValidSkeletonUsecase(value: unknown): value is SkeletonUsecase {
-  return typeof value === 'string' && SKELETON_USECASES.includes(value as SkeletonUsecase);
+  return SkeletonUsecaseSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1488,7 +1488,7 @@ export const UserFeedbackTypes = {
 } as const;
 
 export function isValidUserFeedbackType(value: unknown): value is UserFeedbackType {
-  return typeof value === 'string' && USER_FEEDBACK_TYPES.includes(value as UserFeedbackType);
+  return UserFeedbackTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1518,7 +1518,7 @@ export const OgImageTypes = {
 } as const;
 
 export function isValidOgImageType(value: unknown): value is OgImageType {
-  return typeof value === 'string' && OG_IMAGE_TYPES.includes(value as OgImageType);
+  return OgImageTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -1547,5 +1547,5 @@ export const CopyIconVariants = {
 } as const;
 
 export function isValidCopyIconVariant(value: unknown): value is CopyIconVariant {
-  return typeof value === 'string' && COPY_ICON_VARIANTS.includes(value as CopyIconVariant);
+  return CopyIconVariantSchema.safeParse(value).success;
 }

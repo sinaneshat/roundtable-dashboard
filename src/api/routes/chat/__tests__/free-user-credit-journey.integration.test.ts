@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { CreditActions, CreditTransactionTypes, MessageRoles, PlanTypes } from '@/api/core/enums';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 /**
  * Free User Credit Journey Integration Tests
@@ -595,13 +596,13 @@ describe('free User Credit Journey Integration', () => {
     });
 
     it('paid users not affected by free round marker', () => {
-      paidDb.getCreditBalance(paidUser.id)!.balance = 100000;
+      paidDb.getCreditBalance(paidUser.id)!.balance = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       // Simulate free round complete (shouldn't happen for paid, but test the flag)
       paidDb.zeroOutCredits(paidUser.id);
 
       // Give back credits
-      paidDb.getCreditBalance(paidUser.id)!.balance = 100000;
+      paidDb.getCreditBalance(paidUser.id)!.balance = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       // Paid user should still be able to use credits despite marker
       const canUse = paidDb.getCreditBalance(paidUser.id)!.balance > 100;

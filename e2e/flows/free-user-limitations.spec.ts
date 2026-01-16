@@ -634,7 +634,7 @@ test.describe('Free User Limitations & Restrictions', () => {
       expect(proTierVisible).toBe(true);
 
       // Should show feature comparison
-      const featureComparison = await page.locator('text=/unlimited threads|100,000 credits|web search/i').first().isVisible({ timeout: 3000 });
+      const featureComparison = await page.locator('text=/unlimited threads|2,000,000 credits|web search/i').first().isVisible({ timeout: 3000 });
       expect(featureComparison).toBe(true);
     });
   });
@@ -866,7 +866,7 @@ test.describe('Free User Limitations & Restrictions', () => {
         'unlimited threads',
         'web search',
         'advanced models',
-        '100,000 credits',
+        '2,000,000 credits',
         'custom roles',
       ];
 

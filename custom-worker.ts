@@ -15,8 +15,12 @@ import type { MessageBatch } from '@cloudflare/workers-types';
 // Import the OpenNext generated handler
 // @ts-expect-error - .open-next/worker.js is generated at build time
 import handler from './.open-next/worker.js';
-import type { TitleGenerationQueueMessage } from './src/api/types/queues';
-// Import queue consumer handler (same directory as other custom workers)
+import type {
+  RoundOrchestrationQueueMessage,
+  TitleGenerationQueueMessage,
+} from './src/api/types/queues';
+// Import queue consumer handlers (same directory as other custom workers)
+import { handleRoundOrchestrationQueue } from './src/workers/round-orchestration-queue';
 import { handleTitleGenerationQueue } from './src/workers/title-generation-queue';
 
 /**
@@ -60,13 +64,22 @@ export default {
     env: CloudflareEnv,
   ): Promise<void> => {
     // Route to appropriate handler based on queue name
-    // Each consumer validates message structure with TitleGenerationQueueMessageSchema
+    // Each consumer validates message structure with Zod schemas
+
+    // Title generation queue
     if (batch.queue.startsWith('title-generation-queue')) {
       // Safe: handleTitleGenerationQueue validates messages internally with Zod
-      // The consumer's type signature accepts MessageBatch<TitleGenerationQueueMessage>
-      // but performs runtime validation to ensure type safety
       return handleTitleGenerationQueue(
         batch as MessageBatch<TitleGenerationQueueMessage>,
+        env,
+      );
+    }
+
+    // Round orchestration queue (participant/moderator triggering)
+    if (batch.queue.startsWith('round-orchestration-queue')) {
+      // Safe: handleRoundOrchestrationQueue validates messages internally with Zod
+      return handleRoundOrchestrationQueue(
+        batch as MessageBatch<RoundOrchestrationQueueMessage>,
         env,
       );
     }

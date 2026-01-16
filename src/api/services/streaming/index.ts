@@ -4,6 +4,5 @@
  * Handles SSE stream buffering, KV-based persistence, and resumable streams
  */
 
-export * from './pre-search-stream-buffer.service';
 export * from './resumable-stream-kv.service';
 export * from './unified-stream-buffer.service';

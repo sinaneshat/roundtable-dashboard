@@ -17,9 +17,9 @@ import {
   UploadStatuses,
 } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
+import { ChatInputContainer } from '@/components/chat/chat-input-container';
 import { ChatInputHeader } from '@/components/chat/chat-input-header';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
-import { ChatInputUpgradeBanner } from '@/components/chat/chat-input-upgrade-banner';
 import { QuickStartSkeleton } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
@@ -198,7 +198,7 @@ export default function ChatOverviewScreen() {
   const { data: customRolesData } = useCustomRolesQuery(modelModal.value && !isStreaming);
   // syncToPreferences=true for Overview screen - handles preference persistence
   const { analyzeAndApply } = useAutoModeAnalysis(true);
-  const { borderVariant: headerBorderVariant } = useFreeTrialState();
+  const { borderVariant: _headerBorderVariant } = useFreeTrialState();
 
   const allEnabledModels = useMemo(
     () => modelsData?.data?.items || [],
@@ -938,17 +938,20 @@ export default function ChatOverviewScreen() {
                           exit={{ opacity: 0 }}
                           transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                         >
-                          <div className="flex flex-col">
-                            <ChatInputUpgradeBanner />
+                          <ChatInputContainer
+                            participants={selectedParticipants}
+                            inputValue={inputValue}
+                            isModelsLoading={isModelsLoading}
+                          >
                             <ChatInputHeader
                               autoMode={autoMode}
                               onAutoModeChange={setAutoMode}
                               isAnalyzing={isAnalyzingPrompt}
                               disabled={isToggleDisabled && !isAnalyzingPrompt}
-                              borderVariant={headerBorderVariant}
+                              className="border-0 rounded-none"
                             />
-                            <ChatInput {...sharedChatInputProps} className="rounded-t-none border-t-0" hideInternalAlerts borderVariant={headerBorderVariant} />
-                          </div>
+                            <ChatInput {...sharedChatInputProps} className="border-0 shadow-none rounded-none" hideInternalAlerts />
+                          </ChatInputContainer>
                         </motion.div>
                       )}
                     </div>
@@ -965,17 +968,20 @@ export default function ChatOverviewScreen() {
                       exit={{ opacity: 0 }}
                       transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                     >
-                      <div className="flex flex-col">
-                        <ChatInputUpgradeBanner />
+                      <ChatInputContainer
+                        participants={selectedParticipants}
+                        inputValue={inputValue}
+                        isModelsLoading={isModelsLoading}
+                      >
                         <ChatInputHeader
                           autoMode={autoMode}
                           onAutoModeChange={setAutoMode}
                           isAnalyzing={isAnalyzingPrompt}
                           disabled={isToggleDisabled && !isAnalyzingPrompt}
-                          borderVariant={headerBorderVariant}
+                          className="border-0 rounded-none"
                         />
-                        <ChatInput {...sharedChatInputProps} className="rounded-t-none border-t-0" hideInternalAlerts borderVariant={headerBorderVariant} />
-                      </div>
+                        <ChatInput {...sharedChatInputProps} className="border-0 shadow-none rounded-none" hideInternalAlerts />
+                      </ChatInputContainer>
                     </motion.div>
                   </div>
                 </div>

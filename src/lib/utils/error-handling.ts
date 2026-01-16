@@ -113,6 +113,15 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   }
 
   if (typeof error === 'string') {
+    // Attempt to parse stringified JSON error objects
+    try {
+      const parsed = JSON.parse(error);
+      if (typeof parsed === 'object' && parsed !== null) {
+        return getApiErrorDetails(parsed);
+      }
+    } catch {
+      // Not valid JSON, treat as plain string message
+    }
     return { message: error };
   }
 

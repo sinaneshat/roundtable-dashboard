@@ -145,11 +145,11 @@ test.describe('Plan Upgrade (Free → Paid)', () => {
       const newBalance = await getUserCreditBalance(page);
       expect(newBalance.success).toBe(true);
 
-      // Pro users should have monthly credits (100K)
+      // Pro users should have monthly credits (2M)
       expect(newBalance.data?.planType).toBe('paid');
-      expect(newBalance.data?.monthlyCredits).toBe(100_000);
+      expect(newBalance.data?.monthlyCredits).toBe(2_000_000);
 
-      // Balance should be initial credits + 100K monthly credits
+      // Balance should be initial credits + 2M monthly credits
       expect(newBalance.data?.balance).toBeGreaterThanOrEqual(initialCredits);
 
       // Should have refill schedule
@@ -706,11 +706,11 @@ test.describe('Subscription Renewal and Credit Refill', () => {
     const balance = await getUserCreditBalance(page);
 
     if (balance.success && balance.data?.planType === 'paid') {
-      // Pro users get 100K monthly credits
-      expect(balance.data.monthlyCredits).toBe(100_000);
+      // Pro users get 2M monthly credits
+      expect(balance.data.monthlyCredits).toBe(2_000_000);
 
       // Credits should accumulate (not reset)
-      // If user has 30K remaining, next refill should add 100K to get 130K total
+      // If user has remaining credits, next refill should add 2M to get the total
       expect(balance.data.balance).toBeGreaterThanOrEqual(0);
     }
   });

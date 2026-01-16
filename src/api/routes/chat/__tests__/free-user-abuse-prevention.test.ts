@@ -388,9 +388,9 @@ describe('free User Abuse Prevention', () => {
       expect(checkPaidUserAccess(50, 100)).toBe(false);
     });
 
-    it('paid users get 100,000 monthly credits', () => {
+    it('paid users get 2,000,000 monthly credits', () => {
       const paidPlan = CREDIT_CONFIG.PLANS.paid;
-      expect(paidPlan.monthlyCredits).toBe(100_000);
+      expect(paidPlan.monthlyCredits).toBe(2_000_000);
     });
   });
 
@@ -944,7 +944,7 @@ describe('free User Abuse Prevention', () => {
       expect(detectBalanceAnomaly(100, 200, PlanTypes.FREE).anomaly).toBe(true);
       expect(detectBalanceAnomaly(10_000, 0, PlanTypes.FREE).anomaly).toBe(true);
       expect(detectBalanceAnomaly(5_000, 0, PlanTypes.FREE).anomaly).toBe(false);
-      expect(detectBalanceAnomaly(100_000, 0, PlanTypes.PAID).anomaly).toBe(false);
+      expect(detectBalanceAnomaly(2_000_000, 0, PlanTypes.PAID).anomaly).toBe(false);
     });
   });
 
@@ -1059,7 +1059,7 @@ describe('free User Abuse Prevention', () => {
       const result = applyUpgradeEffects('user-1', 0);
 
       expect(result.planType).toBe(PlanTypes.PAID);
-      expect(result.balance).toBe(100_000);
+      expect(result.balance).toBe(CREDIT_CONFIG.PLANS.paid.monthlyCredits);
       expect(result.threadLimit).toBe(Infinity);
       expect(result.roundLimit).toBe(Infinity);
     });
@@ -1101,7 +1101,7 @@ describe('free User Abuse Prevention', () => {
         return { valid: true };
       };
 
-      expect(validateReservation(50_000, 100_000).valid).toBe(false);
+      expect(validateReservation(50_000, CREDIT_CONFIG.PLANS.paid.monthlyCredits).valid).toBe(false);
       expect(validateReservation(5_000, 10_000).valid).toBe(true);
     });
 

@@ -83,11 +83,11 @@ export const DEV_LOG_LEVEL_LABELS: Record<DevLogLevel, string> = {
 // ============================================================================
 
 export function isValidLogLevel(value: unknown): value is LogLevel {
-  return typeof value === 'string' && LOG_LEVELS.includes(value as LogLevel);
+  return LogLevelSchema.safeParse(value).success;
 }
 
 export function isValidDevLogLevel(value: unknown): value is DevLogLevel {
-  return typeof value === 'string' && DEV_LOG_LEVELS.includes(value as DevLogLevel);
+  return DevLogLevelSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -308,7 +308,7 @@ export const PosthogLogLevels = {
 
 // 6. VALIDATION HELPER
 export function isValidPosthogLogLevel(value: unknown): value is PosthogLogLevel {
-  return typeof value === 'string' && POSTHOG_LOG_LEVELS.includes(value as PosthogLogLevel);
+  return PosthogLogLevelSchema.safeParse(value).success;
 }
 
 // 7. PRIORITY VALUES (for sorting/comparison)

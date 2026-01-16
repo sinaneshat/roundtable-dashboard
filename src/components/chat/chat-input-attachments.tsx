@@ -5,9 +5,8 @@ import { useTranslations } from 'next-intl';
 
 import { FileIconNames, UploadStatuses } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
-import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import type { PendingAttachment } from '@/hooks/utils';
 import { getFileIconName } from '@/hooks/utils';
 import { formatFileSize } from '@/lib/format';
@@ -49,7 +48,9 @@ type AttachmentChipProps = {
 function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
   const { file, preview, status, uploadItem } = attachment;
   const isImage = file.type.startsWith('image/');
+  const isPending = status === UploadStatuses.PENDING;
   const isUploading = status === UploadStatuses.UPLOADING;
+  const isProcessing = isPending || isUploading;
   const isFailed = status === UploadStatuses.FAILED;
   const uploadProgress = uploadItem?.progress.percent ?? 0;
 
@@ -79,20 +80,24 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
         isFailed && 'border-destructive/40 bg-destructive/5',
       )}
     >
-      {/* Thumbnail/Icon */}
+      {/* Thumbnail/Icon with loading overlay */}
       <div className="relative size-5 shrink-0 rounded overflow-hidden bg-background/50 flex items-center justify-center">
-        {isImage && preview?.url
+        {isProcessing
           ? (
-              /* eslint-disable-next-line next/no-img-element -- Object URL from local file */
-              <img
-                src={preview.url}
-                alt={file.name}
-                className="object-cover size-full"
-              />
+              <Icons.loader className="size-3 text-muted-foreground animate-spin" />
             )
-          : (
-              <FileTypeIcon mimeType={file.type} className="size-3" />
-            )}
+          : isImage && preview?.url
+            ? (
+                /* eslint-disable-next-line next/no-img-element -- Object URL from local file */
+                <img
+                  src={preview.url}
+                  alt={file.name}
+                  className="object-cover size-full"
+                />
+              )
+            : (
+                <FileTypeIcon mimeType={file.type} className="size-3" />
+              )}
       </div>
 
       {/* Filename */}
@@ -102,32 +107,32 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
 
       {/* Upload progress indicator */}
       {isUploading && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-lg overflow-hidden">
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-xl overflow-hidden">
           <Progress value={uploadProgress} className="h-0.5 rounded-none" />
         </div>
       )}
 
-      {/* Remove button - only shown when onRemove is provided */}
+      {/* Remove/Cancel button */}
       {onRemove && (
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
             onRemove();
           }}
           className={cn(
-            'size-4 shrink-0 rounded-full p-0',
-            'opacity-60 hover:opacity-100',
+            'size-5 shrink-0 rounded-full p-0',
+            'inline-flex items-center justify-center',
+            'text-muted-foreground/60',
             'hover:bg-destructive/20 hover:text-destructive',
             'transition-all duration-150',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
           )}
-          disabled={isUploading}
+          aria-label="Remove attachment"
         >
-          <Icons.x className="size-2.5" />
-        </Button>
+          <Icons.x className="size-3" />
+        </button>
       )}
     </motion.div>
   );
@@ -191,7 +196,7 @@ export function ChatInputAttachments({
       transition={{ duration: 0.2 }}
       className="overflow-hidden"
     >
-      <ScrollArea className="w-full">
+      <ScrollArea orientation="horizontal" className="w-full">
         <div className="flex items-center gap-1.5 px-3 sm:px-4 py-2 border-b border-border/30">
           <AnimatePresence mode="popLayout">
             {attachments.map(attachment => (
@@ -203,7 +208,6 @@ export function ChatInputAttachments({
             ))}
           </AnimatePresence>
         </div>
-        <ScrollBar orientation="horizontal" className="h-1.5" />
       </ScrollArea>
     </motion.div>
   );

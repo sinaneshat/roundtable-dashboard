@@ -261,7 +261,7 @@ export const DbCitationSchema = z.object({
   // Contextual info for hover card (resolved from source)
   title: z.string().optional(),
   excerpt: z.string().optional(),
-  url: z.string().url().optional(),
+  url: z.string().optional(),
 
   // Thread-specific metadata
   threadId: z.string().optional(),
@@ -269,7 +269,7 @@ export const DbCitationSchema = z.object({
   roundNumber: z.number().int().nonnegative().optional(),
 
   // Attachment-specific metadata (for file citations)
-  downloadUrl: z.string().url().optional(),
+  downloadUrl: z.string().optional(),
   filename: z.string().optional(),
   mimeType: z.string().optional(),
   fileSize: z.number().int().nonnegative().optional(),
@@ -364,7 +364,7 @@ export const DbAssistantMessageMetadataSchema = z.object({
     sourceType: CitationSourceTypeSchema,
     title: z.string(), // Filename or source title
     // Attachment-specific fields
-    downloadUrl: z.string().url().optional(),
+    downloadUrl: z.string().optional(),
     filename: z.string().optional(),
     mimeType: z.string().optional(),
     fileSize: z.number().int().nonnegative().optional(),

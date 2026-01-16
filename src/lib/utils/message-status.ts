@@ -98,7 +98,9 @@ export function getMessageParts(message: UIMessage): MessagePartsAnalysis {
 
   // Source parts for citations
   const sourceParts = message.parts.filter(
-    p => 'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
+    p =>
+      'type' in p
+      && (p.type === MessagePartTypes.SOURCE_URL || p.type === MessagePartTypes.SOURCE_DOCUMENT),
   );
 
   // Derived state flags

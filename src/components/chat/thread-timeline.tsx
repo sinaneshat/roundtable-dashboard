@@ -279,11 +279,10 @@ export function ThreadTimeline({
       ref={listRef}
       data-virtualized-timeline
       style={{
-        // During streaming: minHeight allows container to grow as content streams
-        // When stable: height ensures proper virtualization behavior
-        ...(isActivelyStreaming
-          ? { minHeight: `${totalSize}px` }
-          : { height: `${totalSize}px` }),
+        // OFFICIAL PATTERN: Always use height, not minHeight
+        // getTotalSize() updates as items are measured, so height naturally grows
+        // Using minHeight caused layout recalculations when streaming stopped
+        height: `${totalSize}px`,
         width: '100%',
         position: 'relative',
       }}

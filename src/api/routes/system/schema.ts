@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
-import { HealthStatusSchema } from '@/api/core/enums';
+import { HealthCheckDetailTypeSchema, HealthStatusSchema } from '@/api/core/enums';
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 import type { ApiEnv } from '@/api/types';
 
@@ -39,9 +39,7 @@ const HealthCheckResultSchema = z.object({
     description: 'Health check execution time in milliseconds',
   }),
   details: z.object({
-    detailType: z.enum(['health_check']).openapi({
-      description: 'Type discriminator for health check details',
-    }),
+    detailType: HealthCheckDetailTypeSchema,
     missingVars: z.array(z.string()).openapi({
       description: 'List of missing environment variables',
       example: ['VAR_1', 'VAR_2'],

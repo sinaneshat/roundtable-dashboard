@@ -130,10 +130,19 @@ export type ModelPreferencesActions = z.infer<typeof ModelPreferencesActionsSche
 export type ModelPreferencesStore = z.infer<typeof _ModelPreferencesStoreSchema>;
 
 /**
- * Persisted state subset (what gets saved to cookie)
+ * Persisted state schema (what gets saved to cookie)
  * Source: persist.md - "partialize" pattern
+ *
+ * Zod-first pattern: Schema defines the type, z.infer extracts it
  */
-export type PersistedModelPreferences = Pick<ModelPreferencesState, 'selectedModelIds' | 'modelOrder' | 'selectedMode' | 'enableWebSearch'>;
+const PersistedModelPreferencesSchema = z.object({
+  selectedModelIds: z.array(z.string()),
+  modelOrder: z.array(z.string()),
+  selectedMode: z.string().nullable(),
+  enableWebSearch: z.boolean(),
+});
+
+export type PersistedModelPreferences = z.infer<typeof PersistedModelPreferencesSchema>;
 
 // ============================================================================
 // DEFAULT STATE (Official Pattern)
@@ -435,7 +444,16 @@ export function createModelPreferencesStore(
           storage: {
             getItem: (name) => {
               const value = cookieStorage.getItem(name);
-              return value ? JSON.parse(value) : null;
+              if (!value)
+                return null;
+              // Zod-based validation: parse and validate persisted state
+              const parsed = JSON.parse(value);
+              const result = PersistedModelPreferencesSchema.safeParse(parsed?.state);
+              if (!result.success) {
+                console.error('[preferences/storage] Invalid persisted state:', result.error);
+                return null;
+              }
+              return { state: result.data, version: parsed?.version ?? 0 };
             },
             setItem: (name, value) => {
               cookieStorage.setItem(name, JSON.stringify(value));
@@ -444,16 +462,14 @@ export function createModelPreferencesStore(
               cookieStorage.removeItem(name);
             },
           },
-          // Type assertion required: Zustand persist middleware expects PersistedState to extend S,
-          // but we only persist a subset. This is the official Zustand pattern for partial persistence.
+          // Partialize: Only persist user preferences (subset of state)
           // @see https://docs.pmnd.rs/zustand/integrations/persisting-store-data#partialize
-          partialize: state =>
-            ({
-              selectedModelIds: state.selectedModelIds,
-              modelOrder: state.modelOrder,
-              selectedMode: state.selectedMode,
-              enableWebSearch: state.enableWebSearch,
-            }) as ModelPreferencesStore,
+          partialize: (state): PersistedModelPreferences => ({
+            selectedModelIds: state.selectedModelIds,
+            modelOrder: state.modelOrder,
+            selectedMode: state.selectedMode,
+            enableWebSearch: state.enableWebSearch,
+          }),
           // ✅ OFFICIAL PATTERN: skipHydration for SSR
           // Source: persist.md - prevents automatic hydration
           skipHydration: true,
@@ -462,6 +478,12 @@ export function createModelPreferencesStore(
           onRehydrateStorage: () => (state) => {
             state?.setHasHydrated(true);
           },
+          // Merge persisted partial state with full state
+          // @see https://docs.pmnd.rs/zustand/integrations/persisting-store-data#merge
+          merge: (persistedState, currentState) => ({
+            ...currentState,
+            ...(persistedState ?? {}),
+          }),
         },
       ),
       { name: 'ModelPreferencesStore', enabled: process.env.NODE_ENV === 'development' },

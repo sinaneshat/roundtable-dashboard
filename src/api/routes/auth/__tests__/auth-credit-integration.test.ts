@@ -707,7 +707,7 @@ describe('auth Flow Credit Integration', () => {
 
     it('restores paid plan configuration', async () => {
       const userId = 'user-paid-001';
-      const monthlyCredits = 100_000;
+      const monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       const paidRecord: MockCreditRecord = {
         id: 'credit-paid-001',
