@@ -1522,39 +1522,84 @@ export async function prepareValidatedMessages(
 
     if (uploadIdsFromFileParts.length > 0) {
       try {
-        const { fileParts: loadedParts } = await loadAttachmentContent({
-          attachmentIds: uploadIdsFromFileParts,
-          r2Bucket,
-          db,
-          logger,
-        });
+        // ✅ MEMORY SAFETY: Use URL-based loading to avoid memory exhaustion
+        // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
+        if (canUseUrlLoading) {
+          // URL-based loading - files parts will have URLs, not raw data
+          // The AI provider will fetch the file directly, avoiding Worker memory limits
+          const { fileParts: urlParts, stats } = await loadAttachmentContentUrl({
+            attachmentIds: uploadIdsFromFileParts,
+            r2Bucket,
+            db,
+            logger,
+            baseUrl: baseUrl!,
+            userId: userId!,
+            secret: secret!,
+            threadId,
+          });
 
-        for (const part of loadedParts) {
-          if (
-            'data' in part
-            && part.data instanceof Uint8Array
-            && 'mimeType' in part
-          ) {
-            // Type guard for parts with filename property
-            const filename = ('filename' in part && typeof part.filename === 'string')
-              ? part.filename
-              : undefined;
-            const key
-              = filename || `file_${part.mimeType}_${fileDataFromHistory.size}`;
-            fileDataFromHistory.set(key, {
-              // Create new Uint8Array for ArrayBuffer type (TS 5.6 compatibility)
-              data: new Uint8Array(part.data),
-              mimeType: part.mimeType,
-              filename,
-            });
+          // For URL-based loading, inject URL parts directly into messages
+          // instead of storing raw data in fileDataFromHistory
+          if (urlParts.length > 0) {
+            // Update allMessages to include URL-based file parts
+            for (let i = 0; i < allMessages.length; i++) {
+              const msg = allMessages[i];
+              if (!msg || !Array.isArray(msg.parts)) continue;
+
+              const hasFileParts = msg.parts.some(p => isFilePart(p));
+              if (!hasFileParts) continue;
+
+              const nonFileParts = msg.parts.filter(p => !isFilePart(p));
+              allMessages[i] = {
+                ...msg,
+                parts: [...(urlParts as unknown as typeof msg.parts), ...nonFileParts],
+              };
+              break; // Only inject once
+            }
           }
-        }
 
-        logger?.info('Loaded file data via uploadId fallback', LogHelpers.operation({
-          operationName: 'prepareValidatedMessages',
-          uploadIdsCount: uploadIdsFromFileParts.length,
-          loadedCount: fileDataFromHistory.size,
-        }));
+          logger?.info('Loaded file data via URL-based fallback', LogHelpers.operation({
+            operationName: 'prepareValidatedMessages',
+            uploadIdsCount: uploadIdsFromFileParts.length,
+            loadedCount: urlParts.length,
+            stats,
+          }));
+        } else {
+          // Localhost fallback - must use base64 since AI providers can't access localhost URLs
+          const { fileParts: loadedParts } = await loadAttachmentContent({
+            attachmentIds: uploadIdsFromFileParts,
+            r2Bucket,
+            db,
+            logger,
+          });
+
+          for (const part of loadedParts) {
+            if (
+              'data' in part
+              && part.data instanceof Uint8Array
+              && 'mimeType' in part
+            ) {
+              // Type guard for parts with filename property
+              const filename = ('filename' in part && typeof part.filename === 'string')
+                ? part.filename
+                : undefined;
+              const key
+                = filename || `file_${part.mimeType}_${fileDataFromHistory.size}`;
+              fileDataFromHistory.set(key, {
+                // Create new Uint8Array for ArrayBuffer type (TS 5.6 compatibility)
+                data: new Uint8Array(part.data),
+                mimeType: part.mimeType,
+                filename,
+              });
+            }
+          }
+
+          logger?.info('Loaded file data via uploadId fallback (localhost base64)', LogHelpers.operation({
+            operationName: 'prepareValidatedMessages',
+            uploadIdsCount: uploadIdsFromFileParts.length,
+            loadedCount: fileDataFromHistory.size,
+          }));
+        }
       } catch (error) {
         logger?.warn('Fallback file data loading failed', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
