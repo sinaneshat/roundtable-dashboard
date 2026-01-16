@@ -254,13 +254,40 @@ export async function getDownloadUrlService(data: GetDownloadUrlRequest) {
 /**
  * Request an upload ticket (Step 1 of secure upload)
  * Protected endpoint - requires authentication
+ * @param data - Request payload with filename, mimeType, fileSize
+ * @param signal - Optional AbortSignal to cancel the request
  */
-export async function requestUploadTicketService(data: RequestUploadTicketRequest) {
-  const client = await createApiClient();
-  const params: RequestUploadTicketRequest = {
-    json: data.json ?? {},
-  };
-  return parseResponse(client.uploads.ticket.$post(params));
+export async function requestUploadTicketService(
+  data: RequestUploadTicketRequest,
+  signal?: AbortSignal,
+): Promise<RequestUploadTicketResponse> {
+  const response = await authenticatedFetch('/uploads/ticket', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data.json ?? {}),
+    signal,
+  });
+
+  const json: unknown = await response.json();
+
+  // Type guard for ticket response
+  if (
+    typeof json === 'object'
+    && json !== null
+    && 'success' in json
+    && json.success === true
+    && 'data' in json
+    && typeof json.data === 'object'
+    && json.data !== null
+    && 'token' in json.data
+    && typeof json.data.token === 'string'
+  ) {
+    return json as RequestUploadTicketResponse;
+  }
+
+  throw new Error('Invalid upload ticket response structure');
 }
 
 /**
@@ -308,7 +335,7 @@ export async function secureUploadService(file: File, signal?: AbortSignal) {
       mimeType: file.type || 'application/octet-stream',
       fileSize: file.size,
     },
-  });
+  }, signal);
 
   if (!ticketResponse.success || !ticketResponse.data) {
     throw new Error('Failed to request upload ticket');
