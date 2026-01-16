@@ -407,12 +407,12 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
     const uploadId = ulid();
     const r2Key = generateR2Key(user.id, uploadId, file.name);
 
-    // Upload to storage using streaming to avoid memory exhaustion
-    // R2 accepts ReadableStream directly - no need to buffer entire file
+    // Upload to storage - use arrayBuffer for single uploads (< 100MB)
+    // R2 streams require known content-length which File.stream() doesn't provide
     const uploadResult = await putFile(
       c.env.UPLOADS_R2_BUCKET,
       r2Key,
-      file.stream(),
+      await file.arrayBuffer(),
       {
         contentType: file.type,
         customMetadata: {

@@ -269,7 +269,10 @@ export async function requestUploadTicketService(data: RequestUploadTicketReques
  *
  * NOTE: Uses authenticatedFetch instead of Hono RPC for binary uploads
  */
-export async function uploadWithTicketService(data: { query: { token: string }; form: { file: File } }): Promise<UploadWithTicketResponse> {
+export async function uploadWithTicketService(
+  data: { query: { token: string }; form: { file: File } },
+  signal?: AbortSignal,
+): Promise<UploadWithTicketResponse> {
   const formData = new FormData();
   formData.append('file', data.form.file);
 
@@ -277,6 +280,7 @@ export async function uploadWithTicketService(data: { query: { token: string }; 
     method: 'POST',
     body: formData,
     searchParams: { token: data.query.token },
+    signal,
   });
 
   const json: unknown = await response.json();
@@ -289,8 +293,15 @@ export async function uploadWithTicketService(data: { query: { token: string }; 
 /**
  * Secure upload service (combines ticket request + upload)
  * Convenience function that handles the full secure upload flow
+ * @param file - File to upload
+ * @param signal - Optional AbortSignal to cancel the upload
  */
-export async function secureUploadService(file: File) {
+export async function secureUploadService(file: File, signal?: AbortSignal) {
+  // Check if already aborted before starting
+  if (signal?.aborted) {
+    throw new DOMException('Upload cancelled', 'AbortError');
+  }
+
   const ticketResponse = await requestUploadTicketService({
     json: {
       filename: file.name,
@@ -303,10 +314,15 @@ export async function secureUploadService(file: File) {
     throw new Error('Failed to request upload ticket');
   }
 
+  // Check if aborted after ticket request
+  if (signal?.aborted) {
+    throw new DOMException('Upload cancelled', 'AbortError');
+  }
+
   return uploadWithTicketService({
     query: { token: ticketResponse.data.token },
     form: { file },
-  });
+  }, signal);
 }
 
 // ============================================================================
@@ -334,8 +350,13 @@ export async function createMultipartUploadService(data: CreateMultipartUploadRe
  * Protected endpoint - requires authentication
  *
  * NOTE: Uses authenticatedFetch instead of Hono RPC for binary uploads
+ * @param data - Upload part parameters
+ * @param signal - Optional AbortSignal to cancel the upload
  */
-export async function uploadPartService(data: UploadPartServiceInput): Promise<UploadPartResponse> {
+export async function uploadPartService(
+  data: UploadPartServiceInput,
+  signal?: AbortSignal,
+): Promise<UploadPartResponse> {
   const response = await authenticatedFetch(`/uploads/multipart/${data.param.id}/parts`, {
     method: 'PUT',
     headers: {
@@ -347,6 +368,7 @@ export async function uploadPartService(data: UploadPartServiceInput): Promise<U
       uploadId: data.query.uploadId,
       partNumber: data.query.partNumber,
     },
+    signal,
   });
 
   const json: unknown = await response.json();

@@ -30,11 +30,17 @@ import {
   uploadPartService,
 } from '@/services/api';
 
+/** Input for secure upload mutation with optional abort signal */
+export type SecureUploadInput = {
+  file: File;
+  signal?: AbortSignal;
+};
+
 export function useSecureUploadMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<UploadWithTicketResponse, Error, File>({
-    mutationFn: secureUploadService,
+  return useMutation<UploadWithTicketResponse, Error, SecureUploadInput>({
+    mutationFn: ({ file, signal }) => secureUploadService(file, signal),
     onSuccess: () => {
       invalidationPatterns.afterUpload().forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
@@ -143,10 +149,20 @@ export function useCreateMultipartUploadMutation() {
   });
 }
 
+/** Input for upload part mutation with optional abort signal */
+export type UploadPartInput = UploadPartServiceInput & {
+  signal?: AbortSignal;
+};
+
 export function useUploadPartMutation() {
-  return useMutation<UploadPartResponse, Error, UploadPartServiceInput>({
-    mutationFn: uploadPartService,
-    retry: 3,
+  return useMutation<UploadPartResponse, Error, UploadPartInput>({
+    mutationFn: ({ signal, ...data }) => uploadPartService(data, signal),
+    retry: (failureCount, error) => {
+      // Don't retry if aborted
+      if (error.name === 'AbortError')
+        return false;
+      return failureCount < 3;
+    },
     retryDelay: attempt => Math.min(1000 * 2 ** attempt, 30000),
     throwOnError: false,
   });
