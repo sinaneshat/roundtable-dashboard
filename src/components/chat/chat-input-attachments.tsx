@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 
 import { FileIconNames, getFileTypeColorClass, UploadStatuses } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { PendingAttachment } from '@/hooks/utils';
 import { getFileIconName } from '@/hooks/utils';
@@ -51,13 +50,12 @@ type AttachmentChipProps = {
 };
 
 function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
-  const { file, preview, status, uploadItem } = attachment;
+  const { file, preview, status } = attachment;
   const isImage = file.type.startsWith('image/');
   const isPending = status === UploadStatuses.PENDING;
   const isUploading = status === UploadStatuses.UPLOADING;
   const isProcessing = isPending || isUploading;
   const isFailed = status === UploadStatuses.FAILED;
-  const uploadProgress = uploadItem?.progress.percent ?? 0;
 
   // Truncate filename for display - show more characters now
   const displayName = file.name.length > 24
@@ -121,13 +119,6 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
           {fileExtension}
         </span>
       </div>
-
-      {/* Upload progress indicator */}
-      {isUploading && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5">
-          <Progress value={uploadProgress} className="h-0.5 rounded-none bg-transparent" />
-        </div>
-      )}
 
       {/* Remove/Cancel button - positioned in corner */}
       {onRemove && (
