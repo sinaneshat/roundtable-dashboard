@@ -19,7 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
       ...(t.raw('keywords') as string[]),
       tSeo('createAccount'),
       tSeo('aiCollaboration'),
-      tSeo('multipleAiModels'),
+      tSeo('aiCouncil'),
       BRAND.name,
     ],
   });
