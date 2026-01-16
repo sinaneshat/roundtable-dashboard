@@ -49,7 +49,7 @@ export async function getUserTier(userId: string): Promise<SubscriptionTier> {
   // ✅ CACHING: 60-second TTL - tier changes are webhook-driven and invalidate cache
   // This prevents repeated DB calls during page load (models, usage, etc.)
   const usageResults = await db
-    .select({ subscriptionTier: tables.userChatUsage.subscriptionTier })
+    .select()
     .from(tables.userChatUsage)
     .where(eq(tables.userChatUsage.userId, userId))
     .limit(1)
@@ -58,7 +58,7 @@ export async function getUserTier(userId: string): Promise<SubscriptionTier> {
       tag: UserCacheTags.tier(userId),
     });
 
-  return usageResults[0]?.subscriptionTier || SubscriptionTiers.FREE;
+  return usageResults[0]?.subscriptionTier ?? SubscriptionTiers.FREE;
 }
 
 export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsage> {
@@ -342,7 +342,7 @@ async function getPlanStatsForUsage(userId: string) {
   // Check for active subscription in Stripe (for hasActiveSubscription flag)
   // ✅ CACHING: 60-second TTL - subscription changes trigger cache invalidation via webhook
   const customerResults = await db
-    .select({ id: tables.stripeCustomer.id })
+    .select()
     .from(tables.stripeCustomer)
     .where(eq(tables.stripeCustomer.userId, userId))
     .limit(1)
@@ -357,7 +357,7 @@ async function getPlanStatsForUsage(userId: string) {
   if (customer) {
     // ✅ CACHING: 60-second TTL - invalidated on subscription changes
     const subscriptionResults = await db
-      .select({ id: tables.stripeSubscription.id })
+      .select()
       .from(tables.stripeSubscription)
       .where(
         and(

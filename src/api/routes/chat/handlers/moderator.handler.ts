@@ -57,7 +57,7 @@ import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
 import { getParticipantIndex } from '@/lib/utils';
 
 import type { councilModeratorRoundRoute } from '../route';
-import type { MessageWithParticipant, ModeratorPromptConfig, ParticipantResponse } from '../schema';
+import type { ModeratorPromptConfig, ParticipantResponse } from '../schema';
 import { RoundModeratorRequestSchema } from '../schema';
 
 // ============================================================================
@@ -488,59 +488,34 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     // =========================================================================
 
     // =========================================================================
-    // ✅ D1 POLLING: Wait for messages to be persisted
+    // ✅ D1 QUERY: Single attempt - no blocking polling
     // =========================================================================
-    // RACE CONDITION FIX: The streaming handler's onFinish callback runs AFTER
-    // the stream response is sent to the client. This means:
-    //   1. P2 finishes streaming
-    //   2. onFinish starts (async) - D1 write begins
-    //   3. Stream response sent to client
-    //   4. Frontend receives stream complete, triggers moderator
-    //   5. onFinish still running - D1 write not complete yet
-    //   6. Moderator handler queries D1 → nothing yet → 202
-    //
-    // SOLUTION: Poll D1 a few times with short delays before returning 202.
-    // This gives the onFinish callback time to complete the D1 write.
+    // Query D1 once - if data isn't ready, return 202 immediately.
+    // The frontend will poll again. No server-side delays.
     // =========================================================================
 
-    let participantMessages: MessageWithParticipant[] | null = null;
-    const MAX_POLL_ATTEMPTS = 5;
-    const POLL_DELAY_MS = 200;
+    // Query by round number (most reliable - doesn't depend on frontend IDs)
+    const roundMessages = await db.query.chatMessage.findMany({
+      where: (fields, { and: andOp, eq: eqOp }) =>
+        andOp(
+          eqOp(fields.threadId, threadId),
+          eqOp(fields.role, MessageRoles.ASSISTANT),
+          eqOp(fields.roundNumber, roundNum),
+        ),
+      with: { participant: true },
+      orderBy: [
+        asc(tables.chatMessage.roundNumber),
+        asc(tables.chatMessage.createdAt),
+        asc(tables.chatMessage.id),
+      ],
+    });
 
-    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
-      // Query by round number (most reliable - doesn't depend on frontend IDs)
-      const roundMessages = await db.query.chatMessage.findMany({
-        where: (fields, { and: andOp, eq: eqOp }) =>
-          andOp(
-            eqOp(fields.threadId, threadId),
-            eqOp(fields.role, MessageRoles.ASSISTANT),
-            eqOp(fields.roundNumber, roundNum),
-          ),
-        with: { participant: true },
-        orderBy: [
-          asc(tables.chatMessage.roundNumber),
-          asc(tables.chatMessage.createdAt),
-          asc(tables.chatMessage.id),
-        ],
-      });
-
-      const participantOnlyMessages = filterDbToParticipantMessages(roundMessages);
-
-      if (participantOnlyMessages.length > 0) {
-        participantMessages = participantOnlyMessages;
-        break;
-      }
-
-      // Wait before next attempt (skip wait on last attempt)
-      if (attempt < MAX_POLL_ATTEMPTS - 1) {
-        await new Promise(resolve => setTimeout(resolve, POLL_DELAY_MS));
-      }
-    }
+    const participantMessages = filterDbToParticipantMessages(roundMessages);
 
     // =========================================================================
-    // ✅ KV FALLBACK: Only check KV when D1 polling exhausted
+    // ✅ KV FALLBACK: Check KV when D1 has no messages
     // =========================================================================
-    // If D1 doesn't have participant messages after polling, check KV for status
+    // If D1 doesn't have participant messages, check KV for status
     if (!participantMessages || participantMessages.length === 0) {
       const roundState = await getRoundExecutionState(threadId, roundNum, c.env);
 
