@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.11.0",
   "description": "Roundtable Dashboard - Watch multiple models debate and brainstorm together",
-  "author": "Roundtable <hello@roundtable.now>",
+  "author": "Roundtable <soheil@deadpixel.ai>",
   "homepage": "https://roundtable.now/",
   "repository": {
     "type": "git",

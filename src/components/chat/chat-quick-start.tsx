@@ -8,7 +8,7 @@ import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
-import { getChatModeLabel, MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
+import { getChatModeLabel, getExampleParticipantCount } from '@/lib/config';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
@@ -135,29 +135,24 @@ const PROMPT_POOL: PromptTemplate[] = [
   },
 ];
 
-// Simple seeded random for deterministic selection across server/client
-function seededRandom(seed: number): () => number {
-  return () => {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  };
-}
-
-// Get daily seed to rotate prompts each day while keeping server/client in sync
-function getDailySeed(): number {
-  const now = new Date();
-  return now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-}
-
 function getRandomPrompts(count: number): PromptTemplate[] {
-  const seed = getDailySeed();
-  const random = seededRandom(seed);
-  const shuffled = [...PROMPT_POOL].sort(() => random() - 0.5);
+  // Fisher-Yates shuffle - uniform distribution, fresh on every visit
+  const shuffled = [...PROMPT_POOL];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const itemI = shuffled[i];
+    const itemJ = shuffled[j];
+    // Array bounds guaranteed by loop invariants: i < length, j <= i
+    if (itemI !== undefined && itemJ !== undefined) {
+      shuffled[i] = itemJ;
+      shuffled[j] = itemI;
+    }
+  }
   return shuffled.slice(0, count);
 }
 
-function getDailyOffset(): number {
-  return getDailySeed() % 10;
+function getRandomOffset(): number {
+  return Math.floor(Math.random() * 10);
 }
 
 type QuickStartSuggestion = {
@@ -219,7 +214,7 @@ export function ChatQuickStart({
     // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Hydration: null on server, set on client
     setRandomPrompts(getRandomPrompts(3));
     // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Hydration: null on server, set on client
-    setInitialProviderOffset(getDailyOffset());
+    setInitialProviderOffset(getRandomOffset());
   }, []);
   const { data: usageData, isLoading: isUsageLoading } = useUsageStatsQuery();
   const { data: modelsResponse, isLoading: isModelsLoading } = useModelsQuery();
@@ -247,10 +242,12 @@ export function ChatQuickStart({
     const grouped = new Map<string, typeof accessibleModels>();
     for (const model of accessibleModels) {
       const provider = model.provider || model.id.split('/')[0] || 'unknown';
-      if (!grouped.has(provider)) {
-        grouped.set(provider, []);
+      const existing = grouped.get(provider);
+      if (existing) {
+        existing.push(model);
+      } else {
+        grouped.set(provider, [model]);
       }
-      grouped.get(provider)!.push(model);
     }
     return grouped;
   }, [accessibleModels]);
@@ -320,9 +317,7 @@ export function ChatQuickStart({
       return [];
     }
 
-    const idealCount = userTier === SubscriptionTiers.FREE
-      ? MIN_PARTICIPANTS_REQUIRED
-      : 4;
+    const idealCount = getExampleParticipantCount(userTier);
 
     // Capture checked offset for TypeScript narrowing
     const providerOffset = initialProviderOffset;

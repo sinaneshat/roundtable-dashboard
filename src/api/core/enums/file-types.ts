@@ -615,3 +615,70 @@ export function getPreviewTypeFromMime(mimeType: string): FilePreviewType {
     return FilePreviewTypes.CODE;
   return FilePreviewTypes.UNKNOWN;
 }
+
+// ============================================================================
+// FILE TYPE COLOR (UI color classification for file type badges)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const FILE_TYPE_COLORS = [
+  'red',
+  'purple',
+  'yellow',
+  'blue',
+  'zinc',
+] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_FILE_TYPE_COLOR: FileTypeColor = 'zinc';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const FileTypeColorSchema = z.enum(FILE_TYPE_COLORS).openapi({
+  description: 'Tailwind color name for file type badge background',
+  example: 'blue',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type FileTypeColor = z.infer<typeof FileTypeColorSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const FileTypeColors = {
+  RED: 'red' as const,
+  PURPLE: 'purple' as const,
+  YELLOW: 'yellow' as const,
+  BLUE: 'blue' as const,
+  ZINC: 'zinc' as const,
+} as const;
+
+// 6️⃣ CSS CLASS MAPPING - Tailwind background classes for each color
+export const FILE_TYPE_COLOR_CLASSES: Record<FileTypeColor, string> = {
+  [FileTypeColors.RED]: 'bg-red-500',
+  [FileTypeColors.PURPLE]: 'bg-purple-500',
+  [FileTypeColors.YELLOW]: 'bg-yellow-500',
+  [FileTypeColors.BLUE]: 'bg-blue-500',
+  [FileTypeColors.ZINC]: 'bg-zinc-600',
+};
+
+/**
+ * Get Tailwind color name for file type badge
+ * SINGLE SOURCE OF TRUTH for file type color classification
+ */
+export function getFileTypeColor(mimeType: string): FileTypeColor {
+  if (mimeType === DocumentMimeTypes.PDF)
+    return FileTypeColors.RED;
+  if (IMAGE_MIMES.includes(mimeType))
+    return FileTypeColors.PURPLE;
+  if (mimeType.startsWith('text/javascript') || mimeType.startsWith('application/javascript'))
+    return FileTypeColors.YELLOW;
+  if (mimeType.startsWith('text/') || mimeType.includes('json'))
+    return FileTypeColors.BLUE;
+  return FileTypeColors.ZINC;
+}
+
+/**
+ * Get Tailwind CSS background class for file type badge
+ * Combines getFileTypeColor with class mapping for convenience
+ */
+export function getFileTypeColorClass(mimeType: string): string {
+  return FILE_TYPE_COLOR_CLASSES[getFileTypeColor(mimeType)];
+}

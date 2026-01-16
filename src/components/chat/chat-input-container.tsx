@@ -6,18 +6,19 @@ import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
-import { ComponentSizes, ComponentVariants, PlanTypes } from '@/api/core/enums';
+import type { BorderVariant } from '@/api/core/enums';
+import { BorderVariants, ComponentSizes, ComponentVariants, PlanTypes } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
 import { STRING_LIMITS } from '@/constants';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { useFreeTrialState } from '@/hooks/utils';
-import { MAX_PARTICIPANTS_LIMIT, MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
+import { MAX_PARTICIPANTS_LIMIT, MIN_PARTICIPANTS_TO_SEND } from '@/lib/config';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
 type AlertConfig = {
   message: string;
-  variant: 'success' | 'warning' | 'error';
+  variant: BorderVariant;
   actionLabel?: string;
   actionHref?: string;
 };
@@ -31,20 +32,31 @@ type ChatInputContainerProps = {
   className?: string;
 };
 
-const variantStyles = {
-  success: {
+const variantStyles: Record<BorderVariant, {
+  border: string;
+  alertBg: string;
+  text: string;
+  button: string;
+}> = {
+  [BorderVariants.DEFAULT]: {
+    border: 'border-border',
+    alertBg: 'bg-muted',
+    text: 'text-foreground',
+    button: 'border-border/40 bg-muted/20 text-foreground hover:bg-muted/30',
+  },
+  [BorderVariants.SUCCESS]: {
     border: 'border-green-500/30',
     alertBg: 'bg-green-500/10',
     text: 'text-green-600 dark:text-green-400',
     button: 'border-green-500/40 bg-green-500/20 text-green-600 dark:text-green-400 hover:bg-green-500/30',
   },
-  warning: {
+  [BorderVariants.WARNING]: {
     border: 'border-amber-500/30',
     alertBg: 'bg-amber-500/10',
     text: 'text-amber-600 dark:text-amber-400',
     button: 'border-amber-500/40 bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30',
   },
-  error: {
+  [BorderVariants.ERROR]: {
     border: 'border-destructive/30',
     alertBg: 'bg-destructive/10',
     text: 'text-destructive',
@@ -72,7 +84,7 @@ export const ChatInputContainer = memo(({
 
   const isOverLimit = inputValue.length > STRING_LIMITS.MESSAGE_MAX;
   const participantCount = participants.length;
-  const showMinModelsError = participantCount < MIN_PARTICIPANTS_REQUIRED && !isHydrating && !isModelsLoading;
+  const showMinModelsError = participantCount < MIN_PARTICIPANTS_TO_SEND && !isHydrating && !isModelsLoading;
   const showMaxModelsError = participantCount > MAX_PARTICIPANTS_LIMIT && !isHydrating && !isModelsLoading;
 
   // Credit estimation for paid users
@@ -113,46 +125,40 @@ export const ChatInputContainer = memo(({
     // Model count validation (highest priority)
     if (showMinModelsError) {
       return {
-        message: t('chat.input.minModelsRequired', { min: MIN_PARTICIPANTS_REQUIRED }),
-        variant: 'error',
+        message: t('chat.input.minModelsRequired', { min: MIN_PARTICIPANTS_TO_SEND }),
+        variant: BorderVariants.ERROR,
       };
     }
     if (showMaxModelsError) {
       return {
         message: t('chat.input.maxModelsExceeded', { max: MAX_PARTICIPANTS_LIMIT }),
-        variant: 'error',
+        variant: BorderVariants.ERROR,
       };
     }
     if (isOverLimit) {
-      return { message: t('chat.input.messageTooLong'), variant: 'error' };
+      return { message: t('chat.input.messageTooLong'), variant: BorderVariants.ERROR };
     }
     if (!isFreeUser && creditStatus.status === 'insufficient' && participantCount > 0) {
       return {
-        message: t('chat.input.insufficientCredits', {
-          estimated: creditStatus.estimated.toLocaleString(),
-          available: creditStatus.available.toLocaleString(),
-        }),
-        variant: 'error',
+        message: t('chat.input.insufficientCredits'),
+        variant: BorderVariants.ERROR,
       };
     }
     if (!isFreeUser && creditStatus.status === 'low' && participantCount > 0) {
       return {
-        message: t('chat.input.lowCredits', {
-          remaining: creditStatus.remaining.toLocaleString(),
-          estimated: creditStatus.estimated.toLocaleString(),
-        }),
-        variant: 'warning',
+        message: t('chat.input.lowCredits'),
+        variant: BorderVariants.WARNING,
       };
     }
     if (!isFreeUser && isQuotaExceeded && !isLoadingStats) {
-      return { message: t('usage.quotaAlert.paidUserMessage'), variant: 'error' };
+      return { message: t('usage.quotaAlert.paidUserMessage'), variant: BorderVariants.ERROR };
     }
     if (isFreeUser && !isLoadingStats) {
       return {
         message: hasUsedTrial
           ? t('usage.freeTrial.usedDescription')
           : t('usage.freeTrial.availableDescription'),
-        variant: isWarningState ? 'warning' : 'success',
+        variant: isWarningState ? BorderVariants.WARNING : BorderVariants.SUCCESS,
         actionLabel: t('usage.freeTrial.upgradeToPro'),
         actionHref: '/chat/pricing',
       };

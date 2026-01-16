@@ -62,8 +62,8 @@ export const FORM_DEFAULTS = {
 // AUTO MODE FALLBACK CONFIG - Single Source of Truth
 // ============================================================================
 // Used by both client (useAnalyzePromptStream) and server (analyze.handler.ts)
-// when AI analysis fails. Uses MIN_PARTICIPANTS_REQUIRED (2) models for
-// multi-perspective value. Both models support vision for all scenarios.
+// when AI analysis fails. Uses 2 participants to match MIN_PARTICIPANTS_REQUIRED
+// from @/lib/config (backend minimum for multi-perspective analysis).
 
 export const AUTO_MODE_FALLBACK_CONFIG: {
   participants: { modelId: string; role: string | null }[];

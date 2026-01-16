@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
-import { FileIconNames, UploadStatuses } from '@/api/core/enums';
+import { FileIconNames, getFileTypeColorClass, UploadStatuses } from '@/api/core/enums';
 import { Icons } from '@/components/icons';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -26,7 +26,7 @@ type FileTypeIconProps = {
 
 function FileTypeIcon({ mimeType, className }: FileTypeIconProps) {
   const iconName = getFileIconName(mimeType);
-  const iconClass = cn('size-4 text-muted-foreground', className);
+  const iconClass = cn('size-5 text-white', className);
 
   switch (iconName) {
     case FileIconNames.IMAGE:
@@ -38,6 +38,11 @@ function FileTypeIcon({ mimeType, className }: FileTypeIconProps) {
     default:
       return <Icons.file className={iconClass} />;
   }
+}
+
+function getFileExtension(filename: string): string {
+  const ext = filename.split('.').pop()?.toUpperCase() || '';
+  return ext.length <= 5 ? ext : ext.slice(0, 4);
 }
 
 type AttachmentChipProps = {
@@ -54,10 +59,13 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
   const isFailed = status === UploadStatuses.FAILED;
   const uploadProgress = uploadItem?.progress.percent ?? 0;
 
-  // Truncate filename for display
-  const displayName = file.name.length > 12
-    ? `${file.name.slice(0, 8)}...${file.name.slice(-4)}`
+  // Truncate filename for display - show more characters now
+  const displayName = file.name.length > 24
+    ? `${file.name.slice(0, 20)}...`
     : file.name;
+
+  // Get file extension for display
+  const fileExtension = getFileExtension(file.name);
 
   // Build native title text
   const titleText = `${file.name} (${formatFileSize(file.size)})`;
@@ -72,19 +80,23 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
       transition={{ duration: 0.15 }}
       title={titleText}
       className={cn(
-        'relative group flex items-center gap-1.5 shrink-0',
-        'h-8 px-1.5 pr-1 rounded-xl',
+        'relative group flex items-center gap-2.5 shrink-0',
+        'h-12 pl-1.5 pr-8 rounded-lg overflow-hidden',
         'bg-muted/60 border border-border/40',
         'hover:bg-muted hover:border-border/60',
         'transition-colors duration-150',
         isFailed && 'border-destructive/40 bg-destructive/5',
       )}
     >
-      {/* Thumbnail/Icon with loading overlay */}
-      <div className="relative size-5 shrink-0 rounded overflow-hidden bg-background/50 flex items-center justify-center">
+      {/* Larger icon area with colored background */}
+      <div className={cn(
+        'size-9 shrink-0 rounded-md flex items-center justify-center',
+        isImage && preview?.url ? 'bg-transparent' : getFileTypeColorClass(file.type),
+      )}
+      >
         {isProcessing
           ? (
-              <Icons.loader className="size-3 text-muted-foreground animate-spin" />
+              <Icons.loader className="size-4 text-white animate-spin" />
             )
           : isImage && preview?.url
             ? (
@@ -92,27 +104,32 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
                 <img
                   src={preview.url}
                   alt={file.name}
-                  className="object-cover size-full"
+                  className="object-cover size-full rounded-md"
                 />
               )
             : (
-                <FileTypeIcon mimeType={file.type} className="size-3" />
+                <FileTypeIcon mimeType={file.type} />
               )}
       </div>
 
-      {/* Filename */}
-      <span className="text-xs font-medium text-foreground/80 max-w-[80px] truncate">
-        {displayName}
-      </span>
+      {/* Text content - filename and extension */}
+      <div className="flex flex-col items-start min-w-0 gap-0.5">
+        <span className="text-sm font-medium text-foreground/90 max-w-[140px] truncate leading-tight">
+          {displayName}
+        </span>
+        <span className="text-xs text-muted-foreground uppercase leading-tight">
+          {fileExtension}
+        </span>
+      </div>
 
       {/* Upload progress indicator */}
       {isUploading && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-xl overflow-hidden">
+        <div className="absolute bottom-0 left-0 right-0 h-0.5">
           <Progress value={uploadProgress} className="h-0.5 rounded-none" />
         </div>
       )}
 
-      {/* Remove/Cancel button */}
+      {/* Remove/Cancel button - positioned in corner */}
       {onRemove && (
         <button
           type="button"
@@ -122,12 +139,14 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
             onRemove();
           }}
           className={cn(
+            'absolute top-1 right-1',
             'size-5 shrink-0 rounded-full p-0',
             'inline-flex items-center justify-center',
-            'text-muted-foreground/60',
+            'text-muted-foreground/60 bg-background/80',
+            'opacity-0 group-hover:opacity-100',
             'hover:bg-destructive/20 hover:text-destructive',
             'transition-all duration-150',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:opacity-100',
           )}
           aria-label="Remove attachment"
         >
@@ -197,7 +216,7 @@ export function ChatInputAttachments({
       className="overflow-hidden"
     >
       <ScrollArea orientation="horizontal" className="w-full">
-        <div className="flex items-center gap-1.5 px-3 sm:px-4 py-2 border-b border-border/30">
+        <div className="flex items-center gap-2 px-3 sm:px-4 py-2 border-b border-border/30">
           <AnimatePresence mode="popLayout">
             {attachments.map(attachment => (
               <AttachmentChip
