@@ -8,8 +8,8 @@ import { useShallow } from 'zustand/react/shallow';
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
 import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, RoundPhases, ScreenModes } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
+import { ChatInputContainer } from '@/components/chat/chat-input-container';
 import { ChatInputHeader } from '@/components/chat/chat-input-header';
-import { ChatInputUpgradeBanner } from '@/components/chat/chat-input-upgrade-banner';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
@@ -156,7 +156,7 @@ export function ChatView({
 
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
-  const { borderVariant, isFreeUser } = useFreeTrialState();
+  const { borderVariant: _borderVariant } = useFreeTrialState();
 
   const { data: changelogResponse } = useThreadChangelogQuery(
     effectiveThreadId,
@@ -618,19 +618,22 @@ export function ChatView({
             <div className="absolute inset-0 -bottom-4 bg-gradient-to-t from-background from-85% to-transparent pointer-events-none" />
             <div className="w-full max-w-4xl mx-auto px-5 md:px-6 pt-4 pb-4 relative">
               <ChatScrollButton variant="input" />
-              <div className="flex flex-col">
-                <ChatInputUpgradeBanner />
+              <ChatInputContainer
+                participants={selectedParticipants}
+                inputValue={inputValue}
+                isHydrating={mode === ScreenModes.THREAD && !hasInitiallyLoaded}
+                isModelsLoading={isModelsLoading}
+              >
                 <ChatInputHeader
                   autoMode={autoMode}
                   onAutoModeChange={setAutoMode}
                   isAnalyzing={isAnalyzingPrompt}
                   disabled={isToggleDisabled && !isAnalyzingPrompt}
-                  borderVariant={borderVariant}
+                  className="border-0 rounded-none"
                 />
                 <ChatInput
-                  className="rounded-t-none border-t-0"
-                  hideInternalAlerts={mode === ScreenModes.OVERVIEW || isFreeUser}
-                  borderVariant={(mode === ScreenModes.OVERVIEW || isFreeUser) ? borderVariant : undefined}
+                  className="border-0 shadow-none rounded-none"
+                  hideInternalAlerts
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handleAutoModeSubmit}
@@ -666,7 +669,7 @@ export function ChatView({
                     />
                   )}
                 />
-              </div>
+              </ChatInputContainer>
             </div>
           </div>
         </div>

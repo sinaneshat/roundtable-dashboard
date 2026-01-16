@@ -1,12 +1,9 @@
 'use client';
-import { AnimatePresence, motion } from 'motion/react';
-import Link from 'next/link';
+
 import { useTranslations } from 'next-intl';
 
-import { ComponentSizes, ComponentVariants } from '@/api/core/enums';
-import { Button } from '@/components/ui/button';
+import { ChatAlertBanner } from '@/components/chat/chat-alert-banner';
 import { useFreeTrialState } from '@/hooks/utils';
-import { cn } from '@/lib/ui/cn';
 
 /**
  * Free Trial Alert - Shows upgrade prompt for free users
@@ -28,57 +25,16 @@ export function FreeTrialAlert() {
     return null;
   }
 
-  const getMessage = () => {
-    if (hasUsedTrial) {
-      return t('usage.freeTrial.usedDescription');
-    }
-    return t('usage.freeTrial.availableDescription');
-  };
+  const message = hasUsedTrial
+    ? t('usage.freeTrial.usedDescription')
+    : t('usage.freeTrial.availableDescription');
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ height: 0, opacity: 0 }}
-        animate={{ height: 'auto', opacity: 1 }}
-        exit={{ height: 0, opacity: 0 }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        className="overflow-hidden"
-      >
-        <div
-          className={cn(
-            'flex items-center justify-between gap-3 px-3 py-2',
-            'border-0 border-b',
-            isWarningState
-              ? 'border-amber-500/20 bg-amber-500/10'
-              : 'border-green-500/20 bg-green-500/10',
-          )}
-        >
-          <p className={cn(
-            'text-[11px] leading-tight font-medium text-left flex-1 min-w-0',
-            isWarningState
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-green-600 dark:text-green-400',
-          )}
-          >
-            {getMessage()}
-          </p>
-          <Button
-            asChild
-            variant={ComponentVariants.OUTLINE}
-            size={ComponentSizes.SM}
-            className={cn(
-              'h-7 px-4 text-[11px] font-semibold shrink-0 rounded-full relative z-10',
-              isWarningState
-                ? 'border-amber-500/40 bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30'
-                : 'border-green-500/40 bg-green-500/20 text-green-600 dark:text-green-400 hover:bg-green-500/30',
-            )}
-          >
-            <Link href="/chat/pricing" className="flex items-center justify-center w-full h-full">
-              {t('usage.freeTrial.upgradeToPro')}
-            </Link>
-          </Button>
-        </div>
-      </motion.div>
-    </AnimatePresence>
+    <ChatAlertBanner
+      message={message}
+      variant={isWarningState ? 'warning' : 'success'}
+      actionLabel={t('usage.freeTrial.upgradeToPro')}
+      actionHref="/chat/pricing"
+    />
   );
 }

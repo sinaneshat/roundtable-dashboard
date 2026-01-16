@@ -6,14 +6,13 @@
 
 'use client';
 
-/* eslint-disable perfectionist/sort-named-imports -- alias causes circular conflict */
 import { use, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { RoundPhase } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
-import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getModeratorMetadata, getParticipantIndex, getParticipantModelIds, getRoundNumber, hasError as checkHasError } from '@/lib/utils';
+import { getAssistantMetadata,getCurrentRoundNumber,getEnabledParticipantModelIdSet,getEnabledParticipants,getModeratorMetadata,getParticipantIndex,getParticipantModelIds,getRoundNumber,hasError as checkHasError } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 
 import {
@@ -24,7 +23,6 @@ import {
 } from '../utils/participant-completion-gate';
 import { createOptimisticUserMessage } from '../utils/placeholder-factories';
 import { getEffectiveWebSearchEnabled, shouldWaitForPreSearch } from '../utils/pre-search-execution';
-/* eslint-enable perfectionist/sort-named-imports */
 
 // ============================================================================
 // AI SDK RESUME PATTERN - NO SEPARATE /resume CALL NEEDED
@@ -196,7 +194,6 @@ export function useIncompleteRoundResumption(
     if (staleWaitingStateRef.current) {
       return;
     }
-    // Mark as checked BEFORE evaluating condition (not after)
     staleWaitingStateRef.current = true;
 
     // ✅ PREFILL FIX: Don't clear state if it was just prefilled from server
@@ -512,10 +509,8 @@ export function useIncompleteRoundResumption(
   // ✅ RACE CONDITION FIX: Track round state signature for re-check detection
   const lastCheckedSignatureRef = useRef<string | null>(null);
 
-  // Reset refs on navigation (threadId change)
   useEffect(() => {
     activeStreamCheckRef.current = null;
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional state reset on navigation
     setActiveStreamCheckComplete(false);
     orphanedPreSearchUIRecoveryRef.current = null;
     orphanedPreSearchRecoveryAttemptedRef.current = null;
@@ -558,7 +553,6 @@ export function useIncompleteRoundResumption(
       // But only reset if we're not currently in the middle of resumption
       if (!waitingToStartStreaming && !isStreaming) {
         activeStreamCheckRef.current = null;
-        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- State reset on signature change
         setActiveStreamCheckComplete(false);
         // ✅ BUG FIX: Do NOT reset resumptionAttemptedRef here!
         // This was causing an infinite loop:
@@ -969,7 +963,6 @@ export function useIncompleteRoundResumption(
 
     // Set waiting flag so provider knows to start streaming
     actions.setWaitingToStartStreaming(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- inProgressParticipantIndices is derived from messages (already in deps)
   }, [
     enabled,
     isStreaming,
@@ -1319,7 +1312,6 @@ export function useIncompleteRoundResumption(
         actions.setIsCreatingModerator(true);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- messages/participants only used for getParticipantCompletionStatus; effect re-runs on phase changes
   }, [
     currentResumptionPhase,
     streamResumptionPrefilled,

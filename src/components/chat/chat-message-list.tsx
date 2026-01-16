@@ -173,6 +173,7 @@ function AssistantGroupCard({
   maxContentHeight,
   roundAvailableSources,
   skipTransitions = false,
+  isReadOnly = false,
 }: {
   group: Extract<MessageGroup, { type: 'assistant-group' }>;
   groupIndex: number;
@@ -184,6 +185,7 @@ function AssistantGroupCard({
   maxContentHeight?: number;
   roundAvailableSources?: AvailableSource[];
   skipTransitions?: boolean;
+  isReadOnly?: boolean;
 }) {
   const hasStreamingMessage = group.messages.some(({ participantInfo }) => participantInfo.isStreaming);
   const hasErrorMessage = group.messages.some(({ message }) => {
@@ -250,7 +252,9 @@ function AssistantGroupCard({
                   || p.type === MessagePartTypes.TOOL_RESULT),
               ) as MessagePart[];
             const sourceParts = safeParts.filter(p =>
-              p && 'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
+              p
+              && 'type' in p
+              && (p.type === MessagePartTypes.SOURCE_URL || p.type === MessagePartTypes.SOURCE_DOCUMENT),
             );
             const isModerator = participantInfo.participantIndex === MODERATOR_PARTICIPANT_INDEX;
 
@@ -269,7 +273,7 @@ function AssistantGroupCard({
                   isAccessible={isAccessible}
                   hideInlineHeader
                   hideAvatar
-                  hideActions={isModerator || demoMode}
+                  hideActions={isModerator || demoMode || isReadOnly}
                   maxContentHeight={maxContentHeight}
                   loadingText={isModerator ? t('chat.participant.moderatorObserving') : undefined}
                   groupAvailableSources={groupAvailableSources}
@@ -280,16 +284,16 @@ function AssistantGroupCard({
                     <p className="text-xs font-medium text-muted-foreground">{t('chat.sources.title')}</p>
                     <div className="space-y-1">
                       {sourceParts.map((sourcePart) => {
-                        if ('type' in sourcePart && sourcePart.type === 'source-url' && 'url' in sourcePart) {
+                        if ('type' in sourcePart && sourcePart.type === MessagePartTypes.SOURCE_URL && 'url' in sourcePart && typeof sourcePart.url === 'string') {
                           return (
                             <div key={`${message.id}-source-${sourcePart.url}`} className="text-xs">
                               <a
-                                href={sourcePart.url as string}
+                                href={sourcePart.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-primary hover:underline flex items-center gap-1"
                               >
-                                <span>{('title' in sourcePart && sourcePart.title) || sourcePart.url}</span>
+                                <span>{('title' in sourcePart && typeof sourcePart.title === 'string' ? sourcePart.title : null) || sourcePart.url}</span>
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path
                                     strokeLinecap="round"
@@ -345,7 +349,7 @@ function getParticipantInfoForMessage({
 
   const hasVisibleContent = message.parts?.some(
     p =>
-      (p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0)
+      (p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0)
       || p.type === MessagePartTypes.TOOL_CALL
       || p.type === MessagePartTypes.REASONING,
   ) ?? false;
@@ -1227,7 +1231,7 @@ export const ChatMessageList = memo(
                               messageId={participantMessage?.id}
                               loadingText={loadingText}
                               maxContentHeight={maxContentHeight}
-                              hideActions={demoMode}
+                              hideActions={demoMode || isReadOnly}
                               groupAvailableSources={roundAvailableSources}
                               skipTransitions={isReadOnly}
                             />
@@ -1257,7 +1261,7 @@ export const ChatMessageList = memo(
                       && getRoundNumber(meta) === roundNumber;
                   });
                   const moderatorHasContent = moderatorMessage?.parts?.some(p =>
-                    p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0,
+                    p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
                   ) ?? false;
 
                   // ✅ FIX: Collect availableSources from ALL assistant messages in the round (streaming-safe)
@@ -1431,6 +1435,7 @@ export const ChatMessageList = memo(
                   maxContentHeight={maxContentHeight}
                   roundAvailableSources={roundSources}
                   skipTransitions={isReadOnly}
+                  isReadOnly={isReadOnly}
                 />
               </ScrollAwareParticipant>
             );
@@ -1467,7 +1472,7 @@ export const ChatMessageList = memo(
               return false;
             // Check if moderator has actual text content (not just step-start)
             const hasContent = m.parts?.some(p =>
-              p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0,
+              p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
             );
             return hasContent;
           });

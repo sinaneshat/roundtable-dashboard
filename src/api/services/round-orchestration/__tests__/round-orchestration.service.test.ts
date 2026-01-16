@@ -1,61 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ParticipantStreamStatuses, RoundExecutionPhases, RoundExecutionStatuses } from '@/api/core/enums';
-import type { ApiEnv } from '@/api/types';
-import type { TypedLogger } from '@/api/types/logger';
+import type { MockDrizzleDb } from '@/lib/testing';
+import {
+  createMockApiEnv,
+  createMockDrizzleDb,
+  createMockKV,
+  createMockLogger,
+} from '@/lib/testing';
 
 import * as roundOrchestrationService from '../round-orchestration.service';
-
-type MockKV = {
-  get: ReturnType<typeof vi.fn>;
-  put: ReturnType<typeof vi.fn>;
-};
-
-type MockDb = {
-  query: {
-    chatParticipant: {
-      findMany: ReturnType<typeof vi.fn>;
-    };
-    chatMessage: {
-      findMany: ReturnType<typeof vi.fn>;
-    };
-  };
-};
-
-function createMockKV(): MockKV {
-  return {
-    get: vi.fn(),
-    put: vi.fn(),
-  };
-}
-
-function createMockDb(): MockDb {
-  return {
-    query: {
-      chatParticipant: {
-        findMany: vi.fn(),
-      },
-      chatMessage: {
-        findMany: vi.fn(),
-      },
-    },
-  };
-}
-
-function createMockEnv(kv?: MockKV): ApiEnv['Bindings'] {
-  return {
-    KV: kv || createMockKV(),
-  } as ApiEnv['Bindings'];
-}
-
-function createMockLogger(): TypedLogger {
-  return {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  } as unknown as TypedLogger;
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -65,7 +19,7 @@ describe('round orchestration service', () => {
   describe('initializeRoundExecution', () => {
     it('creates new round execution state in KV', async () => {
       const mockKV = createMockKV();
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
       const logger = createMockLogger();
 
       const result = await roundOrchestrationService.initializeRoundExecution(
@@ -115,7 +69,7 @@ describe('round orchestration service', () => {
 
     it('handles initialization without attachment IDs', async () => {
       const mockKV = createMockKV();
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.initializeRoundExecution(
         'thread-456',
@@ -130,7 +84,7 @@ describe('round orchestration service', () => {
     });
 
     it('handles missing KV gracefully', async () => {
-      const env = { KV: undefined } as ApiEnv['Bindings'];
+      const env = createMockApiEnv({ KV: undefined });
 
       const result = await roundOrchestrationService.initializeRoundExecution(
         'thread-789',
@@ -170,7 +124,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.getRoundExecutionState(
         'thread-123',
@@ -185,7 +139,7 @@ describe('round orchestration service', () => {
     it('returns null for non-existent round', async () => {
       const mockKV = createMockKV();
       mockKV.get.mockResolvedValue(null);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.getRoundExecutionState(
         'thread-999',
@@ -197,7 +151,7 @@ describe('round orchestration service', () => {
     });
 
     it('returns null when KV is unavailable', async () => {
-      const env = { KV: undefined } as ApiEnv['Bindings'];
+      const env = createMockApiEnv({ KV: undefined });
 
       const result = await roundOrchestrationService.getRoundExecutionState(
         'thread-123',
@@ -214,7 +168,7 @@ describe('round orchestration service', () => {
       mockKV.get.mockResolvedValue({
         invalidField: 'bad data',
       });
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.getRoundExecutionState(
         'thread-123',
@@ -237,7 +191,7 @@ describe('round orchestration service', () => {
       const mockKV = createMockKV();
       const logger = createMockLogger();
       mockKV.get.mockRejectedValue(new Error('KV connection error'));
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.getRoundExecutionState(
         'thread-123',
@@ -276,7 +230,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       await roundOrchestrationService.markParticipantStarted(
         'thread-123',
@@ -315,7 +269,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       await roundOrchestrationService.markParticipantStarted(
         'thread-123',
@@ -331,7 +285,7 @@ describe('round orchestration service', () => {
     it('handles non-existent state gracefully', async () => {
       const mockKV = createMockKV();
       mockKV.get.mockResolvedValue(null);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       await roundOrchestrationService.markParticipantStarted(
         'thread-123',
@@ -364,7 +318,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
       const logger = createMockLogger();
 
       const result = await roundOrchestrationService.markParticipantCompleted(
@@ -416,7 +370,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.markParticipantCompleted(
         'thread-123',
@@ -454,7 +408,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.markParticipantCompleted(
         'thread-123',
@@ -474,7 +428,7 @@ describe('round orchestration service', () => {
     it('returns false when state does not exist', async () => {
       const mockKV = createMockKV();
       mockKV.get.mockResolvedValue(null);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.markParticipantCompleted(
         'thread-123',
@@ -508,7 +462,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
       const logger = createMockLogger();
 
       const result = await roundOrchestrationService.markParticipantFailed(
@@ -561,7 +515,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.markParticipantFailed(
         'thread-123',
@@ -596,7 +550,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.markParticipantFailed(
         'thread-123',
@@ -616,7 +570,7 @@ describe('round orchestration service', () => {
     it('returns false when state does not exist', async () => {
       const mockKV = createMockKV();
       mockKV.get.mockResolvedValue(null);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.markParticipantFailed(
         'thread-123',
@@ -633,7 +587,7 @@ describe('round orchestration service', () => {
 
   describe('computeRoundStatus', () => {
     it('computes status when no KV state exists and no messages in DB', async () => {
-      const mockDb = createMockDb();
+      const mockDb = createMockDrizzleDb();
       const mockKV = createMockKV();
 
       mockKV.get.mockResolvedValue(null);
@@ -644,13 +598,13 @@ describe('round orchestration service', () => {
       ]);
       mockDb.query.chatMessage.findMany.mockResolvedValue([]);
 
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
         threadId: 'thread-123',
         roundNumber: 1,
         env,
-        db: mockDb as unknown as Awaited<ReturnType<typeof import('@/db').getDbAsync>>,
+        db: mockDb as MockDrizzleDb,
       });
 
       expect(result).toMatchObject({
@@ -668,7 +622,7 @@ describe('round orchestration service', () => {
     });
 
     it('computes status with KV state during execution', async () => {
-      const mockDb = createMockDb();
+      const mockDb = createMockDrizzleDb();
       const mockKV = createMockKV();
 
       const kvState = {
@@ -704,13 +658,13 @@ describe('round orchestration service', () => {
         },
       ]);
 
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
         threadId: 'thread-123',
         roundNumber: 1,
         env,
-        db: mockDb as unknown as Awaited<ReturnType<typeof import('@/db').getDbAsync>>,
+        db: mockDb as MockDrizzleDb,
       });
 
       expect(result).toMatchObject({
@@ -726,7 +680,7 @@ describe('round orchestration service', () => {
     });
 
     it('computes status with all participants complete, waiting for moderator', async () => {
-      const mockDb = createMockDb();
+      const mockDb = createMockDrizzleDb();
       const mockKV = createMockKV();
 
       mockKV.get.mockResolvedValue(null);
@@ -747,13 +701,13 @@ describe('round orchestration service', () => {
         },
       ]);
 
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
         threadId: 'thread-123',
         roundNumber: 1,
         env,
-        db: mockDb as unknown as Awaited<ReturnType<typeof import('@/db').getDbAsync>>,
+        db: mockDb as MockDrizzleDb,
       });
 
       expect(result).toMatchObject({
@@ -768,7 +722,7 @@ describe('round orchestration service', () => {
     });
 
     it('computes status with complete round (participants + moderator)', async () => {
-      const mockDb = createMockDb();
+      const mockDb = createMockDrizzleDb();
       const mockKV = createMockKV();
 
       mockKV.get.mockResolvedValue(null);
@@ -794,13 +748,13 @@ describe('round orchestration service', () => {
         },
       ]);
 
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
         threadId: 'thread-123',
         roundNumber: 1,
         env,
-        db: mockDb as unknown as Awaited<ReturnType<typeof import('@/db').getDbAsync>>,
+        db: mockDb as MockDrizzleDb,
       });
 
       expect(result).toMatchObject({
@@ -815,7 +769,7 @@ describe('round orchestration service', () => {
     });
 
     it('computes status with single participant (no moderator needed)', async () => {
-      const mockDb = createMockDb();
+      const mockDb = createMockDrizzleDb();
       const mockKV = createMockKV();
 
       mockKV.get.mockResolvedValue(null);
@@ -828,13 +782,13 @@ describe('round orchestration service', () => {
         },
       ]);
 
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
         threadId: 'thread-123',
         roundNumber: 1,
         env,
-        db: mockDb as unknown as Awaited<ReturnType<typeof import('@/db').getDbAsync>>,
+        db: mockDb as MockDrizzleDb,
       });
 
       expect(result).toMatchObject({
@@ -847,7 +801,7 @@ describe('round orchestration service', () => {
     });
 
     it('computes status with incomplete round (some participants missing)', async () => {
-      const mockDb = createMockDb();
+      const mockDb = createMockDrizzleDb();
       const mockKV = createMockKV();
 
       mockKV.get.mockResolvedValue(null);
@@ -864,13 +818,13 @@ describe('round orchestration service', () => {
         },
       ]);
 
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
         threadId: 'thread-123',
         roundNumber: 1,
         env,
-        db: mockDb as unknown as Awaited<ReturnType<typeof import('@/db').getDbAsync>>,
+        db: mockDb as MockDrizzleDb,
       });
 
       expect(result).toMatchObject({
@@ -883,7 +837,7 @@ describe('round orchestration service', () => {
     });
 
     it('computes status with mixed completed and failed participants', async () => {
-      const mockDb = createMockDb();
+      const mockDb = createMockDrizzleDb();
       const mockKV = createMockKV();
 
       const kvState = {
@@ -925,13 +879,13 @@ describe('round orchestration service', () => {
         },
       ]);
 
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
         threadId: 'thread-123',
         roundNumber: 1,
         env,
-        db: mockDb as unknown as Awaited<ReturnType<typeof import('@/db').getDbAsync>>,
+        db: mockDb as MockDrizzleDb,
       });
 
       expect(result).toMatchObject({
@@ -944,20 +898,20 @@ describe('round orchestration service', () => {
     });
 
     it('handles zero participants edge case', async () => {
-      const mockDb = createMockDb();
+      const mockDb = createMockDrizzleDb();
       const mockKV = createMockKV();
 
       mockKV.get.mockResolvedValue(null);
       mockDb.query.chatParticipant.findMany.mockResolvedValue([]);
       mockDb.query.chatMessage.findMany.mockResolvedValue([]);
 
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
         threadId: 'thread-123',
         roundNumber: 1,
         env,
-        db: mockDb as unknown as Awaited<ReturnType<typeof import('@/db').getDbAsync>>,
+        db: mockDb as MockDrizzleDb,
       });
 
       expect(result).toMatchObject({
@@ -993,7 +947,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
       const logger = createMockLogger();
 
       await roundOrchestrationService.markModeratorCompleted(
@@ -1044,7 +998,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
       const logger = createMockLogger();
 
       await roundOrchestrationService.markModeratorFailed(
@@ -1095,7 +1049,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(existingState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
       const logger = createMockLogger();
 
       await roundOrchestrationService.markRoundFailed(
@@ -1144,7 +1098,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(runningState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.getExistingRoundExecution(
         'thread-123',
@@ -1177,7 +1131,7 @@ describe('round orchestration service', () => {
       };
 
       mockKV.get.mockResolvedValue(completedState);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.getExistingRoundExecution(
         'thread-123',
@@ -1191,7 +1145,7 @@ describe('round orchestration service', () => {
     it('returns null when no state exists', async () => {
       const mockKV = createMockKV();
       mockKV.get.mockResolvedValue(null);
-      const env = createMockEnv(mockKV);
+      const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.getExistingRoundExecution(
         'thread-123',

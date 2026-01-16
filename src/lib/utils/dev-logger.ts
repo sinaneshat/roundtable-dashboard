@@ -179,13 +179,17 @@ export const rlog = {
   stream: (action: RlogStreamAction, detail: string): void => rlogNow(RlogCategories.STREAM, `${action}: ${detail}`),
   msg: (key: string, detail: string): void => rlogLog(RlogCategories.MSG, key, detail),
   gate: (check: string, result: string): void => rlogLog(RlogCategories.GATE, check, `${check}: ${result}`),
-  trigger: (action: string, detail: string): void => rlogNow(RlogCategories.TRIGGER, `${action}: ${detail}`),
+  // ✅ DEBOUNCE FIX: Changed trigger/init from rlogNow to rlogLog
+  // These fire frequently during renders and participant checks, causing console spam
+  trigger: (action: string, detail: string): void => rlogLog(RlogCategories.TRIGGER, action, detail),
   presearch: (action: string, detail: string): void => rlogNow(RlogCategories.PRESRCH, `${action}: ${detail}`),
   moderator: (action: string, detail: string): void => rlogNow(RlogCategories.MOD, `${action}: ${detail}`),
   state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
   changelog: (action: string, detail: string): void => rlogNow(RlogCategories.CHANGELOG, `${action}: ${detail}`),
   submit: (action: string, detail: string): void => rlogNow(RlogCategories.SUBMIT, `${action}: ${detail}`),
-  init: (action: string, detail: string): void => rlogNow(RlogCategories.INIT, `${action}: ${detail}`),
+  // ✅ DEBOUNCE FIX: Changed init from rlogNow to rlogLog
+  // timeline-render fires on every re-render, causing excessive console spam
+  init: (action: string, detail: string): void => rlogLog(RlogCategories.INIT, action, detail),
   sync: (key: string, detail: string): void => rlogLog(RlogCategories.SYNC, key, detail),
 };
 

@@ -67,8 +67,9 @@ export function useVirtualizedTimeline({
   isStreaming = false,
   getIsStreamingFromStore,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
-  // Track scrollMargin - official TanStack pattern uses listRef.current?.offsetTop
-  const [scrollMargin, setScrollMargin] = useState(0);
+  // Track scrollMargin - ref first to avoid direct setState in effect
+  const scrollMarginRef = useRef(0);
+  const [, forceUpdate] = useState(0);
 
   // Track streaming state for scroll adjustment logic
   const isStreamingRef = useRef(isStreaming);
@@ -85,7 +86,11 @@ export function useVirtualizedTimeline({
     const measureScrollMargin = () => {
       if (listRef.current) {
         const newMargin = listRef.current.offsetTop;
-        setScrollMargin(newMargin);
+        if (scrollMarginRef.current !== newMargin) {
+          scrollMarginRef.current = newMargin;
+          // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
+          forceUpdate(c => c + 1);
+        }
       }
     };
 
@@ -102,11 +107,12 @@ export function useVirtualizedTimeline({
 
   // Initialize window virtualizer - OFFICIAL PATTERN
   // No onChange callback, no state caching - methods called directly in render
+  // scrollMarginRef.current is read directly; forceUpdate triggers re-render when it changes
   const virtualizer = useWindowVirtualizer({
     count: timelineItems.length,
     estimateSize: () => estimateSize,
     overscan,
-    scrollMargin,
+    scrollMargin: scrollMarginRef.current,
     paddingStart,
     paddingEnd,
     enabled: shouldEnable,
@@ -168,8 +174,10 @@ export function useVirtualizedTimeline({
 
   // Reset scrollMargin when items become empty
   useLayoutEffect(() => {
-    if (timelineItems.length === 0) {
-      setScrollMargin(0);
+    if (timelineItems.length === 0 && scrollMarginRef.current !== 0) {
+      scrollMarginRef.current = 0;
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
+      forceUpdate(c => c + 1);
     }
   }, [timelineItems.length]);
 

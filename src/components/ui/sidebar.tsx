@@ -567,7 +567,7 @@ function SidebarMenuButton({
   const tooltipText = tooltip
     ? typeof tooltip === "string"
       ? tooltip
-      : (tooltip.children as string) || ''
+      : (typeof tooltip.children === 'string' ? tooltip.children : '')
     : undefined
   const showNativeTooltip = tooltipText && state === SidebarStates.COLLAPSED && !isMobile
 

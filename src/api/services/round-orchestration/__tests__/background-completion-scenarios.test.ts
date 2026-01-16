@@ -35,7 +35,7 @@ import {
 // Test Setup
 // ============================================================================
 
-describe('Background Completion Scenarios', () => {
+describe('background Completion Scenarios', () => {
   let mockEnv: {
     KV: {
       get: Mock;
@@ -77,7 +77,8 @@ describe('Background Completion Scenarios', () => {
       KV: {
         get: vi.fn().mockImplementation(async (key: string, format?: string) => {
           const raw = currentState[key];
-          if (!raw) return null;
+          if (!raw)
+            return null;
           // Service uses 'json' format which auto-parses
           return format === 'json' ? JSON.parse(raw) : raw;
         }),
@@ -107,7 +108,7 @@ describe('Background Completion Scenarios', () => {
   // Core Background Completion Tests
   // ============================================================================
 
-  describe('Core: Round State Transitions', () => {
+  describe('core: Round State Transitions', () => {
     it('initializes round state correctly', async () => {
       const threadId = 'thread-init';
       const roundNumber = 0;
@@ -184,7 +185,7 @@ describe('Background Completion Scenarios', () => {
   // Navigate Away Scenarios - State Persistence
   // ============================================================================
 
-  describe('Navigate Away: State persists for background completion', () => {
+  describe('navigate Away: State persists for background completion', () => {
     it('state persists when user navigates away before P0 starts', async () => {
       const threadId = 'thread-nav-before-p0';
       const roundNumber = 0;
@@ -287,7 +288,7 @@ describe('Background Completion Scenarios', () => {
   // Single Participant (No Moderator)
   // ============================================================================
 
-  describe('Single Participant: No moderator needed', () => {
+  describe('single Participant: No moderator needed', () => {
     it('completes round immediately for single participant', async () => {
       const threadId = 'thread-single';
       const roundNumber = 0;
@@ -312,7 +313,7 @@ describe('Background Completion Scenarios', () => {
   // Participant Failures
   // ============================================================================
 
-  describe('Participant Failures: Round continues despite failures', () => {
+  describe('participant Failures: Round continues despite failures', () => {
     it('continues to next participant after failure', async () => {
       const threadId = 'thread-failure';
       const roundNumber = 0;
@@ -376,7 +377,7 @@ describe('Background Completion Scenarios', () => {
   // Multiple Rounds
   // ============================================================================
 
-  describe('Multiple Rounds: Independent tracking', () => {
+  describe('multiple Rounds: Independent tracking', () => {
     it('tracks round 0 and round 1 independently', async () => {
       const threadId = 'thread-multi';
 
@@ -402,7 +403,7 @@ describe('Background Completion Scenarios', () => {
   // Status Computation
   // ============================================================================
 
-  describe('Status Computation: Accurate status at any point', () => {
+  describe('status Computation: Accurate status at any point', () => {
     it('computes status from KV when available', async () => {
       const threadId = 'thread-status-kv';
       const roundNumber = 0;
@@ -481,7 +482,7 @@ describe('Background Completion Scenarios', () => {
   // Critical Error Handling
   // ============================================================================
 
-  describe('Critical Errors: Round failure handling', () => {
+  describe('critical Errors: Round failure handling', () => {
     it('marks round as failed for critical errors', async () => {
       const threadId = 'thread-critical';
       const roundNumber = 0;
@@ -547,7 +548,7 @@ describe('Background Completion Scenarios', () => {
   // Full Flow Tests
   // ============================================================================
 
-  describe('Full Flow: Complete round lifecycle', () => {
+  describe('full Flow: Complete round lifecycle', () => {
     it('completes 2-participant round fully', async () => {
       const threadId = 'thread-full-2';
       const roundNumber = 0;
@@ -625,7 +626,7 @@ describe('Background Completion Scenarios', () => {
   // Attachments: State Preservation
   // ============================================================================
 
-  describe('Attachments: State preservation', () => {
+  describe('attachments: State preservation', () => {
     it('preserves attachment IDs through round execution', async () => {
       const threadId = 'thread-attachments';
       const roundNumber = 0;

@@ -71,7 +71,7 @@ describe('product Logic Service', () => {
     });
 
     it('returns 100,000 for pro tier', () => {
-      expect(getMonthlyCreditsForTier(SubscriptionTiers.PRO)).toBe(100_000);
+      expect(getMonthlyCreditsForTier(SubscriptionTiers.PRO)).toBe(2_000_000);
       expect(getMonthlyCreditsForTier(SubscriptionTiers.PRO)).toBe(CREDIT_CONFIG.PLANS.paid.monthlyCredits);
     });
   });
@@ -100,7 +100,7 @@ describe('product Logic Service', () => {
       const proCredits = getMonthlyCreditsForTier(proTier);
       expect(proCredits).toBeGreaterThan(freeCredits);
       expect(freeCredits).toBe(0);
-      expect(proCredits).toBe(100_000);
+      expect(proCredits).toBe(2_000_000);
 
       expect(SUBSCRIPTION_TIER_NAMES[freeTier]).toBe('Free');
       expect(SUBSCRIPTION_TIER_NAMES[proTier]).toBe('Pro');
@@ -136,7 +136,7 @@ describe('product Logic Service', () => {
         tier: SubscriptionTiers.PRO,
         name: 'Pro',
         maxModels: 12,
-        monthlyCredits: 100_000,
+        monthlyCredits: 2_000_000,
       });
     });
   });

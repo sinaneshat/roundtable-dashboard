@@ -216,7 +216,7 @@ export const OgTypes = {
 } as const;
 
 export function isValidOgType(value: unknown): value is OgType {
-  return typeof value === 'string' && OG_TYPES.includes(value as OgType);
+  return OgTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -429,7 +429,7 @@ export const CircuitBreakerStates = {
 } as const;
 
 export function isCircuitBreakerState(value: unknown): value is CircuitBreakerState {
-  return typeof value === 'string' && CIRCUIT_BREAKER_STATES.includes(value as CircuitBreakerState);
+  return CircuitBreakerStateSchema.safeParse(value).success;
 }
 
 // ============================================================================

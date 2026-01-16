@@ -15,8 +15,6 @@ import {
   PreSearchQueryStatusSchema,
   PreSearchStreamingEventTypeSchema,
   QueryResultStatusSchema,
-  RoundExecutionPhaseSchema,
-  RoundExecutionStatusSchema,
   RoundPhaseSchema,
   SharedAssumptionTypeSchema,
   UIMessageRoleSchema,
@@ -1765,94 +1763,3 @@ export const ExistingModeratorMessageSchema = z.object({
 }).openapi('ExistingModeratorMessage');
 
 export type ExistingModeratorMessage = z.infer<typeof ExistingModeratorMessageSchema>;
-
-// ============================================================================
-// ROUND EXECUTION SCHEMAS (Server-Side Orchestration)
-// ============================================================================
-
-export const ExecuteRoundRequestSchema = z.object({
-  attachmentIds: z.array(z.string()).optional().openapi({
-    description: 'Optional attachment IDs to include for all participants',
-    example: ['att_123', 'att_456'],
-  }),
-}).openapi('ExecuteRoundRequest');
-
-export type ExecuteRoundRequest = z.infer<typeof ExecuteRoundRequestSchema>;
-
-export const ExecuteRoundResponseSchema = z.object({
-  status: RoundExecutionStatusSchema.openapi({
-    description: 'Current execution status',
-    example: 'running',
-  }),
-  phase: RoundExecutionPhaseSchema.openapi({
-    description: 'Current execution phase',
-    example: 'participants',
-  }),
-  message: z.string().openapi({
-    description: 'Human-readable status message',
-    example: 'Round execution started',
-  }),
-  roundNumber: z.number().int().nonnegative().openapi({
-    description: 'Round number being executed',
-    example: 0,
-  }),
-  threadId: z.string().openapi({
-    description: 'Thread ID',
-    example: '01HX...',
-  }),
-}).openapi('ExecuteRoundResponse');
-
-export type ExecuteRoundResponse = z.infer<typeof ExecuteRoundResponseSchema>;
-
-export const RoundStatusResponseSchema = z.object({
-  threadId: z.string().openapi({
-    description: 'Thread ID',
-    example: '01HX...',
-  }),
-  roundNumber: z.number().int().nonnegative().openapi({
-    description: 'Round number',
-    example: 0,
-  }),
-  status: RoundExecutionStatusSchema.openapi({
-    description: 'Overall round execution status',
-    example: 'running',
-  }),
-  phase: RoundExecutionPhaseSchema.openapi({
-    description: 'Current phase of execution',
-    example: 'participants',
-  }),
-  totalParticipants: z.number().int().nonnegative().openapi({
-    description: 'Total number of participants in the round',
-    example: 3,
-  }),
-  completedParticipants: z.number().int().nonnegative().openapi({
-    description: 'Number of participants that have completed',
-    example: 1,
-  }),
-  failedParticipants: z.number().int().nonnegative().openapi({
-    description: 'Number of participants that have failed',
-    example: 0,
-  }),
-  participantStatuses: z.record(z.string(), ParticipantStreamStatusSchema).openapi({
-    description: 'Status of each participant by index',
-    example: { 0: 'completed', 1: 'active', 2: 'pending' },
-  }),
-  moderatorStatus: ParticipantStreamStatusSchema.nullable().openapi({
-    description: 'Status of moderator (null if not yet started)',
-    example: null,
-  }),
-  hasModeratorMessage: z.boolean().openapi({
-    description: 'Whether moderator message exists in DB',
-    example: false,
-  }),
-  isComplete: z.boolean().openapi({
-    description: 'Whether the round is fully complete',
-    example: false,
-  }),
-  error: z.string().nullable().openapi({
-    description: 'Error message if execution failed',
-    example: null,
-  }),
-}).openapi('RoundStatusResponse');
-
-export type RoundStatusResponse = z.infer<typeof RoundStatusResponseSchema>;

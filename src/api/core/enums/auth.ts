@@ -107,5 +107,5 @@ export const AuthErrorTypes = {
 // ============================================================================
 
 export function isValidAuthErrorType(value: unknown): value is AuthErrorType {
-  return typeof value === 'string' && AUTH_ERROR_TYPES.includes(value as AuthErrorType);
+  return AuthErrorTypeSchema.safeParse(value).success;
 }

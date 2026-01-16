@@ -50,7 +50,6 @@ export {
   ToastNamespaces,
   ToastNamespaceSchema,
 } from './model-presets';
-
 // Participant limits configuration
 export {
   MAX_PARTICIPANTS_LIMIT,
@@ -64,7 +63,6 @@ export {
   normalizeParticipantSettings,
   ParticipantSettingsSchema,
 } from './participant-settings';
-
 // Role prompts configuration
 export { createRoleSystemPrompt } from './role-prompts';
 

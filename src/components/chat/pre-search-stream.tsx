@@ -75,9 +75,7 @@ function PreSearchStreamComponent({
 
   useEffect(() => {
     retryCountRef.current = 0;
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
     setExpectedQueryCount(null);
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
     setIsStreamComplete(false);
   }, [preSearch.id]);
 
@@ -157,10 +155,10 @@ function PreSearchStreamComponent({
 
           if (responseData?.data?.status === MessageStatuses.COMPLETE && responseData.data.searchData) {
             const completedSearchData = responseData.data.searchData;
-            // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI update
+            // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate UI update for streaming completion
             flushSync(() => {
               setPartialSearchData(completedSearchData);
-              setIsStreamComplete(true); // Mark complete - no more skeletons needed
+              setIsStreamComplete(true);
               isAutoRetryingOnFalseRef.current();
             });
             onStreamCompleteRef.current?.(completedSearchData);
@@ -169,13 +167,12 @@ function PreSearchStreamComponent({
 
           postRetryCount++;
 
-          // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI feedback
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate UI feedback for retry state
           flushSync(() => {
             isAutoRetryingOnTrueRef.current();
           });
 
           if (postRetryCount <= MAX_POST_RETRIES) {
-            // eslint-disable-next-line react-web-api/no-leaked-timeout -- Promise resolves when timeout fires
             await new Promise(resolve => setTimeout(resolve, retryDelayMs));
             if (!abortController.signal.aborted) {
               return startStream();
@@ -203,10 +200,10 @@ function PreSearchStreamComponent({
           const parseResult = PreSearchResponseSchema.safeParse(rawJson);
           const searchData = parseResult.success ? parseResult.data.data?.searchData : undefined;
           if (searchData) {
-            // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI update
+            // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate UI update for JSON response
             flushSync(() => {
               setPartialSearchData(searchData);
-              setIsStreamComplete(true); // JSON response means complete
+              setIsStreamComplete(true);
             });
             onStreamCompleteRef.current?.(searchData);
           }
@@ -239,9 +236,8 @@ function PreSearchStreamComponent({
               });
               const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
               const results = Array.from(resultsMap.values());
-              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
+              // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: progressive streaming UI for SSE events
               flushSync(() => {
-                // Capture expected query count from first QUERY event
                 if (queryData.total && queryData.total > 0) {
                   setExpectedQueryCount(queryData.total);
                 }
@@ -259,7 +255,7 @@ function PreSearchStreamComponent({
               });
               const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
               const results = Array.from(resultsMap.values());
-              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
+              // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: progressive streaming UI for SSE events
               flushSync(() => {
                 setPartialSearchData({ queries, results });
               });
@@ -272,33 +268,33 @@ function PreSearchStreamComponent({
 
                 if (retryCountRef.current < MAX_STREAM_RETRIES) {
                   retryCountRef.current++;
-                  // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI feedback
+                  // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate UI feedback for retry state
                   flushSync(() => {
                     isAutoRetryingOnTrueRef.current();
                   });
-                  // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate effect re-trigger
+                  // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate effect re-trigger
                   flushSync(() => {
                     setForceRetryCount(c => c + 1);
                   });
                   return;
                 }
 
-                // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
+                // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate error display
                 flushSync(() => {
                   setError(new Error('Pre-search stream interrupted after multiple retries'));
                 });
                 return;
               }
 
-              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
+              // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: streaming completion
               flushSync(() => {
                 setPartialSearchData(finalData);
-                setIsStreamComplete(true); // Mark stream as complete - remove all skeletons
+                setIsStreamComplete(true);
               });
               onStreamCompleteRef.current?.(finalData);
             } else if (event === PreSearchSseEvents.FAILED) {
               const errorData = JSON.parse(data);
-              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
+              // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate error display
               flushSync(() => {
                 setError(new Error(errorData.error || 'Pre-search failed'));
               });
@@ -361,8 +357,6 @@ function PreSearchStreamComponent({
 
     startStream().catch(() => {
     });
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, store, tryMarkPreSearchTriggered, clearPreSearchTracking, forceRetryCount, isWaitingForChangelog, configChangeRoundNumber, executePreSearchStream]);
 
   const isPollingRef = useRef(false);
@@ -381,7 +375,7 @@ function PreSearchStreamComponent({
     const pollingStartTime = Date.now();
     const POLLING_TIMEOUT_MS = 5_000;
 
-    // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI feedback
+    // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate UI feedback for polling state
     flushSync(() => {
       isAutoRetryingOnTrueRef.current();
     });
@@ -403,20 +397,20 @@ function PreSearchStreamComponent({
         if (current) {
           if (current.status === MessageStatuses.COMPLETE && current.searchData) {
             const completedData = current.searchData;
-            // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive polling UI
+            // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: polling completion update
             flushSync(() => {
               setPartialSearchData(completedData);
-              setIsStreamComplete(true); // Polling found complete - no more skeletons
+              setIsStreamComplete(true);
             });
             onStreamCompleteRef.current?.(completedData);
             if (isMounted) {
               isPollingRef.current = false;
-              is409ConflictOnFalseRef.current(); // Stop polling
-              isAutoRetryingOnFalseRef.current(); // Clear auto-retry state
+              is409ConflictOnFalseRef.current();
+              isAutoRetryingOnFalseRef.current();
             }
             return;
           } else if (current.status === MessageStatuses.FAILED) {
-            // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive polling UI
+            // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate error display
             flushSync(() => {
               setError(new Error(current.errorMessage || 'Pre-search failed'));
             });
@@ -430,7 +424,7 @@ function PreSearchStreamComponent({
             const elapsedMs = Date.now() - pollingStartTime;
             if (elapsedMs > POLLING_TIMEOUT_MS) {
               clearPreSearchTracking(preSearch.roundNumber);
-              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate effect re-trigger
+              // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate effect re-trigger
               flushSync(() => {
                 setForceRetryCount(c => c + 1);
               });
@@ -444,7 +438,7 @@ function PreSearchStreamComponent({
 
             if (current.searchData) {
               const searchDataToSet = current.searchData;
-              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive polling UI
+              // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: progressive polling update
               flushSync(() => {
                 setPartialSearchData(searchDataToSet);
               });

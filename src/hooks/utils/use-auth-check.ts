@@ -9,9 +9,9 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
-import { useSession } from '@/lib/auth/client';
+import { getSession, signOut, useSession } from '@/lib/auth/client';
 
 export type UseAuthCheckReturn = {
   /** Whether the user is authenticated */
@@ -20,7 +20,24 @@ export type UseAuthCheckReturn = {
   isPending: boolean;
   /** The user's ID if authenticated */
   userId: string | undefined;
+  /** Handle 401 errors by verifying session and signing out if invalid */
+  handleAuthError: (error: unknown) => Promise<void>;
 };
+
+/**
+ * Check if an error is a 401 Unauthorized response
+ * Supports Hono client DetailedError format
+ */
+function is401Error(error: unknown): boolean {
+  if (error && typeof error === 'object' && 'statusCode' in error) {
+    return (error as { statusCode: number }).statusCode === 401;
+  }
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.startsWith('401 ') || msg === 'unauthorized';
+  }
+  return false;
+}
 
 /**
  * Hook for checking authentication status - SINGLE SOURCE OF TRUTH
@@ -52,9 +69,36 @@ export type UseAuthCheckReturn = {
 export function useAuthCheck(): UseAuthCheckReturn {
   const { data: session, isPending } = useSession();
 
+  /**
+   * Handle 401 authentication errors
+   *
+   * When an API returns 401, this verifies if the session is truly invalid
+   * by fetching fresh session data. If invalid, signs out and redirects.
+   */
+  const handleAuthError = useCallback(async (error: unknown) => {
+    if (!is401Error(error)) return;
+
+    // Verify session is actually invalid by fetching fresh data
+    const freshSession = await getSession();
+
+    if (!freshSession?.data?.user) {
+      // Session is truly invalid - sign out and redirect
+      await signOut({
+        fetchOptions: {
+          onSuccess: () => {
+            if (typeof window !== 'undefined') {
+              window.location.href = '/auth';
+            }
+          },
+        },
+      });
+    }
+  }, []);
+
   return useMemo(() => ({
     isAuthenticated: !isPending && !!session?.user?.id,
     isPending,
     userId: session?.user?.id,
-  }), [session?.user?.id, isPending]);
+    handleAuthError,
+  }), [session?.user?.id, isPending, handleAuthError]);
 }

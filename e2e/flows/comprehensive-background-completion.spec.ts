@@ -114,6 +114,7 @@ test.describe('Comprehensive Background Completion Tests', () => {
    */
   async function uploadFile(page: Page, fileName: string, content: string): Promise<void> {
     const fileInput = page.locator('input[type="file"]').first();
+    const { Buffer } = await import('node:buffer');
     const buffer = Buffer.from(content);
     await fileInput.setInputFiles({
       name: fileName,
@@ -204,7 +205,8 @@ test.describe('Comprehensive Background Completion Tests', () => {
         `/api/v1/chat/threads/${threadId}/messages`,
       );
 
-      if (!response.ok()) return false;
+      if (!response.ok())
+        return false;
 
       const data = await response.json() as {
         data?: { messages?: Array<{ metadata?: { participantIndex?: number; isModerator?: boolean } }> };
@@ -914,7 +916,7 @@ test.describe('Comprehensive Background Completion Tests', () => {
       await sendButton.click();
 
       await waitForThreadNavigation(page, 30000).catch(() => {});
-      const threadUrl = page.url();
+      const _threadUrl = page.url();
       const threadId = getThreadIdFromUrl(page);
 
       // Wait for P0 to start
@@ -967,7 +969,7 @@ test.describe('Comprehensive Background Completion Tests', () => {
 
       // Check if streaming is visible (text is growing)
       const participantMessage = page.locator('[data-participant-index="0"]').first();
-      const initialText = await participantMessage.textContent().catch(() => '');
+      const _initialText = await participantMessage.textContent().catch(() => '');
 
       await page.waitForTimeout(3000);
 

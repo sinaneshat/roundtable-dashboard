@@ -101,6 +101,10 @@ export function getParticipantMetadata(
   // Participant metadata is assistant metadata with participantId
   const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
   if (!result.success) {
+    // Log Zod validation errors
+    console.log('[getParticipantMetadata] Zod validation failed:', {
+      errors: result.error.issues.map(i => ({ path: i.path.join('.'), msg: i.message, code: i.code })),
+    });
     return null;
   }
   // Verify it has participantId using type guard from db schemas

@@ -11,6 +11,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -52,9 +53,9 @@ import {
  * }
  */
 export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
-  const { isAuthenticated } = useAuthCheck();
+  const { isAuthenticated, handleAuthError } = useAuthCheck();
 
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.usage.stats(),
     queryFn: () => getUserUsageStatsService(),
     staleTime: STALE_TIMES.quota, // ⚠️ NO CACHE (0) - always fresh for accurate UI blocking
@@ -72,4 +73,13 @@ export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
     enabled: options?.forceEnabled ?? isAuthenticated,
     throwOnError: false,
   });
+
+  // Handle 401 errors by verifying session and signing out if invalid
+  useEffect(() => {
+    if (query.error) {
+      void handleAuthError(query.error);
+    }
+  }, [query.error, handleAuthError]);
+
+  return query;
 }

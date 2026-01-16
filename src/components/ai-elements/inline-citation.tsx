@@ -212,7 +212,7 @@ type InlineCitationCardBodyProps = {
 
 function InlineCitationCardBody({ children, className }: InlineCitationCardBodyProps) {
   return (
-    <PopoverContent className={cn('w-80 p-0 backdrop-blur-lg bg-popover/95', className)} align="start" sideOffset={8}>
+    <PopoverContent className={cn('z-[60] w-80 p-0 backdrop-blur-lg bg-popover/95', className)} align="start" sideOffset={8}>
       <div className="p-3 space-y-3">{children}</div>
     </PopoverContent>
   );
@@ -353,9 +353,9 @@ type InlineCitationQuoteProps = {
 
 function InlineCitationQuote({ children, className }: InlineCitationQuoteProps) {
   return (
-    <blockquote className={cn('border-l-2 border-primary/30 pl-3 py-1 text-xs text-muted-foreground italic line-clamp-4', className)}>
+    <p className={cn('text-xs text-muted-foreground line-clamp-3', className)}>
       {children}
-    </blockquote>
+    </p>
   );
 }
 
@@ -582,7 +582,7 @@ function SourcesFooter({ sources, className }: SourcesFooterProps) {
             </button>
           </PopoverTrigger>
           <PopoverContent
-            className="w-96 p-0 backdrop-blur-lg bg-popover/95"
+            className="z-[60] w-96 p-0 backdrop-blur-lg bg-popover/95"
             align="start"
             sideOffset={8}
           >

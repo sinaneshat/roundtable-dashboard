@@ -19,7 +19,7 @@ import { createError } from '@/api/common/error-handling';
 import { getErrorMessage, getErrorName, toError } from '@/api/common/error-types';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/api/core';
-import { MessagePartTypes, MessageRoles, PlanTypes, PollingStatuses } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, PlanTypes, PollingStatuses, RoundExecutionPhases } from '@/api/core/enums';
 import {
   checkFreeUserHasCompletedRound,
   deductCreditsForAction,
@@ -38,6 +38,7 @@ import type { ModeratorParticipantResponse } from '@/api/services/prompts';
 import {
   buildCouncilModeratorSystemPrompt,
 } from '@/api/services/prompts';
+import { getRoundExecutionState } from '@/api/services/round-orchestration';
 import {
   appendParticipantStreamChunk,
   clearActiveParticipantStream,
@@ -429,6 +430,13 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     const { threadId, roundNumber } = c.validated.params;
     const body = c.validated.body;
 
+    console.log('[Moderator] Request received:', {
+      threadId,
+      roundNumber,
+      bodyMsgIds: body.participantMessageIds,
+      bodyMsgCount: body.participantMessageIds?.length ?? 0,
+    });
+
     const db = await getDbAsync();
     const roundNum = Number.parseInt(roundNumber, 10);
 
@@ -471,37 +479,44 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
       });
     }
 
-    // Get participant messages for this round
+    // =========================================================================
+    // ✅ D1-FIRST APPROACH: Query database for participant messages FIRST
+    // =========================================================================
+    // RATIONALE: The onFinish callback in streaming handler runs AFTER the stream
+    // response is sent to the client. Order of operations:
+    //   1. saveStreamedMessage (D1 write) - awaited
+    //   2. markParticipantCompleted (KV update) - runs after saveStreamedMessage
+    //   3. Stream response completes, sent to client
+    //   4. Frontend sees stream complete, triggers moderator
+    //
+    // Since saveStreamedMessage completes BEFORE markParticipantCompleted,
+    // D1 is the source of truth. If D1 has all participant messages, proceed
+    // regardless of KV state. Only fall back to KV check for better error info
+    // when D1 doesn't have expected messages.
+    // =========================================================================
+
+    // =========================================================================
+    // ✅ D1 POLLING: Wait for messages to be persisted
+    // =========================================================================
+    // RACE CONDITION FIX: The streaming handler's onFinish callback runs AFTER
+    // the stream response is sent to the client. This means:
+    //   1. P2 finishes streaming
+    //   2. onFinish starts (async) - D1 write begins
+    //   3. Stream response sent to client
+    //   4. Frontend receives stream complete, triggers moderator
+    //   5. onFinish still running - D1 write not complete yet
+    //   6. Moderator handler queries D1 → nothing yet → 202
+    //
+    // SOLUTION: Poll D1 a few times with short delays before returning 202.
+    // This gives the onFinish callback time to complete the D1 write.
+    // =========================================================================
+
     let participantMessages: MessageWithParticipant[] | null = null;
+    const MAX_POLL_ATTEMPTS = 5;
+    const POLL_DELAY_MS = 200;
 
-    if (body.participantMessageIds && body.participantMessageIds.length > 0) {
-      const messageIds = body.participantMessageIds;
-
-      const foundMessages = await db.query.chatMessage.findMany({
-        where: (fields, { inArray, eq: eqOp, and: andOp }) =>
-          andOp(
-            inArray(fields.id, messageIds),
-            eqOp(fields.threadId, threadId),
-            eqOp(fields.role, MessageRoles.ASSISTANT),
-          ),
-        with: { participant: true },
-        orderBy: [
-          asc(tables.chatMessage.roundNumber),
-          asc(tables.chatMessage.createdAt),
-          asc(tables.chatMessage.id),
-        ],
-      });
-
-      const participantOnlyFoundMessages = filterDbToParticipantMessages(foundMessages);
-
-      // ✅ LENIENT: Skip strict Zod validation - lenient filter already confirmed these are participant messages
-      // Strict MessageWithParticipantSchema validation was failing due to metadata schema strictness
-      if (participantOnlyFoundMessages.length > 0) {
-        participantMessages = participantOnlyFoundMessages as MessageWithParticipant[];
-      }
-    }
-    // Fallback: query by round number
-    if (!participantMessages) {
+    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+      // Query by round number (most reliable - doesn't depend on frontend IDs)
       const roundMessages = await db.query.chatMessage.findMany({
         where: (fields, { and: andOp, eq: eqOp }) =>
           andOp(
@@ -519,16 +534,70 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
 
       const participantOnlyMessages = filterDbToParticipantMessages(roundMessages);
 
-      if (participantOnlyMessages.length === 0) {
+      console.log('[Moderator] D1 poll:', {
+        attempt: attempt + 1,
+        roundNum,
+        rawCount: roundMessages.length,
+        rawIds: roundMessages.map(m => ({
+          id: m.id,
+          pId: m.participantId,
+          round: m.roundNumber,
+          hasMetadata: !!m.metadata,
+          metaRole: m.metadata && typeof m.metadata === 'object' && 'role' in m.metadata ? m.metadata.role : 'NO_ROLE',
+          metaPId: m.metadata && typeof m.metadata === 'object' && 'participantId' in m.metadata ? m.metadata.participantId : 'NO_PARTICIPANT_ID',
+          metaFinish: m.metadata && typeof m.metadata === 'object' && 'finishReason' in m.metadata ? m.metadata.finishReason : 'NO_FINISH',
+        })),
+        filteredCount: participantOnlyMessages.length,
+        filteredIds: participantOnlyMessages.map(m => m.id),
+      });
+
+      if (participantOnlyMessages.length > 0) {
+        participantMessages = participantOnlyMessages as MessageWithParticipant[];
+        break;
+      }
+
+      // Wait before next attempt (skip wait on last attempt)
+      if (attempt < MAX_POLL_ATTEMPTS - 1) {
+        await new Promise(resolve => setTimeout(resolve, POLL_DELAY_MS));
+      }
+    }
+
+    // =========================================================================
+    // ✅ KV FALLBACK: Only check KV when D1 polling exhausted
+    // =========================================================================
+    // If D1 doesn't have participant messages after polling, check KV for status
+    if (!participantMessages || participantMessages.length === 0) {
+      const roundState = await getRoundExecutionState(threadId, roundNum, c.env);
+
+      console.log('[Moderator] D1 empty after polling, checking KV:', {
+        threadId,
+        roundNum,
+        kvState: roundState
+          ? {
+              phase: roundState.phase,
+              completed: roundState.completedParticipants,
+              failed: roundState.failedParticipants,
+              total: roundState.totalParticipants,
+            }
+          : null,
+      });
+
+      if (roundState && roundState.phase !== RoundExecutionPhases.MODERATOR) {
+        // KV shows participants still running - return detailed status
+        const completedCount = roundState.completedParticipants + roundState.failedParticipants;
         return Responses.polling(c, {
           status: PollingStatuses.PENDING,
-          message: `Messages for round ${roundNum} are still being processed. Please poll for completion.`,
+          message: `Waiting for participants to complete (${completedCount}/${roundState.totalParticipants}). Please poll for completion.`,
           retryAfterMs: 1000,
         });
       }
 
-      // ✅ LENIENT: Skip strict Zod validation - lenient filter already confirmed these are participant messages
-      participantMessages = participantOnlyMessages as MessageWithParticipant[];
+      // KV is null or shows MODERATOR phase but D1 has no messages - still processing
+      return Responses.polling(c, {
+        status: PollingStatuses.PENDING,
+        message: `Messages for round ${roundNum} are still being processed. Please poll for completion.`,
+        retryAfterMs: 1000,
+      });
     }
 
     if (!participantMessages || participantMessages.length === 0) {

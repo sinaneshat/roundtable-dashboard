@@ -399,7 +399,7 @@ describe('monthly Credit Allocation by Plan', () => {
   it('pro tier gets 100K monthly credits', () => {
     const monthlyCredits = getMonthlyCreditsForTier(SubscriptionTiers.PRO);
 
-    expect(monthlyCredits).toBe(100_000);
+    expect(monthlyCredits).toBe(2_000_000);
   });
 
   it('pro tier monthly credits match CREDIT_CONFIG', () => {
@@ -527,7 +527,7 @@ describe('trial Period Feature Access', () => {
 
     const monthlyCredits = getMonthlyCreditsForTier(subscription.tier);
 
-    expect(monthlyCredits).toBe(100_000);
+    expect(monthlyCredits).toBe(2_000_000);
   });
 
   it('trial subscription has future period end date', () => {
@@ -593,7 +593,7 @@ describe('plan Upgrade Effects on Features', () => {
     const proMonthlyCredits = getMonthlyCreditsForTier(SubscriptionTiers.PRO);
 
     expect(freeMonthlyCredits).toBe(0);
-    expect(proMonthlyCredits).toBe(100_000);
+    expect(proMonthlyCredits).toBe(2_000_000);
   });
 });
 
@@ -638,7 +638,7 @@ describe('plan Downgrade Effects on Features', () => {
     const proMonthlyCredits = getMonthlyCreditsForTier(SubscriptionTiers.PRO);
     const freeMonthlyCredits = getMonthlyCreditsForTier(SubscriptionTiers.FREE);
 
-    expect(proMonthlyCredits).toBe(100_000);
+    expect(proMonthlyCredits).toBe(2_000_000);
     expect(freeMonthlyCredits).toBe(0);
   });
 

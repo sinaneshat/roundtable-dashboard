@@ -9,9 +9,11 @@ import {
   FileCategorySchema,
   FileValidationErrorCodeSchema,
   getFileCategoryFromMime,
+  isVisualMimeType,
   MAX_MULTIPART_PARTS,
   MAX_SINGLE_UPLOAD_SIZE,
   MAX_TOTAL_FILE_SIZE,
+  MAX_VISUAL_FILE_SIZE,
   MIN_MULTIPART_PART_SIZE,
   RECOMMENDED_PART_SIZE,
   UploadStrategies,
@@ -82,6 +84,8 @@ const _FileValidationConstantsSchema = z.object({
   maxSingleUploadSize: z.number().int().positive(),
   /** Maximum total file size in bytes */
   maxTotalFileSize: z.number().int().positive(),
+  /** Maximum visual file size in bytes (images + PDFs for AI processing) */
+  maxVisualFileSize: z.number().int().positive(),
   /** Minimum multipart part size in bytes */
   minPartSize: z.number().int().positive(),
   /** Recommended part size in bytes */
@@ -192,6 +196,25 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
         };
       }
 
+      // Visual files (images + PDFs) have stricter size limits for AI processing
+      // These files are converted to base64 for AI model consumption, which requires
+      // significant memory in Cloudflare Workers (128MB limit)
+      if (isVisualMimeType(file.type) && file.size > MAX_VISUAL_FILE_SIZE) {
+        return {
+          valid: false,
+          error: {
+            code: 'visual_file_too_large',
+            message: `${file.type === 'application/pdf' ? 'PDF' : 'Image'} files must be ${formatFileSize(MAX_VISUAL_FILE_SIZE)} or smaller for AI processing. Your file is ${formatFileSize(file.size)}.`,
+            details: {
+              maxSize: MAX_VISUAL_FILE_SIZE,
+              actualSize: file.size,
+            },
+          },
+          uploadStrategy: UploadStrategies.SINGLE,
+          fileCategory,
+        };
+      }
+
       if (file.size > effectiveMaxSize) {
         return {
           valid: false,
@@ -259,6 +282,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
     () => ({
       maxSingleUploadSize: MAX_SINGLE_UPLOAD_SIZE,
       maxTotalFileSize: MAX_TOTAL_FILE_SIZE,
+      maxVisualFileSize: MAX_VISUAL_FILE_SIZE,
       minPartSize: MIN_MULTIPART_PART_SIZE,
       recommendedPartSize: RECOMMENDED_PART_SIZE,
       allowedTypes,

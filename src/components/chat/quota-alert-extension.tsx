@@ -1,12 +1,11 @@
 'use client';
 
-import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
 import { PlanTypes } from '@/api/core/enums';
+import { ChatAlertBanner } from '@/components/chat/chat-alert-banner';
 import { useUsageStatsQuery } from '@/hooks/queries';
-import { cn } from '@/lib/ui/cn';
 
 type QuotaAlertExtensionProps = {
   /** Minimum credits threshold - show alert when available credits fall below this */
@@ -44,26 +43,10 @@ export function QuotaAlertExtension({ minCreditsThreshold = 0 }: QuotaAlertExten
   }
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ height: 0, opacity: 0 }}
-        animate={{ height: 'auto', opacity: 1 }}
-        exit={{ height: 0, opacity: 0 }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        className="overflow-hidden"
-      >
-        <div
-          className={cn(
-            'flex items-center justify-center gap-3 px-3 py-2',
-            'border-0 border-b border-destructive/20',
-            'bg-destructive/10',
-          )}
-        >
-          <p className="text-[10px] leading-tight text-destructive font-medium text-center">
-            {t('usage.quotaAlert.paidUserMessage')}
-          </p>
-        </div>
-      </motion.div>
-    </AnimatePresence>
+    <ChatAlertBanner
+      message={t('usage.quotaAlert.paidUserMessage')}
+      variant="error"
+      showAction={false}
+    />
   );
 }

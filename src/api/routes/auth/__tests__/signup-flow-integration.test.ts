@@ -297,7 +297,7 @@ describe('signup Flow Integration', () => {
     it('paid plan config is correctly defined', () => {
       const paidPlan = CREDIT_CONFIG.PLANS.paid;
 
-      expect(paidPlan.monthlyCredits).toBe(100_000);
+      expect(paidPlan.monthlyCredits).toBe(2_000_000);
       expect(paidPlan.priceInCents).toBe(5900); // $59
     });
   });

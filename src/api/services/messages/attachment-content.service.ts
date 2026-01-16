@@ -9,7 +9,7 @@
 
 import { eq, inArray } from 'drizzle-orm';
 
-import { IMAGE_MIME_TYPES, MessagePartTypes } from '@/api/core/enums';
+import { AI_PROCESSABLE_MIME_SET, MessagePartTypes } from '@/api/core/enums';
 import { getFile } from '@/api/services/uploads';
 import { LogHelpers } from '@/api/types/logger';
 import type {
@@ -21,12 +21,6 @@ import type {
 } from '@/api/types/uploads';
 import { MAX_BASE64_FILE_SIZE } from '@/api/types/uploads';
 import * as tables from '@/db';
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const VISUAL_MIME_TYPES = new Set([...IMAGE_MIME_TYPES, 'application/pdf']);
 
 // ============================================================================
 // Main Functions
@@ -83,8 +77,8 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
   for (const upload of uploads) {
     try {
       // Skip files that AI models can't process visually
-      if (!VISUAL_MIME_TYPES.has(upload.mimeType)) {
-        logger?.debug('Skipping non-visual file', LogHelpers.operation({
+      if (!AI_PROCESSABLE_MIME_SET.has(upload.mimeType)) {
+        logger?.debug('Skipping unsupported file type for AI processing', LogHelpers.operation({
           operationName: 'loadAttachmentContent',
           uploadId: upload.id,
           mimeType: upload.mimeType,
@@ -305,8 +299,8 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
     for (const { uploadId, upload } of uploads) {
       try {
         // Skip files that AI models can't process visually
-        if (!VISUAL_MIME_TYPES.has(upload.mimeType)) {
-          logger?.debug('Skipping non-visual file in message', LogHelpers.operation({
+        if (!AI_PROCESSABLE_MIME_SET.has(upload.mimeType)) {
+          logger?.debug('Skipping unsupported file type for AI processing in message', LogHelpers.operation({
             operationName: 'loadMessageAttachments',
             messageId,
             uploadId,

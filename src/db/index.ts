@@ -200,6 +200,13 @@ export const getDbAsync = cache(async () => {
 });
 
 /**
+ * Type guard for checking if caches object has default property
+ */
+function hasCachesDefault(obj: unknown): obj is { default: unknown } {
+  return typeof obj === 'object' && obj !== null && 'default' in obj;
+}
+
+/**
  * Detect if running in Cloudflare Workers environment (not Node.js)
  * Workers don't have Node.js fs/path modules available
  */
@@ -211,7 +218,7 @@ function isCloudflareWorkersRuntime(): boolean {
   }
   // Check if running via opennextjs-cloudflare (preview or production)
   // The presence of caches global is a Workers indicator
-  if (typeof caches !== 'undefined' && typeof (caches as unknown as { default?: unknown }).default !== 'undefined') {
+  if (typeof caches !== 'undefined' && hasCachesDefault(caches)) {
     return true;
   }
   return false;

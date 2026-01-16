@@ -247,8 +247,8 @@ describe('paid Tier Monthly Credit Refills', () => {
 
     const balance = mockState.userCreditBalances.get(userId)!;
 
-    expect(balance.balance).toBe(100_000);
-    expect(balance.monthlyCredits).toBe(100_000);
+    expect(balance.balance).toBe(2_000_000);
+    expect(balance.monthlyCredits).toBe(2_000_000);
     expect(balance.planType).toBe(PlanTypes.PAID);
   });
 
@@ -269,7 +269,7 @@ describe('paid Tier Monthly Credit Refills', () => {
     nextRefill.setMonth(nextRefill.getMonth() + 1);
     balance.nextRefillAt = nextRefill;
 
-    expect(balance.balance).toBe(130_000); // 30K + 100K refill
+    expect(balance.balance).toBe(2_030_000); // 30K + 100K refill
     expect(balance.lastRefillAt).toBeTruthy();
     expect(balance.nextRefillAt).toBeTruthy();
   });
@@ -286,7 +286,7 @@ describe('paid Tier Monthly Credit Refills', () => {
     // Monthly refill adds 100K
     balance.balance += balance.monthlyCredits;
 
-    expect(balance.balance).toBe(180_000); // 80K unused + 100K refill
+    expect(balance.balance).toBe(2_080_000); // 80K unused + 100K refill
   });
 
   it('pro tier refill updates lastRefillAt and nextRefillAt', () => {
@@ -344,9 +344,9 @@ describe('plan Upgrade (Free → Pro)', () => {
     usage.subscriptionTier = SubscriptionTiers.PRO;
 
     // Verify upgrade
-    expect(balance.balance).toBe(105_000); // 5K + 100K
+    expect(balance.balance).toBe(2_005_000); // 5K + 100K
     expect(balance.planType).toBe(PlanTypes.PAID);
-    expect(balance.monthlyCredits).toBe(100_000);
+    expect(balance.monthlyCredits).toBe(2_000_000);
     expect(usage.subscriptionTier).toBe(SubscriptionTiers.PRO);
   });
 
@@ -364,7 +364,7 @@ describe('plan Upgrade (Free → Pro)', () => {
     balance.balance += planConfig.monthlyCredits;
     balance.planType = PlanTypes.PAID;
 
-    expect(balance.balance).toBe(103_000); // 3K + 100K
+    expect(balance.balance).toBe(2_003_000); // 3K + 2M
   });
 
   it('upgrade sets refill dates', () => {
@@ -616,7 +616,7 @@ describe('credit Configuration Validation', () => {
   });
 
   it('paid plan monthly credits is 100000', () => {
-    expect(CREDIT_CONFIG.PLANS.paid.monthlyCredits).toBe(100_000);
+    expect(CREDIT_CONFIG.PLANS.paid.monthlyCredits).toBe(2_000_000);
   });
 
   it('paid plan price is $59/month', () => {
@@ -628,7 +628,7 @@ describe('credit Configuration Validation', () => {
   });
 
   it('pro tier config has 100K monthly credits', () => {
-    expect(TIER_CONFIG.pro.monthlyCredits).toBe(100_000);
+    expect(TIER_CONFIG.pro.monthlyCredits).toBe(2_000_000);
   });
 });
 
@@ -693,7 +693,7 @@ describe('edge Cases', () => {
     expect(TIER_CONFIG.free.quotas.threadsPerMonth).toBe(1);
 
     // Pro tier
-    expect(TIER_CONFIG.pro.monthlyCredits).toBe(100_000);
+    expect(TIER_CONFIG.pro.monthlyCredits).toBe(2_000_000);
     expect(TIER_CONFIG.pro.quotas.threadsPerMonth).toBe(500);
   });
 });
@@ -762,7 +762,7 @@ describe('tier Change Side Effects', () => {
     balance.monthlyCredits = planConfig.monthlyCredits;
 
     // Verify credit grant occurred
-    expect(balance.balance).toBe(initialBalance + 100_000);
+    expect(balance.balance).toBe(initialBalance + 2_000_000);
     expect(balance.planType).toBe(PlanTypes.PAID);
   });
 
@@ -1040,7 +1040,7 @@ describe('tier Validation and Constraints', () => {
 
     expect(balance.planType).toBe(PlanTypes.PAID);
     expect(balance.monthlyCredits).toBeGreaterThan(0);
-    expect(balance.monthlyCredits).toBe(100_000);
+    expect(balance.monthlyCredits).toBe(2_000_000);
   });
 
   it('reserved credits cannot exceed balance', () => {
@@ -1277,8 +1277,8 @@ describe('tier Transition Edge Cases', () => {
     balance.planType = PlanTypes.PAID;
     balance.monthlyCredits = planConfig.monthlyCredits;
 
-    // Should have 2K + 100K = 102K
-    expect(balance.balance).toBe(102_000);
+    // Should have 2K + 2M = 2,002K
+    expect(balance.balance).toBe(2_002_000);
   });
 
   it('upgrade immediately sets monthly credits field', () => {
@@ -1294,7 +1294,7 @@ describe('tier Transition Edge Cases', () => {
     balance.monthlyCredits = planConfig.monthlyCredits;
     balance.planType = PlanTypes.PAID;
 
-    expect(balance.monthlyCredits).toBe(100_000);
+    expect(balance.monthlyCredits).toBe(2_000_000);
   });
 
   it('downgrade mid-month preserves tier until period end', () => {
@@ -1348,7 +1348,7 @@ describe('tier Transition Edge Cases', () => {
     balance.balance += planConfig.monthlyCredits;
     balance.planType = PlanTypes.PAID;
 
-    expect(balance.balance).toBe(100_000);
+    expect(balance.balance).toBe(2_000_000);
   });
 });
 

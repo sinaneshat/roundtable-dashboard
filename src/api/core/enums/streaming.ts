@@ -328,7 +328,7 @@ export const StreamPhases = {
 
 // 6. TYPE GUARD (optional helper)
 export function isStreamPhase(value: unknown): value is StreamPhase {
-  return typeof value === 'string' && STREAM_PHASES.includes(value as StreamPhase);
+  return StreamPhaseSchema.safeParse(value).success;
 }
 
 // ============================================================================

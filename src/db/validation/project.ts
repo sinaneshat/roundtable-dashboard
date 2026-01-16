@@ -98,11 +98,9 @@ export type ChatProjectUpdate = z.infer<typeof chatProjectUpdateSchema>;
  */
 export const projectAttachmentSelectSchema = createSelectSchema(projectAttachment);
 export const projectAttachmentInsertSchema = createInsertSchema(projectAttachment);
-export const projectAttachmentUpdateSchema = createUpdateSchema(projectAttachment);
 
 export type ProjectAttachment = z.infer<typeof projectAttachmentSelectSchema>;
 export type ProjectAttachmentInsert = z.infer<typeof projectAttachmentInsertSchema>;
-export type ProjectAttachmentUpdate = z.infer<typeof projectAttachmentUpdateSchema>;
 
 /**
  * Project Memory Schemas
@@ -111,8 +109,6 @@ export type ProjectAttachmentUpdate = z.infer<typeof projectAttachmentUpdateSche
  */
 export const projectMemorySelectSchema = createSelectSchema(projectMemory);
 export const projectMemoryInsertSchema = createInsertSchema(projectMemory);
-export const projectMemoryUpdateSchema = createUpdateSchema(projectMemory);
 
 export type ProjectMemory = z.infer<typeof projectMemorySelectSchema>;
 export type ProjectMemoryInsert = z.infer<typeof projectMemoryInsertSchema>;
-export type ProjectMemoryUpdate = z.infer<typeof projectMemoryUpdateSchema>;

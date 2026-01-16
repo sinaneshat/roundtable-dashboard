@@ -200,9 +200,7 @@ describe('citation Source Map Merging', () => {
     };
     citableContextSourceMap.set('mem_abc123', memorySource);
 
-    // BUG FIX: Should MERGE, not replace
-    // OLD (buggy): citationSourceMap = citableContextSourceMap;
-    // NEW (fixed): Merge sources into existing map
+    // BUG FIX: Should MERGE, not replace - Merge sources into existing map
     for (const [id, source] of citableContextSourceMap) {
       citationSourceMap.set(id, source);
     }

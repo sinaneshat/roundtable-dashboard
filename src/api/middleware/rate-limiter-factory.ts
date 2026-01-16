@@ -10,6 +10,7 @@ import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
+import { z } from 'zod';
 
 import { HttpMethods } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
@@ -137,12 +138,14 @@ export function stopCleanup() {
 startCleanup();
 
 /**
- * Rate limit entry stored in KV
+ * Rate limit entry schema (Zod - single source of truth)
  */
-type KVRateLimitEntry = {
-  count: number;
-  resetTime: number;
-};
+const KVRateLimitEntrySchema = z.object({
+  count: z.number().int().nonnegative(),
+  resetTime: z.number().int().positive(),
+});
+
+type KVRateLimitEntry = z.infer<typeof KVRateLimitEntrySchema>;
 
 /**
  * Get rate limit entry from KV or in-memory store
@@ -156,7 +159,12 @@ async function getRateLimitEntry(
   if (kv) {
     try {
       const entry = await kv.get(`ratelimit:${key}`, 'json');
-      return entry as KVRateLimitEntry | null;
+      if (!entry)
+        return null;
+
+      // Validate KV data with Zod (no type casting)
+      const result = KVRateLimitEntrySchema.safeParse(entry);
+      return result.success ? result.data : null;
     } catch {
       // Fall through to in-memory
     }

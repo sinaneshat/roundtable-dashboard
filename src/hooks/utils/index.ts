@@ -15,6 +15,8 @@ export type { UseCopyToClipboardOptions, UseCopyToClipboardReturn } from './use-
 export { useCopyToClipboard } from './use-copy-to-clipboard';
 export type { UseCountdownRedirectOptions, UseCountdownRedirectReturn } from './use-countdown-redirect';
 export { useCountdownRedirect } from './use-countdown-redirect';
+export type { CreditEstimationResult, UseCreditEstimationOptions } from './use-credit-estimation';
+export { useCreditEstimation } from './use-credit-estimation';
 export { useCurrentPathname } from './use-current-pathname';
 export type { UseDebouncedValueReturn } from './use-debounced-value';
 export { useDebouncedValue } from './use-debounced-value';

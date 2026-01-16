@@ -205,9 +205,44 @@ export async function updateRoundExecutionState(
       return null;
     }
 
+    // ✅ FIX: Merge participantStatuses instead of replacing to prevent race conditions
+    // When multiple participants complete simultaneously, each reads the old state and
+    // updates their own status. Without merging, the last writer wins and loses other
+    // participants' statuses. By merging, all statuses are preserved.
+    const mergedParticipantStatuses = {
+      ...existing.participantStatuses,
+      ...(updates.participantStatuses || {}),
+    };
+
+    // ✅ FIX: Recompute counts from merged statuses to ensure accuracy
+    // This prevents race conditions where two participants both compute count=1
+    // and both write count=1, when the actual count should be 2.
+    const completedParticipants = Object.values(mergedParticipantStatuses).filter(
+      s => s === ParticipantStreamStatuses.COMPLETED,
+    ).length;
+
+    const failedParticipants = Object.values(mergedParticipantStatuses).filter(
+      s => s === ParticipantStreamStatuses.FAILED,
+    ).length;
+
+    // ✅ FIX: Recompute phase based on actual merged state
+    const allParticipantsComplete = (completedParticipants + failedParticipants) >= existing.totalParticipants;
+    const computedPhase = allParticipantsComplete
+      ? RoundExecutionPhases.MODERATOR
+      : RoundExecutionPhases.PARTICIPANTS;
+
+    // Build updated state with merged and recomputed values
     const updated: RoundExecutionState = {
       ...existing,
       ...updates,
+      participantStatuses: mergedParticipantStatuses,
+      completedParticipants,
+      failedParticipants,
+      // Use computed phase if we're in PARTICIPANTS phase and updating participant statuses
+      // Otherwise respect the explicit phase update (e.g., COMPLETE from moderator)
+      phase: updates.phase === RoundExecutionPhases.COMPLETE
+        ? updates.phase
+        : (updates.participantStatuses ? computedPhase : (updates.phase ?? existing.phase)),
     };
 
     await env.KV.put(

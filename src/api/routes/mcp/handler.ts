@@ -552,7 +552,8 @@ async function toolCreateThread(
   const userTier = await getUserTier(user.id);
   const allModels = getAllModels();
   // ✅ PERF: Build Map once for O(1) lookups instead of O(n) find() in loop
-  const modelById = new Map(allModels.map(m => [m.id as string, m]));
+  // Key is string to accept user input; value is validated model
+  const modelById = new Map<string, (typeof allModels)[number]>(allModels.map(m => [m.id, m]));
 
   // ✅ FREE ROUND BYPASS: Free users who haven't completed their free round
   // can use ANY models for their first experience.

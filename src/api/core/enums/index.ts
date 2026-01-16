@@ -127,6 +127,8 @@ export {
   DEFAULT_USAGE_STATUS,
   getGrantTransactionType,
   getModelTierMultiplier,
+  getMonthlyCreditsForPlanTier,
+  getTierPriceCents,
   getUsageStatusFromPercentage,
   hasSubscription,
   INVOICE_STATUSES,
@@ -172,6 +174,7 @@ export {
   type PurchaseType,
   PurchaseTypes,
   PurchaseTypeSchema,
+  SIGNUP_BONUS_CREDITS,
   STRIPE_BILLING_REASONS,
   STRIPE_PRORATION_BEHAVIORS,
   STRIPE_SUBSCRIPTION_STATUSES,
@@ -199,6 +202,8 @@ export {
   type SyncedSubscriptionStatus,
   SyncedSubscriptionStatuses,
   SyncedSubscriptionStatusSchema,
+  TIER_MONTHLY_CREDITS,
+  TIER_PRICE_CENTS,
   TRIAL_STATES,
   type TrialState,
   TrialStates,
@@ -520,6 +525,8 @@ export {
 
 // File, MIME type, and upload enums (consolidated)
 export {
+  AI_PROCESSABLE_MIME_SET,
+  AI_PROCESSABLE_MIME_TYPES,
   ALLOWED_MIME_TYPES,
   type AllowedMimeType,
   AllowedMimeTypeSchema,
@@ -575,12 +582,14 @@ export {
   type IncompatibilityReason,
   IncompatibilityReasons,
   IncompatibilityReasonSchema,
+  isAiProcessableMimeType,
   isVisualMimeType,
   MAX_FILENAME_LENGTH,
   MAX_MULTIPART_PARTS,
   MAX_SINGLE_UPLOAD_SIZE,
   MAX_TEXT_CONTENT_SIZE,
   MAX_TOTAL_FILE_SIZE,
+  MAX_VISUAL_FILE_SIZE,
   MIME_TYPE_CATEGORIES,
   MIN_MULTIPART_PART_SIZE,
   RECOMMENDED_PART_SIZE,
@@ -760,6 +769,7 @@ export {
 
 // Role enums and mappings
 export {
+  DEFAULT_ROLE_ICON_NAME,
   DEFAULT_SHORT_ROLE_NAME,
   getPredefinedRoleTemplate,
   getRoleCategoryMetadata,
@@ -773,6 +783,7 @@ export {
   type RoleCategoryMetadata,
   RoleCategoryMetadataSchema,
   type RoleIconName,
+  RoleIconNames,
   RoleIconNameSchema,
   SHORT_ROLE_NAMES,
   type ShortRoleName,

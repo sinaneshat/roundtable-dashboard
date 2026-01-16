@@ -45,6 +45,7 @@ import {
   AI_RETRY_CONFIG,
   AI_TIMEOUT_CONFIG,
   checkFreeUserHasCompletedRound,
+  enforceCredits,
   estimateWeightedCredits,
   finalizeCredits,
   getModelCreditMultiplierById,
@@ -79,6 +80,7 @@ import {
 import { processParticipantChanges } from '@/api/services/participants';
 import { buildParticipantSystemPrompt } from '@/api/services/prompts';
 import {
+  initializeRoundExecution,
   markParticipantCompleted,
   markParticipantFailed,
   markParticipantStarted,
@@ -106,6 +108,7 @@ import {
   getUserTier,
 } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
+import type { TriggerModeratorQueueMessage, TriggerParticipantQueueMessage } from '@/api/types/queues';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
@@ -415,6 +418,33 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         thread,
         db,
       });
+
+      // =========================================================================
+      // STEP 7.5: EARLY CREDIT CHECK - Fail fast if user can't afford the round
+      // =========================================================================
+      // Only check on first participant (P0) since this is the start of a round
+      // Uses the same estimation logic that reserveCredits uses later
+      // This prevents wasted computation when the user clearly can't afford it
+      if ((participantIndex ?? 0) === 0 && participants.length > 0) {
+        const firstParticipant = participants[0]!;
+        let highestMultiplierModel = firstParticipant;
+        let maxMultiplier = getModelCreditMultiplierById(firstParticipant.modelId, getModelById);
+        for (let i = 1; i < participants.length; i++) {
+          const p = participants[i]!;
+          const multiplier = getModelCreditMultiplierById(p.modelId, getModelById);
+          if (multiplier > maxMultiplier) {
+            maxMultiplier = multiplier;
+            highestMultiplierModel = p;
+          }
+        }
+        const earlyEstimatedCredits = estimateWeightedCredits(
+          participants.length,
+          highestMultiplierModel.modelId,
+          getModelById,
+        );
+        // enforceCredits throws if insufficient - fail fast before loading messages
+        await enforceCredits(user.id, earlyEstimatedCredits);
+      }
 
       // =========================================================================
       // STEP 8: Load Previous Messages and Prepare for Streaming (parallelized with user tier check)
@@ -794,6 +824,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         getModelById,
       );
 
+      // ✅ ROUND ORCHESTRATION: Initialize round state when P0 starts
+      // This MUST happen before markParticipantStarted/markParticipantCompleted
+      // which rely on existing round state in KV
+      const effectiveParticipantIndex = participantIndex ?? DEFAULT_PARTICIPANT_INDEX;
+      if (effectiveParticipantIndex === 0) {
+        await initializeRoundExecution(
+          threadId,
+          currentRoundNumber,
+          participants.length,
+          attachmentIds,
+          c.env,
+        );
+      }
+
       const [existingMessage] = await Promise.all([
         db.query.chatMessage.findFirst({
           where: eq(tables.chatMessage.id, streamMessageId),
@@ -809,21 +853,21 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           streamMessageId,
           threadId,
           currentRoundNumber,
-          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          effectiveParticipantIndex,
           c.env,
         ),
         // ✅ RESUMABLE STREAMS: Mark stream as active in KV for resume detection
         markStreamActive(
           threadId,
           currentRoundNumber,
-          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          effectiveParticipantIndex,
           c.env,
         ),
         // ✅ ROUND ORCHESTRATION: Mark participant as started for tracking
         markParticipantStarted(
           threadId,
           currentRoundNumber,
-          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          effectiveParticipantIndex,
           c.env,
         ),
         // ✅ RESUMABLE STREAMS: Set thread-level active stream for AI SDK resume pattern
@@ -834,7 +878,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           threadId,
           streamMessageId,
           currentRoundNumber,
-          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          effectiveParticipantIndex,
           participants.length, // ✅ FIX: Track total participants for round completion detection
           c.env,
           undefined, // logger
@@ -1016,6 +1060,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
         // ✅ PERSIST MESSAGE: Save to database after streaming completes
         onFinish: async (finishResult) => {
+          console.log('[Streaming] onFinish CALLED:', {
+            messageId: streamMessageId,
+            threadId,
+            roundNumber: currentRoundNumber,
+            participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+            finishReason: finishResult.finishReason,
+            hasText: (finishResult.text?.length ?? 0) > 0,
+          });
+
+          // ✅ DEBUG: Wrap entire onFinish in try-catch to surface any errors
+          try {
           const messageId = streamMessageId;
 
           // ✅ CRITICAL FIX: Detect and handle empty responses before persistence
@@ -1064,6 +1119,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             finalReasoningDuration = Math.round((Date.now() - reasoningStartTime) / 1000);
           }
 
+          // ✅ DEBUG: Log before saving
+          console.log('[Streaming] onFinish saving:', {
+            messageId,
+            threadId,
+            roundNumber: currentRoundNumber,
+            participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+            textLen: finishResult.text?.length ?? 0,
+          });
+
           await saveStreamedMessage({
             messageId,
             threadId,
@@ -1083,6 +1147,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // ✅ EMPTY RESPONSE ERROR: Pass error for messages with no renderable content
             emptyResponseError,
           });
+
+          // ✅ DEBUG: Log after saving
+          console.log('[Streaming] onFinish saved:', { messageId });
 
           // =========================================================================
           // ✅ PARALLELIZED POST-STREAMING OPERATIONS: Credit finalization and balance check
@@ -1357,136 +1424,74 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           const hasMoreParticipants = nextParticipantIndex < participants.length;
           const needsModerator = participants.length >= 2 && allParticipantsComplete;
 
-          // Build base URL for internal API calls
-          const baseUrl = c.req.url.split('/api/')[0];
+          // =========================================================================
+          // QUEUE-BASED ORCHESTRATION: Guaranteed delivery via Cloudflare Queues
+          // =========================================================================
+          // Benefits over waitUntil(fetch):
+          // - Guaranteed delivery: Queue retries if worker times out
+          // - Decoupled execution: Stream continues regardless of request lifecycle
+          // - Built-in retry semantics with exponential backoff
+          // =========================================================================
 
           if (hasMoreParticipants) {
-            // ✅ TRIGGER NEXT PARTICIPANT: Server-side continuation
-            // Uses waitUntil() to run in background - client can disconnect
-            const triggerNextParticipant = async () => {
+            // ✅ TRIGGER NEXT PARTICIPANT via Queue
+            const queueMessage: TriggerParticipantQueueMessage = {
+              type: 'trigger-participant',
+              messageId: `trigger-${threadId}-r${currentRoundNumber}-p${nextParticipantIndex}`,
+              threadId,
+              roundNumber: currentRoundNumber,
+              participantIndex: nextParticipantIndex,
+              userId: user.id,
+              attachmentIds: resolvedAttachmentIds,
+              queuedAt: new Date().toISOString(),
+            };
+
+            // Queue binding may be undefined in local dev without Cloudflare simulation
+            if (c.env.ROUND_ORCHESTRATION_QUEUE) {
               try {
-                const nextParticipant = participants[nextParticipantIndex];
-                if (!nextParticipant)
-                  return;
-
-                // Build request for next participant
-                // Note: We pass a trigger message (empty text) to continue the round
-                const requestBody = {
-                  id: threadId,
-                  message: {
-                    id: `trigger-${threadId}-r${currentRoundNumber}-p${nextParticipantIndex}`,
-                    role: UIMessageRoles.USER,
-                    content: '', // Trigger message - no new user input
-                    parts: [{ type: MessagePartTypes.TEXT, text: '' }],
-                  },
-                  participantIndex: nextParticipantIndex,
-                  // Pass attachmentIds for consistent context
-                  attachmentIds: resolvedAttachmentIds,
-                };
-
-                // Get auth cookie/header from current request to forward
-                const authCookie = c.req.header('cookie') || '';
-                const authHeader = c.req.header('authorization') || '';
-
-                const response = await fetch(`${baseUrl}/api/v1/chat`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    ...(authCookie && { cookie: authCookie }),
-                    ...(authHeader && { authorization: authHeader }),
-                  },
-                  body: JSON.stringify(requestBody),
-                });
-
-                if (!response.ok) {
-                  // Log but don't throw - this is background work
-                  console.error(`[RoundOrchestration] Failed to trigger participant ${nextParticipantIndex}: ${response.status}`);
-                }
-
-                // Consume the stream response to complete the request
-                // The stream handler will handle persistence and next triggers
-                const reader = response.body?.getReader();
-                if (reader) {
-                  try {
-                    // Just drain the stream - we don't need the content
-                    while (true) {
-                      const { done } = await reader.read();
-                      if (done)
-                        break;
-                    }
-                  } finally {
-                    reader.releaseLock();
-                  }
-                }
+                await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
               } catch (error) {
-                console.error(`[RoundOrchestration] Error triggering participant ${nextParticipantIndex}:`, error);
+                console.error(`[RoundOrchestration] Failed to queue participant ${nextParticipantIndex}:`, error);
                 // Mark as failed so status endpoint reflects the issue
                 await markParticipantFailed(
                   threadId,
                   currentRoundNumber,
                   nextParticipantIndex,
-                  error instanceof Error ? error.message : 'Unknown error',
+                  error instanceof Error ? error.message : 'Queue send failed',
                   c.env,
                 );
               }
-            };
-
-            // Run in background via waitUntil
-            if (executionCtx) {
-              executionCtx.waitUntil(triggerNextParticipant());
-            } else {
-              triggerNextParticipant().catch(console.error);
             }
           } else if (needsModerator) {
-            // ✅ TRIGGER MODERATOR: Server-side completion of round
-            // All participants done, now trigger moderator for summary
-            const triggerModerator = async () => {
-              try {
-                // Get auth cookie/header from current request to forward
-                const authCookie = c.req.header('cookie') || '';
-                const authHeader = c.req.header('authorization') || '';
-
-                const response = await fetch(
-                  `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${currentRoundNumber}/moderator`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      ...(authCookie && { cookie: authCookie }),
-                      ...(authHeader && { authorization: authHeader }),
-                    },
-                    body: JSON.stringify({}),
-                  },
-                );
-
-                if (!response.ok) {
-                  console.error(`[RoundOrchestration] Failed to trigger moderator: ${response.status}`);
-                }
-
-                // Consume the stream response to complete the request
-                const reader = response.body?.getReader();
-                if (reader) {
-                  try {
-                    while (true) {
-                      const { done } = await reader.read();
-                      if (done)
-                        break;
-                    }
-                  } finally {
-                    reader.releaseLock();
-                  }
-                }
-              } catch (error) {
-                console.error('[RoundOrchestration] Error triggering moderator:', error);
-              }
+            // ✅ TRIGGER MODERATOR via Queue
+            const queueMessage: TriggerModeratorQueueMessage = {
+              type: 'trigger-moderator',
+              messageId: `trigger-${threadId}-r${currentRoundNumber}-moderator`,
+              threadId,
+              roundNumber: currentRoundNumber,
+              userId: user.id,
+              queuedAt: new Date().toISOString(),
             };
 
-            // Run in background via waitUntil
-            if (executionCtx) {
-              executionCtx.waitUntil(triggerModerator());
-            } else {
-              triggerModerator().catch(console.error);
+            // Queue binding may be undefined in local dev without Cloudflare simulation
+            if (c.env.ROUND_ORCHESTRATION_QUEUE) {
+              try {
+                await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
+              } catch (error) {
+                console.error('[RoundOrchestration] Failed to queue moderator:', error);
+              }
             }
+          }
+          } catch (onFinishError) {
+            // ✅ DEBUG: Log any errors in onFinish callback
+            console.error('[Streaming] onFinish ERROR:', {
+              error: onFinishError instanceof Error ? onFinishError.message : String(onFinishError),
+              stack: onFinishError instanceof Error ? onFinishError.stack : undefined,
+              messageId: streamMessageId,
+              threadId,
+              roundNumber: currentRoundNumber,
+              participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+            });
           }
         },
       });

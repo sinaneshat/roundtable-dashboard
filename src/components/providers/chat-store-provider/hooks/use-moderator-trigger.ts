@@ -61,6 +61,8 @@ function parseAiSdkStreamLine(line: string): string | null {
   return null;
 }
 
+const MAX_202_RETRIES = 5;
+
 export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
   const { threadId, createdThreadId } = useStore(store, useShallow(s => ({
     threadId: s.thread?.id,
@@ -69,6 +71,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const triggeringRoundRef = useRef<number | null>(null);
+  const retryCountRef = useRef<number>(0);
 
   const effectiveThreadId = threadId || createdThreadId || '';
 
@@ -80,7 +83,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     const state = store.getState();
     const freshThreadId = state.thread?.id || state.createdThreadId || '';
 
-    rlog.sync('moderator-trigger', `r${roundNumber} threadId=${freshThreadId.slice(-8)} isRetry=${isRetry} triggeringRef=${triggeringRoundRef.current}`);
+    rlog.sync('moderator-trigger', `r${roundNumber} threadId=${freshThreadId.slice(-8)} isRetry=${isRetry} triggeringRef=${triggeringRoundRef.current} msgIds=${participantMessageIds.length}:[${participantMessageIds.map(id => id.slice(-15)).join(',')}]`);
 
     if (!freshThreadId) {
       rlog.sync('moderator-skip', 'no threadId');
@@ -158,22 +161,38 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       if (contentType.includes('application/json')) {
         // Could be either: existing moderator message OR 202 polling response
         // Parse JSON to check if it's a polling response that needs retry
-        const jsonData = await response.json() as { data?: { status?: string; retryAfterMs?: number } };
+        const jsonData = await response.json() as { data?: { status?: string; retryAfterMs?: number; message?: string } };
+        rlog.sync('moderator-json', `status=${response.status} data=${JSON.stringify(jsonData?.data ?? {})}`);
         if (response.status === 202 || jsonData?.data?.status === 'pending') {
+          retryCountRef.current += 1;
+          if (retryCountRef.current >= MAX_202_RETRIES) {
+            console.error('[Moderator] MAX RETRIES REACHED - messages never appeared in D1', {
+              roundNumber,
+              retryCount: retryCountRef.current,
+              threadId: freshThreadId.slice(-8),
+            });
+            rlog.sync('moderator-max-retries', `r${roundNumber} gave up after ${retryCountRef.current} attempts`);
+            retryCountRef.current = 0;
+            store.getState().completeStreaming();
+            return;
+          }
           // 202 Accepted - messages not persisted yet, retry after delay
           const retryAfterMs = jsonData?.data?.retryAfterMs || 1000;
-          rlog.sync('moderator-retry', `202 polling response, will retry in ${retryAfterMs}ms`);
+          rlog.sync('moderator-retry', `202 poll ${retryCountRef.current}/${MAX_202_RETRIES}: ${jsonData?.data?.message ?? 'no message'}, retry in ${retryAfterMs}ms`);
           await new Promise(resolve => setTimeout(resolve, retryAfterMs));
           // Retry the request - clear tracking and reset ref so we can trigger again
-          rlog.sync('moderator-retry', `retrying now after ${retryAfterMs}ms delay`);
           triggeringRoundRef.current = null;
           store.getState().clearModeratorStreamTracking(roundNumber);
           // Pass isRetry=true to bypass the already-triggered check
           await triggerModerator(roundNumber, participantMessageIds, true);
           return;
         }
+        // Success - reset retry counter
+        retryCountRef.current = 0;
         // Message already exists - no streaming needed
+        rlog.sync('moderator-exists', `message already exists, no streaming needed`);
       } else {
+        rlog.sync('moderator-stream-start', `starting stream read, contentType=${contentType}`);
         const reader = response.body?.getReader();
         if (reader) {
           const decoder = new TextDecoder();
@@ -295,10 +314,12 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
+      console.error('[Moderator] triggerModerator error:', error);
     } finally {
       store.getState().completeStreaming();
       triggeringRoundRef.current = null;
       abortControllerRef.current = null;
+      retryCountRef.current = 0;
     }
   }, [store]);
 

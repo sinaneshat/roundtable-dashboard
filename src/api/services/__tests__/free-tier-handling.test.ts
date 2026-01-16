@@ -588,7 +588,7 @@ describe('tier Transition Logic', () => {
 
       expect(balanceAfter.planType).toBe(PlanTypes.PAID);
       expect(usageAfter.subscriptionTier).toBe(SubscriptionTiers.PRO);
-      expect(balanceAfter.balance).toBe(102_000);
+      expect(balanceAfter.balance).toBe(2_002_000);
     });
 
     it('should preserve existing credits on upgrade', () => {
@@ -601,7 +601,7 @@ describe('tier Transition Logic', () => {
       updated.balance += CREDIT_CONFIG.PLANS.paid.monthlyCredits;
       updated.monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
-      expect(mockState.userCreditBalances.get(userId)!.balance).toBe(101_500);
+      expect(mockState.userCreditBalances.get(userId)!.balance).toBe(2_001_500);
     });
 
     it('should grant monthly credits on upgrade', () => {
@@ -611,7 +611,7 @@ describe('tier Transition Logic', () => {
       const updated = mockState.userCreditBalances.get(userId)!;
       updated.monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
-      expect(updated.monthlyCredits).toBe(100_000);
+      expect(updated.monthlyCredits).toBe(2_000_000);
     });
 
     it('should set refill dates on upgrade', () => {
@@ -799,7 +799,7 @@ describe('tier Configuration Consistency', () => {
 
   it('should have consistent credit config values', () => {
     expect(CREDIT_CONFIG.SIGNUP_CREDITS).toBe(5_000);
-    expect(CREDIT_CONFIG.PLANS.paid.monthlyCredits).toBe(100_000);
+    expect(CREDIT_CONFIG.PLANS.paid.monthlyCredits).toBe(2_000_000);
   });
 
   it('should have upgrade messages for each tier', () => {
@@ -839,7 +839,7 @@ describe('edge Cases and Boundary Conditions', () => {
     const updated = mockState.userCreditBalances.get(userId)!;
     updated.balance += CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
-    expect(updated.balance).toBe(100_000);
+    expect(updated.balance).toBe(2_000_000);
   });
 
   it('should handle reserved credits affecting available balance', () => {

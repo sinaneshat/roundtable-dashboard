@@ -51,6 +51,22 @@ export const RoleIconNameSchema = z.enum(ROLE_ICON_NAMES).openapi({
 
 export type RoleIconName = z.infer<typeof RoleIconNameSchema>;
 
+// 4️⃣ DEFAULT VALUE
+export const DEFAULT_ROLE_ICON_NAME: RoleIconName = 'lightbulb';
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const RoleIconNames = {
+  LIGHTBULB: 'lightbulb' as const,
+  MESSAGE_SQUARE: 'messageSquare' as const,
+  HAMMER: 'hammer' as const,
+  TARGET: 'target' as const,
+  SPARKLES: 'sparkles' as const,
+  GRADUATION_CAP: 'graduationCap' as const,
+  USERS: 'users' as const,
+  BRIEFCASE: 'briefcase' as const,
+  TRENDING_UP: 'trendingUp' as const,
+} as const;
+
 // ============================================================================
 // ROLE CATEGORY METADATA
 // ============================================================================
@@ -197,8 +213,8 @@ export const PREDEFINED_ROLE_TEMPLATES: readonly PredefinedRoleTemplate[] = [
   },
 ] as const;
 
-function isShortRoleName(role: string): role is ShortRoleName {
-  return SHORT_ROLE_NAMES.includes(role as ShortRoleName);
+function isShortRoleName(role: unknown): role is ShortRoleName {
+  return ShortRoleNameSchema.safeParse(role).success;
 }
 
 export function getShortRoleName(role: string): ShortRoleName | string {

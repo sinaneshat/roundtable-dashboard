@@ -5,8 +5,12 @@ import { forwardRef } from 'react';
 
 import { cn } from "@/lib/ui/cn"
 
-const ScrollArea = forwardRef<ElementRef<"div">, ComponentProps<"div">>(
-  ({ className, children, ...props }, ref) => {
+type ScrollAreaProps = ComponentProps<"div"> & {
+  orientation?: "vertical" | "horizontal" | "both";
+};
+
+const ScrollArea = forwardRef<ElementRef<"div">, ScrollAreaProps>(
+  ({ className, children, orientation = "vertical", ...props }, ref) => {
     return (
       <div
         ref={ref}
@@ -17,9 +21,15 @@ const ScrollArea = forwardRef<ElementRef<"div">, ComponentProps<"div">>(
         <div
           data-slot="scroll-area-viewport"
           className={cn(
-            "size-full overflow-auto rounded-[inherit]",
-            // Thin scrollbar styling via CSS
+            "size-full rounded-[inherit]",
+            // Overflow handling based on orientation
+            orientation === "horizontal" && "overflow-x-auto overflow-y-hidden",
+            orientation === "vertical" && "overflow-y-auto overflow-x-hidden",
+            orientation === "both" && "overflow-auto",
+            // Vertical scrollbar styling
             "[&::-webkit-scrollbar]:w-2",
+            // Horizontal scrollbar styling
+            "[&::-webkit-scrollbar]:h-1.5",
             "[&::-webkit-scrollbar-track]:bg-transparent",
             "[&::-webkit-scrollbar-thumb]:bg-border",
             "[&::-webkit-scrollbar-thumb]:rounded-full",
