@@ -69,12 +69,26 @@ function createWrapper(queryClient: QueryClient) {
 // useSwitchSubscriptionMutation Tests
 // ============================================================================
 
+// Default mock data for services called in onSuccess
+const defaultMockUsageData = {
+  success: true as const,
+  data: { creditsUsed: 0, creditsLimit: 1000, modelsUsed: 0, modelsLimit: 10 },
+};
+
+const defaultMockModelsData = {
+  success: true as const,
+  data: { items: [], count: 0 },
+};
+
 describe('useSwitchSubscriptionMutation', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
     queryClient = createTestQueryClient();
     vi.clearAllMocks();
+    // Mock services called in onSuccess to prevent hanging
+    vi.spyOn(apiServices, 'getUserUsageStatsService').mockResolvedValue(defaultMockUsageData);
+    vi.spyOn(apiServices, 'listModelsService').mockResolvedValue(defaultMockModelsData);
   });
 
   describe('successful subscription switch', () => {
@@ -478,6 +492,9 @@ describe('useCancelSubscriptionMutation', () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     vi.clearAllMocks();
+    // Mock services called in onSuccess to prevent hanging
+    vi.spyOn(apiServices, 'getUserUsageStatsService').mockResolvedValue(defaultMockUsageData);
+    vi.spyOn(apiServices, 'listModelsService').mockResolvedValue(defaultMockModelsData);
   });
 
   describe('successful subscription cancellation', () => {

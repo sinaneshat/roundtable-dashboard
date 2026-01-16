@@ -35,13 +35,12 @@ type UseTimelineAnimationsReturn = {
  * const { shouldAnimate, markAnimated } = useTimelineAnimations({ enabled: true });
  *
  * return items.map((item, index) => (
- *   <TimelineEntrance
+ *   <ScrollFadeEntrance
  *     key={item.id}
  *     skipAnimation={!shouldAnimate(item.id)}
- *     onAnimationComplete={() => markAnimated(item.id)}
  *   >
  *     {item.content}
- *   </TimelineEntrance>
+ *   </ScrollFadeEntrance>
  * ));
  * ```
  */

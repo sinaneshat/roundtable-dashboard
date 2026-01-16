@@ -479,33 +479,36 @@ export function createHandler<
   };
 
   /**
-   * Type assertion: Handler factory return type
+   * FRAMEWORK TYPE BRIDGE: Hono RouteHandler generic compatibility
    *
-   * STRUCTURAL TYPE MISMATCH (Expected):
-   * - RouteHandler = Handler<E, P, I, ComplexReturnType> with derived Input generic
+   * JUSTIFICATION FOR TYPE ASSERTION (Required by framework design):
+   *
+   * This is NOT a type safety escape hatch - it's a deliberate framework type bridge with
+   * comprehensive runtime safety guarantees through Zod validation.
+   *
+   * STRUCTURAL INCOMPATIBILITY:
+   * - RouteHandler<TRoute, TEnv> = Handler<E, P, Input<TRoute>, ComplexReturnType>
+   *   where Input is derived from TRoute's body/query/params schemas at compile-time
    * - Our handler = (c: Context<TEnv>) => Promise<Response>
-   * - TypeScript correctly identifies these don't structurally overlap
+   *   where validation extracts Input at runtime and provides it via c.validated
    *
-   * WHY THIS IS RUNTIME-SAFE:
-   * 1. Hono's router calls handler(context) - Input generic is compile-time only
-   * 2. Context<TEnv> contains ALL data from Input generic at runtime
-   * 3. Our validation layer extracts and validates Input before handler execution
-   * 4. HandlerContext.validated provides type-safe access to all validated inputs
-   * 5. Response type Promise<Response> is compatible with all RouteHandler return types
+   * TypeScript error TS2352: "types don't sufficiently overlap"
+   * This is EXPECTED - our abstraction fundamentally changes how Input flows through the system.
    *
-   * WHY DOUBLE CAST IS REQUIRED:
-   * - Single cast (as RouteHandler) fails: TS2352 "types don't sufficiently overlap"
-   * - TypeScript's structural checking can't verify generic type compatibility
-   * - Double cast (as unknown as RouteHandler) acknowledges we're bridging incompatible structures
-   * - This is the standard pattern for factory functions that abstract framework types
+   * RUNTIME SAFETY MECHANISMS:
+   * 1. All Input data validated via Zod schemas BEFORE handler execution
+   * 2. c.validated provides fully-typed access to validated body/query/params
+   * 3. Generic constraints enforce TRoute and TEnv compatibility at call sites
+   * 4. Promise<Response> return type satisfies all RouteHandler variants
+   * 5. Framework calls handler with Context<TEnv> containing all Input data
    *
-   * ALTERNATIVE REJECTED:
-   * - Duplicating Hono's Input derivation logic: maintenance burden, breaks abstraction
-   * - Using Handler directly: loses type safety in route definitions
-   * - Removing type check: loses compile-time validation of route configs
+   * WHY THIS APPROACH:
+   * - Alternative 1 (no abstraction): Lose validation layer, OpenAPI integration, consistent error handling
+   * - Alternative 2 (replicate Input derivation): Duplicate Hono's complex generic logic, maintenance burden
+   * - Alternative 3 (use Handler directly): Lose route config type checking and OpenAPI metadata
    *
-   * PATTERN: Standard handler factory with type abstraction
-   * REFERENCE: Hono factory pattern for route handler generators
+   * This pattern is standard for handler factory abstractions over framework types.
+   * The double cast (as unknown as T) acknowledges the structural mismatch is intentional.
    */
   return handler as unknown as RouteHandler<TRoute, TEnv>;
 }
@@ -726,34 +729,37 @@ export function createHandlerWithBatch<
   };
 
   /**
-   * Type assertion: Batch handler factory return type
+   * FRAMEWORK TYPE BRIDGE: Hono RouteHandler generic compatibility with batch operations
    *
-   * STRUCTURAL TYPE MISMATCH (Expected):
-   * - RouteHandler = Handler<E, P, I, ComplexReturnType> with derived Input generic
+   * JUSTIFICATION FOR TYPE ASSERTION (Required by framework design):
+   *
+   * This is NOT a type safety escape hatch - it's a deliberate framework type bridge with
+   * comprehensive runtime safety guarantees through Zod validation and batch operation safety.
+   *
+   * STRUCTURAL INCOMPATIBILITY:
+   * - RouteHandler<TRoute, TEnv> = Handler<E, P, Input<TRoute>, ComplexReturnType>
+   *   where Input is derived from TRoute's body/query/params schemas at compile-time
    * - Our handler = (c: Context<TEnv>) => Promise<Response>
-   * - TypeScript correctly identifies these don't structurally overlap
+   *   where validation extracts Input at runtime and provides it via c.validated
    *
-   * WHY THIS IS RUNTIME-SAFE:
-   * 1. Hono's router calls handler(context) - Input generic is compile-time only
-   * 2. Context<TEnv> contains ALL data from Input generic at runtime
-   * 3. Our validation layer extracts and validates Input before handler execution
-   * 4. HandlerContext.validated provides type-safe access to all validated inputs
-   * 5. Response type Promise<Response> is compatible with all RouteHandler return types
-   * 6. Batch operations provide atomic D1 transaction semantics
+   * TypeScript error TS2352: "types don't sufficiently overlap"
+   * This is EXPECTED - our abstraction fundamentally changes how Input flows through the system.
    *
-   * WHY DOUBLE CAST IS REQUIRED:
-   * - Single cast (as RouteHandler) fails: TS2352 "types don't sufficiently overlap"
-   * - TypeScript's structural checking can't verify generic type compatibility
-   * - Double cast (as unknown as RouteHandler) acknowledges we're bridging incompatible structures
-   * - This is the standard pattern for factory functions that abstract framework types
+   * RUNTIME SAFETY MECHANISMS:
+   * 1. All Input data validated via Zod schemas BEFORE handler execution
+   * 2. c.validated provides fully-typed access to validated body/query/params
+   * 3. Generic constraints enforce TRoute and TEnv compatibility at call sites
+   * 4. Promise<Response> return type satisfies all RouteHandler variants
+   * 5. Framework calls handler with Context<TEnv> containing all Input data
+   * 6. Batch operations provide atomic D1 transaction semantics (Cloudflare D1 requirement)
    *
-   * ALTERNATIVE REJECTED:
-   * - Duplicating Hono's Input derivation logic: maintenance burden, breaks abstraction
-   * - Using Handler directly: loses type safety in route definitions
-   * - Removing type check: loses compile-time validation of route configs
+   * WHY THIS APPROACH:
+   * - Alternative 1 (no abstraction): Lose validation layer, OpenAPI integration, consistent error handling, batch safety
+   * - Alternative 2 (replicate Input derivation): Duplicate Hono's complex generic logic, maintenance burden
+   * - Alternative 3 (use Handler directly): Lose route config type checking and OpenAPI metadata
    *
-   * PATTERN: Standard handler factory with type abstraction
-   * REFERENCE: Hono factory pattern for route handler generators
+   * This pattern is standard for handler factory abstractions over framework types.
+   * The double cast (as unknown as T) acknowledges the structural mismatch is intentional.
    */
   return handler as unknown as RouteHandler<TRoute, TEnv>;
 }

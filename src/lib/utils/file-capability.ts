@@ -176,9 +176,67 @@ export function getIncompatibleModelIds<T extends { id: string; capabilities: Mo
   return incompatibleIds;
 }
 
+/**
+ * ✅ GRANULAR: Get detailed incompatibility info for each model
+ * Returns which models are incompatible and why (vision vs file)
+ */
+export type ModelIncompatibilityInfo = {
+  /** All incompatible model IDs */
+  incompatibleIds: Set<string>;
+  /** Model IDs incompatible due to missing vision support (images) */
+  visionIncompatibleIds: Set<string>;
+  /** Model IDs incompatible due to missing file support (PDFs) */
+  fileIncompatibleIds: Set<string>;
+};
+
+export function getDetailedIncompatibleModelIds<T extends { id: string; capabilities: ModelFileCapabilities }>(
+  models: T[],
+  files: FileForCapabilityCheck[],
+): ModelIncompatibilityInfo {
+  const incompatibleIds = new Set<string>();
+  const visionIncompatibleIds = new Set<string>();
+  const fileIncompatibleIds = new Set<string>();
+
+  // No files = no incompatibilities
+  if (files.length === 0) {
+    return { incompatibleIds, visionIncompatibleIds, fileIncompatibleIds };
+  }
+
+  const hasImages = filesHaveImages(files);
+  const hasDocuments = filesHaveDocuments(files);
+
+  for (const model of models) {
+    // Check vision incompatibility (images)
+    if (hasImages && !model.capabilities.vision) {
+      incompatibleIds.add(model.id);
+      visionIncompatibleIds.add(model.id);
+    }
+    // Check file incompatibility (documents) - only if not already incompatible due to vision
+    if (hasDocuments && !model.capabilities.file) {
+      incompatibleIds.add(model.id);
+      fileIncompatibleIds.add(model.id);
+    }
+  }
+
+  return { incompatibleIds, visionIncompatibleIds, fileIncompatibleIds };
+}
+
 // ============================================================================
 // THREAD-LEVEL FILE CHECKING
 // ============================================================================
+
+/**
+ * Helper to extract mediaType from a message part
+ */
+function getPartMediaType(part: unknown): string | null {
+  if (typeof part !== 'object' || part === null)
+    return null;
+  if (!('type' in part) || part.type !== 'file')
+    return null;
+  if (!('mediaType' in part) || typeof part.mediaType !== 'string')
+    return null;
+  return part.mediaType;
+}
 
 /**
  * Check if thread messages contain vision-required files
@@ -194,14 +252,42 @@ export function threadHasVisionRequiredFiles(
     if (!msg.parts)
       return false;
     return msg.parts.some((part) => {
-      // Type guard: check if part is a file part with mediaType
-      if (typeof part !== 'object' || part === null)
-        return false;
-      if (!('type' in part) || part.type !== 'file')
-        return false;
-      if (!('mediaType' in part) || typeof part.mediaType !== 'string')
-        return false;
-      return isVisionRequiredMimeType(part.mediaType);
+      const mediaType = getPartMediaType(part);
+      return mediaType !== null && isVisionRequiredMimeType(mediaType);
+    });
+  });
+}
+
+/**
+ * ✅ GRANULAR: Check if thread messages contain image files
+ * Used to determine if non-vision models should be disabled
+ */
+export function threadHasImageFiles(
+  messages: Array<{ parts?: unknown[] }>,
+): boolean {
+  return messages.some((msg) => {
+    if (!msg.parts)
+      return false;
+    return msg.parts.some((part) => {
+      const mediaType = getPartMediaType(part);
+      return mediaType !== null && isImageFile(mediaType);
+    });
+  });
+}
+
+/**
+ * ✅ GRANULAR: Check if thread messages contain document files (PDFs)
+ * Used to determine if non-file-supporting models should be disabled
+ */
+export function threadHasDocumentFiles(
+  messages: Array<{ parts?: unknown[] }>,
+): boolean {
+  return messages.some((msg) => {
+    if (!msg.parts)
+      return false;
+    return msg.parts.some((part) => {
+      const mediaType = getPartMediaType(part);
+      return mediaType !== null && isDocumentFile(mediaType);
     });
   });
 }

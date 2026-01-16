@@ -413,8 +413,12 @@
       "modelsDeselected": "Models Deselected",
       "modelsDeselectedDescription": "{models} cannot process images/PDFs and were deselected",
       "noModelsFound": "No models found",
+      "noFileSupport": "No PDF support",
+      "noFileSupportTooltip": "This model cannot process PDF documents",
       "noVision": "No vision",
       "noVisionTooltip": "This model cannot process images",
+      "modelsDeselectedDueToImages": "{models} cannot process images and were deselected",
+      "modelsDeselectedDueToDocuments": "{models} cannot process PDF documents and were deselected",
       "presetModelsExcluded": "Some models excluded",
       "presetModelsExcludedDescription": "Some models in this preset are not available on your plan.",
       "presets": {

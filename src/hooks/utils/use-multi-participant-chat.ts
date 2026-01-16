@@ -1881,7 +1881,6 @@ export function useMultiParticipantChat(
 
     // ✅ Guards: Wait for dependencies to be ready
     // ✅ FIX: Require AI SDK to be fully ready before sending
-    // NOTE: isExplicitlyStreaming removed from guard - handled above by stale state fix
     if (messages.length === 0 || status !== AiSdkStatuses.READY) {
       isTriggeringRef.current = false;
       return;
@@ -2389,10 +2388,6 @@ export function useMultiParticipantChat(
     // Note: callbackRefs not in deps - we use callbackRefs.onRetry.current to always get latest value
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.onRetry/pendingFileParts accessed via .current (ref pattern)
   }, [messages, sendMessage, status, setMessages, resetErrorTracking, clearAnimations]);
-
-  // ✅ RESUMABLE STREAMS: Stop functionality removed
-  // Stream resumption is incompatible with abort signals
-  // Streams now continue until completion and can resume after page reload
 
   // ✅ REACT 19 PATTERN: useEffectEvent for resumed stream handling
   // This event handler reads latest values (hasEarlyOptimisticMessage, threadId, messages)

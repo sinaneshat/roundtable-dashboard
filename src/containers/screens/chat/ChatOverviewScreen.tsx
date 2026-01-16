@@ -1048,7 +1048,7 @@ export default function ChatOverviewScreen() {
             current_tier: userTierConfig.tier,
             can_upgrade: userTierConfig.can_upgrade,
           }}
-          incompatibleModelIds={incompatibleModelIds}
+          visionIncompatibleModelIds={visionIncompatibleModelIds}
         />
       )}
 

@@ -535,7 +535,8 @@ describe('invalidation Scope Precision', () => {
       const threadId = 'thread-123';
       const patterns = invalidationPatterns.threadDetail(threadId);
 
-      expect(patterns).toHaveLength(3);
+      // detail + lists + sidebar + changelog = 4 patterns
+      expect(patterns).toHaveLength(4);
     });
   });
 

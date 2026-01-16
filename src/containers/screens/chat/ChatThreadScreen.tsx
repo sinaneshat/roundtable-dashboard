@@ -17,9 +17,11 @@ import { toastManager } from '@/lib/toast';
 import {
   chatMessagesToUIMessages,
   getCurrentRoundNumber,
-  getIncompatibleModelIds,
-  isVisionRequiredMimeType,
-  threadHasVisionRequiredFiles,
+  getDetailedIncompatibleModelIds,
+  isDocumentFile,
+  isImageFile,
+  threadHasDocumentFiles,
+  threadHasImageFiles,
 } from '@/lib/utils';
 import {
   areAllParticipantsCompleteForRound,
@@ -143,31 +145,57 @@ export default function ChatThreadScreen({
     [modelsData?.data?.items],
   );
 
-  const { incompatibleModelIds, visionIncompatibleModelIds } = useMemo(() => {
+  // ✅ GRANULAR: Track vision (image) and file (document) incompatibilities separately
+  const { incompatibleModelIds, visionIncompatibleModelIds, fileIncompatibleModelIds } = useMemo(() => {
     const incompatible = new Set<string>();
-    const visionIncompatible = new Set<string>();
 
+    // Add inaccessible models (tier restrictions)
     for (const model of allEnabledModels) {
       if (!model.is_accessible_to_user) {
         incompatible.add(model.id);
       }
     }
 
-    const existingVisionFiles = threadHasVisionRequiredFiles(messages);
-    const newVisionFiles = chatAttachments.attachments.some(att =>
-      isVisionRequiredMimeType(att.file.type),
+    // Check for images in thread and attachments
+    const existingImageFiles = threadHasImageFiles(messages);
+    const newImageFiles = chatAttachments.attachments.some(att =>
+      isImageFile(att.file.type),
     );
+    const hasImages = existingImageFiles || newImageFiles;
 
-    if (existingVisionFiles || newVisionFiles) {
-      const files = [{ mimeType: 'image/png' }];
-      const visionIncompatibleIds = getIncompatibleModelIds(allEnabledModels, files);
-      for (const id of visionIncompatibleIds) {
-        incompatible.add(id);
-        visionIncompatible.add(id);
-      }
+    // Check for documents in thread and attachments
+    const existingDocumentFiles = threadHasDocumentFiles(messages);
+    const newDocumentFiles = chatAttachments.attachments.some(att =>
+      isDocumentFile(att.file.type),
+    );
+    const hasDocuments = existingDocumentFiles || newDocumentFiles;
+
+    // Build file list for capability checking
+    const files: Array<{ mimeType: string }> = [];
+    if (hasImages) {
+      files.push({ mimeType: 'image/png' }); // Representative image type
+    }
+    if (hasDocuments) {
+      files.push({ mimeType: 'application/pdf' }); // Representative document type
     }
 
-    return { incompatibleModelIds: incompatible, visionIncompatibleModelIds: visionIncompatible };
+    // Get detailed incompatibility info
+    const {
+      incompatibleIds,
+      visionIncompatibleIds,
+      fileIncompatibleIds,
+    } = getDetailedIncompatibleModelIds(allEnabledModels, files);
+
+    // Merge with tier-restricted models
+    for (const id of incompatibleIds) {
+      incompatible.add(id);
+    }
+
+    return {
+      incompatibleModelIds: incompatible,
+      visionIncompatibleModelIds: visionIncompatibleIds,
+      fileIncompatibleModelIds: fileIncompatibleIds,
+    };
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
   useEffect(() => {
@@ -190,12 +218,19 @@ export default function ChatThreadScreen({
       return;
     }
 
-    // Only show toast for models deselected due to vision incompatibility (not access control)
+    // ✅ GRANULAR: Track deselected models by reason
     const visionDeselected = incompatibleSelected.filter(
       p => visionIncompatibleModelIds.has(p.modelId),
     );
+    const fileDeselected = incompatibleSelected.filter(
+      p => fileIncompatibleModelIds.has(p.modelId) && !visionIncompatibleModelIds.has(p.modelId),
+    );
 
     const visionModelNames = visionDeselected
+      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .filter((name): name is string => Boolean(name));
+
+    const fileModelNames = fileDeselected
       .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
@@ -211,20 +246,33 @@ export default function ChatThreadScreen({
     setSelectedParticipants(reindexed);
     setSelectedModelIds(reindexed.map(p => p.modelId));
 
-    // Only show "images/PDFs" toast when:
-    // 1. Models are actually deselected due to vision incompatibility
-    // 2. NOT on initial page load (only when user adds new files)
-    if (visionModelNames.length > 0 && !isInitialMount) {
-      const modelList = visionModelNames.length <= 2
-        ? visionModelNames.join(' and ')
-        : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;
+    // ✅ GRANULAR TOASTS: Show specific reason for deselection (not on initial page load)
+    if (!isInitialMount) {
+      // Toast for vision (image) incompatibility
+      if (visionModelNames.length > 0) {
+        const modelList = visionModelNames.length <= 2
+          ? visionModelNames.join(' and ')
+          : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;
 
-      toastManager.warning(
-        t('chat.models.modelsDeselected'),
-        t('chat.models.modelsDeselectedDescription', { models: modelList }),
-      );
+        toastManager.warning(
+          t('chat.models.modelsDeselected'),
+          t('chat.models.modelsDeselectedDueToImages', { models: modelList }),
+        );
+      }
+
+      // Toast for file (document) incompatibility - separate from vision
+      if (fileModelNames.length > 0) {
+        const modelList = fileModelNames.length <= 2
+          ? fileModelNames.join(' and ')
+          : `${fileModelNames.slice(0, 2).join(', ')} and ${fileModelNames.length - 2} more`;
+
+        toastManager.warning(
+          t('chat.models.modelsDeselected'),
+          t('chat.models.modelsDeselectedDueToDocuments', { models: modelList }),
+        );
+      }
     }
-  }, [incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, setSelectedParticipants, setSelectedModelIds, allEnabledModels, t]);
+  }, [incompatibleModelIds, visionIncompatibleModelIds, fileIncompatibleModelIds, selectedParticipants, setSelectedParticipants, setSelectedModelIds, allEnabledModels, t]);
 
   const formActions = useChatFormActions();
 

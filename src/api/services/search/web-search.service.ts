@@ -66,10 +66,6 @@ import {
   getCachedSearch,
 } from './web-search-cache.service';
 
-// ✅ SINGLE SOURCE OF TRUTH: Use BillingContext from @/api/services/billing
-// Re-export for backwards compatibility with existing imports
-export type { BillingContext as WebSearchBillingContext } from '@/api/services/billing';
-
 type PuppeteerRequestHandler = {
   isInterceptResolutionHandled: () => boolean;
   resourceType: () => string;

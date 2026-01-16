@@ -11,7 +11,7 @@ type ChatInputAttachmentsProps = {
   onRemove?: (id: string) => void;
 };
 
-const SKELETON_WIDTHS = ['w-24', 'w-20', 'w-28', 'w-22', 'w-26', 'w-18', 'w-30', 'w-20', 'w-24', 'w-22'] as const;
+const ATTACHMENT_SKELETON_WIDTHS = ['w-24', 'w-20', 'w-28', 'w-22', 'w-26', 'w-18', 'w-30', 'w-20', 'w-24', 'w-22'] as const;
 
 type ChatInputAttachmentsSkeletonProps = {
   count: number;
@@ -24,7 +24,7 @@ function ChatInputAttachmentsSkeleton({ count }: ChatInputAttachmentsSkeletonPro
         {Array.from({ length: count }, (_, i) => (
           <Skeleton
             key={`attachment-skeleton-${i}`}
-            className={`h-8 ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]} rounded-xl`}
+            className={`h-8 ${ATTACHMENT_SKELETON_WIDTHS[i % ATTACHMENT_SKELETON_WIDTHS.length]} rounded-xl`}
           />
         ))}
       </div>

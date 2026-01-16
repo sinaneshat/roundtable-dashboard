@@ -811,7 +811,7 @@ export type AnalyzeModelInfo = {
  * @param minModels - Minimum participants required
  * @param roleNames - Available role names
  * @param chatModes - Available chat modes
- * @param hasVisualFiles - Whether user has attached visual files
+ * @param requiresVision - Whether user has attached image files requiring vision support
  * @param freeTierMaxModels - Max models for free tier (for prompt guidance)
  * @returns System prompt for AI orchestrator analysis
  */
@@ -821,7 +821,7 @@ export function buildAnalyzeSystemPrompt(
   minModels: number,
   roleNames: readonly string[],
   chatModes: string[],
-  hasVisualFiles: boolean = false,
+  requiresVision: boolean = false,
   freeTierMaxModels: number = 3,
 ): string {
   const modelList = models.map((m) => {
@@ -834,17 +834,17 @@ export function buildAnalyzeSystemPrompt(
     return `- ${m.id}: ${m.description}${tagStr}`;
   }).join('\n');
 
-  const visualFilesNote = hasVisualFiles
+  const visionRequiredNote = requiresVision
     ? `
 
-## ⚠️ CRITICAL CONSTRAINT: VISUAL FILES ATTACHED
-The user has attached visual files (images or PDFs) that need to be analyzed.
+## ⚠️ CRITICAL CONSTRAINT: IMAGE FILES ATTACHED
+The user has attached image files that need to be analyzed.
 **YOU MUST ONLY SELECT MODELS MARKED WITH [vision] TAG.**
-All models in the list below already support vision - select from them for optimal image/PDF analysis.
+All models in the list below already support vision - select from them for optimal image analysis.
 `
     : '';
 
-  return `You are an expert AI orchestrator that analyzes user prompts and configures optimal multi-model chat sessions. Your goal is to maximize response quality by intelligently selecting models, assigning roles, choosing the right conversation mode, and deciding whether web search would help.${visualFilesNote}
+  return `You are an expert AI orchestrator that analyzes user prompts and configures optimal multi-model chat sessions. Your goal is to maximize response quality by intelligently selecting models, assigning roles, choosing the right conversation mode, and deciding whether web search would help.${visionRequiredNote}
 
 ## YOUR TASK
 Analyze the user's prompt deeply. Consider:

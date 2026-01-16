@@ -172,12 +172,10 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
   },
   async (c) => {
     const { user } = c.auth();
-    const { prompt, hasImageFiles, hasDocumentFiles, hasVisualFiles } = c.validated.body;
+    const { prompt, hasImageFiles, hasDocumentFiles } = c.validated.body;
 
-    // ✅ GRANULAR: Derive flags - use new granular flags, fallback to legacy hasVisualFiles
-    // Legacy clients sending hasVisualFiles=true will filter for both vision AND file support
-    const requiresVision = hasImageFiles || hasVisualFiles;
-    const requiresFile = hasDocumentFiles || hasVisualFiles; // PDFs were grouped with visual files
+    const requiresVision = hasImageFiles;
+    const requiresFile = hasDocumentFiles;
 
     // Get user tier and model limits
     const userTier = await getUserTier(user.id);
@@ -212,14 +210,13 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
     // Build system prompt with user's accessible options
     // ✅ SINGLE SOURCE: Uses buildAnalyzeSystemPrompt from prompts.service.ts
     const models = getModelInfo(accessibleModelIds);
-    const hasAnyVisualFiles = requiresVision || requiresFile;
     const systemPrompt = buildAnalyzeSystemPrompt(
       models,
       maxModels,
       MIN_PARTICIPANTS_REQUIRED,
       SHORT_ROLE_NAMES,
       Object.values(ChatModes),
-      hasAnyVisualFiles,
+      requiresVision,
       MAX_MODELS_BY_TIER[SubscriptionTiers.FREE],
     );
 

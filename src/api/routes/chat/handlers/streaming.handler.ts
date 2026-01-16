@@ -190,9 +190,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         attachmentIds,
       } = c.validated.body;
 
-      // 🔍 DEBUG: Log incoming request for troubleshooting 400 errors
-      // Debug logging removed - use proper logger if needed
-
       // =========================================================================
       // STEP 1: Validate incoming message
       // =========================================================================

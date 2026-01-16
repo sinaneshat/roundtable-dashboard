@@ -1004,7 +1004,9 @@ function collectFileDataFromMessages(
  * when a model (like gpt-4o-mini via Azure) receives conversation history containing file parts.
  *
  * @param modelMessages - Messages that may contain file/image parts
- * @param capabilities - Model capabilities (supports_vision, supports_file)
+ * @param capabilities - Model capabilities
+ * @param capabilities.supportsVision - Whether the model supports vision/image content
+ * @param capabilities.supportsFile - Whether the model supports file content (PDFs, documents)
  * @returns Messages with unsupported parts filtered out
  */
 export function filterUnsupportedFileParts(

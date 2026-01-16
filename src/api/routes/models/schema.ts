@@ -117,6 +117,7 @@ export const BaseModelSchema = RawOpenRouterModelSchema.extend({
   category: ModelCategorySchema,
   capabilities: z.object({
     vision: z.boolean(),
+    file: z.boolean(), // ✅ Whether model supports file/document inputs (PDFs, DOC, etc.)
     reasoning: z.boolean(),
     streaming: z.boolean(),
     tools: z.boolean(),
@@ -127,6 +128,7 @@ export const BaseModelSchema = RawOpenRouterModelSchema.extend({
   }),
   is_free: z.boolean(),
   supports_vision: z.boolean(),
+  supports_file: z.boolean(), // ✅ Whether model supports file content types (PDFs) - derived from modality
   is_reasoning_model: z.boolean(),
 });
 

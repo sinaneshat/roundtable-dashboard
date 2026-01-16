@@ -33,6 +33,13 @@ export function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
+/**
+ * Check if value is a valid ErrorCode enum value
+ */
+export function isValidErrorCode(code: string, validCodes: readonly string[]): boolean {
+  return validCodes.includes(code);
+}
+
 export function isNumber(value: unknown): value is number {
   return typeof value === 'number' && !Number.isNaN(value);
 }

@@ -338,16 +338,16 @@ describe('multi-Round Timeline Integrity', () => {
     expect(timeline).toHaveLength(8); // 2 rounds × (1 user + 2 participants + 1 moderator)
 
     // Round 0
-    expect(timeline[0]).toMatchObject({ type: 'user_message', roundNumber: 0 });
-    expect(timeline[1]).toMatchObject({ type: 'participant_message', roundNumber: 0, participantIndex: 0 });
-    expect(timeline[2]).toMatchObject({ type: 'participant_message', roundNumber: 0, participantIndex: 1 });
-    expect(timeline[3]).toMatchObject({ type: 'moderator', roundNumber: 0 });
+    expect(timeline[0]).toMatchObject({ type: TimelineElementTypes.USER_MESSAGE, roundNumber: 0 });
+    expect(timeline[1]).toMatchObject({ type: TimelineElementTypes.PARTICIPANT_MESSAGE, roundNumber: 0, participantIndex: 0 });
+    expect(timeline[2]).toMatchObject({ type: TimelineElementTypes.PARTICIPANT_MESSAGE, roundNumber: 0, participantIndex: 1 });
+    expect(timeline[3]).toMatchObject({ type: TimelineElementTypes.MODERATOR, roundNumber: 0 });
 
     // Round 1
-    expect(timeline[4]).toMatchObject({ type: 'user_message', roundNumber: 1 });
-    expect(timeline[5]).toMatchObject({ type: 'participant_message', roundNumber: 1, participantIndex: 0 });
-    expect(timeline[6]).toMatchObject({ type: 'participant_message', roundNumber: 1, participantIndex: 1 });
-    expect(timeline[7]).toMatchObject({ type: 'moderator', roundNumber: 1 });
+    expect(timeline[4]).toMatchObject({ type: TimelineElementTypes.USER_MESSAGE, roundNumber: 1 });
+    expect(timeline[5]).toMatchObject({ type: TimelineElementTypes.PARTICIPANT_MESSAGE, roundNumber: 1, participantIndex: 0 });
+    expect(timeline[6]).toMatchObject({ type: TimelineElementTypes.PARTICIPANT_MESSAGE, roundNumber: 1, participantIndex: 1 });
+    expect(timeline[7]).toMatchObject({ type: TimelineElementTypes.MODERATOR, roundNumber: 1 });
   });
 
   it('should handle mixed web search enabled/disabled across rounds', () => {
@@ -1071,7 +1071,7 @@ describe('complete Conversation Flow', () => {
     expect(validation.errors).toHaveLength(0);
 
     // Verify element counts
-    expect(timeline.filter(e => e.type === 'user_message')).toHaveLength(3);
+    expect(timeline.filter(e => e.type === TimelineElementTypes.USER_MESSAGE)).toHaveLength(3);
     expect(timeline.filter(e => e.type === TimelineElementTypes.PRE_SEARCH)).toHaveLength(3);
     expect(timeline.filter(e => e.type === TimelineElementTypes.PARTICIPANT_MESSAGE)).toHaveLength(6);
     expect(timeline.filter(e => e.type === TimelineElementTypes.MODERATOR)).toHaveLength(3);

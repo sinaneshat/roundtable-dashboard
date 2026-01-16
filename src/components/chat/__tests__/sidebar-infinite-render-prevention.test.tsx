@@ -82,15 +82,12 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       expect(content).toMatch(/href=\{chatUrl\}/);
     });
 
-    it('should use IntersectionObserver-based prefetch for visible items only', () => {
+    it('should disable prefetch to prevent server overload', () => {
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // Uses useInView hook for viewport-based prefetch (prevents server overload)
-      expect(content).toMatch(/useInView/);
-      expect(content).toMatch(/isInView/);
-      // Prefetch tied to visibility state
-      expect(content).toMatch(/prefetch=\{isInView\}/);
+      // Prefetch disabled entirely to prevent server overload from sidebar items
+      expect(content).toMatch(/prefetch=\{false\}/);
       // Should NOT have hover-based prefetch logic (caused production server overload)
       expect(content).not.toMatch(/shouldPrefetch/);
       expect(content).not.toMatch(/setShouldPrefetch/);

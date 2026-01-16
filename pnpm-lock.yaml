@@ -242,6 +242,9 @@ importers:
       ulid:
         specifier: ^3.0.2
         version: 3.0.2
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
       unpdf:
         specifier: ^1.4.0
         version: 1.4.0
@@ -293,7 +296,7 @@ importers:
         version: 4.3.1(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(postcss@8.5.6)
       '@serwist/next':
         specifier: ^9.4.4
-        version: 9.4.4(next@16.0.10(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)(typescript@5.9.3)(webpack@5.104.1(esbuild@0.25.10))
+        version: 9.4.4(next@16.0.10(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)(typescript@5.9.3)(webpack@5.104.1(esbuild@0.25.12))
       '@sparticuz/chromium':
         specifier: ^143.0.4
         version: 143.0.4
@@ -16284,11 +16287,11 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  '@serwist/next@9.4.4(next@16.0.10(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)(typescript@5.9.3)(webpack@5.104.1(esbuild@0.25.10))':
+  '@serwist/next@9.4.4(next@16.0.10(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)(typescript@5.9.3)(webpack@5.104.1(esbuild@0.25.12))':
     dependencies:
       '@serwist/build': 9.4.4(typescript@5.9.3)
       '@serwist/utils': 9.4.4
-      '@serwist/webpack-plugin': 9.4.4(typescript@5.9.3)(webpack@5.104.1(esbuild@0.25.10))
+      '@serwist/webpack-plugin': 9.4.4(typescript@5.9.3)(webpack@5.104.1(esbuild@0.25.12))
       '@serwist/window': 9.4.4(typescript@5.9.3)
       browserslist: 4.28.1
       glob: 10.5.0
@@ -16305,7 +16308,7 @@ snapshots:
 
   '@serwist/utils@9.4.4': {}
 
-  '@serwist/webpack-plugin@9.4.4(typescript@5.9.3)(webpack@5.104.1(esbuild@0.25.10))':
+  '@serwist/webpack-plugin@9.4.4(typescript@5.9.3)(webpack@5.104.1(esbuild@0.25.12))':
     dependencies:
       '@serwist/build': 9.4.4(typescript@5.9.3)
       '@serwist/utils': 9.4.4

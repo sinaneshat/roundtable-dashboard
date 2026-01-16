@@ -33,6 +33,28 @@ import type {
 } from './store-schemas';
 
 // ============================================================================
+// RESET STATE TYPES - Extracted complex Pick<> expressions
+// ============================================================================
+
+/**
+ * Type for streaming state reset - all streaming-related flags
+ * Extracted from STREAMING_STATE_RESET satisfies clause
+ */
+type StreamingStateResetType = Pick<ThreadState & UIState & DataState, 'isStreaming' | 'currentParticipantIndex'> & Pick<DataState, 'streamingRoundNumber' | 'currentRoundNumber'> & Pick<UIState, 'waitingToStartStreaming'>;
+
+/**
+ * Type for pending message state reset - all pending message-related flags
+ * Extracted from PENDING_MESSAGE_STATE_RESET satisfies clause
+ */
+type PendingMessageStateResetType = Pick<DataState, 'pendingMessage' | 'pendingAttachmentIds' | 'pendingFileParts' | 'expectedParticipantIds'> & Pick<TrackingState, 'hasSentPendingMessage'>;
+
+/**
+ * Type for regeneration state reset - all regeneration-related flags
+ * Extracted from REGENERATION_STATE_RESET satisfies clause
+ */
+type RegenerationStateResetType = Pick<FlagsState, 'isRegenerating'> & Pick<DataState, 'regeneratingRoundNumber'>;
+
+// ============================================================================
 // FORM SLICE DEFAULTS
 // ============================================================================
 
@@ -250,7 +272,7 @@ export const STREAMING_STATE_RESET = {
   currentRoundNumber: null,
   waitingToStartStreaming: false,
   currentParticipantIndex: 0,
-} satisfies Pick<ThreadState & UIState & DataState, 'isStreaming' | 'currentParticipantIndex'> & Pick<DataState, 'streamingRoundNumber' | 'currentRoundNumber'> & Pick<UIState, 'waitingToStartStreaming'>;
+} satisfies StreamingStateResetType;
 
 /**
  * Moderator creation flags
@@ -278,7 +300,7 @@ export const PENDING_MESSAGE_STATE_RESET = {
   pendingFileParts: null,
   expectedParticipantIds: null,
   hasSentPendingMessage: false,
-} satisfies Pick<DataState, 'pendingMessage' | 'pendingAttachmentIds' | 'pendingFileParts' | 'expectedParticipantIds'> & Pick<TrackingState, 'hasSentPendingMessage'>;
+} satisfies PendingMessageStateResetType;
 
 /**
  * Regeneration-specific flags
@@ -287,7 +309,7 @@ export const PENDING_MESSAGE_STATE_RESET = {
 export const REGENERATION_STATE_RESET = {
   isRegenerating: false,
   regeneratingRoundNumber: null,
-} satisfies Pick<FlagsState, 'isRegenerating'> & Pick<DataState, 'regeneratingRoundNumber'>;
+} satisfies RegenerationStateResetType;
 
 /**
  * Stream resumption state that must be cleared when round completes

@@ -190,3 +190,36 @@ export const TextPartStates = {
 export function isTextPartStreaming(state: TextPartState | undefined): boolean {
   return state === TextPartStates.STREAMING;
 }
+
+// ============================================================================
+// STREAM PART TYPE (AI SDK v6 streaming event types)
+// ============================================================================
+
+export const STREAM_PART_TYPES = [
+  'start',
+  'text-delta',
+  'reasoning-delta',
+  'finish',
+  'error',
+  'start-step',
+  'finish-step',
+] as const;
+
+export const StreamPartTypeSchema = z.enum(STREAM_PART_TYPES).openapi({
+  description: 'AI SDK v6 streaming event types',
+  example: 'text-delta',
+});
+
+export type StreamPartType = z.infer<typeof StreamPartTypeSchema>;
+
+export const DEFAULT_STREAM_PART_TYPE: StreamPartType = 'start';
+
+export const StreamPartTypes = {
+  START: 'start' as const,
+  TEXT_DELTA: 'text-delta' as const,
+  REASONING_DELTA: 'reasoning-delta' as const,
+  FINISH: 'finish' as const,
+  ERROR: 'error' as const,
+  START_STEP: 'start-step' as const,
+  FINISH_STEP: 'finish-step' as const,
+} as const;

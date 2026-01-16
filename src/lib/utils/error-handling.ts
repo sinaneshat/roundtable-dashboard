@@ -5,6 +5,8 @@ import { ERROR_CODES } from '@/api/core/enums';
 import type { ValidationError } from '@/api/core/schemas';
 import { ValidationErrorSchema } from '@/api/core/schemas';
 
+import { hasProperty, isNonEmptyString, isObject, isValidErrorCode } from './type-guards';
+
 // ============================================================================
 // ERROR MESSAGE CONSTANTS
 // ============================================================================
@@ -56,35 +58,26 @@ export const ApiErrorDetailsSchema = z.object({
 export type ApiErrorDetails = z.infer<typeof ApiErrorDetailsSchema>;
 
 // ============================================================================
-// TYPE GUARDS
+// ERROR CODE VALIDATION
 // ============================================================================
 
-export function isValidErrorCode(code: string): code is ErrorCode {
-  return (ERROR_CODES as readonly string[]).includes(code);
+export function isErrorCode(code: string): code is ErrorCode {
+  return isValidErrorCode(code, ERROR_CODES);
 }
 
-function hasStringProperty(obj: object, key: string): boolean {
-  if (typeof obj !== 'object' || obj === null)
-    return false;
-  return key in obj && typeof (obj as { [K in typeof key]?: unknown })[key] === 'string';
-}
-
-function isNonNullObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+// ============================================================================
+// ERROR DETAILS EXTRACTION
+// ============================================================================
 
 function extractErrorDetails(context: unknown): ClientErrorDetails | undefined {
-  if (!isNonNullObject(context)) {
+  if (!isObject(context)) {
     return undefined;
   }
 
   const details: NonNullable<ClientErrorDetails> = {};
 
-  if (hasStringProperty(context, 'errorType')) {
-    // context is already validated as Record<string, unknown> by isNonNullObject
-    if (typeof context.errorType === 'string') {
-      details.errorType = context.errorType;
-    }
+  if (hasProperty(context, 'errorType', isNonEmptyString)) {
+    details.errorType = context.errorType;
   }
 
   const contextRecord: Record<string, ErrorContextValue> = {};
@@ -168,7 +161,7 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
       result.details = extractErrorDetails(apiError.details);
     }
 
-    if ('context' in apiError && isNonNullObject(apiError.context)) {
+    if ('context' in apiError && isObject(apiError.context)) {
       result.details = result.details ?? extractErrorDetails(apiError.context);
     }
   }

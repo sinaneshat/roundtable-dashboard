@@ -72,7 +72,8 @@ export type ModelSelectionModalProps = {
   className?: string;
   children?: ReactNode;
   enableDrag?: boolean;
-  incompatibleModelIds?: Set<string>;
+  visionIncompatibleModelIds?: Set<string>;
+  fileIncompatibleModelIds?: Set<string>;
 };
 
 export function ModelSelectionModal({
@@ -91,7 +92,8 @@ export function ModelSelectionModal({
   className,
   children,
   enableDrag = true,
-  incompatibleModelIds,
+  visionIncompatibleModelIds,
+  fileIncompatibleModelIds,
 }: ModelSelectionModalProps) {
   const t = useTranslations();
   const [searchQuery, setSearchQuery] = useState('');
@@ -428,6 +430,21 @@ export function ModelSelectionModal({
     return selectedPreset.modelRoles.map(mr => mr.modelId);
   }, [selectedPreset]);
 
+  const combinedIncompatibleModelIds = useMemo(() => {
+    const combined = new Set<string>();
+    if (visionIncompatibleModelIds) {
+      for (const id of visionIncompatibleModelIds) {
+        combined.add(id);
+      }
+    }
+    if (fileIncompatibleModelIds) {
+      for (const id of fileIncompatibleModelIds) {
+        combined.add(id);
+      }
+    }
+    return combined;
+  }, [visionIncompatibleModelIds, fileIncompatibleModelIds]);
+
   const presetValidation = useMemo(() => {
     const selectedModels = orderedModels.filter(om => om.participant !== null);
 
@@ -475,9 +492,9 @@ export function ModelSelectionModal({
     if (!selectedPreset || !onPresetSelect)
       return;
 
-    const incompatibleCount = incompatibleModelIds
-      ? selectedPresetModelIds.filter(id => incompatibleModelIds.has(id)).length
-      : 0;
+    const incompatibleCount = selectedPresetModelIds.filter(id =>
+      combinedIncompatibleModelIds.has(id),
+    ).length;
 
     if (incompatibleCount > 0 && incompatibleCount < selectedPresetModelIds.length) {
       toastManager.warning(
@@ -490,7 +507,7 @@ export function ModelSelectionModal({
       onPresetSelect(selectedPreset);
       onOpenChange(false);
     }
-  }, [selectedPreset, selectedPresetModelIds, onPresetSelect, onOpenChange, incompatibleModelIds, t]);
+  }, [selectedPreset, selectedPresetModelIds, onPresetSelect, onOpenChange, combinedIncompatibleModelIds, t]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -761,7 +778,7 @@ export function ModelSelectionModal({
                                             userTier={userTier}
                                             onSelect={handlePresetCardClick}
                                             isSelected={selectedPresetId === userPreset.id}
-                                            incompatibleModelIds={incompatibleModelIds}
+                                            incompatibleModelIds={combinedIncompatibleModelIds}
                                             onCustomize={result => handleCustomizePreset(result, true)}
                                             isUserPreset
                                             onDelete={() => handleDeleteUserPreset(userPreset.id)}
@@ -789,7 +806,7 @@ export function ModelSelectionModal({
                                     userTier={userTier}
                                     onSelect={handlePresetCardClick}
                                     isSelected={selectedPresetId === preset.id}
-                                    incompatibleModelIds={incompatibleModelIds}
+                                    incompatibleModelIds={combinedIncompatibleModelIds}
                                     onCustomize={handleCustomizePreset}
                                   />
                                 ))}
@@ -864,7 +881,8 @@ export function ModelSelectionModal({
                                           maxModels={maxModels}
                                           enableDrag
                                           onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
-                                          isIncompatibleWithFiles={incompatibleModelIds?.has(orderedModel.model.id)}
+                                          isVisionIncompatible={visionIncompatibleModelIds?.has(orderedModel.model.id)}
+                                          isFileIncompatible={fileIncompatibleModelIds?.has(orderedModel.model.id)}
                                           pendingRole={pendingRoles[orderedModel.model.id]}
                                         />
                                       ))}
@@ -884,7 +902,8 @@ export function ModelSelectionModal({
                                           maxModels={maxModels}
                                           enableDrag={false}
                                           onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
-                                          isIncompatibleWithFiles={incompatibleModelIds?.has(orderedModel.model.id)}
+                                          isVisionIncompatible={visionIncompatibleModelIds?.has(orderedModel.model.id)}
+                                          isFileIncompatible={fileIncompatibleModelIds?.has(orderedModel.model.id)}
                                           pendingRole={pendingRoles[orderedModel.model.id]}
                                         />
                                       ))}

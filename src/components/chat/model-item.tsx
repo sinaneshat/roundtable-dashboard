@@ -92,7 +92,8 @@ export type ModelItemProps = {
   maxModels: number;
   enableDrag?: boolean;
   onOpenRolePanel?: () => void;
-  isIncompatibleWithFiles?: boolean;
+  isVisionIncompatible?: boolean;
+  isFileIncompatible?: boolean;
   pendingRole?: PendingRoleConfig;
 };
 
@@ -104,7 +105,8 @@ export function ModelItem({
   maxModels,
   enableDrag = true,
   onOpenRolePanel,
-  isIncompatibleWithFiles = false,
+  isVisionIncompatible = false,
+  isFileIncompatible = false,
   pendingRole,
 }: ModelItemProps) {
   const t = useTranslations();
@@ -115,8 +117,8 @@ export function ModelItem({
   const isAccessible = model.is_accessible_to_user ?? isSelected;
   const isDisabledDueToTier = !isSelected && !isAccessible;
   const isDisabledDueToLimit = !isSelected && selectedCount >= maxModels;
-  const isDisabledDueToFileIncompatibility = !isSelected && isIncompatibleWithFiles;
-  const showFileIncompatibilityWarning = isIncompatibleWithFiles;
+  const hasAnyFileIncompatibility = isVisionIncompatible || isFileIncompatible;
+  const isDisabledDueToFileIncompatibility = !isSelected && hasAnyFileIncompatibility;
   const isDisabled = isDisabledDueToTier || isDisabledDueToLimit || isDisabledDueToFileIncompatibility;
 
   const itemContent = (
@@ -154,8 +156,7 @@ export function ModelItem({
                 {t('chat.models.limitReached')}
               </Badge>
             )}
-            {/* Use native title instead of Radix Tooltip to avoid React 19 compose-refs infinite loop */}
-            {showFileIncompatibilityWarning && !isDisabledDueToTier && !isDisabledDueToLimit && (
+            {isVisionIncompatible && !isDisabledDueToTier && !isDisabledDueToLimit && (
               <Badge
                 variant="outline"
                 title={t('chat.models.noVisionTooltip')}
@@ -163,6 +164,16 @@ export function ModelItem({
               >
                 <Icons.eyeOff className="size-2.5 sm:size-3" />
                 {t('chat.models.noVision')}
+              </Badge>
+            )}
+            {isFileIncompatible && !isVisionIncompatible && !isDisabledDueToTier && !isDisabledDueToLimit && (
+              <Badge
+                variant="outline"
+                title={t('chat.models.noFileSupportTooltip')}
+                className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1"
+              >
+                <Icons.fileX className="size-2.5 sm:size-3" />
+                {t('chat.models.noFileSupport')}
               </Badge>
             )}
 

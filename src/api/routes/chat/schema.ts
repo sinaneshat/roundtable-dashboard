@@ -1802,11 +1802,6 @@ export const AnalyzePromptRequestSchema = z.object({
     description: 'Whether document files (PDFs, DOC, etc.) are attached - restricts to models with supports_file',
     example: false,
   }),
-  // ⚠️ LEGACY: Kept for backward compatibility - prefer using hasImageFiles/hasDocumentFiles
-  hasVisualFiles: z.boolean().optional().default(false).openapi({
-    description: '[LEGACY] Whether visual files (images/PDFs) are attached - use hasImageFiles/hasDocumentFiles instead',
-    example: false,
-  }),
 }).openapi('AnalyzePromptRequest');
 
 export type AnalyzePromptRequest = z.infer<typeof AnalyzePromptRequestSchema>;

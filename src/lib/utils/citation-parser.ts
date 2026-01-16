@@ -159,10 +159,9 @@ export function parseCitations(text: string): ParsedCitationResult {
   CITATION_PATTERN.lastIndex = 0;
 
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  let match = CITATION_PATTERN.exec(normalizedText);
 
-  // eslint-disable-next-line no-cond-assign
-  while ((match = CITATION_PATTERN.exec(normalizedText)) !== null) {
+  while (match !== null) {
     const marker = match[0];
     const sourceId = marker.slice(1, -1);
     const prefix = sourceId.split('_')[0] ?? '';
@@ -170,6 +169,7 @@ export function parseCitations(text: string): ParsedCitationResult {
     // Use type guard to safely access the prefix-to-source-type map
     if (!isValidPrefix(prefix)) {
       // Invalid prefix, treat as plain text
+      match = CITATION_PATTERN.exec(normalizedText);
       continue;
     }
 
@@ -215,6 +215,7 @@ export function parseCitations(text: string): ParsedCitationResult {
     }
 
     lastIndex = match.index + marker.length;
+    match = CITATION_PATTERN.exec(normalizedText);
   }
 
   // Add remaining text as segment

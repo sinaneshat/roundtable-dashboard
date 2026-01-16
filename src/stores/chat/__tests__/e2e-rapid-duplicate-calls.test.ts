@@ -16,6 +16,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FinishReasons, MessageStatuses } from '@/api/core/enums';
 import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage } from '@/lib/testing';
+import type { TestCallType } from '@/lib/testing/enums';
+import { TestCallTypes } from '@/lib/testing/enums';
 
 import { createChatStore } from '../store';
 
@@ -24,7 +26,7 @@ import { createChatStore } from '../store';
 // ============================================================================
 
 type CallRecord = {
-  type: string;
+  type: TestCallType;
   timestamp: number;
   tick: number;
   args?: unknown;
@@ -33,10 +35,10 @@ type CallRecord = {
 type CallTracker = {
   calls: CallRecord[];
   currentTick: number;
-  recordCall: (type: string, args?: unknown) => void;
+  recordCall: (type: TestCallType, args?: unknown) => void;
   advanceTick: () => void;
   getCallsInTick: (tick: number) => CallRecord[];
-  getDuplicatesInTick: (tick: number) => Map<string, CallRecord[]>;
+  getDuplicatesInTick: (tick: number) => Map<TestCallType, CallRecord[]>;
   clear: () => void;
 };
 
@@ -51,7 +53,7 @@ function createCallTracker(): CallTracker {
   return {
     calls,
     currentTick,
-    recordCall: (type: string, args?: unknown) => {
+    recordCall: (type: TestCallType, args?: unknown) => {
       calls.push({
         type,
         timestamp: Date.now(),
@@ -67,7 +69,7 @@ function createCallTracker(): CallTracker {
     },
     getDuplicatesInTick: (tick: number) => {
       const tickCalls = calls.filter(c => c.tick === tick);
-      const grouped = new Map<string, CallRecord[]>();
+      const grouped = new Map<TestCallType, CallRecord[]>();
 
       for (const call of tickCalls) {
         const existing = grouped.get(call.type) ?? [];
@@ -75,7 +77,7 @@ function createCallTracker(): CallTracker {
         grouped.set(call.type, existing);
       }
 
-      const duplicates = new Map<string, CallRecord[]>();
+      const duplicates = new Map<TestCallType, CallRecord[]>();
       for (const [type, records] of grouped) {
         if (records.length > 1) {
           duplicates.set(type, records);
@@ -114,7 +116,7 @@ describe('flow Controller Effects: hasUpdatedThreadRef Re-entry Guard', () => {
         return; // Guard prevents re-entry
       }
 
-      tracker.recordCall('slug-polling-start');
+      tracker.recordCall(TestCallTypes.SLUG_POLLING_START);
       hasUpdatedThreadRef.current = true;
     };
 
@@ -169,7 +171,7 @@ describe('flow Controller Effects: hasUpdatedThreadRef Re-entry Guard', () => {
         return;
       }
 
-      tracker.recordCall('url-replace');
+      tracker.recordCall(TestCallTypes.URL_REPLACE);
       hasUpdatedThreadRef.current = true;
     };
 
@@ -190,7 +192,7 @@ describe('flow Controller Effects: hasUpdatedThreadRef Re-entry Guard', () => {
       if (hasUpdatedThreadRef.current) {
         return;
       }
-      tracker.recordCall('slug-polling');
+      tracker.recordCall(TestCallTypes.SLUG_POLLING);
       hasUpdatedThreadRef.current = true;
     };
 
@@ -236,7 +238,7 @@ describe('flow State Machine Effects: hasNavigatedRef Duplicate Navigation Guard
         return;
       }
 
-      tracker.recordCall('router-push', { slug });
+      tracker.recordCall(TestCallTypes.ROUTER_PUSH, { slug });
       hasNavigatedRef.current = true;
     };
 
@@ -257,7 +259,7 @@ describe('flow State Machine Effects: hasNavigatedRef Duplicate Navigation Guard
       if (hasNavigatedRef.current) {
         return;
       }
-      tracker.recordCall('router-push', { slug });
+      tracker.recordCall(TestCallTypes.ROUTER_PUSH, { slug });
       hasNavigatedRef.current = true;
     };
 
@@ -288,7 +290,7 @@ describe('flow State Machine Effects: hasNavigatedRef Duplicate Navigation Guard
       }
 
       queueMicrotask(() => {
-        tracker.recordCall('router-push', { slug });
+        tracker.recordCall(TestCallTypes.ROUTER_PUSH, { slug });
       });
 
       hasNavigatedRef.current = true;
@@ -326,7 +328,7 @@ describe('slug Polling: Interval Timing Verification', () => {
     const POLL_INTERVAL = 3000;
 
     const runSlugPoll = () => {
-      tracker.recordCall('slug-poll');
+      tracker.recordCall(TestCallTypes.SLUG_POLL);
     };
 
     const intervalId = setInterval(runSlugPoll, POLL_INTERVAL);
@@ -358,7 +360,7 @@ describe('slug Polling: Interval Timing Verification', () => {
         clearInterval(intervalId);
         return;
       }
-      tracker.recordCall('slug-poll');
+      tracker.recordCall(TestCallTypes.SLUG_POLL);
     };
 
     intervalId = setInterval(runSlugPoll, POLL_INTERVAL);
@@ -381,7 +383,7 @@ describe('slug Polling: Interval Timing Verification', () => {
 
     const setupPolling = () => {
       const intervalId = setInterval(() => {
-        tracker.recordCall('slug-poll');
+        tracker.recordCall(TestCallTypes.SLUG_POLL);
       }, POLL_INTERVAL);
 
       return () => clearInterval(intervalId);
@@ -414,13 +416,13 @@ describe('moderator Trigger: tryMarkModeratorCreated Atomic Guard', () => {
     // First attempt
     const didMark1 = store.getState().tryMarkModeratorCreated(roundNumber);
     if (didMark1) {
-      tracker.recordCall('moderator-create', { roundNumber });
+      tracker.recordCall(TestCallTypes.MODERATOR_CREATE, { roundNumber });
     }
 
     // Second attempt (duplicate)
     const didMark2 = store.getState().tryMarkModeratorCreated(roundNumber);
     if (didMark2) {
-      tracker.recordCall('moderator-create', { roundNumber, duplicate: true });
+      tracker.recordCall(TestCallTypes.MODERATOR_CREATE, { roundNumber, duplicate: true });
     }
 
     expect(didMark1).toBe(true);
@@ -484,13 +486,13 @@ describe('pre-Search Execution: tryMarkPreSearchTriggered Atomic Guard', () => {
     // First attempt
     const didMark1 = store.getState().tryMarkPreSearchTriggered(roundNumber);
     if (didMark1) {
-      tracker.recordCall('pre-search-execute', { roundNumber });
+      tracker.recordCall(TestCallTypes.PRE_SEARCH_EXECUTE, { roundNumber });
     }
 
     // Second attempt (duplicate)
     const didMark2 = store.getState().tryMarkPreSearchTriggered(roundNumber);
     if (didMark2) {
-      tracker.recordCall('pre-search-execute', { roundNumber, duplicate: true });
+      tracker.recordCall(TestCallTypes.PRE_SEARCH_EXECUTE, { roundNumber, duplicate: true });
     }
 
     expect(didMark1).toBe(true);
@@ -560,7 +562,7 @@ describe('stop Button: Prevent Duplicate Stop Actions', () => {
         return; // Already stopped
       }
 
-      tracker.recordCall('stop-streaming');
+      tracker.recordCall(TestCallTypes.STOP_STREAMING);
       // Use setIsStreaming instead of stopStreaming
       store.getState().setIsStreaming(false);
     };
@@ -597,7 +599,7 @@ describe('stop Button: Prevent Duplicate Stop Actions', () => {
       if (!store.getState().isStreaming) {
         return;
       }
-      tracker.recordCall('stop-streaming');
+      tracker.recordCall(TestCallTypes.STOP_STREAMING);
       store.getState().setIsStreaming(false);
     };
 
@@ -637,7 +639,7 @@ describe('message Submission: Rapid Submit Prevention', () => {
         return;
       }
 
-      tracker.recordCall('message-submit', { content: inputValue });
+      tracker.recordCall(TestCallTypes.SUBMIT_MESSAGE, { content: inputValue });
       store.setState({ pendingMessage: inputValue });
     };
 
@@ -680,7 +682,7 @@ describe('message Submission: Rapid Submit Prevention', () => {
       if (store.getState().pendingMessage !== null || store.getState().isStreaming) {
         return;
       }
-      tracker.recordCall('message-submit', { content });
+      tracker.recordCall(TestCallTypes.SUBMIT_MESSAGE, { content });
       store.setState({ pendingMessage: content });
     };
 
@@ -720,7 +722,7 @@ describe('subscription Cascade Prevention', () => {
       }
 
       // Don't trigger state updates inside subscription
-      tracker.recordCall('subscription-callback');
+      tracker.recordCall(TestCallTypes.SUBSCRIPTION_CALLBACK);
     };
 
     // Simulate multiple rapid state changes
@@ -754,16 +756,16 @@ describe('subscription Cascade Prevention', () => {
 
     // Track reference changes
     if (initialMessages !== messagesAfterUnrelatedUpdate) {
-      tracker.recordCall('messages-reference-changed-unrelated');
+      tracker.recordCall(TestCallTypes.MESSAGES_REFERENCE_CHANGED_UNRELATED);
     }
 
     if (messagesAfterUnrelatedUpdate !== messagesAfterUpdate) {
-      tracker.recordCall('messages-reference-changed-update');
+      tracker.recordCall(TestCallTypes.MESSAGES_REFERENCE_CHANGED_UPDATE);
     }
 
     // Only the actual message update should change reference
     expect(tracker.calls).toHaveLength(1);
-    expect(tracker.calls[0]?.type).toBe('messages-reference-changed-update');
+    expect(tracker.calls[0]?.type).toBe(TestCallTypes.MESSAGES_REFERENCE_CHANGED_UPDATE);
   });
 });
 
@@ -784,7 +786,7 @@ describe('effect Re-entry Detection', () => {
     const tracker = createCallTracker();
 
     const runEffect = () => {
-      tracker.recordCall('effect-run');
+      tracker.recordCall(TestCallTypes.EFFECT_RUN);
     };
 
     // Simulate React strict mode double-invoke
@@ -795,7 +797,7 @@ describe('effect Re-entry Detection', () => {
     const duplicates = tracker.getDuplicatesInTick(0);
 
     expect(callsInTick).toHaveLength(2);
-    expect(duplicates.has('effect-run')).toBe(true);
+    expect(duplicates.has(TestCallTypes.EFFECT_RUN)).toBe(true);
   });
 
   it('should use ref to prevent effect re-entry', () => {
@@ -807,7 +809,7 @@ describe('effect Re-entry Detection', () => {
         return;
       }
 
-      tracker.recordCall('effect-run');
+      tracker.recordCall(TestCallTypes.EFFECT_RUN);
       hasRunRef.current = true;
     };
 
@@ -826,7 +828,7 @@ describe('effect Re-entry Detection', () => {
 
     const setupEffect = () => {
       const timeoutId = setTimeout(() => {
-        tracker.recordCall('timeout-callback');
+        tracker.recordCall(TestCallTypes.TIMEOUT_CALLBACK);
       }, 1000);
 
       return () => clearTimeout(timeoutId);
@@ -863,7 +865,7 @@ describe('comprehensive Rapid Call Detection', () => {
     const tracker = createCallTracker();
 
     const rapidFunction = () => {
-      tracker.recordCall('rapid-call');
+      tracker.recordCall(TestCallTypes.RAPID_CALL);
     };
 
     // Rapid fire
@@ -874,7 +876,7 @@ describe('comprehensive Rapid Call Detection', () => {
     rapidFunction();
 
     // All should be in same tick (within 100ms window)
-    const allCalls = tracker.calls.filter(c => c.type === 'rapid-call');
+    const allCalls = tracker.calls.filter(c => c.type === TestCallTypes.RAPID_CALL);
     const timeRange = allCalls[allCalls.length - 1]!.timestamp - allCalls[0]!.timestamp;
 
     expect(allCalls).toHaveLength(3);
@@ -901,7 +903,7 @@ describe('comprehensive Rapid Call Detection', () => {
     };
 
     const debouncedCall = createDebouncedFunction(() => {
-      tracker.recordCall('debounced-call');
+      tracker.recordCall(TestCallTypes.DEBOUNCED_CALL);
     }, DEBOUNCE_MS);
 
     // Rapid calls
@@ -938,7 +940,7 @@ describe('comprehensive Rapid Call Detection', () => {
     };
 
     const throttledCall = createThrottledFunction(() => {
-      tracker.recordCall('throttled-call');
+      tracker.recordCall(TestCallTypes.THROTTLED_CALL);
     }, THROTTLE_MS);
 
     // First call - should fire immediately
@@ -971,7 +973,7 @@ describe('store Action Call Frequency', () => {
     const originalSetMessages = store.getState().setMessages;
     store.setState({
       setMessages: (messages) => {
-        tracker.recordCall('setMessages', { count: messages.length });
+        tracker.recordCall(TestCallTypes.SET_MESSAGES, { count: messages.length });
         originalSetMessages(messages);
       },
     });
@@ -1001,14 +1003,14 @@ describe('store Action Call Frequency', () => {
 
     // Call with same round number multiple times
     store.getState().setStreamingRoundNumber(0);
-    tracker.recordCall('setStreamingRoundNumber', { roundNumber: 0 });
+    tracker.recordCall(TestCallTypes.SET_STREAMING_ROUND_NUMBER, { roundNumber: 0 });
 
     store.getState().setStreamingRoundNumber(0);
-    tracker.recordCall('setStreamingRoundNumber', { roundNumber: 0 });
+    tracker.recordCall(TestCallTypes.SET_STREAMING_ROUND_NUMBER, { roundNumber: 0 });
 
     const duplicates = tracker.getDuplicatesInTick(0);
 
-    expect(duplicates.has('setStreamingRoundNumber')).toBe(true);
+    expect(duplicates.has(TestCallTypes.SET_STREAMING_ROUND_NUMBER)).toBe(true);
   });
 });
 
@@ -1044,7 +1046,7 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
       if (store.getState().pendingMessage !== null) {
         return;
       }
-      tracker.recordCall('submit-message');
+      tracker.recordCall(TestCallTypes.SUBMIT_MESSAGE);
       store.setState({ pendingMessage: store.getState().inputValue });
     };
 
@@ -1057,7 +1059,7 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
       if (store.getState().isStreaming) {
         return;
       }
-      tracker.recordCall('start-streaming');
+      tracker.recordCall(TestCallTypes.START_STREAMING);
       store.setState({ isStreaming: true, streamingRoundNumber: 0 });
     };
 
@@ -1081,7 +1083,7 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
     });
 
     store.getState().setMessages([userMsg, p0Msg]);
-    tracker.recordCall('participant-0-complete');
+    tracker.recordCall(TestCallTypes.PARTICIPANT_0_COMPLETE);
     tracker.advanceTick();
 
     // Tick 3: Second participant completes
@@ -1095,14 +1097,14 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
     });
 
     store.getState().setMessages([userMsg, p0Msg, p1Msg]);
-    tracker.recordCall('participant-1-complete');
+    tracker.recordCall(TestCallTypes.PARTICIPANT_1_COMPLETE);
     tracker.advanceTick();
 
     // Tick 4: Trigger moderator
     const triggerModerator = () => {
       const didMark = store.getState().tryMarkModeratorCreated(0);
       if (didMark) {
-        tracker.recordCall('trigger-moderator', { roundNumber: 0 });
+        tracker.recordCall(TestCallTypes.TRIGGER_MODERATOR, { roundNumber: 0 });
       }
     };
 
@@ -1119,7 +1121,7 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
     });
 
     store.getState().setMessages([userMsg, p0Msg, p1Msg, modMsg]);
-    tracker.recordCall('moderator-complete');
+    tracker.recordCall(TestCallTypes.MODERATOR_COMPLETE);
     tracker.advanceTick();
 
     // Tick 6: Stop streaming
@@ -1127,7 +1129,7 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
       if (!store.getState().isStreaming) {
         return;
       }
-      tracker.recordCall('stop-streaming');
+      tracker.recordCall(TestCallTypes.STOP_STREAMING);
       store.setState({ isStreaming: false });
     };
 
@@ -1146,9 +1148,9 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
     expect(tick6Duplicates.size).toBe(0); // No duplicate stops
 
     // Verify expected call counts
-    expect(tracker.calls.filter(c => c.type === 'submit-message')).toHaveLength(1);
-    expect(tracker.calls.filter(c => c.type === 'start-streaming')).toHaveLength(1);
-    expect(tracker.calls.filter(c => c.type === 'trigger-moderator')).toHaveLength(1);
-    expect(tracker.calls.filter(c => c.type === 'stop-streaming')).toHaveLength(1);
+    expect(tracker.calls.filter(c => c.type === TestCallTypes.SUBMIT_MESSAGE)).toHaveLength(1);
+    expect(tracker.calls.filter(c => c.type === TestCallTypes.START_STREAMING)).toHaveLength(1);
+    expect(tracker.calls.filter(c => c.type === TestCallTypes.TRIGGER_MODERATOR)).toHaveLength(1);
+    expect(tracker.calls.filter(c => c.type === TestCallTypes.STOP_STREAMING)).toHaveLength(1);
   });
 });
