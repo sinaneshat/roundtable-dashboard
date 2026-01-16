@@ -102,6 +102,7 @@ describe('server-side round completion', () => {
           threadId: 'thread123',
           roundNumber: 0,
           userId: 'user123',
+          sessionToken: 'a'.repeat(32), // Min 32 chars required
           reason: CheckRoundCompletionReasons.STALE_STREAM,
           queuedAt: new Date().toISOString(),
         };
@@ -117,6 +118,7 @@ describe('server-side round completion', () => {
           threadId: 'thread123',
           roundNumber: 1,
           userId: 'user456',
+          sessionToken: 'b'.repeat(32), // Min 32 chars required
           reason: CheckRoundCompletionReasons.RESUME_TRIGGER,
           queuedAt: new Date().toISOString(),
         };
@@ -132,6 +134,7 @@ describe('server-side round completion', () => {
           threadId: 'thread123',
           roundNumber: 2,
           userId: 'user789',
+          sessionToken: 'c'.repeat(32), // Min 32 chars required
           reason: CheckRoundCompletionReasons.SCHEDULED_CHECK,
           queuedAt: new Date().toISOString(),
         };
@@ -175,6 +178,7 @@ describe('server-side round completion', () => {
           threadId: 'thread123',
           roundNumber: 0,
           userId: 'user123',
+          sessionToken: 'd'.repeat(32), // Min 32 chars required
           userQuery: 'What is the weather like?',
           queuedAt: new Date().toISOString(),
         };
@@ -190,6 +194,7 @@ describe('server-side round completion', () => {
           threadId: 'thread123',
           roundNumber: 0,
           userId: 'user123',
+          sessionToken: 'e'.repeat(32), // Min 32 chars required
           userQuery: 'Analyze this document',
           attachmentIds: ['attach1', 'attach2'],
           queuedAt: new Date().toISOString(),

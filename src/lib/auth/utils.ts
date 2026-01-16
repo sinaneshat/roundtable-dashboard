@@ -6,15 +6,32 @@
 
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { APIError } from 'better-auth/api';
+import { z } from 'zod';
 
+import { BETTER_AUTH_SESSION_COOKIE_NAME } from '@/api/core/enums';
 import { isWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 
+// ============================================================================
+// SCHEMAS
+// ============================================================================
+
 /**
- * Better-auth middleware context type (inferred from createAuthMiddleware)
+ * Schema for auth request body with optional email field
+ * Used by Better Auth middleware for email-based operations
+ */
+const AuthRequestBodySchema = z.object({
+  email: z.string().email().optional(),
+}).passthrough(); // Allow additional Better Auth fields
+
+type AuthRequestBody = z.infer<typeof AuthRequestBodySchema>;
+
+/**
+ * Better-auth middleware context type
+ * Represents the context passed to auth hooks
  */
 type AuthContext = {
   path: string;
-  body?: Record<string, unknown>;
+  body?: AuthRequestBody;
 };
 
 /**
@@ -142,16 +159,32 @@ export function validateEmailDomain(ctx: AuthContext): void {
     return;
   }
 
-  // Extract email from request body
-  const email = ctx.body?.email;
-  if (!email || typeof email !== 'string') {
-    return; // Let better-auth handle missing email
+  // Validate and extract email from request body using Zod
+  const bodyParse = AuthRequestBodySchema.safeParse(ctx.body);
+  if (!bodyParse.success || !bodyParse.data.email) {
+    return; // Let better-auth handle missing/invalid email
   }
 
   // Validate email domain
-  if (!isAllowedEmailDomain(email)) {
+  if (!isAllowedEmailDomain(bodyParse.data.email)) {
     throw new APIError('BAD_REQUEST', {
       message: EMAIL_DOMAIN_CONFIG.ERROR_MESSAGE,
     });
   }
+}
+
+/**
+ * Extract session token from cookie header
+ * Used for queue-based operations that need to authenticate with Better Auth
+ *
+ * @param {string | undefined} cookieHeader - The Cookie header string
+ * @returns {string} The session token value, or empty string if not found
+ */
+export function extractSessionToken(cookieHeader: string | undefined): string {
+  if (!cookieHeader) {
+    return '';
+  }
+
+  const sessionTokenMatch = cookieHeader.match(new RegExp(`${BETTER_AUTH_SESSION_COOKIE_NAME.replace(/\./g, '\\.')}=([^;]+)`));
+  return sessionTokenMatch?.[1] || '';
 }

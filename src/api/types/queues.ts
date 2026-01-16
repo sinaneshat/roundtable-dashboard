@@ -68,6 +68,8 @@ export const TriggerParticipantQueueMessageSchema = z.object({
   participantIndex: z.number(),
   /** User ID who owns the thread */
   userId: z.string(),
+  /** User's session token for auth - queue consumer uses this as Cookie header */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
   /** Optional attachment IDs to pass to next participant */
   attachmentIds: z.array(z.string()).optional(),
   /** ISO timestamp when message was queued */
@@ -94,6 +96,8 @@ export const TriggerModeratorQueueMessageSchema = z.object({
   roundNumber: z.number(),
   /** User ID who owns the thread */
   userId: z.string(),
+  /** User's session token for auth - queue consumer uses this as Cookie header */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
   /** ISO timestamp when message was queued */
   queuedAt: z.string(),
 });
@@ -128,6 +132,8 @@ export const CheckRoundCompletionQueueMessageSchema = z.object({
   roundNumber: z.number(),
   /** User ID who owns the thread */
   userId: z.string(),
+  /** User's session token for auth - queue consumer uses this as Cookie header */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
   /** Reason for the check */
   reason: CheckRoundCompletionReasonSchema,
   /** ISO timestamp when message was queued */
@@ -158,6 +164,8 @@ export const TriggerPreSearchQueueMessageSchema = z.object({
   roundNumber: z.number(),
   /** User ID who owns the thread */
   userId: z.string(),
+  /** User's session token for auth - queue consumer uses this as Cookie header */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
   /** User query for web search */
   userQuery: z.string(),
   /** Optional attachment IDs */

@@ -235,7 +235,7 @@ export function NavUser({ initialSession }: NavUserProps) {
                   )
                 : (
                     <DropdownMenuItem asChild className="text-emerald-400 focus:text-emerald-300 focus:bg-emerald-500/10">
-                      <Link href="/chat/pricing" className="flex items-center gap-2.5">
+                      <Link href="/chat/pricing" prefetch={true} className="flex items-center gap-2.5">
                         <Icons.sparkles className="size-4" />
                         <div className="flex-1">
                           <p className="text-xs font-semibold">{t('userMenu.upgradeToPro')}</p>

@@ -19,7 +19,8 @@
 
 import type { Message, MessageBatch } from '@cloudflare/workers-types';
 
-import { MessagePartTypes, RoundOrchestrationMessageTypes, UIMessageRoles } from '@/api/core/enums';
+import { BETTER_AUTH_SESSION_COOKIE_NAME, MessagePartTypes, RoundOrchestrationMessageTypes, UIMessageRoles } from '@/api/core/enums';
+import { RoundStatusSchema } from '@/api/routes/chat/schema';
 import type {
   CheckRoundCompletionQueueMessage,
   RoundOrchestrationQueueMessage,
@@ -40,12 +41,6 @@ const MAX_RETRY_DELAY_SECONDS = 300;
 /** Base retry delay in seconds */
 const BASE_RETRY_DELAY_SECONDS = 60;
 
-/** Internal auth header name */
-const INTERNAL_AUTH_HEADER = 'X-Internal-Queue-Secret';
-
-/** User ID header for internal auth */
-const USER_ID_HEADER = 'X-Queue-User-Id';
-
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -60,16 +55,15 @@ function getBaseUrl(env: CloudflareEnv): string {
 }
 
 /**
- * Build auth headers for internal queue calls
+ * Build auth headers using user's session cookie
+ *
+ * Uses the session token from the original request (passed via queue message)
+ * to authenticate with Better Auth - same as browser-based requests.
  */
-function buildInternalAuthHeaders(
-  secret: string,
-  userId: string,
-): Record<string, string> {
+function buildSessionAuthHeaders(sessionToken: string): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    [INTERNAL_AUTH_HEADER]: secret,
-    [USER_ID_HEADER]: userId,
+    'Cookie': `${BETTER_AUTH_SESSION_COOKIE_NAME}=${sessionToken}`,
   };
 }
 
@@ -103,13 +97,8 @@ async function triggerParticipantStream(
   message: TriggerParticipantQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { threadId, roundNumber, participantIndex, userId, attachmentIds } = message;
+  const { threadId, roundNumber, participantIndex, sessionToken, attachmentIds } = message;
   const baseUrl = getBaseUrl(env);
-  const secret = env.INTERNAL_QUEUE_SECRET;
-
-  if (!secret) {
-    throw new Error('INTERNAL_QUEUE_SECRET not configured');
-  }
 
   // Build request body matching streaming handler expectations
   const requestBody = {
@@ -126,7 +115,7 @@ async function triggerParticipantStream(
 
   const response = await fetch(`${baseUrl}/api/v1/chat`, {
     method: 'POST',
-    headers: buildInternalAuthHeaders(secret, userId),
+    headers: buildSessionAuthHeaders(sessionToken),
     body: JSON.stringify(requestBody),
   });
 
@@ -145,19 +134,14 @@ async function triggerModeratorStream(
   message: TriggerModeratorQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { threadId, roundNumber, userId } = message;
+  const { threadId, roundNumber, sessionToken } = message;
   const baseUrl = getBaseUrl(env);
-  const secret = env.INTERNAL_QUEUE_SECRET;
-
-  if (!secret) {
-    throw new Error('INTERNAL_QUEUE_SECRET not configured');
-  }
 
   const response = await fetch(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
     {
       method: 'POST',
-      headers: buildInternalAuthHeaders(secret, userId),
+      headers: buildSessionAuthHeaders(sessionToken),
       body: JSON.stringify({}),
     },
   );
@@ -177,19 +161,14 @@ async function triggerPreSearch(
   message: TriggerPreSearchQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { threadId, roundNumber, userId, userQuery, attachmentIds } = message;
+  const { threadId, roundNumber, sessionToken, userQuery, attachmentIds } = message;
   const baseUrl = getBaseUrl(env);
-  const secret = env.INTERNAL_QUEUE_SECRET;
-
-  if (!secret) {
-    throw new Error('INTERNAL_QUEUE_SECRET not configured');
-  }
 
   const response = await fetch(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`,
     {
       method: 'POST',
-      headers: buildInternalAuthHeaders(secret, userId),
+      headers: buildSessionAuthHeaders(sessionToken),
       body: JSON.stringify({
         userQuery,
         attachmentIds: attachmentIds || [],
@@ -218,49 +197,32 @@ async function checkRoundCompletion(
   message: CheckRoundCompletionQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { threadId, roundNumber, userId, reason: _reason } = message;
+  const { threadId, roundNumber, sessionToken } = message;
   const baseUrl = getBaseUrl(env);
-  const secret = env.INTERNAL_QUEUE_SECRET;
-
-  if (!secret) {
-    throw new Error('INTERNAL_QUEUE_SECRET not configured');
-  }
-
-  // LOG:(`[RoundOrchestration] 🔍 Checking round completion for ${threadId} r${roundNumber} (reason: ${reason})`);
 
   // Get round state via internal API (this validates recovery attempts server-side)
   const stateResponse = await fetch(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/status`,
     {
       method: 'GET',
-      headers: buildInternalAuthHeaders(secret, userId),
+      headers: buildSessionAuthHeaders(sessionToken),
     },
   );
 
   if (!stateResponse.ok) {
     // 404 means round doesn't exist or is complete - not an error
     if (stateResponse.status === 404) {
-      // LOG:(`[RoundOrchestration] ℹ️ Round ${roundNumber} not found or complete for ${threadId}`);
       return;
     }
     throw new Error(`Failed to get round status: ${stateResponse.status} ${stateResponse.statusText}`);
   }
 
-  const roundState = await stateResponse.json() as {
-    status: string;
-    phase: string;
-    totalParticipants: number;
-    completedParticipants: number;
-    failedParticipants: number;
-    nextParticipantIndex: number | null;
-    needsModerator: boolean;
-    needsPreSearch: boolean;
-    userQuery?: string;
-    attachmentIds?: string[];
-    canRecover: boolean;
-    recoveryAttempts: number;
-    maxRecoveryAttempts: number;
-  };
+  // Validate response with Zod schema - single source of truth
+  const parseResult = RoundStatusSchema.safeParse(await stateResponse.json());
+  if (!parseResult.success) {
+    throw new Error(`Invalid round status response: ${parseResult.error.message}`);
+  }
+  const roundState = parseResult.data;
 
   // Check if recovery is allowed
   if (!roundState.canRecover) {
@@ -277,7 +239,8 @@ async function checkRoundCompletion(
       messageId: `trigger-${threadId}-r${roundNumber}-presearch-${Date.now()}`,
       threadId,
       roundNumber,
-      userId,
+      userId: message.userId,
+      sessionToken,
       userQuery: roundState.userQuery,
       attachmentIds: roundState.attachmentIds,
       queuedAt: new Date().toISOString(),
@@ -291,7 +254,8 @@ async function checkRoundCompletion(
       threadId,
       roundNumber,
       participantIndex: roundState.nextParticipantIndex,
-      userId,
+      userId: message.userId,
+      sessionToken,
       attachmentIds: roundState.attachmentIds,
       queuedAt: new Date().toISOString(),
     } satisfies TriggerParticipantQueueMessage);
@@ -303,7 +267,8 @@ async function checkRoundCompletion(
       messageId: `trigger-${threadId}-r${roundNumber}-moderator-${Date.now()}`,
       threadId,
       roundNumber,
-      userId,
+      userId: message.userId,
+      sessionToken,
       queuedAt: new Date().toISOString(),
     } satisfies TriggerModeratorQueueMessage);
   } else {
@@ -339,11 +304,9 @@ async function processQueueMessage(
       case RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH:
         await triggerPreSearch(body, env);
         break;
-      default: {
-        // TypeScript exhaustiveness check
-        const _exhaustive: never = body;
-        console.error(`[RoundOrchestration] Unknown message type:`, _exhaustive);
-      }
+      default:
+        // TypeScript exhaustiveness check - unreachable if all message types handled
+        body satisfies never;
     }
 
     msg.ack();

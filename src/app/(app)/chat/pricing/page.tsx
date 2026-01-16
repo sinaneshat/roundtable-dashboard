@@ -4,7 +4,6 @@ import { BRAND } from '@/constants';
 import { PublicPricingScreen } from '@/containers/screens/chat/billing/PublicPricingScreen';
 import { createMetadata } from '@/utils';
 
-// Revalidate every 24 hours
 export const revalidate = 86400;
 
 export async function generateMetadata(): Promise<Metadata> {

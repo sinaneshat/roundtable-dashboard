@@ -16,7 +16,6 @@ import {
   wrapLanguageModel,
 } from 'ai';
 import { and, desc, eq } from 'drizzle-orm';
-import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { executeBatch } from '@/api/common/batch-operations';
@@ -32,6 +31,11 @@ import {
   getErrorName,
   getErrorStatusCode,
 } from '@/api/common/error-types';
+import {
+  calculateDynamicLimits,
+  estimateMessageSize,
+  MemoryBudgetTracker,
+} from '@/api/common/memory-safety';
 import { createHandler } from '@/api/core';
 import {
   CheckRoundCompletionReasons,
@@ -114,6 +118,7 @@ import type { CheckRoundCompletionQueueMessage, TriggerModeratorQueueMessage, Tr
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
+import { extractSessionToken } from '@/lib/auth';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { cleanCitationExcerpt, completeStreamingMetadata, createStreamingMetadata, getRoundNumber } from '@/lib/utils';
 
@@ -126,17 +131,25 @@ import { chatMessagesToUIMessages } from './helpers';
 // ============================================================================
 
 /**
- * Maximum messages to load from DB per streaming request
+ * DEFAULT Maximum messages to load from DB per streaming request
  *
  * Prevents memory exhaustion in Cloudflare Workers (128MB limit)
  * by limiting conversation context. The most recent N messages are kept.
  *
- * 150 messages × ~2KB avg = ~300KB, leaving headroom for:
- * - System prompts with RAG context (~50KB)
- * - Attachment content (~20MB limit via separate constant)
+ * REDUCED from 150 to 75 for better memory safety.
+ * Dynamic limits may further reduce this based on request complexity.
+ *
+ * 75 messages × ~2KB avg = ~150KB base, leaving headroom for:
+ * - System prompts with RAG context (~100KB max)
+ * - Attachment content (limited via dynamic config)
  * - Response buffering and SDK overhead
  */
-const MAX_CONTEXT_MESSAGES = 150;
+const DEFAULT_MAX_CONTEXT_MESSAGES = 75;
+
+/**
+ * Absolute maximum to prevent extreme memory usage
+ */
+const ABSOLUTE_MAX_CONTEXT_MESSAGES = 100;
 
 // ============================================================================
 // Streaming Chat Handler
@@ -155,6 +168,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const executionCtx = c.executionCtx;
 
       const { user } = c.auth();
+
+      // ✅ SESSION TOKEN: Extract for queue-based round orchestration
+      // Queue consumers use this cookie to authenticate with Better Auth
+      // instead of a separate internal secret
+      const sessionToken = extractSessionToken(c.req.header('cookie'));
+
       const {
         message,
         id: threadId,
@@ -264,9 +283,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         );
 
         if (participantResponses.length > 0) {
-          throw new HTTPException(409, {
-            message: `Round ${currentRoundNumber} already has assistant responses. Cannot create new user message in a completed round. Expected round ${currentRoundNumber + 1}.`,
-          });
+          throw createError.conflict(
+            `Round ${currentRoundNumber} already has assistant responses. Cannot create new user message in a completed round. Expected round ${currentRoundNumber + 1}.`,
+            { errorType: 'validation', field: 'roundNumber' },
+          );
         }
       }
 
@@ -451,7 +471,36 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // =========================================================================
       // STEP 8: Load Previous Messages and Prepare for Streaming (parallelized with user tier check)
       // =========================================================================
-      // ✅ MEMORY SAFETY: Limit messages to prevent Worker memory exhaustion
+      // ✅ MEMORY SAFETY: Dynamic limits prevent Worker memory exhaustion (128MB limit)
+      // Calculate complexity-aware limits based on request features
+
+      // First, get a quick message count to estimate complexity
+      const messageCountResult = await db.query.chatMessage.findMany({
+        where: eq(tables.chatMessage.threadId, threadId),
+        columns: { id: true },
+        limit: ABSOLUTE_MAX_CONTEXT_MESSAGES + 10,
+      });
+      const estimatedMessageCount = messageCountResult.length;
+
+      // Calculate dynamic memory limits based on request complexity
+      const memoryLimits = calculateDynamicLimits({
+        messageCount: estimatedMessageCount,
+        attachmentCount: attachmentIds?.length ?? 0,
+        hasRag: !!thread.projectId,
+        hasWebSearch: thread.enableWebSearch ?? false,
+        hasProject: !!thread.projectId,
+      });
+
+      // Initialize memory budget tracker for this request
+      const memoryTracker = new MemoryBudgetTracker(memoryLimits);
+
+      // Determine actual message limit based on complexity
+      const dynamicMessageLimit = Math.min(
+        memoryLimits.maxMessages,
+        DEFAULT_MAX_CONTEXT_MESSAGES,
+        ABSOLUTE_MAX_CONTEXT_MESSAGES,
+      );
+
       // Query in descending order to get most recent messages, then reverse for chronological context
       const [recentDbMessages, userTier] = await Promise.all([
         db.query.chatMessage.findMany({
@@ -461,10 +510,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             desc(tables.chatMessage.createdAt),
             desc(tables.chatMessage.id),
           ],
-          limit: MAX_CONTEXT_MESSAGES,
+          limit: dynamicMessageLimit,
         }),
         getUserTier(user.id),
       ]);
+
+      // Track memory allocation for loaded messages
+      const estimatedMsgMemory = estimateMessageSize(recentDbMessages.length);
+      if (!memoryTracker.allocate('previousMessages', estimatedMsgMemory)) {
+        throw createError.internal(
+          'Conversation too large. Try starting a new conversation or reducing attachment count.',
+          { errorType: 'configuration', operation: 'memory_allocation' },
+        );
+      }
 
       // Reverse to restore chronological order for AI context
       const allDbMessages = recentDbMessages.reverse();
@@ -548,6 +606,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         userId: user.id,
         secret: c.env.BETTER_AUTH_SECRET,
         threadId,
+        memoryLimits,
       }).then(result => result.modelMessages);
 
       // Build system prompt with RAG context and citation support
@@ -574,7 +633,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           db,
           attachmentIds: resolvedAttachmentIds, // ✅ FIX: Use resolved attachmentIds (includes KV lookup for P1+)
           baseUrl: new URL(c.req.url).origin, // ✅ FIX: Absolute URLs for download links
+          memoryLimits,
         });
+
+      // ✅ MEMORY SAFETY: Track system prompt allocation and truncate if needed
+      const systemPromptBytes = systemPrompt.length * 2; // UTF-16 encoding
+      if (!memoryTracker.allocate('systemPrompt', systemPromptBytes)) {
+        // Memory budget exceeded but we continue with what we have
+        // The request may fail later but at least we tried to gracefully degrade
+      }
 
       // Include ALL citable sources in metadata (not just attachments)
       // This enables frontend to show citation sources for all types during streaming
@@ -1431,6 +1498,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 roundNumber: currentRoundNumber,
                 participantIndex: nextParticipantIndex,
                 userId: user.id,
+                sessionToken,
                 attachmentIds: resolvedAttachmentIds,
                 queuedAt: new Date().toISOString(),
               };
@@ -1459,6 +1527,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 threadId,
                 roundNumber: currentRoundNumber,
                 userId: user.id,
+                sessionToken,
                 queuedAt: new Date().toISOString(),
               };
 
@@ -1484,12 +1553,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           }
         },
       });
-
-      // ✅ AI SDK V6 OFFICIAL PATTERN: No need to manually consume stream
-      // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
-      // The toUIMessageStreamResponse() method handles stream consumption automatically.
-      // The onFinish callback will run when the stream completes successfully or on error.
-      // Client disconnects are handled by the Response stream - onFinish will still fire.
 
       // Get the base stream response
       const filteredOriginalMessages = previousMessages.filter((m) => {
@@ -1602,6 +1665,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                     threadId,
                     roundNumber: currentRoundNumber,
                     userId: user.id,
+                    sessionToken,
                     reason: CheckRoundCompletionReasons.STALE_STREAM,
                     queuedAt: new Date().toISOString(),
                   };
@@ -1676,6 +1740,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               threadId,
               roundNumber: currentRoundNumber,
               userId: user.id,
+              sessionToken,
               reason: CheckRoundCompletionReasons.STALE_STREAM,
               queuedAt: new Date().toISOString(),
             } satisfies CheckRoundCompletionQueueMessage).catch(() => {
@@ -1745,6 +1810,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           return JSON.stringify(errorMetadata);
         },
       });
+
+      // =========================================================================
+      // ✅ AI SDK V6 PATTERN: Consume stream to ensure onFinish runs on client disconnect
+      // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#handling-client-disconnects
+      // consumeStream removes backpressure, ensuring the stream completes even if client disconnects.
+      // This guarantees onFinish callback runs to queue next participant/moderator.
+      // =========================================================================
+      finalResult.consumeStream(); // no await - runs in background
 
       // =========================================================================
       // Return the stream - Pre-search now handled by separate /chat/pre-search endpoint

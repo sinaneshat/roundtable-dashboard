@@ -62,6 +62,7 @@ export {
   type AuthStep,
   AuthSteps,
   AuthStepSchema,
+  BETTER_AUTH_SESSION_COOKIE_NAME,
   DEFAULT_AUTH_ERROR_TYPE,
   DEFAULT_AUTH_MODE,
   DEFAULT_AUTH_STEP,

@@ -19,6 +19,8 @@ import { z } from 'zod';
 
 import { createError } from '@/api/common/error-handling';
 import { getErrorMessage } from '@/api/common/error-types';
+import type { MemoryBudgetConfig } from '@/api/common/memory-safety';
+import { safeSlice, truncateToMemoryBudget } from '@/api/common/memory-safety';
 import {
   CitationSourcePrefixes,
   CitationSourceTypes,
@@ -122,6 +124,7 @@ export const BuildSystemPromptParamsSchema = z.object({
   logger: z.custom<TypedLogger>().optional(),
   attachmentIds: z.array(z.string()).optional(),
   baseUrl: z.string().url(), // Base URL for generating absolute download URLs
+  memoryLimits: z.custom<MemoryBudgetConfig>().optional(), // Memory safety limits
 });
 
 export const BuildSystemPromptResultSchema = z.object({
@@ -142,6 +145,7 @@ export const PrepareValidatedMessagesParamsSchema = z.object({
   userId: z.string().optional(),
   secret: z.string().optional(),
   threadId: z.string().optional(),
+  memoryLimits: z.custom<MemoryBudgetConfig>().optional(), // Memory safety limits
 });
 
 export const PrepareValidatedMessagesResultSchema = z.object({
@@ -611,7 +615,13 @@ export async function loadParticipantConfiguration(
 export async function buildSystemPromptWithContext(
   params: BuildSystemPromptParams,
 ): Promise<BuildSystemPromptResult> {
-  const { participant, allParticipants, thread, userQuery, previousDbMessages, currentRoundNumber, env, db, logger, attachmentIds, baseUrl } = params;
+  const { participant, allParticipants, thread, userQuery, previousDbMessages, currentRoundNumber, env, db, logger, attachmentIds, baseUrl, memoryLimits } = params;
+
+  // Memory safety defaults
+  const maxRagResults = memoryLimits?.maxRagResults ?? 5;
+  const maxCitationSources = memoryLimits?.maxCitationSources ?? 15;
+  const maxAttachments = memoryLimits?.maxAttachments ?? 10;
+  const maxSystemPromptSize = memoryLimits?.maxSystemPromptSize ?? 100 * 1024;
 
   const citationSourceMap: CitationSourceMap = new Map();
   let citableSources: CitableSource[] = [];
@@ -648,7 +658,7 @@ export async function buildSystemPromptWithContext(
               project.autoragInstanceId,
             ).aiSearch({
               query: userQuery,
-              max_num_results: 5,
+              max_num_results: maxRagResults, // ✅ MEMORY SAFETY: Dynamic limit based on request complexity
               rewrite_query: true,
               stream: false,
               reranking: {
@@ -737,14 +747,15 @@ export async function buildSystemPromptWithContext(
         }
 
         // Parallelize citable context and thread attachments loading
+        // ✅ MEMORY SAFETY: Use dynamic limits based on request complexity
         const [citableContextResult, threadAttachmentResult] = await Promise.allSettled([
           buildCitableContext({
             projectId: thread.projectId,
             currentThreadId: thread.id,
             userQuery,
-            maxMemories: 10,
+            maxMemories: Math.min(10, maxCitationSources),
             maxMessagesPerThread: 3,
-            maxSearchResults: 5,
+            maxSearchResults: Math.min(5, maxRagResults),
             maxModerators: 3,
             db,
             baseUrl,
@@ -754,7 +765,7 @@ export async function buildSystemPromptWithContext(
             r2Bucket: env.UPLOADS_R2_BUCKET,
             db,
             logger,
-            maxAttachments: 20,
+            maxAttachments, // ✅ MEMORY SAFETY: Dynamic limit
             extractContent: true,
             currentAttachmentIds: attachmentIds || [],
             baseUrl,
@@ -873,7 +884,7 @@ export async function buildSystemPromptWithContext(
         r2Bucket: env.UPLOADS_R2_BUCKET,
         db,
         logger,
-        maxAttachments: 20,
+        maxAttachments, // ✅ MEMORY SAFETY: Dynamic limit
         extractContent: true,
         currentAttachmentIds: attachmentIds || [],
         baseUrl,
@@ -908,15 +919,34 @@ export async function buildSystemPromptWithContext(
     }
   }
 
-  logger?.info(`Built system prompt with context: sources=${citableSources.length}, types=[${citableSources.map(s => s.type).join(',')}], hasProject=${!!thread.projectId}`, LogHelpers.operation({
+  // ✅ MEMORY SAFETY: Limit citation sources to prevent memory exhaustion
+  const limitedCitableSources = safeSlice(citableSources, maxCitationSources);
+  if (limitedCitableSources.length < citableSources.length) {
+    logger?.info(`Truncated citation sources from ${citableSources.length} to ${limitedCitableSources.length} for memory safety`, LogHelpers.operation({
+      operationName: 'buildSystemPromptWithContext',
+      threadId: thread.id,
+    }));
+  }
+
+  // ✅ MEMORY SAFETY: Truncate system prompt if it exceeds the limit
+  let finalSystemPrompt = systemPrompt;
+  if (systemPrompt.length * 2 > maxSystemPromptSize) { // UTF-16 encoding
+    finalSystemPrompt = truncateToMemoryBudget(systemPrompt, maxSystemPromptSize);
+    logger?.info(`Truncated system prompt from ${systemPrompt.length} to ${finalSystemPrompt.length} chars for memory safety`, LogHelpers.operation({
+      operationName: 'buildSystemPromptWithContext',
+      threadId: thread.id,
+    }));
+  }
+
+  logger?.info(`Built system prompt with context: sources=${limitedCitableSources.length}, types=[${limitedCitableSources.map(s => s.type).join(',')}], hasProject=${!!thread.projectId}`, LogHelpers.operation({
     operationName: 'buildSystemPromptWithContext',
     threadId: thread.id,
   }));
 
   return {
-    systemPrompt,
+    systemPrompt: finalSystemPrompt,
     citationSourceMap,
-    citableSources,
+    citableSources: limitedCitableSources,
   };
 }
 
@@ -1058,7 +1088,17 @@ function injectFileDataIntoModelMessages(
 export async function prepareValidatedMessages(
   params: PrepareValidatedMessagesParams,
 ): Promise<PrepareValidatedMessagesResult> {
-  const { previousDbMessages, newMessage, logger, r2Bucket, db, attachmentIds, baseUrl, userId, secret, threadId } = params;
+  const { previousDbMessages, newMessage, logger, r2Bucket, db, attachmentIds, baseUrl, userId, secret, threadId, memoryLimits } = params;
+
+  // ✅ MEMORY SAFETY: Apply limits to attachment processing
+  const maxAttachments = memoryLimits?.maxAttachments ?? 10;
+  const limitedAttachmentIds = attachmentIds ? safeSlice(attachmentIds, maxAttachments) : undefined;
+
+  if (attachmentIds && limitedAttachmentIds && limitedAttachmentIds.length < attachmentIds.length) {
+    logger?.info(`Limited attachmentIds from ${attachmentIds.length} to ${limitedAttachmentIds.length} for memory safety`, LogHelpers.operation({
+      operationName: 'prepareValidatedMessages',
+    }));
+  }
 
   // URL-based loading requires baseUrl, userId, secret for signed URL generation
   const canUseUrlLoading = Boolean(baseUrl && userId && secret);
@@ -1067,9 +1107,9 @@ export async function prepareValidatedMessages(
   // All files use URL-based delivery for efficiency (no memory-intensive base64 encoding)
   const [previousMessages, firstAttachmentLoad] = await Promise.all([
     chatMessagesToUIMessages(previousDbMessages),
-    attachmentIds && attachmentIds.length > 0 && db && canUseUrlLoading
+    limitedAttachmentIds && limitedAttachmentIds.length > 0 && db && canUseUrlLoading
       ? loadAttachmentContentUrl({
-          attachmentIds,
+          attachmentIds: limitedAttachmentIds,
           r2Bucket,
           db,
           logger,

@@ -12,6 +12,7 @@ import type { CheckRoundCompletionQueueMessage } from '@/api/types/queues';
 import { parseStreamId } from '@/api/types/streaming';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { extractSessionToken } from '@/lib/auth';
 import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
 
 import type { getThreadStreamResumptionStateRoute, resumeThreadStreamRoute } from '../route';
@@ -30,9 +31,10 @@ async function queueRoundCompletionCheck(
   threadId: string,
   roundNumber: number,
   userId: string,
+  sessionToken: string,
   env: ApiEnv['Bindings'],
 ): Promise<boolean> {
-  if (!env?.ROUND_ORCHESTRATION_QUEUE) {
+  if (!env?.ROUND_ORCHESTRATION_QUEUE || !sessionToken) {
     return false;
   }
 
@@ -43,6 +45,7 @@ async function queueRoundCompletionCheck(
       threadId,
       roundNumber,
       userId,
+      sessionToken,
       reason: CheckRoundCompletionReasons.RESUME_TRIGGER,
       queuedAt: new Date().toISOString(),
     };
@@ -112,6 +115,10 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
   async (c) => {
     const { user } = c.auth();
     const { threadId } = c.validated.params;
+
+    // ✅ SESSION TOKEN: Extract for queue-based round orchestration
+    const sessionToken = extractSessionToken(c.req.header('cookie'));
+
     // Get lastChunkIndex from query params to avoid re-sending chunks client already has
     const lastChunkIndexParam = c.req.query('lastChunkIndex');
     const lastChunkIndex = lastChunkIndexParam ? Number.parseInt(lastChunkIndexParam, 10) : 0;
@@ -194,6 +201,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
             threadId,
             activeStream.roundNumber,
             user.id,
+            sessionToken,
             c.env,
           );
 
@@ -258,6 +266,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
             threadId,
             activeStream.roundNumber,
             user.id,
+            sessionToken,
             c.env,
           );
 

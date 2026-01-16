@@ -103,6 +103,20 @@ export const AuthErrorTypes = {
 } as const;
 
 // ============================================================================
+// BETTER AUTH CONSTANTS
+// ============================================================================
+
+/**
+ * Better Auth session cookie name
+ * Used for extracting session token from cookies in queue-based operations
+ *
+ * @see src/api/routes/chat/handlers/streaming.handler.ts
+ * @see src/api/routes/chat/handlers/stream-resume.handler.ts
+ * @see src/workers/round-orchestration-queue.ts
+ */
+export const BETTER_AUTH_SESSION_COOKIE_NAME = 'better-auth.session_token' as const;
+
+// ============================================================================
 // VALIDATION HELPER
 // ============================================================================
 
