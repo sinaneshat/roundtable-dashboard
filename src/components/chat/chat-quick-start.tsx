@@ -8,7 +8,7 @@ import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
-import { getChatModeLabel, MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
+import { getChatModeLabel } from '@/lib/config';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
@@ -311,9 +311,9 @@ export function ChatQuickStart({
       return [];
     }
 
-    const idealCount = userTier === SubscriptionTiers.FREE
-      ? MIN_PARTICIPANTS_REQUIRED
-      : 4;
+    // Examples always show 3+ models to demonstrate roundtable value
+    // (validation minimum is lower to allow user flexibility)
+    const idealCount = userTier === SubscriptionTiers.FREE ? 3 : 4;
 
     // Capture checked offset for TypeScript narrowing
     const providerOffset = initialProviderOffset;

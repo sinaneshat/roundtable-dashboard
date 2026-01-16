@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { STRING_LIMITS } from '@/constants';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { useFreeTrialState } from '@/hooks/utils';
-import { MAX_PARTICIPANTS_LIMIT, MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
+import { MAX_PARTICIPANTS_LIMIT } from '@/lib/config/participant-limits';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
@@ -72,7 +72,7 @@ export const ChatInputContainer = memo(({
 
   const isOverLimit = inputValue.length > STRING_LIMITS.MESSAGE_MAX;
   const participantCount = participants.length;
-  const showMinModelsError = participantCount < MIN_PARTICIPANTS_REQUIRED && !isHydrating && !isModelsLoading;
+  const showMinModelsError = participantCount < 1 && !isHydrating && !isModelsLoading;
   const showMaxModelsError = participantCount > MAX_PARTICIPANTS_LIMIT && !isHydrating && !isModelsLoading;
 
   // Credit estimation for paid users
@@ -113,7 +113,7 @@ export const ChatInputContainer = memo(({
     // Model count validation (highest priority)
     if (showMinModelsError) {
       return {
-        message: t('chat.input.minModelsRequired', { min: MIN_PARTICIPANTS_REQUIRED }),
+        message: t('chat.input.minModelsRequired', { min: 1 }),
         variant: 'error',
       };
     }
