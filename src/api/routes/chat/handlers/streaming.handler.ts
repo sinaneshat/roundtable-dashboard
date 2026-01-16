@@ -1210,8 +1210,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // =========================================================================
             // ✅ PARALLELIZED POST-STREAMING OPERATIONS: Credit finalization and balance check
             // =========================================================================
-            const actualInputTokens = finishResult.usage?.inputTokens ?? 0;
-            const actualOutputTokens = finishResult.usage?.outputTokens ?? 0;
+            // NOTE: Use Number.isFinite to properly handle NaN (which ?? doesn't catch)
+            const rawInputTokens = finishResult.usage?.inputTokens ?? 0;
+            const rawOutputTokens = finishResult.usage?.outputTokens ?? 0;
+            const actualInputTokens = Number.isFinite(rawInputTokens) ? rawInputTokens : 0;
+            const actualOutputTokens = Number.isFinite(rawOutputTokens) ? rawOutputTokens : 0;
 
             const [, creditBalance] = await Promise.all([
             // ✅ CREDIT FINALIZATION: Deduct actual credits based on token usage
