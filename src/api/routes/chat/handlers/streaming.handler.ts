@@ -80,6 +80,7 @@ import {
 import {
   buildSystemPromptWithContext,
   extractUserQuery,
+  filterUnsupportedFileParts,
   loadParticipantConfiguration,
   prepareValidatedMessages,
 } from '@/api/services/orchestration';
@@ -595,7 +596,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Prepare and validate messages
       // ✅ HYBRID FILE LOADING: Pass params for URL-based delivery of large files (>4MB)
       // Small files use base64, large files get signed public URLs for AI provider access
-      const modelMessages = await prepareValidatedMessages({
+      const rawModelMessages = await prepareValidatedMessages({
         previousDbMessages,
         newMessage: message,
         r2Bucket: c.env.UPLOADS_R2_BUCKET,
@@ -608,6 +609,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         threadId,
         memoryLimits,
       }).then(result => result.modelMessages);
+
+      // ✅ CAPABILITY FILTER: Strip file/image parts for models that don't support them
+      const modelMessages = filterUnsupportedFileParts(rawModelMessages, {
+        supportsVision: modelInfo?.supports_vision ?? false,
+        supportsFile: modelInfo?.supports_file ?? false,
+      });
 
       // Build system prompt with RAG context and citation support
       const userQuery = extractUserQuery([
@@ -797,6 +804,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           const statusCode = getErrorStatusCode(error);
           const errorName = getErrorName(error) || '';
           const aiError = extractAISdkError(error);
+
+          // ✅ DEBUG: Concise retry decision log
+          const errMsg = getErrorMessage(error).substring(0, 100);
+          const respBody = aiError?.responseBody?.substring(0, 200) || '-';
+          console.error(`[Stream:P${participantIndex}] RETRY? model=${participant.modelId} status=${statusCode ?? '-'} name=${errorName} msg=${errMsg} body=${respBody}`);
 
           // Don't retry AI SDK type validation errors - these are provider response format issues
           // that won't be fixed by retrying. The stream already partially succeeded.
@@ -1044,6 +1056,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Reference: https://ai-sdk.dev/docs/reference/ai-sdk-core/stream-text
       // =========================================================================
 
+      // ✅ DEBUG: Concise request context log (compare P0 vs P1)
+      const msgParts = modelMessages.map(m =>
+        Array.isArray(m.content)
+          ? m.content.map((p: { type?: string }) => p.type?.[0] || '?').join('')
+          : 't',
+      ).join(',');
+      console.error(`[Stream:P${participantIndex}] START model=${participant.modelId} msgs=${modelMessages.length} parts=[${msgParts}] tokens~${estimatedInputTokens} attach=${resolvedAttachmentIds?.length ?? 0}`);
+
       // ✅ STREAM RESPONSE: Single stream with built-in AI SDK retry logic
       const finalResult = streamText({
         ...streamParams,
@@ -1076,6 +1096,23 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // This includes errors thrown from onFinish (like empty response errors)
         // AI SDK v6 will automatically handle these errors and propagate them to the client
         onError: async ({ error }) => {
+          // ✅ DEBUG: Handle both Error instances and plain objects
+          const isErrorInstance = error instanceof Error;
+          const errName = isErrorInstance ? error.name : 'PlainObject';
+          const errMsg = isErrorInstance
+            ? error.message.substring(0, 150)
+            : (typeof error === 'object' && error !== null ? JSON.stringify(error).substring(0, 500) : String(error));
+          const errStatus = error && typeof error === 'object' && 'statusCode' in error ? (error as Record<string, unknown>).statusCode : '-';
+          const errBody = error && typeof error === 'object' && 'responseBody' in error
+            ? String((error as Record<string, unknown>).responseBody).substring(0, 300)
+            : '-';
+          const errCause = error && typeof error === 'object' && 'cause' in error
+            ? String((error as Record<string, unknown>).cause).substring(0, 100)
+            : '-';
+          console.error(`[Stream:P${participantIndex}] ERROR model=${participant.modelId} isErr=${isErrorInstance} name=${errName} status=${errStatus}`);
+          console.error(`[Stream:P${participantIndex}] ERROR_DETAIL msg=${errMsg}`);
+          console.error(`[Stream:P${participantIndex}] ERROR_EXTRA body=${errBody} cause=${errCause}`);
+
           // ✅ CREDIT RELEASE: Release reserved credits on error
           // We don't know how many credits were reserved, so we pass estimatedCredits
           try {
@@ -1697,6 +1734,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         },
 
         onError: (error) => {
+          // ✅ DEBUG: Handle plain objects (JSON.stringify to see structure)
+          const isErrorInstance = error instanceof Error;
+          const errMsg = isErrorInstance
+            ? error.message.substring(0, 200)
+            : (typeof error === 'object' && error !== null ? JSON.stringify(error).substring(0, 500) : String(error));
+          console.error(`[Stream:P${participantIndex}] CLIENT_ERR model=${participant.modelId} isErr=${isErrorInstance} msg=${errMsg}`);
+
           // ✅ TYPE-SAFE ERROR EXTRACTION: Use error utility for consistent error handling
           const streamErrorMessage = getErrorMessage(error);
           const errorName = getErrorName(error);

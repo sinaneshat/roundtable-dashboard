@@ -162,6 +162,36 @@ export async function listThreadsService(
   return parseResponse(client.chat.threads.$get(params));
 }
 
+// ============================================================================
+// Type Inference - Sidebar Thread Operations
+// ============================================================================
+
+export type ListSidebarThreadsRequest = InferRequestType<
+  ApiClientType['chat']['threads']['sidebar']['$get']
+>;
+
+export type ListSidebarThreadsResponse = InferResponseType<
+  ApiClientType['chat']['threads']['sidebar']['$get']
+>;
+
+/**
+ * List sidebar threads with lightweight payload (essential fields only)
+ * Protected endpoint - requires authentication
+ *
+ * @param args - Request arguments with query params
+ * @param options - Service options
+ * @param options.cookieHeader - Pre-captured cookie header for server-side prefetches
+ */
+export async function listSidebarThreadsService(
+  args?: ListSidebarThreadsRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = await createApiClient({ cookieHeader: options?.cookieHeader });
+  return parseResponse(client.chat.threads.sidebar.$get({
+    query: args?.query ?? {},
+  }));
+}
+
 /**
  * Create a new chat thread with participants and optional first message
  * Protected endpoint - requires authentication

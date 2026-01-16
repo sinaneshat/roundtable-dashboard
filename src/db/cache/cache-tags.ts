@@ -62,11 +62,12 @@ const ProductCacheTags = {
 
 const ThreadCacheTags = {
   list: (userId: string) => `threads-list-${userId}`,
+  sidebar: (userId: string) => `threads-sidebar-${userId}`,
   single: (threadId: string) => `thread-${threadId}`,
   bySlug: (slug: string) => `thread-slug-${slug}`,
   participants: (threadId: string) => `thread-participants-${threadId}`,
   all: (userId: string, threadId?: string, slug?: string) => {
-    const tags = [ThreadCacheTags.list(userId)];
+    const tags = [ThreadCacheTags.list(userId), ThreadCacheTags.sidebar(userId)];
     if (threadId) {
       tags.push(
         ThreadCacheTags.single(threadId),

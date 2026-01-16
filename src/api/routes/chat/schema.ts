@@ -1105,6 +1105,22 @@ export const ChatSidebarGroupSchema = z.object({
 
 export type ChatSidebarGroup = z.infer<typeof ChatSidebarGroupSchema>;
 
+export const ThreadSidebarItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  slug: z.string(),
+  previousSlug: z.string().nullable(),
+  isFavorite: z.boolean(),
+  isPublic: z.boolean(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+}).openapi('ThreadSidebarItem');
+
+export type ThreadSidebarItem = z.infer<typeof ThreadSidebarItemSchema>;
+
+export const ThreadSidebarListResponseSchema = createCursorPaginatedResponseSchema(ThreadSidebarItemSchema).openapi('ThreadSidebarListResponse');
+export type ThreadSidebarListResponse = z.infer<typeof ThreadSidebarListResponseSchema>;
+
 export type ChatThread = z.infer<typeof ChatThreadSchema>;
 export type CreateThreadRequest = z.infer<typeof CreateThreadRequestSchema>;
 export type UpdateThreadRequest = z.infer<typeof UpdateThreadRequestSchema>;
@@ -1777,8 +1793,18 @@ export const AnalyzePromptRequestSchema = z.object({
     description: 'User prompt to analyze for optimal configuration',
     example: 'What are the best practices for building a SaaS product?',
   }),
+  // ✅ GRANULAR: Separate image and document flags for proper capability filtering
+  hasImageFiles: z.boolean().optional().default(false).openapi({
+    description: 'Whether image files are attached - restricts to models with supports_vision',
+    example: false,
+  }),
+  hasDocumentFiles: z.boolean().optional().default(false).openapi({
+    description: 'Whether document files (PDFs, DOC, etc.) are attached - restricts to models with supports_file',
+    example: false,
+  }),
+  // ⚠️ LEGACY: Kept for backward compatibility - prefer using hasImageFiles/hasDocumentFiles
   hasVisualFiles: z.boolean().optional().default(false).openapi({
-    description: 'Whether visual files (images/PDFs) are attached - restricts model selection to vision-capable models',
+    description: '[LEGACY] Whether visual files (images/PDFs) are attached - use hasImageFiles/hasDocumentFiles instead',
     example: false,
   }),
 }).openapi('AnalyzePromptRequest');

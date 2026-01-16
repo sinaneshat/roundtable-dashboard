@@ -54,6 +54,8 @@ import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { showApiErrorToast, toastManager } from '@/lib/toast';
 import {
   getIncompatibleModelIds,
+  isDocumentFile,
+  isImageFile,
   isVisionRequiredMimeType,
   threadHasVisionRequiredFiles,
 } from '@/lib/utils';
@@ -637,9 +639,12 @@ export default function ChatOverviewScreen() {
         }
 
         if (autoMode && inputValue.trim()) {
-          // Check if visual files are attached to restrict model selection to vision-capable models
-          const hasVisualFiles = chatAttachments.attachments.some(att =>
-            isVisionRequiredMimeType(att.file.type),
+          // ✅ GRANULAR: Check file types separately for proper model capability filtering
+          const hasImageFiles = chatAttachments.attachments.some(att =>
+            isImageFile(att.file.type),
+          );
+          const hasDocumentFiles = chatAttachments.attachments.some(att =>
+            isDocumentFile(att.file.type),
           );
 
           // Pass accessible model IDs to filter server response
@@ -649,7 +654,8 @@ export default function ChatOverviewScreen() {
           // Consolidated auto mode analysis - updates both chat store and preferences
           await analyzeAndApply({
             prompt: inputValue.trim(),
-            hasVisualFiles,
+            hasImageFiles,
+            hasDocumentFiles,
             accessibleModelIds: accessibleSet,
           });
         }

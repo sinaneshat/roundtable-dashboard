@@ -144,6 +144,17 @@ const _TokenUsageSchema = z.object({
 
 export type TokenUsage = z.infer<typeof _TokenUsageSchema>;
 
+/**
+ * Billing context for AI operations that deduct credits
+ * ✅ ZOD-FIRST: Single source of truth for all billing context types
+ */
+export const BillingContextSchema = z.object({
+  userId: z.string(),
+  threadId: z.string(),
+});
+
+export type BillingContext = z.infer<typeof BillingContextSchema>;
+
 const _EnforceCreditsOptionsSchema = z.object({
   skipRoundCheck: z.boolean().optional(),
 });

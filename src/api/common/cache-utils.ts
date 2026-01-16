@@ -98,3 +98,12 @@ export async function invalidateCreditBalanceCache(
     await db.$cache.invalidate({ tags: CreditCacheTags.all(userId) });
   }
 }
+
+export async function invalidateSidebarCache(
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+  userId: string,
+): Promise<void> {
+  if (db.$cache?.invalidate) {
+    await db.$cache.invalidate({ tags: [ThreadCacheTags.sidebar(userId)] });
+  }
+}

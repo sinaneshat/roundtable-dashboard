@@ -31,6 +31,11 @@ type AnalyzePromptStreamState = {
 
 type StreamConfigOptions = {
   prompt: string;
+  /** ✅ GRANULAR: Whether image files are attached - requires supports_vision */
+  hasImageFiles?: boolean;
+  /** ✅ GRANULAR: Whether document files (PDFs, DOC, etc.) are attached - requires supports_file */
+  hasDocumentFiles?: boolean;
+  /** @deprecated Use hasImageFiles/hasDocumentFiles instead */
   hasVisualFiles?: boolean;
 };
 
@@ -66,7 +71,7 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
   }, [abort]);
 
   const streamConfig = useCallback(async (options: StreamConfigOptions): Promise<AnalyzePromptPayload | null> => {
-    const { prompt, hasVisualFiles = false } = options;
+    const { prompt, hasImageFiles = false, hasDocumentFiles = false, hasVisualFiles = false } = options;
 
     // Abort any existing stream
     abort();
@@ -82,7 +87,7 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
 
     try {
       const response = await analyzePromptStreamService({
-        json: { prompt, hasVisualFiles },
+        json: { prompt, hasImageFiles, hasDocumentFiles, hasVisualFiles },
       });
 
       if (!response.ok) {

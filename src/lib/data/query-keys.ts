@@ -66,6 +66,10 @@ export const queryKeys = {
       cursor
         ? QueryKeyFactory.action('threads', 'list', cursor)
         : QueryKeyFactory.list('threads'),
+    sidebar: (search?: string) =>
+      search
+        ? [...queryKeys.threads.all, 'sidebar', 'search', search] as const
+        : [...queryKeys.threads.all, 'sidebar'] as const,
     details: () => [...queryKeys.threads.all, 'detail'] as const,
     detail: (id: string) => QueryKeyFactory.detail('threads', id),
     public: (slug: string) => QueryKeyFactory.action('threads', 'public', slug),
@@ -204,12 +208,14 @@ export const invalidationPatterns = {
   // Stats are only updated when messages are sent (actual usage), not when threads are created/deleted
   threads: [
     queryKeys.threads.lists(),
+    queryKeys.threads.sidebar(),
     queryKeys.usage.stats(), // Invalidate stats to refresh quota
   ],
 
   threadDetail: (threadId: string) => [
     queryKeys.threads.detail(threadId),
     queryKeys.threads.lists(),
+    queryKeys.threads.sidebar(),
     queryKeys.threads.changelog(threadId),
   ],
 
@@ -217,6 +223,7 @@ export const invalidationPatterns = {
   afterThreadMessage: (threadId: string) => [
     queryKeys.threads.detail(threadId),
     queryKeys.threads.lists(),
+    queryKeys.threads.sidebar(),
     queryKeys.usage.stats(),
   ],
 

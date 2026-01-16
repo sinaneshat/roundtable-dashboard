@@ -10,7 +10,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, Dia
 import { LinkLoadingIndicator } from '@/components/ui/link-loading-indicator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { VisuallyHidden } from '@/components/ui/visually-hidden';
-import { useThreadsQuery } from '@/hooks/queries';
+import { useSidebarThreadsQuery } from '@/hooks/queries';
 import { useDebouncedValue } from '@/hooks/utils';
 import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
@@ -87,7 +87,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     hasNextPage,
     isFetchingNextPage,
     isLoading,
-  } = useThreadsQuery(debouncedSearch || undefined);
+  } = useSidebarThreadsQuery(debouncedSearch || undefined);
   const threads = useMemo(() => {
     if (!threadsData?.pages) {
       return [];

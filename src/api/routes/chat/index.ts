@@ -50,6 +50,7 @@ export {
   getThreadHandler,
   getThreadSlugStatusHandler,
   listPublicThreadSlugsHandler,
+  listSidebarThreadsHandler,
   listThreadsHandler,
   updateThreadHandler,
 } from './handlers/thread.handler';

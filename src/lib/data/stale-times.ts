@@ -53,6 +53,7 @@ export const STALE_TIMES = {
   // Chat & Messages (optimized for navigation speed)
   // ============================================================================
   threads: 60 * 1000, // 1 minute - sidebar list, invalidated on mutations
+  threadsSidebar: 30 * 1000, // 30s - lightweight sidebar endpoint, shorter TTL for fresher titles
   threadDetail: 2 * 60 * 1000, // 2 minutes - thread metadata rarely changes, instant nav
   threadMessages: 2 * 60 * 1000, // 2 minutes - messages are immutable once created
   threadChangelog: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
@@ -68,6 +69,7 @@ export const STALE_TIMES = {
   // KV Cache TTLs (in seconds for $withCache DB-level caching)
   // ============================================================================
   threadListKV: 120, // 2 minutes - thread list DB cache
+  threadSidebarKV: 60, // 60s - lightweight sidebar (KV min TTL is 60s)
   threadDetailKV: 300, // 5 minutes - thread detail DB cache
   threadMessagesKV: 300, // 5 minutes - messages immutable, fast load on nav
   threadParticipantsKV: 600, // 10 minutes - participants rarely change

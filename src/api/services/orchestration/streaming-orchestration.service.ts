@@ -997,6 +997,53 @@ function collectFileDataFromMessages(
   return fileDataMap;
 }
 
+/**
+ * ✅ GRANULAR FILE FILTERING: Remove file/image parts for models that don't support them
+ *
+ * This prevents the "Invalid Value: 'file'. This model does not support file content types" error
+ * when a model (like gpt-4o-mini via Azure) receives conversation history containing file parts.
+ *
+ * @param modelMessages - Messages that may contain file/image parts
+ * @param capabilities - Model capabilities (supports_vision, supports_file)
+ * @returns Messages with unsupported parts filtered out
+ */
+export function filterUnsupportedFileParts(
+  modelMessages: ModelMessage[],
+  capabilities: { supportsVision: boolean; supportsFile: boolean },
+): ModelMessage[] {
+  return modelMessages.map((msg) => {
+    // Only filter user messages with array content
+    if (msg.role !== MessageRoles.USER || !Array.isArray(msg.content)) {
+      return msg;
+    }
+
+    const filteredContent = msg.content.filter((part) => {
+      // Keep text parts always
+      if (part.type === 'text') {
+        return true;
+      }
+
+      // Filter image parts based on vision support
+      if (part.type === 'image') {
+        return capabilities.supportsVision;
+      }
+
+      // Filter file parts (PDFs, documents) based on file support
+      if (part.type === 'file') {
+        return capabilities.supportsFile;
+      }
+
+      // Keep other part types
+      return true;
+    });
+
+    return {
+      ...msg,
+      content: filteredContent,
+    };
+  });
+}
+
 function injectFileDataIntoModelMessages(
   modelMessages: ModelMessage[],
   fileDataMap: Map<string, FileDataEntry>,

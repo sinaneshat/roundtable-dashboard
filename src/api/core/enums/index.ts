@@ -597,6 +597,8 @@ export {
   IncompatibilityReasons,
   IncompatibilityReasonSchema,
   isAiProcessableMimeType,
+  isDocumentMimeType,
+  isImageMimeType,
   isVisualMimeType,
   MAX_FILENAME_LENGTH,
   MAX_IMAGE_FILE_SIZE,

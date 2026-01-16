@@ -33,7 +33,7 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useTogglePublicMutation } from '@/hooks/mutations';
-import { useThreadQuery, useThreadsQuery } from '@/hooks/queries';
+import { useSidebarThreadsQuery, useThreadQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';
 import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
@@ -53,7 +53,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const sidebarContentRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
   const handleNavigationReset = useNavigationReset();
-  const { data: threadsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error } = useThreadsQuery();
+  const { data: threadsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error } = useSidebarThreadsQuery();
 
   // Share dialog state - exact same pattern as chat-thread-actions.tsx
   const [chatToShare, setChatToShare] = useState<ChatSidebarItem | null>(null);

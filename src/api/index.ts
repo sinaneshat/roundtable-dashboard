@@ -100,6 +100,7 @@ import {
   getUserPresetHandler,
   listCustomRolesHandler,
   listPublicThreadSlugsHandler,
+  listSidebarThreadsHandler,
   listThreadsHandler,
   listUserPresetsHandler,
   resumeThreadStreamHandler,
@@ -137,6 +138,7 @@ import {
   getUserPresetRoute,
   listCustomRolesRoute,
   listPublicThreadSlugsRoute,
+  listSidebarThreadsRoute,
   listThreadsRoute,
   listUserPresetsRoute,
   resumeThreadStreamRoute,
@@ -636,6 +638,7 @@ const appRoutes = app
   // ============================================================================
   // Thread Management
   .openapi(listThreadsRoute, listThreadsHandler) // List threads with cursor pagination
+  .openapi(listSidebarThreadsRoute, listSidebarThreadsHandler) // List sidebar threads (lightweight)
   .openapi(createThreadRoute, createThreadHandler) // Create thread with mode and configuration
   .openapi(getThreadRoute, getThreadHandler) // Get thread details with participants
   .openapi(getThreadBySlugRoute, getThreadBySlugHandler) // Get thread by slug (authenticated)

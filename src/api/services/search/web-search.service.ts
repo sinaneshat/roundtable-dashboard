@@ -8,6 +8,7 @@ import {
   Output,
   streamText,
 } from 'ai';
+import { ulid } from 'ulid';
 import { z } from 'zod';
 
 import { createError, normalizeError } from '@/api/common/error-handling';
@@ -23,6 +24,7 @@ import type {
 } from '@/api/core/enums';
 import {
   BrowserEnvironments,
+  CreditActions,
   DEFAULT_ACTIVE_ANSWER_MODE,
   DEFAULT_BLOCKED_RESOURCE_TYPES,
   LogTypes,
@@ -40,6 +42,8 @@ import type {
   WebSearchResultItem,
 } from '@/api/routes/chat/schema';
 import { MultiQueryGenerationSchema } from '@/api/routes/chat/schema';
+import type { BillingContext } from '@/api/services/billing';
+import { finalizeCredits } from '@/api/services/billing';
 import {
   initializeOpenRouter,
   openRouterService,
@@ -61,6 +65,10 @@ import {
   getCachedImageDescription,
   getCachedSearch,
 } from './web-search-cache.service';
+
+// ✅ SINGLE SOURCE OF TRUTH: Use BillingContext from @/api/services/billing
+// Re-export for backwards compatibility with existing imports
+export type { BillingContext as WebSearchBillingContext } from '@/api/services/billing';
 
 type PuppeteerRequestHandler = {
   isInterceptResolutionHandled: () => boolean;
@@ -237,7 +245,11 @@ export async function generateSearchQuery(
       return q;
     });
 
-    return result.output;
+    // ✅ BILLING: Return usage info for credit deduction
+    return {
+      output: result.output,
+      usage: result.usage,
+    };
   } catch (error) {
     const errorDetails = {
       modelId,
@@ -1135,16 +1147,19 @@ async function searchWithFetch(
  *
  * ✅ FIXED: Now using actual vision API with image URLs (not fake text prompts)
  * ✅ TAVILY-ENHANCED: AI-generated image descriptions
+ * ✅ BILLING: Deducts credits when billing context is provided
  *
  * @param images - Array of image URLs to describe
  * @param env - Cloudflare environment bindings
  * @param logger - Optional logger
+ * @param billingContext - Optional billing context for credit deduction
  * @returns Images with AI-generated descriptions
  */
 async function generateImageDescriptions(
   images: Array<{ url: string; alt?: string }>,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
+  billingContext?: BillingContext,
 ): Promise<Array<{ url: string; description?: string; alt?: string }>> {
   if (images.length === 0)
     return [];
@@ -1200,6 +1215,27 @@ async function generateImageDescriptions(
             });
 
             await cacheImageDescription(image.url, result.text, env, logger);
+
+            // ✅ BILLING: Deduct credits for image description AI call
+            if (billingContext && result.usage) {
+              const rawInput = result.usage.inputTokens ?? 0;
+              const rawOutput = result.usage.outputTokens ?? 0;
+              const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+              const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+              if (safeInputTokens > 0 || safeOutputTokens > 0) {
+                try {
+                  await finalizeCredits(billingContext.userId, `img-desc-${ulid()}`, {
+                    inputTokens: safeInputTokens,
+                    outputTokens: safeOutputTokens,
+                    action: CreditActions.AI_RESPONSE,
+                    threadId: billingContext.threadId,
+                    modelId: AIModels.WEB_SEARCH,
+                  });
+                } catch (billingError) {
+                  console.error('[WebSearch] Image description billing failed:', billingError);
+                }
+              }
+            }
 
             return {
               url: image.url,
@@ -1319,12 +1355,14 @@ export function streamAnswerSummary(
  * For streaming responses with progressive rendering, use streamAnswerSummary().
  *
  * ✅ TAVILY-ENHANCED: Basic and advanced answer modes
+ * ✅ BILLING: Deducts credits when billing context is provided
  *
  * @param query - Original search query
  * @param results - Search results to synthesize
  * @param mode - WebSearchActiveAnswerMode (basic or advanced)
  * @param env - Cloudflare environment bindings
  * @param logger - Optional logger
+ * @param billingContext - Optional billing context for credit deduction
  * @returns AI-generated answer summary
  */
 async function generateAnswerSummary(
@@ -1333,6 +1371,7 @@ async function generateAnswerSummary(
   mode: WebSearchActiveAnswerMode,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
+  billingContext?: BillingContext,
 ): Promise<string | null> {
   if (results.length === 0)
     return null;
@@ -1370,6 +1409,27 @@ async function generateAnswerSummary(
       temperature: 0.5,
     });
 
+    // ✅ BILLING: Deduct credits for answer summary AI call
+    if (billingContext && result.usage) {
+      const rawInput = result.usage.inputTokens ?? 0;
+      const rawOutput = result.usage.outputTokens ?? 0;
+      const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+      const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+      if (safeInputTokens > 0 || safeOutputTokens > 0) {
+        try {
+          await finalizeCredits(billingContext.userId, `answer-summary-${ulid()}`, {
+            inputTokens: safeInputTokens,
+            outputTokens: safeOutputTokens,
+            action: CreditActions.AI_RESPONSE,
+            threadId: billingContext.threadId,
+            modelId: AIModels.WEB_SEARCH,
+          });
+        } catch (billingError) {
+          console.error('[WebSearch] Answer summary billing failed:', billingError);
+        }
+      }
+    }
+
     return result.text;
   } catch (error) {
     if (logger) {
@@ -1390,16 +1450,19 @@ async function generateAnswerSummary(
  * Auto-detect optimal search parameters based on query analysis
  *
  * ✅ TAVILY-ENHANCED: Intelligent parameter detection
+ * ✅ BILLING: Deducts credits when billing context is provided
  *
  * @param query - Search query to analyze
  * @param env - Cloudflare environment bindings
  * @param logger - Optional logger
+ * @param billingContext - Optional billing context for credit deduction
  * @returns Auto-detected parameters with reasoning
  */
 async function detectSearchParameters(
   query: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
+  billingContext?: BillingContext,
 ): Promise<{
   topic?: WebSearchTopic;
   timeRange?: WebSearchTimeRange;
@@ -1426,6 +1489,27 @@ async function detectSearchParameters(
       maxTokens: 200,
       temperature: 0.3,
     });
+
+    // ✅ BILLING: Deduct credits for parameter detection AI call
+    if (billingContext && result.usage) {
+      const rawInput = result.usage.inputTokens ?? 0;
+      const rawOutput = result.usage.outputTokens ?? 0;
+      const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+      const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+      if (safeInputTokens > 0 || safeOutputTokens > 0) {
+        try {
+          await finalizeCredits(billingContext.userId, `param-detect-${ulid()}`, {
+            inputTokens: safeInputTokens,
+            outputTokens: safeOutputTokens,
+            action: CreditActions.AI_RESPONSE,
+            threadId: billingContext.threadId,
+            modelId: AIModels.WEB_SEARCH,
+          });
+        } catch (billingError) {
+          console.error('[WebSearch] Parameter detection billing failed:', billingError);
+        }
+      }
+    }
 
     // Parse JSON response
     const parsed = JSON.parse(result.text);
@@ -1547,6 +1631,7 @@ export async function* streamSearchResults(
   params: WebSearchParameters,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
+  billingContext?: BillingContext,
 ): AsyncGenerator<StreamSearchEvent> {
   const { query, maxResults = 10, searchDepth = 'advanced' } = params;
   const startTime = performance.now();
@@ -1692,6 +1777,7 @@ export async function* streamSearchResults(
                 extracted.images,
                 env,
                 logger,
+                billingContext,
               );
             } else {
               enhancedResult.images = extracted.images;
@@ -1759,11 +1845,13 @@ export async function* streamSearchResults(
  * - Retry logic for reliability
  * - Progressive result streaming preparation
  * ✅ TAVILY-ENHANCED: All advanced features implemented
+ * ✅ BILLING: Deducts credits for all internal AI operations
  *
  * @param params - Enhanced search parameters
  * @param env - Cloudflare environment bindings
  * @param complexity - Optional complexity level for metadata
  * @param logger - Optional logger for error tracking
+ * @param billingContext - Optional billing context for credit deduction
  * @returns Formatted search result with Tavily features
  */
 export async function performWebSearch(
@@ -1771,6 +1859,7 @@ export async function performWebSearch(
   env: ApiEnv['Bindings'],
   complexity?: WebSearchComplexity,
   logger?: TypedLogger,
+  billingContext?: BillingContext,
 ): Promise<WebSearchResult> {
   const startTime = performance.now();
 
@@ -1810,7 +1899,7 @@ export async function performWebSearch(
     // Auto-detect parameters if requested
     let autoParams: WebSearchResult['autoParameters'];
     if (params.autoParameters) {
-      const detected = await detectSearchParameters(params.query, env, logger);
+      const detected = await detectSearchParameters(params.query, env, logger, billingContext);
       if (detected) {
         autoParams = detected;
         // Apply auto-detected parameters
@@ -1980,6 +2069,7 @@ export async function performWebSearch(
                 extracted.images,
                 env,
                 logger,
+                billingContext,
               );
             } else {
               baseResult.images = extracted.images;
@@ -2041,6 +2131,7 @@ export async function performWebSearch(
         answerMode,
         env,
         logger,
+        billingContext,
       );
     }
 

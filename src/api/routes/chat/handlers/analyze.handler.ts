@@ -16,6 +16,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { Output, streamText } from 'ai';
 import { streamSSE } from 'hono/streaming';
+import { ulid } from 'ulid';
 import { z } from 'zod';
 
 import { createHandler } from '@/api/core';
@@ -25,6 +26,7 @@ import {
   AnalyzePromptSseEvents,
   ChatModes,
   ChatModeSchema,
+  CreditActions,
   DEFAULT_CHAT_MODE,
   SHORT_ROLE_NAMES,
   ShortRoleNameSchema,
@@ -33,7 +35,8 @@ import {
 import {
   canAccessModelByPricing,
   checkFreeUserHasCompletedRound,
-  deductCreditsForAction,
+  enforceCredits,
+  finalizeCredits,
   MAX_MODELS_BY_TIER,
 } from '@/api/services/billing';
 import { HARDCODED_MODELS, initializeOpenRouter, openRouterService } from '@/api/services/models';
@@ -169,21 +172,26 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
   },
   async (c) => {
     const { user } = c.auth();
-    const { prompt, hasVisualFiles } = c.validated.body;
+    const { prompt, hasImageFiles, hasDocumentFiles, hasVisualFiles } = c.validated.body;
+
+    // ✅ GRANULAR: Derive flags - use new granular flags, fallback to legacy hasVisualFiles
+    // Legacy clients sending hasVisualFiles=true will filter for both vision AND file support
+    const requiresVision = hasImageFiles || hasVisualFiles;
+    const requiresFile = hasDocumentFiles || hasVisualFiles; // PDFs were grouped with visual files
 
     // Get user tier and model limits
     const userTier = await getUserTier(user.id);
     const maxModels = MAX_MODELS_BY_TIER[userTier];
 
-    // Free users get 1 free round - skip credit deduction if they haven't used it yet
+    // Free users get 1 free round - skip credit enforcement if they haven't used it yet
     const isFreeUser = userTier === SubscriptionTiers.FREE;
     const freeRoundUsed = isFreeUser ? await checkFreeUserHasCompletedRound(user.id) : false;
 
-    // Only deduct credits if user is paid OR has already used their free round
-    if (!isFreeUser || freeRoundUsed) {
-      await deductCreditsForAction(user.id, 'autoModeAnalysis', {
-        description: 'Auto mode prompt analysis',
-      });
+    // ✅ BILLING: Enforce credits before AI call (actual deduction happens after with real token count)
+    // Only enforce if user is paid OR has already used their free round
+    const shouldBill = !isFreeUser || freeRoundUsed;
+    if (shouldBill) {
+      await enforceCredits(user.id, 1, { skipRoundCheck: true });
     }
 
     // Filter models accessible to user's tier
@@ -191,9 +199,12 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
       model => canAccessModelByPricing(userTier, model),
     );
 
-    // When visual files are attached, restrict to vision-capable models only
-    if (hasVisualFiles) {
+    // ✅ GRANULAR FILTERING: Filter by both image and document capabilities
+    if (requiresVision) {
       accessibleModels = accessibleModels.filter(model => model.supports_vision);
+    }
+    if (requiresFile) {
+      accessibleModels = accessibleModels.filter(model => model.supports_file);
     }
 
     const accessibleModelIds = accessibleModels.map(m => m.id);
@@ -201,13 +212,14 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
     // Build system prompt with user's accessible options
     // ✅ SINGLE SOURCE: Uses buildAnalyzeSystemPrompt from prompts.service.ts
     const models = getModelInfo(accessibleModelIds);
+    const hasAnyVisualFiles = requiresVision || requiresFile;
     const systemPrompt = buildAnalyzeSystemPrompt(
       models,
       maxModels,
       MIN_PARTICIPANTS_REQUIRED,
       SHORT_ROLE_NAMES,
       Object.values(ChatModes),
-      hasVisualFiles,
+      hasAnyVisualFiles,
       MAX_MODELS_BY_TIER[SubscriptionTiers.FREE],
     );
 
@@ -285,6 +297,31 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
         } catch {
           // Use best partial or fallback
           finalConfig = bestConfig ?? AUTO_MODE_FALLBACK_CONFIG;
+        }
+
+        // ✅ BILLING: Deduct credits based on actual token usage (not fixed cost)
+        if (shouldBill) {
+          try {
+            const usage = await analysisStream.usage;
+            if (usage) {
+              const rawInput = usage.inputTokens ?? 0;
+              const rawOutput = usage.outputTokens ?? 0;
+              const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+              const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+              if (safeInputTokens > 0 || safeOutputTokens > 0) {
+                c.executionCtx.waitUntil(
+                  finalizeCredits(user.id, `analyze-prompt-${ulid()}`, {
+                    inputTokens: safeInputTokens,
+                    outputTokens: safeOutputTokens,
+                    action: CreditActions.AI_RESPONSE,
+                    modelId: PROMPT_ANALYSIS_MODEL_ID,
+                  }),
+                );
+              }
+            }
+          } catch (billingError) {
+            console.error('[Analyze] Billing failed:', billingError);
+          }
         }
 
         // Send final done event with complete config

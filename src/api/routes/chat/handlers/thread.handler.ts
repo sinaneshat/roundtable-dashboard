@@ -6,7 +6,7 @@ import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
-import { invalidateMessagesCache, invalidatePublicThreadCache, invalidateThreadCache } from '@/api/common/cache-utils';
+import { invalidateMessagesCache, invalidatePublicThreadCache, invalidateSidebarCache, invalidateThreadCache } from '@/api/common/cache-utils';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
@@ -65,6 +65,7 @@ import type {
   getThreadRoute,
   getThreadSlugStatusRoute,
   listPublicThreadSlugsRoute,
+  listSidebarThreadsRoute,
   listThreadsRoute,
   updateThreadRoute,
 } from '../route';
@@ -134,6 +135,74 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
     return Responses.cursorPaginated(c, items, pagination);
   },
 );
+
+export const listSidebarThreadsHandler: RouteHandler<typeof listSidebarThreadsRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateQuery: ThreadListQuerySchema,
+    operationName: 'listSidebarThreads',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const query = c.validated.query;
+    const db = await getDbAsync();
+
+    const filters: SQL[] = [
+      eq(tables.chatThread.userId, user.id),
+      ne(tables.chatThread.status, ThreadStatusSchema.enum.deleted),
+    ];
+    const fetchLimit = query.search ? 200 : (query.limit + 1);
+
+    const allThreadsRaw = await db
+      .select()
+      .from(tables.chatThread)
+      .where(buildCursorWhereWithFilters(
+        tables.chatThread.updatedAt,
+        query.cursor,
+        'desc',
+        filters,
+      ))
+      .orderBy(getCursorOrderBy(tables.chatThread.updatedAt, 'desc'))
+      .limit(fetchLimit)
+      .$withCache({
+        config: { ex: STALE_TIMES.threadSidebarKV },
+        tag: ThreadCacheTags.sidebar(user.id),
+      });
+
+    // Map to lightweight sidebar schema
+    const allThreads = allThreadsRaw.map(t => ({
+      id: t.id,
+      title: t.title,
+      slug: t.slug,
+      previousSlug: t.previousSlug,
+      isFavorite: t.isFavorite,
+      isPublic: t.isPublic,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    }));
+
+    let threads = allThreads;
+    if (query.search?.trim()) {
+      const fuse = new Fuse(allThreads, {
+        keys: ['title', 'slug'],
+        threshold: 0.3,
+        ignoreLocation: true,
+        minMatchCharLength: 2,
+      });
+      threads = fuse.search(query.search.trim()).map(r => r.item).slice(0, query.limit + 1);
+    }
+
+    const { items, pagination } = applyCursorPagination(
+      threads,
+      query.limit,
+      thread => createTimestampCursor(thread.updatedAt),
+    );
+
+    c.header('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+    return Responses.cursorPaginated(c, items, pagination);
+  },
+);
+
 export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv> = createHandlerWithBatch(
   {
     auth: 'session',
@@ -518,7 +587,11 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // - No request blocking on AI model latency
     const generateTitleAsync = async () => {
       try {
-        const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
+        // ✅ BILLING: Pass billing context for title generation credit deduction
+        const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env, {
+          userId: user.id,
+          threadId,
+        });
         await updateThreadTitleAndSlug(threadId, aiTitle);
         const db = await getDbAsync();
         await invalidateThreadCache(db, user.id, threadId);
@@ -1167,8 +1240,11 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     if (!updatedThreadWithParticipants) {
       throw createError.notFound('Thread not found after update', ErrorContextBuilders.resourceNotFound('thread', id, user.id));
     }
-    if (body.status !== undefined) {
+    // ✅ CACHE INVALIDATION: Always invalidate when sidebar-relevant fields change
+    // This ensures sidebar shows fresh titles, favorites, and public status after updates
+    if (body.title !== undefined || body.isFavorite !== undefined || body.isPublic !== undefined || body.status !== undefined) {
       await invalidateThreadCache(db, user.id, id, thread.slug);
+      await invalidateSidebarCache(db, user.id);
     }
 
     // ✅ PUBLIC THREAD CACHE: Invalidate when visibility changes

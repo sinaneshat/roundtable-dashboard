@@ -22,8 +22,8 @@ import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/ap
 import { MessagePartTypes, MessageRoles, PlanTypes, PollingStatuses, RoundExecutionPhases } from '@/api/core/enums';
 import {
   checkFreeUserHasCompletedRound,
-  deductCreditsForAction,
   enforceCredits,
+  finalizeCredits,
   getUserCreditBalance,
   zeroOutFreeUserCredits,
 } from '@/api/services/billing';
@@ -160,6 +160,14 @@ function generateCouncilModerator(
       try {
         const db = await getDbAsync();
 
+        // ✅ NaN HANDLING: Use Number.isFinite() to handle NaN from failed AI responses
+        const rawInputTokens = finishResult.usage?.inputTokens ?? 0;
+        const rawOutputTokens = finishResult.usage?.outputTokens ?? 0;
+        const rawTotalTokens = finishResult.usage?.totalTokens ?? 0;
+        const safeInputTokens = Number.isFinite(rawInputTokens) ? rawInputTokens : 0;
+        const safeOutputTokens = Number.isFinite(rawOutputTokens) ? rawOutputTokens : 0;
+        const safeTotalTokens = Number.isFinite(rawTotalTokens) ? rawTotalTokens : safeInputTokens + safeOutputTokens;
+
         // Build complete moderator metadata
         const completeMetadata: DbModeratorMessageMetadata = {
           ...streamMetadata,
@@ -167,9 +175,9 @@ function generateCouncilModerator(
           usage: finishResult.usage
             ? {
                 // Map AI SDK format (inputTokens/outputTokens) to schema format (promptTokens/completionTokens)
-                promptTokens: finishResult.usage.inputTokens || 0,
-                completionTokens: finishResult.usage.outputTokens || 0,
-                totalTokens: finishResult.usage.totalTokens || 0,
+                promptTokens: safeInputTokens,
+                completionTokens: safeOutputTokens,
+                totalTokens: safeTotalTokens,
               }
             : undefined,
           createdAt: new Date().toISOString(),
@@ -213,6 +221,19 @@ function generateCouncilModerator(
         await clearActiveParticipantStream(threadId, roundNumber, MODERATOR_PARTICIPANT_INDEX, env);
 
         // =========================================================================
+        // ✅ CREDIT FINALIZATION: Deduct actual tokens used by moderator
+        // Uses actual token counts instead of fixed estimate for accurate billing
+        // =========================================================================
+        await finalizeCredits(userId, messageId, {
+          inputTokens: safeInputTokens,
+          outputTokens: safeOutputTokens,
+          action: 'ai_response',
+          threadId,
+          messageId,
+          modelId: moderatorModelId,
+        });
+
+        // =========================================================================
         // ✅ FREE USER SINGLE-ROUND: Zero out credits after moderator completes
         // For multi-participant threads, the round is only complete after moderator finishes.
         // This is the final step - now we can lock out free users from further usage.
@@ -229,13 +250,11 @@ function generateCouncilModerator(
         const finishData = {
           text: finishResult.text,
           finishReason: finishResult.finishReason,
-          usage: finishResult.usage
-            ? {
-                inputTokens: finishResult.usage.inputTokens || 0,
-                outputTokens: finishResult.usage.outputTokens || 0,
-                totalTokens: finishResult.usage.totalTokens || 0,
-              }
-            : { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          usage: {
+            inputTokens: safeInputTokens,
+            outputTokens: safeOutputTokens,
+            totalTokens: safeTotalTokens,
+          },
         };
 
         const trackAnalytics = async () => {
@@ -332,15 +351,23 @@ function generateCouncilModerator(
       }
 
       if (part.type === 'finish') {
+        // ✅ NaN HANDLING: Use Number.isFinite() to handle NaN from failed AI responses
+        const rawInput = part.totalUsage?.inputTokens ?? 0;
+        const rawOutput = part.totalUsage?.outputTokens ?? 0;
+        const rawTotal = part.totalUsage?.totalTokens ?? 0;
+        const safeInput = Number.isFinite(rawInput) ? rawInput : 0;
+        const safeOutput = Number.isFinite(rawOutput) ? rawOutput : 0;
+        const safeTotal = Number.isFinite(rawTotal) ? rawTotal : safeInput + safeOutput;
+
         return {
           ...streamMetadata,
           finishReason: part.finishReason,
           usage: part.totalUsage
             ? {
                 // Map AI SDK format to schema format
-                promptTokens: part.totalUsage.inputTokens || 0,
-                completionTokens: part.totalUsage.outputTokens || 0,
-                totalTokens: part.totalUsage.totalTokens || 0,
+                promptTokens: safeInput,
+                completionTokens: safeOutput,
+                totalTokens: safeTotal,
               }
             : undefined,
         };
@@ -572,13 +599,13 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
       })
       .sort((a, b) => a.participantIndex - b.participantIndex);
 
-    // ✅ CREDITS: Enforce and deduct credits for analysis generation
+    // ✅ CREDITS: Enforce credits for moderator generation
     // Skip round completion check because moderator is PART of completing the round
     // Without this, multi-participant threads hit a circular dependency:
     // - Round isn't complete until moderator runs
     // - But enforceCredits blocks moderator if round "appears complete" (all participants done)
-    await enforceCredits(user.id, 2, { skipRoundCheck: true }); // Analysis requires ~2 credits
-    await deductCreditsForAction(user.id, 'analysisGeneration', { threadId });
+    // NOTE: Actual deduction happens in onFinish via finalizeCredits() with real token counts
+    await enforceCredits(user.id, 2, { skipRoundCheck: true }); // Analysis requires ~2 credits estimate
 
     // ✅ RESUMABLE STREAMS: Initialize stream buffer for resumption
     await initializeParticipantStreamBuffer(messageId, threadId, roundNum, MODERATOR_PARTICIPANT_INDEX, c.env);

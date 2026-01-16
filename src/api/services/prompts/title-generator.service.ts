@@ -9,12 +9,14 @@
 import 'server-only';
 
 import { eq } from 'drizzle-orm';
+import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { TITLE_GENERATION_MODEL_ID } from '@/api/core/ai-models';
-import { MessagePartTypes, UIMessageRoles } from '@/api/core/enums';
-import { TITLE_GENERATION_CONFIG } from '@/api/services/billing';
+import { CreditActions, MessagePartTypes, UIMessageRoles } from '@/api/core/enums';
+import type { BillingContext } from '@/api/services/billing';
+import { finalizeCredits, TITLE_GENERATION_CONFIG } from '@/api/services/billing';
 import { initializeOpenRouter, openRouterService } from '@/api/services/models';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
@@ -22,14 +24,21 @@ import * as tables from '@/db';
 
 import { generateUniqueSlug } from './slug-generator.service';
 
+// ✅ SINGLE SOURCE OF TRUTH: Use BillingContext from @/api/services/billing
+
 /**
  * Generate title from first user message
  * Uses Google Gemini 2.0 Flash for fast, reliable title generation
  * Single attempt - falls back to truncated message on failure
+ *
+ * @param firstMessage - The user's first message to generate title from
+ * @param env - API environment bindings
+ * @param billingContext - Optional billing context for credit deduction
  */
 export async function generateTitleFromMessage(
   firstMessage: string,
   env: ApiEnv['Bindings'],
+  billingContext?: BillingContext,
 ): Promise<string> {
   initializeOpenRouter(env);
 
@@ -61,6 +70,30 @@ export async function generateTitleFromMessage(
 
     if (title.length > MAX_LENGTH) {
       title = title.substring(0, MAX_LENGTH).trim();
+    }
+
+    // ✅ BILLING: Deduct credits for title generation AI call
+    if (billingContext && result.usage) {
+      const rawInput = result.usage.inputTokens ?? 0;
+      const rawOutput = result.usage.outputTokens ?? 0;
+      const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+      const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+
+      // Only deduct if we actually used tokens
+      if (safeInputTokens > 0 || safeOutputTokens > 0) {
+        try {
+          await finalizeCredits(billingContext.userId, `title-gen-${ulid()}`, {
+            inputTokens: safeInputTokens,
+            outputTokens: safeOutputTokens,
+            action: CreditActions.AI_RESPONSE,
+            threadId: billingContext.threadId,
+            modelId: TITLE_GENERATION_MODEL_ID,
+          });
+        } catch (billingError) {
+          // Don't fail title generation if billing fails - log and continue
+          console.error('[TitleGenerator] Billing failed:', billingError);
+        }
+      }
     }
 
     return title;

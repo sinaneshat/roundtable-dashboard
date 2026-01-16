@@ -17,6 +17,7 @@ import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses } from '@/api/core';
 import {
+  CreditActions,
   DEFAULT_CHAT_MODE,
   MCPProtocolMethods,
   MCPToolMethods,
@@ -27,7 +28,7 @@ import {
   SubscriptionTiers,
   ThreadStatuses,
 } from '@/api/core/enums';
-import { AI_RETRY_CONFIG, AI_TIMEOUT_CONFIG, canAccessModelByPricing, checkFreeUserHasCompletedRound, getSafeMaxOutputTokens } from '@/api/services/billing';
+import { AI_RETRY_CONFIG, AI_TIMEOUT_CONFIG, canAccessModelByPricing, checkFreeUserHasCompletedRound, enforceCredits, finalizeCredits, getSafeMaxOutputTokens } from '@/api/services/billing';
 import { saveStreamedMessage } from '@/api/services/messages';
 import { getAllModels, getModelById, initializeOpenRouter, openRouterService } from '@/api/services/models';
 import { buildParticipantSystemPrompt } from '@/api/services/prompts';
@@ -811,6 +812,10 @@ async function toolGenerateResponses(
   const client = openRouterService.getClient();
   const userTier = await getUserTier(user.id);
 
+  // ✅ BILLING: Enforce user has credits before generating responses
+  // Estimate ~2 credits per participant for enforcement check
+  await enforceCredits(user.id, participants.length * 2, { skipRoundCheck: true });
+
   const responses: Array<{ participantId: string; content: string }> = [];
 
   for (let i = 0; i < participants.length; i++) {
@@ -874,6 +879,26 @@ async function toolGenerateResponses(
       },
       db,
     });
+
+    // ✅ BILLING: Deduct credits for MCP AI call
+    const rawInput = usage?.inputTokens ?? 0;
+    const rawOutput = usage?.outputTokens ?? 0;
+    const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+    const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+    if (safeInputTokens > 0 || safeOutputTokens > 0) {
+      try {
+        await finalizeCredits(user.id, `mcp-response-${streamMessageId}`, {
+          inputTokens: safeInputTokens,
+          outputTokens: safeOutputTokens,
+          action: CreditActions.AI_RESPONSE,
+          threadId: input.threadId,
+          messageId: streamMessageId,
+          modelId: participant.modelId,
+        });
+      } catch (billingError) {
+        console.error('[MCP] Billing failed for participant response:', billingError);
+      }
+    }
 
     responses.push({ participantId: participant.id, content: fullText });
   }

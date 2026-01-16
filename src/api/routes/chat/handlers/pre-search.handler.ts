@@ -20,10 +20,12 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, IdParamSchema, Responses, STREAMING_CONFIG, ThreadRoundParamSchema } from '@/api/core';
-import { FinishReasons, IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PollingStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { CreditActions, FinishReasons, IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PollingStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import type { BillingContext } from '@/api/services/billing';
 import {
   deductCreditsForAction,
   enforceCredits,
+  finalizeCredits,
 } from '@/api/services/billing';
 import type { PreSearchTrackingContext } from '@/api/services/errors';
 import { buildEmptyResponseError, extractErrorMetadata, initializePreSearchTracking, trackPreSearchComplete, trackQueryGeneration, trackWebSearchExecution } from '@/api/services/errors';
@@ -64,6 +66,14 @@ import { PreSearchRequestSchema } from '../schema';
 // ============================================================================
 
 /**
+ * Extended billing context for image analysis with execution context
+ * ✅ EXTENDS: BillingContext from @/api/services/billing
+ */
+type ImageAnalysisBillingContext = BillingContext & {
+  executionCtx: ExecutionContext;
+};
+
+/**
  * Analyze images using vision model to extract searchable context
  *
  * This function is critical for web search with image attachments:
@@ -73,6 +83,7 @@ import { PreSearchRequestSchema } from '../schema';
  *
  * @param fileParts - Image file parts loaded from attachments
  * @param env - API environment bindings
+ * @param billingContext - Billing context for credit deduction
  * @returns Description of image contents for search context
  */
 async function analyzeImagesForSearchContext(
@@ -85,6 +96,7 @@ async function analyzeImagesForSearchContext(
     image?: string; // URL for image parts from loadAttachmentContentUrl
   }>,
   env: ApiEnv['Bindings'],
+  billingContext?: ImageAnalysisBillingContext,
 ): Promise<string> {
   // Filter for image files only
   const imageFileParts = fileParts.filter(
@@ -171,6 +183,25 @@ async function analyzeImagesForSearchContext(
     });
 
     const description = result.text.trim();
+
+    // ✅ BILLING: Deduct credits for image analysis AI call
+    if (billingContext && result.usage) {
+      const rawInput = result.usage.inputTokens ?? 0;
+      const rawOutput = result.usage.outputTokens ?? 0;
+      const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+      const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+      if (safeInputTokens > 0 || safeOutputTokens > 0) {
+        billingContext.executionCtx.waitUntil(
+          finalizeCredits(billingContext.userId, `presearch-img-analysis-${ulid()}`, {
+            inputTokens: safeInputTokens,
+            outputTokens: safeOutputTokens,
+            action: CreditActions.AI_RESPONSE,
+            threadId: billingContext.threadId,
+            modelId: AIModels.IMAGE_ANALYSIS,
+          }),
+        );
+      }
+    }
 
     if (description) {
       return `[Image Content Analysis]\n${description}`;
@@ -435,7 +466,12 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
               if (fileParts.length > 0) {
                 // Analyze images with vision model to get searchable descriptions
-                imageContext = await analyzeImagesForSearchContext(fileParts, c.env);
+                // ✅ BILLING: Pass billing context for credit deduction
+                imageContext = await analyzeImagesForSearchContext(fileParts, c.env, {
+                  userId: user.id,
+                  threadId,
+                  executionCtx: c.executionCtx,
+                });
               }
             } catch (error) {
               // Log but don't fail - continue without image context
@@ -607,10 +643,35 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 },
               );
             }
+
+            // ✅ BILLING: Deduct credits for query generation AI call (streaming)
+            try {
+              const queryUsage = await queryStream.usage;
+              if (queryUsage) {
+                const rawInput = queryUsage.inputTokens ?? 0;
+                const rawOutput = queryUsage.outputTokens ?? 0;
+                const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+                const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+                if (safeInputTokens > 0 || safeOutputTokens > 0) {
+                  c.executionCtx.waitUntil(
+                    finalizeCredits(user.id, `presearch-query-${streamId}`, {
+                      inputTokens: safeInputTokens,
+                      outputTokens: safeOutputTokens,
+                      action: CreditActions.AI_RESPONSE,
+                      threadId,
+                      modelId: AIModels.WEB_SEARCH,
+                    }),
+                  );
+                }
+              }
+            } catch (billingError) {
+              console.error('[Pre-search] Query generation billing failed:', billingError);
+            }
           } catch {
           // ✅ FALLBACK LEVEL 1: Try non-streaming generation (streaming failed completely)
             try {
-              multiQueryResult = await generateSearchQuery(body.userQuery, c.env);
+              const queryGenResult = await generateSearchQuery(body.userQuery, c.env);
+              multiQueryResult = queryGenResult.output;
 
               // Validate generation succeeded
               if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
@@ -622,6 +683,25 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                     operation: 'non_stream_query_generation',
                   },
                 );
+              }
+
+              // ✅ BILLING: Deduct credits for query generation AI call (non-streaming)
+              if (queryGenResult.usage) {
+                const rawInput = queryGenResult.usage.inputTokens ?? 0;
+                const rawOutput = queryGenResult.usage.outputTokens ?? 0;
+                const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+                const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+                if (safeInputTokens > 0 || safeOutputTokens > 0) {
+                  c.executionCtx.waitUntil(
+                    finalizeCredits(user.id, `presearch-query-fallback-${streamId}`, {
+                      inputTokens: safeInputTokens,
+                      outputTokens: safeOutputTokens,
+                      action: CreditActions.AI_RESPONSE,
+                      threadId,
+                      modelId: AIModels.WEB_SEARCH,
+                    }),
+                  );
+                }
               }
 
               // Send start event for non-streaming result
@@ -863,6 +943,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               },
               c.env,
               complexity,
+              undefined, // logger
+              { userId: user.id, threadId }, // ✅ BILLING: Pass billing context
             );
             const searchDuration = performance.now() - searchStartTime;
 

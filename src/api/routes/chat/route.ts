@@ -32,6 +32,7 @@ import {
   ThreadDetailResponseSchema,
   ThreadListQuerySchema,
   ThreadListResponseSchema,
+  ThreadSidebarListResponseSchema,
   ThreadSlugStatusResponseSchema,
   ThreadStreamResumptionStateResponseSchema,
   UpdateCustomRoleRequestSchema,
@@ -62,6 +63,27 @@ export const listThreadsRoute = createRoute({
     ...createProtectedRouteResponses(),
   },
 });
+
+export const listSidebarThreadsRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/sidebar',
+  tags: ['chat'],
+  summary: 'List sidebar threads (lightweight)',
+  description: 'Lightweight endpoint for sidebar - only essential fields (id, title, slug, previousSlug, isFavorite, isPublic, timestamps)',
+  request: {
+    query: ThreadListQuerySchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Sidebar threads retrieved',
+      content: {
+        'application/json': { schema: ThreadSidebarListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
 export const createThreadRoute = createRoute({
   method: 'post',
   path: '/chat/threads',

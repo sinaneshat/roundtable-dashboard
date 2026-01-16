@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import type { BorderVariant, TrialState } from '@/api/core/enums';
 import { BorderVariants, PlanTypes, TrialStates } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
-import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
+import { useSidebarThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
 
 export type FreeTrialStateReturn = {
   isFreeUser: boolean;
@@ -32,7 +32,7 @@ export type FreeTrialStateReturn = {
  */
 export function useFreeTrialState(): FreeTrialStateReturn {
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
-  const { data: threadsData } = useThreadsQuery();
+  const { data: threadsData } = useSidebarThreadsQuery();
   const messages = useChatStore(state => state.messages);
 
   const freeRoundUsedFromApi = useMemo(() => {

@@ -58,6 +58,7 @@ export function useUpdateThreadMutation() {
       // This ensures fresh data is fetched after rename
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.detail(variables.param.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.sidebar() });
 
       // Also invalidate slug-based cache if slug was provided
       if ('slug' in variables.json && typeof variables.json.slug === 'string') {
@@ -87,7 +88,7 @@ export function useDeleteThreadMutation() {
           predicate: (query) => {
             if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
               return false;
-            return query.queryKey[1] === 'list';
+            return query.queryKey[1] === 'list' || query.queryKey[1] === 'sidebar';
           },
         },
         (old) => {

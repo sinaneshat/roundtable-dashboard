@@ -12,6 +12,7 @@ export {
 } from './chat/feedback-and-roles';
 export { useThreadMessagesQuery } from './chat/messages';
 export { useThreadPreSearchesQuery } from './chat/pre-search';
+export { useSidebarThreadsQuery } from './chat/sidebar';
 export {
   usePublicThreadQuery,
   usePublicThreadSlugsQuery,

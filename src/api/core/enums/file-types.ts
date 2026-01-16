@@ -102,6 +102,11 @@ export const ImageMimeTypeSchema = z.enum(IMAGE_MIME_TYPES).openapi({
 
 export type ImageMimeType = z.infer<typeof ImageMimeTypeSchema>;
 
+// ✅ Type guard: Check if MIME type is an image
+export function isImageMimeType(mimeType: unknown): mimeType is ImageMimeType {
+  return ImageMimeTypeSchema.safeParse(mimeType).success;
+}
+
 export const ImageMimeTypes = {
   PNG: 'image/png' as const,
   JPEG: 'image/jpeg' as const,
@@ -135,6 +140,11 @@ export const DocumentMimeTypeSchema = z.enum(DOCUMENT_MIME_TYPES).openapi({
 });
 
 export type DocumentMimeType = z.infer<typeof DocumentMimeTypeSchema>;
+
+// ✅ Type guard: Check if MIME type is a document (PDF, DOC, etc.)
+export function isDocumentMimeType(mimeType: unknown): mimeType is DocumentMimeType {
+  return DocumentMimeTypeSchema.safeParse(mimeType).success;
+}
 
 export const DocumentMimeTypes = {
   PDF: 'application/pdf' as const,
@@ -297,7 +307,7 @@ export function isAiProcessableMimeType(mimeType: string): boolean {
 // ============================================================================
 
 // 1. ARRAY CONSTANT - Source of truth
-export const INCOMPATIBILITY_REASONS = ['noVision'] as const;
+export const INCOMPATIBILITY_REASONS = ['noVision', 'noFileSupport'] as const;
 
 // 2. DEFAULT VALUE
 export const DEFAULT_INCOMPATIBILITY_REASON: IncompatibilityReason = 'noVision';
@@ -314,6 +324,7 @@ export type IncompatibilityReason = z.infer<typeof IncompatibilityReasonSchema>;
 // 5. CONSTANT OBJECT - For usage in code (prevents typos)
 export const IncompatibilityReasons = {
   NO_VISION: 'noVision' as const,
+  NO_FILE_SUPPORT: 'noFileSupport' as const,
 } as const;
 
 // ============================================================================
