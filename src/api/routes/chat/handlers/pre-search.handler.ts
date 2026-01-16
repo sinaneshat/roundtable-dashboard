@@ -1222,7 +1222,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 /**
  * Get all pre-search results for a thread
  * ✅ FOLLOWS: getThreadAnalysesHandler pattern exactly
- * ✅ ORPHAN CLEANUP: Marks stale STREAMING/PENDING searches as FAILED
+ * ✅ ORPHAN CLEANUP: Fire-and-forget via waitUntil (non-blocking)
  */
 export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearchesRoute, ApiEnv> = createHandler(
   {
@@ -1254,92 +1254,91 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
       },
     });
 
-    // Mark stale STREAMING/PENDING searches as FAILED
-    // ✅ FIX: Check KV buffer for recent activity before marking as orphaned
-    // A search with recent KV chunks is still actively running and should not be marked failed
+    // ✅ NON-BLOCKING: Fire-and-forget orphan cleanup via waitUntil
+    // Don't block response - orphan cleanup happens in background
+    // Next request will see updated status if cleanup was needed
     const potentialOrphans = allPreSearches.filter((search) => {
       if (search.status !== MessageStatuses.STREAMING && search.status !== MessageStatuses.PENDING) {
         return false;
       }
-
-      // Check if timestamp has exceeded orphan cleanup timeout
       return hasTimestampExceededTimeout(search.createdAt, STREAMING_CONFIG.ORPHAN_CLEANUP_TIMEOUT_MS);
     });
 
-    // ✅ OPTIMIZED: Parallelize KV checks for all potential orphans
-    const orphanedSearches: typeof potentialOrphans = [];
-    const orphanChecks = await Promise.all(
-      potentialOrphans.map(async (search) => {
-        const streamId = generatePreSearchStreamId(threadId, search.roundNumber);
-        const chunks = await getPreSearchStreamChunks(streamId, c.env);
-
-        // If KV has recent chunks, the stream is still active - don't mark as orphaned
-        if (chunks && chunks.length > 0) {
-          const lastChunkTime = Math.max(...chunks.map(chunk => chunk.timestamp));
-          const isStale = Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
-
-          if (!isStale) {
-            // Stream is still active, skip orphan cleanup for this search
-            return { search, isOrphaned: false };
-          }
-        }
-
-        // No recent KV activity OR no KV available - this is truly orphaned
-        return { search, isOrphaned: true };
-      }),
-    );
-
-    // Filter to only truly orphaned searches
-    for (const check of orphanChecks) {
-      if (check.isOrphaned) {
-        orphanedSearches.push(check.search);
-      }
+    if (potentialOrphans.length > 0) {
+      // ✅ FIRE-AND-FORGET: Orphan cleanup runs after response is sent
+      c.executionCtx.waitUntil(
+        cleanupOrphanedPreSearches(potentialOrphans, threadId, db, c.env),
+      );
     }
 
-    if (orphanedSearches.length > 0) {
-      // ✅ OPTIMIZED: Parallelize KV cleanup and batch database updates
-      // Clean up KV tracking for all orphaned searches in parallel
-      await Promise.all(
-        orphanedSearches.map(search =>
-          clearActivePreSearchStream(threadId, search.roundNumber, c.env),
-        ),
-      );
-
-      // Update orphaned searches to FAILED status (parallel execution)
-      await Promise.all(
-        orphanedSearches.map(search =>
-          db.update(tables.chatPreSearch)
-            .set({
-              status: MessageStatuses.FAILED,
-              errorMessage: 'Search timed out after 2 minutes. This may have been caused by a page refresh or connection issue during streaming.',
-            })
-            .where(eq(tables.chatPreSearch.id, search.id)),
-        ),
-      );
-
-      // ✅ OPTIMIZED: Update in-memory data instead of re-querying database
-      // Mark orphaned searches as FAILED in the existing result set
-      const updatedPreSearches = allPreSearches.map((search) => {
-        const isOrphaned = orphanedSearches.some(orphan => orphan.id === search.id);
-        if (isOrphaned) {
-          return {
-            ...search,
-            status: MessageStatuses.FAILED,
-            errorMessage: 'Search timed out after 2 minutes. This may have been caused by a page refresh or connection issue during streaming.',
-          };
-        }
-        return search;
-      });
-
-      return Responses.ok(c, {
-        items: updatedPreSearches,
-        count: updatedPreSearches.length,
-      });
-    }
-
+    // ✅ RETURN IMMEDIATELY: Don't wait for orphan cleanup
+    // Client sees current state; any orphans will be cleaned on next request
     return Responses.ok(c, {
       items: allPreSearches,
       count: allPreSearches.length,
     });
   },
 );
+
+/**
+ * Background orphan cleanup - runs via waitUntil after response is sent
+ */
+async function cleanupOrphanedPreSearches(
+  potentialOrphans: Array<{
+    id: string;
+    threadId: string;
+    roundNumber: number;
+    status: string;
+    createdAt: Date;
+  }>,
+  threadId: string,
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+  env: ApiEnv['Bindings'],
+): Promise<void> {
+  try {
+    // Check KV for each potential orphan to confirm it's truly orphaned
+    const orphanChecks = await Promise.all(
+      potentialOrphans.map(async (search) => {
+        const streamId = generatePreSearchStreamId(threadId, search.roundNumber);
+        const chunks = await getPreSearchStreamChunks(streamId, env);
+
+        if (chunks && chunks.length > 0) {
+          const lastChunkTime = Math.max(...chunks.map(chunk => chunk.timestamp));
+          const isStale = Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
+          if (!isStale) {
+            return { search, isOrphaned: false };
+          }
+        }
+        return { search, isOrphaned: true };
+      }),
+    );
+
+    const orphanedSearches = orphanChecks
+      .filter(check => check.isOrphaned)
+      .map(check => check.search);
+
+    if (orphanedSearches.length === 0) {
+      return;
+    }
+
+    // Clean up KV and update DB in parallel
+    await Promise.all([
+      // Clear KV tracking
+      ...orphanedSearches.map(search =>
+        clearActivePreSearchStream(threadId, search.roundNumber, env),
+      ),
+      // Update DB status
+      ...orphanedSearches.map(search =>
+        db.update(tables.chatPreSearch)
+          .set({
+            status: MessageStatuses.FAILED,
+            errorMessage: 'Search timed out. May have been caused by page refresh or connection issue.',
+          })
+          .where(eq(tables.chatPreSearch.id, search.id)),
+      ),
+    ]);
+  } catch {
+    // Silently fail - orphan cleanup is best-effort
+    // Will be retried on next request
+  }
+}
