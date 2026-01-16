@@ -542,11 +542,6 @@ export async function finalizeCredits(
   streamId: string,
   actualUsage: TokenUsage,
 ): Promise<void> {
-  const db = await getDbAsync();
-
-  // Mutable ref to track current record for retries
-  let currentRecord = await ensureUserCreditRecord(userId);
-
   // Calculate weighted credits based on model pricing tier
   const weightedCredits = calculateWeightedCredits(
     actualUsage.inputTokens,
@@ -554,6 +549,16 @@ export async function finalizeCredits(
     actualUsage.modelId,
     getModelById,
   );
+
+  // Skip finalization if no credits to deduct (0 tokens used or calculation returned 0)
+  if (weightedCredits === 0 || !Number.isFinite(weightedCredits)) {
+    return;
+  }
+
+  const db = await getDbAsync();
+
+  // Mutable ref to track current record for retries
+  let currentRecord = await ensureUserCreditRecord(userId);
 
   // Get pricing tier and model info for transaction logging
   const pricingTier = getModelPricingTierById(actualUsage.modelId, getModelById);

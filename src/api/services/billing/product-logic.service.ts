@@ -196,7 +196,16 @@ export function calculateWeightedCredits(
   modelId: string,
   getModel: (id: string) => ModelForPricing | undefined,
 ): number {
-  const baseCredits = calculateBaseCredits(inputTokens, outputTokens);
+  // Ensure tokens are valid numbers, default to 0 if NaN/undefined
+  const safeInputTokens = Number.isFinite(inputTokens) ? inputTokens : 0;
+  const safeOutputTokens = Number.isFinite(outputTokens) ? outputTokens : 0;
+
+  // Skip calculation if no tokens used
+  if (safeInputTokens === 0 && safeOutputTokens === 0) {
+    return 0;
+  }
+
+  const baseCredits = calculateBaseCredits(safeInputTokens, safeOutputTokens);
   const multiplier = getModelCreditMultiplierById(modelId, getModel);
   return Math.ceil(baseCredits * multiplier);
 }
