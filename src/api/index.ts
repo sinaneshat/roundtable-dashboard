@@ -220,11 +220,13 @@ import {
 // ============================================================================
 // System/health routes
 import {
+  benchmarkHandler,
   clearCacheHandler,
   detailedHealthHandler,
   healthHandler,
 } from './routes/system/handler';
 import {
+  benchmarkRoute,
   clearCacheRoute,
   detailedHealthRoute,
   healthRoute,
@@ -596,6 +598,7 @@ const appRoutes = app
   .openapi(healthRoute, healthHandler) // Basic health check for monitoring
   .openapi(detailedHealthRoute, detailedHealthHandler) // Detailed health check with environment and dependencies
   .openapi(clearCacheRoute, clearCacheHandler) // Clear all backend caches
+  .openapi(benchmarkRoute, benchmarkHandler) // Database query benchmark
 
   // ============================================================================
   // Auth Routes - User authentication and session management (protected)

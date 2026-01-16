@@ -52,17 +52,110 @@ export function useUpdateThreadMutation() {
 
   return useMutation({
     mutationFn: updateThreadService,
-    // No optimistic updates - wait for server response and show loading state
-    onSuccess: (_data, variables) => {
-      // Invalidate all caches that might contain the thread title
-      // This ensures fresh data is fetched after rename
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.detail(variables.param.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.sidebar() });
+    onSuccess: (data, variables) => {
+      const threadId = variables.param.id;
+      const updatedThread = data.success && data.data ? data.data : null;
 
-      // Also invalidate slug-based cache if slug was provided
-      if ('slug' in variables.json && typeof variables.json.slug === 'string') {
-        queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(variables.json.slug) });
+      // Immediately update sidebar/list caches with the new title from the response
+      // This prevents waiting for a refetch and shows the update instantly
+      queryClient.setQueriesData(
+        {
+          queryKey: queryKeys.threads.all,
+          predicate: (query) => {
+            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
+              return false;
+            return query.queryKey[1] === 'list' || query.queryKey[1] === 'sidebar';
+          },
+        },
+        (old) => {
+          const parsedQuery = validateInfiniteQueryCache(old);
+          if (!parsedQuery)
+            return old;
+
+          return {
+            ...parsedQuery,
+            pages: parsedQuery.pages.map((page) => {
+              if (!page.success || !page.data?.items)
+                return page;
+
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: page.data.items.map((thread) => {
+                    const threadData = ChatThreadCacheSchema.safeParse(thread);
+                    if (!threadData.success || threadData.data.id !== threadId)
+                      return thread;
+
+                    // Merge the response data with existing thread
+                    return {
+                      ...thread,
+                      ...(updatedThread || {}),
+                      // Also apply the request variables as fallback
+                      ...('title' in variables.json && { title: variables.json.title }),
+                      ...('isFavorite' in variables.json && { isFavorite: variables.json.isFavorite }),
+                      ...('isPublic' in variables.json && { isPublic: variables.json.isPublic }),
+                      ...('slug' in variables.json && { slug: variables.json.slug }),
+                    };
+                  }),
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      // Update thread detail cache if present
+      queryClient.setQueryData(
+        queryKeys.threads.detail(threadId),
+        (old) => {
+          const parsedData = validateThreadDetailPayloadCache(old);
+          if (!parsedData)
+            return old;
+
+          return {
+            success: true,
+            data: {
+              ...parsedData,
+              thread: {
+                ...parsedData.thread,
+                ...(updatedThread || {}),
+                ...('title' in variables.json && { title: variables.json.title }),
+                ...('isFavorite' in variables.json && { isFavorite: variables.json.isFavorite }),
+                ...('isPublic' in variables.json && { isPublic: variables.json.isPublic }),
+                ...('slug' in variables.json && { slug: variables.json.slug }),
+              },
+            },
+          };
+        },
+      );
+
+      // Update slug-based cache if slug was provided
+      const newSlug = 'slug' in variables.json ? variables.json.slug : null;
+      if (typeof newSlug === 'string') {
+        queryClient.setQueryData(
+          queryKeys.threads.bySlug(newSlug),
+          (old) => {
+            const parsedData = validateThreadDetailPayloadCache(old);
+            if (!parsedData)
+              return old;
+
+            return {
+              success: true,
+              data: {
+                ...parsedData,
+                thread: {
+                  ...parsedData.thread,
+                  ...(updatedThread || {}),
+                  ...('title' in variables.json && { title: variables.json.title }),
+                  ...('isFavorite' in variables.json && { isFavorite: variables.json.isFavorite }),
+                  ...('isPublic' in variables.json && { isPublic: variables.json.isPublic }),
+                  slug: newSlug,
+                },
+              },
+            };
+          },
+        );
       }
     },
     retry: false,

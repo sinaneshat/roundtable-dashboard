@@ -301,80 +301,50 @@ async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage
 }
 
 export async function getUserUsageStats(userId: string): Promise<UsageStatsPayload> {
-  return {
-    credits: await getCreditStatsForUsage(userId),
-    plan: await getPlanStatsForUsage(userId),
-  };
-}
+  const db = await getDbAsync();
 
-async function getCreditStatsForUsage(userId: string) {
-  const creditBalance = await getUserCreditBalance(userId);
+  // ✅ PERF: Fetch all independent data in parallel
+  // - creditBalance: used by both credits and plan stats
+  // - usageRecord: needed for tier and pending change info
+  // - customerWithSub: check active subscription
+  const [creditBalance, usageRecord, customerWithSub] = await Promise.all([
+    getUserCreditBalance(userId),
+    ensureUserUsageRecord(userId),
+    // ✅ PERF: Single JOIN query instead of 2 sequential queries
+    db
+      .select()
+      .from(tables.stripeCustomer)
+      .leftJoin(
+        tables.stripeSubscription,
+        and(
+          eq(tables.stripeSubscription.customerId, tables.stripeCustomer.id),
+          eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
+        ),
+      )
+      .where(eq(tables.stripeCustomer.userId, userId))
+      .limit(1)
+      .$withCache({
+        config: { ex: 60 },
+        tag: SubscriptionCacheTags.active(userId),
+      }),
+  ]);
+
+  const hasActiveSubscription = customerWithSub.length > 0 && !!customerWithSub[0]?.stripe_subscription;
+  const currentTier = usageRecord.subscriptionTier;
+  const isPaidTier = currentTier !== SubscriptionTiers.FREE;
+
+  // ✅ PERF: Only check free round for FREE users (skip expensive query for paid)
+  const freeRoundUsed = isPaidTier ? false : await checkFreeUserHasCompletedRound(userId);
+
+  // Build credits stats
   let creditStatus: UsageStatus = UsageStatuses.DEFAULT;
-
   if (creditBalance.available <= 0) {
     creditStatus = UsageStatuses.CRITICAL;
   } else if (creditBalance.available <= 1000) {
     creditStatus = UsageStatuses.WARNING;
   }
 
-  return {
-    balance: creditBalance.balance,
-    available: creditBalance.available,
-    status: creditStatus,
-  };
-}
-
-/**
- * Get plan stats for usage response
- * ✅ Uses userChatUsage.subscriptionTier as source of truth (honors grace period)
- * ✅ Includes pendingTierChange info for UI to show grace period message
- */
-async function getPlanStatsForUsage(userId: string) {
-  const db = await getDbAsync();
-  const creditBalance = await getUserCreditBalance(userId);
-
-  // ✅ SOURCE OF TRUTH: Use userChatUsage.subscriptionTier (honors grace period)
-  // This correctly maintains 'pro' tier during downgrade grace period
-  const usageRecord = await ensureUserUsageRecord(userId);
-  const currentTier = usageRecord.subscriptionTier;
-  const isPaidTier = currentTier !== SubscriptionTiers.FREE;
-
-  // Check for active subscription in Stripe (for hasActiveSubscription flag)
-  // ✅ CACHING: 60-second TTL - subscription changes trigger cache invalidation via webhook
-  const customerResults = await db
-    .select()
-    .from(tables.stripeCustomer)
-    .where(eq(tables.stripeCustomer.userId, userId))
-    .limit(1)
-    .$withCache({
-      config: { ex: 60 },
-      tag: CustomerCacheTags.byUserId(userId),
-    });
-
-  const customer = customerResults[0];
-  let hasActiveSubscription = false;
-
-  if (customer) {
-    // ✅ CACHING: 60-second TTL - invalidated on subscription changes
-    const subscriptionResults = await db
-      .select()
-      .from(tables.stripeSubscription)
-      .where(
-        and(
-          eq(tables.stripeSubscription.customerId, customer.id),
-          eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
-        ),
-      )
-      .limit(1)
-      .$withCache({
-        config: { ex: 60 },
-        tag: SubscriptionCacheTags.active(userId),
-      });
-
-    hasActiveSubscription = subscriptionResults.length > 0;
-  }
-
-  // Build pending tier change info for UI grace period display
+  // Build pending tier change info
   const pendingChange = usageRecord.pendingTierChange
     ? {
         pendingTier: usageRecord.pendingTierChange,
@@ -382,31 +352,31 @@ async function getPlanStatsForUsage(userId: string) {
       }
     : null;
 
-  // Check if free user has used their one-time free round
-  // Always false for paid users, permanent flag for free users
-  const freeRoundUsed = isPaidTier ? false : await checkFreeUserHasCompletedRound(userId);
-
-  // User on paid tier (including during grace period)
-  if (isPaidTier) {
-    return {
-      type: 'paid' as const,
-      name: 'Pro',
-      monthlyCredits: creditBalance.monthlyCredits,
-      hasActiveSubscription,
-      freeRoundUsed: false, // Always false for paid users
-      nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
-      pendingChange,
-    };
-  }
-
   return {
-    type: PlanTypes.FREE,
-    name: 'Free',
-    monthlyCredits: creditBalance.monthlyCredits,
-    hasActiveSubscription: false,
-    freeRoundUsed, // True if free user has completed their round
-    nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
-    pendingChange: null,
+    credits: {
+      balance: creditBalance.balance,
+      available: creditBalance.available,
+      status: creditStatus,
+    },
+    plan: isPaidTier
+      ? {
+          type: 'paid' as const,
+          name: 'Pro',
+          monthlyCredits: creditBalance.monthlyCredits,
+          hasActiveSubscription,
+          freeRoundUsed: false,
+          nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
+          pendingChange,
+        }
+      : {
+          type: PlanTypes.FREE,
+          name: 'Free',
+          monthlyCredits: creditBalance.monthlyCredits,
+          hasActiveSubscription: false,
+          freeRoundUsed,
+          nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
+          pendingChange: null,
+        },
   };
 }
 

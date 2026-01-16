@@ -352,60 +352,73 @@ export async function isFreeUserWithPendingRound(
 export async function checkFreeUserHasCompletedRound(userId: string): Promise<boolean> {
   const db = await getDbAsync();
 
-  // ✅ PERF: Check if already recorded - early exit with single indexed query
-  const hasTransaction = await db.query.creditTransaction.findFirst({
-    where: and(
-      eq(tables.creditTransaction.userId, userId),
-      eq(tables.creditTransaction.action, CreditActions.FREE_ROUND_COMPLETE),
-    ),
-    columns: { id: true },
-  });
+  // ✅ PERF: Check if already recorded - CACHED because once true, always true
+  // Cache tag allows invalidation if ever needed (e.g., admin reset)
+  const hasTransactionResults = await db
+    .select()
+    .from(tables.creditTransaction)
+    .where(
+      and(
+        eq(tables.creditTransaction.userId, userId),
+        eq(tables.creditTransaction.action, CreditActions.FREE_ROUND_COMPLETE),
+      ),
+    )
+    .limit(1)
+    .$withCache({
+      config: { ex: 3600 }, // 1 hour - this is a permanent flag
+      tag: `free-round-complete-${userId}`,
+    });
 
-  if (hasTransaction) {
+  if (hasTransactionResults.length > 0) {
     return true;
   }
 
-  // Get the user's thread (free users can only have one)
-  const thread = await db.query.chatThread.findFirst({
-    where: eq(tables.chatThread.userId, userId),
-    columns: { id: true },
-  });
+  // Get thread (free users can only have one) - also cached
+  const threadResults = await db
+    .select()
+    .from(tables.chatThread)
+    .where(eq(tables.chatThread.userId, userId))
+    .limit(1)
+    .$withCache({
+      config: { ex: 60 },
+      tag: `user-thread-${userId}`,
+    });
 
+  const thread = threadResults[0];
   if (!thread) {
     return false;
   }
 
-  // ✅ PERF: Use SQL COUNT for participant counts instead of fetching all records
-  const participantCountResult = await db
-    .select()
-    .from(tables.chatParticipant)
-    .where(
-      and(
-        eq(tables.chatParticipant.threadId, thread.id),
-        eq(tables.chatParticipant.isEnabled, true),
+  // ✅ PERF: Run participant and message queries in parallel
+  const [participantResults, messageResults] = await Promise.all([
+    db
+      .select()
+      .from(tables.chatParticipant)
+      .where(
+        and(
+          eq(tables.chatParticipant.threadId, thread.id),
+          eq(tables.chatParticipant.isEnabled, true),
+        ),
       ),
-    );
-  const enabledCount = participantCountResult.length;
+    db
+      .select()
+      .from(tables.chatMessage)
+      .where(
+        and(
+          eq(tables.chatMessage.threadId, thread.id),
+          eq(tables.chatMessage.role, 'assistant'),
+          eq(tables.chatMessage.roundNumber, 0),
+        ),
+      ),
+  ]);
 
+  const enabledCount = participantResults.length;
   if (enabledCount === 0) {
     return false;
   }
 
-  // ✅ PERF: Use SQL COUNT(DISTINCT) to count unique responded participants
-  const respondedCountResult = await db
-    .select()
-    .from(tables.chatMessage)
-    .where(
-      and(
-        eq(tables.chatMessage.threadId, thread.id),
-        eq(tables.chatMessage.role, 'assistant'),
-        eq(tables.chatMessage.roundNumber, 0),
-      ),
-    );
-
-  // Count unique participant IDs
   const respondedIds = new Set(
-    respondedCountResult
+    messageResults
       .map(m => m.participantId)
       .filter((id): id is string => id !== null),
   );
