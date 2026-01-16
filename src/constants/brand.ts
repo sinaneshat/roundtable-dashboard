@@ -24,7 +24,7 @@ export const BRAND = {
   // URLs
   website: 'https://roundtable.now/',
   parentWebsite: 'https://roundtable.now/',
-  support: 'hello@roundtable.now',
+  support: 'soheil@deadpixel.ai',
 
   // Professional AI/tech brand colors
   colors: {

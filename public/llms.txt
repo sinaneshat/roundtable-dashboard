@@ -36,7 +36,7 @@ Roundtable orchestrates multiple AI models—GPT-4, Claude, Gemini, Grok—to de
 ## Links
 - Website: https://roundtable.now
 - Pricing: https://roundtable.now/chat/pricing
-- Support: hello@roundtable.now
+- Support: soheil@deadpixel.ai
 
 ## FAQ
 
