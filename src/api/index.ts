@@ -26,7 +26,7 @@ import { APP_VERSION } from '@/constants/version';
 import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
 
 import { createOpenApiApp } from './core/app';
-import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, protectMutations, RateLimiterFactory, requireSession } from './middleware';
+import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, RateLimiterFactory } from './middleware';
 // API Keys routes
 import {
   createApiKeyHandler,
@@ -513,106 +513,78 @@ app.notFound(notFound);
 // CRITICAL: Routes must be registered with .openapi() for RPC to work
 // ============================================================================
 
-// Apply CSRF protection and authentication to protected routes
-// Following Hono best practices: apply CSRF only to authenticated routes
-app.use('/auth/me', csrfProtection, requireSession);
+// ============================================================================
+// CSRF Protection for Mutation Routes
+// ============================================================================
+// ⚠️ PERF: Handlers use createHandler with auth:'session' which calls getSession()
+// DO NOT add requireSession middleware here - it causes DOUBLE session lookup
+// Only apply CSRF protection for POST/PATCH/PUT/DELETE routes
 
-// Protected API keys endpoints
-app.use('/auth/api-keys', csrfProtection, requireSession);
+// Auth endpoints - CSRF only (handlers do their own auth)
+app.use('/auth/me', csrfProtection);
+app.use('/auth/api-keys', csrfProtection);
 
-// Protected billing endpoints (checkout, portal, sync, subscriptions)
-app.use('/billing/checkout', csrfProtection, requireSession);
-app.use('/billing/portal', csrfProtection, requireSession);
-app.use('/billing/sync-after-checkout', csrfProtection, requireSession);
-app.use('/billing/sync-credits-after-checkout', csrfProtection, requireSession);
-app.use('/billing/subscriptions', csrfProtection, requireSession);
-app.use('/billing/subscriptions/:id', csrfProtection, requireSession);
-app.use('/billing/subscriptions/:id/switch', csrfProtection, requireSession);
-app.use('/billing/subscriptions/:id/cancel', csrfProtection, requireSession);
+// Billing endpoints - CSRF only (handlers do their own auth)
+app.use('/billing/checkout', csrfProtection);
+app.use('/billing/portal', csrfProtection);
+app.use('/billing/sync-after-checkout', csrfProtection);
+app.use('/billing/sync-credits-after-checkout', csrfProtection);
+app.use('/billing/subscriptions', csrfProtection);
+app.use('/billing/subscriptions/:id', csrfProtection);
+app.use('/billing/subscriptions/:id/switch', csrfProtection);
+app.use('/billing/subscriptions/:id/cancel', csrfProtection);
 
 // Test endpoints (development/test only)
 if (process.env.NODE_ENV !== 'production') {
-  app.use('/test/*', csrfProtection, requireSession);
+  app.use('/test/*', csrfProtection);
 }
 
-// Protected chat endpoints (ChatGPT pattern with smart access control)
-// POST /chat/threads - create thread (requires auth + CSRF)
-// GET /chat/threads - list threads (requires auth, no CSRF for safe method)
-app.on('POST', '/chat/threads', csrfProtection, requireSession);
-app.on('GET', '/chat/threads', requireSession);
+// Chat endpoints - CSRF only for mutations (handlers do their own auth)
+app.on('POST', '/chat/threads', csrfProtection);
+app.on('POST', '/chat', csrfProtection);
+app.on(['PATCH', 'DELETE'], '/chat/threads/:id', csrfProtection);
 
-// POST /chat - stream AI response (AI SDK v6 pattern - requires auth + CSRF)
-// This is the OFFICIAL AI SDK endpoint for streaming chat responses
-app.on('POST', '/chat', csrfProtection, requireSession);
+// Participant management - CSRF only
+app.use('/chat/threads/:id/participants', csrfProtection);
+app.use('/chat/participants/:id', csrfProtection);
 
-// /chat/threads/:id - mixed access pattern
-// GET: public access for public threads (handler checks ownership/public status)
-// PATCH/DELETE: protected mutations (requires auth + CSRF)
-app.use('/chat/threads/:id', protectMutations);
+// Custom role routes - CSRF only
+app.use('/chat/custom-roles', csrfProtection);
+app.use('/chat/custom-roles/:id', csrfProtection);
 
-// GET /chat/threads/slug/:slug - get thread by slug (requires auth)
-app.use('/chat/threads/slug/:slug', requireSession);
+// Pre-search routes - CSRF only for POST
+app.on('POST', '/chat/threads/:threadId/rounds/:roundNumber/pre-search', csrfProtection);
 
-// GET /chat/threads/:id/messages - get messages (requires auth)
-app.use('/chat/threads/:id/messages', requireSession);
+// Moderator routes - CSRF only for POST
+app.on('POST', '/chat/threads/:threadId/rounds/:roundNumber/moderator', csrfProtection);
 
-// GET /chat/threads/:id/changelog - get thread configuration changelog (requires auth)
-app.use('/chat/threads/:id/changelog', requireSession);
+// Feedback routes - CSRF only for POST
+app.on('POST', '/chat/threads/:threadId/rounds/:roundNumber/feedback', csrfProtection);
 
-// GET /chat/threads/:id/slug-status - poll for slug updates (requires auth)
-app.use('/chat/threads/:id/slug-status', requireSession);
+// Project routes - CSRF only
+app.use('/projects', csrfProtection);
+app.on(['PATCH', 'DELETE'], '/projects/:id', csrfProtection);
+app.use('/projects/:id/knowledge', csrfProtection);
+app.use('/projects/:id/knowledge/:fileId', csrfProtection);
 
-// Participant management routes (protected)
-app.use('/chat/threads/:id/participants', csrfProtection, requireSession);
-app.use('/chat/participants/:id', csrfProtection, requireSession);
-
-// Custom role routes (protected)
-app.use('/chat/custom-roles', csrfProtection, requireSession);
-app.use('/chat/custom-roles/:id', csrfProtection, requireSession);
-
-// Pre-search routes (protected)
-app.use('/chat/threads/:threadId/rounds/:roundNumber/pre-search', csrfProtection, requireSession);
-app.use('/chat/threads/:id/pre-searches', requireSession); // GET pre-searches for thread
-
-// Round summary routes (protected)
-app.use('/chat/threads/:threadId/rounds/:roundNumber/moderator', csrfProtection, requireSession);
-app.use('/chat/threads/:threadId/rounds/:roundNumber/moderator/resume', requireSession); // GET resume (no CSRF for safe method)
-app.use('/chat/threads/:id/summaries', requireSession); // GET summaries for thread
-
-// Round feedback routes (protected)
-app.use('/chat/threads/:threadId/rounds/:roundNumber/feedback', csrfProtection, requireSession);
-app.use('/chat/threads/:id/feedback', requireSession); // GET feedback for thread
-
-// Project routes (protected)
-app.use('/projects', csrfProtection, requireSession);
-app.use('/projects/:id', protectMutations);
-app.use('/projects/:id/knowledge', csrfProtection, requireSession);
-app.use('/projects/:id/knowledge/:fileId', csrfProtection, requireSession);
-
-// Upload routes (protected - file attachments for chat)
-// NOTE: Download routes have separate rate limiting - don't apply upload rate limiter to them
+// Upload routes - CSRF + rate limiting only (handlers do their own auth)
+// NOTE: Download routes have separate rate limiting
 app.use('/uploads', async (c, next) => {
   // Skip rate limiting for download routes - they have their own rate limiter
   if (c.req.path.includes('/download')) {
     return next();
   }
   return RateLimiterFactory.create('upload')(c, next);
-}, csrfProtection, async (c, next) => {
-  // Skip session requirement for download routes - they use signed URLs
-  if (c.req.path.includes('/download')) {
-    return next();
-  }
-  return requireSession(c, next);
-});
-app.use('/uploads/ticket', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
-app.use('/uploads/ticket/upload', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
-app.use('/uploads/:id', protectMutations);
-app.use('/uploads/:id/download', RateLimiterFactory.create('download')); // Download has its own rate limit + session-optional auth
-app.use('/uploads/:id/download-url', RateLimiterFactory.create('download'), requireSession);
-app.use('/uploads/multipart', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
-app.use('/uploads/multipart/:id', protectMutations);
-app.use('/uploads/multipart/:id/parts', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
-app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+}, csrfProtection);
+app.use('/uploads/ticket', RateLimiterFactory.create('upload'), csrfProtection);
+app.use('/uploads/ticket/upload', RateLimiterFactory.create('upload'), csrfProtection);
+app.on(['PATCH', 'DELETE'], '/uploads/:id', csrfProtection);
+app.use('/uploads/:id/download', RateLimiterFactory.create('download'));
+app.use('/uploads/:id/download-url', RateLimiterFactory.create('download'));
+app.use('/uploads/multipart', RateLimiterFactory.create('upload'), csrfProtection);
+app.on(['PATCH', 'DELETE'], '/uploads/multipart/:id', csrfProtection);
+app.use('/uploads/multipart/:id/parts', RateLimiterFactory.create('upload'), csrfProtection);
+app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), csrfProtection);
 
 // Register all routes directly on the app
 const appRoutes = app
