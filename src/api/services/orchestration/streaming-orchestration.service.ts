@@ -37,6 +37,7 @@ import {
   loadAttachmentContent,
   loadAttachmentContentUrl,
   loadMessageAttachments,
+  loadMessageAttachmentsUrl,
   uint8ArrayToBase64,
 } from '@/api/services/messages';
 import {
@@ -1204,12 +1205,25 @@ export async function prepareValidatedMessages(
         );
 
         try {
-          const { fileParts, stats } = await loadAttachmentContent({
-            attachmentIds: uploadIdsFromUrls,
-            r2Bucket,
-            db,
-            logger,
-          });
+          // Use URL-based loading to avoid memory-intensive base64 encoding
+          // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
+          const { fileParts, stats } = canUseUrlLoading
+            ? await loadAttachmentContentUrl({
+                attachmentIds: uploadIdsFromUrls,
+                r2Bucket,
+                db,
+                logger,
+                baseUrl: baseUrl!,
+                userId: userId!,
+                secret: secret!,
+                threadId,
+              })
+            : await loadAttachmentContent({
+                attachmentIds: uploadIdsFromUrls,
+                r2Bucket,
+                db,
+                logger,
+              });
 
           if (fileParts.length > 0) {
             const nonFileParts = existingParts.filter(
@@ -1218,11 +1232,11 @@ export async function prepareValidatedMessages(
 
             messageWithAttachments = {
               ...newMessage,
-              parts: [...fileParts, ...nonFileParts],
+              parts: [...(fileParts as unknown as typeof existingParts), ...nonFileParts],
             };
 
             logger?.info(
-              'Converted HTTP URL file parts to base64 for participant 1+',
+              'Loaded file parts for participant 1+ (URL mode)',
               LogHelpers.operation({
                 operationName: 'prepareValidatedMessages',
                 filePartsCount: fileParts.length,
@@ -1268,12 +1282,24 @@ export async function prepareValidatedMessages(
         );
 
         try {
-          const { fileParts, stats } = await loadAttachmentContent({
-            attachmentIds: uploadIdsFromParts,
-            r2Bucket,
-            db,
-            logger,
-          });
+          // Use URL-based loading to avoid memory-intensive base64 encoding
+          const { fileParts, stats } = canUseUrlLoading
+            ? await loadAttachmentContentUrl({
+                attachmentIds: uploadIdsFromParts,
+                r2Bucket,
+                db,
+                logger,
+                baseUrl: baseUrl!,
+                userId: userId!,
+                secret: secret!,
+                threadId,
+              })
+            : await loadAttachmentContent({
+                attachmentIds: uploadIdsFromParts,
+                r2Bucket,
+                db,
+                logger,
+              });
 
           if (fileParts.length > 0) {
             const nonFileParts = existingParts.filter(
@@ -1282,11 +1308,11 @@ export async function prepareValidatedMessages(
 
             messageWithAttachments = {
               ...newMessage,
-              parts: [...fileParts, ...nonFileParts],
+              parts: [...(fileParts as unknown as typeof existingParts), ...nonFileParts],
             };
 
             logger?.info(
-              'Converted uploadId file parts to base64 for participant 1+',
+              'Loaded uploadId file parts for participant 1+ (URL mode)',
               LogHelpers.operation({
                 operationName: 'prepareValidatedMessages',
                 filePartsCount: fileParts.length,
@@ -1340,18 +1366,30 @@ export async function prepareValidatedMessages(
       }));
 
       if (messageIdsToCheck.length > 0) {
-        const { filePartsByMessageId, errors, stats }
-          = await loadMessageAttachments({
-            messageIds: messageIdsToCheck,
-            r2Bucket,
-            db,
-            logger,
-          });
+        // Use URL-based loading to avoid memory-intensive base64 encoding
+        // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
+        const { filePartsByMessageId, errors, stats } = canUseUrlLoading
+          ? await loadMessageAttachmentsUrl({
+              messageIds: messageIdsToCheck,
+              r2Bucket,
+              db,
+              logger,
+              baseUrl: baseUrl!,
+              userId: userId!,
+              secret: secret!,
+              threadId,
+            })
+          : await loadMessageAttachments({
+              messageIds: messageIdsToCheck,
+              r2Bucket,
+              db,
+              logger,
+            });
 
         if (filePartsByMessageId.size > 0) {
           messagesWithBase64 = previousMessages.map((msg) => {
-            const base64Parts = filePartsByMessageId.get(msg.id);
-            if (!base64Parts || base64Parts.length === 0) {
+            const urlParts = filePartsByMessageId.get(msg.id);
+            if (!urlParts || urlParts.length === 0) {
               return msg;
             }
 
@@ -1362,7 +1400,7 @@ export async function prepareValidatedMessages(
             if (!hasFileParts) {
               return {
                 ...msg,
-                parts: [...base64Parts, ...currentParts],
+                parts: [...(urlParts as unknown as typeof currentParts), ...currentParts],
               };
             }
 
@@ -1378,12 +1416,12 @@ export async function prepareValidatedMessages(
 
             return {
               ...msg,
-              parts: [...base64Parts, ...existingDataUrlParts, ...nonFileParts],
+              parts: [...(urlParts as unknown as typeof currentParts), ...existingDataUrlParts, ...nonFileParts],
             };
           });
 
           logger?.info(
-            'Converted HTTP file URLs to base64 for previous messages',
+            'Loaded previous message attachments via signed URLs',
             LogHelpers.operation({
               operationName: 'prepareValidatedMessages',
               messagesConverted: filePartsByMessageId.size,

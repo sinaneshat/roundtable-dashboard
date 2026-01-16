@@ -586,3 +586,257 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
 
   return { filePartsByMessageId, errors, stats };
 }
+
+// ============================================================================
+// URL-Based Message Attachment Loading (Memory-Efficient)
+// ============================================================================
+
+export type LoadMessageAttachmentsUrlParams = LoadMessageAttachmentsParams & {
+  /** Base URL of the application for generating signed URLs */
+  baseUrl: string;
+  /** User ID for signing URLs */
+  userId: string;
+  /** BETTER_AUTH_SECRET for signing */
+  secret: string;
+  /** Optional thread ID for URL signing */
+  threadId?: string;
+};
+
+export type LoadMessageAttachmentsUrlResult = {
+  filePartsByMessageId: Map<string, UrlFilePart[]>;
+  errors: Array<{ messageId: string; uploadId: string; error: string }>;
+  stats: {
+    messagesWithAttachments: number;
+    totalUploads: number;
+    loaded: number;
+    failed: number;
+    skipped: number;
+  };
+};
+
+/**
+ * Load message attachments with environment-aware delivery.
+ *
+ * - Production/Preview: Uses signed public URLs (no memory-intensive base64)
+ * - Local development: Falls back to base64 (AI providers can't access localhost)
+ *
+ * This is the memory-efficient version that avoids loading file data into memory.
+ */
+export async function loadMessageAttachmentsUrl(
+  params: LoadMessageAttachmentsUrlParams,
+): Promise<LoadMessageAttachmentsUrlResult> {
+  const { messageIds, r2Bucket, db, logger, baseUrl, userId, secret, threadId } = params;
+
+  const filePartsByMessageId = new Map<string, UrlFilePart[]>();
+  const errors: Array<{ messageId: string; uploadId: string; error: string }> = [];
+  let totalUploads = 0;
+  let loaded = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  if (!messageIds || messageIds.length === 0) {
+    return {
+      filePartsByMessageId,
+      errors: [],
+      stats: {
+        messagesWithAttachments: 0,
+        totalUploads: 0,
+        loaded: 0,
+        failed: 0,
+        skipped: 0,
+      },
+    };
+  }
+
+  // Check if we're in local development (AI providers can't access localhost)
+  const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+
+  // For localhost, fall back to base64 version
+  if (isLocalhost) {
+    logger?.info('Using base64 fallback for localhost (AI providers cannot access local URLs)', LogHelpers.operation({
+      operationName: 'loadMessageAttachmentsUrl',
+      messageCount: messageIds.length,
+    }));
+
+    const base64Result = await loadMessageAttachments({ messageIds, r2Bucket, db, logger });
+    // Convert Map<string, ModelFilePart[]> to Map<string, UrlFilePart[]> for type compatibility
+    const convertedMap = new Map<string, UrlFilePart[]>();
+    for (const [msgId, parts] of base64Result.filePartsByMessageId) {
+      convertedMap.set(msgId, parts as unknown as UrlFilePart[]);
+    }
+    return {
+      filePartsByMessageId: convertedMap,
+      errors: base64Result.errors,
+      stats: base64Result.stats,
+    };
+  }
+
+  const messageUploadsRaw = await db
+    .select()
+    .from(tables.messageUpload)
+    .innerJoin(tables.upload, eq(tables.messageUpload.uploadId, tables.upload.id))
+    .where(inArray(tables.messageUpload.messageId, messageIds));
+
+  if (messageUploadsRaw.length === 0) {
+    logger?.debug('No attachments found for messages (URL mode)', LogHelpers.operation({
+      operationName: 'loadMessageAttachmentsUrl',
+      messageCount: messageIds.length,
+    }));
+    return {
+      filePartsByMessageId,
+      errors: [],
+      stats: {
+        messagesWithAttachments: 0,
+        totalUploads: 0,
+        loaded: 0,
+        failed: 0,
+        skipped: 0,
+      },
+    };
+  }
+
+  // Group by message ID for efficient processing
+  const uploadsByMessageId = new Map<
+    string,
+    Array<{
+      uploadId: string;
+      displayOrder: number;
+      upload: (typeof messageUploadsRaw)[0]['upload'];
+    }>
+  >();
+
+  for (const row of messageUploadsRaw) {
+    const messageUpload = row.message_upload;
+    const existing = uploadsByMessageId.get(messageUpload.messageId) || [];
+    existing.push({
+      uploadId: messageUpload.uploadId,
+      displayOrder: messageUpload.displayOrder,
+      upload: row.upload,
+    });
+    uploadsByMessageId.set(messageUpload.messageId, existing);
+  }
+
+  totalUploads = messageUploadsRaw.length;
+
+  logger?.info('Loading message attachments via signed URLs', LogHelpers.operation({
+    operationName: 'loadMessageAttachmentsUrl',
+    messageCount: messageIds.length,
+    messagesWithAttachments: uploadsByMessageId.size,
+    totalUploads,
+  }));
+
+  // Process each message's attachments
+  for (const [messageId, uploads] of uploadsByMessageId) {
+    const messageParts: UrlFilePart[] = [];
+
+    // Sort by display order
+    uploads.sort((a, b) => a.displayOrder - b.displayOrder);
+
+    for (const { uploadId, upload } of uploads) {
+      try {
+        // Skip files that AI models can't process
+        if (!AI_PROCESSABLE_MIME_SET.has(upload.mimeType)) {
+          logger?.debug('Skipping unsupported file type (URL mode)', LogHelpers.operation({
+            operationName: 'loadMessageAttachmentsUrl',
+            messageId,
+            uploadId,
+            mimeType: upload.mimeType,
+          }));
+          skipped++;
+          continue;
+        }
+
+        const isImage = IMAGE_MIME_SET.has(upload.mimeType);
+
+        // Generate signed URL for AI provider access
+        const urlResult = await generateAiPublicUrl({
+          uploadId: upload.id,
+          userId,
+          baseUrl,
+          secret,
+          threadId,
+        });
+
+        if (!urlResult.success) {
+          logger?.error('URL generation failed for message attachment', LogHelpers.operation({
+            operationName: 'loadMessageAttachmentsUrl',
+            messageId,
+            uploadId,
+            filename: upload.filename,
+            error: urlResult.error,
+          }));
+          errors.push({
+            messageId,
+            uploadId,
+            error: urlResult.error,
+          });
+          failed++;
+          continue;
+        }
+
+        if (isImage) {
+          // Image: use type:'image' with URL
+          messageParts.push({
+            type: 'image',
+            image: urlResult.url,
+            mimeType: upload.mimeType,
+          } as ModelImagePartUrl);
+        } else {
+          // Non-image (PDF, etc.): use type:'file' with URL
+          messageParts.push({
+            type: MessagePartTypes.FILE,
+            url: urlResult.url,
+            mimeType: upload.mimeType,
+            filename: upload.filename,
+            mediaType: upload.mimeType,
+          } as ModelFilePartUrl);
+        }
+
+        loaded++;
+
+        logger?.debug('Generated URL for message attachment', LogHelpers.operation({
+          operationName: 'loadMessageAttachmentsUrl',
+          messageId,
+          uploadId,
+          filename: upload.filename,
+          mimeType: upload.mimeType,
+          sizeKB: Math.round(upload.fileSize / 1024),
+        }));
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger?.error('Failed to process message attachment (URL mode)', LogHelpers.operation({
+          operationName: 'loadMessageAttachmentsUrl',
+          messageId,
+          uploadId,
+          filename: upload.filename,
+          error: errorMessage,
+        }));
+        errors.push({
+          messageId,
+          uploadId,
+          error: errorMessage,
+        });
+        failed++;
+      }
+    }
+
+    if (messageParts.length > 0) {
+      filePartsByMessageId.set(messageId, messageParts);
+    }
+  }
+
+  const stats = {
+    messagesWithAttachments: uploadsByMessageId.size,
+    totalUploads,
+    loaded,
+    failed,
+    skipped,
+  };
+
+  logger?.info('Message attachment URL generation complete', LogHelpers.operation({
+    operationName: 'loadMessageAttachmentsUrl',
+    stats,
+  }));
+
+  return { filePartsByMessageId, errors, stats };
+}
