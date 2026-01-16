@@ -35,10 +35,10 @@ export class CloudflareKVCache extends Cache {
     return this.globalCache ? 'all' : 'explicit';
   }
 
-  override async get(key: string): Promise<any[] | undefined> {
+  override async get(key: string): Promise<unknown[] | undefined> {
     try {
       const prefixedKey = this.getPrefixedKey(key);
-      const cached = await this.kv.get<any[]>(prefixedKey, 'json');
+      const cached = await this.kv.get<unknown[]>(prefixedKey, 'json');
 
       if (cached !== null) {
         return cached;
@@ -53,7 +53,7 @@ export class CloudflareKVCache extends Cache {
 
   override async put(
     hashedQuery: string,
-    response: any,
+    response: unknown,
     tables: string[],
     isTag: boolean,
     config?: CacheConfig,

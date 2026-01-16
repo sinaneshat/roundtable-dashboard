@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { memo, use, useEffect, useRef, useState } from 'react';
+import { memo, use, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -45,6 +45,7 @@ function PreSearchStreamComponent({
   const RETRY_INTERVAL_MS = 3000;
   const retryCountRef = useRef(0);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const postRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const store = use(ChatStoreContext);
 
@@ -73,9 +74,13 @@ function PreSearchStreamComponent({
   const [expectedQueryCount, setExpectedQueryCount] = useState<number | null>(null);
   const [isStreamComplete, setIsStreamComplete] = useState(false);
 
-  useEffect(() => {
+  // Reset progressive skeleton state when preSearch.id changes
+  // useLayoutEffect ensures synchronous reset before paint
+  useLayoutEffect(() => {
     retryCountRef.current = 0;
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on prop change required
     setExpectedQueryCount(null);
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on prop change required
     setIsStreamComplete(false);
   }, [preSearch.id]);
 
@@ -83,6 +88,9 @@ function PreSearchStreamComponent({
     return () => {
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
+      }
+      if (postRetryTimeoutRef.current) {
+        clearTimeout(postRetryTimeoutRef.current);
       }
     };
   }, []);
@@ -173,7 +181,12 @@ function PreSearchStreamComponent({
           });
 
           if (postRetryCount <= MAX_POST_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+            await new Promise<void>((resolve) => {
+              postRetryTimeoutRef.current = setTimeout(() => {
+                postRetryTimeoutRef.current = null;
+                resolve();
+              }, retryDelayMs);
+            });
             if (!abortController.signal.aborted) {
               return startStream();
             }
@@ -357,6 +370,7 @@ function PreSearchStreamComponent({
 
     startStream().catch(() => {
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- is409Conflict/isAutoRetrying callbacks accessed via refs, preSearch.status used in guard, tErrors is stable
   }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, store, tryMarkPreSearchTriggered, clearPreSearchTracking, forceRetryCount, isWaitingForChangelog, configChangeRoundNumber, executePreSearchStream]);
 
   const isPollingRef = useRef(false);

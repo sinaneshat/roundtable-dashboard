@@ -76,6 +76,30 @@ export const HealthStatuses = {
 } as const;
 
 // ============================================================================
+// HEALTH CHECK DETAIL TYPE
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const HEALTH_CHECK_DETAIL_TYPES = ['health_check'] as const;
+
+// 2. ZOD SCHEMA
+export const HealthCheckDetailTypeSchema = z.enum(HEALTH_CHECK_DETAIL_TYPES).openapi({
+  description: 'Type discriminator for health check details',
+  example: 'health_check',
+});
+
+// 3. TYPESCRIPT TYPE
+export type HealthCheckDetailType = z.infer<typeof HealthCheckDetailTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_HEALTH_CHECK_DETAIL_TYPE: HealthCheckDetailType = 'health_check';
+
+// 5. CONSTANT OBJECT
+export const HealthCheckDetailTypes = {
+  HEALTH_CHECK: 'health_check' as const,
+} as const;
+
+// ============================================================================
 // ENVIRONMENT
 // ============================================================================
 

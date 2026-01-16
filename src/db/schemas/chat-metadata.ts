@@ -261,14 +261,14 @@ export const DbCitationSchema = z.object({
   // Contextual info for hover card (resolved from source)
   title: z.string().optional(),
   excerpt: z.string().optional(),
-  url: z.string().optional(), // Allows relative paths
+  url: z.string().optional(),
 
   // Thread-specific metadata
   threadId: z.string().optional(),
   threadTitle: z.string().optional(),
   roundNumber: z.number().int().nonnegative().optional(),
 
-  // Attachment-specific metadata (for file citations) - allows relative paths
+  // Attachment-specific metadata (for file citations)
   downloadUrl: z.string().optional(),
   filename: z.string().optional(),
   mimeType: z.string().optional(),
@@ -363,7 +363,7 @@ export const DbAssistantMessageMetadataSchema = z.object({
     id: z.string(), // Citation ID (e.g., att_abc12345, sch_q0r0)
     sourceType: CitationSourceTypeSchema,
     title: z.string(), // Filename or source title
-    // Attachment-specific fields (downloadUrl allows relative paths like /api/v1/uploads/...)
+    // Attachment-specific fields
     downloadUrl: z.string().optional(),
     filename: z.string().optional(),
     mimeType: z.string().optional(),

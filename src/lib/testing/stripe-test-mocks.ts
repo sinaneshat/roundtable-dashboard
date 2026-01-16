@@ -15,8 +15,16 @@
 
 import { z } from 'zod';
 
-import type { StripeSubscriptionStatus } from '@/api/core/enums';
-import { StripeSubscriptionStatuses } from '@/api/core/enums';
+import type { InvoiceStatus, StripeBillingReason, StripeSubscriptionStatus } from '@/api/core/enums';
+import {
+  BILLING_INTERVALS,
+  INVOICE_STATUSES,
+  InvoiceStatuses,
+  STRIPE_BILLING_REASONS,
+  STRIPE_SUBSCRIPTION_STATUSES,
+  StripeBillingReasons,
+  StripeSubscriptionStatuses,
+} from '@/api/core/enums';
 
 // ============================================================================
 // STRIPE SUBSCRIPTION MOCK (Zod-first pattern)
@@ -24,18 +32,9 @@ import { StripeSubscriptionStatuses } from '@/api/core/enums';
 
 /**
  * Stripe subscription statuses as Zod enum
- * Maps to Stripe.Subscription.Status
+ * Uses STRIPE_SUBSCRIPTION_STATUSES from billing enums
  */
-const StripeSubscriptionStatusSchema = z.enum([
-  'active',
-  'canceled',
-  'incomplete',
-  'incomplete_expired',
-  'past_due',
-  'paused',
-  'trialing',
-  'unpaid',
-]);
+const StripeSubscriptionStatusSchemaLocal = z.enum(STRIPE_SUBSCRIPTION_STATUSES);
 
 /**
  * Minimal Stripe Price schema for subscription items
@@ -55,7 +54,7 @@ const StripePriceSchema = z.object({
   product: z.string(),
   recurring: z.object({
     aggregate_usage: z.null(),
-    interval: z.enum(['day', 'week', 'month', 'year']),
+    interval: z.enum(BILLING_INTERVALS),
     interval_count: z.number(),
     meter: z.null(),
     trial_period_days: z.null(),
@@ -146,7 +145,7 @@ const MockStripeSubscriptionSchema = z.object({
   quantity: z.null(),
   schedule: z.null(),
   start_date: z.number(),
-  status: StripeSubscriptionStatusSchema,
+  status: StripeSubscriptionStatusSchemaLocal,
   test_clock: z.null(),
   transfer_data: z.null(),
   trial_end: z.number().nullable(),
@@ -304,14 +303,9 @@ export function createMockStripeSubscription(
 
 /**
  * Stripe invoice status schema
+ * Uses INVOICE_STATUSES array from billing enums
  */
-const StripeInvoiceStatusSchema = z.enum([
-  'draft',
-  'open',
-  'paid',
-  'uncollectible',
-  'void',
-]);
+const StripeInvoiceStatusSchemaLocal = z.enum(INVOICE_STATUSES);
 
 /**
  * Stripe invoice line item schema
@@ -354,18 +348,9 @@ const StripeInvoiceLineItemSchema = z.object({
 
 /**
  * Stripe invoice billing reason schema
+ * Uses STRIPE_BILLING_REASONS array from billing enums
  */
-const StripeBillingReasonSchema = z.enum([
-  'automatic_pending_invoice_item_invoice',
-  'manual',
-  'quote_accept',
-  'subscription',
-  'subscription_create',
-  'subscription_cycle',
-  'subscription_threshold',
-  'subscription_update',
-  'upcoming',
-]);
+const StripeBillingReasonSchemaLocal = z.enum(STRIPE_BILLING_REASONS);
 
 /**
  * Stripe invoice schema - defines fields used in webhook handlers
@@ -393,7 +378,7 @@ const MockStripeInvoiceSchema = z.object({
     status: z.null(),
   }),
   automatically_finalizes_at: z.null(),
-  billing_reason: StripeBillingReasonSchema,
+  billing_reason: StripeBillingReasonSchemaLocal,
   charge: z.null(),
   collection_method: z.literal('charge_automatically'),
   created: z.number(),
@@ -450,7 +435,7 @@ const MockStripeInvoiceSchema = z.object({
   shipping_details: z.null(),
   starting_balance: z.number(),
   statement_descriptor: z.null(),
-  status: StripeInvoiceStatusSchema,
+  status: StripeInvoiceStatusSchemaLocal,
   status_transitions: z.null(),
   subscription: z.string().nullable(),
   subscription_details: z.null(),
@@ -477,10 +462,10 @@ export type MockStripeInvoiceOptions = {
   id?: string;
   customer?: string;
   subscription?: string;
-  status?: z.infer<typeof StripeInvoiceStatusSchema>;
+  status?: InvoiceStatus;
   amountPaid?: number;
   amountDue?: number;
-  billingReason?: z.infer<typeof StripeBillingReasonSchema>;
+  billingReason?: StripeBillingReason;
 };
 
 /**
@@ -492,7 +477,7 @@ export function createMockStripeInvoice(
   const now = Math.floor(Date.now() / 1000);
   const invoiceId = options.id ?? `in_${Math.random().toString(36).substring(7)}`;
   const amountPaid = options.amountPaid ?? 5900;
-  const status = options.status ?? 'paid';
+  const status = options.status ?? InvoiceStatuses.PAID;
 
   const data = {
     id: invoiceId,
@@ -500,14 +485,14 @@ export function createMockStripeInvoice(
     account_country: 'US',
     account_name: 'Test Account',
     account_tax_ids: null,
-    amount_due: options.amountDue ?? (status === 'paid' ? 0 : amountPaid),
+    amount_due: options.amountDue ?? (status === InvoiceStatuses.PAID ? 0 : amountPaid),
     amount_paid: amountPaid,
-    amount_remaining: status === 'paid' ? 0 : amountPaid,
+    amount_remaining: status === InvoiceStatuses.PAID ? 0 : amountPaid,
     amount_shipping: 0,
     application: null,
     application_fee_amount: null,
-    attempt_count: status === 'paid' ? 1 : 0,
-    attempted: status === 'paid',
+    attempt_count: status === InvoiceStatuses.PAID ? 1 : 0,
+    attempted: status === InvoiceStatuses.PAID,
     auto_advance: true,
     automatic_tax: {
       disabled_reason: null,
@@ -517,7 +502,7 @@ export function createMockStripeInvoice(
       status: null,
     },
     automatically_finalizes_at: null,
-    billing_reason: options.billingReason ?? ('subscription_create' as const),
+    billing_reason: options.billingReason ?? StripeBillingReasons.SUBSCRIPTION_CREATE,
     charge: null,
     collection_method: 'charge_automatically' as const,
     created: now,
@@ -594,7 +579,7 @@ export function createMockStripeInvoice(
     next_payment_attempt: null,
     number: null,
     on_behalf_of: null,
-    paid: status === 'paid',
+    paid: status === InvoiceStatuses.PAID,
     paid_out_of_band: false,
     payment_intent: null,
     payment_settings: null,

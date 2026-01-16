@@ -13,21 +13,9 @@ export function isDbPreSearchMessage(message: ChatMessage): boolean {
 }
 
 export function isDbParticipantMessage(message: ChatMessage): boolean {
-  if (!message.participantId) {
-    console.log('[TypeGuard] rejected - no participantId:', message.id);
+  if (!message.participantId)
     return false;
-  }
-  const meta = getParticipantMetadata(message.metadata);
-  if (meta === null) {
-    // Log why metadata validation failed
-    console.log('[TypeGuard] rejected - metadata validation failed:', {
-      msgId: message.id,
-      metadataKeys: message.metadata && typeof message.metadata === 'object' ? Object.keys(message.metadata) : 'NOT_OBJECT',
-      rawMetadata: JSON.stringify(message.metadata)?.slice(0, 500),
-    });
-    return false;
-  }
-  return true;
+  return getParticipantMetadata(message.metadata) !== null;
 }
 
 export function filterDbToParticipantMessages(messages: ChatMessage[]): ChatMessage[] {

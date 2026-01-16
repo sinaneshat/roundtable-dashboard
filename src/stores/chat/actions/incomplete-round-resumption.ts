@@ -6,13 +6,23 @@
 
 'use client';
 
-import { use, useEffect, useRef, useState } from 'react';
+import { use, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { RoundPhase } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
-import { getAssistantMetadata,getCurrentRoundNumber,getEnabledParticipantModelIdSet,getEnabledParticipants,getModeratorMetadata,getParticipantIndex,getParticipantModelIds,getRoundNumber,hasError as checkHasError } from '@/lib/utils';
+import {
+  getAssistantMetadata,
+  getCurrentRoundNumber,
+  getEnabledParticipantModelIdSet,
+  getEnabledParticipants,
+  getModeratorMetadata,
+  getParticipantIndex,
+  getParticipantModelIds,
+  getRoundNumber,
+  hasError as checkHasError, // eslint-disable-line perfectionist/sort-named-imports -- simple-import-sort conflicts with perfectionist on aliased imports
+} from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 
 import {
@@ -509,8 +519,10 @@ export function useIncompleteRoundResumption(
   // ✅ RACE CONDITION FIX: Track round state signature for re-check detection
   const lastCheckedSignatureRef = useRef<string | null>(null);
 
-  useEffect(() => {
+  // Reset all refs when threadId changes - useLayoutEffect for synchronous reset before paint
+  useLayoutEffect(() => {
     activeStreamCheckRef.current = null;
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
     setActiveStreamCheckComplete(false);
     orphanedPreSearchUIRecoveryRef.current = null;
     orphanedPreSearchRecoveryAttemptedRef.current = null;
@@ -540,7 +552,8 @@ export function useIncompleteRoundResumption(
   // and cleared refs, but by then immediate placeholder already returned early!
   // ============================================================================
   // Signature reset for re-check detection when round state changes
-  useEffect(() => {
+  // useLayoutEffect for synchronous reset before paint
+  useLayoutEffect(() => {
     const currentSignature = `${threadId}_${isIncomplete}_${currentRoundNumber}`;
 
     // If signature changed and we previously checked as "complete", reset refs
@@ -553,6 +566,7 @@ export function useIncompleteRoundResumption(
       // But only reset if we're not currently in the middle of resumption
       if (!waitingToStartStreaming && !isStreaming) {
         activeStreamCheckRef.current = null;
+        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on round state change required
         setActiveStreamCheckComplete(false);
         // ✅ BUG FIX: Do NOT reset resumptionAttemptedRef here!
         // This was causing an infinite loop:
@@ -963,6 +977,7 @@ export function useIncompleteRoundResumption(
 
     // Set waiting flag so provider knows to start streaming
     actions.setWaitingToStartStreaming(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- enabledParticipants/respondedParticipantIndices/inProgressParticipantIndices derived from messages+participants (already in deps)
   }, [
     enabled,
     isStreaming,
@@ -1323,6 +1338,7 @@ export function useIncompleteRoundResumption(
     isStreaming,
     waitingToStartStreaming,
     actions,
+    participants,
   ]);
 
   // ============================================================================

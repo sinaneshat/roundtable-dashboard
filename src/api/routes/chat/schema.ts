@@ -34,6 +34,8 @@ import {
   DbChangelogDataSchema,
   DbCustomRoleMetadataSchema,
   DbMessageMetadataSchema,
+  DbMessagePartsSchema,
+  DbModeratorMessageMetadataSchema,
   DbParticipantSettingsSchema,
   DbThreadMetadataSchema,
 } from '@/db/schemas/chat-metadata';
@@ -1757,8 +1759,8 @@ export type DeletedResponse = z.infer<typeof DeletedResponseSchema>;
 export const ExistingModeratorMessageSchema = z.object({
   id: z.string(),
   role: z.string(),
-  parts: z.array(z.any()),
-  metadata: z.any(),
+  parts: DbMessagePartsSchema,
+  metadata: DbModeratorMessageMetadataSchema,
   roundNumber: z.number(),
 }).openapi('ExistingModeratorMessage');
 

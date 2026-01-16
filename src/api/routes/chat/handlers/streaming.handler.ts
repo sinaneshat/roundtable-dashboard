@@ -564,6 +564,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           },
           db,
           attachmentIds: resolvedAttachmentIds, // ✅ FIX: Use resolved attachmentIds (includes KV lookup for P1+)
+          baseUrl: new URL(c.req.url).origin, // ✅ FIX: Absolute URLs for download links
         });
 
       // Include ALL citable sources in metadata (not just attachments)
@@ -1060,152 +1061,131 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
         // ✅ PERSIST MESSAGE: Save to database after streaming completes
         onFinish: async (finishResult) => {
-          console.log('[Streaming] onFinish CALLED:', {
-            messageId: streamMessageId,
-            threadId,
-            roundNumber: currentRoundNumber,
-            participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-            finishReason: finishResult.finishReason,
-            hasText: (finishResult.text?.length ?? 0) > 0,
-          });
-
           // ✅ DEBUG: Wrap entire onFinish in try-catch to surface any errors
           try {
-          const messageId = streamMessageId;
+            const messageId = streamMessageId;
 
-          // ✅ CRITICAL FIX: Detect and handle empty responses before persistence
-          // Models like gemini-2.5-flash-lite return empty responses
-          // This prevents AI SDK internal state corruption that causes "Cannot read properties of undefined (reading 'state')" errors
-          const hasText = (finishResult.text?.trim().length || 0) > 0;
-          // ✅ FIX: Don't count [REDACTED]-only reasoning as valid content
-          // When reasoning models (GPT-5 Nano, o3-mini, etc.) exhaust tokens on encrypted reasoning
-          // before outputting text, they produce only [REDACTED] which gets filtered on frontend
-          // Result: empty message card with no visible content
-          // Solution: Treat [REDACTED]-only reasoning as not having meaningful content
-          const reasoningContent = reasoningDeltas.join('').trim();
-          const isOnlyRedactedReasoning = /^\[REDACTED\]$/i.test(reasoningContent);
-          const hasReasoning
-            = reasoningDeltas.length > 0
-              && reasoningContent.length > 0
-              && !isOnlyRedactedReasoning;
-          const hasToolCalls
-            = finishResult.toolCalls && finishResult.toolCalls.length > 0;
-          const hasContent = hasText || hasReasoning || hasToolCalls;
+            // ✅ CRITICAL FIX: Detect and handle empty responses before persistence
+            // Models like gemini-2.5-flash-lite return empty responses
+            // This prevents AI SDK internal state corruption that causes "Cannot read properties of undefined (reading 'state')" errors
+            const hasText = (finishResult.text?.trim().length || 0) > 0;
+            // ✅ FIX: Don't count [REDACTED]-only reasoning as valid content
+            // When reasoning models (GPT-5 Nano, o3-mini, etc.) exhaust tokens on encrypted reasoning
+            // before outputting text, they produce only [REDACTED] which gets filtered on frontend
+            // Result: empty message card with no visible content
+            // Solution: Treat [REDACTED]-only reasoning as not having meaningful content
+            const reasoningContent = reasoningDeltas.join('').trim();
+            const isOnlyRedactedReasoning = /^\[REDACTED\]$/i.test(reasoningContent);
+            const hasReasoning
+              = reasoningDeltas.length > 0
+                && reasoningContent.length > 0
+                && !isOnlyRedactedReasoning;
+            const hasToolCalls
+              = finishResult.toolCalls && finishResult.toolCalls.length > 0;
+            const hasContent = hasText || hasReasoning || hasToolCalls;
 
-          // ✅ EMPTY RESPONSE HANDLING: Save with error metadata instead of throwing
-          // IMPORTANT: Cannot throw here because stream is already open - throwing causes
-          // ERR_INCOMPLETE_CHUNKED_ENCODING because response is partially sent
-          //
-          // Instead: Save message with error metadata so frontend shows error state
-          // The message will have hasError: true and errorMessage explaining what happened
-          //
-          // Examples of empty responses in production:
-          // - gemini-2.5-flash-lite: finishReason='unknown', 0 tokens, no text
-          // - gpt-5-nano with finishReason='length': exhausted tokens on reasoning
-          const emptyResponseError = !hasContent
-            ? (isOnlyRedactedReasoning && finishResult.finishReason === FinishReasons.LENGTH
-                ? `Model exhausted token limit during reasoning and could not generate a response.`
-                : `Model did not generate a response.`)
-            : null;
+            // ✅ EMPTY RESPONSE HANDLING: Save with error metadata instead of throwing
+            // IMPORTANT: Cannot throw here because stream is already open - throwing causes
+            // ERR_INCOMPLETE_CHUNKED_ENCODING because response is partially sent
+            //
+            // Instead: Save message with error metadata so frontend shows error state
+            // The message will have hasError: true and errorMessage explaining what happened
+            //
+            // Examples of empty responses in production:
+            // - gemini-2.5-flash-lite: finishReason='unknown', 0 tokens, no text
+            // - gpt-5-nano with finishReason='length': exhausted tokens on reasoning
+            const emptyResponseError = !hasContent
+              ? (isOnlyRedactedReasoning && finishResult.finishReason === FinishReasons.LENGTH
+                  ? `Model exhausted token limit during reasoning and could not generate a response.`
+                  : `Model did not generate a response.`)
+              : null;
 
-          // Delegate to message persistence service
-          // ✅ CITATIONS: Pass citationSourceMap for resolving [source_id] markers in AI response
-          // ✅ AVAILABLE SOURCES: Pass availableSources for "Sources" UI even without inline citations
-          // ✅ REASONING DURATION: Calculate final duration if not already set
-          // Handle case where model only outputs reasoning without text (e.g., reasoning-only response)
-          // Also handle native reasoning (Claude/OpenAI) which comes via finishResult.reasoning
-          let finalReasoningDuration = reasoningDurationSeconds;
-          if (finalReasoningDuration === undefined && reasoningStartTime !== null) {
-            finalReasoningDuration = Math.round((Date.now() - reasoningStartTime) / 1000);
-          }
+            // Delegate to message persistence service
+            // ✅ CITATIONS: Pass citationSourceMap for resolving [source_id] markers in AI response
+            // ✅ AVAILABLE SOURCES: Pass availableSources for "Sources" UI even without inline citations
+            // ✅ REASONING DURATION: Calculate final duration if not already set
+            // Handle case where model only outputs reasoning without text (e.g., reasoning-only response)
+            // Also handle native reasoning (Claude/OpenAI) which comes via finishResult.reasoning
+            let finalReasoningDuration = reasoningDurationSeconds;
+            if (finalReasoningDuration === undefined && reasoningStartTime !== null) {
+              finalReasoningDuration = Math.round((Date.now() - reasoningStartTime) / 1000);
+            }
 
-          // ✅ DEBUG: Log before saving
-          console.log('[Streaming] onFinish saving:', {
-            messageId,
-            threadId,
-            roundNumber: currentRoundNumber,
-            participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-            textLen: finishResult.text?.length ?? 0,
-          });
+            await saveStreamedMessage({
+              messageId,
+              threadId,
+              participantId: participant.id,
+              participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+              participantRole: participant.role,
+              modelId: participant.modelId,
+              roundNumber: currentRoundNumber,
+              text: finishResult.text,
+              reasoningDeltas,
+              finishResult,
+              db,
+              citationSourceMap,
+              availableSources,
+              // ✅ REASONING DURATION: Pass duration for "Thought for X seconds" display
+              reasoningDuration: finalReasoningDuration,
+              // ✅ EMPTY RESPONSE ERROR: Pass error for messages with no renderable content
+              emptyResponseError,
+            });
 
-          await saveStreamedMessage({
-            messageId,
-            threadId,
-            participantId: participant.id,
-            participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-            participantRole: participant.role,
-            modelId: participant.modelId,
-            roundNumber: currentRoundNumber,
-            text: finishResult.text,
-            reasoningDeltas,
-            finishResult,
-            db,
-            citationSourceMap,
-            availableSources,
-            // ✅ REASONING DURATION: Pass duration for "Thought for X seconds" display
-            reasoningDuration: finalReasoningDuration,
-            // ✅ EMPTY RESPONSE ERROR: Pass error for messages with no renderable content
-            emptyResponseError,
-          });
+            // =========================================================================
+            // ✅ PARALLELIZED POST-STREAMING OPERATIONS: Credit finalization and balance check
+            // =========================================================================
+            const actualInputTokens = finishResult.usage?.inputTokens ?? 0;
+            const actualOutputTokens = finishResult.usage?.outputTokens ?? 0;
 
-          // ✅ DEBUG: Log after saving
-          console.log('[Streaming] onFinish saved:', { messageId });
-
-          // =========================================================================
-          // ✅ PARALLELIZED POST-STREAMING OPERATIONS: Credit finalization and balance check
-          // =========================================================================
-          const actualInputTokens = finishResult.usage?.inputTokens ?? 0;
-          const actualOutputTokens = finishResult.usage?.outputTokens ?? 0;
-
-          const [, creditBalance] = await Promise.all([
+            const [, creditBalance] = await Promise.all([
             // ✅ CREDIT FINALIZATION: Deduct actual credits based on token usage
             // Releases reservation and deducts actual credits used
-            finalizeCredits(user.id, streamMessageId, {
-              inputTokens: actualInputTokens,
-              outputTokens: actualOutputTokens,
-              action: 'ai_response',
-              threadId,
-              messageId,
-              modelId: participant.modelId,
-            }),
-            // ✅ FREE USER SINGLE-ROUND: Check credit balance for zero-out logic
-            getUserCreditBalance(user.id),
-          ]);
+              finalizeCredits(user.id, streamMessageId, {
+                inputTokens: actualInputTokens,
+                outputTokens: actualOutputTokens,
+                action: 'ai_response',
+                threadId,
+                messageId,
+                modelId: participant.modelId,
+              }),
+              // ✅ FREE USER SINGLE-ROUND: Check credit balance for zero-out logic
+              getUserCreditBalance(user.id),
+            ]);
 
-          // =========================================================================
-          // ✅ FREE USER SINGLE-ROUND: Zero out credits after round is COMPLETE
-          // Free users get exactly ONE round - exhaust credits only after ALL
-          // participants have responded AND moderator has completed (for 2+ participants).
-          // For single-participant threads, zero out after participant completes (no moderator).
-          // For multi-participant threads, moderator.handler.ts handles zeroing after it completes.
-          // =========================================================================
-          if (creditBalance.planType === PlanTypes.FREE && participants.length < 2) {
+            // =========================================================================
+            // ✅ FREE USER SINGLE-ROUND: Zero out credits after round is COMPLETE
+            // Free users get exactly ONE round - exhaust credits only after ALL
+            // participants have responded AND moderator has completed (for 2+ participants).
+            // For single-participant threads, zero out after participant completes (no moderator).
+            // For multi-participant threads, moderator.handler.ts handles zeroing after it completes.
+            // =========================================================================
+            if (creditBalance.planType === PlanTypes.FREE && participants.length < 2) {
             // Single-participant thread: no moderator, so round completes after participant
-            const roundComplete = await checkFreeUserHasCompletedRound(user.id);
-            if (roundComplete) {
-              await zeroOutFreeUserCredits(user.id);
+              const roundComplete = await checkFreeUserHasCompletedRound(user.id);
+              if (roundComplete) {
+                await zeroOutFreeUserCredits(user.id);
+              }
             }
-          }
-          // Multi-participant threads: moderator.handler.ts calls zeroOutFreeUserCredits after completion
+            // Multi-participant threads: moderator.handler.ts calls zeroOutFreeUserCredits after completion
 
-          // =========================================================================
-          // ✅ POSTHOG LLM TRACKING: Track generation with official best practices
-          // =========================================================================
-          // Following PostHog recommendations:
-          // - Always include input/output for observability
-          // - Link to Session Replay via $session_id
-          // - Track prompt ID/version for A/B testing
-          // - Include subscription tier for cost analysis
-          // - Capture dynamic pricing from OpenRouter API
-          //
-          // Reference: https://posthog.com/docs/llm-analytics/generations
-          try {
+            // =========================================================================
+            // ✅ POSTHOG LLM TRACKING: Track generation with official best practices
+            // =========================================================================
+            // Following PostHog recommendations:
+            // - Always include input/output for observability
+            // - Link to Session Replay via $session_id
+            // - Track prompt ID/version for A/B testing
+            // - Include subscription tier for cost analysis
+            // - Capture dynamic pricing from OpenRouter API
+            //
+            // Reference: https://posthog.com/docs/llm-analytics/generations
+            try {
             // Convert recent model messages to PostHog input format (last 5 for context)
-            const recentModelMessages = modelMessages.slice(-5);
-            const inputMessages = recentModelMessages.map((msg): { role: string; content: string | Array<{ type: string; text: string }> } => {
-              return {
-                role: msg.role,
-                content:
+              const recentModelMessages = modelMessages.slice(-5);
+              const inputMessages = recentModelMessages.map((msg): { role: string; content: string | Array<{ type: string; text: string }> } => {
+                return {
+                  role: msg.role,
+                  content:
                   typeof msg.content === 'string'
                     ? msg.content
                     : Array.isArray(msg.content)
@@ -1219,269 +1199,269 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                           return { type: MessagePartTypes.TEXT, text: '[content]' };
                         })
                       : [],
-              };
-            });
+                };
+              });
 
-            // ✅ AI SDK V6 TOKEN USAGE: Extract both usage (final step) and totalUsage (cumulative)
-            // Reference: https://sdk.vercel.ai/docs/migration-guides/migration-guide-6-0#distinguish-ai-sdk-usage-reporting-in-60
-            // In AI SDK 6.0:
-            // - usage: Contains token usage from the FINAL STEP only
-            // - totalUsage: Contains CUMULATIVE token usage across ALL STEPS (multi-step reasoning)
-            const usage = finishResult.usage
-              ? {
-                  inputTokens: finishResult.usage.inputTokens ?? 0,
-                  outputTokens: finishResult.usage.outputTokens ?? 0,
-                  totalTokens:
+              // ✅ AI SDK V6 TOKEN USAGE: Extract both usage (final step) and totalUsage (cumulative)
+              // Reference: https://sdk.vercel.ai/docs/migration-guides/migration-guide-6-0#distinguish-ai-sdk-usage-reporting-in-60
+              // In AI SDK 6.0:
+              // - usage: Contains token usage from the FINAL STEP only
+              // - totalUsage: Contains CUMULATIVE token usage across ALL STEPS (multi-step reasoning)
+              const usage = finishResult.usage
+                ? {
+                    inputTokens: finishResult.usage.inputTokens ?? 0,
+                    outputTokens: finishResult.usage.outputTokens ?? 0,
+                    totalTokens:
                     finishResult.usage.totalTokens
                     ?? (finishResult.usage.inputTokens ?? 0)
                     + (finishResult.usage.outputTokens ?? 0),
-                  // AI SDK v6: inputTokenDetails contains cache metrics
-                  inputTokenDetails: finishResult.usage.inputTokenDetails,
-                  // AI SDK v6: outputTokenDetails contains reasoning token metrics
-                  outputTokenDetails: finishResult.usage.outputTokenDetails,
-                }
-              : undefined;
+                    // AI SDK v6: inputTokenDetails contains cache metrics
+                    inputTokenDetails: finishResult.usage.inputTokenDetails,
+                    // AI SDK v6: outputTokenDetails contains reasoning token metrics
+                    outputTokenDetails: finishResult.usage.outputTokenDetails,
+                  }
+                : undefined;
 
-            // ✅ AI SDK V6 MULTI-STEP TRACKING: Use totalUsage for cumulative metrics (if available)
-            // For single-step generations, totalUsage === usage
-            // For multi-step reasoning (e.g., o1, o3), totalUsage includes ALL steps
-            const totalUsage
-              = 'totalUsage' in finishResult && finishResult.totalUsage
-                ? {
-                    inputTokens: finishResult.totalUsage.inputTokens ?? 0,
-                    outputTokens: finishResult.totalUsage.outputTokens ?? 0,
-                    totalTokens:
+              // ✅ AI SDK V6 MULTI-STEP TRACKING: Use totalUsage for cumulative metrics (if available)
+              // For single-step generations, totalUsage === usage
+              // For multi-step reasoning (e.g., o1, o3), totalUsage includes ALL steps
+              const totalUsage
+                = 'totalUsage' in finishResult && finishResult.totalUsage
+                  ? {
+                      inputTokens: finishResult.totalUsage.inputTokens ?? 0,
+                      outputTokens: finishResult.totalUsage.outputTokens ?? 0,
+                      totalTokens:
                       finishResult.totalUsage.totalTokens
                       ?? (finishResult.totalUsage.inputTokens ?? 0)
                       + (finishResult.totalUsage.outputTokens ?? 0),
-                    inputTokenDetails: finishResult.totalUsage.inputTokenDetails,
-                    outputTokenDetails: finishResult.totalUsage.outputTokenDetails,
-                  }
-                : usage; // Fallback to usage if totalUsage not available
+                      inputTokenDetails: finishResult.totalUsage.inputTokenDetails,
+                      outputTokenDetails: finishResult.totalUsage.outputTokenDetails,
+                    }
+                  : usage; // Fallback to usage if totalUsage not available
 
-            // ✅ REASONING TOKENS: Use AI SDK v6's outputTokenDetails.reasoningTokens when available
-            // Priority: SDK token count > manual calculation from reasoning parts > estimate from deltas
-            const reasoningText = reasoningDeltas.join('');
-            const sdkReasoningTokens = finishResult.usage?.outputTokenDetails?.reasoningTokens;
-            const reasoningTokens
-              = sdkReasoningTokens
-                ?? (finishResult.reasoning && finishResult.reasoning.length > 0
-                  ? finishResult.reasoning.reduce(
-                      (acc, r) => acc + Math.ceil(r.text.length / 4),
-                      0,
-                    )
-                  : Math.ceil(reasoningText.length / 4));
+              // ✅ REASONING TOKENS: Use AI SDK v6's outputTokenDetails.reasoningTokens when available
+              // Priority: SDK token count > manual calculation from reasoning parts > estimate from deltas
+              const reasoningText = reasoningDeltas.join('');
+              const sdkReasoningTokens = finishResult.usage?.outputTokenDetails?.reasoningTokens;
+              const reasoningTokens
+                = sdkReasoningTokens
+                  ?? (finishResult.reasoning && finishResult.reasoning.length > 0
+                    ? finishResult.reasoning.reduce(
+                        (acc, r) => acc + Math.ceil(r.text.length / 4),
+                        0,
+                      )
+                    : Math.ceil(reasoningText.length / 4));
 
-            // ✅ PERFORMANCE OPTIMIZATION: Non-blocking analytics tracking
-            // PostHog tracking runs asynchronously via waitUntil() to avoid blocking response
-            // Expected gain: 100-300ms per streaming response
-            const trackAnalytics = async () => {
-              try {
-                await trackLLMGeneration(
-                  trackingContext,
-                  {
-                    text: finishResult.text,
-                    finishReason: finishResult.finishReason,
-                    // AI SDK V6: Use usage (final step only)
-                    usage,
-                    reasoning: finishResult.reasoning,
-                    // AI SDK v6: toolCalls and toolResults are already in correct format (ToolCallPart/ToolResultPart)
-                    toolCalls: finishResult.toolCalls,
-                    toolResults: finishResult.toolResults,
-                    response: finishResult.response,
-                  },
-                  inputMessages, // PostHog Best Practice: Always include input messages
-                  llmTraceId,
-                  llmStartTime,
-                  {
+              // ✅ PERFORMANCE OPTIMIZATION: Non-blocking analytics tracking
+              // PostHog tracking runs asynchronously via waitUntil() to avoid blocking response
+              // Expected gain: 100-300ms per streaming response
+              const trackAnalytics = async () => {
+                try {
+                  await trackLLMGeneration(
+                    trackingContext,
+                    {
+                      text: finishResult.text,
+                      finishReason: finishResult.finishReason,
+                      // AI SDK V6: Use usage (final step only)
+                      usage,
+                      reasoning: finishResult.reasoning,
+                      // AI SDK v6: toolCalls and toolResults are already in correct format (ToolCallPart/ToolResultPart)
+                      toolCalls: finishResult.toolCalls,
+                      toolResults: finishResult.toolResults,
+                      response: finishResult.response,
+                    },
+                    inputMessages, // PostHog Best Practice: Always include input messages
+                    llmTraceId,
+                    llmStartTime,
+                    {
                     // Dynamic model pricing from OpenRouter API
-                    modelPricing,
+                      modelPricing,
 
-                    // Model configuration tracking
-                    modelConfig: {
-                      temperature: temperatureValue,
-                      maxTokens: maxOutputTokens,
-                    },
+                      // Model configuration tracking
+                      modelConfig: {
+                        temperature: temperatureValue,
+                        maxTokens: maxOutputTokens,
+                      },
 
-                    // PostHog Best Practice: Prompt tracking for A/B testing
-                    promptTracking: {
-                      promptId: participant.role
-                        ? `role_${participant.role.replace(/\s+/g, '_').toLowerCase()}`
-                        : 'default',
-                      promptVersion: 'v3.0', // V3.0: Natural dialogue + CEBR protocol
-                      systemPromptTokens,
-                    },
+                      // PostHog Best Practice: Prompt tracking for A/B testing
+                      promptTracking: {
+                        promptId: participant.role
+                          ? `role_${participant.role.replace(/\s+/g, '_').toLowerCase()}`
+                          : 'default',
+                        promptVersion: 'v3.0', // V3.0: Natural dialogue + CEBR protocol
+                        systemPromptTokens,
+                      },
 
-                    // ✅ AI SDK V6: Pass totalUsage for cumulative metrics
-                    totalUsage,
+                      // ✅ AI SDK V6: Pass totalUsage for cumulative metrics
+                      totalUsage,
 
-                    // ✅ REASONING TOKENS: Pass calculated reasoning tokens
-                    reasoningTokens,
+                      // ✅ REASONING TOKENS: Pass calculated reasoning tokens
+                      reasoningTokens,
 
-                    // ✅ POSTHOG OFFICIAL: Provider URL tracking for debugging
-                    providerUrls: {
-                      baseUrl: 'https://openrouter.ai',
-                      requestUrl:
+                      // ✅ POSTHOG OFFICIAL: Provider URL tracking for debugging
+                      providerUrls: {
+                        baseUrl: 'https://openrouter.ai',
+                        requestUrl:
                         'https://openrouter.ai/api/v1/chat/completions',
-                    },
+                      },
 
-                    // Additional custom properties for analytics
-                    additionalProperties: {
-                      message_id: messageId,
-                      reasoning_length_chars: reasoningText.length,
-                      reasoning_from_sdk: !!(
-                        finishResult.reasoning
-                        && finishResult.reasoning.length > 0
-                      ),
-                      rag_context_used: systemPrompt !== baseSystemPrompt,
-                      sdk_version: 'ai-sdk-v6',
-                      is_first_participant: participantIndex === 0,
-                      total_participants: participants.length,
-                      message_persisted: true,
+                      // Additional custom properties for analytics
+                      additionalProperties: {
+                        message_id: messageId,
+                        reasoning_length_chars: reasoningText.length,
+                        reasoning_from_sdk: !!(
+                          finishResult.reasoning
+                          && finishResult.reasoning.length > 0
+                        ),
+                        rag_context_used: systemPrompt !== baseSystemPrompt,
+                        sdk_version: 'ai-sdk-v6',
+                        is_first_participant: participantIndex === 0,
+                        total_participants: participants.length,
+                        message_persisted: true,
+                      },
                     },
-                  },
-                );
-              } catch {
+                  );
+                } catch {
                 // Tracking should never break the main flow - silently fail
-              }
-            };
+                }
+              };
 
-            // Use waitUntil in production, fire-and-forget in local dev
-            if (executionCtx) {
-              executionCtx.waitUntil(trackAnalytics());
-            } else {
-              trackAnalytics().catch(() => {});
-            }
-          } catch {
+              // Use waitUntil in production, fire-and-forget in local dev
+              if (executionCtx) {
+                executionCtx.waitUntil(trackAnalytics());
+              } else {
+                trackAnalytics().catch(() => {});
+              }
+            } catch {
             // Error in analytics setup - silently fail
-          }
+            }
 
-          // =========================================================================
-          // ✅ PARALLELIZED STREAM COMPLETION: Mark stream as completed for resume detection
-          // =========================================================================
-          // ✅ FIX: Mark stream buffer as COMPLETED and clear active key immediately
-          // The consumeSseStream callback runs in waitUntil (background), so if user refreshes
-          // before it completes, KV metadata is still ACTIVE. This causes server to return
-          // phase=participants instead of next phase, triggering participant re-execution.
-          // By calling these here (in onFinish which runs before response ends), we ensure
-          // KV state is correct even if consumeSseStream hasn't finished buffering.
-          await Promise.all([
-            markStreamCompleted(
+            // =========================================================================
+            // ✅ PARALLELIZED STREAM COMPLETION: Mark stream as completed for resume detection
+            // =========================================================================
+            // ✅ FIX: Mark stream buffer as COMPLETED and clear active key immediately
+            // The consumeSseStream callback runs in waitUntil (background), so if user refreshes
+            // before it completes, KV metadata is still ACTIVE. This causes server to return
+            // phase=participants instead of next phase, triggering participant re-execution.
+            // By calling these here (in onFinish which runs before response ends), we ensure
+            // KV state is correct even if consumeSseStream hasn't finished buffering.
+            await Promise.all([
+              markStreamCompleted(
+                threadId,
+                currentRoundNumber,
+                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+                messageId,
+                c.env,
+              ),
+              // ✅ FIX: Update participant status instead of clearing thread active stream
+              // Only clears thread active stream when ALL participants have finished
+              // This enables proper multi-participant stream resumption after page reload
+              updateParticipantStatus(
+                threadId,
+                currentRoundNumber,
+                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+                ParticipantStreamStatuses.COMPLETED,
+                c.env,
+              ),
+              // ✅ FIX: Mark buffer as COMPLETED (same fix as moderator.handler.ts)
+              completeParticipantStreamBuffer(streamMessageId, c.env),
+              // ✅ FIX: Clear active key for this participant (same fix as moderator.handler.ts)
+              clearActiveParticipantStream(
+                threadId,
+                currentRoundNumber,
+                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+                c.env,
+              ),
+            ]);
+
+            // =========================================================================
+            // ✅ SERVER-SIDE ROUND ORCHESTRATION: Continue round in background
+            // =========================================================================
+            // This is the key fix for "user navigates away" problem:
+            // - After each participant completes, server triggers the next one
+            // - Uses waitUntil() to run in background, independent of client connection
+            // - Client can disconnect - round continues to completion
+            //
+            // FLOW:
+            // 1. Participant N completes → mark completed in round state
+            // 2. Check if all participants done
+            // 3. If not done → trigger participant N+1 via internal fetch
+            // 4. If all done → trigger moderator (for 2+ participants)
+            // =========================================================================
+
+            const currentParticipantIdx = participantIndex ?? DEFAULT_PARTICIPANT_INDEX;
+
+            // Update round execution state
+            const { allParticipantsComplete } = await markParticipantCompleted(
               threadId,
               currentRoundNumber,
-              participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-              messageId,
+              currentParticipantIdx,
               c.env,
-            ),
-            // ✅ FIX: Update participant status instead of clearing thread active stream
-            // Only clears thread active stream when ALL participants have finished
-            // This enables proper multi-participant stream resumption after page reload
-            updateParticipantStatus(
-              threadId,
-              currentRoundNumber,
-              participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-              ParticipantStreamStatuses.COMPLETED,
-              c.env,
-            ),
-            // ✅ FIX: Mark buffer as COMPLETED (same fix as moderator.handler.ts)
-            completeParticipantStreamBuffer(streamMessageId, c.env),
-            // ✅ FIX: Clear active key for this participant (same fix as moderator.handler.ts)
-            clearActiveParticipantStream(
-              threadId,
-              currentRoundNumber,
-              participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-              c.env,
-            ),
-          ]);
+            );
 
-          // =========================================================================
-          // ✅ SERVER-SIDE ROUND ORCHESTRATION: Continue round in background
-          // =========================================================================
-          // This is the key fix for "user navigates away" problem:
-          // - After each participant completes, server triggers the next one
-          // - Uses waitUntil() to run in background, independent of client connection
-          // - Client can disconnect - round continues to completion
-          //
-          // FLOW:
-          // 1. Participant N completes → mark completed in round state
-          // 2. Check if all participants done
-          // 3. If not done → trigger participant N+1 via internal fetch
-          // 4. If all done → trigger moderator (for 2+ participants)
-          // =========================================================================
+            // Determine next action based on round state
+            const nextParticipantIndex = currentParticipantIdx + 1;
+            const hasMoreParticipants = nextParticipantIndex < participants.length;
+            const needsModerator = participants.length >= 2 && allParticipantsComplete;
 
-          const currentParticipantIdx = participantIndex ?? DEFAULT_PARTICIPANT_INDEX;
+            // =========================================================================
+            // QUEUE-BASED ORCHESTRATION: Guaranteed delivery via Cloudflare Queues
+            // =========================================================================
+            // Benefits over waitUntil(fetch):
+            // - Guaranteed delivery: Queue retries if worker times out
+            // - Decoupled execution: Stream continues regardless of request lifecycle
+            // - Built-in retry semantics with exponential backoff
+            // =========================================================================
 
-          // Update round execution state
-          const { allParticipantsComplete } = await markParticipantCompleted(
-            threadId,
-            currentRoundNumber,
-            currentParticipantIdx,
-            c.env,
-          );
-
-          // Determine next action based on round state
-          const nextParticipantIndex = currentParticipantIdx + 1;
-          const hasMoreParticipants = nextParticipantIndex < participants.length;
-          const needsModerator = participants.length >= 2 && allParticipantsComplete;
-
-          // =========================================================================
-          // QUEUE-BASED ORCHESTRATION: Guaranteed delivery via Cloudflare Queues
-          // =========================================================================
-          // Benefits over waitUntil(fetch):
-          // - Guaranteed delivery: Queue retries if worker times out
-          // - Decoupled execution: Stream continues regardless of request lifecycle
-          // - Built-in retry semantics with exponential backoff
-          // =========================================================================
-
-          if (hasMoreParticipants) {
+            if (hasMoreParticipants) {
             // ✅ TRIGGER NEXT PARTICIPANT via Queue
-            const queueMessage: TriggerParticipantQueueMessage = {
-              type: 'trigger-participant',
-              messageId: `trigger-${threadId}-r${currentRoundNumber}-p${nextParticipantIndex}`,
-              threadId,
-              roundNumber: currentRoundNumber,
-              participantIndex: nextParticipantIndex,
-              userId: user.id,
-              attachmentIds: resolvedAttachmentIds,
-              queuedAt: new Date().toISOString(),
-            };
+              const queueMessage: TriggerParticipantQueueMessage = {
+                type: 'trigger-participant',
+                messageId: `trigger-${threadId}-r${currentRoundNumber}-p${nextParticipantIndex}`,
+                threadId,
+                roundNumber: currentRoundNumber,
+                participantIndex: nextParticipantIndex,
+                userId: user.id,
+                attachmentIds: resolvedAttachmentIds,
+                queuedAt: new Date().toISOString(),
+              };
 
-            // Queue binding may be undefined in local dev without Cloudflare simulation
-            if (c.env.ROUND_ORCHESTRATION_QUEUE) {
-              try {
-                await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
-              } catch (error) {
-                console.error(`[RoundOrchestration] Failed to queue participant ${nextParticipantIndex}:`, error);
-                // Mark as failed so status endpoint reflects the issue
-                await markParticipantFailed(
-                  threadId,
-                  currentRoundNumber,
-                  nextParticipantIndex,
-                  error instanceof Error ? error.message : 'Queue send failed',
-                  c.env,
-                );
+              // Queue binding may be undefined in local dev without Cloudflare simulation
+              if (c.env.ROUND_ORCHESTRATION_QUEUE) {
+                try {
+                  await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
+                } catch (error) {
+                  console.error(`[RoundOrchestration] Failed to queue participant ${nextParticipantIndex}:`, error);
+                  // Mark as failed so status endpoint reflects the issue
+                  await markParticipantFailed(
+                    threadId,
+                    currentRoundNumber,
+                    nextParticipantIndex,
+                    error instanceof Error ? error.message : 'Queue send failed',
+                    c.env,
+                  );
+                }
               }
-            }
-          } else if (needsModerator) {
+            } else if (needsModerator) {
             // ✅ TRIGGER MODERATOR via Queue
-            const queueMessage: TriggerModeratorQueueMessage = {
-              type: 'trigger-moderator',
-              messageId: `trigger-${threadId}-r${currentRoundNumber}-moderator`,
-              threadId,
-              roundNumber: currentRoundNumber,
-              userId: user.id,
-              queuedAt: new Date().toISOString(),
-            };
+              const queueMessage: TriggerModeratorQueueMessage = {
+                type: 'trigger-moderator',
+                messageId: `trigger-${threadId}-r${currentRoundNumber}-moderator`,
+                threadId,
+                roundNumber: currentRoundNumber,
+                userId: user.id,
+                queuedAt: new Date().toISOString(),
+              };
 
-            // Queue binding may be undefined in local dev without Cloudflare simulation
-            if (c.env.ROUND_ORCHESTRATION_QUEUE) {
-              try {
-                await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
-              } catch (error) {
-                console.error('[RoundOrchestration] Failed to queue moderator:', error);
+              // Queue binding may be undefined in local dev without Cloudflare simulation
+              if (c.env.ROUND_ORCHESTRATION_QUEUE) {
+                try {
+                  await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
+                } catch (error) {
+                  console.error('[RoundOrchestration] Failed to queue moderator:', error);
+                }
               }
             }
-          }
           } catch (onFinishError) {
             // ✅ DEBUG: Log any errors in onFinish callback
             console.error('[Streaming] onFinish ERROR:', {

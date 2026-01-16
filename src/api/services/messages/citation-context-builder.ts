@@ -28,6 +28,7 @@ import type { CitableContextResult, CitableSource, CitationSourceMap } from '@/a
 
 export type CitableContextParams = ProjectContextParams & {
   includeAttachments?: boolean;
+  baseUrl: string; // Base URL for generating absolute download URLs
 };
 
 // ============================================================================
@@ -162,6 +163,7 @@ function buildModeratorSources(
  */
 function buildAttachmentSources(
   attachments: AggregatedProjectContext['attachments'],
+  baseUrl: string,
 ): CitableSource[] {
   return attachments.attachments.map((attachment) => {
     // Format file size for display
@@ -187,8 +189,8 @@ function buildAttachmentSources(
       attachment.threadTitle ? `From thread: ${attachment.threadTitle}` : '',
     ].filter(Boolean).join('\n');
 
-    // Generate download URL for attachment
-    const downloadUrl = `/api/v1/uploads/${attachment.id}/download`;
+    // Generate absolute download URL for attachment
+    const downloadUrl = `${baseUrl}/api/v1/uploads/${attachment.id}/download`;
 
     return {
       id: generateSourceId(CitationSourceTypes.ATTACHMENT, attachment.id),
@@ -265,7 +267,7 @@ export async function buildCitableContext(params: CitableContextParams): Promise
   const threadSources = buildThreadSources(aggregatedContext.chats);
   const searchSources = buildSearchSources(aggregatedContext.searches);
   const moderatorSources = buildModeratorSources(aggregatedContext.moderators);
-  const attachmentSources = buildAttachmentSources(aggregatedContext.attachments);
+  const attachmentSources = buildAttachmentSources(aggregatedContext.attachments, params.baseUrl);
 
   const allSources = [
     ...memorySources,

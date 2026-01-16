@@ -722,12 +722,16 @@ export const StripeProratioBehaviors = {
 // STRIPE BILLING REASON
 // ============================================================================
 
-// 1️⃣ ARRAY CONSTANT - Source of truth for values
+// 1️⃣ ARRAY CONSTANT - Source of truth for values (matches Stripe.Invoice.BillingReason)
 export const STRIPE_BILLING_REASONS = [
-  'subscription_create',
-  'subscription_update',
-  'subscription_cycle',
+  'automatic_pending_invoice_item_invoice',
   'manual',
+  'quote_accept',
+  'subscription',
+  'subscription_create',
+  'subscription_cycle',
+  'subscription_threshold',
+  'subscription_update',
   'upcoming',
 ] as const;
 
@@ -745,10 +749,14 @@ export type StripeBillingReason = z.infer<typeof StripeBillingReasonSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const StripeBillingReasons = {
-  SUBSCRIPTION_CREATE: 'subscription_create' as const,
-  SUBSCRIPTION_UPDATE: 'subscription_update' as const,
-  SUBSCRIPTION_CYCLE: 'subscription_cycle' as const,
+  AUTOMATIC_PENDING_INVOICE_ITEM_INVOICE: 'automatic_pending_invoice_item_invoice' as const,
   MANUAL: 'manual' as const,
+  QUOTE_ACCEPT: 'quote_accept' as const,
+  SUBSCRIPTION: 'subscription' as const,
+  SUBSCRIPTION_CREATE: 'subscription_create' as const,
+  SUBSCRIPTION_CYCLE: 'subscription_cycle' as const,
+  SUBSCRIPTION_THRESHOLD: 'subscription_threshold' as const,
+  SUBSCRIPTION_UPDATE: 'subscription_update' as const,
   UPCOMING: 'upcoming' as const,
 } as const;
 

@@ -638,6 +638,7 @@ export function useMultiParticipantChat(
     }
     // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
     // Note: callbackRefs not in deps - we use callbackRefs.onComplete.current to always get latest value
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.onComplete accessed via .current (ref pattern)
   }, [resetErrorTracking]);
 
   /**
@@ -1612,8 +1613,12 @@ export function useMultiParticipantChat(
       // Reset hydration flag to allow re-hydration on next thread
       hasHydratedRef.current = false;
 
+      // Reset state synchronously on navigation - legitimate useLayoutEffect pattern
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
       setCurrentRound(0);
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
       setCurrentParticipantIndex(0);
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
       setIsExplicitlyStreaming(false);
     }
 
@@ -2382,6 +2387,7 @@ export function useMultiParticipantChat(
     // The sendMessage function will handle participant orchestration properly
     sendMessage(userPromptText);
     // Note: callbackRefs not in deps - we use callbackRefs.onRetry.current to always get latest value
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.onRetry/pendingFileParts accessed via .current (ref pattern)
   }, [messages, sendMessage, status, setMessages, resetErrorTracking, clearAnimations]);
 
   // ✅ RESUMABLE STREAMS: Stop functionality removed
@@ -2420,6 +2426,7 @@ export function useMultiParticipantChat(
     // This ensures store.isStreaming reflects the actual state for message sync
     // Must happen BEFORE the streamResumptionPrefilled check so message sync works
     isStreamingRef.current = true;
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- called from useEffectEvent in response to AI SDK status
     setIsExplicitlyStreaming(true);
 
     // ✅ CRITICAL FIX: When server has prefilled resumption state, DON'T trigger custom resumption

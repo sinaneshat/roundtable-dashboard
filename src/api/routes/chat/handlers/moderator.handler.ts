@@ -428,14 +428,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
   async (c) => {
     const { user } = c.auth();
     const { threadId, roundNumber } = c.validated.params;
-    const body = c.validated.body;
-
-    console.log('[Moderator] Request received:', {
-      threadId,
-      roundNumber,
-      bodyMsgIds: body.participantMessageIds,
-      bodyMsgCount: body.participantMessageIds?.length ?? 0,
-    });
+    // Note: body.participantMessageIds is validated but D1 is source of truth for finding messages
 
     const db = await getDbAsync();
     const roundNum = Number.parseInt(roundNumber, 10);
@@ -534,23 +527,6 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
 
       const participantOnlyMessages = filterDbToParticipantMessages(roundMessages);
 
-      console.log('[Moderator] D1 poll:', {
-        attempt: attempt + 1,
-        roundNum,
-        rawCount: roundMessages.length,
-        rawIds: roundMessages.map(m => ({
-          id: m.id,
-          pId: m.participantId,
-          round: m.roundNumber,
-          hasMetadata: !!m.metadata,
-          metaRole: m.metadata && typeof m.metadata === 'object' && 'role' in m.metadata ? m.metadata.role : 'NO_ROLE',
-          metaPId: m.metadata && typeof m.metadata === 'object' && 'participantId' in m.metadata ? m.metadata.participantId : 'NO_PARTICIPANT_ID',
-          metaFinish: m.metadata && typeof m.metadata === 'object' && 'finishReason' in m.metadata ? m.metadata.finishReason : 'NO_FINISH',
-        })),
-        filteredCount: participantOnlyMessages.length,
-        filteredIds: participantOnlyMessages.map(m => m.id),
-      });
-
       if (participantOnlyMessages.length > 0) {
         participantMessages = participantOnlyMessages as MessageWithParticipant[];
         break;
@@ -568,19 +544,6 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     // If D1 doesn't have participant messages after polling, check KV for status
     if (!participantMessages || participantMessages.length === 0) {
       const roundState = await getRoundExecutionState(threadId, roundNum, c.env);
-
-      console.log('[Moderator] D1 empty after polling, checking KV:', {
-        threadId,
-        roundNum,
-        kvState: roundState
-          ? {
-              phase: roundState.phase,
-              completed: roundState.completedParticipants,
-              failed: roundState.failedParticipants,
-              total: roundState.totalParticipants,
-            }
-          : null,
-      });
 
       if (roundState && roundState.phase !== RoundExecutionPhases.MODERATOR) {
         // KV shows participants still running - return detailed status

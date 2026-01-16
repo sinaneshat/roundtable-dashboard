@@ -17,14 +17,14 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { useIsMounted } from '@/hooks/utils';
+import { render, renderHook } from '@/lib/testing';
+
+import { ChatInput } from '../chat-input';
+
 describe('chatInput Hydration Safety', () => {
   describe('file input rendering', () => {
-    it('should always render file input element regardless of enableAttachments', async () => {
-      // This test verifies that the file input is always rendered
-      // to maintain consistent DOM structure between SSR and client
-      const { ChatInput } = await import('../chat-input');
-      const { render } = await import('@/lib/testing');
-
+    it('should always render file input element regardless of enableAttachments', () => {
       const { container } = render(
         <ChatInput
           value=""
@@ -42,10 +42,7 @@ describe('chatInput Hydration Safety', () => {
       expect(fileInput).toBeDisabled();
     });
 
-    it('should enable file input when attachments are enabled', async () => {
-      const { ChatInput } = await import('../chat-input');
-      const { render } = await import('@/lib/testing');
-
+    it('should enable file input when attachments are enabled', () => {
       const { container } = render(
         <ChatInput
           value=""
@@ -64,10 +61,7 @@ describe('chatInput Hydration Safety', () => {
   });
 
   describe('useIsMounted hydration safety', () => {
-    it('should return false on server and true on client', async () => {
-      const { useIsMounted } = await import('@/hooks/utils');
-      const { renderHook } = await import('@/lib/testing');
-
+    it('should return false on server and true on client', () => {
       const { result } = renderHook(() => useIsMounted());
 
       // In test environment (simulating client), should be true
@@ -78,7 +72,7 @@ describe('chatInput Hydration Safety', () => {
 });
 
 describe('chatView isModelsLoading hydration safety', () => {
-  it('should treat loading as true until mounted to match SSR', async () => {
+  it('should treat loading as true until mounted to match SSR', () => {
     // This tests the pattern used in ChatView:
     // const isModelsLoading = !isMounted || isModelsLoadingRaw;
     //

@@ -5,7 +5,7 @@
  * that are not captured by wrangler types generation (e.g., secrets).
  */
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+// eslint-disable-next-line ts/consistent-type-definitions -- Declaration merging requires interface
 interface CloudflareEnv {
   /**
    * Internal secret for queue worker authentication.

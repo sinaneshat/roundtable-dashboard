@@ -76,7 +76,8 @@ export function useAuthCheck(): UseAuthCheckReturn {
    * by fetching fresh session data. If invalid, signs out and redirects.
    */
   const handleAuthError = useCallback(async (error: unknown) => {
-    if (!is401Error(error)) return;
+    if (!is401Error(error))
+      return;
 
     // Verify session is actually invalid by fetching fresh data
     const freshSession = await getSession();
