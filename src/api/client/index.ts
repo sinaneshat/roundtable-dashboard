@@ -60,26 +60,26 @@ function getClientApiUrl() {
 export async function createApiClient(options?: { bypassCache?: boolean }): Promise<ApiClientType> {
   // Check if we're on server-side (Next.js server component or API route)
   if (typeof window === 'undefined') {
-    // Server-side: Dynamically import cookies to avoid client-side bundling issues
-    // credentials: 'include' doesn't work in server contexts with Hono client
-    const { cookies } = await import('next/headers');
-    const cookieStore = await cookies();
-    const cookieHeader = cookieStore.toString();
+    // Server-side: credentials: 'include' doesn't work - must manually forward cookies
+    // Using headers().get('cookie') per Better Auth recommended pattern
+    const { headers: getHeaders } = await import('next/headers');
+    const headersList = await getHeaders();
+    const cookieHeader = headersList.get('cookie') || '';
 
-    const headers: Record<string, string> = {
+    const reqHeaders: Record<string, string> = {
       Accept: 'application/json',
     };
 
     if (options?.bypassCache) {
-      headers['Cache-Control'] = 'no-cache';
-      headers.Pragma = 'no-cache';
+      reqHeaders['Cache-Control'] = 'no-cache';
+      reqHeaders.Pragma = 'no-cache';
     }
 
     if (cookieHeader) {
-      headers.Cookie = cookieHeader;
+      reqHeaders.Cookie = cookieHeader;
     }
 
-    return hc<AppType>(getClientApiUrl(), { headers });
+    return hc<AppType>(getClientApiUrl(), { headers: reqHeaders });
   }
 
   // Client-side: Use standard credentials approach
@@ -184,11 +184,11 @@ export async function authenticatedFetch(
 
   const headers = new Headers(init.headers);
 
-  // Server-side: manually forward cookies
+  // Server-side: manually forward cookies per Better Auth recommended pattern
   if (typeof window === 'undefined') {
-    const { cookies } = await import('next/headers');
-    const cookieStore = await cookies();
-    const cookieHeader = cookieStore.toString();
+    const { headers: getHeaders } = await import('next/headers');
+    const headersList = await getHeaders();
+    const cookieHeader = headersList.get('cookie') || '';
     if (cookieHeader) {
       headers.set('Cookie', cookieHeader);
     }
