@@ -56,15 +56,32 @@ function getClientApiUrl() {
  *
  * @param options - Client options
  * @param options.bypassCache - If true, adds cache-busting headers to bypass HTTP cache
+ * @param options.cookieHeader - Pre-captured cookie header (for fire-and-forget prefetches that lose request context)
  */
-export async function createApiClient(options?: { bypassCache?: boolean }): Promise<ApiClientType> {
+export async function createApiClient(options?: {
+  bypassCache?: boolean;
+  cookieHeader?: string;
+}): Promise<ApiClientType> {
   // Check if we're on server-side (Next.js server component or API route)
   if (typeof window === 'undefined') {
     // Server-side: credentials: 'include' doesn't work - must manually forward cookies
-    // Using headers().get('cookie') per Better Auth recommended pattern
-    const { headers: getHeaders } = await import('next/headers');
-    const headersList = await getHeaders();
-    const cookieHeader = headersList.get('cookie') || '';
+    // Use pre-captured cookieHeader if provided (for fire-and-forget prefetches)
+    // Otherwise fetch from headers() (for synchronous server contexts)
+    let cookieHeader = options?.cookieHeader;
+
+    if (cookieHeader === undefined) {
+      // Only call headers() if cookieHeader not pre-captured
+      // This may fail in fire-and-forget async contexts where request context is lost
+      try {
+        const { headers: getHeaders } = await import('next/headers');
+        const headersList = await getHeaders();
+        cookieHeader = headersList.get('cookie') || '';
+      } catch {
+        // Request context lost (fire-and-forget async) - proceed without cookies
+        // The request will 401 but client will refetch with proper auth
+        cookieHeader = '';
+      }
+    }
 
     const reqHeaders: Record<string, string> = {
       Accept: 'application/json',
@@ -82,7 +99,9 @@ export async function createApiClient(options?: { bypassCache?: boolean }): Prom
     return hc<AppType>(getClientApiUrl(), { headers: reqHeaders });
   }
 
-  // Client-side: Use standard credentials approach
+  // Client-side: Use custom fetch to ensure credentials are always sent
+  // The Hono client's `init` option may not reliably forward to all fetch calls,
+  // so we wrap fetch to guarantee credentials: 'include' is applied.
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };
@@ -92,12 +111,18 @@ export async function createApiClient(options?: { bypassCache?: boolean }): Prom
     headers.Pragma = 'no-cache';
   }
 
-  return hc<AppType>(getClientApiUrl(), {
-    headers,
-    init: {
+  // Custom fetch that guarantees credentials are sent with every request
+  const fetchWithCredentials: typeof fetch = (input, init) => {
+    return fetch(input, {
+      ...init,
       credentials: 'include',
       ...(options?.bypassCache && { cache: 'no-cache' as RequestCache }),
-    },
+    });
+  };
+
+  return hc<AppType>(getClientApiUrl(), {
+    headers,
+    fetch: fetchWithCredentials,
   });
 }
 

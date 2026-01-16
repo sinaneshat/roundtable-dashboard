@@ -801,6 +801,11 @@ export const SSEStreamMetadataSchema = z.object({
     description: 'Moderator message ID for moderator phase',
     example: 'moderator_abc123',
   }),
+  /** Whether auto-trigger was queued for round recovery */
+  autoTriggerQueued: z.boolean().optional().openapi({
+    description: 'Whether auto-trigger was queued for round recovery',
+    example: true,
+  }),
 }).openapi('SSEStreamMetadata');
 
 export type SSEStreamMetadata = z.infer<typeof SSEStreamMetadataSchema>;

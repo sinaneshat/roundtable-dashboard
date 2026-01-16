@@ -5,9 +5,10 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { createHandler, Responses, STREAMING_CONFIG, ThreadIdParamSchema } from '@/api/core';
 import type { MessageStatus, RoundPhase } from '@/api/core/enums';
-import { MessageRoles, MessageStatuses, ParticipantStreamStatuses, RoundPhases, StreamStatuses } from '@/api/core/enums';
+import { CheckRoundCompletionReasons, MessageRoles, MessageStatuses, ParticipantStreamStatuses, RoundOrchestrationMessageTypes, RoundPhases, StreamPhases, StreamStatuses } from '@/api/core/enums';
 import { clearThreadActiveStream, createLiveParticipantResumeStream, getActiveParticipantStreamId, getActivePreSearchStreamId, getNextParticipantToStream, getParticipantStreamChunks, getParticipantStreamMetadata, getPreSearchStreamChunks, getPreSearchStreamMetadata, getThreadActiveStream, updateParticipantStatus } from '@/api/services/streaming';
 import type { ApiEnv } from '@/api/types';
+import type { CheckRoundCompletionQueueMessage } from '@/api/types/queues';
 import { parseStreamId } from '@/api/types/streaming';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -20,6 +21,39 @@ import type {
   PreSearchPhaseStatus,
   ThreadStreamResumptionState,
 } from '../schema';
+
+/**
+ * Queue a check-round-completion message when a stuck round is detected
+ * This enables auto-recovery when user refreshes and round is incomplete
+ */
+async function queueRoundCompletionCheck(
+  threadId: string,
+  roundNumber: number,
+  userId: string,
+  env: ApiEnv['Bindings'],
+): Promise<boolean> {
+  if (!env?.ROUND_ORCHESTRATION_QUEUE) {
+    return false;
+  }
+
+  try {
+    const message: CheckRoundCompletionQueueMessage = {
+      type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+      messageId: `check-${threadId}-r${roundNumber}-${Date.now()}`,
+      threadId,
+      roundNumber,
+      userId,
+      reason: CheckRoundCompletionReasons.RESUME_TRIGGER,
+      queuedAt: new Date().toISOString(),
+    };
+
+    await env.ROUND_ORCHESTRATION_QUEUE.send(message);
+    return true;
+  } catch {
+    // Queue send failed - non-critical, continue without auto-trigger
+    return false;
+  }
+}
 
 /**
  * ✅ FIX: Validate KV participant status against actual DB messages
@@ -78,6 +112,10 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
   async (c) => {
     const { user } = c.auth();
     const { threadId } = c.validated.params;
+    // Get lastChunkIndex from query params to avoid re-sending chunks client already has
+    const lastChunkIndexParam = c.req.query('lastChunkIndex');
+    const lastChunkIndex = lastChunkIndexParam ? Number.parseInt(lastChunkIndexParam, 10) : 0;
+    const startFromChunkIndex = Number.isNaN(lastChunkIndex) ? 0 : lastChunkIndex;
 
     if (!c.env?.KV) {
       return Responses.noContentWithHeaders();
@@ -117,7 +155,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 
         if (!isStale) {
           return Responses.noContentWithHeaders({
-            phase: 'presearch',
+            phase: StreamPhases.PRESEARCH,
             roundNumber: currentRound,
             streamId: preSearchStreamId,
           });
@@ -150,12 +188,23 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
         const validatedRoundComplete = !dbValidatedNext;
 
         if (dbValidatedNext && !validatedRoundComplete) {
+          // ✅ AUTO-TRIGGER: Queue check-round-completion for auto-recovery
+          // When there's no active stream but incomplete round detected, trigger recovery
+          const triggered = await queueRoundCompletionCheck(
+            threadId,
+            activeStream.roundNumber,
+            user.id,
+            c.env,
+          );
+
           return Responses.noContentWithHeaders({
             roundNumber: activeStream.roundNumber,
             totalParticipants: activeStream.totalParticipants,
             nextParticipantIndex: dbValidatedNext.participantIndex,
             participantStatuses: activeStream.participantStatuses,
             roundComplete: false,
+            // Signal to client that auto-trigger was queued
+            autoTriggerQueued: triggered,
           });
         }
         return Responses.noContentWithHeaders();
@@ -203,12 +252,23 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
         }
 
         if (dbValidatedNextParticipant && !updatedRoundComplete) {
+          // ✅ AUTO-TRIGGER: Queue check-round-completion for auto-recovery
+          // Stale stream detected with incomplete round - trigger recovery
+          const triggered = await queueRoundCompletionCheck(
+            threadId,
+            activeStream.roundNumber,
+            user.id,
+            c.env,
+          );
+
           return Responses.noContentWithHeaders({
             roundNumber: activeStream.roundNumber,
             totalParticipants: activeStream.totalParticipants,
             nextParticipantIndex: dbValidatedNextParticipant.participantIndex,
             participantStatuses: activeStream.participantStatuses,
             roundComplete: false,
+            // Signal to client that auto-trigger was queued
+            autoTriggerQueued: triggered,
           });
         }
         return Responses.noContentWithHeaders();
@@ -216,13 +276,15 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 
       const isStreamActive = metadata.status === StreamStatuses.ACTIVE;
       // ✅ FIX: Add filterReasoningOnReplay to prevent duplicate thinking tags during resume
+      // ✅ FIX: Pass startFromChunkIndex to avoid re-sending chunks client already received
       const liveStream = createLiveParticipantResumeStream(streamIdToResume, c.env, {
         filterReasoningOnReplay: true,
+        startFromChunkIndex,
       });
 
       return Responses.sse(liveStream, {
         streamId: streamIdToResume,
-        phase: 'participant',
+        phase: StreamPhases.PARTICIPANT,
         roundNumber: activeStream.roundNumber,
         participantIndex: activeStream.participantIndex,
         totalParticipants: activeStream.totalParticipants,
@@ -253,11 +315,13 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
           const liveStream = createLiveParticipantResumeStream(moderatorStreamId, c.env, {
             // Filter reasoning chunks to prevent duplicate thinking tags during resume
             filterReasoningOnReplay: true,
+            // ✅ FIX: Pass startFromChunkIndex to avoid re-sending chunks client already received
+            startFromChunkIndex,
           });
 
           return Responses.sse(liveStream, {
             streamId: moderatorStreamId,
-            phase: 'moderator',
+            phase: StreamPhases.MODERATOR,
             roundNumber: currentRound,
             isActive: isStreamActive,
             resumedFromBuffer: true,

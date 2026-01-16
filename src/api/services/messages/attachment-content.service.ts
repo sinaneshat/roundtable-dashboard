@@ -9,8 +9,8 @@
 
 import { eq, inArray } from 'drizzle-orm';
 
-import { AI_PROCESSABLE_MIME_SET, MessagePartTypes } from '@/api/core/enums';
-import { getFile } from '@/api/services/uploads';
+import { AI_PROCESSABLE_MIME_SET, IMAGE_MIME_TYPES, MessagePartTypes } from '@/api/core/enums';
+import { generateAiPublicUrl, getFile } from '@/api/services/uploads';
 import { LogHelpers } from '@/api/types/logger';
 import type {
   LoadAttachmentContentParams,
@@ -18,6 +18,8 @@ import type {
   LoadMessageAttachmentsParams,
   LoadMessageAttachmentsResult,
   ModelFilePart,
+  ModelFilePartUrl,
+  ModelImagePartUrl,
 } from '@/api/types/uploads';
 import { MAX_BASE64_FILE_SIZE } from '@/api/types/uploads';
 import * as tables from '@/db';
@@ -48,24 +50,17 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
     .where(inArray(tables.upload.id, attachmentIds));
 
   if (uploads.length === 0 && attachmentIds.length > 0) {
-    console.error(
-      '[Attachment] WARNING: No uploads found in DB for given IDs!',
-      {
-        attachmentIds,
-        attachmentIdsCount: attachmentIds.length,
-        foundUploadsCount: uploads.length,
-        hint: 'This may indicate a race condition or incorrect upload IDs extracted from URLs',
-      },
-    );
+    logger?.error('No uploads found in DB for given IDs - possible race condition or incorrect upload IDs', LogHelpers.operation({
+      operationName: 'loadAttachmentContent',
+      attachmentCount: attachmentIds.length,
+      foundUploads: 0,
+    }));
   } else if (uploads.length < attachmentIds.length) {
-    console.error(
-      '[Attachment] WARNING: Partial uploads found - some IDs not in DB',
-      {
-        attachmentIds,
-        foundIds: uploads.map(u => u.id),
-        missingCount: attachmentIds.length - uploads.length,
-      },
-    );
+    logger?.error('Partial uploads found - some IDs not in DB', LogHelpers.operation({
+      operationName: 'loadAttachmentContent',
+      attachmentCount: attachmentIds.length,
+      foundUploads: uploads.length,
+    }));
   }
 
   logger?.info('Loading attachment content for AI model', LogHelpers.operation({
@@ -87,41 +82,14 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
         continue;
       }
 
-      // Skip files that are too large for base64 conversion
-      if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
-        const errorMsg = `File too large (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB > ${MAX_BASE64_FILE_SIZE / 1024 / 1024}MB limit)`;
-        console.error('[Attachment] File too large for base64 conversion:', {
-          uploadId: upload.id,
-          filename: upload.filename,
-          fileSize: upload.fileSize,
-          maxSize: MAX_BASE64_FILE_SIZE,
-          error: errorMsg,
-        });
-        logger?.warn('File too large for base64 conversion', LogHelpers.operation({
-          operationName: 'loadAttachmentContent',
-          uploadId: upload.id,
-          fileSize: upload.fileSize,
-          maxSize: MAX_BASE64_FILE_SIZE,
-        }));
-        errors.push({
-          uploadId: upload.id,
-          error: errorMsg,
-        });
-        continue;
-      }
-
       // Fetch file content from storage
       const { data } = await getFile(r2Bucket, upload.r2Key);
 
       if (!data) {
-        console.error('[Attachment] File not found in storage:', {
-          uploadId: upload.id,
-          filename: upload.filename,
-          r2Key: upload.r2Key,
-        });
-        logger?.warn('File not found in storage', LogHelpers.operation({
+        logger?.error('File not found in storage', LogHelpers.operation({
           operationName: 'loadAttachmentContent',
           uploadId: upload.id,
+          filename: upload.filename,
           r2Key: upload.r2Key,
         }));
         errors.push({
@@ -154,15 +122,11 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
     } catch (error) {
       const errorMessage
         = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[Attachment] Failed to load attachment content:', {
-        uploadId: upload.id,
-        filename: upload.filename,
-        mimeType: upload.mimeType,
-        error: errorMessage,
-      });
       logger?.error('Failed to load attachment content', LogHelpers.operation({
         operationName: 'loadAttachmentContent',
         uploadId: upload.id,
+        filename: upload.filename,
+        mimeType: upload.mimeType,
         error: errorMessage,
       }));
       errors.push({
@@ -181,6 +145,230 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
 
   logger?.info('Attachment content loading complete', LogHelpers.operation({
     operationName: 'loadAttachmentContent',
+    stats,
+  }));
+
+  return { fileParts, errors, stats };
+}
+
+// ============================================================================
+// URL-Based Loading (All files use signed URLs for AI provider access)
+// ============================================================================
+
+export type UrlFilePart = ModelFilePartUrl | ModelImagePartUrl;
+
+export type LoadAttachmentContentUrlParams = LoadAttachmentContentParams & {
+  /** Base URL of the application for generating signed URLs */
+  baseUrl: string;
+  /** User ID for signing URLs */
+  userId: string;
+  /** BETTER_AUTH_SECRET for signing */
+  secret: string;
+  /** Optional thread ID for URL signing */
+  threadId?: string;
+};
+
+export type LoadAttachmentContentUrlResult = {
+  fileParts: UrlFilePart[];
+  errors: Array<{ uploadId: string; error: string }>;
+  stats: {
+    total: number;
+    loaded: number;
+    failed: number;
+    skipped: number;
+  };
+};
+
+const IMAGE_MIME_SET = new Set<string>(IMAGE_MIME_TYPES);
+
+/**
+ * Load attachment content with environment-aware delivery.
+ *
+ * - Production/Preview: Uses signed public URLs (AI providers fetch directly)
+ * - Local development: Falls back to base64 (AI providers can't access localhost)
+ *
+ * URL-based delivery is more efficient:
+ * - Avoids memory-intensive base64 encoding in Workers
+ * - Allows AI providers to fetch files in parallel
+ * - Supports much larger files (up to 100MB for PDFs, 20MB for images)
+ */
+export async function loadAttachmentContentUrl(
+  params: LoadAttachmentContentUrlParams,
+): Promise<LoadAttachmentContentUrlResult> {
+  const { attachmentIds, r2Bucket, db, logger, baseUrl, userId, secret, threadId } = params;
+
+  const fileParts: UrlFilePart[] = [];
+  const errors: Array<{ uploadId: string; error: string }> = [];
+  let skipped = 0;
+
+  if (!attachmentIds || attachmentIds.length === 0) {
+    return {
+      fileParts: [],
+      errors: [],
+      stats: { total: 0, loaded: 0, failed: 0, skipped: 0 },
+    };
+  }
+
+  // Check if we're in local development (AI providers can't access localhost)
+  const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+
+  // Load attachment metadata from database
+  const uploads = await db
+    .select()
+    .from(tables.upload)
+    .where(inArray(tables.upload.id, attachmentIds));
+
+  if (uploads.length === 0 && attachmentIds.length > 0) {
+    logger?.error('No uploads found in DB for given IDs (URL mode) - possible race condition', LogHelpers.operation({
+      operationName: 'loadAttachmentContentUrl',
+      attachmentCount: attachmentIds.length,
+      foundUploads: 0,
+    }));
+  }
+
+  const deliveryMode = isLocalhost ? 'base64' : 'url';
+  logger?.info(`Loading attachment content (${deliveryMode} mode) for AI model`, LogHelpers.operation({
+    operationName: 'loadAttachmentContentUrl',
+    attachmentCount: attachmentIds.length,
+    foundUploads: uploads.length,
+  }));
+
+  for (const upload of uploads) {
+    try {
+      // Skip files that AI models can't process
+      if (!AI_PROCESSABLE_MIME_SET.has(upload.mimeType)) {
+        logger?.debug('Skipping unsupported file type for AI processing', LogHelpers.operation({
+          operationName: 'loadAttachmentContentUrl',
+          uploadId: upload.id,
+          mimeType: upload.mimeType,
+        }));
+        skipped++;
+        continue;
+      }
+
+      const isImage = IMAGE_MIME_SET.has(upload.mimeType);
+
+      if (isLocalhost) {
+        // LOCAL DEV: Use base64 encoding (AI providers can't access localhost URLs)
+        // Use same format as original loadAttachmentContent for compatibility
+        const { data } = await getFile(r2Bucket, upload.r2Key);
+
+        if (!data) {
+          logger?.error('File not found in storage (URL mode)', LogHelpers.operation({
+            operationName: 'loadAttachmentContentUrl',
+            uploadId: upload.id,
+            filename: upload.filename,
+            r2Key: upload.r2Key,
+          }));
+          errors.push({
+            uploadId: upload.id,
+            error: 'File not found in storage',
+          });
+          continue;
+        }
+
+        const uint8Data = new Uint8Array(data);
+        const base64 = arrayBufferToBase64(data);
+        const dataUrl = `data:${upload.mimeType};base64,${base64}`;
+
+        // Use type:'file' with both data (Uint8Array) and url (data URL) for all files
+        // This matches the format expected by the AI SDK and streaming orchestration
+        fileParts.push({
+          type: MessagePartTypes.FILE,
+          data: uint8Data,
+          mimeType: upload.mimeType,
+          filename: upload.filename,
+          url: dataUrl,
+          mediaType: upload.mimeType,
+        // TYPE BRIDGE: Local dev creates hybrid with both data (Uint8Array) and url (data URL)
+        // to satisfy both AI SDK (needs data) and UI (needs url). Production uses URL-only.
+        } as unknown as UrlFilePart);
+
+        logger?.debug('Loaded attachment (base64 for local dev)', LogHelpers.operation({
+          operationName: 'loadAttachmentContentUrl',
+          uploadId: upload.id,
+          filename: upload.filename,
+          mimeType: upload.mimeType,
+          sizeKB: Math.round(upload.fileSize / 1024),
+        }));
+      } else {
+        // PRODUCTION/PREVIEW: Use signed public URL
+        const urlResult = await generateAiPublicUrl({
+          uploadId: upload.id,
+          userId,
+          baseUrl,
+          secret,
+          threadId,
+        });
+
+        if (!urlResult.success) {
+          logger?.error('URL generation failed', LogHelpers.operation({
+            operationName: 'loadAttachmentContentUrl',
+            uploadId: upload.id,
+            filename: upload.filename,
+            fileSize: upload.fileSize,
+            error: urlResult.error,
+          }));
+          errors.push({
+            uploadId: upload.id,
+            error: urlResult.error,
+          });
+          continue;
+        }
+
+        if (isImage) {
+          // Image: use type:'image' with URL
+          fileParts.push({
+            type: 'image',
+            image: urlResult.url,
+            mimeType: upload.mimeType,
+          // TYPE SATISFIED: Object matches ModelImagePartUrl schema
+          } as ModelImagePartUrl);
+        } else {
+          // Non-image (PDF, etc.): use type:'file' with URL
+          fileParts.push({
+            type: MessagePartTypes.FILE,
+            url: urlResult.url,
+            mimeType: upload.mimeType,
+            filename: upload.filename,
+            mediaType: upload.mimeType,
+          // TYPE SATISFIED: Object matches ModelFilePartUrl schema
+          } as ModelFilePartUrl);
+        }
+
+        logger?.debug('Generated URL for attachment', LogHelpers.operation({
+          operationName: 'loadAttachmentContentUrl',
+          uploadId: upload.id,
+          filename: upload.filename,
+          mimeType: upload.mimeType,
+          sizeKB: Math.round(upload.fileSize / 1024),
+        }));
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger?.error('Failed to load attachment (URL mode)', LogHelpers.operation({
+        operationName: 'loadAttachmentContentUrl',
+        uploadId: upload.id,
+        filename: upload.filename,
+        mimeType: upload.mimeType,
+        error: errorMessage,
+      }));
+      errors.push({
+        uploadId: upload.id,
+        error: errorMessage,
+      });
+    }
+  }
+
+  const stats = {
+    total: attachmentIds.length,
+    loaded: fileParts.length,
+    failed: errors.length,
+    skipped,
+  };
+
+  logger?.info('Attachment loading complete', LogHelpers.operation({
+    operationName: 'loadAttachmentContentUrl',
     stats,
   }));
 
@@ -310,47 +498,15 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
           continue;
         }
 
-        // Skip files that are too large for base64 conversion
-        if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
-          const errorMsg = `File too large (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB > ${MAX_BASE64_FILE_SIZE / 1024 / 1024}MB limit)`;
-          console.error('[Attachment] File too large for message attachment:', {
-            messageId,
-            uploadId,
-            filename: upload.filename,
-            fileSize: upload.fileSize,
-            maxSize: MAX_BASE64_FILE_SIZE,
-            error: errorMsg,
-          });
-          logger?.warn('File too large for base64 conversion', LogHelpers.operation({
-            operationName: 'loadMessageAttachments',
-            messageId,
-            uploadId,
-            fileSize: upload.fileSize,
-            maxSize: MAX_BASE64_FILE_SIZE,
-          }));
-          errors.push({
-            messageId,
-            uploadId,
-            error: errorMsg,
-          });
-          failed++;
-          continue;
-        }
-
         // Fetch file content from storage
         const { data } = await getFile(r2Bucket, upload.r2Key);
 
         if (!data) {
-          console.error('[Attachment] File not found in storage for message:', {
-            messageId,
-            uploadId,
-            filename: upload.filename,
-            r2Key: upload.r2Key,
-          });
-          logger?.warn('File not found in storage', LogHelpers.operation({
+          logger?.error('File not found in storage for message', LogHelpers.operation({
             operationName: 'loadMessageAttachments',
             messageId,
             uploadId,
+            filename: upload.filename,
             r2Key: upload.r2Key,
           }));
           errors.push({
@@ -394,16 +550,11 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
       } catch (error) {
         const errorMessage
           = error instanceof Error ? error.message : 'Unknown error';
-        console.error('[Attachment] Failed to load attachment for message:', {
-          messageId,
-          uploadId,
-          filename: upload.filename,
-          error: errorMessage,
-        });
-        logger?.error('Failed to load attachment content for message', LogHelpers.operation({
+        logger?.error('Failed to load attachment for message', LogHelpers.operation({
           operationName: 'loadMessageAttachments',
           messageId,
           uploadId,
+          filename: upload.filename,
           error: errorMessage,
         }));
         errors.push({

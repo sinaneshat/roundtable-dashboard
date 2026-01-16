@@ -369,22 +369,34 @@ export const MAX_FILENAME_LENGTH = 255;
 export const MAX_MULTIPART_PARTS = 10000;
 
 /**
- * Maximum file size for visual content (images + PDFs) that AI models can process.
+ * Threshold for switching from base64 to URL-based file delivery.
  *
- * This limit exists because visual files are converted to base64 for AI consumption,
- * which requires significant memory in Cloudflare Workers (128MB limit):
+ * Files at or below this size use base64 encoding (fast, reliable).
+ * Files above this size use signed public URLs for AI provider access.
+ *
+ * This limit exists because base64 encoding requires significant memory
+ * in Cloudflare Workers (128MB limit):
  * - 4MB file → ~5.3MB base64 string (33% larger)
  * - Plus Uint8Array copy: ~4MB
  * - Plus ArrayBuffer: ~4MB
  * - Total per file: ~13.3MB
  *
- * Files exceeding this size can still be uploaded for storage but will be
- * silently skipped during AI processing. To prevent user confusion, we
- * validate this limit at upload time for visual file types.
- *
  * @see MAX_BASE64_FILE_SIZE in src/api/types/uploads.ts (backend equivalent)
  */
-export const MAX_VISUAL_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+export const URL_FILE_SIZE_THRESHOLD = 4 * 1024 * 1024; // 4MB
+
+/**
+ * Maximum image file size when using URL-based delivery.
+ * AI providers (OpenAI, Anthropic, Google) can fetch images from URLs.
+ * ChatGPT supports ~20MB images.
+ */
+export const MAX_IMAGE_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+
+/**
+ * Maximum PDF file size when using URL-based delivery.
+ * AI providers can fetch PDFs from URLs for document analysis.
+ */
+export const MAX_PDF_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
 // ============================================================================
 // UPLOAD STATUS (Frontend Upload Lifecycle)

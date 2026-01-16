@@ -188,44 +188,6 @@ function buildCurrentRoundSearchContextWithCitations(
   return { content: parts.join(''), sources };
 }
 
-/**
- * Legacy function for backward compatibility
- * Use buildSearchContextWithCitations for citation support
- */
-export function buildSearchContext(
-  allMessages: ChatMessage[],
-  options: SearchContextOptions,
-): string {
-  const { currentRoundNumber, includeFullResults = true } = options;
-
-  const preSearchMessages = filterDbToPreSearchMessages(allMessages);
-
-  if (preSearchMessages.length === 0) {
-    return '';
-  }
-
-  // ✅ PERF: Use array collect pattern instead of string += (O(n) vs O(n²))
-  const contextParts: string[] = ['\n\n## Web Search Context\n\n'];
-
-  for (const preSearchMsg of preSearchMessages) {
-    const validatedData = extractValidatedPreSearchData(preSearchMsg);
-    if (!validatedData)
-      continue;
-
-    const msgRoundNumber = getRoundNumber(preSearchMsg.metadata) || 0;
-    const isCurrentRound = msgRoundNumber === currentRoundNumber;
-
-    if (isCurrentRound && includeFullResults) {
-      contextParts.push(buildCurrentRoundSearchContext(validatedData));
-    } else {
-      contextParts.push(buildPreviousRoundSearchContext(msgRoundNumber, validatedData));
-    }
-  }
-
-  contextParts.push('\n');
-  return contextParts.join('');
-}
-
 function extractValidatedPreSearchData(
   message: ChatMessage,
 ): ValidatedPreSearchData | null {
@@ -240,61 +202,6 @@ function extractValidatedPreSearchData(
     return null;
 
   return validation.data;
-}
-
-function buildCurrentRoundSearchContext(preSearch: ValidatedPreSearchData): string {
-  // ✅ PERF: Use array collect pattern instead of string += (O(n) vs O(n²))
-  const parts: string[] = [
-    '### Web Search Results\n\n',
-    'The following raw content was scraped from web sources. Use this information directly to formulate your response:\n\n',
-  ];
-
-  for (const searchResult of preSearch.results) {
-    parts.push(`---\n**Search Query:** "${searchResult.query}"\n\n`);
-
-    for (let i = 0; i < searchResult.results.length; i++) {
-      const result = searchResult.results[i];
-      if (!result)
-        continue;
-
-      parts.push(`#### Source ${i + 1}: ${result.title}\n`);
-      parts.push(`**URL:** ${result.url}\n`);
-      if (result.domain) {
-        parts.push(`**Domain:** ${result.domain}\n`);
-      }
-      if (result.publishedDate) {
-        parts.push(`**Published:** ${result.publishedDate}\n`);
-      }
-
-      if (result.metadata) {
-        const meta: string[] = [];
-        if (result.metadata.author)
-          meta.push(`Author: ${result.metadata.author}`);
-        if (result.metadata.wordCount)
-          meta.push(`${result.metadata.wordCount.toLocaleString()} words`);
-        if (result.metadata.readingTime)
-          meta.push(`${result.metadata.readingTime} min read`);
-        if (result.metadata.description)
-          meta.push(`Description: ${result.metadata.description}`);
-        if (meta.length > 0) {
-          parts.push(`**Metadata:** ${meta.join(' | ')}\n`);
-        }
-      }
-
-      const rawData = result.rawContent || result.fullContent || result.content || result.excerpt || '';
-
-      if (rawData) {
-        parts.push('\n**Raw Content:**\n```\n', rawData, '\n```\n\n');
-      }
-    }
-  }
-
-  parts.push(
-    '---\n\n**Instructions:** Synthesize the above raw data to answer the user\'s question. ',
-    'Cite sources with URLs when referencing specific information.\n\n',
-  );
-
-  return parts.join('');
 }
 
 function buildPreviousRoundSearchContext(

@@ -986,12 +986,27 @@
     "defaultName": "User"
   },
   "userMenu": {
+    "deleteAccount": "Delete Account",
+    "deleteAccountDescription": "Permanently delete your account",
     "feedbackDescription": "Help us improve Roundtable",
     "manageBilling": "Manage billing",
     "proPlan": "Pro Plan",
     "sendFeedback": "Send Feedback",
     "upgradeDescription": "Unlock all AI models & unlimited messages",
     "upgradeToPro": "Upgrade to Pro"
+  },
+  "deleteAccount": {
+    "title": "Delete Account",
+    "description": "This will permanently delete your account and all associated data including:",
+    "dataList": {
+      "threads": "All chat threads and messages",
+      "projects": "All projects and attachments",
+      "billing": "Billing history (Stripe customer record)",
+      "settings": "Custom roles and presets"
+    },
+    "warning": "This action cannot be undone.",
+    "confirmButton": "Delete My Account",
+    "cancelButton": "Cancel"
   },
   "version": {
     "newVersionAvailable": "New version available",

@@ -34,7 +34,6 @@ import {
 } from '@/api/services/errors';
 import { filterDbToParticipantMessages } from '@/api/services/messages';
 import { extractModeratorModelName, initializeOpenRouter, openRouterService } from '@/api/services/models';
-import type { ModeratorParticipantResponse } from '@/api/services/prompts';
 import {
   buildCouncilModeratorSystemPrompt,
 } from '@/api/services/prompts';
@@ -72,7 +71,7 @@ const MODERATOR_PARTICIPANT_INDEX = NO_PARTICIPANT_SENTINEL;
 // Prompt Building - Uses Centralized Prompts Service
 // ============================================================================
 // ✅ SINGLE SOURCE: Moderator prompts defined in prompts.service.ts
-// See: buildCouncilModeratorSystemPrompt, ModeratorParticipantResponse
+// See: buildCouncilModeratorSystemPrompt, ParticipantResponse (from schema)
 
 // ============================================================================
 // Council Moderator Generation (Text Streaming - Like Participants)
@@ -117,7 +116,7 @@ function generateCouncilModerator(
     roundNumber,
     mode,
     userQuestion,
-    participantResponses as ModeratorParticipantResponse[],
+    participantResponses,
   );
 
   // Build initial moderator metadata (streaming state)
@@ -528,7 +527,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
       const participantOnlyMessages = filterDbToParticipantMessages(roundMessages);
 
       if (participantOnlyMessages.length > 0) {
-        participantMessages = participantOnlyMessages as MessageWithParticipant[];
+        participantMessages = participantOnlyMessages;
         break;
       }
 

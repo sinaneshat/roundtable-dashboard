@@ -24,12 +24,18 @@ import {
   useSubscriptionsQuery,
 } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
-import { signOut, useSession } from '@/lib/auth/client';
+import { deleteUser, signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
+import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 import { showApiErrorToast } from '@/lib/toast';
 
 const CancelSubscriptionDialog = dynamic(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => m.CancelSubscriptionDialog),
+  { ssr: false },
+);
+
+const DeleteAccountDialog = dynamic(
+  () => import('@/components/chat/delete-account-dialog').then(m => m.DeleteAccountDialog),
   { ssr: false },
 );
 
@@ -50,9 +56,12 @@ export function NavUser({ initialSession }: NavUserProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const showCancelDialog = useBoolean(false);
+  const showDeleteDialog = useBoolean(false);
   const showFeedbackModal = useBoolean(false);
+  const isDeleting = useBoolean(false);
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
+  const showDeleteAccountOption = getWebappEnv() !== WEBAPP_ENVS.PROD;
 
   const user = clientSession?.user ?? initialSession?.user;
 
@@ -105,6 +114,18 @@ export function NavUser({ initialSession }: NavUserProps) {
       }
     } catch (error) {
       showApiErrorToast('Cancellation Failed', error);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    isDeleting.onTrue();
+    try {
+      await deleteUser({
+        callbackURL: '/auth/sign-in',
+      });
+    } catch (error) {
+      showApiErrorToast('Delete Account Failed', error);
+      isDeleting.onFalse();
     }
   };
 
@@ -233,6 +254,18 @@ export function NavUser({ initialSession }: NavUserProps) {
                   <p className="text-[10px] text-muted-foreground">{t('userMenu.feedbackDescription')}</p>
                 </div>
               </DropdownMenuItem>
+              {showDeleteAccountOption && (
+                <DropdownMenuItem
+                  onClick={showDeleteDialog.onTrue}
+                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                >
+                  <Icons.trash />
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold">{t('userMenu.deleteAccount')}</p>
+                    <p className="text-[10px] text-muted-foreground/70">{t('userMenu.deleteAccountDescription')}</p>
+                  </div>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <Icons.logOut />
@@ -256,6 +289,14 @@ export function NavUser({ initialSession }: NavUserProps) {
         <FeedbackModal
           open={showFeedbackModal.value}
           onOpenChange={showFeedbackModal.setValue}
+        />
+      )}
+      {showDeleteDialog.value && (
+        <DeleteAccountDialog
+          open={showDeleteDialog.value}
+          onOpenChange={showDeleteDialog.setValue}
+          onConfirm={handleDeleteAccount}
+          isProcessing={isDeleting.value}
         />
       )}
     </>

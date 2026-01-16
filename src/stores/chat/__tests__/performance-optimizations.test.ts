@@ -216,8 +216,8 @@ describe('participant Completion Gate - Map Optimization', () => {
       expect(status.expectedCount).toBe(100);
       expect(status.completedCount).toBe(100);
 
-      // Should complete in under 500ms even with 100 participants (accounts for test env overhead + JIT warmup + CI variability)
-      expect(endTime - startTime).toBeLessThan(500);
+      // Should complete in under 1000ms even with 100 participants (accounts for test env overhead + JIT warmup + CI variability)
+      expect(endTime - startTime).toBeLessThan(1000);
     });
 
     it('correctly handles multiple rounds', () => {

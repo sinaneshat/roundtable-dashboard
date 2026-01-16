@@ -14,6 +14,7 @@ import type { ErrorContext } from '@/api/core';
 import type { ApiEnv } from '@/api/types';
 import type { SignedUrlOptions, ValidateSignatureResult } from '@/api/types/uploads';
 import {
+  AI_PUBLIC_URL_EXPIRATION_MS,
   DEFAULT_URL_EXPIRATION_MS,
   MAX_URL_EXPIRATION_MS,
   MIN_URL_EXPIRATION_MS,
@@ -126,6 +127,145 @@ export async function generateSignedDownloadPath(
   const fullUrl = await generateSignedDownloadUrl(c, options);
   const url = new URL(fullUrl);
   return `${url.pathname}${url.search}`;
+}
+
+// ============================================================================
+// AI PROVIDER PUBLIC URL GENERATION
+// ============================================================================
+
+export type GenerateAiPublicUrlOptions = {
+  /** Upload ID to generate URL for */
+  uploadId: string;
+  /** User ID who owns the file */
+  userId: string;
+  /** Base URL of the application (must be publicly accessible) */
+  baseUrl: string;
+  /** BETTER_AUTH_SECRET for signing */
+  secret: string;
+  /** Optional thread ID for additional validation */
+  threadId?: string;
+};
+
+export type GenerateAiPublicUrlResult
+  = | { success: true; url: string; expiresAt: number }
+    | { success: false; error: string };
+
+/**
+ * Generate a publicly accessible signed URL for AI providers to fetch files.
+ *
+ * This is used for large files (>4MB) that exceed base64 memory limits.
+ * AI providers (OpenAI, Anthropic, Google, OpenRouter) fetch from this URL directly.
+ *
+ * IMPORTANT: Only works when baseUrl is publicly accessible (preview/production).
+ * Returns error for localhost URLs since AI providers cannot access them.
+ *
+ * @param options - URL generation options
+ * @returns Signed public URL or error
+ */
+export async function generateAiPublicUrl(
+  options: GenerateAiPublicUrlOptions,
+): Promise<GenerateAiPublicUrlResult> {
+  const { uploadId, userId, baseUrl, secret, threadId } = options;
+
+  // Validate baseUrl is publicly accessible
+  const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+  if (isLocalhost) {
+    return {
+      success: false,
+      error: 'URL-based file delivery requires a public URL. Large files (>4MB) are not supported in local development.',
+    };
+  }
+
+  if (!secret) {
+    return {
+      success: false,
+      error: 'BETTER_AUTH_SECRET not configured',
+    };
+  }
+
+  const expiration = Date.now() + AI_PUBLIC_URL_EXPIRATION_MS;
+
+  const signature = await generateSignature(secret, uploadId, expiration, userId, threadId);
+
+  const url = new URL(`${baseUrl}/api/v1/uploads/${encodeURIComponent(uploadId)}/download`);
+  url.searchParams.set('exp', expiration.toString());
+  url.searchParams.set('uid', userId);
+  if (threadId) {
+    url.searchParams.set('tid', threadId);
+  }
+  url.searchParams.set('sig', signature);
+
+  return {
+    success: true,
+    url: url.toString(),
+    expiresAt: expiration,
+  };
+}
+
+/**
+ * Generate public URLs for multiple files (batch operation).
+ * Uses single key import for efficiency.
+ */
+export async function generateAiPublicUrlBatch(
+  baseOptions: Omit<GenerateAiPublicUrlOptions, 'uploadId'>,
+  uploadIds: string[],
+): Promise<Map<string, GenerateAiPublicUrlResult>> {
+  const { baseUrl, secret, userId, threadId } = baseOptions;
+  const results = new Map<string, GenerateAiPublicUrlResult>();
+
+  if (uploadIds.length === 0) {
+    return results;
+  }
+
+  // Validate baseUrl is publicly accessible
+  const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+  if (isLocalhost) {
+    const error: GenerateAiPublicUrlResult = {
+      success: false,
+      error: 'URL-based file delivery requires a public URL. Large files (>4MB) are not supported in local development.',
+    };
+    for (const uploadId of uploadIds) {
+      results.set(uploadId, error);
+    }
+    return results;
+  }
+
+  if (!secret) {
+    const error: GenerateAiPublicUrlResult = {
+      success: false,
+      error: 'BETTER_AUTH_SECRET not configured',
+    };
+    for (const uploadId of uploadIds) {
+      results.set(uploadId, error);
+    }
+    return results;
+  }
+
+  const key = await importSigningKey(secret);
+  const now = Date.now();
+  const expiration = now + AI_PUBLIC_URL_EXPIRATION_MS;
+
+  await Promise.all(
+    uploadIds.map(async (uploadId) => {
+      const signature = await generateSignatureWithKey(key, uploadId, expiration, userId, threadId);
+
+      const url = new URL(`${baseUrl}/api/v1/uploads/${encodeURIComponent(uploadId)}/download`);
+      url.searchParams.set('exp', expiration.toString());
+      url.searchParams.set('uid', userId);
+      if (threadId) {
+        url.searchParams.set('tid', threadId);
+      }
+      url.searchParams.set('sig', signature);
+
+      results.set(uploadId, {
+        success: true,
+        url: url.toString(),
+        expiresAt: expiration,
+      });
+    }),
+  );
+
+  return results;
 }
 
 // ============================================================================

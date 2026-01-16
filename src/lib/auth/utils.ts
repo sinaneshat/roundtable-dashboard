@@ -42,7 +42,7 @@ const ALLOWED_EMAIL_EXCEPTIONS: readonly string[] = [
 /**
  * Configuration for email domain restrictions
  */
-const EMAIL_DOMAIN_CONFIG = {
+export const EMAIL_DOMAIN_CONFIG = {
   /**
    * Allowed email domain for local and preview environments
    */
@@ -154,13 +154,4 @@ export function validateEmailDomain(ctx: AuthContext): void {
       message: EMAIL_DOMAIN_CONFIG.ERROR_MESSAGE,
     });
   }
-}
-
-/**
- * Get the allowed email domain for the current environment
- *
- * @returns {string} The allowed email domain (e.g., '@roundtable.now')
- */
-export function getAllowedDomain(): string {
-  return EMAIL_DOMAIN_CONFIG.ALLOWED_DOMAIN;
 }

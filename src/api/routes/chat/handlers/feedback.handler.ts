@@ -27,17 +27,11 @@ export const setRoundFeedbackHandler: RouteHandler<typeof setRoundFeedbackRoute,
     operationName: 'setRoundFeedback',
   },
   async (c) => {
+    const { user } = c.auth();
     const { threadId, roundNumber: roundNumberStr } = c.validated.params;
     const { feedbackType } = c.validated.body;
     const roundNumber = Number.parseInt(roundNumberStr, 10);
     const db = await getDbAsync();
-    const user = c.get('user');
-    if (!user) {
-      throw createError.unauthenticated(
-        'Authentication required',
-        ErrorContextBuilders.auth(),
-      );
-    }
     await verifyThreadOwnership(threadId, user.id, db);
     const existingFeedback = await db.query.chatRoundFeedback.findFirst({
       where: and(
@@ -113,15 +107,9 @@ export const getThreadFeedbackHandler: RouteHandler<typeof getThreadFeedbackRout
     operationName: 'getThreadFeedback',
   },
   async (c) => {
+    const { user } = c.auth();
     const { id: threadId } = c.validated.params;
     const db = await getDbAsync();
-    const user = c.get('user');
-    if (!user) {
-      throw createError.unauthenticated(
-        'Authentication required',
-        ErrorContextBuilders.auth(),
-      );
-    }
     await verifyThreadOwnership(threadId, user.id, db);
     const feedbackList = await db.query.chatRoundFeedback.findMany({
       where: and(

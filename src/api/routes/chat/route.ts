@@ -25,6 +25,7 @@ import {
   RoundFeedbackParamSchema,
   RoundFeedbackRequestSchema,
   RoundModeratorRequestSchema,
+  RoundStatusResponseSchema,
   SetRoundFeedbackResponseSchema,
   StreamChatRequestSchema,
   StreamStatusResponseSchema,
@@ -887,6 +888,31 @@ export const councilModeratorRoundRoute = createRoute({
 });
 
 /**
+ * GET Round Status Route - Internal queue worker endpoint
+ * ✅ FOLLOWS: computeRoundStatus pattern from round-orchestration.service
+ * Used by ROUND_ORCHESTRATION_QUEUE worker to determine next action
+ */
+export const getRoundStatusRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/status',
+  tags: ['chat'],
+  summary: 'Get round execution status (internal)',
+  description: 'Internal endpoint for queue workers to determine next action in round orchestration. Returns current round status, participant completion, and what needs to be triggered next.',
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Round status retrieved successfully',
+      content: {
+        'application/json': { schema: RoundStatusResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
  * GET Thread Pre-Searches Route - List all pre-searches for thread
  * ✅ FOLLOWS: getThreadSummariesRoute pattern
  */
@@ -985,7 +1011,7 @@ This is the **preferred endpoint** for stream resumption. The frontend doesn't n
 3. If 204: No active stream, proceed normally
 4. If 200: Stream found, process SSE and trigger next participant on completion
 
-**Example**: GET /chat/threads/thread_123/stream`,
+**Example**: GET /chat/threads/thread_123/stream?lastChunkIndex=42`,
   request: {
     params: ThreadIdParamSchema,
   },

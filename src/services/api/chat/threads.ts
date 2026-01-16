@@ -146,9 +146,16 @@ export type GetThreadStreamResumptionStateResponse = InferResponseType<
 /**
  * List chat threads with cursor pagination
  * Protected endpoint - requires authentication
+ *
+ * @param args - Request arguments with query params
+ * @param options - Service options
+ * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
-export async function listThreadsService(args?: ListThreadsRequest) {
-  const client = await createApiClient();
+export async function listThreadsService(
+  args?: ListThreadsRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = await createApiClient({ cookieHeader: options?.cookieHeader });
   const params: ListThreadsRequest = {
     query: args?.query ?? {},
   };
@@ -272,9 +279,16 @@ export async function getThreadMessagesService(data: GetThreadMessagesRequest) {
 /**
  * Get configuration changelog for a thread
  * Protected endpoint - requires authentication (ownership check)
+ *
+ * @param data - Request arguments with thread id
+ * @param options - Service options
+ * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
-export async function getThreadChangelogService(data: GetThreadChangelogRequest) {
-  const client = await createApiClient();
+export async function getThreadChangelogService(
+  data: GetThreadChangelogRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = await createApiClient({ cookieHeader: options?.cookieHeader });
   const params: GetThreadChangelogRequest = {
     param: data.param ?? { id: '' },
   };

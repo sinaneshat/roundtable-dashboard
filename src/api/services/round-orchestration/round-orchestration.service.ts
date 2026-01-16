@@ -31,6 +31,24 @@ import { getThreadActiveStream } from '../streaming';
 // ZOD SCHEMAS - SINGLE SOURCE OF TRUTH
 // ============================================================================
 
+/**
+ * Pre-search status values (extends ParticipantStreamStatuses with SKIPPED)
+ * Reuses core enum to avoid duplication: pending, active, completed, failed from ParticipantStreamStatuses
+ * RUNNING maps to ACTIVE from core enum for semantic consistency
+ */
+export const RoundPreSearchStatuses = {
+  PENDING: ParticipantStreamStatuses.PENDING,
+  RUNNING: ParticipantStreamStatuses.ACTIVE,
+  COMPLETED: ParticipantStreamStatuses.COMPLETED,
+  FAILED: ParticipantStreamStatuses.FAILED,
+  SKIPPED: 'skipped' as const,
+} as const;
+
+export type RoundPreSearchStatus = typeof RoundPreSearchStatuses[keyof typeof RoundPreSearchStatuses];
+
+/** Default max recovery attempts to prevent infinite loops */
+const DEFAULT_MAX_RECOVERY_ATTEMPTS = 3;
+
 export const RoundExecutionStateSchema = z.object({
   threadId: z.string().min(1),
   roundNumber: z.number().int().nonnegative(),
@@ -48,6 +66,34 @@ export const RoundExecutionStateSchema = z.object({
   triggeredParticipants: z.array(z.number()),
   // Attachment IDs shared across all participants
   attachmentIds: z.array(z.string()).optional(),
+
+  // =========================================================================
+  // NEW: Pre-search tracking for web search enabled threads
+  // =========================================================================
+  /** Pre-search status: pending, running, completed, failed, skipped, or null if not applicable */
+  preSearchStatus: z.enum([
+    RoundPreSearchStatuses.PENDING,
+    RoundPreSearchStatuses.RUNNING,
+    RoundPreSearchStatuses.COMPLETED,
+    RoundPreSearchStatuses.FAILED,
+    RoundPreSearchStatuses.SKIPPED,
+  ]).nullable().optional(),
+  /** Pre-search database record ID (if created) */
+  preSearchId: z.string().nullable().optional(),
+
+  // =========================================================================
+  // NEW: Activity tracking for staleness detection
+  // =========================================================================
+  /** ISO timestamp of last meaningful activity (chunk received, status update, etc.) */
+  lastActivityAt: z.string().optional(),
+
+  // =========================================================================
+  // NEW: Recovery tracking to prevent infinite loops
+  // =========================================================================
+  /** Number of recovery attempts made for this round */
+  recoveryAttempts: z.number().int().nonnegative().default(0),
+  /** Maximum recovery attempts allowed (default: 3) */
+  maxRecoveryAttempts: z.number().int().positive().default(DEFAULT_MAX_RECOVERY_ATTEMPTS),
 });
 
 export type RoundExecutionState = z.infer<typeof RoundExecutionStateSchema>;
@@ -102,7 +148,14 @@ export async function initializeRoundExecution(
   attachmentIds: string[] | undefined,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
+  options?: {
+    /** Whether web search is enabled for this thread */
+    enableWebSearch?: boolean;
+    /** Pre-search ID if already created */
+    preSearchId?: string;
+  },
 ): Promise<RoundExecutionState> {
+  const now = new Date().toISOString();
   const state: RoundExecutionState = {
     threadId,
     roundNumber,
@@ -113,11 +166,19 @@ export async function initializeRoundExecution(
     failedParticipants: 0,
     participantStatuses: {},
     moderatorStatus: null,
-    startedAt: new Date().toISOString(),
+    startedAt: now,
     completedAt: null,
     error: null,
     triggeredParticipants: [],
     attachmentIds,
+    // NEW: Pre-search tracking
+    preSearchStatus: options?.enableWebSearch ? RoundPreSearchStatuses.PENDING : null,
+    preSearchId: options?.preSearchId ?? null,
+    // NEW: Activity tracking
+    lastActivityAt: now,
+    // NEW: Recovery tracking
+    recoveryAttempts: 0,
+    maxRecoveryAttempts: DEFAULT_MAX_RECOVERY_ATTEMPTS,
   };
 
   if (env?.KV) {
@@ -695,4 +756,100 @@ export async function getIncompleteParticipants(
   }));
 
   return incomplete;
+}
+
+// ============================================================================
+// RECOVERY HELPERS
+// ============================================================================
+
+/**
+ * Update last activity timestamp for a round
+ * Called when meaningful activity occurs (chunk received, status change)
+ */
+export async function updateRoundActivity(
+  threadId: string,
+  roundNumber: number,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<void> {
+  await updateRoundExecutionState(threadId, roundNumber, {
+    lastActivityAt: new Date().toISOString(),
+  }, env, logger);
+}
+
+/**
+ * Increment recovery attempts counter and check if more attempts allowed
+ * Returns true if recovery should proceed, false if max attempts exceeded
+ */
+export async function incrementRecoveryAttempts(
+  threadId: string,
+  roundNumber: number,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<{ canRecover: boolean; attempts: number; maxAttempts: number }> {
+  const state = await getRoundExecutionState(threadId, roundNumber, env, logger);
+
+  if (!state) {
+    return { canRecover: false, attempts: 0, maxAttempts: DEFAULT_MAX_RECOVERY_ATTEMPTS };
+  }
+
+  const newAttempts = (state.recoveryAttempts ?? 0) + 1;
+  const maxAttempts = state.maxRecoveryAttempts ?? DEFAULT_MAX_RECOVERY_ATTEMPTS;
+  const canRecover = newAttempts <= maxAttempts;
+
+  if (canRecover) {
+    await updateRoundExecutionState(threadId, roundNumber, {
+      recoveryAttempts: newAttempts,
+      lastActivityAt: new Date().toISOString(),
+    }, env, logger);
+  }
+
+  logger?.info(`Recovery attempts: ${newAttempts}/${maxAttempts}, canRecover: ${canRecover}`, LogHelpers.operation({
+    operationName: 'incrementRecoveryAttempts',
+    threadId,
+    roundNumber,
+  }));
+
+  return { canRecover, attempts: newAttempts, maxAttempts };
+}
+
+/**
+ * Update pre-search status in round execution state
+ */
+export async function updatePreSearchStatus(
+  threadId: string,
+  roundNumber: number,
+  status: RoundPreSearchStatus,
+  preSearchId: string | null,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<void> {
+  await updateRoundExecutionState(threadId, roundNumber, {
+    preSearchStatus: status,
+    preSearchId,
+    lastActivityAt: new Date().toISOString(),
+  }, env, logger);
+
+  logger?.info(`Pre-search status: ${status}${preSearchId ? `, id: ${preSearchId}` : ''}`, LogHelpers.operation({
+    operationName: 'updatePreSearchStatus',
+    threadId,
+    roundNumber,
+  }));
+}
+
+/**
+ * Check if a round is stale (no activity for specified duration)
+ */
+export function isRoundStale(
+  state: RoundExecutionState,
+  staleThresholdMs: number = 30_000,
+): boolean {
+  if (!state.lastActivityAt) {
+    // No activity timestamp - check startedAt
+    const startTime = new Date(state.startedAt).getTime();
+    return Date.now() - startTime > staleThresholdMs;
+  }
+
+  const lastActivity = new Date(state.lastActivityAt).getTime();
+  return Date.now() - lastActivity > staleThresholdMs;
 }

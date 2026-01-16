@@ -24,7 +24,7 @@
  * @see /src/api/types/streaming.ts for type definitions
  */
 
-import { FinishReasons, LogTypes, parseSSEEventType, StreamPhases, StreamStatuses } from '@/api/core/enums';
+import { FinishReasons, parseSSEEventType, StreamPhases, StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
 import { LogHelpers } from '@/api/types/logger';
@@ -689,20 +689,18 @@ export async function initializePreSearchStreamBuffer(
       }),
     ]);
 
-    logger?.debug('Initialized pre-search stream buffer', {
-      logType: LogTypes.OPERATION,
+    logger?.debug('Initialized pre-search stream buffer', LogHelpers.operation({
       operationName: 'initializePreSearchStreamBuffer',
       streamId,
       threadId,
       roundNumber,
-    });
+    }));
   } catch (error) {
-    logger?.warn('Failed to initialize pre-search stream buffer', {
-      logType: LogTypes.EDGE_CASE,
+    logger?.warn('Failed to initialize pre-search stream buffer', LogHelpers.edgeCase({
       scenario: 'pre_search_buffer_init_failed',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
   }
 }
 
@@ -723,11 +721,10 @@ export async function appendPreSearchStreamChunk(
     const metadataResult = PreSearchStreamMetadataSchema.safeParse(rawMetadata);
 
     if (!metadataResult.success) {
-      logger?.warn('Stream metadata not found during chunk append', {
-        logType: LogTypes.EDGE_CASE,
+      logger?.warn('Stream metadata not found during chunk append', LogHelpers.edgeCase({
         scenario: 'pre_search_metadata_not_found',
         streamId,
-      });
+      }));
       return;
     }
 
@@ -752,12 +749,11 @@ export async function appendPreSearchStreamChunk(
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
   } catch (error) {
-    logger?.warn('Failed to append pre-search stream chunk', {
-      logType: LogTypes.EDGE_CASE,
+    logger?.warn('Failed to append pre-search stream chunk', LogHelpers.edgeCase({
       scenario: 'pre_search_chunk_append_failed',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
   }
 }
 
@@ -789,18 +785,16 @@ export async function completePreSearchStreamBuffer(
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
 
-    logger?.debug('Completed pre-search stream buffer', {
-      logType: LogTypes.OPERATION,
+    logger?.debug('Completed pre-search stream buffer', LogHelpers.operation({
       operationName: 'completePreSearchStreamBuffer',
       streamId,
-    });
+    }));
   } catch (error) {
-    logger?.warn('Failed to complete pre-search stream buffer', {
-      logType: LogTypes.EDGE_CASE,
+    logger?.warn('Failed to complete pre-search stream buffer', LogHelpers.edgeCase({
       scenario: 'pre_search_buffer_complete_failed',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
   }
 }
 
@@ -834,19 +828,17 @@ export async function failPreSearchStreamBuffer(
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
 
-    logger?.debug('Failed pre-search stream buffer', {
-      logType: LogTypes.OPERATION,
+    logger?.debug('Failed pre-search stream buffer', LogHelpers.operation({
       operationName: 'failPreSearchStreamBuffer',
       streamId,
       errorMessage,
-    });
+    }));
   } catch (error) {
-    logger?.warn('Failed to fail pre-search stream buffer', {
-      logType: LogTypes.EDGE_CASE,
+    logger?.warn('Failed to fail pre-search stream buffer', LogHelpers.edgeCase({
       scenario: 'pre_search_buffer_fail_failed',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
   }
 }
 
@@ -862,20 +854,18 @@ export async function clearActivePreSearchStream(
 
   try {
     await env.KV.delete(getActiveKey(threadId, roundNumber, StreamPhases.PRESEARCH));
-    logger?.debug('Cleared active pre-search stream', {
-      logType: LogTypes.OPERATION,
+    logger?.debug('Cleared active pre-search stream', LogHelpers.operation({
       operationName: 'clearActivePreSearchStream',
       threadId,
       roundNumber,
-    });
+    }));
   } catch (error) {
-    logger?.warn('Failed to clear active pre-search stream', {
-      logType: LogTypes.EDGE_CASE,
+    logger?.warn('Failed to clear active pre-search stream', LogHelpers.edgeCase({
       scenario: 'pre_search_clear_failed',
       threadId,
       roundNumber,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
   }
 }
 
@@ -1179,11 +1169,10 @@ export async function appendModeratorStreamChunk(
     const metadataResult = ModeratorStreamBufferMetadataSchema.safeParse(rawMetadata);
 
     if (!metadataResult.success) {
-      logger?.warn('Stream metadata not found during chunk append', {
-        logType: LogTypes.EDGE_CASE,
+      logger?.warn('Stream metadata not found during chunk append', LogHelpers.edgeCase({
         scenario: 'moderator_metadata_not_found',
         streamId,
-      });
+      }));
       return;
     }
 
@@ -1206,11 +1195,10 @@ export async function appendModeratorStreamChunk(
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
   } catch (error) {
-    logger?.warn('Failed to append moderator stream chunk', {
-      logType: LogTypes.EDGE_CASE,
+    logger?.warn('Failed to append moderator stream chunk', LogHelpers.edgeCase({
       scenario: 'moderator_chunk_append_failed',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
   }
 }

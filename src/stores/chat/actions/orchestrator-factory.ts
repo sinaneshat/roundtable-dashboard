@@ -73,6 +73,7 @@ export function createOrchestrator<
     options: OrchestratorOptions<TQueryArgs, TDeduplicationOptions>,
   ): OrchestratorReturn {
     const { threadId, enabled = true, deduplicationOptions: runtimeDeduplicationOptions } = options;
+    // TYPE INFERENCE: Empty array default is compatible with TQueryArgs constraint
     const queryArgs = (options.queryArgs ?? []) as TQueryArgs;
 
     const mergedDeduplicationOptions = useMemo(
@@ -80,6 +81,7 @@ export function createOrchestrator<
         if (deduplicationOptions === undefined && runtimeDeduplicationOptions === undefined) {
           return undefined;
         }
+        // TYPE INFERENCE: Spread merge of compatible objects maintains TDeduplicationOptions shape
         return { ...deduplicationOptions, ...runtimeDeduplicationOptions } as TDeduplicationOptions;
       },
       [runtimeDeduplicationOptions],

@@ -24,6 +24,7 @@ import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isOb
 import { rlog } from '@/lib/utils/dev-logger';
 
 import type { SendMessage, StartRound } from './store-action-types';
+import { isUpsertOptions } from './store-action-types';
 import type { ResetFormPreferences } from './store-defaults';
 import {
   ANIMATION_DEFAULTS,
@@ -379,13 +380,12 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
 
   upsertStreamingMessage: (optionsOrMessage) => {
     // Accepts UIMessage directly or { message, insertOnly } options object
-    const isOptionsObject = optionsOrMessage !== null
-      && typeof optionsOrMessage === 'object'
-      && 'message' in optionsOrMessage
-      && typeof optionsOrMessage.message === 'object';
+    // Use type guard for proper type narrowing
+    const isOptionsObject = isUpsertOptions(optionsOrMessage);
+
     const message = (isOptionsObject
       ? optionsOrMessage.message
-      : optionsOrMessage) as UIMessage;
+      : optionsOrMessage);
     const insertOnly = isOptionsObject ? optionsOrMessage.insertOnly : undefined;
 
     set((draft) => {

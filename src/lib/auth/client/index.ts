@@ -43,14 +43,6 @@ export const {
   // User management
   updateUser,
   deleteUser,
-
-  // Password management
-  requestPasswordReset,
-  resetPassword,
-
-  // Email verification
-  sendVerificationEmail,
-  verifyEmail,
 } = authClient;
 
 // Types are exported from @/lib/auth/types for consistency

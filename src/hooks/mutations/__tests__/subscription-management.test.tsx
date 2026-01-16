@@ -13,17 +13,19 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import {
+  act,
   createActiveSubscription,
   createCanceledSubscription,
   createMockPrice,
   createMockSubscription,
+  renderHook,
+  waitFor,
 } from '@/lib/testing';
 import type { GetSubscriptionsResponse } from '@/services/api';
 import * as apiServices from '@/services/api';
@@ -75,7 +77,7 @@ describe('useSwitchSubscriptionMutation', () => {
     vi.clearAllMocks();
   });
 
-  describe('successful Subscription Switch', () => {
+  describe('successful subscription switch', () => {
     it('should switch subscription and invalidate cache', async () => {
       const oldSubscription = createActiveSubscription({
         id: 'sub_old',
@@ -293,7 +295,7 @@ describe('useSwitchSubscriptionMutation', () => {
     });
   });
 
-  describe('error Handling', () => {
+  describe('error handling', () => {
     it('should handle API errors', async () => {
       const mockErrorResponse = {
         success: false as const,
@@ -378,7 +380,7 @@ describe('useSwitchSubscriptionMutation', () => {
     });
   });
 
-  describe('cache Invalidation Logic', () => {
+  describe('cache invalidation logic', () => {
     it('should invalidate subscription cache after switch', async () => {
       const subscription1 = createActiveSubscription({ id: 'sub_1', priceId: 'price_old_1' });
       const subscription2 = createActiveSubscription({ id: 'sub_2', priceId: 'price_old_2' });
@@ -478,7 +480,7 @@ describe('useCancelSubscriptionMutation', () => {
     vi.clearAllMocks();
   });
 
-  describe('successful Subscription Cancellation', () => {
+  describe('successful subscription cancellation', () => {
     it('should cancel subscription at period end (default)', async () => {
       const canceledSubscription = createCanceledSubscription({
         id: 'sub_cancel',
@@ -661,7 +663,7 @@ describe('useCancelSubscriptionMutation', () => {
     });
   });
 
-  describe('error Handling', () => {
+  describe('error handling', () => {
     it('should handle cancellation errors', async () => {
       const mockErrorResponse = {
         success: false as const,
@@ -746,7 +748,7 @@ describe('useCancelSubscriptionMutation', () => {
     });
   });
 
-  describe('grace Period Handling', () => {
+  describe('grace period handling', () => {
     it('should handle cancellation during grace period', async () => {
       const now = new Date();
       const gracePeriodSubscription = createMockSubscription({

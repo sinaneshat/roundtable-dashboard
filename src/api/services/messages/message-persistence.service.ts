@@ -317,6 +317,8 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
         threadId,
         participantId,
         role: MessageRoles.ASSISTANT,
+        // TYPE BRIDGE: MessagePart[] and DbMessageParts are structurally identical
+        // Zod schemas. Cast needed because TypeScript treats them as separate types.
         parts: parts as DbMessageParts,
         roundNumber,
         metadata: messageMetadata,
@@ -344,6 +346,7 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
           threadId,
           participantId,
           role: MessageRoles.TOOL,
+          // TYPE BRIDGE: Same as above - MessagePart[] to DbMessageParts
           parts: toolParts as DbMessageParts,
           roundNumber,
           metadata: null,

@@ -9,17 +9,20 @@ import {
   FileCategorySchema,
   FileValidationErrorCodeSchema,
   getFileCategoryFromMime,
-  isVisualMimeType,
+  IMAGE_MIME_TYPES,
+  MAX_IMAGE_FILE_SIZE,
   MAX_MULTIPART_PARTS,
+  MAX_PDF_FILE_SIZE,
   MAX_SINGLE_UPLOAD_SIZE,
   MAX_TOTAL_FILE_SIZE,
-  MAX_VISUAL_FILE_SIZE,
   MIN_MULTIPART_PART_SIZE,
   RECOMMENDED_PART_SIZE,
   UploadStrategies,
   UploadStrategySchema,
 } from '@/api/core/enums';
 import { formatFileSize } from '@/lib/format';
+
+const IMAGE_MIME_SET = new Set<string>(IMAGE_MIME_TYPES);
 
 // ============================================================================
 // ZOD SCHEMAS
@@ -84,8 +87,10 @@ const _FileValidationConstantsSchema = z.object({
   maxSingleUploadSize: z.number().int().positive(),
   /** Maximum total file size in bytes */
   maxTotalFileSize: z.number().int().positive(),
-  /** Maximum visual file size in bytes (images + PDFs for AI processing) */
-  maxVisualFileSize: z.number().int().positive(),
+  /** Maximum image file size in bytes */
+  maxImageFileSize: z.number().int().positive(),
+  /** Maximum PDF file size in bytes */
+  maxPdfFileSize: z.number().int().positive(),
   /** Minimum multipart part size in bytes */
   minPartSize: z.number().int().positive(),
   /** Recommended part size in bytes */
@@ -196,17 +201,35 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
         };
       }
 
-      // Visual files (images + PDFs) have stricter size limits for AI processing
-      // These files are converted to base64 for AI model consumption, which requires
-      // significant memory in Cloudflare Workers (128MB limit)
-      if (isVisualMimeType(file.type) && file.size > MAX_VISUAL_FILE_SIZE) {
+      // Validate file size limits for visual content (images and PDFs)
+      // Large files use URL-based delivery where AI providers fetch from signed URLs
+      const isPdf = file.type === 'application/pdf';
+      const isImage = IMAGE_MIME_SET.has(file.type);
+
+      if (isPdf && file.size > MAX_PDF_FILE_SIZE) {
         return {
           valid: false,
           error: {
             code: 'visual_file_too_large',
-            message: `${file.type === 'application/pdf' ? 'PDF' : 'Image'} files must be ${formatFileSize(MAX_VISUAL_FILE_SIZE)} or smaller for AI processing. Your file is ${formatFileSize(file.size)}.`,
+            message: `PDF files must be ${formatFileSize(MAX_PDF_FILE_SIZE)} or smaller. Your file is ${formatFileSize(file.size)}.`,
             details: {
-              maxSize: MAX_VISUAL_FILE_SIZE,
+              maxSize: MAX_PDF_FILE_SIZE,
+              actualSize: file.size,
+            },
+          },
+          uploadStrategy: UploadStrategies.SINGLE,
+          fileCategory,
+        };
+      }
+
+      if (isImage && file.size > MAX_IMAGE_FILE_SIZE) {
+        return {
+          valid: false,
+          error: {
+            code: 'visual_file_too_large',
+            message: `Image files must be ${formatFileSize(MAX_IMAGE_FILE_SIZE)} or smaller. Your file is ${formatFileSize(file.size)}.`,
+            details: {
+              maxSize: MAX_IMAGE_FILE_SIZE,
               actualSize: file.size,
             },
           },
@@ -282,7 +305,8 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
     () => ({
       maxSingleUploadSize: MAX_SINGLE_UPLOAD_SIZE,
       maxTotalFileSize: MAX_TOTAL_FILE_SIZE,
-      maxVisualFileSize: MAX_VISUAL_FILE_SIZE,
+      maxImageFileSize: MAX_IMAGE_FILE_SIZE,
+      maxPdfFileSize: MAX_PDF_FILE_SIZE,
       minPartSize: MIN_MULTIPART_PART_SIZE,
       recommendedPartSize: RECOMMENDED_PART_SIZE,
       allowedTypes,

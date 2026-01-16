@@ -18,6 +18,7 @@ import { useMemo } from 'react';
 
 import type { ModelPricingTier } from '@/api/core/enums';
 import {
+  MODEL_PRICING_TIERS,
   MODEL_TIER_CREDIT_MULTIPLIERS,
   MODEL_TIER_THRESHOLDS,
   ModelPricingTiers,
@@ -77,7 +78,7 @@ function getModelTierFromPrice(pricePerTokenStr: string | undefined): ModelPrici
   const pricePerMillion = pricePerToken * 1_000_000;
 
   // Check each tier's threshold range
-  for (const tier of Object.keys(MODEL_TIER_THRESHOLDS) as ModelPricingTier[]) {
+  for (const tier of MODEL_PRICING_TIERS) {
     const threshold = MODEL_TIER_THRESHOLDS[tier];
     if (pricePerMillion >= threshold.min && pricePerMillion < threshold.max) {
       return tier;

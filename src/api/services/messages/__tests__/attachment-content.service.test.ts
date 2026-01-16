@@ -9,8 +9,11 @@
  * - Text files (text/plain) are converted to base64 data URLs
  * - Images and PDFs are converted to base64 data URLs
  * - Unsupported MIME types are skipped
- * - Files exceeding size limit are rejected with error
  * - Empty/missing attachments return empty results
+ *
+ * NOTE: Size limits are now enforced in frontend validation (use-file-validation.ts),
+ * not in this service. Large files are supported via URL-based delivery in
+ * loadAttachmentContentUrl() for production environments.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,7 +23,6 @@ import { getFile } from '@/api/services/uploads';
 import type {
   LoadAttachmentContentParams,
 } from '@/api/types/uploads';
-import { MAX_BASE64_FILE_SIZE } from '@/api/types/uploads';
 
 import { loadAttachmentContent } from '../attachment-content.service';
 
@@ -347,48 +349,26 @@ describe('attachment Content Service', () => {
   });
 
   // ============================================================================
-  // Tests: Size Limits
+  // Tests: Large File Processing
   // ============================================================================
 
-  describe('size Limits', () => {
-    it('should reject files exceeding MAX_BASE64_FILE_SIZE', async () => {
-      const oversizedFile = {
+  describe('large File Processing', () => {
+    it('should process large files (size validation happens at frontend)', async () => {
+      // Note: Size limits are now enforced in frontend validation (use-file-validation.ts)
+      // This service processes all valid MIME types regardless of size
+      const largeContent = 'x'.repeat(1000);
+      const textBuffer = createTextContent(largeContent);
+
+      const largeFile = {
         id: 'upload-large',
         mimeType: 'text/plain',
         filename: 'large.txt',
-        fileSize: MAX_BASE64_FILE_SIZE + 1, // 1 byte over limit
+        fileSize: 50 * 1024 * 1024, // 50MB - larger than old limit
         r2Key: 'uploads/user-1/upload-large_large.txt',
       };
 
-      const db = createMockDb([oversizedFile]);
+      const db = createMockDb([largeFile]);
       const logger = createMockLogger();
-
-      const result = await loadAttachmentContent({
-        attachmentIds: ['upload-large'],
-        r2Bucket: undefined,
-        db,
-        logger,
-      });
-
-      expect(result.fileParts).toHaveLength(0);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]?.uploadId).toBe('upload-large');
-      expect(result.errors[0]?.error).toContain('too large');
-      expect(getFile).not.toHaveBeenCalled();
-    });
-
-    it('should accept files at exactly MAX_BASE64_FILE_SIZE', async () => {
-      const textBuffer = createTextContent('x');
-
-      const exactSizeFile = {
-        id: 'upload-exact',
-        mimeType: 'text/plain',
-        filename: 'exact.txt',
-        fileSize: MAX_BASE64_FILE_SIZE,
-        r2Key: 'uploads/user-1/upload-exact_exact.txt',
-      };
-
-      const db = createMockDb([exactSizeFile]);
 
       vi.mocked(getFile).mockResolvedValue({
         data: textBuffer,
@@ -398,13 +378,16 @@ describe('attachment Content Service', () => {
       });
 
       const result = await loadAttachmentContent({
-        attachmentIds: ['upload-exact'],
+        attachmentIds: ['upload-large'],
         r2Bucket: undefined,
         db,
+        logger,
       });
 
+      // Large files should now be processed successfully
       expect(result.fileParts).toHaveLength(1);
       expect(result.errors).toHaveLength(0);
+      expect(getFile).toHaveBeenCalled();
     });
   });
 

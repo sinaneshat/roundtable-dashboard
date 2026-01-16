@@ -2,17 +2,18 @@
  * File Upload Validation E2E Tests
  *
  * Tests verify that file upload validation works correctly in the browser,
- * particularly for visual files (images + PDFs) that have stricter size limits.
+ * particularly for visual files (images + PDFs) that have size limits.
  *
- * CRITICAL: Visual files (images, PDFs) are converted to base64 for AI model
- * consumption. Files over 4MB cannot be processed by AI due to Cloudflare
- * Worker memory constraints (128MB limit).
+ * SIZE LIMITS (URL-based delivery to AI providers):
+ * - Images: 20MB max (AI providers fetch from signed URLs)
+ * - PDFs: 100MB max (AI providers fetch from signed URLs)
+ * - Other files: 100MB single upload / 5GB multipart
  *
  * Test Scenarios:
- * 1. Oversized PDF rejection with user-friendly error
- * 2. Oversized image rejection with user-friendly error
- * 3. Valid small PDF acceptance
- * 4. Text files over 4MB should still be accepted (different limit)
+ * 1. Oversized PDF rejection with user-friendly error (>100MB)
+ * 2. Oversized image rejection with user-friendly error (>20MB)
+ * 3. Valid PDF acceptance
+ * 4. Text files over 20MB should still be accepted (different limit)
  *
  * @see src/hooks/utils/use-file-validation.ts
  */
@@ -68,9 +69,9 @@ test.describe('File Upload Validation - Visual File Size Limits', () => {
     await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
   });
 
-  test('should reject PDF over 4MB with user-friendly error message', async ({ page }) => {
-    // Create a 5MB PDF file
-    const pdfPath = createTestFile('large-test.pdf', 5);
+  test('should reject PDF over 100MB with user-friendly error message', async ({ page }) => {
+    // Create a 110MB PDF file (over 100MB limit)
+    const pdfPath = createTestFile('large-test.pdf', 110);
 
     // Find the hidden file input and upload
     const fileInput = page.locator('input[type="file"]');
@@ -79,16 +80,16 @@ test.describe('File Upload Validation - Visual File Size Limits', () => {
     // Should show error toast or error state
     // Look for the error message about visual file being too large
     // Use .first() to handle multiple matching elements (toast + aria-live region)
-    const errorMessage = page.getByText(/PDF.*files must be.*4 MB.*or smaller/i)
+    const errorMessage = page.getByText(/PDF.*files must be.*100 MB.*or smaller/i)
       .or(page.getByText(/too large/i))
       .first();
 
     await expect(errorMessage).toBeVisible({ timeout: 5000 });
   });
 
-  test('should reject image over 4MB with user-friendly error message', async ({ page }) => {
-    // Create a 6MB PNG file (simulated)
-    const imagePath = createTestFile('large-image.png', 6);
+  test('should reject image over 20MB with user-friendly error message', async ({ page }) => {
+    // Create a 25MB PNG file (over 20MB limit)
+    const imagePath = createTestFile('large-image.png', 25);
 
     // Find the hidden file input and upload
     const fileInput = page.locator('input[type="file"]');
@@ -96,16 +97,16 @@ test.describe('File Upload Validation - Visual File Size Limits', () => {
 
     // Should show error message about image being too large
     // Use .first() to handle multiple matching elements (toast + aria-live region)
-    const errorMessage = page.getByText(/Image.*files must be.*4 MB.*or smaller/i)
+    const errorMessage = page.getByText(/Image.*files must be.*20 MB.*or smaller/i)
       .or(page.getByText(/too large/i))
       .first();
 
     await expect(errorMessage).toBeVisible({ timeout: 5000 });
   });
 
-  test('should accept PDF under 4MB', async ({ page }) => {
-    // Create a 2MB PDF file
-    const pdfPath = createTestFile('small-test.pdf', 2);
+  test('should accept PDF under 100MB limit', async ({ page }) => {
+    // Create a 50MB PDF file (under 100MB limit)
+    const pdfPath = createTestFile('small-test.pdf', 50);
 
     // Find the hidden file input and upload
     const fileInput = page.locator('input[type="file"]');
@@ -123,9 +124,10 @@ test.describe('File Upload Validation - Visual File Size Limits', () => {
     expect(errorCount).toBe(0);
   });
 
-  test('should accept text files larger than 4MB (different limit applies)', async ({ page }) => {
-    // Create a 10MB text file - should be accepted since text files have 100MB limit
-    const textPath = createTestFile('large-text.txt', 10);
+  test('should accept text files larger than image limit (different limit applies)', async ({ page }) => {
+    // Create a 30MB text file - should be accepted since text files have 100MB single upload limit
+    // This is larger than the 20MB image limit to verify text files have separate limits
+    const textPath = createTestFile('large-text.txt', 30);
 
     // Find the hidden file input and upload
     const fileInput = page.locator('input[type="file"]');

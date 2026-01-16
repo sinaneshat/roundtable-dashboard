@@ -490,3 +490,65 @@ export function parseSSEEventType(data: string): SSEEventType {
 
   return SSEEventTypes.UNKNOWN;
 }
+
+// ============================================================================
+// ROUND ORCHESTRATION QUEUE MESSAGE TYPE
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ROUND_ORCHESTRATION_MESSAGE_TYPES = [
+  'trigger-participant',
+  'trigger-moderator',
+  'check-round-completion',
+  'trigger-pre-search',
+] as const;
+
+// 2. ZOD SCHEMA
+export const RoundOrchestrationMessageTypeSchema = z.enum(ROUND_ORCHESTRATION_MESSAGE_TYPES).openapi({
+  description: 'Round orchestration queue message type discriminator',
+  example: 'trigger-participant',
+});
+
+// 3. TYPESCRIPT TYPE
+export type RoundOrchestrationMessageType = z.infer<typeof RoundOrchestrationMessageTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ROUND_ORCHESTRATION_MESSAGE_TYPE: RoundOrchestrationMessageType = 'trigger-participant';
+
+// 5. CONSTANT OBJECT
+export const RoundOrchestrationMessageTypes = {
+  TRIGGER_PARTICIPANT: 'trigger-participant' as const,
+  TRIGGER_MODERATOR: 'trigger-moderator' as const,
+  CHECK_ROUND_COMPLETION: 'check-round-completion' as const,
+  TRIGGER_PRE_SEARCH: 'trigger-pre-search' as const,
+} as const;
+
+// ============================================================================
+// CHECK ROUND COMPLETION REASON
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const CHECK_ROUND_COMPLETION_REASONS = [
+  'stale_stream',
+  'resume_trigger',
+  'scheduled_check',
+] as const;
+
+// 2. ZOD SCHEMA
+export const CheckRoundCompletionReasonSchema = z.enum(CHECK_ROUND_COMPLETION_REASONS).openapi({
+  description: 'Reason for triggering a round completion check',
+  example: 'resume_trigger',
+});
+
+// 3. TYPESCRIPT TYPE
+export type CheckRoundCompletionReason = z.infer<typeof CheckRoundCompletionReasonSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_CHECK_ROUND_COMPLETION_REASON: CheckRoundCompletionReason = 'scheduled_check';
+
+// 5. CONSTANT OBJECT
+export const CheckRoundCompletionReasons = {
+  STALE_STREAM: 'stale_stream' as const,
+  RESUME_TRIGGER: 'resume_trigger' as const,
+  SCHEDULED_CHECK: 'scheduled_check' as const,
+} as const;

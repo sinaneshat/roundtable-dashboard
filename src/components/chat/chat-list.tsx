@@ -22,7 +22,7 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { useToggleFavoriteMutation, useUpdateThreadMutation } from '@/hooks/mutations';
-import { useCurrentPathname } from '@/hooks/utils';
+import { useCurrentPathname, useInView } from '@/hooks/utils';
 
 function isChatActive(chat: ChatSidebarItem, pathname: string): boolean {
   const currentSlugUrl = `/chat/${chat.slug}`;
@@ -66,15 +66,17 @@ function ChatItem({
 }: ChatItemProps) {
   const t = useTranslations();
   const chatUrl = `/chat/${chat.slug}`;
-  const [shouldPrefetch, setShouldPrefetch] = useState(false);
-  const handleMouseEnter = useCallback(() => setShouldPrefetch(true), []);
+
+  // Prefetch only when item is visible in viewport (once visible, stays enabled)
+  // Prevents server overload from prefetching all items at once
+  const { ref, isInView } = useInView<HTMLLIElement>({ once: true, rootMargin: '100px' });
 
   const handleRenameFormSubmit = useCallback((title: string) => {
     onRenameSubmit(chat, title);
   }, [chat, onRenameSubmit]);
 
   const content = (
-    <SidebarMenuItem>
+    <SidebarMenuItem ref={ref}>
       {isEditing
         ? (
             <ChatRenameForm
@@ -91,8 +93,7 @@ function ChatItem({
             >
               <Link
                 href={chatUrl}
-                prefetch={shouldPrefetch ? null : false}
-                onMouseEnter={handleMouseEnter}
+                prefetch={isInView}
               >
                 <div
                   className="truncate overflow-hidden text-ellipsis whitespace-nowrap"

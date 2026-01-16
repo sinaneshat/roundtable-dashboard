@@ -2,7 +2,7 @@ import type { z } from '@hono/zod-openapi';
 
 import type { ChatMode, PlaceholderPrefix, QueryAnalysisResult, WebSearchActiveAnswerMode } from '@/api/core/enums';
 import { ChatModes, PlaceholderPrefixes, QueryAnalysisComplexities, WebSearchActiveAnswerModes, WebSearchDepths } from '@/api/core/enums';
-import type { ModeratorPayload } from '@/api/routes/chat/schema';
+import type { ModeratorPayload, ParticipantResponse } from '@/api/routes/chat/schema';
 import type { AttachmentCitationInfo } from '@/api/types/citations';
 
 export type PromptPlaceholder<T>
@@ -990,20 +990,12 @@ Think carefully. Your configuration directly impacts the quality of help the use
  * Participant response type for moderator prompt building
  * Contains participant info and their response content
  */
-export type ModeratorParticipantResponse = {
-  participantIndex: number;
-  participantRole: string;
-  modelId: string;
-  modelName: string;
-  responseContent: string;
-};
-
 /**
  * Build participant list for moderator prompt context
  * @param participantResponses - Array of participant responses
  * @returns Formatted participant list string
  */
-export function buildModeratorParticipantList(participantResponses: ModeratorParticipantResponse[]): string {
+export function buildModeratorParticipantList(participantResponses: ParticipantResponse[]): string {
   return participantResponses
     .map(p => `${p.participantRole} (${p.modelName})`)
     .join(', ');
@@ -1014,7 +1006,7 @@ export function buildModeratorParticipantList(participantResponses: ModeratorPar
  * @param participantResponses - Array of participant responses
  * @returns Formatted transcript string
  */
-export function buildModeratorTranscript(participantResponses: ModeratorParticipantResponse[]): string {
+export function buildModeratorTranscript(participantResponses: ParticipantResponse[]): string {
   return participantResponses
     .map(p => `**${p.participantRole} (${p.modelName}):**\n${p.responseContent}`)
     .join('\n\n');
@@ -1047,7 +1039,7 @@ export function buildCouncilModeratorSystemPrompt(
   roundNumber: number,
   mode: ChatMode,
   userQuestion: string,
-  participantResponses: ModeratorParticipantResponse[],
+  participantResponses: ParticipantResponse[],
 ): string {
   const participantList = buildModeratorParticipantList(participantResponses);
   const participantCount = participantResponses.length;

@@ -33,6 +33,7 @@ import { chatMessagesToUIMessages } from '@/api/routes/chat/handlers/helpers';
 import {
   buildCitableContext,
   loadAttachmentContent,
+  loadAttachmentContentUrl,
   loadMessageAttachments,
   uint8ArrayToBase64,
 } from '@/api/services/messages';
@@ -136,6 +137,11 @@ export const PrepareValidatedMessagesParamsSchema = z.object({
   r2Bucket: z.custom<R2Bucket>().optional(),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>().optional(),
   attachmentIds: z.array(z.string()).optional(),
+  // Hybrid loading params (for large file URL-based delivery)
+  baseUrl: z.string().optional(),
+  userId: z.string().optional(),
+  secret: z.string().optional(),
+  threadId: z.string().optional(),
 });
 
 export const PrepareValidatedMessagesResultSchema = z.object({
@@ -1052,17 +1058,25 @@ function injectFileDataIntoModelMessages(
 export async function prepareValidatedMessages(
   params: PrepareValidatedMessagesParams,
 ): Promise<PrepareValidatedMessagesResult> {
-  const { previousDbMessages, newMessage, logger, r2Bucket, db, attachmentIds } = params;
+  const { previousDbMessages, newMessage, logger, r2Bucket, db, attachmentIds, baseUrl, userId, secret, threadId } = params;
+
+  // URL-based loading requires baseUrl, userId, secret for signed URL generation
+  const canUseUrlLoading = Boolean(baseUrl && userId && secret);
 
   // Parallelize previousMessages conversion with attachment loading if needed
+  // All files use URL-based delivery for efficiency (no memory-intensive base64 encoding)
   const [previousMessages, firstAttachmentLoad] = await Promise.all([
     chatMessagesToUIMessages(previousDbMessages),
-    attachmentIds && attachmentIds.length > 0 && db
-      ? loadAttachmentContent({
+    attachmentIds && attachmentIds.length > 0 && db && canUseUrlLoading
+      ? loadAttachmentContentUrl({
           attachmentIds,
           r2Bucket,
           db,
           logger,
+          baseUrl: baseUrl!,
+          userId: userId!,
+          secret: secret!,
+          threadId,
         })
       : Promise.resolve(null),
   ]);
@@ -1082,9 +1096,13 @@ export async function prepareValidatedMessages(
           part => part.type !== 'file',
         );
 
+        // Cast URL-based file parts to work with UIMessage format
+        // AI SDK will handle these correctly during model message conversion
+        const combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+
         messageWithAttachments = {
           ...newMessage,
-          parts: [...fileParts, ...nonFileParts],
+          parts: combinedParts,
         };
 
         logger?.info('Injected file parts into message for AI model', LogHelpers.operation({

@@ -98,6 +98,8 @@ function deriveTierRecord<T>(
 ): Record<SubscriptionTier, T> {
   return Object.fromEntries(
     SUBSCRIPTION_TIERS.map(tier => [tier, extractor(TIER_CONFIG[tier])]),
+  // TYPE INFERENCE: Object.fromEntries returns { [k: string]: T } but we know keys
+  // are SubscriptionTier from SUBSCRIPTION_TIERS const array
   ) as Record<SubscriptionTier, T>;
 }
 

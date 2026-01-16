@@ -51,9 +51,16 @@ export async function setRoundFeedbackService(data: SetRoundFeedbackRequest) {
 /**
  * Get Thread Feedback
  * Protected endpoint - requires authentication (ownership check)
+ *
+ * @param data - Request arguments with thread id
+ * @param options - Service options
+ * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
-export async function getThreadFeedbackService(data: GetThreadFeedbackRequest) {
-  const client = await createApiClient();
+export async function getThreadFeedbackService(
+  data: GetThreadFeedbackRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = await createApiClient({ cookieHeader: options?.cookieHeader });
   const params: GetThreadFeedbackRequest = {
     param: data.param ?? { id: '' },
   };

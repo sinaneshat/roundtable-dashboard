@@ -155,6 +155,18 @@ export type UpsertStreamingMessageOptions = {
 };
 
 /**
+ * Type guard to check if input is UpsertStreamingMessageOptions (has message property)
+ */
+export function isUpsertOptions(
+  value: UpsertStreamingMessageOptions | UIMessage,
+): value is UpsertStreamingMessageOptions {
+  return value !== null
+    && typeof value === 'object'
+    && 'message' in value
+    && typeof (value as UpsertStreamingMessageOptions).message === 'object';
+}
+
+/**
  * Upsert a streaming message into the store
  *
  * If message with same ID exists:

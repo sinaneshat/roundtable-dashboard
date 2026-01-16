@@ -117,6 +117,45 @@ export const ModelImagePartSchema = z.object({
 export type ModelImagePart = z.infer<typeof ModelImagePartSchema>;
 
 /**
+ * URL-based file part for AI model consumption (large files)
+ *
+ * Used for files >4MB that exceed base64 memory limits.
+ * AI providers (OpenAI, Anthropic, Google, OpenRouter) fetch from the URL directly.
+ * URL must be publicly accessible with signed authentication.
+ */
+export const ModelFilePartUrlSchema = z.object({
+  type: z.literal('file'),
+  /** Public URL for AI provider to fetch the file */
+  url: z.string().url(),
+  /** MIME type of the file (AI SDK v6 LanguageModelV2 format) */
+  mimeType: z.string(),
+  /** Original filename for reference */
+  filename: z.string().optional(),
+  /** MIME type for UIMessage compatibility (same as mimeType) */
+  mediaType: z.string(),
+});
+
+/** URL-based file part for AI model consumption */
+export type ModelFilePartUrl = z.infer<typeof ModelFilePartUrlSchema>;
+
+/**
+ * URL-based image part for AI model consumption (large images)
+ *
+ * Used for images >4MB that exceed base64 memory limits.
+ * AI providers fetch the image from the URL directly.
+ */
+export const ModelImagePartUrlSchema = z.object({
+  type: z.literal('image'),
+  /** Public URL for AI provider to fetch the image */
+  image: z.string().url(),
+  /** MIME type of the image */
+  mimeType: z.string(),
+});
+
+/** URL-based image part for AI model consumption */
+export type ModelImagePartUrl = z.infer<typeof ModelImagePartUrlSchema>;
+
+/**
  * Union type for model-ready media parts (images or files)
  */
 export const ModelMediaPartSchema = z.discriminatedUnion('type', [
@@ -387,6 +426,20 @@ export function isModelMediaPart(value: unknown): value is ModelMediaPart {
   return ModelMediaPartSchema.safeParse(value).success;
 }
 
+/**
+ * Type guard: Check if value is a ModelFilePartUrl
+ */
+export function isModelFilePartUrl(value: unknown): value is ModelFilePartUrl {
+  return ModelFilePartUrlSchema.safeParse(value).success;
+}
+
+/**
+ * Type guard: Check if value is a ModelImagePartUrl
+ */
+export function isModelImagePartUrl(value: unknown): value is ModelImagePartUrl {
+  return ModelImagePartUrlSchema.safeParse(value).success;
+}
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -416,3 +469,6 @@ export const MIN_URL_EXPIRATION_MS = 5 * 60 * 1000;
 
 /** Cleanup delay before orphaned uploads are deleted (15 minutes) */
 export const UPLOAD_CLEANUP_DELAY_MS = 15 * 60 * 1000;
+
+/** Public URL expiration for AI provider access (4 hours for long conversations) */
+export const AI_PUBLIC_URL_EXPIRATION_MS = 4 * 60 * 60 * 1000;

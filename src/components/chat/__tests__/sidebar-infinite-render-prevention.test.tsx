@@ -82,20 +82,19 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       expect(content).toMatch(/href=\{chatUrl\}/);
     });
 
-    it('should use prefetch prop on Link for hover prefetching', () => {
+    it('should use IntersectionObserver-based prefetch for visible items only', () => {
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      expect(content).toMatch(/prefetch=/);
-      expect(content).toMatch(/shouldPrefetch/);
-    });
-
-    it('should have handleMouseEnter callback for prefetch trigger', () => {
-      const chatListPath = resolve(__dirname, '../chat-list.tsx');
-      const content = readFileSync(chatListPath, 'utf-8');
-
-      expect(content).toMatch(/handleMouseEnter[^\n\r=\u2028\u2029]*=.*useCallback/);
-      expect(content).toMatch(/setShouldPrefetch/);
+      // Uses useInView hook for viewport-based prefetch (prevents server overload)
+      expect(content).toMatch(/useInView/);
+      expect(content).toMatch(/isInView/);
+      // Prefetch tied to visibility state
+      expect(content).toMatch(/prefetch=\{isInView\}/);
+      // Should NOT have hover-based prefetch logic (caused production server overload)
+      expect(content).not.toMatch(/shouldPrefetch/);
+      expect(content).not.toMatch(/setShouldPrefetch/);
+      expect(content).not.toMatch(/onMouseEnter.*prefetch/);
     });
   });
 

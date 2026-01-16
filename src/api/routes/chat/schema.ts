@@ -15,6 +15,8 @@ import {
   PreSearchQueryStatusSchema,
   PreSearchStreamingEventTypeSchema,
   QueryResultStatusSchema,
+  RoundExecutionPhaseSchema,
+  RoundExecutionStatusSchema,
   RoundPhaseSchema,
   SharedAssumptionTypeSchema,
   UIMessageRoleSchema,
@@ -1369,6 +1371,77 @@ export const ThreadStreamResumptionStateResponseSchema = createApiResponseSchema
 ).openapi('ThreadStreamResumptionStateResponse');
 
 export type ThreadStreamResumptionStateResponse = z.infer<typeof ThreadStreamResumptionStateResponseSchema>;
+
+// ============================================================================
+// ROUND STATUS SCHEMA (Queue Worker Internal API)
+// ============================================================================
+
+/**
+ * Round status for queue worker orchestration
+ * Used by GET /chat/threads/:threadId/rounds/:roundNumber/status
+ */
+export const RoundStatusSchema = z.object({
+  status: RoundExecutionStatusSchema.openapi({
+    description: 'Round execution status',
+    example: 'running',
+  }),
+  phase: RoundExecutionPhaseSchema.openapi({
+    description: 'Current execution phase',
+    example: 'participants',
+  }),
+  totalParticipants: z.number().int().nonnegative().openapi({
+    description: 'Total participants in round',
+    example: 3,
+  }),
+  completedParticipants: z.number().int().nonnegative().openapi({
+    description: 'Number of completed participants',
+    example: 1,
+  }),
+  failedParticipants: z.number().int().nonnegative().openapi({
+    description: 'Number of failed participants',
+    example: 0,
+  }),
+  nextParticipantIndex: z.number().int().nonnegative().nullable().openapi({
+    description: 'Next participant index to trigger (null if all complete)',
+    example: 1,
+  }),
+  needsModerator: z.boolean().openapi({
+    description: 'Whether moderator needs to be triggered',
+    example: false,
+  }),
+  needsPreSearch: z.boolean().openapi({
+    description: 'Whether pre-search needs to be triggered',
+    example: false,
+  }),
+  userQuery: z.string().optional().openapi({
+    description: 'User query for pre-search (if needed)',
+    example: 'What are the best practices for React?',
+  }),
+  attachmentIds: z.array(z.string()).optional().openapi({
+    description: 'Attachment IDs for round',
+    example: ['attachment_123'],
+  }),
+  canRecover: z.boolean().openapi({
+    description: 'Whether recovery is allowed (not exceeded max attempts)',
+    example: true,
+  }),
+  recoveryAttempts: z.number().int().nonnegative().openapi({
+    description: 'Number of recovery attempts made',
+    example: 0,
+  }),
+  maxRecoveryAttempts: z.number().int().positive().openapi({
+    description: 'Maximum allowed recovery attempts',
+    example: 3,
+  }),
+}).openapi('RoundStatus');
+
+export type RoundStatus = z.infer<typeof RoundStatusSchema>;
+
+export const RoundStatusResponseSchema = createApiResponseSchema(
+  RoundStatusSchema,
+).openapi('RoundStatusResponse');
+
+export type RoundStatusResponse = z.infer<typeof RoundStatusResponseSchema>;
 
 export const PreSearchStartDataSchema = z.object({
   type: PreSearchStreamingEventTypeSchema.extract(['pre_search_start']),

@@ -34,11 +34,13 @@ import {
 } from '@/api/common/error-types';
 import { createHandler } from '@/api/core';
 import {
+  CheckRoundCompletionReasons,
   FinishReasons,
   MessagePartTypes,
   MessageRoles,
   ParticipantStreamStatuses,
   PlanTypes,
+  RoundOrchestrationMessageTypes,
   UIMessageRoles,
 } from '@/api/core/enums';
 import {
@@ -108,7 +110,7 @@ import {
   getUserTier,
 } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
-import type { TriggerModeratorQueueMessage, TriggerParticipantQueueMessage } from '@/api/types/queues';
+import type { CheckRoundCompletionQueueMessage, TriggerModeratorQueueMessage, TriggerParticipantQueueMessage } from '@/api/types/queues';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
@@ -533,12 +535,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       }
 
       // Prepare and validate messages
+      // ✅ HYBRID FILE LOADING: Pass params for URL-based delivery of large files (>4MB)
+      // Small files use base64, large files get signed public URLs for AI provider access
       const modelMessages = await prepareValidatedMessages({
         previousDbMessages,
         newMessage: message,
         r2Bucket: c.env.UPLOADS_R2_BUCKET,
         db,
         attachmentIds: resolvedAttachmentIds,
+        // Hybrid loading params for large file support
+        baseUrl: new URL(c.req.url).origin,
+        userId: user.id,
+        secret: c.env.BETTER_AUTH_SECRET,
+        threadId,
       }).then(result => result.modelMessages);
 
       // Build system prompt with RAG context and citation support
@@ -1416,7 +1425,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             if (hasMoreParticipants) {
             // ✅ TRIGGER NEXT PARTICIPANT via Queue
               const queueMessage: TriggerParticipantQueueMessage = {
-                type: 'trigger-participant',
+                type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
                 messageId: `trigger-${threadId}-r${currentRoundNumber}-p${nextParticipantIndex}`,
                 threadId,
                 roundNumber: currentRoundNumber,
@@ -1445,7 +1454,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             } else if (needsModerator) {
             // ✅ TRIGGER MODERATOR via Queue
               const queueMessage: TriggerModeratorQueueMessage = {
-                type: 'trigger-moderator',
+                type: RoundOrchestrationMessageTypes.TRIGGER_MODERATOR,
                 messageId: `trigger-${threadId}-r${currentRoundNumber}-moderator`,
                 threadId,
                 roundNumber: currentRoundNumber,
@@ -1582,6 +1591,25 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               const errorMessage
                 = error instanceof Error ? error.message : 'Stream buffer error';
               await failParticipantStreamBuffer(streamMessageId, errorMessage, c.env);
+
+              // ✅ AUTO-RECOVERY: Queue check-round-completion on stream failure
+              // This ensures round can continue even if this stream fails mid-way
+              if (c.env.ROUND_ORCHESTRATION_QUEUE) {
+                try {
+                  const recoveryMessage: CheckRoundCompletionQueueMessage = {
+                    type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+                    messageId: `check-${threadId}-r${currentRoundNumber}-stale-${Date.now()}`,
+                    threadId,
+                    roundNumber: currentRoundNumber,
+                    userId: user.id,
+                    reason: CheckRoundCompletionReasons.STALE_STREAM,
+                    queuedAt: new Date().toISOString(),
+                  };
+                  await c.env.ROUND_ORCHESTRATION_QUEUE.send(recoveryMessage);
+                } catch {
+                  // Queue send failed - non-critical
+                }
+              }
             } finally {
               // ✅ FIX: Always release the reader lock to prevent "unused stream branch" warnings
               // This ensures the stream is properly consumed/cleaned up in Cloudflare Workers
@@ -1638,6 +1666,22 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           ).catch(() => {
             // Silently fail - don't break error handling
           });
+
+          // ✅ AUTO-RECOVERY: Queue check-round-completion on stream error
+          // This ensures round can continue even if this stream fails
+          if (c.env.ROUND_ORCHESTRATION_QUEUE) {
+            c.env.ROUND_ORCHESTRATION_QUEUE.send({
+              type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+              messageId: `check-${threadId}-r${currentRoundNumber}-error-${Date.now()}`,
+              threadId,
+              roundNumber: currentRoundNumber,
+              userId: user.id,
+              reason: CheckRoundCompletionReasons.STALE_STREAM,
+              queuedAt: new Date().toISOString(),
+            } satisfies CheckRoundCompletionQueueMessage).catch(() => {
+              // Queue send failed - non-critical
+            });
+          }
 
           // ✅ PERFORMANCE OPTIMIZATION: Non-blocking error tracking
           // PostHog error tracking runs asynchronously via waitUntil()

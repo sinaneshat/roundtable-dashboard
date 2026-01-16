@@ -121,6 +121,8 @@ describe('round orchestration service', () => {
         completedAt: null,
         error: null,
         triggeredParticipants: [0],
+        recoveryAttempts: 0,
+        maxRecoveryAttempts: 3,
       };
 
       mockKV.get.mockResolvedValue(existingState);
@@ -1095,6 +1097,8 @@ describe('round orchestration service', () => {
         completedAt: null,
         error: null,
         triggeredParticipants: [0],
+        recoveryAttempts: 0,
+        maxRecoveryAttempts: 3,
       };
 
       mockKV.get.mockResolvedValue(runningState);

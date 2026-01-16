@@ -87,6 +87,7 @@ import {
   executePreSearchHandler,
   getCustomRoleHandler,
   getPublicThreadHandler,
+  getRoundStatusHandler,
   getThreadBySlugHandler,
   getThreadChangelogHandler,
   getThreadFeedbackHandler,
@@ -123,6 +124,7 @@ import {
   executePreSearchRoute,
   getCustomRoleRoute,
   getPublicThreadRoute,
+  getRoundStatusRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
   getThreadFeedbackRoute,
@@ -690,6 +692,8 @@ const appRoutes = app
   .openapi(executePreSearchRoute, executePreSearchHandler) // Stream pre-search execution (auto-creates)
   // Council Moderator (protected, backend-triggered only)
   .openapi(councilModeratorRoundRoute, councilModeratorRoundHandler) // Stream council moderator generation (text streaming like participants)
+  // Round Orchestration (protected, queue worker internal API)
+  .openapi(getRoundStatusRoute, getRoundStatusHandler) // Get round status for queue worker orchestration
   // Round Feedback (protected)
   .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler) // Set/update round feedback (like/dislike)
   .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler) // Get all round feedback for a thread

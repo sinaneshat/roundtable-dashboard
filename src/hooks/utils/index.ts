@@ -51,6 +51,7 @@ export {
 } from './use-file-validation';
 export type { FreeTrialStateReturn } from './use-free-trial-state';
 export { useFreeTrialState } from './use-free-trial-state';
+export { useInView } from './use-in-view';
 export { useIsMounted } from './use-is-mounted';
 export type { UseMediaQueryReturn } from './use-media-query';
 export { useMediaQuery } from './use-media-query';
