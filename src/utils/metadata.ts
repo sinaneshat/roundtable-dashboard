@@ -237,6 +237,13 @@ export function createMetadata({
     site: '@roundtablenow',
   };
 
+  // Add twitter:domain for better X card display
+  const twitterWithDomain = {
+    ...twitter,
+    // Note: 'domain' is not in Next.js types but is valid for X cards
+    domain: 'roundtable.now',
+  } as Metadata['twitter'];
+
   return {
     metadataBase: new URL(baseUrl),
     title,
@@ -244,7 +251,7 @@ export function createMetadata({
     keywords: keywords.join(', '),
     authors: [{ name: author }],
     openGraph,
-    twitter,
+    twitter: twitterWithDomain,
     robots,
     alternates: {
       canonical: canonicalUrl || fullUrl,
