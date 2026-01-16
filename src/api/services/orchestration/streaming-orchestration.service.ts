@@ -1157,7 +1157,6 @@ export async function prepareValidatedMessages(
         logger?.info('Injected file parts into message for AI model', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
           filePartsCount: fileParts.length,
-          hasExtractedText: !!extractedTextContent,
           stats,
         }));
       }
@@ -1216,7 +1215,7 @@ export async function prepareValidatedMessages(
         try {
           // Use URL-based loading to avoid memory-intensive base64 encoding
           // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
-          const { fileParts, stats } = canUseUrlLoading
+          const loadResult = canUseUrlLoading
             ? await loadAttachmentContentUrl({
                 attachmentIds: uploadIdsFromUrls,
                 r2Bucket,
@@ -1234,14 +1233,28 @@ export async function prepareValidatedMessages(
                 logger,
               });
 
-          if (fileParts.length > 0) {
+          const { fileParts, stats } = loadResult;
+          // extractedTextContent only exists in URL-based loading
+          const extractedTextContent = 'extractedTextContent' in loadResult ? loadResult.extractedTextContent : null;
+
+          if (fileParts.length > 0 || extractedTextContent) {
             const nonFileParts = existingParts.filter(
               part => part.type !== 'file',
             );
 
+            let combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+
+            // Prepend extracted text from PDFs/documents as a text part
+            if (extractedTextContent) {
+              combinedParts = [
+                { type: MessagePartTypes.TEXT, text: extractedTextContent },
+                ...combinedParts,
+              ];
+            }
+
             messageWithAttachments = {
               ...newMessage,
-              parts: [...(fileParts as unknown as typeof existingParts), ...nonFileParts],
+              parts: combinedParts,
             };
 
             logger?.info(
@@ -1292,7 +1305,7 @@ export async function prepareValidatedMessages(
 
         try {
           // Use URL-based loading to avoid memory-intensive base64 encoding
-          const { fileParts, stats } = canUseUrlLoading
+          const loadResult = canUseUrlLoading
             ? await loadAttachmentContentUrl({
                 attachmentIds: uploadIdsFromParts,
                 r2Bucket,
@@ -1310,14 +1323,28 @@ export async function prepareValidatedMessages(
                 logger,
               });
 
-          if (fileParts.length > 0) {
+          const { fileParts, stats } = loadResult;
+          // extractedTextContent only exists in URL-based loading
+          const extractedTextContent = 'extractedTextContent' in loadResult ? loadResult.extractedTextContent : null;
+
+          if (fileParts.length > 0 || extractedTextContent) {
             const nonFileParts = existingParts.filter(
               part => part.type !== 'file',
             );
 
+            let combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+
+            // Prepend extracted text from PDFs/documents as a text part
+            if (extractedTextContent) {
+              combinedParts = [
+                { type: MessagePartTypes.TEXT, text: extractedTextContent },
+                ...combinedParts,
+              ];
+            }
+
             messageWithAttachments = {
               ...newMessage,
-              parts: [...(fileParts as unknown as typeof existingParts), ...nonFileParts],
+              parts: combinedParts,
             };
 
             logger?.info(
@@ -1377,7 +1404,7 @@ export async function prepareValidatedMessages(
       if (messageIdsToCheck.length > 0) {
         // Use URL-based loading to avoid memory-intensive base64 encoding
         // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
-        const { filePartsByMessageId, errors, stats } = canUseUrlLoading
+        const loadResult = canUseUrlLoading
           ? await loadMessageAttachmentsUrl({
               messageIds: messageIdsToCheck,
               r2Bucket,
@@ -1395,10 +1422,19 @@ export async function prepareValidatedMessages(
               logger,
             });
 
-        if (filePartsByMessageId.size > 0) {
+        const { filePartsByMessageId, errors, stats } = loadResult;
+        // extractedTextByMessageId only exists in URL-based loading
+        const extractedTextByMessageId = 'extractedTextByMessageId' in loadResult
+          ? loadResult.extractedTextByMessageId
+          : new Map<string, string>();
+
+        if (filePartsByMessageId.size > 0 || extractedTextByMessageId.size > 0) {
           messagesWithBase64 = previousMessages.map((msg) => {
             const urlParts = filePartsByMessageId.get(msg.id);
-            if (!urlParts || urlParts.length === 0) {
+            const extractedText = extractedTextByMessageId.get(msg.id);
+
+            // Skip if no changes needed for this message
+            if ((!urlParts || urlParts.length === 0) && !extractedText) {
               return msg;
             }
 
@@ -1406,7 +1442,7 @@ export async function prepareValidatedMessages(
 
             const hasFileParts = currentParts.some(part => part.type === 'file');
 
-            if (!hasFileParts) {
+            if (!hasFileParts && !extractedText) {
               return {
                 ...msg,
                 parts: [...(urlParts as unknown as typeof currentParts), ...currentParts],
@@ -1423,9 +1459,23 @@ export async function prepareValidatedMessages(
               return typeof partUrl === 'string' && partUrl.startsWith('data:');
             });
 
+            let combinedParts = [
+              ...((urlParts || []) as unknown as typeof currentParts),
+              ...existingDataUrlParts,
+              ...nonFileParts,
+            ];
+
+            // Prepend extracted text from PDFs/documents as a text part
+            if (extractedText) {
+              combinedParts = [
+                { type: MessagePartTypes.TEXT, text: extractedText },
+                ...combinedParts,
+              ];
+            }
+
             return {
               ...msg,
-              parts: [...(urlParts as unknown as typeof currentParts), ...existingDataUrlParts, ...nonFileParts],
+              parts: combinedParts,
             };
           });
 
