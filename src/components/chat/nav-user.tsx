@@ -123,9 +123,13 @@ export function NavUser({ initialSession }: NavUserProps) {
       await deleteUser({
         callbackURL: '/auth/sign-in',
       });
+      await signOut();
+      router.replace('/auth/sign-in');
     } catch (error) {
       showApiErrorToast('Delete Account Failed', error);
+    } finally {
       isDeleting.onFalse();
+      showDeleteDialog.onFalse();
     }
   };
 

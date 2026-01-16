@@ -303,6 +303,7 @@ async function applyAuthentication<TEnv extends ApiEnv>(c: Context<TEnv>, authMo
       // ✅ PERF: Try KV cache first to avoid expensive Better Auth DB lookup
       const cookieHeader = c.req.header('cookie');
       const sessionToken = extractSessionToken(cookieHeader);
+
       // Safe access to KV binding from env
       const env = c.env as ApiEnv['Bindings'] | undefined;
       const kv = env?.KV;

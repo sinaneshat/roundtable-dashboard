@@ -177,6 +177,8 @@ function createAuth() {
       cookieCache: {
         enabled: true,
         maxAge: 60 * 15, // 15 minutes cache
+        strategy: 'compact', // Base64url + HMAC-SHA256 - smallest, best perf
+        refreshCache: true, // Stateless refresh without DB lookup
       },
     },
 
