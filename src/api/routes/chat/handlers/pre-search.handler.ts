@@ -27,7 +27,7 @@ import {
 } from '@/api/services/billing';
 import type { PreSearchTrackingContext } from '@/api/services/errors';
 import { buildEmptyResponseError, extractErrorMetadata, initializePreSearchTracking, trackPreSearchComplete, trackQueryGeneration, trackWebSearchExecution } from '@/api/services/errors';
-import { loadAttachmentContent } from '@/api/services/messages';
+import { loadAttachmentContent, loadAttachmentContentUrl } from '@/api/services/messages';
 import { initializeOpenRouter, openRouterService } from '@/api/services/models';
 import { analyzeQueryComplexity, IMAGE_ANALYSIS_FOR_SEARCH_PROMPT, simpleOptimizeQuery } from '@/api/services/prompts';
 import {
@@ -82,6 +82,7 @@ async function analyzeImagesForSearchContext(
     mimeType?: string;
     filename?: string;
     url?: string;
+    image?: string; // URL for image parts from loadAttachmentContentUrl
   }>,
   env: ApiEnv['Bindings'],
 ): Promise<string> {
@@ -105,26 +106,55 @@ async function analyzeImagesForSearchContext(
       text: IMAGE_ANALYSIS_FOR_SEARCH_PROMPT,
     };
 
-    // Build file parts for images
+    // Build file parts for images - support both URL-based and data-based parts
+    // All parts use type: 'file' for UIMessage compatibility
     const filePartsList = imageFileParts
-      .filter(part => part.data && part.mimeType)
+      .filter(part => (part.data || part.url || part.image) && part.mimeType)
       .map((part) => {
-        // ✅ PERF: Convert Uint8Array to base64 using array collect pattern (O(n) vs O(n²))
-        const bytes = part.data!;
-        const chunks: string[] = [];
-        const chunkSize = 8192;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-          chunks.push(String.fromCharCode(...chunk));
+        // URL-based parts (from loadAttachmentContentUrl in production)
+        // Check for image URL first (ModelImagePartUrl format), then file URL
+        if (part.image && part.image.startsWith('http')) {
+          return {
+            type: 'file' as const,
+            mediaType: part.mimeType,
+            url: part.image,
+          };
         }
-        const base64 = btoa(chunks.join(''));
-        const dataUrl = `data:${part.mimeType};base64,${base64}`;
-        return {
-          type: 'file' as const,
-          mediaType: part.mimeType,
-          url: dataUrl,
-        };
-      });
+        if (part.url && part.url.startsWith('http')) {
+          return {
+            type: 'file' as const,
+            mediaType: part.mimeType,
+            url: part.url,
+          };
+        }
+        // Data URL (already base64 encoded)
+        if (part.url && part.url.startsWith('data:')) {
+          return {
+            type: 'file' as const,
+            mediaType: part.mimeType,
+            url: part.url,
+          };
+        }
+        // Fallback: Convert Uint8Array to base64 (localhost only)
+        if (part.data) {
+          const bytes = part.data;
+          const chunks: string[] = [];
+          const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+            chunks.push(String.fromCharCode(...chunk));
+          }
+          const base64 = btoa(chunks.join(''));
+          const dataUrl = `data:${part.mimeType};base64,${base64}`;
+          return {
+            type: 'file' as const,
+            mediaType: part.mimeType,
+            url: dataUrl,
+          };
+        }
+        return null;
+      })
+      .filter((part): part is NonNullable<typeof part> => part !== null);
 
     // Call vision model to analyze images
     const result = await openRouterService.generateText({
@@ -383,11 +413,25 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           let imageContext = '';
           if (body.attachmentIds && body.attachmentIds.length > 0) {
             try {
-              const { fileParts } = await loadAttachmentContent({
-                attachmentIds: body.attachmentIds,
-                r2Bucket: c.env.UPLOADS_R2_BUCKET,
-                db,
-              });
+              // Use URL-based loading in production to avoid memory-intensive base64 encoding
+              const baseUrl = new URL(c.req.url).origin;
+              const canUseUrlLoading = Boolean(baseUrl && user.id && c.env.BETTER_AUTH_SECRET);
+
+              const { fileParts } = canUseUrlLoading
+                ? await loadAttachmentContentUrl({
+                    attachmentIds: body.attachmentIds,
+                    r2Bucket: c.env.UPLOADS_R2_BUCKET,
+                    db,
+                    baseUrl,
+                    userId: user.id,
+                    secret: c.env.BETTER_AUTH_SECRET,
+                    threadId,
+                  })
+                : await loadAttachmentContent({
+                    attachmentIds: body.attachmentIds,
+                    r2Bucket: c.env.UPLOADS_R2_BUCKET,
+                    db,
+                  });
 
               if (fileParts.length > 0) {
                 // Analyze images with vision model to get searchable descriptions
