@@ -1586,7 +1586,7 @@ export async function prepareValidatedMessages(
         if (canUseUrlLoading) {
           // URL-based loading - files parts will have URLs, not raw data
           // The AI provider will fetch the file directly, avoiding Worker memory limits
-          const { fileParts: urlParts, stats } = await loadAttachmentContentUrl({
+          const { fileParts: urlParts, extractedTextContent, stats } = await loadAttachmentContentUrl({
             attachmentIds: uploadIdsFromFileParts,
             r2Bucket,
             db,
@@ -1599,8 +1599,10 @@ export async function prepareValidatedMessages(
 
           // For URL-based loading, inject URL parts directly into messages
           // instead of storing raw data in fileDataFromHistory
-          if (urlParts.length > 0) {
-            // Update allMessages to include URL-based file parts
+          // ✅ FIX: Also handle PDFs where urlParts is empty but extractedTextContent exists
+          // Without this, PDFs in fallback path keep invalid file parts (url: '' or url: filename)
+          if (urlParts.length > 0 || extractedTextContent) {
+            // Update allMessages to include URL-based file parts or extracted text
             for (let i = 0; i < allMessages.length; i++) {
               const msg = allMessages[i];
               if (!msg || !Array.isArray(msg.parts))
@@ -1611,9 +1613,19 @@ export async function prepareValidatedMessages(
                 continue;
 
               const nonFileParts = msg.parts.filter(p => !isFilePart(p));
+              let newParts = [...(urlParts as unknown as typeof msg.parts), ...nonFileParts];
+
+              // Prepend extracted text from PDFs/documents as a text part
+              if (extractedTextContent) {
+                newParts = [
+                  { type: MessagePartTypes.TEXT, text: extractedTextContent },
+                  ...newParts,
+                ];
+              }
+
               allMessages[i] = {
                 ...msg,
-                parts: [...(urlParts as unknown as typeof msg.parts), ...nonFileParts],
+                parts: newParts,
               };
               break; // Only inject once
             }
