@@ -9,7 +9,7 @@
 
 import { eq, inArray } from 'drizzle-orm';
 
-import { AI_PROCESSABLE_MIME_SET, IMAGE_MIME_TYPES, MessagePartTypes } from '@/api/core/enums';
+import { AI_PROCESSABLE_MIME_SET, IMAGE_MIME_TYPES, MessagePartTypes, TEXT_EXTRACTABLE_MIME_TYPES } from '@/api/core/enums';
 import { generateAiPublicUrl, getFile } from '@/api/services/uploads';
 import { LogHelpers } from '@/api/types/logger';
 import type {
@@ -23,6 +23,7 @@ import type {
 } from '@/api/types/uploads';
 import { MAX_BASE64_FILE_SIZE } from '@/api/types/uploads';
 import * as tables from '@/db';
+import { getExtractedText } from '@/lib/utils/metadata';
 
 // ============================================================================
 // Main Functions
@@ -180,6 +181,8 @@ export type LoadAttachmentContentUrlResult = {
 };
 
 const IMAGE_MIME_SET = new Set<string>(IMAGE_MIME_TYPES);
+const TEXT_EXTRACTABLE_MIME_SET = new Set<string>(TEXT_EXTRACTABLE_MIME_TYPES);
+const PDF_MIME_TYPE = 'application/pdf';
 
 /**
  * Load attachment content with environment-aware delivery.
@@ -292,57 +295,108 @@ export async function loadAttachmentContentUrl(
           sizeKB: Math.round(upload.fileSize / 1024),
         }));
       } else {
-        // PRODUCTION/PREVIEW: Use signed public URL
-        const urlResult = await generateAiPublicUrl({
-          uploadId: upload.id,
-          userId,
-          baseUrl,
-          secret,
-          threadId,
-        });
-
-        if (!urlResult.success) {
-          logger?.error('URL generation failed', LogHelpers.operation({
-            operationName: 'loadAttachmentContentUrl',
-            uploadId: upload.id,
-            filename: upload.filename,
-            fileSize: upload.fileSize,
-            error: urlResult.error,
-          }));
-          errors.push({
-            uploadId: upload.id,
-            error: urlResult.error,
-          });
-          continue;
-        }
-
+        // PRODUCTION/PREVIEW: Handle based on file type
         if (isImage) {
-          // Image: use type:'image' with URL
+          // Image: use type:'image' with URL (images are small, download quickly)
+          const urlResult = await generateAiPublicUrl({
+            uploadId: upload.id,
+            userId,
+            baseUrl,
+            secret,
+            threadId,
+          });
+
+          if (!urlResult.success) {
+            logger?.error('URL generation failed for image', LogHelpers.operation({
+              operationName: 'loadAttachmentContentUrl',
+              uploadId: upload.id,
+              filename: upload.filename,
+              error: urlResult.error,
+            }));
+            errors.push({ uploadId: upload.id, error: urlResult.error });
+            continue;
+          }
+
           fileParts.push({
             type: 'image',
             image: urlResult.url,
             mimeType: upload.mimeType,
-          // TYPE SATISFIED: Object matches ModelImagePartUrl schema
           } as ModelImagePartUrl);
+
+          logger?.debug('Generated URL for image attachment', LogHelpers.operation({
+            operationName: 'loadAttachmentContentUrl',
+            uploadId: upload.id,
+            filename: upload.filename,
+            mimeType: upload.mimeType,
+            sizeKB: Math.round(upload.fileSize / 1024),
+          }));
+        } else if (upload.mimeType === PDF_MIME_TYPE || TEXT_EXTRACTABLE_MIME_SET.has(upload.mimeType)) {
+          // PDF/Text files: Use extracted text instead of URL
+          // OpenAI times out downloading files from our signed URL endpoint (2-5s timeout)
+          // Solution: Use the pre-extracted text from upload metadata
+          const extractedText = getExtractedText(upload.metadata);
+
+          if (extractedText && extractedText.length > 0) {
+            const fileTypeLabel = upload.mimeType === PDF_MIME_TYPE ? 'PDF' : 'Document';
+            fileParts.push({
+              type: 'text',
+              text: `[${fileTypeLabel}: ${upload.filename}]\n\n${extractedText}`,
+            } as unknown as UrlFilePart);
+
+            logger?.debug('Using extracted text for document', LogHelpers.operation({
+              operationName: 'loadAttachmentContentUrl',
+              uploadId: upload.id,
+              filename: upload.filename,
+              mimeType: upload.mimeType,
+              fileSize: extractedText.length,
+            }));
+          } else {
+            // No extracted text available - skip with warning
+            logger?.warn('No extracted text available for document, skipping', LogHelpers.operation({
+              operationName: 'loadAttachmentContentUrl',
+              uploadId: upload.id,
+              filename: upload.filename,
+              mimeType: upload.mimeType,
+            }));
+            skipped++;
+          }
         } else {
-          // Non-image (PDF, etc.): use type:'file' with URL
+          // Other file types: use URL
+          const urlResult = await generateAiPublicUrl({
+            uploadId: upload.id,
+            userId,
+            baseUrl,
+            secret,
+            threadId,
+          });
+
+          if (!urlResult.success) {
+            logger?.error('URL generation failed', LogHelpers.operation({
+              operationName: 'loadAttachmentContentUrl',
+              uploadId: upload.id,
+              filename: upload.filename,
+              error: urlResult.error,
+            }));
+            errors.push({ uploadId: upload.id, error: urlResult.error });
+            continue;
+          }
+
           fileParts.push({
             type: MessagePartTypes.FILE,
             url: urlResult.url,
             mimeType: upload.mimeType,
             filename: upload.filename,
             mediaType: upload.mimeType,
-          // TYPE SATISFIED: Object matches ModelFilePartUrl schema
           } as ModelFilePartUrl);
-        }
 
-        logger?.debug('Generated URL for attachment', LogHelpers.operation({
-          operationName: 'loadAttachmentContentUrl',
-          uploadId: upload.id,
-          filename: upload.filename,
-          mimeType: upload.mimeType,
-          sizeKB: Math.round(upload.fileSize / 1024),
-        }));
+          logger?.debug('Generated URL for file attachment', LogHelpers.operation({
+            operationName: 'loadAttachmentContentUrl',
+            uploadId: upload.id,
+            filename: upload.filename,
+            mimeType: upload.mimeType,
+            sizeKB: Math.round(upload.fileSize / 1024),
+          }));
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -748,41 +802,101 @@ export async function loadMessageAttachmentsUrl(
 
         const isImage = IMAGE_MIME_SET.has(upload.mimeType);
 
-        // Generate signed URL for AI provider access
-        const urlResult = await generateAiPublicUrl({
-          uploadId: upload.id,
-          userId,
-          baseUrl,
-          secret,
-          threadId,
-        });
-
-        if (!urlResult.success) {
-          logger?.error('URL generation failed for message attachment', LogHelpers.operation({
-            operationName: 'loadMessageAttachmentsUrl',
-            messageId,
-            uploadId,
-            filename: upload.filename,
-            error: urlResult.error,
-          }));
-          errors.push({
-            messageId,
-            uploadId,
-            error: urlResult.error,
-          });
-          failed++;
-          continue;
-        }
-
         if (isImage) {
-          // Image: use type:'image' with URL
+          // Image: use type:'image' with URL (images are small, download quickly)
+          const urlResult = await generateAiPublicUrl({
+            uploadId: upload.id,
+            userId,
+            baseUrl,
+            secret,
+            threadId,
+          });
+
+          if (!urlResult.success) {
+            logger?.error('URL generation failed for image', LogHelpers.operation({
+              operationName: 'loadMessageAttachmentsUrl',
+              messageId,
+              uploadId,
+              filename: upload.filename,
+              error: urlResult.error,
+            }));
+            errors.push({ messageId, uploadId, error: urlResult.error });
+            failed++;
+            continue;
+          }
+
           messageParts.push({
             type: 'image',
             image: urlResult.url,
             mimeType: upload.mimeType,
           } as ModelImagePartUrl);
+
+          loaded++;
+
+          logger?.debug('Generated URL for image attachment', LogHelpers.operation({
+            operationName: 'loadMessageAttachmentsUrl',
+            messageId,
+            uploadId,
+            filename: upload.filename,
+            mimeType: upload.mimeType,
+            sizeKB: Math.round(upload.fileSize / 1024),
+          }));
+        } else if (upload.mimeType === PDF_MIME_TYPE || TEXT_EXTRACTABLE_MIME_SET.has(upload.mimeType)) {
+          // PDF/Text files: Use extracted text instead of URL
+          // OpenAI times out downloading files from our signed URL endpoint (2-5s timeout)
+          const extractedText = getExtractedText(upload.metadata);
+
+          if (extractedText && extractedText.length > 0) {
+            const fileTypeLabel = upload.mimeType === PDF_MIME_TYPE ? 'PDF' : 'Document';
+            messageParts.push({
+              type: 'text',
+              text: `[${fileTypeLabel}: ${upload.filename}]\n\n${extractedText}`,
+            } as unknown as UrlFilePart);
+
+            loaded++;
+
+            logger?.debug('Using extracted text for document', LogHelpers.operation({
+              operationName: 'loadMessageAttachmentsUrl',
+              messageId,
+              uploadId,
+              filename: upload.filename,
+              mimeType: upload.mimeType,
+              fileSize: extractedText.length,
+            }));
+          } else {
+            // No extracted text available - skip with warning
+            logger?.warn('No extracted text available for document, skipping', LogHelpers.operation({
+              operationName: 'loadMessageAttachmentsUrl',
+              messageId,
+              uploadId,
+              filename: upload.filename,
+              mimeType: upload.mimeType,
+            }));
+            skipped++;
+          }
         } else {
-          // Non-image (PDF, etc.): use type:'file' with URL
+          // Other file types: use URL
+          const urlResult = await generateAiPublicUrl({
+            uploadId: upload.id,
+            userId,
+            baseUrl,
+            secret,
+            threadId,
+          });
+
+          if (!urlResult.success) {
+            logger?.error('URL generation failed for file', LogHelpers.operation({
+              operationName: 'loadMessageAttachmentsUrl',
+              messageId,
+              uploadId,
+              filename: upload.filename,
+              error: urlResult.error,
+            }));
+            errors.push({ messageId, uploadId, error: urlResult.error });
+            failed++;
+            continue;
+          }
+
           messageParts.push({
             type: MessagePartTypes.FILE,
             url: urlResult.url,
@@ -790,18 +904,18 @@ export async function loadMessageAttachmentsUrl(
             filename: upload.filename,
             mediaType: upload.mimeType,
           } as ModelFilePartUrl);
+
+          loaded++;
+
+          logger?.debug('Generated URL for file attachment', LogHelpers.operation({
+            operationName: 'loadMessageAttachmentsUrl',
+            messageId,
+            uploadId,
+            filename: upload.filename,
+            mimeType: upload.mimeType,
+            sizeKB: Math.round(upload.fileSize / 1024),
+          }));
         }
-
-        loaded++;
-
-        logger?.debug('Generated URL for message attachment', LogHelpers.operation({
-          operationName: 'loadMessageAttachmentsUrl',
-          messageId,
-          uploadId,
-          filename: upload.filename,
-          mimeType: upload.mimeType,
-          sizeKB: Math.round(upload.fileSize / 1024),
-        }));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger?.error('Failed to process message attachment (URL mode)', LogHelpers.operation({
