@@ -34,7 +34,7 @@ import {
 import { checkFreeUserHasCompletedRound, getTierFromProductId, getUserCreditBalance, TIER_QUOTAS, upgradeToPaidPlan } from '@/api/services/billing';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import { CustomerCacheTags, PriceCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
+import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
 import type { UserChatUsage } from '@/db/validation';
 
 import type { UsageStatsPayload } from '../../routes/usage/schema';
@@ -46,12 +46,17 @@ function getTierQuotas(tier: SubscriptionTier) {
 export async function getUserTier(userId: string): Promise<SubscriptionTier> {
   const db = await getDbAsync();
 
-  // ⚠️ NO CACHING: Subscription tier changes after payments - must be fresh
+  // ✅ CACHING: 60-second TTL - tier changes are webhook-driven and invalidate cache
+  // This prevents repeated DB calls during page load (models, usage, etc.)
   const usageResults = await db
-    .select()
+    .select({ subscriptionTier: tables.userChatUsage.subscriptionTier })
     .from(tables.userChatUsage)
     .where(eq(tables.userChatUsage.userId, userId))
-    .limit(1);
+    .limit(1)
+    .$withCache({
+      config: { ex: 60 },
+      tag: UserCacheTags.tier(userId),
+    });
 
   return usageResults[0]?.subscriptionTier || SubscriptionTiers.FREE;
 }
@@ -335,18 +340,24 @@ async function getPlanStatsForUsage(userId: string) {
   const isPaidTier = currentTier !== SubscriptionTiers.FREE;
 
   // Check for active subscription in Stripe (for hasActiveSubscription flag)
+  // ✅ CACHING: 60-second TTL - subscription changes trigger cache invalidation via webhook
   const customerResults = await db
-    .select()
+    .select({ id: tables.stripeCustomer.id })
     .from(tables.stripeCustomer)
     .where(eq(tables.stripeCustomer.userId, userId))
-    .limit(1);
+    .limit(1)
+    .$withCache({
+      config: { ex: 60 },
+      tag: CustomerCacheTags.byUserId(userId),
+    });
 
   const customer = customerResults[0];
   let hasActiveSubscription = false;
 
   if (customer) {
+    // ✅ CACHING: 60-second TTL - invalidated on subscription changes
     const subscriptionResults = await db
-      .select()
+      .select({ id: tables.stripeSubscription.id })
       .from(tables.stripeSubscription)
       .where(
         and(
@@ -354,7 +365,11 @@ async function getPlanStatsForUsage(userId: string) {
           eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .$withCache({
+        config: { ex: 60 },
+        tag: SubscriptionCacheTags.active(userId),
+      });
 
     hasActiveSubscription = subscriptionResults.length > 0;
   }
