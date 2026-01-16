@@ -25,7 +25,7 @@ import { generateUniqueSlug } from './slug-generator.service';
 /**
  * Generate title from first user message
  * Uses Google Gemini 2.0 Flash for fast, reliable title generation
- * Attempts up to 10 times before falling back to truncated message
+ * Single attempt - falls back to truncated message on failure
  */
 export async function generateTitleFromMessage(
   firstMessage: string,
@@ -33,48 +33,42 @@ export async function generateTitleFromMessage(
 ): Promise<string> {
   initializeOpenRouter(env);
 
-  const MAX_ATTEMPTS = 10;
   const MAX_WORDS = 5;
   const MAX_LENGTH = 50;
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      const result = await openRouterService.generateText({
-        modelId: TITLE_GENERATION_MODEL_ID,
-        messages: [
-          {
-            id: 'msg-title-gen',
-            role: UIMessageRoles.USER,
-            parts: [{ type: MessagePartTypes.TEXT, text: firstMessage }],
-          },
-        ],
-        system: TITLE_GENERATION_CONFIG.systemPrompt,
-        temperature: TITLE_GENERATION_CONFIG.temperature,
-        maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
-      });
+  // Single attempt - no retry delays. If it fails, use fallback immediately.
+  try {
+    const result = await openRouterService.generateText({
+      modelId: TITLE_GENERATION_MODEL_ID,
+      messages: [
+        {
+          id: 'msg-title-gen',
+          role: UIMessageRoles.USER,
+          parts: [{ type: MessagePartTypes.TEXT, text: firstMessage }],
+        },
+      ],
+      system: TITLE_GENERATION_CONFIG.systemPrompt,
+      temperature: TITLE_GENERATION_CONFIG.temperature,
+      maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
+    });
 
-      let title = result.text.trim().replace(/^["']|["']$/g, '');
+    let title = result.text.trim().replace(/^["']|["']$/g, '');
 
-      const words = title.split(/\s+/);
-      if (words.length > MAX_WORDS) {
-        title = words.slice(0, MAX_WORDS).join(' ');
-      }
-
-      if (title.length > MAX_LENGTH) {
-        title = title.substring(0, MAX_LENGTH).trim();
-      }
-
-      return title;
-    } catch {
-      if (attempt >= MAX_ATTEMPTS) {
-        break;
-      }
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    const words = title.split(/\s+/);
+    if (words.length > MAX_WORDS) {
+      title = words.slice(0, MAX_WORDS).join(' ');
     }
-  }
 
-  const words = firstMessage.trim().split(/\s+/).slice(0, MAX_WORDS).join(' ');
-  return words.length > MAX_LENGTH ? words.substring(0, MAX_LENGTH).trim() : words || 'Chat';
+    if (title.length > MAX_LENGTH) {
+      title = title.substring(0, MAX_LENGTH).trim();
+    }
+
+    return title;
+  } catch {
+    // Fallback to first words of user message
+    const words = firstMessage.trim().split(/\s+/).slice(0, MAX_WORDS).join(' ');
+    return words.length > MAX_LENGTH ? words.substring(0, MAX_LENGTH).trim() : words || 'Chat';
+  }
 }
 
 /**

@@ -1451,19 +1451,18 @@ async function detectSearchParameters(
 // Utility: Retry Logic with Exponential Backoff
 
 /**
- * Retry wrapper with exponential backoff for reliability
- *
- * ✅ P0 FIX: Adds retry logic for transient failures
+ * Retry wrapper with minimal backoff for reliability
+ * Single retry with short delay - fail fast, don't block
  *
  * @param fn - Async function to retry
- * @param maxRetries - Maximum retry attempts (default: 3)
- * @param initialDelay - Initial delay in ms (default: 1000)
+ * @param maxRetries - Maximum retry attempts (default: 2)
+ * @param initialDelay - Initial delay in ms (default: 200)
  * @returns Result of the function
  */
 async function withRetry<T>(
   fn: () => Promise<T>,
-  maxRetries = 3,
-  initialDelay = 1000,
+  maxRetries = 2,
+  initialDelay = 200,
 ): Promise<T> {
   let lastError: Error | null = null;
 
@@ -1475,9 +1474,7 @@ async function withRetry<T>(
 
       // Don't retry on last attempt
       if (attempt < maxRetries - 1) {
-        // Exponential backoff: delay * (attempt + 1)
-        const delay = initialDelay * (attempt + 1);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => setTimeout(resolve, initialDelay));
       }
     }
   }
@@ -1583,7 +1580,7 @@ export async function* streamSearchResults(
           env,
           params,
         ),
-      3, // 3 retries
+      2, // 2 retries max - fail fast
     );
 
     if (searchResults.length === 0) {
@@ -1834,7 +1831,7 @@ export async function performWebSearch(
           env,
           params,
         ),
-      3, // 3 retries
+      2, // 2 retries max - fail fast
     );
 
     if (searchResults.length === 0) {
