@@ -171,6 +171,8 @@ export type LoadAttachmentContentUrlParams = LoadAttachmentContentParams & {
 
 export type LoadAttachmentContentUrlResult = {
   fileParts: UrlFilePart[];
+  /** Extracted text from PDFs/documents (not sent as file parts to avoid AI provider timeout) */
+  extractedTextContent: string | null;
   errors: Array<{ uploadId: string; error: string }>;
   stats: {
     total: number;
@@ -201,12 +203,14 @@ export async function loadAttachmentContentUrl(
   const { attachmentIds, r2Bucket, db, logger, baseUrl, userId, secret, threadId } = params;
 
   const fileParts: UrlFilePart[] = [];
+  const extractedTexts: string[] = []; // Collect extracted text from PDFs/documents
   const errors: Array<{ uploadId: string; error: string }> = [];
   let skipped = 0;
 
   if (!attachmentIds || attachmentIds.length === 0) {
     return {
       fileParts: [],
+      extractedTextContent: null,
       errors: [],
       stats: { total: 0, loaded: 0, failed: 0, skipped: 0 },
     };
@@ -333,15 +337,13 @@ export async function loadAttachmentContentUrl(
         } else if (upload.mimeType === PDF_MIME_TYPE || TEXT_EXTRACTABLE_MIME_SET.has(upload.mimeType)) {
           // PDF/Text files: Use extracted text instead of URL
           // OpenAI times out downloading files from our signed URL endpoint (2-5s timeout)
-          // Solution: Use the pre-extracted text from upload metadata
+          // Solution: Use the pre-extracted text from upload metadata, sent as text content (not file part)
           const extractedText = getExtractedText(upload.metadata);
 
           if (extractedText && extractedText.length > 0) {
             const fileTypeLabel = upload.mimeType === PDF_MIME_TYPE ? 'PDF' : 'Document';
-            fileParts.push({
-              type: 'text',
-              text: `[${fileTypeLabel}: ${upload.filename}]\n\n${extractedText}`,
-            } as unknown as UrlFilePart);
+            // Add to extractedTexts array - will be combined into extractedTextContent
+            extractedTexts.push(`[${fileTypeLabel}: ${upload.filename}]\n\n${extractedText}`);
 
             logger?.debug('Using extracted text for document', LogHelpers.operation({
               operationName: 'loadAttachmentContentUrl',
@@ -416,17 +418,22 @@ export async function loadAttachmentContentUrl(
 
   const stats = {
     total: attachmentIds.length,
-    loaded: fileParts.length,
+    loaded: fileParts.length + extractedTexts.length,
     failed: errors.length,
     skipped,
   };
+
+  // Combine all extracted texts into a single content string
+  const extractedTextContent = extractedTexts.length > 0
+    ? extractedTexts.join('\n\n---\n\n')
+    : null;
 
   logger?.info('Attachment loading complete', LogHelpers.operation({
     operationName: 'loadAttachmentContentUrl',
     stats,
   }));
 
-  return { fileParts, errors, stats };
+  return { fileParts, extractedTextContent, errors, stats };
 }
 
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
@@ -658,6 +665,8 @@ export type LoadMessageAttachmentsUrlParams = LoadMessageAttachmentsParams & {
 
 export type LoadMessageAttachmentsUrlResult = {
   filePartsByMessageId: Map<string, UrlFilePart[]>;
+  /** Extracted text from PDFs/documents by message ID (not sent as file parts to avoid AI provider timeout) */
+  extractedTextByMessageId: Map<string, string>;
   errors: Array<{ messageId: string; uploadId: string; error: string }>;
   stats: {
     messagesWithAttachments: number;
@@ -682,6 +691,7 @@ export async function loadMessageAttachmentsUrl(
   const { messageIds, r2Bucket, db, logger, baseUrl, userId, secret, threadId } = params;
 
   const filePartsByMessageId = new Map<string, UrlFilePart[]>();
+  const extractedTextByMessageId = new Map<string, string>(); // Extracted text from PDFs/documents
   const errors: Array<{ messageId: string; uploadId: string; error: string }> = [];
   let totalUploads = 0;
   let loaded = 0;
@@ -691,6 +701,7 @@ export async function loadMessageAttachmentsUrl(
   if (!messageIds || messageIds.length === 0) {
     return {
       filePartsByMessageId,
+      extractedTextByMessageId,
       errors: [],
       stats: {
         messagesWithAttachments: 0,
@@ -720,6 +731,7 @@ export async function loadMessageAttachmentsUrl(
     }
     return {
       filePartsByMessageId: convertedMap,
+      extractedTextByMessageId: new Map(), // Empty for base64 fallback
       errors: base64Result.errors,
       stats: base64Result.stats,
     };
@@ -738,6 +750,7 @@ export async function loadMessageAttachmentsUrl(
     }));
     return {
       filePartsByMessageId,
+      extractedTextByMessageId,
       errors: [],
       stats: {
         messagesWithAttachments: 0,
@@ -844,14 +857,19 @@ export async function loadMessageAttachmentsUrl(
         } else if (upload.mimeType === PDF_MIME_TYPE || TEXT_EXTRACTABLE_MIME_SET.has(upload.mimeType)) {
           // PDF/Text files: Use extracted text instead of URL
           // OpenAI times out downloading files from our signed URL endpoint (2-5s timeout)
+          // Store extracted text separately - will be added to message content (not as file part)
           const extractedText = getExtractedText(upload.metadata);
 
           if (extractedText && extractedText.length > 0) {
             const fileTypeLabel = upload.mimeType === PDF_MIME_TYPE ? 'PDF' : 'Document';
-            messageParts.push({
-              type: 'text',
-              text: `[${fileTypeLabel}: ${upload.filename}]\n\n${extractedText}`,
-            } as unknown as UrlFilePart);
+            const formattedText = `[${fileTypeLabel}: ${upload.filename}]\n\n${extractedText}`;
+
+            // Append to existing extracted text for this message
+            const existing = extractedTextByMessageId.get(messageId) || '';
+            extractedTextByMessageId.set(
+              messageId,
+              existing ? `${existing}\n\n---\n\n${formattedText}` : formattedText,
+            );
 
             loaded++;
 
@@ -952,5 +970,5 @@ export async function loadMessageAttachmentsUrl(
     stats,
   }));
 
-  return { filePartsByMessageId, errors, stats };
+  return { filePartsByMessageId, extractedTextByMessageId, errors, stats };
 }

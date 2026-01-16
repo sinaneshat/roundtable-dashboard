@@ -1126,9 +1126,9 @@ export async function prepareValidatedMessages(
 
   if (firstAttachmentLoad) {
     try {
-      const { fileParts, errors, stats } = firstAttachmentLoad;
+      const { fileParts, extractedTextContent, errors, stats } = firstAttachmentLoad;
 
-      if (fileParts.length > 0) {
+      if (fileParts.length > 0 || extractedTextContent) {
         const existingParts = Array.isArray(newMessage.parts)
           ? newMessage.parts
           : [];
@@ -1139,7 +1139,15 @@ export async function prepareValidatedMessages(
 
         // Cast URL-based file parts to work with UIMessage format
         // AI SDK will handle these correctly during model message conversion
-        const combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+        let combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+
+        // Prepend extracted text from PDFs/documents as a text part
+        if (extractedTextContent) {
+          combinedParts = [
+            { type: MessagePartTypes.TEXT, text: extractedTextContent },
+            ...combinedParts,
+          ];
+        }
 
         messageWithAttachments = {
           ...newMessage,
@@ -1149,6 +1157,7 @@ export async function prepareValidatedMessages(
         logger?.info('Injected file parts into message for AI model', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
           filePartsCount: fileParts.length,
+          hasExtractedText: !!extractedTextContent,
           stats,
         }));
       }
@@ -1544,10 +1553,12 @@ export async function prepareValidatedMessages(
             // Update allMessages to include URL-based file parts
             for (let i = 0; i < allMessages.length; i++) {
               const msg = allMessages[i];
-              if (!msg || !Array.isArray(msg.parts)) continue;
+              if (!msg || !Array.isArray(msg.parts))
+                continue;
 
               const hasFileParts = msg.parts.some(p => isFilePart(p));
-              if (!hasFileParts) continue;
+              if (!hasFileParts)
+                continue;
 
               const nonFileParts = msg.parts.filter(p => !isFilePart(p));
               allMessages[i] = {

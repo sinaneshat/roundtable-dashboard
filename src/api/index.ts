@@ -433,16 +433,14 @@ app.use('*', async (c, next) => {
   const path = c.req.path;
   const method = c.req.method;
 
-  // Skip session for truly public endpoints - handlers use requireOptionalSession if needed
-  // These routes NEVER need authentication:
-  // - Public chat threads (read-only, auth checked in handler if needed)
-  // - System/health endpoints
-  // - OpenAPI documentation
-  // - Webhook endpoints (use signature verification instead)
-  // - Product listings (public catalog)
-  // - Models listing (public)
-  // - Static asset paths
+  // Skip session for routes where:
+  // 1. Truly public endpoints (never need auth)
+  // 2. Routes with handlers that do their own auth (avoid double session lookup)
+  //
+  // ⚠️ PERF: createHandler with auth:'session' already calls getSession()
+  // Running attachSession middleware first would cause DOUBLE DB lookup
   if (
+    // Public endpoints - never need auth
     path.startsWith('/chat/public/')
     || path.startsWith('/system/')
     || path === '/health'
@@ -460,6 +458,16 @@ app.use('*', async (c, next) => {
     || path.endsWith('.png')
     || path.endsWith('.jpg')
     || path.endsWith('.svg')
+    // Routes with createHandler auth - handlers do their own session lookup
+    // These routes all use createHandler with auth:'session' which does its own getSession()
+    || path.startsWith('/chat/threads/')
+    || path.startsWith('/chat/roles/')
+    || path.startsWith('/chat/presets/')
+    || path.startsWith('/usage/')
+    || path.startsWith('/uploads/')
+    || path.startsWith('/api-keys/')
+    || path.startsWith('/projects/')
+    || path.startsWith('/mcp/')
   ) {
     c.set('session', null);
     c.set('user', null);
