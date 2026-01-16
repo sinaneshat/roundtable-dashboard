@@ -9,7 +9,7 @@ import { executeBatch, validateBatchSize } from '@/api/common/batch-operations';
 import { AppError } from '@/api/common/error-handling';
 import { getErrorMessage } from '@/api/common/error-types';
 import type { ErrorCode } from '@/api/core/enums';
-import { BETTER_AUTH_SESSION_COOKIE_NAME, ErrorCodes } from '@/api/core/enums';
+import { ErrorCodes } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import { auth } from '@/lib/auth/server';
@@ -20,96 +20,6 @@ import { HTTPExceptionFactory } from './http-exceptions';
 import { Responses } from './responses';
 import { ValidationErrorDetailsSchema } from './schemas';
 import { validateWithSchema } from './validation';
-
-// ============================================================================
-// SESSION CACHING (KV)
-// ============================================================================
-
-const SESSION_CACHE_TTL = 60; // 60 seconds - short TTL for security
-const SESSION_CACHE_PREFIX = 'session:';
-
-type CachedSessionData = {
-  user: User;
-  session: Session;
-  cachedAt: number;
-};
-
-/**
- * Extract session token from cookie header
- */
-function extractSessionToken(cookieHeader: string | undefined): string | null {
-  if (!cookieHeader)
-    return null;
-  const match = cookieHeader.match(
-    new RegExp(`${BETTER_AUTH_SESSION_COOKIE_NAME.replace(/\./g, '\\.')}=([^;]+)`),
-  );
-  return match?.[1] || null;
-}
-
-/**
- * Create cache key from session token (hashed for security)
- */
-async function createSessionCacheKey(sessionToken: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(sessionToken);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return `${SESSION_CACHE_PREFIX}${hashHex.slice(0, 32)}`;
-}
-
-/**
- * Get session from KV cache
- */
-async function getSessionFromCache(
-  kv: KVNamespace | undefined,
-  cacheKey: string,
-): Promise<CachedSessionData | null> {
-  if (!kv)
-    return null;
-
-  try {
-    const cached = await kv.get(cacheKey, 'json');
-    if (!cached)
-      return null;
-
-    const data = cached as CachedSessionData;
-    // Verify cache is still fresh (double-check TTL)
-    if (Date.now() - data.cachedAt > SESSION_CACHE_TTL * 1000) {
-      return null;
-    }
-
-    return data;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Cache session in KV
- */
-async function cacheSession(
-  kv: KVNamespace | undefined,
-  cacheKey: string,
-  user: User,
-  session: Session,
-): Promise<void> {
-  if (!kv)
-    return;
-
-  try {
-    const data: CachedSessionData = {
-      user,
-      session,
-      cachedAt: Date.now(),
-    };
-    await kv.put(cacheKey, JSON.stringify(data), {
-      expirationTtl: SESSION_CACHE_TTL,
-    });
-  } catch {
-    // Cache failures are non-fatal
-  }
-}
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -295,33 +205,12 @@ export type BatchHandler<
 
 /**
  * Apply authentication check based on mode
- * Uses KV caching to avoid expensive DB lookups on every request
+ * Better Auth cookie cache (session_data cookie) handles caching natively
  */
 async function applyAuthentication<TEnv extends ApiEnv>(c: Context<TEnv>, authMode: AuthMode): Promise<void> {
   switch (authMode) {
     case 'session': {
-      // ✅ PERF: Try KV cache first to avoid expensive Better Auth DB lookup
-      const cookieHeader = c.req.header('cookie');
-      const sessionToken = extractSessionToken(cookieHeader);
-
-      // Safe access to KV binding from env
-      const env = c.env as ApiEnv['Bindings'] | undefined;
-      const kv = env?.KV;
-
-      if (sessionToken && kv) {
-        const cacheKey = await createSessionCacheKey(sessionToken);
-        const cachedSession = await getSessionFromCache(kv, cacheKey);
-
-        if (cachedSession) {
-          // Cache hit - use cached session data
-          c.set('session', cachedSession.session);
-          c.set('user', cachedSession.user);
-          c.set('requestId', c.req.header('x-request-id') || crypto.randomUUID());
-          break;
-        }
-      }
-
-      // Cache miss - call Better Auth (expensive)
+      // Better Auth reads session_data cookie first (no DB lookup if valid)
       const sessionData = await auth.api.getSession({
         headers: c.req.raw.headers,
       });
@@ -332,51 +221,18 @@ async function applyAuthentication<TEnv extends ApiEnv>(c: Context<TEnv>, authMo
         });
       }
 
-      // Cache the session for future requests
-      if (sessionToken && kv) {
-        const cacheKey = await createSessionCacheKey(sessionToken);
-        // Fire-and-forget cache write
-        void cacheSession(kv, cacheKey, sessionData.user, sessionData.session);
-      }
-
-      // Set authenticated session context
       c.set('session', sessionData.session);
       c.set('user', sessionData.user);
       c.set('requestId', c.req.header('x-request-id') || crypto.randomUUID());
       break;
     }
     case 'session-optional': {
-      // ✅ PERF: Try KV cache first for optional session too
-      const cookieHeader = c.req.header('cookie');
-      const sessionToken = extractSessionToken(cookieHeader);
-      const envOpt = c.env as ApiEnv['Bindings'] | undefined;
-      const kv = envOpt?.KV;
-
-      if (sessionToken && kv) {
-        const cacheKey = await createSessionCacheKey(sessionToken);
-        const cachedSession = await getSessionFromCache(kv, cacheKey);
-
-        if (cachedSession) {
-          c.set('session', cachedSession.session);
-          c.set('user', cachedSession.user);
-          c.set('requestId', c.req.header('x-request-id') || crypto.randomUUID());
-          break;
-        }
-      }
-
-      // Cache miss - call Better Auth
       try {
         const sessionData = await auth.api.getSession({
           headers: c.req.raw.headers,
         });
 
         if (sessionData?.user && sessionData?.session) {
-          // Cache the session
-          if (sessionToken && kv) {
-            const cacheKey = await createSessionCacheKey(sessionToken);
-            void cacheSession(kv, cacheKey, sessionData.user, sessionData.session);
-          }
-
           c.set('session', sessionData.session);
           c.set('user', sessionData.user);
         } else {
@@ -385,7 +241,6 @@ async function applyAuthentication<TEnv extends ApiEnv>(c: Context<TEnv>, authMo
         }
         c.set('requestId', c.req.header('x-request-id') || crypto.randomUUID());
       } catch {
-        // Allow unauthenticated requests
         c.set('session', null);
         c.set('user', null);
       }

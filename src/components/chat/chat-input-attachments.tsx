@@ -125,7 +125,7 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
       {/* Upload progress indicator */}
       {isUploading && (
         <div className="absolute bottom-0 left-0 right-0 h-0.5">
-          <Progress value={uploadProgress} className="h-0.5 rounded-none" />
+          <Progress value={uploadProgress} className="h-0.5 rounded-none bg-transparent" />
         </div>
       )}
 
