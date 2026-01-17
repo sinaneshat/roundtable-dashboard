@@ -32,6 +32,7 @@ import {
   MIN_MULTIPART_PART_SIZE,
 } from '@/api/core/enums';
 import {
+  backgroundPdfProcessing,
   createUploadTicket,
   deleteFile,
   deleteMultipartMetadata,
@@ -43,6 +44,7 @@ import {
   markTicketUsed,
   putFile,
   scheduleUploadCleanup,
+  shouldExtractPdfText,
   storeMultipartMetadata,
   validateMultipartOwnership,
   validateR2UploadId,
@@ -467,6 +469,24 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
         c.executionCtx.waitUntil(scheduleCleanupTask());
       } else {
         scheduleCleanupTask().catch(() => {});
+      }
+    }
+
+    // Process PDF text extraction in background
+    if (shouldExtractPdfText(file.type, file.size) && c.env.UPLOADS_R2_BUCKET) {
+      const pdfProcessingTask = backgroundPdfProcessing({
+        uploadId,
+        r2Key,
+        fileSize: file.size,
+        mimeType: file.type,
+        r2Bucket: c.env.UPLOADS_R2_BUCKET,
+        db,
+      });
+
+      if (c.executionCtx) {
+        c.executionCtx.waitUntil(pdfProcessingTask);
+      } else {
+        pdfProcessingTask.catch(() => {});
       }
     }
 
@@ -1033,6 +1053,24 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
     const cleanupMetadata = deleteMultipartMetadata(c.env.KV, uploadId);
     if (c.executionCtx) {
       c.executionCtx.waitUntil(cleanupMetadata);
+    }
+
+    // Process PDF text extraction in background
+    if (shouldExtractPdfText(uploadMeta.mimeType, uploadMeta.fileSize) && c.env.UPLOADS_R2_BUCKET) {
+      const pdfProcessingTask = backgroundPdfProcessing({
+        uploadId,
+        r2Key: uploadMeta.r2Key,
+        fileSize: uploadMeta.fileSize,
+        mimeType: uploadMeta.mimeType,
+        r2Bucket: c.env.UPLOADS_R2_BUCKET,
+        db,
+      });
+
+      if (c.executionCtx) {
+        c.executionCtx.waitUntil(pdfProcessingTask);
+      } else {
+        pdfProcessingTask.catch(() => {});
+      }
     }
 
     return Responses.ok(c, updated);

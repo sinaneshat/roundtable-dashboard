@@ -276,6 +276,13 @@ import {
 } from './routes/usage/route';
 
 // ============================================================================
+// Environment Detection (sync, build-time check)
+// ============================================================================
+// NEXT_PUBLIC_WEBAPP_ENV is inlined at build time - safe for sync access
+const WEBAPP_ENV = process.env.NEXT_PUBLIC_WEBAPP_ENV || 'development';
+const IS_DEV_ENVIRONMENT = WEBAPP_ENV === 'local' || WEBAPP_ENV === 'development' || WEBAPP_ENV === 'preview';
+
+// ============================================================================
 // Step 1: Create the main OpenAPIHono app with defaultHook (following docs)
 // ============================================================================
 
@@ -591,15 +598,22 @@ app.use('/uploads/multipart/:id/parts', RateLimiterFactory.create('upload'), csr
 app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), csrfProtection);
 
 // Register all routes directly on the app
-const appRoutes = app
+// Build route chain with conditional dev-only routes
+let routeChain = app
   // ============================================================================
   // System Routes - Health monitoring and diagnostics
   // ============================================================================
   .openapi(healthRoute, healthHandler) // Basic health check for monitoring
-  .openapi(detailedHealthRoute, detailedHealthHandler) // Detailed health check with environment and dependencies
-  .openapi(clearCacheRoute, clearCacheHandler) // Clear all backend caches
-  .openapi(benchmarkRoute, benchmarkHandler) // Database query benchmark
+  .openapi(detailedHealthRoute, detailedHealthHandler); // Detailed health check with environment and dependencies
 
+// Dev-only routes - only registered in local/preview/development environments
+if (IS_DEV_ENVIRONMENT) {
+  routeChain = routeChain
+    .openapi(clearCacheRoute, clearCacheHandler) // Clear all backend caches (dev only)
+    .openapi(benchmarkRoute, benchmarkHandler); // Database query benchmark (dev only)
+}
+
+const appRoutes = routeChain
   // ============================================================================
   // Auth Routes - User authentication and session management (protected)
   // ============================================================================
@@ -720,13 +734,16 @@ const appRoutes = app
   // ============================================================================
   .openapi(getCreditBalanceRoute, getCreditBalanceHandler) // Get credit balance and plan info
   .openapi(getCreditTransactionsRoute, getCreditTransactionsHandler) // Get credit transaction history
-  .openapi(estimateCreditCostRoute, estimateCreditCostHandler) // Estimate credit cost for action
+  .openapi(estimateCreditCostRoute, estimateCreditCostHandler); // Estimate credit cost for action
 
-  // ============================================================================
-  // Test Routes - Development/test only utilities (protected)
-  // ============================================================================
-  .openapi(setUserCreditsRoute, setUserCreditsHandler) // Set user credits (test only)
+// Test Routes - Development/test only utilities (protected)
+// Only registered in local/preview/development environments
+let creditsChain = appRoutes;
+if (IS_DEV_ENVIRONMENT) {
+  creditsChain = creditsChain.openapi(setUserCreditsRoute, setUserCreditsHandler); // Set user credits (dev only)
+}
 
+const finalRoutes = creditsChain
   // ============================================================================
   // Models Routes - Simplified OpenRouter models endpoint (public)
   // ============================================================================
@@ -770,14 +787,14 @@ const appRoutes = app
 // This enables full type safety for RPC clients
 // ============================================================================
 
-export type AppType = typeof appRoutes;
+export type AppType = typeof finalRoutes;
 
 // ============================================================================
 // Step 6: OpenAPI documentation endpoints
 // ============================================================================
 
 // OpenAPI specification document endpoint
-appRoutes.doc('/doc', c => ({
+finalRoutes.doc('/doc', c => ({
   openapi: '3.0.0',
   info: {
     version: APP_VERSION,
@@ -820,7 +837,7 @@ appRoutes.doc('/doc', c => ({
 }));
 
 // OpenAPI JSON endpoint (redirect to the doc endpoint)
-appRoutes.get('/openapi.json', async (c) => {
+finalRoutes.get('/openapi.json', async (c) => {
   // Redirect to the existing doc endpoint which contains the full OpenAPI spec
   return c.redirect('/api/v1/doc');
 });
@@ -832,7 +849,7 @@ appRoutes.get('/openapi.json', async (c) => {
 // Scalar API documentation UI
 // CSP headers set directly in Hono since Next.js headers() don't apply to Hono routes in Cloudflare Workers
 // Middleware to set permissive CSP for Scalar before the response is generated
-appRoutes.use('/scalar', async (c, next) => {
+finalRoutes.use('/scalar', async (c, next) => {
   await next();
 
   // Get the response that was set
@@ -864,16 +881,16 @@ appRoutes.use('/scalar', async (c, next) => {
   });
 });
 
-appRoutes.get('/scalar', Scalar({
+finalRoutes.get('/scalar', Scalar({
   url: '/api/v1/doc',
 }));
 
 // Health endpoints are now properly registered as OpenAPI routes above
 
 // LLM-friendly documentation
-appRoutes.get('/llms.txt', async (c) => {
+finalRoutes.get('/llms.txt', async (c) => {
   try {
-    const document = appRoutes.getOpenAPI31Document({
+    const document = finalRoutes.getOpenAPI31Document({
       openapi: '3.1.0',
       info: {
         title: 'Application API',
@@ -891,4 +908,4 @@ appRoutes.get('/llms.txt', async (c) => {
 // Step 8: Export the app (default export for Cloudflare Workers/Bun)
 // ============================================================================
 
-export default appRoutes;
+export default finalRoutes;

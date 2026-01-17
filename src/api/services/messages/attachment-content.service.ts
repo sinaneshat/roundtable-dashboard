@@ -353,43 +353,57 @@ export async function loadAttachmentContentUrl(
               fileSize: extractedText.length,
             }));
           } else {
-            // No extracted text available - send PDF as base64 binary for visual content
-            // AI SDK v6 pattern: models that support PDF files (Google, Anthropic, OpenAI gpt-4o)
-            // can process visual content directly when sent as binary data
-            const { data } = await getFile(r2Bucket, upload.r2Key);
-
-            if (data) {
-              const uint8Data = new Uint8Array(data);
-              const base64 = arrayBufferToBase64(data);
-              const dataUrl = `data:${upload.mimeType};base64,${base64}`;
-
-              // Send as file part with binary data for AI SDK compatibility
-              // TYPE BRIDGE: Hybrid format with both data (Uint8Array) and url (data URL)
-              // to satisfy AI SDK (needs data) and UI rendering (needs url)
-              fileParts.push({
-                type: MessagePartTypes.FILE,
-                data: uint8Data,
-                mimeType: upload.mimeType,
-                filename: upload.filename,
-                url: dataUrl,
-                mediaType: upload.mimeType,
-              } as unknown as UrlFilePart);
-
-              logger?.info('Loaded visual PDF as base64 (no extracted text)', LogHelpers.operation({
+            // No extracted text available - check size before loading to prevent memory exhaustion
+            // Cloudflare Workers have 128MB limit, loading large PDFs as base64 can crash the worker
+            if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
+              logger?.warn('PDF too large for base64 fallback, skipping (text extraction may have failed)', LogHelpers.operation({
                 operationName: 'loadAttachmentContentUrl',
                 uploadId: upload.id,
                 filename: upload.filename,
                 mimeType: upload.mimeType,
                 sizeKB: Math.round(upload.fileSize / 1024),
-              }));
-            } else {
-              logger?.warn('Failed to load PDF from storage, skipping', LogHelpers.operation({
-                operationName: 'loadAttachmentContentUrl',
-                uploadId: upload.id,
-                filename: upload.filename,
-                mimeType: upload.mimeType,
+                maxSize: Math.round(MAX_BASE64_FILE_SIZE / 1024),
               }));
               skipped++;
+            } else {
+              // File is small enough - send PDF as base64 binary for visual content
+              // AI SDK v6 pattern: models that support PDF files (Google, Anthropic, OpenAI gpt-4o)
+              // can process visual content directly when sent as binary data
+              const { data } = await getFile(r2Bucket, upload.r2Key);
+
+              if (data) {
+                const uint8Data = new Uint8Array(data);
+                const base64 = arrayBufferToBase64(data);
+                const dataUrl = `data:${upload.mimeType};base64,${base64}`;
+
+                // Send as file part with binary data for AI SDK compatibility
+                // TYPE BRIDGE: Hybrid format with both data (Uint8Array) and url (data URL)
+                // to satisfy AI SDK (needs data) and UI rendering (needs url)
+                fileParts.push({
+                  type: MessagePartTypes.FILE,
+                  data: uint8Data,
+                  mimeType: upload.mimeType,
+                  filename: upload.filename,
+                  url: dataUrl,
+                  mediaType: upload.mimeType,
+                } as unknown as UrlFilePart);
+
+                logger?.info('Loaded visual PDF as base64 (no extracted text)', LogHelpers.operation({
+                  operationName: 'loadAttachmentContentUrl',
+                  uploadId: upload.id,
+                  filename: upload.filename,
+                  mimeType: upload.mimeType,
+                  sizeKB: Math.round(upload.fileSize / 1024),
+                }));
+              } else {
+                logger?.warn('Failed to load PDF from storage, skipping', LogHelpers.operation({
+                  operationName: 'loadAttachmentContentUrl',
+                  uploadId: upload.id,
+                  filename: upload.filename,
+                  mimeType: upload.mimeType,
+                }));
+                skipped++;
+              }
             }
           }
         } else {
@@ -912,44 +926,59 @@ export async function loadMessageAttachmentsUrl(
               fileSize: extractedText.length,
             }));
           } else {
-            // No extracted text available - send PDF as base64 binary for visual content
-            // AI SDK v6 pattern: models that support PDF files can process visual content
-            const { data } = await getFile(r2Bucket, upload.r2Key);
-
-            if (data) {
-              const uint8Data = new Uint8Array(data);
-              const base64 = arrayBufferToBase64(data);
-              const dataUrl = `data:${upload.mimeType};base64,${base64}`;
-
-              // Send as file part with binary data for AI SDK compatibility
-              messageParts.push({
-                type: MessagePartTypes.FILE,
-                data: uint8Data,
-                mimeType: upload.mimeType,
-                filename: upload.filename,
-                url: dataUrl,
-                mediaType: upload.mimeType,
-              } as unknown as UrlFilePart);
-
-              loaded++;
-
-              logger?.info('Loaded visual PDF as base64 (no extracted text)', LogHelpers.operation({
+            // No extracted text available - check size before loading to prevent memory exhaustion
+            // Cloudflare Workers have 128MB limit, loading large PDFs as base64 can crash the worker
+            if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
+              logger?.warn('PDF too large for base64 fallback, skipping (text extraction may have failed)', LogHelpers.operation({
                 operationName: 'loadMessageAttachmentsUrl',
                 messageId,
                 uploadId,
                 filename: upload.filename,
                 mimeType: upload.mimeType,
                 sizeKB: Math.round(upload.fileSize / 1024),
-              }));
-            } else {
-              logger?.warn('Failed to load PDF from storage, skipping', LogHelpers.operation({
-                operationName: 'loadMessageAttachmentsUrl',
-                messageId,
-                uploadId,
-                filename: upload.filename,
-                mimeType: upload.mimeType,
+                maxSize: Math.round(MAX_BASE64_FILE_SIZE / 1024),
               }));
               skipped++;
+            } else {
+              // File is small enough - send PDF as base64 binary for visual content
+              // AI SDK v6 pattern: models that support PDF files can process visual content
+              const { data } = await getFile(r2Bucket, upload.r2Key);
+
+              if (data) {
+                const uint8Data = new Uint8Array(data);
+                const base64 = arrayBufferToBase64(data);
+                const dataUrl = `data:${upload.mimeType};base64,${base64}`;
+
+                // Send as file part with binary data for AI SDK compatibility
+                messageParts.push({
+                  type: MessagePartTypes.FILE,
+                  data: uint8Data,
+                  mimeType: upload.mimeType,
+                  filename: upload.filename,
+                  url: dataUrl,
+                  mediaType: upload.mimeType,
+                } as unknown as UrlFilePart);
+
+                loaded++;
+
+                logger?.info('Loaded visual PDF as base64 (no extracted text)', LogHelpers.operation({
+                  operationName: 'loadMessageAttachmentsUrl',
+                  messageId,
+                  uploadId,
+                  filename: upload.filename,
+                  mimeType: upload.mimeType,
+                  sizeKB: Math.round(upload.fileSize / 1024),
+                }));
+              } else {
+                logger?.warn('Failed to load PDF from storage, skipping', LogHelpers.operation({
+                  operationName: 'loadMessageAttachmentsUrl',
+                  messageId,
+                  uploadId,
+                  filename: upload.filename,
+                  mimeType: upload.mimeType,
+                }));
+                skipped++;
+              }
             }
           }
         } else {

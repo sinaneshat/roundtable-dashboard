@@ -31,8 +31,11 @@ export const UploadMetadataSchema = z.object({
   height: z.number().int().positive().optional(),
   // Document-specific
   pageCount: z.number().int().positive().optional(),
+  totalPages: z.number().int().positive().optional(), // Alias for PDF extraction
   // Text extraction result
   extractedText: z.string().optional(),
+  extractedAt: z.string().optional(), // ISO timestamp when extraction completed
+  extractionError: z.string().optional(), // Error message if extraction failed
   // User-provided context
   description: z.string().max(500).optional(),
   // Processing error details

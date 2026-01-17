@@ -124,6 +124,7 @@ function checkEnvironment(c: HealthCheckContext) {
 /**
  * Clear all backend caches handler
  * Invalidates all known cache tags to force fresh data
+ * NOTE: Route only registered in preview/local environments (see api/index.ts)
  */
 export const clearCacheHandler: RouteHandler<typeof clearCacheRoute, ApiEnv> = createHandler(
   {
@@ -174,6 +175,7 @@ export const clearCacheHandler: RouteHandler<typeof clearCacheRoute, ApiEnv> = c
 /**
  * Database query benchmark handler
  * Runs common queries and measures execution time
+ * NOTE: Route only registered in preview/local environments (see api/index.ts)
  */
 export const benchmarkHandler: RouteHandler<typeof benchmarkRoute, ApiEnv> = createHandler(
   {

@@ -5,6 +5,7 @@
  */
 
 export * from './multipart-upload.service';
+export * from './pdf-extraction.service';
 export * from './signed-url.service';
 export * from './storage.service';
 export * from './upload-cleanup.service';

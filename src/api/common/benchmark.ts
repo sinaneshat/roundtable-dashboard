@@ -5,7 +5,7 @@
  * Provides min/max/avg/p95 statistics for query performance analysis.
  */
 
-export interface BenchmarkResult {
+export type BenchmarkResult = {
   name: string;
   iterations: number;
   timings: {
@@ -17,14 +17,14 @@ export interface BenchmarkResult {
   };
   /** Individual run times in ms */
   runs: number[];
-}
+};
 
-export interface BenchmarkSuite {
+export type BenchmarkSuite = {
   startedAt: string;
   completedAt: string;
   totalDuration: number;
   results: BenchmarkResult[];
-}
+};
 
 /**
  * Benchmark a single async operation
