@@ -33,6 +33,9 @@ export {
   updateCustomRoleHandler,
 } from './handlers/role.handler';
 export {
+  getRoundStatusHandler,
+} from './handlers/round-status.handler';
+export {
   getThreadStreamResumptionStateHandler,
   resumeThreadStreamHandler,
 } from './handlers/stream-resume.handler';
@@ -47,6 +50,7 @@ export {
   getThreadHandler,
   getThreadSlugStatusHandler,
   listPublicThreadSlugsHandler,
+  listSidebarThreadsHandler,
   listThreadsHandler,
   updateThreadHandler,
 } from './handlers/thread.handler';

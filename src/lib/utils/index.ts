@@ -20,5 +20,6 @@ export * from './role-colors';
 export * from './round-utils';
 export * from './ssr-message-verification';
 export * from './state-merge';
+export * from './subscription-helpers';
 export * from './type-guards';
 export * from './web-search-utils';

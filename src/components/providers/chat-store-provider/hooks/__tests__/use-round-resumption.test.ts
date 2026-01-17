@@ -19,7 +19,7 @@ type MockChatStoreState = {
   }>;
   messages: Array<{
     id: string;
-    role: MessageRoles.USER | 'assistant';
+    role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT;
     metadata?: { roundNumber?: number };
   }>;
   preSearches: StoredPreSearch[];

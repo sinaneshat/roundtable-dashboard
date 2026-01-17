@@ -61,7 +61,7 @@ function createMockParticipant(overrides?: Partial<ChatParticipant>): ChatPartic
 
 function createMockUIMessage(opts: {
   id: string;
-  role: MessageRoles.USER | 'assistant';
+  role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT;
   text: string;
   roundNumber: number;
   participantIndex?: number;

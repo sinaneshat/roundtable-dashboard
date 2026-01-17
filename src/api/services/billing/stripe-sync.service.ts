@@ -12,7 +12,6 @@ import type {
   InvoiceStatus,
   PaymentMethodType,
   PriceType,
-  StripeSubscriptionStatus,
 } from '@/api/core/enums';
 import {
   BillingIntervals,
@@ -36,6 +35,7 @@ import {
 } from '@/lib/utils';
 
 import { stripeService } from './stripe.service';
+import type { SyncedSubscriptionState } from './stripe-sync-schemas';
 
 function calculatePeriodEnd(
   startTimestamp: number,
@@ -56,34 +56,6 @@ function calculatePeriodEnd(
   }
 
   return Math.floor(endDate.getTime() / 1000);
-}
-
-export type SyncedSubscriptionState
-  = | {
-    status: StripeSubscriptionStatus;
-    subscriptionId: string;
-    priceId: string;
-    productId: string;
-    currentPeriodStart: number;
-    currentPeriodEnd: number;
-    cancelAtPeriodEnd: boolean;
-    canceledAt: number | null;
-    trialStart: number | null;
-    trialEnd: number | null;
-    paymentMethod: {
-      brand: string | null;
-      last4: string | null;
-    } | null;
-  }
-  | {
-    status: typeof SyncedSubscriptionStatuses.NONE;
-  };
-
-/** Type guard to check if synced state has an active subscription */
-export function hasSyncedSubscription(
-  state: SyncedSubscriptionState,
-): state is SyncedSubscriptionState & { status: StripeSubscriptionStatus } {
-  return state.status !== SyncedSubscriptionStatuses.NONE;
 }
 
 export async function syncStripeDataFromStripe(

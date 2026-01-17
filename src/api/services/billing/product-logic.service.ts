@@ -7,18 +7,19 @@
 
 import { z } from 'zod';
 
-import type { ChatMode, ModelPricingTier, SubscriptionTier } from '@/api/core/enums';
+import type { ChatMode, ModelCostCategory, ModelPricingTier, SubscriptionTier } from '@/api/core/enums';
 import {
   ChatModes,
   getModelTierMultiplier,
   MODEL_PRICING_TIERS,
   MODEL_TIER_THRESHOLDS,
+  ModelCostCategories,
   SUBSCRIPTION_TIERS,
   SubscriptionTiers,
 } from '@/api/core/enums';
 // Direct import to avoid barrel export pulling in server-only slug-generator.service.ts
 import { TITLE_GENERATION_PROMPT } from '@/api/services/prompts/prompts.service';
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 
 const _ModelForPricingSchema = z.object({
   id: z.string(),
@@ -97,11 +98,10 @@ function deriveTierRecord<T>(
 ): Record<SubscriptionTier, T> {
   return Object.fromEntries(
     SUBSCRIPTION_TIERS.map(tier => [tier, extractor(TIER_CONFIG[tier])]),
+  // TYPE INFERENCE: Object.fromEntries returns { [k: string]: T } but we know keys
+  // are SubscriptionTier from SUBSCRIPTION_TIERS const array
   ) as Record<SubscriptionTier, T>;
 }
-
-export const SUBSCRIPTION_TIER_NAMES: Record<SubscriptionTier, string>
-  = deriveTierRecord(config => config.name);
 
 export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number>
   = deriveTierRecord(config => config.maxOutputTokens);
@@ -109,17 +109,8 @@ export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number>
 export const MAX_MODEL_PRICING_BY_TIER: Record<SubscriptionTier, number | null>
   = deriveTierRecord(config => config.maxModelPricing);
 
-export const MIN_PARTICIPANTS_REQUIRED = 2;
-
 export const MAX_MODELS_BY_TIER: Record<SubscriptionTier, number>
   = deriveTierRecord(config => config.maxModels);
-
-/**
- * Absolute maximum participants allowed across all tiers.
- * Derived from pro tier's maxModels limit.
- * Used as literal value in Zod schemas that require compile-time constants.
- */
-export const MAX_PARTICIPANTS_LIMIT = 12;
 
 export const TIER_QUOTAS: Record<
   SubscriptionTier,
@@ -205,7 +196,16 @@ export function calculateWeightedCredits(
   modelId: string,
   getModel: (id: string) => ModelForPricing | undefined,
 ): number {
-  const baseCredits = calculateBaseCredits(inputTokens, outputTokens);
+  // Ensure tokens are valid numbers, default to 0 if NaN/undefined
+  const safeInputTokens = Number.isFinite(inputTokens) ? inputTokens : 0;
+  const safeOutputTokens = Number.isFinite(outputTokens) ? outputTokens : 0;
+
+  // Skip calculation if no tokens used
+  if (safeInputTokens === 0 && safeOutputTokens === 0) {
+    return 0;
+  }
+
+  const baseCredits = calculateBaseCredits(safeInputTokens, safeOutputTokens);
   const multiplier = getModelCreditMultiplierById(modelId, getModel);
   return Math.ceil(baseCredits * multiplier);
 }
@@ -304,17 +304,17 @@ export function isModelFree(model: ModelForPricing): boolean {
   return freeLimit !== null && inputPricePerMillion <= freeLimit;
 }
 
-export function getModelCostCategory(model: ModelForPricing): 'free' | 'low' | 'medium' | 'high' {
+export function getModelCostCategory(model: ModelForPricing): ModelCostCategory {
   if (isModelFree(model))
-    return 'free';
+    return ModelCostCategories.FREE;
 
   const inputPrice = parsePrice(model.pricing_display?.input || 0);
 
   if (inputPrice <= 1.0)
-    return 'low';
+    return ModelCostCategories.LOW;
   if (inputPrice <= 10.0)
-    return 'medium';
-  return 'high';
+    return ModelCostCategories.MEDIUM;
+  return ModelCostCategories.HIGH;
 }
 
 export function getModelPricingDisplay(model: ModelForPricing): string {

@@ -180,6 +180,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           // We should only skip if the stream was actually triggered by another path.
           const moderatorId = `${threadId}_r${effectiveRoundNumber}_moderator`;
           if (currentState.hasModeratorStreamBeenTriggered(moderatorId, effectiveRoundNumber)) {
+            rlog.sync('mod-skip-triggered', `r${effectiveRoundNumber} already triggered`);
             return;
           }
 
@@ -195,9 +196,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               && !('isModerator' in meta);
           });
           const allParticipantsComplete = assistantMsgsInRound.length >= participantCount;
+          rlog.sync('mod-check-complete', `r${effectiveRoundNumber} assistMsgs=${assistantMsgsInRound.length} pCount=${participantCount} allComplete=${allParticipantsComplete}`);
 
           if (!allParticipantsComplete) {
             if (currentState.waitingToStartStreaming || currentState.nextParticipantToTrigger !== null) {
+              rlog.sync('mod-skip-waiting', `r${effectiveRoundNumber} waiting=${currentState.waitingToStartStreaming} nextP=${currentState.nextParticipantToTrigger}`);
               return;
             }
           }
@@ -210,6 +213,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           // Re-check with latest state (but skip if all participants already complete)
           if (!allParticipantsComplete) {
             if (latestState.waitingToStartStreaming || latestState.nextParticipantToTrigger !== null) {
+              rlog.sync('mod-skip-waiting2', `r${effectiveRoundNumber} recheck: waiting=${latestState.waitingToStartStreaming} nextP=${latestState.nextParticipantToTrigger}`);
               return;
             }
           }
@@ -224,6 +228,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           });
 
           if (hasAnyStreamingParts && storeIsStreaming) {
+            rlog.sync('mod-skip-streaming', `r${effectiveRoundNumber} still streaming parts`);
             return;
           }
 
@@ -232,10 +237,12 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           if (webSearchEnabled) {
             const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === effectiveRoundNumber);
             if (preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE) {
+              rlog.sync('mod-skip-presearch', `r${effectiveRoundNumber} presearch not complete`);
               return;
             }
           }
 
+          rlog.sync('mod-proceed', `r${effectiveRoundNumber} all checks passed, proceeding to trigger`);
           currentState.markModeratorCreated(effectiveRoundNumber);
 
           const participantMessageIds = sdkMessages
@@ -253,9 +260,15 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             })
             .map(m => m.id);
 
+          // ✅ DEBUG: Log message IDs being sent to moderator
+          rlog.sync('mod-ids', `r${effectiveRoundNumber} ids=[${participantMessageIds.join(',')}] count=${participantMessageIds.length}`);
+
           if (participantMessageIds.length > 0) {
+            rlog.sync('mod-trigger-start', `r${effectiveRoundNumber} triggering moderator with ${participantMessageIds.length} msgs`);
             currentState.setIsModeratorStreaming(true);
             triggerModeratorRef.current?.(effectiveRoundNumber, participantMessageIds);
+          } else {
+            rlog.sync('mod-skip', `r${effectiveRoundNumber} no participant messages found, skipping moderator`);
           }
         } catch {
         }

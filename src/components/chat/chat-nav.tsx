@@ -33,7 +33,7 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useTogglePublicMutation } from '@/hooks/mutations';
-import { useThreadQuery, useThreadsQuery } from '@/hooks/queries';
+import { useSidebarThreadsQuery, useThreadQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';
 import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
@@ -53,7 +53,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const sidebarContentRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
   const handleNavigationReset = useNavigationReset();
-  const { data: threadsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error } = useThreadsQuery();
+  const { data: threadsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error } = useSidebarThreadsQuery();
 
   // Share dialog state - exact same pattern as chat-thread-actions.tsx
   const [chatToShare, setChatToShare] = useState<ChatSidebarItem | null>(null);
@@ -180,6 +180,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
             <div className="flex h-9 mb-2 items-center justify-between group-data-[collapsible=icon]:hidden">
               <Link
                 href="/chat"
+                prefetch={true}
                 onClick={handleNavLinkClick}
                 className="flex h-9 items-center rounded-md ps-3 pe-2 hover:opacity-80 transition-opacity"
               >
@@ -197,6 +198,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
             <div className="hidden h-10 mb-2 group-data-[collapsible=icon]:flex items-center justify-center relative">
               <Link
                 href="/chat"
+                prefetch={true}
                 onClick={handleNavLinkClick}
                 className="flex size-10 items-center justify-center group-hover:opacity-0 group-hover:pointer-events-none transition-opacity duration-150"
               >
@@ -217,7 +219,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
             <SidebarMenu className="gap-1">
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
                 <SidebarMenuButton asChild isActive={pathname === '/chat'}>
-                  <Link href="/chat" onClick={handleNavLinkClick}>
+                  <Link href="/chat" prefetch={true} onClick={handleNavLinkClick}>
                     <Icons.plus className="size-4 shrink-0" />
                     <span
                       className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
@@ -250,7 +252,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
 
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
                 <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
-                  <Link href="/chat" onClick={handleNavLinkClick}>
+                  <Link href="/chat" prefetch={true} onClick={handleNavLinkClick}>
                     <Icons.plus />
                   </Link>
                 </SidebarMenuButton>

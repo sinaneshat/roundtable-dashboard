@@ -310,7 +310,7 @@ describe('round Completion Detection', () => {
       // ✅ TYPE-SAFE: Direct property access on properly typed message
       expect(errorMessage.metadata.hasError).toBe(true);
       // Even with error, participant has responded
-      expect(errorMessage.role).toBe('assistant');
+      expect(errorMessage.role).toBe(UIMessageRoles.ASSISTANT);
     });
 
     it('finishReason=error indicates participant failed', () => {
@@ -496,7 +496,7 @@ describe('multi-Round Conversations', () => {
       ];
 
       // Expected order: U0, A0P0, A0P1, U1, A1P0, A1P1
-      expect(conversation[0]?.role).toBe('user');
+      expect(conversation[0]?.role).toBe(UIMessageRoles.USER);
       expect(conversation[0]?.metadata.roundNumber).toBe(0);
 
       // ✅ TYPE-SAFE: Extract assistant messages for typed access
@@ -506,7 +506,7 @@ describe('multi-Round Conversations', () => {
       expect(round0Assistants[0]?.metadata.participantIndex).toBe(0);
       expect(round0Assistants[1]?.metadata.participantIndex).toBe(1);
 
-      expect(conversation[3]?.role).toBe('user');
+      expect(conversation[3]?.role).toBe(UIMessageRoles.USER);
       expect(conversation[3]?.metadata.roundNumber).toBe(1);
     });
   });

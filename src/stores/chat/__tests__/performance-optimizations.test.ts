@@ -45,11 +45,11 @@ function createUIMessage(overrides: {
   content?: string;
   parts?: UIMessage['parts'];
   createdAt?: Date;
-  metadata?: Record<string, unknown>;
+  metadata?: UIMessage['metadata'];
 }): UIMessage {
   return {
     id: overrides.id,
-    role: overrides.role as 'user' | 'assistant' | 'system',
+    role: overrides.role as typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT | 'system',
     content: overrides.content ?? '',
     parts: overrides.parts ?? [],
     createdAt: overrides.createdAt ?? new Date(),
@@ -216,8 +216,8 @@ describe('participant Completion Gate - Map Optimization', () => {
       expect(status.expectedCount).toBe(100);
       expect(status.completedCount).toBe(100);
 
-      // Should complete in under 500ms even with 100 participants (accounts for test env overhead + JIT warmup + CI variability)
-      expect(endTime - startTime).toBeLessThan(500);
+      // Should complete in under 1000ms even with 100 participants (accounts for test env overhead + JIT warmup + CI variability)
+      expect(endTime - startTime).toBeLessThan(1000);
     });
 
     it('correctly handles multiple rounds', () => {

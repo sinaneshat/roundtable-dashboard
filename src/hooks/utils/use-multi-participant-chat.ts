@@ -14,7 +14,7 @@ import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractValidFileParts, isRenderableContent, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, isPreSearch, mergeParticipantMetadata } from '@/lib/utils';
+import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getAvailableSources, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, isPreSearch, mergeParticipantMetadata } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 
 import { useSyncedRefs } from './use-synced-refs';
@@ -492,7 +492,8 @@ export function useMultiParticipantChat(
     }
 
     // Find first participant without a COMPLETE message (0 to totalParticipants-1)
-    let nextIndex = currentIndexRef.current + 1; // Default: increment
+    // ✅ FIX: Default to totalParticipants (round complete) - only set lower if incomplete found
+    let nextIndex = totalParticipants;
     for (let i = 0; i < totalParticipants; i++) {
       if (!participantIndicesWithCompleteMessages.has(i)) {
         // Found a participant without a complete message - trigger them
@@ -637,8 +638,7 @@ export function useMultiParticipantChat(
     }
     // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
     // Note: callbackRefs not in deps - we use callbackRefs.onComplete.current to always get latest value
-    // hasResponded, markAsResponded, resetErrorTracking are stable functions
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.onComplete accessed via .current (ref pattern)
   }, [resetErrorTracking]);
 
   /**
@@ -680,6 +680,9 @@ export function useMultiParticipantChat(
       const attachmentIdsForRequest = participantIndexToUse === 0
         ? (callbackRefs.pendingAttachmentIds.current || undefined)
         : undefined;
+
+      // ✅ DEBUG: Log attachment IDs being sent
+      rlog.msg('cite-send', `pIdx=${participantIndexToUse} pending=${callbackRefs.pendingAttachmentIds.current?.length ?? 0} sending=${attachmentIdsForRequest?.length ?? 0}`);
 
       // ✅ SANITIZATION: Filter message parts for backend transmission
       // Uses shared isValidFilePartForTransmission type guard for consistent handling
@@ -792,6 +795,12 @@ export function useMultiParticipantChat(
     // in Chat.makeRequest because internal state initialization fails
     id: useChatId,
     transport,
+
+    // ✅ DEBUG: Log all streaming data parts to trace when metadata arrives
+    onData: (dataPart) => {
+      rlog.msg('cite-data', `type=${dataPart?.type} keys=[${dataPart && typeof dataPart === 'object' ? Object.keys(dataPart).join(',') : 'null'}]`);
+    },
+
     // ✅ AI SDK RESUME PATTERN: Enable automatic stream resumption after page reload
     // When true, AI SDK calls prepareReconnectToStreamRequest on mount to check for active streams
     // GET endpoint at /api/v1/chat/threads/{threadId}/stream serves buffered chunks
@@ -993,7 +1002,10 @@ export function useMultiParticipantChat(
       const msgId = data.message?.id;
       const pIdxMatch = msgId?.match(/_p(\d+)$/);
       const rndMatch = msgId?.match(/_r(\d+)_/);
-      rlog.stream('end', `r${rndMatch?.[1] ?? '-'} p${pIdxMatch?.[1] ?? '-'} reason=${data.finishReason ?? '-'} parts=${data.message?.parts?.length ?? 0}`);
+      // ✅ DEBUG: Log metadata to trace availableSources (only for real messages)
+      const availableSources = getAvailableSources(data.message?.metadata);
+      const hasAvail = availableSources?.length ?? 0;
+      rlog.stream('end', `r${rndMatch?.[1] ?? '-'} p${pIdxMatch?.[1] ?? '-'} reason=${data.finishReason ?? '-'} parts=${data.message?.parts?.length ?? 0} avail=${hasAvail}`);
 
       // ✅ Skip phantom resume completions (no active stream to resume)
       const notOurMessageId = !data.message?.id?.includes('_r');
@@ -1601,12 +1613,12 @@ export function useMultiParticipantChat(
       // Reset hydration flag to allow re-hydration on next thread
       hasHydratedRef.current = false;
 
-      // Reset React state as well (intentional direct setState for sync reset)
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional sync state reset on navigation
+      // Reset state synchronously on navigation - legitimate useLayoutEffect pattern
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
       setCurrentRound(0);
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional sync state reset on navigation
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
       setCurrentParticipantIndex(0);
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional sync state reset on navigation
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
       setIsExplicitlyStreaming(false);
     }
 
@@ -1869,7 +1881,6 @@ export function useMultiParticipantChat(
 
     // ✅ Guards: Wait for dependencies to be ready
     // ✅ FIX: Require AI SDK to be fully ready before sending
-    // NOTE: isExplicitlyStreaming removed from guard - handled above by stale state fix
     if (messages.length === 0 || status !== AiSdkStatuses.READY) {
       isTriggeringRef.current = false;
       return;
@@ -2375,12 +2386,8 @@ export function useMultiParticipantChat(
     // The sendMessage function will handle participant orchestration properly
     sendMessage(userPromptText);
     // Note: callbackRefs not in deps - we use callbackRefs.onRetry.current to always get latest value
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.onRetry/pendingFileParts accessed via .current (ref pattern)
   }, [messages, sendMessage, status, setMessages, resetErrorTracking, clearAnimations]);
-
-  // ✅ RESUMABLE STREAMS: Stop functionality removed
-  // Stream resumption is incompatible with abort signals
-  // Streams now continue until completion and can resume after page reload
 
   // ✅ REACT 19 PATTERN: useEffectEvent for resumed stream handling
   // This event handler reads latest values (hasEarlyOptimisticMessage, threadId, messages)
@@ -2414,7 +2421,7 @@ export function useMultiParticipantChat(
     // This ensures store.isStreaming reflects the actual state for message sync
     // Must happen BEFORE the streamResumptionPrefilled check so message sync works
     isStreamingRef.current = true;
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Valid React 19 pattern: useEffectEvent callback for stream state sync
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- called from useEffectEvent in response to AI SDK status
     setIsExplicitlyStreaming(true);
 
     // ✅ CRITICAL FIX: When server has prefilled resumption state, DON'T trigger custom resumption

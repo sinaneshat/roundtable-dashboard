@@ -10,9 +10,10 @@
  * const { streamConfig, isStreaming, error, partialConfig } = useAnalyzePromptStream();
  *
  * const handleSubmit = async () => {
- *   const hasVisualFiles = attachments.some(att => isImageOrPdf(att.file.type));
- *   const finalConfig = await streamConfig({ prompt, hasVisualFiles });
- *   // Apply finalConfig to store - only vision-capable models when visual files are attached
+ *   const hasImageFiles = attachments.some(att => isImage(att.file.type));
+ *   const hasDocumentFiles = attachments.some(att => isDocument(att.file.type));
+ *   const finalConfig = await streamConfig({ prompt, hasImageFiles, hasDocumentFiles });
+ *   // Apply finalConfig to store - models filtered by capabilities
  * };
  */
 
@@ -31,7 +32,10 @@ type AnalyzePromptStreamState = {
 
 type StreamConfigOptions = {
   prompt: string;
-  hasVisualFiles?: boolean;
+  /** ✅ GRANULAR: Whether image files are attached - requires supports_vision */
+  hasImageFiles?: boolean;
+  /** ✅ GRANULAR: Whether document files (PDFs, DOC, etc.) are attached - requires supports_file */
+  hasDocumentFiles?: boolean;
 };
 
 type AnalyzePromptStreamResult = AnalyzePromptStreamState & {
@@ -66,7 +70,7 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
   }, [abort]);
 
   const streamConfig = useCallback(async (options: StreamConfigOptions): Promise<AnalyzePromptPayload | null> => {
-    const { prompt, hasVisualFiles = false } = options;
+    const { prompt, hasImageFiles = false, hasDocumentFiles = false } = options;
 
     // Abort any existing stream
     abort();
@@ -82,7 +86,7 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
 
     try {
       const response = await analyzePromptStreamService({
-        json: { prompt, hasVisualFiles },
+        json: { prompt, hasImageFiles, hasDocumentFiles },
       });
 
       if (!response.ok) {

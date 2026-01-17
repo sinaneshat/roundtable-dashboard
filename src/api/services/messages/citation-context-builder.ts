@@ -11,6 +11,7 @@
 
 import type { CitationSourceType } from '@/api/core/enums';
 import {
+  CITATION_PREFIXES,
   CITATION_SOURCE_TYPES,
   CitationSourceContentLimits,
   CitationSourceLabels,
@@ -27,6 +28,7 @@ import type { CitableContextResult, CitableSource, CitationSourceMap } from '@/a
 
 export type CitableContextParams = ProjectContextParams & {
   includeAttachments?: boolean;
+  baseUrl: string; // Base URL for generating absolute download URLs
 };
 
 // ============================================================================
@@ -161,6 +163,7 @@ function buildModeratorSources(
  */
 function buildAttachmentSources(
   attachments: AggregatedProjectContext['attachments'],
+  baseUrl: string,
 ): CitableSource[] {
   return attachments.attachments.map((attachment) => {
     // Format file size for display
@@ -186,6 +189,9 @@ function buildAttachmentSources(
       attachment.threadTitle ? `From thread: ${attachment.threadTitle}` : '',
     ].filter(Boolean).join('\n');
 
+    // Generate absolute download URL for attachment
+    const downloadUrl = `${baseUrl}/api/v1/uploads/${attachment.id}/download`;
+
     return {
       id: generateSourceId(CitationSourceTypes.ATTACHMENT, attachment.id),
       type: CitationSourceTypes.ATTACHMENT,
@@ -196,6 +202,10 @@ function buildAttachmentSources(
         threadId: attachment.threadId || undefined,
         threadTitle: attachment.threadTitle || undefined,
         filename: attachment.filename,
+        // Include attachment-specific fields for citation UI
+        downloadUrl,
+        mimeType: attachment.mimeType,
+        fileSize: attachment.fileSize,
       },
     };
   });
@@ -257,7 +267,7 @@ export async function buildCitableContext(params: CitableContextParams): Promise
   const threadSources = buildThreadSources(aggregatedContext.chats);
   const searchSources = buildSearchSources(aggregatedContext.searches);
   const moderatorSources = buildModeratorSources(aggregatedContext.moderators);
-  const attachmentSources = buildAttachmentSources(aggregatedContext.attachments);
+  const attachmentSources = buildAttachmentSources(aggregatedContext.attachments, params.baseUrl);
 
   const allSources = [
     ...memorySources,
@@ -276,19 +286,41 @@ export async function buildCitableContext(params: CitableContextParams): Promise
         formatContextWithSources(allSources),
         '</project-context>',
         '',
-        '## Citation Instructions',
+        '## 🚨 MANDATORY: Project Context Citation Requirements',
         '',
-        'When referencing information from the project context above, cite the source using its ID in square brackets.',
-        'Format: [source_id] (e.g., [mem_abc123], [thd_xyz456], [att_upload1], [sch_search1], [ana_round0])',
+        '**YOU MUST CITE project context when using information from it. This is NOT optional.**',
         '',
-        'Citation guidelines:',
-        '- Cite memories with [mem_...] when referencing stored knowledge',
-        '- Cite threads with [thd_...] when referencing previous conversations',
-        '- Cite attachments with [att_...] when referencing uploaded files',
-        '- Cite searches with [sch_...] when referencing web search results',
-        '- Cite moderators with [ana_...] when referencing moderators',
-        '- Place citations inline where the information is used',
-        '- You may cite multiple sources for the same point',
+        '### Available Sources to Cite:',
+        ...allSources.slice(0, 15).map(s => `  • "${s.title}" → cite as [${s.id}]`),
+        '',
+        '### Citation Rules (MUST FOLLOW):',
+        '',
+        '1. **EVERY fact from project context needs a citation**',
+        '   When you state ANY information from memories, threads, or files, add the citation immediately after.',
+        '',
+        '2. **Use the EXACT citation format for each type:**',
+        '   - Memories: [mem_xxxxxxxx] - stored knowledge and user preferences',
+        '   - Threads: [thd_xxxxxxxx] - previous conversation history',
+        '   - Attachments: [att_xxxxxxxx] - uploaded files and documents',
+        '   - Searches: [sch_xxxxxxxx] - web search results',
+        '   - Moderators: [mod_xxxxxxxx] - moderator summaries',
+        '',
+        '3. **Quote or paraphrase specific content**',
+        '   Don\'t just cite - show WHAT you\'re citing from the source.',
+        '',
+        '### Correct Citation Examples:',
+        '',
+        '✅ GOOD (shows specific content + citation):',
+        `- "Based on your previous preference, you prefer dark mode [${memorySources[0]?.id || 'mem_example'}]."`,
+        `- "In our earlier conversation, you mentioned working at Company X [${threadSources[0]?.id || 'thd_example'}]."`,
+        `- "The uploaded resume shows 5 years of experience [${attachmentSources[0]?.id || 'att_example'}]."`,
+        '',
+        '❌ BAD (no citation):',
+        '- "You prefer dark mode." ← MISSING CITATION',
+        '- "Based on what I know, you work at Company X." ← NOT SPECIFIC',
+        '',
+        '---',
+        '**Remember: NO citation = INCOMPLETE RESPONSE. Always cite your sources from project context.**',
       ].join('\n')
     : '';
 
@@ -311,7 +343,11 @@ export function resolveSourceId(sourceId: string, sourceMap: CitationSourceMap):
 }
 
 export function extractCitationMarkers(text: string): string[] {
-  const citationPattern = /\[(mem|thd|att|sch|ana|rag)_[a-zA-Z0-9]+\]/g;
+  // Use CITATION_PREFIXES from enum for single source of truth
+  const citationPattern = new RegExp(
+    `\\[(${CITATION_PREFIXES.join('|')})_[a-zA-Z0-9]+\\]`,
+    'g',
+  );
   const matches = text.match(citationPattern) || [];
   return [...new Set(matches.map(m => m.slice(1, -1)))];
 }

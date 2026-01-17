@@ -1,20 +1,24 @@
+import { z } from '@hono/zod-openapi';
+
 import { createError } from '@/api/common/error-handling';
 import type { JsonModeQuality } from '@/api/core/enums';
-import { JsonModeQualities } from '@/api/core/enums';
+import { JsonModeQualities, JsonModeQualitySchema } from '@/api/core/enums';
 import { getAllModels, getModelById } from '@/api/services/models';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type ModelCapabilities = {
-  structuredOutput: boolean;
-  streaming: boolean;
-  functionCalling: boolean;
-  vision: boolean;
-  jsonModeQuality: JsonModeQuality;
-  knownIssues?: string[];
-};
+export const ModelCapabilitiesSchema = z.object({
+  structuredOutput: z.boolean(),
+  streaming: z.boolean(),
+  functionCalling: z.boolean(),
+  vision: z.boolean(),
+  jsonModeQuality: JsonModeQualitySchema,
+  knownIssues: z.array(z.string()).optional(),
+});
+
+export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
 
 // ============================================================================
 // CAPABILITY EXTRACTION

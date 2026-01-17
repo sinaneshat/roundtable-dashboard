@@ -13,7 +13,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { MessagePartTypes, MessageRoles, MessageStatuses, ModelIds } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, MessageStatuses, ModelIds, TimelineItemTypes } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { DbModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useThreadTimeline } from '@/hooks/utils';
@@ -66,21 +66,15 @@ function createMockChangelog(
 
 function createMockPreSearch(
   roundNumber: number,
-  status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
+  status: typeof MessageStatuses[keyof typeof MessageStatuses] = MessageStatuses.COMPLETE,
 ): StoredPreSearch {
   return {
     id: `presearch-r${roundNumber}`,
     threadId: 'thread-123',
     roundNumber,
     userQuery: `Query for round ${roundNumber}`,
-    status: status === 'pending'
-      ? MessageStatuses.PENDING
-      : status === 'streaming'
-        ? MessageStatuses.STREAMING
-        : status === 'complete'
-          ? MessageStatuses.COMPLETE
-          : MessageStatuses.FAILED,
-    searchData: status === 'complete'
+    status,
+    searchData: status === MessageStatuses.COMPLETE
       ? {
           queries: [],
           results: [],
@@ -93,7 +87,7 @@ function createMockPreSearch(
       : undefined,
     errorMessage: null,
     createdAt: new Date(),
-    completedAt: status === 'complete' ? new Date() : null,
+    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
   } as StoredPreSearch;
 }
 
@@ -172,15 +166,15 @@ describe('bug #1: Changelog Display Between Rounds', () => {
       // BUG: Changelog should be FIRST item in round 2
       expect(round2Items.length).toBeGreaterThan(0);
 
-      const changelogItem = round2Items.find(item => item.type === 'changelog');
+      const changelogItem = round2Items.find(item => item.type === TimelineItemTypes.CHANGELOG);
       expect(changelogItem).toBeDefined();
 
       // Changelog should appear BEFORE messages in round 2
       const changelogIndex = timeline.findIndex(
-        item => item.type === 'changelog' && item.roundNumber === 2,
+        item => item.type === TimelineItemTypes.CHANGELOG && item.roundNumber === 2,
       );
       const messagesIndex = timeline.findIndex(
-        item => item.type === 'messages' && item.roundNumber === 2,
+        item => item.type === TimelineItemTypes.MESSAGES && item.roundNumber === 2,
       );
 
       expect(changelogIndex).toBeGreaterThan(-1);
@@ -220,7 +214,7 @@ describe('bug #1: Changelog Display Between Rounds', () => {
 
       // Round 2 changelog should still be visible
       const round2Changelog = result.current.find(
-        item => item.type === 'changelog' && item.roundNumber === 2,
+        item => item.type === TimelineItemTypes.CHANGELOG && item.roundNumber === 2,
       );
 
       expect(round2Changelog).toBeDefined();
@@ -252,7 +246,7 @@ describe('bug #2: Timeline Element Ordering', () => {
       ];
 
       const preSearches: StoredPreSearch[] = [
-        createMockPreSearch(0, 'complete'),
+        createMockPreSearch(0, MessageStatuses.COMPLETE),
       ];
 
       const { result } = renderHook(() =>
@@ -270,11 +264,11 @@ describe('bug #2: Timeline Element Ordering', () => {
 
       // ✅ UNIFIED: Only 'messages' item now (moderator is inside messages, sorted last)
       // Pre-search is rendered INSIDE ChatMessageList when messages exist
-      expect(round0Items.map(item => item.type)).toEqual(['messages']);
+      expect(round0Items.map(item => item.type)).toEqual([TimelineItemTypes.MESSAGES]);
 
       // Verify moderator is last in messages
-      const messagesItem = round0Items.find(item => item.type === 'messages');
-      const roundMessages = messagesItem?.type === 'messages' ? messagesItem.data : [];
+      const messagesItem = round0Items.find(item => item.type === TimelineItemTypes.MESSAGES);
+      const roundMessages = messagesItem?.type === TimelineItemTypes.MESSAGES ? messagesItem.data : [];
       const lastMessage = roundMessages[roundMessages.length - 1];
       expect(lastMessage?.metadata).toHaveProperty('isModerator', true);
     });
@@ -294,8 +288,8 @@ describe('bug #2: Timeline Element Ordering', () => {
       ];
 
       const preSearches: StoredPreSearch[] = [
-        createMockPreSearch(0, 'complete'),
-        createMockPreSearch(1, 'streaming'), // Round 1 pre-search in progress, no messages
+        createMockPreSearch(0, MessageStatuses.COMPLETE),
+        createMockPreSearch(1, MessageStatuses.STREAMING), // Round 1 pre-search in progress, no messages
       ];
 
       const { result } = renderHook(() =>
@@ -310,11 +304,11 @@ describe('bug #2: Timeline Element Ordering', () => {
 
       // Round 1 should have a pre-search item at timeline level (orphaned)
       const round1PreSearch = timeline.find(
-        item => item.type === 'pre-search' && item.roundNumber === 1,
+        item => item.type === TimelineItemTypes.PRE_SEARCH && item.roundNumber === 1,
       );
 
       expect(round1PreSearch).toBeDefined();
-      expect(round1PreSearch?.type).toBe('pre-search');
+      expect(round1PreSearch?.type).toBe(TimelineItemTypes.PRE_SEARCH);
     });
   });
 
@@ -341,14 +335,14 @@ describe('bug #2: Timeline Element Ordering', () => {
       );
 
       const timeline = result.current;
-      const messagesItem = timeline.find(item => item.type === 'messages');
+      const messagesItem = timeline.find(item => item.type === TimelineItemTypes.MESSAGES);
 
       expect(messagesItem).toBeDefined();
-      expect(messagesItem?.type).toBe('messages');
+      expect(messagesItem?.type).toBe(TimelineItemTypes.MESSAGES);
 
       // Type assertion after expect assertion
       const typedMessagesItem = messagesItem as { type: 'messages'; data: Array<{ role: string; metadata?: { participantIndex?: number } }> };
-      const assistantMessages = typedMessagesItem.data.filter(m => m.role === 'assistant');
+      const assistantMessages = typedMessagesItem.data.filter(m => m.role === MessageRoles.ASSISTANT);
 
       // Should be sorted by participantIndex
       const indices = assistantMessages.map(m => m.metadata?.participantIndex);
@@ -402,14 +396,14 @@ describe('bug #3: Changelog Visibility After New Round Submission', () => {
 
     // Changelog for round 2 should still exist
     const round2Changelog = timeline.find(
-      item => item.type === 'changelog' && item.roundNumber === 2,
+      item => item.type === TimelineItemTypes.CHANGELOG && item.roundNumber === 2,
     );
 
     expect(round2Changelog).toBeDefined();
 
     // Verify timeline order
     const round2Start = timeline.findIndex(item => item.roundNumber === 2);
-    expect(timeline[round2Start]?.type).toBe('changelog');
+    expect(timeline[round2Start]?.type).toBe(TimelineItemTypes.CHANGELOG);
   });
 });
 
@@ -477,12 +471,12 @@ describe('bug #4: Progressive UI Updates During Streaming', () => {
        */
 
       // Streaming state
-      const streamingPreSearch = createMockPreSearch(0, 'streaming');
+      const streamingPreSearch = createMockPreSearch(0, MessageStatuses.STREAMING);
       expect(streamingPreSearch.status).toBe(MessageStatuses.STREAMING);
       expect(streamingPreSearch.searchData).toBeUndefined();
 
       // Complete state
-      const completePreSearch = createMockPreSearch(0, 'complete');
+      const completePreSearch = createMockPreSearch(0, MessageStatuses.COMPLETE);
       expect(completePreSearch.status).toBe(MessageStatuses.COMPLETE);
       expect(completePreSearch.searchData).toBeDefined();
     });
@@ -573,9 +567,9 @@ describe('production State Reproduction', () => {
     ];
 
     const preSearches: StoredPreSearch[] = [
-      createMockPreSearch(0, 'complete'),
-      createMockPreSearch(1, 'complete'),
-      createMockPreSearch(2, 'complete'),
+      createMockPreSearch(0, MessageStatuses.COMPLETE),
+      createMockPreSearch(1, MessageStatuses.COMPLETE),
+      createMockPreSearch(2, MessageStatuses.COMPLETE),
     ];
 
     const { result } = renderHook(() =>
@@ -592,31 +586,31 @@ describe('production State Reproduction', () => {
 
     // 1. Changelog should exist for round 2
     const round2Changelog = timeline.find(
-      item => item.type === 'changelog' && item.roundNumber === 2,
+      item => item.type === TimelineItemTypes.CHANGELOG && item.roundNumber === 2,
     );
     expect(round2Changelog).toBeDefined();
 
     // 2. Changelog should be FIRST item in round 2
     const round2Items = timeline.filter(item => item.roundNumber === 2);
-    expect(round2Items[0]?.type).toBe('changelog');
+    expect(round2Items[0]?.type).toBe(TimelineItemTypes.CHANGELOG);
 
     // 3. All rounds should have their messages
     [0, 1, 2, 3].forEach((roundNum) => {
       const roundMessages = timeline.find(
-        item => item.type === 'messages' && item.roundNumber === roundNum,
+        item => item.type === TimelineItemTypes.MESSAGES && item.roundNumber === roundNum,
       );
       expect(roundMessages).toBeDefined();
     });
 
     // 4. Timeline should be in chronological order
     const roundNumbers = timeline
-      .filter(item => item.type === 'messages')
+      .filter(item => item.type === TimelineItemTypes.MESSAGES)
       .map(item => item.roundNumber);
     expect(roundNumbers).toEqual([0, 1, 2, 3]);
 
     // 5. Pre-searches should NOT be at timeline level when messages exist
     // (they're rendered inside ChatMessageList)
-    const timelinePreSearches = timeline.filter(item => item.type === 'pre-search');
+    const timelinePreSearches = timeline.filter(item => item.type === TimelineItemTypes.PRE_SEARCH);
     expect(timelinePreSearches).toHaveLength(0);
   });
 });

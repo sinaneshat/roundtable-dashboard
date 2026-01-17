@@ -19,9 +19,12 @@ import { z } from 'zod';
 
 import { createError } from '@/api/common/error-handling';
 import { getErrorMessage } from '@/api/common/error-types';
+import type { MemoryBudgetConfig } from '@/api/common/memory-safety';
+import { safeSlice, truncateToMemoryBudget } from '@/api/common/memory-safety';
 import {
   CitationSourcePrefixes,
   CitationSourceTypes,
+  IMAGE_MIME_TYPES,
   MAX_TEXT_CONTENT_SIZE,
   MessagePartTypes,
   MessageRoles,
@@ -32,7 +35,9 @@ import { chatMessagesToUIMessages } from '@/api/routes/chat/handlers/helpers';
 import {
   buildCitableContext,
   loadAttachmentContent,
+  loadAttachmentContentUrl,
   loadMessageAttachments,
+  loadMessageAttachmentsUrl,
   uint8ArrayToBase64,
 } from '@/api/services/messages';
 import {
@@ -40,7 +45,7 @@ import {
   buildParticipantSystemPrompt,
   PARTICIPANT_ROSTER_PLACEHOLDER,
 } from '@/api/services/prompts';
-import { buildSearchContext } from '@/api/services/search';
+import { buildSearchContextWithCitations } from '@/api/services/search';
 import { getFile } from '@/api/services/uploads';
 import type {
   AttachmentCitationInfo,
@@ -64,6 +69,7 @@ import {
   isFilePart,
 } from '@/lib/schemas/message-schemas';
 import { filterNonEmptyMessages, getRoundNumber } from '@/lib/utils';
+import { getExtractedText } from '@/lib/utils/metadata';
 
 type FileDataEntry = {
   data: Uint8Array;
@@ -118,6 +124,8 @@ export const BuildSystemPromptParamsSchema = z.object({
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
   logger: z.custom<TypedLogger>().optional(),
   attachmentIds: z.array(z.string()).optional(),
+  baseUrl: z.string().url(), // Base URL for generating absolute download URLs
+  memoryLimits: z.custom<MemoryBudgetConfig>().optional(), // Memory safety limits
 });
 
 export const BuildSystemPromptResultSchema = z.object({
@@ -133,6 +141,12 @@ export const PrepareValidatedMessagesParamsSchema = z.object({
   r2Bucket: z.custom<R2Bucket>().optional(),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>().optional(),
   attachmentIds: z.array(z.string()).optional(),
+  // Hybrid loading params (for large file URL-based delivery)
+  baseUrl: z.string().optional(),
+  userId: z.string().optional(),
+  secret: z.string().optional(),
+  threadId: z.string().optional(),
+  memoryLimits: z.custom<MemoryBudgetConfig>().optional(), // Memory safety limits
 });
 
 export const PrepareValidatedMessagesResultSchema = z.object({
@@ -169,6 +183,7 @@ export const LoadThreadAttachmentContextParamsSchema = z.object({
   maxAttachments: z.number().int().positive().default(20),
   extractContent: z.boolean().default(true),
   currentAttachmentIds: z.array(z.string()).default([]),
+  baseUrl: z.string().url(), // Base URL for generating absolute download URLs
 });
 
 export type LoadThreadAttachmentContextParams = z.infer<typeof LoadThreadAttachmentContextParamsSchema>;
@@ -176,12 +191,18 @@ export type LoadThreadAttachmentContextParams = z.infer<typeof LoadThreadAttachm
 export async function loadThreadAttachmentContext(
   params: LoadThreadAttachmentContextParams,
 ): Promise<ThreadAttachmentContextResult> {
-  const { threadId, r2Bucket, db, logger, maxAttachments, extractContent, currentAttachmentIds } = params;
+  const { threadId, r2Bucket, db, logger, maxAttachments, extractContent, currentAttachmentIds, baseUrl } = params;
 
   const attachments: ThreadAttachmentWithContent[] = [];
   const citableSources: CitableSource[] = [];
   let withContent = 0;
   let skipped = 0;
+
+  // ✅ DEBUG: Log entry into loadThreadAttachmentContext
+  logger?.info(`loadThreadAttachmentContext called: threadId=${threadId}, currentAttachmentIds=${JSON.stringify(currentAttachmentIds)}, maxAttachments=${maxAttachments}`, LogHelpers.operation({
+    operationName: 'loadThreadAttachmentContext',
+    threadId,
+  }));
 
   try {
     // Parallelize independent queries
@@ -195,11 +216,13 @@ export async function loadThreadAttachmentContext(
         },
       }),
       // Pre-load current attachments in parallel if they exist
+      // ✅ FIX: Check for both 'uploaded' AND 'ready' statuses
+      // Status flow: uploading → uploaded → processing → ready
       currentAttachmentIds.length > 0
         ? db.query.upload.findMany({
             where: and(
               inArray(tables.upload.id, currentAttachmentIds),
-              eq(tables.upload.status, 'uploaded'),
+              inArray(tables.upload.status, ['uploaded', 'ready']),
             ),
             columns: {
               id: true,
@@ -208,6 +231,7 @@ export async function loadThreadAttachmentContext(
               fileSize: true,
               r2Key: true,
               status: true,
+              metadata: true,
             },
           })
         : Promise.resolve([]),
@@ -257,11 +281,14 @@ export async function loadThreadAttachmentContext(
 
           attachments.push(attachment);
 
-          const contentPreview = textContent
-            ? textContent.slice(0, 500) + (textContent.length > 500 ? '...' : '')
+          // Use extracted text from metadata for PDFs and processed files
+          const extractedText = getExtractedText(upload.metadata);
+          const availableText = textContent ?? extractedText;
+          const contentPreview = availableText
+            ? availableText.slice(0, 500) + (availableText.length > 500 ? '...' : '')
             : `File: ${upload.filename} (${upload.mimeType}, ${(upload.fileSize / 1024).toFixed(1)}KB)`;
 
-          const downloadUrl = `/api/v1/uploads/${upload.id}/download`;
+          const downloadUrl = `${baseUrl}/api/v1/uploads/${upload.id}/download`;
 
           citableSources.push({
             id: citationId,
@@ -311,21 +338,14 @@ export async function loadThreadAttachmentContext(
       .where(
         and(
           inArray(tables.messageUpload.messageId, messageIds),
-          eq(tables.upload.status, 'uploaded'),
+          // ✅ FIX: Check for both 'uploaded' AND 'ready' statuses
+          inArray(tables.upload.status, ['uploaded', 'ready']),
         ),
       )
       .orderBy(asc(tables.messageUpload.createdAt))
       .limit(maxAttachments);
 
     const processedUploadIds = new Set<string>();
-
-    logger?.info('Loading thread attachment context', LogHelpers.operation({
-      operationName: 'loadThreadAttachmentContext',
-      threadId,
-      messageCount: threadMessages.length,
-      attachmentCount: messageUploadsRaw.length,
-      currentAttachmentCount: currentAttachmentIds.length,
-    }));
 
     for (const row of messageUploadsRaw) {
       processedUploadIds.add(row.upload.id);
@@ -379,11 +399,14 @@ export async function loadThreadAttachmentContext(
 
       attachments.push(attachment);
 
-      const contentPreview = textContent
-        ? textContent.slice(0, 500) + (textContent.length > 500 ? '...' : '')
+      // Use extracted text from metadata for PDFs and processed files
+      const extractedText = getExtractedText(upload.metadata);
+      const availableText = textContent ?? extractedText;
+      const contentPreview = availableText
+        ? availableText.slice(0, 500) + (availableText.length > 500 ? '...' : '')
         : `File: ${upload.filename} (${upload.mimeType}, ${(upload.fileSize / 1024).toFixed(1)}KB)`;
 
-      const downloadUrl = `/api/v1/uploads/${upload.id}/download`;
+      const downloadUrl = `${baseUrl}/api/v1/uploads/${upload.id}/download`;
 
       citableSources.push({
         id: citationId,
@@ -457,11 +480,14 @@ export async function loadThreadAttachmentContext(
 
         attachments.push(attachment);
 
-        const contentPreview = textContent
-          ? textContent.slice(0, 500) + (textContent.length > 500 ? '...' : '')
+        // Use extracted text from metadata for PDFs and processed files
+        const extractedText = getExtractedText(upload.metadata);
+        const availableText = textContent ?? extractedText;
+        const contentPreview = availableText
+          ? availableText.slice(0, 500) + (availableText.length > 500 ? '...' : '')
           : `File: ${upload.filename} (${upload.mimeType}, ${(upload.fileSize / 1024).toFixed(1)}KB)`;
 
-        const downloadUrl = `/api/v1/uploads/${upload.id}/download`;
+        const downloadUrl = `${baseUrl}/api/v1/uploads/${upload.id}/download`;
 
         citableSources.push({
           id: citationId,
@@ -481,12 +507,6 @@ export async function loadThreadAttachmentContext(
     }
 
     const formattedPrompt = formatThreadAttachmentPrompt(attachments);
-
-    logger?.info('Thread attachment context loaded', LogHelpers.operation({
-      operationName: 'loadThreadAttachmentContext',
-      threadId,
-      stats: { total: attachments.length, withContent, skipped },
-    }));
 
     return {
       attachments,
@@ -596,9 +616,15 @@ export async function loadParticipantConfiguration(
 export async function buildSystemPromptWithContext(
   params: BuildSystemPromptParams,
 ): Promise<BuildSystemPromptResult> {
-  const { participant, allParticipants, thread, userQuery, previousDbMessages, currentRoundNumber, env, db, logger, attachmentIds } = params;
+  const { participant, allParticipants, thread, userQuery, previousDbMessages, currentRoundNumber, env, db, logger, attachmentIds, baseUrl, memoryLimits } = params;
 
-  let citationSourceMap: CitationSourceMap = new Map();
+  // Memory safety defaults
+  const maxRagResults = memoryLimits?.maxRagResults ?? 5;
+  const maxCitationSources = memoryLimits?.maxCitationSources ?? 15;
+  const maxAttachments = memoryLimits?.maxAttachments ?? 10;
+  const maxSystemPromptSize = memoryLimits?.maxSystemPromptSize ?? 100 * 1024;
+
+  const citationSourceMap: CitationSourceMap = new Map();
   let citableSources: CitableSource[] = [];
 
   let systemPrompt
@@ -633,7 +659,7 @@ export async function buildSystemPromptWithContext(
               project.autoragInstanceId,
             ).aiSearch({
               query: userQuery,
-              max_num_results: 5,
+              max_num_results: maxRagResults, // ✅ MEMORY SAFETY: Dynamic limit based on request complexity
               rewrite_query: true,
               stream: false,
               reranking: {
@@ -693,7 +719,14 @@ export async function buildSystemPromptWithContext(
                 ? `### AI Analysis\n${ragResponse.response}\n\n### Source Files\n${sourceFiles}`
                 : `### Relevant Files\n${sourceFiles}`;
 
-              systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Indexed Files)\n\n${ragContext}\n\n---\n\nUse the above knowledge from indexed project files when relevant. Cite sources using [rag_xxxxx] markers when referencing specific files.`;
+              // Build source list for citation emphasis
+              const ragSourceList = citableSources
+                .filter(s => s.type === CitationSourceTypes.RAG)
+                .slice(0, 10)
+                .map(s => `  • "${s.title}" → cite as [${s.id}]`)
+                .join('\n');
+
+              systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Indexed Files)\n\n${ragContext}\n\n---\n\n## 🚨 MANDATORY: RAG Knowledge Citation Requirements\n\n**YOU MUST CITE indexed files when using their information. This is NOT optional.**\n\n### Available RAG Sources:\n${ragSourceList}\n\n### Citation Rules:\n1. **EVERY fact from indexed files needs a citation** - Use [rag_xxxxxxxx] immediately after.\n2. **Quote or paraphrase specific content** - Show WHAT you're citing.\n\n✅ GOOD: "The document states the API uses REST architecture [rag_abc12345]."\n❌ BAD: "The API uses REST architecture." ← MISSING CITATION\n\n**NO citation = INCOMPLETE RESPONSE.**`;
 
               logger?.info('AutoRAG retrieved context', LogHelpers.operation({
                 operationName: 'buildSystemPromptWithContext',
@@ -715,32 +748,39 @@ export async function buildSystemPromptWithContext(
         }
 
         // Parallelize citable context and thread attachments loading
+        // ✅ MEMORY SAFETY: Use dynamic limits based on request complexity
         const [citableContextResult, threadAttachmentResult] = await Promise.allSettled([
           buildCitableContext({
             projectId: thread.projectId,
             currentThreadId: thread.id,
             userQuery,
-            maxMemories: 10,
+            maxMemories: Math.min(10, maxCitationSources),
             maxMessagesPerThread: 3,
-            maxSearchResults: 5,
+            maxSearchResults: Math.min(5, maxRagResults),
             maxModerators: 3,
             db,
+            baseUrl,
           }),
           loadThreadAttachmentContext({
             threadId: thread.id,
             r2Bucket: env.UPLOADS_R2_BUCKET,
             db,
             logger,
-            maxAttachments: 20,
+            maxAttachments, // ✅ MEMORY SAFETY: Dynamic limit
             extractContent: true,
             currentAttachmentIds: attachmentIds || [],
+            baseUrl,
           }),
         ]);
 
         if (citableContextResult.status === 'fulfilled') {
           const citableContext = citableContextResult.value;
-          citationSourceMap = citableContext.sourceMap;
-          citableSources = citableContext.sources;
+
+          // MERGE sources (not replace) - preserve RAG sources added earlier
+          for (const [id, source] of citableContext.sourceMap) {
+            citationSourceMap.set(id, source);
+          }
+          citableSources = [...citableSources, ...citableContext.sources];
 
           if (citableContext.formattedPrompt) {
             systemPrompt = `${systemPrompt}${citableContext.formattedPrompt}`;
@@ -762,6 +802,12 @@ export async function buildSystemPromptWithContext(
 
         if (threadAttachmentResult.status === 'fulfilled') {
           const threadAttachmentContext = threadAttachmentResult.value;
+
+          // ✅ DEBUG: Always log attachment result even when empty
+          logger?.info(`Thread attachment context (project path): found=${threadAttachmentContext.attachments.length}, sources=${threadAttachmentContext.citableSources.length}`, LogHelpers.operation({
+            operationName: 'buildSystemPromptWithContext',
+            threadId: thread.id,
+          }));
 
           if (threadAttachmentContext.attachments.length > 0) {
             systemPrompt = `${systemPrompt}${threadAttachmentContext.formattedPrompt}`;
@@ -795,16 +841,22 @@ export async function buildSystemPromptWithContext(
     }
   }
 
-  // Web search context (only runs if no project, since project path handles attachments)
+  // Web search context with citation support
   if (thread.enableWebSearch) {
     try {
-      const searchContext = buildSearchContext(previousDbMessages, {
+      const searchResult = buildSearchContextWithCitations(previousDbMessages, {
         currentRoundNumber,
         includeFullResults: true,
       });
 
-      if (searchContext) {
-        systemPrompt = `${systemPrompt}${searchContext}`;
+      if (searchResult.formattedPrompt) {
+        systemPrompt = `${systemPrompt}${searchResult.formattedPrompt}`;
+
+        // Merge search sources into citation map
+        for (const source of searchResult.citableSources) {
+          citableSources.push(source);
+          citationSourceMap.set(source.id, source);
+        }
       }
     } catch (error) {
       logger?.warn('Search context building failed', LogHelpers.operation({
@@ -815,17 +867,34 @@ export async function buildSystemPromptWithContext(
   }
 
   // If no project context, load thread attachments separately
+  // ✅ DEBUG: Log entry conditions for attachment loading
+  logger?.info(`Attachment loading check: hasProject=${!!thread.projectId}, hasQuery=${!!userQuery.trim()}, attachmentIds=${JSON.stringify(attachmentIds || [])}`, LogHelpers.operation({
+    operationName: 'buildSystemPromptWithContext',
+    threadId: thread.id,
+  }));
+
   if (!thread.projectId || !userQuery.trim()) {
     try {
+      logger?.info(`Loading thread attachments (non-project path): ids=${JSON.stringify(attachmentIds || [])}`, LogHelpers.operation({
+        operationName: 'buildSystemPromptWithContext',
+        threadId: thread.id,
+      }));
+
       const threadAttachmentContext = await loadThreadAttachmentContext({
         threadId: thread.id,
         r2Bucket: env.UPLOADS_R2_BUCKET,
         db,
         logger,
-        maxAttachments: 20,
+        maxAttachments, // ✅ MEMORY SAFETY: Dynamic limit
         extractContent: true,
         currentAttachmentIds: attachmentIds || [],
+        baseUrl,
       });
+
+      logger?.info(`Thread attachment result: found=${threadAttachmentContext.attachments.length}, sources=${threadAttachmentContext.citableSources.length}`, LogHelpers.operation({
+        operationName: 'buildSystemPromptWithContext',
+        threadId: thread.id,
+      }));
 
       if (threadAttachmentContext.attachments.length > 0) {
         systemPrompt = `${systemPrompt}${threadAttachmentContext.formattedPrompt}`;
@@ -851,10 +920,34 @@ export async function buildSystemPromptWithContext(
     }
   }
 
+  // ✅ MEMORY SAFETY: Limit citation sources to prevent memory exhaustion
+  const limitedCitableSources = safeSlice(citableSources, maxCitationSources);
+  if (limitedCitableSources.length < citableSources.length) {
+    logger?.info(`Truncated citation sources from ${citableSources.length} to ${limitedCitableSources.length} for memory safety`, LogHelpers.operation({
+      operationName: 'buildSystemPromptWithContext',
+      threadId: thread.id,
+    }));
+  }
+
+  // ✅ MEMORY SAFETY: Truncate system prompt if it exceeds the limit
+  let finalSystemPrompt = systemPrompt;
+  if (systemPrompt.length * 2 > maxSystemPromptSize) { // UTF-16 encoding
+    finalSystemPrompt = truncateToMemoryBudget(systemPrompt, maxSystemPromptSize);
+    logger?.info(`Truncated system prompt from ${systemPrompt.length} to ${finalSystemPrompt.length} chars for memory safety`, LogHelpers.operation({
+      operationName: 'buildSystemPromptWithContext',
+      threadId: thread.id,
+    }));
+  }
+
+  logger?.info(`Built system prompt with context: sources=${limitedCitableSources.length}, types=[${limitedCitableSources.map(s => s.type).join(',')}], hasProject=${!!thread.projectId}`, LogHelpers.operation({
+    operationName: 'buildSystemPromptWithContext',
+    threadId: thread.id,
+  }));
+
   return {
-    systemPrompt,
+    systemPrompt: finalSystemPrompt,
     citationSourceMap,
-    citableSources,
+    citableSources: limitedCitableSources,
   };
 }
 
@@ -904,6 +997,55 @@ function collectFileDataFromMessages(
   return fileDataMap;
 }
 
+/**
+ * ✅ GRANULAR FILE FILTERING: Remove file/image parts for models that don't support them
+ *
+ * This prevents the "Invalid Value: 'file'. This model does not support file content types" error
+ * when a model (like gpt-4o-mini via Azure) receives conversation history containing file parts.
+ *
+ * @param modelMessages - Messages that may contain file/image parts
+ * @param capabilities - Model capabilities
+ * @param capabilities.supportsVision - Whether the model supports vision/image content
+ * @param capabilities.supportsFile - Whether the model supports file content (PDFs, documents)
+ * @returns Messages with unsupported parts filtered out
+ */
+export function filterUnsupportedFileParts(
+  modelMessages: ModelMessage[],
+  capabilities: { supportsVision: boolean; supportsFile: boolean },
+): ModelMessage[] {
+  return modelMessages.map((msg) => {
+    // Only filter user messages with array content
+    if (msg.role !== MessageRoles.USER || !Array.isArray(msg.content)) {
+      return msg;
+    }
+
+    const filteredContent = msg.content.filter((part) => {
+      // Keep text parts always
+      if (part.type === 'text') {
+        return true;
+      }
+
+      // Filter image parts based on vision support
+      if (part.type === 'image') {
+        return capabilities.supportsVision;
+      }
+
+      // Filter file parts (PDFs, documents) based on file support
+      if (part.type === 'file') {
+        return capabilities.supportsFile;
+      }
+
+      // Keep other part types
+      return true;
+    });
+
+    return {
+      ...msg,
+      content: filteredContent,
+    };
+  });
+}
+
 function injectFileDataIntoModelMessages(
   modelMessages: ModelMessage[],
   fileDataMap: Map<string, FileDataEntry>,
@@ -948,6 +1090,21 @@ function injectFileDataIntoModelMessages(
 
         if (fileData) {
           const base64 = uint8ArrayToBase64(fileData.data);
+          const isImage = IMAGE_MIME_TYPES.includes(fileData.mimeType as typeof IMAGE_MIME_TYPES[number]);
+
+          // ✅ AI SDK v6 PATTERN: Use correct part type for provider compatibility
+          // Images must use type:'image' with raw base64 in 'image' field
+          // Files (PDF, etc.) use type:'file' with data URL in 'url' field
+          // This fixes Bedrock error: "URL sources are not supported"
+          if (isImage) {
+            return {
+              type: 'image' as const,
+              image: base64, // Raw base64 string (NOT data URL)
+              mimeType: fileData.mimeType, // Matches AI SDK's ImageUIPart.mimeType
+            };
+          }
+
+          // Non-image files use 'file' type with data URL
           return {
             type: 'file' as const,
             data: fileData.data,
@@ -962,16 +1119,8 @@ function injectFileDataIntoModelMessages(
         const hasValidUrl = partUrl && (partUrl.startsWith('data:') || partUrl.startsWith('http://') || partUrl.startsWith('https://'));
 
         if (!hasValidUrl) {
-          const logFilename = getFilenameFromPart(part) ?? 'unknown';
-          console.error(
-            '[AI Streaming] Filtering out file part with invalid URL:',
-            {
-              filename: logFilename,
-              url: partUrl || '(empty)',
-              reason:
-                'File parts must have data URLs or valid HTTP(S) URLs for AI providers',
-            },
-          );
+          // Filtering out file part with invalid URL
+          // File parts must have data URLs or valid HTTP(S) URLs for AI providers
           return null;
         }
 
@@ -989,17 +1138,35 @@ function injectFileDataIntoModelMessages(
 export async function prepareValidatedMessages(
   params: PrepareValidatedMessagesParams,
 ): Promise<PrepareValidatedMessagesResult> {
-  const { previousDbMessages, newMessage, logger, r2Bucket, db, attachmentIds } = params;
+  const { previousDbMessages, newMessage, logger, r2Bucket, db, attachmentIds, baseUrl, userId, secret, threadId, memoryLimits } = params;
+
+  // ✅ MEMORY SAFETY: Apply limits to attachment processing
+  const maxAttachments = memoryLimits?.maxAttachments ?? 10;
+  const limitedAttachmentIds = attachmentIds ? safeSlice(attachmentIds, maxAttachments) : undefined;
+
+  if (attachmentIds && limitedAttachmentIds && limitedAttachmentIds.length < attachmentIds.length) {
+    logger?.info(`Limited attachmentIds from ${attachmentIds.length} to ${limitedAttachmentIds.length} for memory safety`, LogHelpers.operation({
+      operationName: 'prepareValidatedMessages',
+    }));
+  }
+
+  // URL-based loading requires baseUrl, userId, secret for signed URL generation
+  const canUseUrlLoading = Boolean(baseUrl && userId && secret);
 
   // Parallelize previousMessages conversion with attachment loading if needed
+  // All files use URL-based delivery for efficiency (no memory-intensive base64 encoding)
   const [previousMessages, firstAttachmentLoad] = await Promise.all([
     chatMessagesToUIMessages(previousDbMessages),
-    attachmentIds && attachmentIds.length > 0 && db
-      ? loadAttachmentContent({
-          attachmentIds,
+    limitedAttachmentIds && limitedAttachmentIds.length > 0 && db && canUseUrlLoading
+      ? loadAttachmentContentUrl({
+          attachmentIds: limitedAttachmentIds,
           r2Bucket,
           db,
           logger,
+          baseUrl: baseUrl!,
+          userId: userId!,
+          secret: secret!,
+          threadId,
         })
       : Promise.resolve(null),
   ]);
@@ -1008,9 +1175,9 @@ export async function prepareValidatedMessages(
 
   if (firstAttachmentLoad) {
     try {
-      const { fileParts, errors, stats } = firstAttachmentLoad;
+      const { fileParts, extractedTextContent, errors, stats } = firstAttachmentLoad;
 
-      if (fileParts.length > 0) {
+      if (fileParts.length > 0 || extractedTextContent) {
         const existingParts = Array.isArray(newMessage.parts)
           ? newMessage.parts
           : [];
@@ -1019,24 +1186,30 @@ export async function prepareValidatedMessages(
           part => part.type !== 'file',
         );
 
+        // Cast URL-based file parts to work with UIMessage format
+        // AI SDK will handle these correctly during model message conversion
+        let combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+
+        // Prepend extracted text from PDFs/documents as a text part
+        if (extractedTextContent) {
+          combinedParts = [
+            { type: MessagePartTypes.TEXT, text: extractedTextContent },
+            ...combinedParts,
+          ];
+        }
+
         messageWithAttachments = {
           ...newMessage,
-          parts: [...fileParts, ...nonFileParts],
+          parts: combinedParts,
         };
 
         logger?.info('Injected file parts into message for AI model', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
-          filePartsCount: fileParts.length,
           stats,
         }));
       }
 
       if (errors.length > 0) {
-        console.error('[Streaming] Some attachments failed to load:', {
-          errorCount: errors.length,
-          errors: errors.slice(0, 5),
-          attachmentIds,
-        });
         logger?.warn('Some attachments failed to load', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
           errors,
@@ -1044,11 +1217,6 @@ export async function prepareValidatedMessages(
       }
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      console.error('[Streaming] Failed to load attachment content:', {
-        error: errorMessage,
-        attachmentIds,
-        stack: error instanceof Error ? error.stack : undefined,
-      });
       logger?.error('Failed to load attachment content', LogHelpers.operation({
         operationName: 'prepareValidatedMessages',
         error: errorMessage,
@@ -1093,25 +1261,52 @@ export async function prepareValidatedMessages(
         );
 
         try {
-          const { fileParts, stats, errors: loadErrors } = await loadAttachmentContent({
-            attachmentIds: uploadIdsFromUrls,
-            r2Bucket,
-            db,
-            logger,
-          });
+          // Use URL-based loading to avoid memory-intensive base64 encoding
+          // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
+          const loadResult = canUseUrlLoading
+            ? await loadAttachmentContentUrl({
+                attachmentIds: uploadIdsFromUrls,
+                r2Bucket,
+                db,
+                logger,
+                baseUrl: baseUrl!,
+                userId: userId!,
+                secret: secret!,
+                threadId,
+              })
+            : await loadAttachmentContent({
+                attachmentIds: uploadIdsFromUrls,
+                r2Bucket,
+                db,
+                logger,
+              });
 
-          if (fileParts.length > 0) {
+          const { fileParts, stats } = loadResult;
+          // extractedTextContent only exists in URL-based loading
+          const extractedTextContent = 'extractedTextContent' in loadResult ? loadResult.extractedTextContent : null;
+
+          if (fileParts.length > 0 || extractedTextContent) {
             const nonFileParts = existingParts.filter(
               part => part.type !== 'file',
             );
 
+            let combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+
+            // Prepend extracted text from PDFs/documents as a text part
+            if (extractedTextContent) {
+              combinedParts = [
+                { type: MessagePartTypes.TEXT, text: extractedTextContent },
+                ...combinedParts,
+              ];
+            }
+
             messageWithAttachments = {
               ...newMessage,
-              parts: [...fileParts, ...nonFileParts],
+              parts: combinedParts,
             };
 
             logger?.info(
-              'Converted HTTP URL file parts to base64 for participant 1+',
+              'Loaded file parts for participant 1+ (URL mode)',
               LogHelpers.operation({
                 operationName: 'prepareValidatedMessages',
                 filePartsCount: fileParts.length,
@@ -1119,26 +1314,8 @@ export async function prepareValidatedMessages(
               }),
             );
           }
-
-          if (loadErrors.length > 0) {
-            console.error(
-              '[Streaming] Some participant 1+ attachments failed to load:',
-              {
-                errorCount: loadErrors.length,
-                errors: loadErrors.slice(0, 5),
-                uploadIds: uploadIdsFromUrls,
-              },
-            );
-          }
         } catch (error) {
           const errorMessage = getErrorMessage(error);
-          console.error(
-            '[Streaming] Failed to load participant 1+ attachment content:',
-            {
-              error: errorMessage,
-              uploadIds: uploadIdsFromUrls,
-            },
-          );
           logger?.error(
             'Failed to load participant 1+ attachment content',
             LogHelpers.operation({
@@ -1175,25 +1352,51 @@ export async function prepareValidatedMessages(
         );
 
         try {
-          const { fileParts, stats, errors: loadErrors } = await loadAttachmentContent({
-            attachmentIds: uploadIdsFromParts,
-            r2Bucket,
-            db,
-            logger,
-          });
+          // Use URL-based loading to avoid memory-intensive base64 encoding
+          const loadResult = canUseUrlLoading
+            ? await loadAttachmentContentUrl({
+                attachmentIds: uploadIdsFromParts,
+                r2Bucket,
+                db,
+                logger,
+                baseUrl: baseUrl!,
+                userId: userId!,
+                secret: secret!,
+                threadId,
+              })
+            : await loadAttachmentContent({
+                attachmentIds: uploadIdsFromParts,
+                r2Bucket,
+                db,
+                logger,
+              });
 
-          if (fileParts.length > 0) {
+          const { fileParts, stats } = loadResult;
+          // extractedTextContent only exists in URL-based loading
+          const extractedTextContent = 'extractedTextContent' in loadResult ? loadResult.extractedTextContent : null;
+
+          if (fileParts.length > 0 || extractedTextContent) {
             const nonFileParts = existingParts.filter(
               part => part.type !== 'file',
             );
 
+            let combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+
+            // Prepend extracted text from PDFs/documents as a text part
+            if (extractedTextContent) {
+              combinedParts = [
+                { type: MessagePartTypes.TEXT, text: extractedTextContent },
+                ...combinedParts,
+              ];
+            }
+
             messageWithAttachments = {
               ...newMessage,
-              parts: [...fileParts, ...nonFileParts],
+              parts: combinedParts,
             };
 
             logger?.info(
-              'Converted uploadId file parts to base64 for participant 1+',
+              'Loaded uploadId file parts for participant 1+ (URL mode)',
               LogHelpers.operation({
                 operationName: 'prepareValidatedMessages',
                 filePartsCount: fileParts.length,
@@ -1201,26 +1404,8 @@ export async function prepareValidatedMessages(
               }),
             );
           }
-
-          if (loadErrors.length > 0) {
-            console.error(
-              '[Streaming] Some participant 1+ uploadId attachments failed to load:',
-              {
-                errorCount: loadErrors.length,
-                errors: loadErrors.slice(0, 5),
-                uploadIds: uploadIdsFromParts,
-              },
-            );
-          }
         } catch (error) {
           const errorMessage = getErrorMessage(error);
-          console.error(
-            '[Streaming] Failed to load participant 1+ uploadId attachment content:',
-            {
-              error: errorMessage,
-              uploadIds: uploadIdsFromParts,
-            },
-          );
           logger?.error(
             'Failed to load participant 1+ uploadId attachment content',
             LogHelpers.operation({
@@ -1238,8 +1423,16 @@ export async function prepareValidatedMessages(
 
   if (db) {
     try {
+      // Skip the new message ID to avoid double-loading attachments
+      // (attachments for new message are already loaded via loadAttachmentContentUrl)
+      const newMessageId = newMessage?.id;
       const messageIdsToCheck = previousMessages
         .filter((msg) => {
+          // Skip the new message - its attachments were already loaded
+          if (newMessageId && msg.id === newMessageId) {
+            return false;
+          }
+
           if (msg.role === MessageRoles.USER) {
             return true;
           }
@@ -1265,18 +1458,39 @@ export async function prepareValidatedMessages(
       }));
 
       if (messageIdsToCheck.length > 0) {
-        const { filePartsByMessageId, errors, stats }
-          = await loadMessageAttachments({
-            messageIds: messageIdsToCheck,
-            r2Bucket,
-            db,
-            logger,
-          });
+        // Use URL-based loading to avoid memory-intensive base64 encoding
+        // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
+        const loadResult = canUseUrlLoading
+          ? await loadMessageAttachmentsUrl({
+              messageIds: messageIdsToCheck,
+              r2Bucket,
+              db,
+              logger,
+              baseUrl: baseUrl!,
+              userId: userId!,
+              secret: secret!,
+              threadId,
+            })
+          : await loadMessageAttachments({
+              messageIds: messageIdsToCheck,
+              r2Bucket,
+              db,
+              logger,
+            });
 
-        if (filePartsByMessageId.size > 0) {
+        const { filePartsByMessageId, errors, stats } = loadResult;
+        // extractedTextByMessageId only exists in URL-based loading
+        const extractedTextByMessageId = 'extractedTextByMessageId' in loadResult
+          ? loadResult.extractedTextByMessageId
+          : new Map<string, string>();
+
+        if (filePartsByMessageId.size > 0 || extractedTextByMessageId.size > 0) {
           messagesWithBase64 = previousMessages.map((msg) => {
-            const base64Parts = filePartsByMessageId.get(msg.id);
-            if (!base64Parts || base64Parts.length === 0) {
+            const urlParts = filePartsByMessageId.get(msg.id);
+            const extractedText = extractedTextByMessageId.get(msg.id);
+
+            // Skip if no changes needed for this message
+            if ((!urlParts || urlParts.length === 0) && !extractedText) {
               return msg;
             }
 
@@ -1284,10 +1498,10 @@ export async function prepareValidatedMessages(
 
             const hasFileParts = currentParts.some(part => part.type === 'file');
 
-            if (!hasFileParts) {
+            if (!hasFileParts && !extractedText) {
               return {
                 ...msg,
-                parts: [...base64Parts, ...currentParts],
+                parts: [...(urlParts as unknown as typeof currentParts), ...currentParts],
               };
             }
 
@@ -1301,14 +1515,28 @@ export async function prepareValidatedMessages(
               return typeof partUrl === 'string' && partUrl.startsWith('data:');
             });
 
+            let combinedParts = [
+              ...((urlParts || []) as unknown as typeof currentParts),
+              ...existingDataUrlParts,
+              ...nonFileParts,
+            ];
+
+            // Prepend extracted text from PDFs/documents as a text part
+            if (extractedText) {
+              combinedParts = [
+                { type: MessagePartTypes.TEXT, text: extractedText },
+                ...combinedParts,
+              ];
+            }
+
             return {
               ...msg,
-              parts: [...base64Parts, ...existingDataUrlParts, ...nonFileParts],
+              parts: combinedParts,
             };
           });
 
           logger?.info(
-            'Converted HTTP file URLs to base64 for previous messages',
+            'Loaded previous message attachments via signed URLs',
             LogHelpers.operation({
               operationName: 'prepareValidatedMessages',
               messagesConverted: filePartsByMessageId.size,
@@ -1409,39 +1637,98 @@ export async function prepareValidatedMessages(
 
     if (uploadIdsFromFileParts.length > 0) {
       try {
-        const { fileParts: loadedParts } = await loadAttachmentContent({
-          attachmentIds: uploadIdsFromFileParts,
-          r2Bucket,
-          db,
-          logger,
-        });
+        // ✅ MEMORY SAFETY: Use URL-based loading to avoid memory exhaustion
+        // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
+        if (canUseUrlLoading) {
+          // URL-based loading - files parts will have URLs, not raw data
+          // The AI provider will fetch the file directly, avoiding Worker memory limits
+          const { fileParts: urlParts, extractedTextContent, stats } = await loadAttachmentContentUrl({
+            attachmentIds: uploadIdsFromFileParts,
+            r2Bucket,
+            db,
+            logger,
+            baseUrl: baseUrl!,
+            userId: userId!,
+            secret: secret!,
+            threadId,
+          });
 
-        for (const part of loadedParts) {
-          if (
-            'data' in part
-            && part.data instanceof Uint8Array
-            && 'mimeType' in part
-          ) {
-            // Type guard for parts with filename property
-            const filename = ('filename' in part && typeof part.filename === 'string')
-              ? part.filename
-              : undefined;
-            const key
-              = filename || `file_${part.mimeType}_${fileDataFromHistory.size}`;
-            fileDataFromHistory.set(key, {
-              // Create new Uint8Array for ArrayBuffer type (TS 5.6 compatibility)
-              data: new Uint8Array(part.data),
-              mimeType: part.mimeType,
-              filename,
-            });
+          // For URL-based loading, inject URL parts directly into messages
+          // instead of storing raw data in fileDataFromHistory
+          // ✅ FIX: Also handle PDFs where urlParts is empty but extractedTextContent exists
+          // Without this, PDFs in fallback path keep invalid file parts (url: '' or url: filename)
+          if (urlParts.length > 0 || extractedTextContent) {
+            // Update allMessages to include URL-based file parts or extracted text
+            for (let i = 0; i < allMessages.length; i++) {
+              const msg = allMessages[i];
+              if (!msg || !Array.isArray(msg.parts))
+                continue;
+
+              const hasFileParts = msg.parts.some(p => isFilePart(p));
+              if (!hasFileParts)
+                continue;
+
+              const nonFileParts = msg.parts.filter(p => !isFilePart(p));
+              let newParts = [...(urlParts as unknown as typeof msg.parts), ...nonFileParts];
+
+              // Prepend extracted text from PDFs/documents as a text part
+              if (extractedTextContent) {
+                newParts = [
+                  { type: MessagePartTypes.TEXT, text: extractedTextContent },
+                  ...newParts,
+                ];
+              }
+
+              allMessages[i] = {
+                ...msg,
+                parts: newParts,
+              };
+              break; // Only inject once
+            }
           }
-        }
 
-        logger?.info('Loaded file data via uploadId fallback', LogHelpers.operation({
-          operationName: 'prepareValidatedMessages',
-          uploadIdsCount: uploadIdsFromFileParts.length,
-          loadedCount: fileDataFromHistory.size,
-        }));
+          logger?.info('Loaded file data via URL-based fallback', LogHelpers.operation({
+            operationName: 'prepareValidatedMessages',
+            uploadIdsCount: uploadIdsFromFileParts.length,
+            loadedCount: urlParts.length,
+            stats,
+          }));
+        } else {
+          // Localhost fallback - must use base64 since AI providers can't access localhost URLs
+          const { fileParts: loadedParts } = await loadAttachmentContent({
+            attachmentIds: uploadIdsFromFileParts,
+            r2Bucket,
+            db,
+            logger,
+          });
+
+          for (const part of loadedParts) {
+            if (
+              'data' in part
+              && part.data instanceof Uint8Array
+              && 'mimeType' in part
+            ) {
+              // Type guard for parts with filename property
+              const filename = ('filename' in part && typeof part.filename === 'string')
+                ? part.filename
+                : undefined;
+              const key
+                = filename || `file_${part.mimeType}_${fileDataFromHistory.size}`;
+              fileDataFromHistory.set(key, {
+                // Create new Uint8Array for ArrayBuffer type (TS 5.6 compatibility)
+                data: new Uint8Array(part.data),
+                mimeType: part.mimeType,
+                filename,
+              });
+            }
+          }
+
+          logger?.info('Loaded file data via uploadId fallback (localhost base64)', LogHelpers.operation({
+            operationName: 'prepareValidatedMessages',
+            uploadIdsCount: uploadIdsFromFileParts.length,
+            loadedCount: fileDataFromHistory.size,
+          }));
+        }
       } catch (error) {
         logger?.warn('Fallback file data loading failed', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
@@ -1455,7 +1742,6 @@ export async function prepareValidatedMessages(
     ...fileDataFromHistory,
     ...fileDataFromNewMessage,
   ]);
-
   let typedMessages: UIMessage[] = [];
 
   try {

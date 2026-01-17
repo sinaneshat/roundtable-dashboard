@@ -407,6 +407,17 @@ export function structureAIProviderError(
   participantContext?: { id: string; modelId: string; role: string | null },
   traceId?: string,
 ): AIProviderErrorMetadata {
+  // ✅ DEBUG: Handle plain objects (stringify to see full structure)
+  const isErrorInstance = error instanceof Error;
+  const errMsg = isErrorInstance
+    ? error.message.substring(0, 200)
+    : (typeof error === 'object' && error !== null ? JSON.stringify(error).substring(0, 500) : String(error));
+  const errStatus = error && typeof error === 'object' && 'statusCode' in error ? (error as Record<string, unknown>).statusCode : '-';
+  const errBody = error && typeof error === 'object' && 'responseBody' in error
+    ? String((error as Record<string, unknown>).responseBody).substring(0, 200)
+    : '-';
+  console.error(`[StructErr] model=${participantContext?.modelId ?? '-'} isErr=${isErrorInstance} status=${errStatus} msg=${errMsg} body=${errBody}`);
+
   const aiError = extractAISdkError(error);
 
   const errorName = getErrorName(error) ?? 'UnknownError';

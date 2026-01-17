@@ -20,7 +20,7 @@
  * @see https://posthog.com/docs/product-analytics/person-properties
  */
 
-import type { BillingInterval } from '@/api/core/enums';
+import type { BillingInterval, StripeSubscriptionStatus } from '@/api/core/enums';
 
 import { getDistinctIdFromCookie, getPostHogClient } from './posthog-server';
 
@@ -43,7 +43,7 @@ type RevenueEventProperties = {
   interval?: BillingInterval;
   price_id?: string;
   invoice_id?: string;
-  subscription_status?: 'active' | 'canceled' | 'past_due' | 'trialing' | 'paused';
+  subscription_status?: StripeSubscriptionStatus;
   total_revenue?: number;
   lifetime_value?: number;
 };

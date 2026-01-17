@@ -71,7 +71,6 @@ export const chatThreadChangelogSelectSchema = createSelectSchema(chatThreadChan
   changeData: DbChangelogDataSchema,
 });
 export const chatThreadChangelogInsertSchema = createInsertSchema(chatThreadChangelog);
-export const chatThreadChangelogUpdateSchema = createUpdateSchema(chatThreadChangelog);
 
 /**
  * Custom Role Schemas
@@ -91,7 +90,6 @@ export const chatCustomRoleUpdateSchema = createUpdateSchema(chatCustomRole);
  */
 export const chatPreSearchSelectSchema = createSelectSchema(chatPreSearch);
 export const chatPreSearchInsertSchema = createInsertSchema(chatPreSearch);
-export const chatPreSearchUpdateSchema = createUpdateSchema(chatPreSearch);
 
 /**
  * Round Feedback Schemas
@@ -130,7 +128,6 @@ export type ChatMessageUpdate = z.infer<typeof chatMessageUpdateSchema>;
 
 export type ChatThreadChangelog = z.infer<typeof chatThreadChangelogSelectSchema>;
 export type ChatThreadChangelogInsert = z.infer<typeof chatThreadChangelogInsertSchema>;
-export type ChatThreadChangelogUpdate = z.infer<typeof chatThreadChangelogUpdateSchema>;
 
 export type ChatCustomRole = z.infer<typeof chatCustomRoleSelectSchema>;
 export type ChatCustomRoleInsert = z.infer<typeof chatCustomRoleInsertSchema>;
@@ -138,7 +135,6 @@ export type ChatCustomRoleUpdate = z.infer<typeof chatCustomRoleUpdateSchema>;
 
 export type ChatPreSearch = z.infer<typeof chatPreSearchSelectSchema>;
 export type ChatPreSearchInsert = z.infer<typeof chatPreSearchInsertSchema>;
-export type ChatPreSearchUpdate = z.infer<typeof chatPreSearchUpdateSchema>;
 
 export type ChatRoundFeedback = z.infer<typeof chatRoundFeedbackSelectSchema>;
 export type ChatRoundFeedbackInsert = z.infer<typeof chatRoundFeedbackInsertSchema>;

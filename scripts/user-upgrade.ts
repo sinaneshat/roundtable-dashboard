@@ -3,8 +3,8 @@
  * User Upgrade Script
  *
  * Grants a user Pro access for 1 month (manual upgrade, no Stripe payment).
- * - If already pro: tops off credits (+100K) and extends period (+1 month)
- * - If free: upgrades to pro, grants 100K credits, sets 1 month period
+ * - If already pro: tops off credits (+2M) and extends period (+1 month)
+ * - If free: upgrades to pro, grants 2M credits, sets 1 month period
  *
  * Creates all necessary database records for proper behavior:
  * - user_chat_usage: subscription tier = 'pro', billing period
@@ -31,13 +31,15 @@
 import { execSync } from 'node:child_process';
 import * as readline from 'node:readline';
 
+import { SubscriptionTiers, TIER_MONTHLY_CREDITS } from '../src/api/core/enums/billing';
+
 const D1_DATABASE_NAMES = {
   preview: 'roundtable-dashboard-db-preview',
   prod: 'roundtable-dashboard-db-prod',
 } as const;
 
-// Pro plan constants (from product-logic.service.ts and credit-config.ts)
-const PRO_MONTHLY_CREDITS = 100_000;
+// Pro plan credits - imported from single source of truth
+const PRO_MONTHLY_CREDITS = TIER_MONTHLY_CREDITS[SubscriptionTiers.PRO];
 
 // Stripe IDs from seed files - use real product/price so tier detection works correctly
 // These match the actual Stripe catalog (test mode for preview, live mode for prod)

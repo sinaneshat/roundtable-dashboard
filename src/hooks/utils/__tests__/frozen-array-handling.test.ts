@@ -360,7 +360,7 @@ describe('setMessages Callback Patterns with Frozen Arrays', () => {
 // TESTS: Error Path with Frozen Arrays
 // ============================================================================
 
-describe('error Path with Frozen Arrays', () => {
+describe('error path with frozen arrays', () => {
   it('should add error message to frozen array', () => {
     const original = [createBasicMessage('msg-1', 0)];
     const frozen = createFrozenMessageArray(original);
@@ -397,7 +397,7 @@ describe('error Path with Frozen Arrays', () => {
 // TESTS: Complete Path with Frozen Arrays
 // ============================================================================
 
-describe('complete Path with Frozen Arrays (onFinish)', () => {
+describe('complete path with frozen arrays (onFinish)', () => {
   it('should add completed message to frozen array', () => {
     const original = [createStreamingMessage('msg-1', 0)];
     const frozen = createFrozenMessageArray(original);
@@ -453,7 +453,7 @@ describe('complete Path with Frozen Arrays (onFinish)', () => {
 // TESTS: Part State Update with Frozen Arrays
 // ============================================================================
 
-describe('part State Update with Frozen Arrays', () => {
+describe('part state update with frozen arrays', () => {
   /**
    * Simulates the onFinish part state update fix
    * This ensures all parts have state='done' before creating completeMessage
@@ -527,7 +527,7 @@ describe('part State Update with Frozen Arrays', () => {
 // TESTS: Real-World Scenario - Full Streaming Flow
 // ============================================================================
 
-describe('real-World Scenario: Full Streaming Flow with Frozen Arrays', () => {
+describe('real-world scenario: full streaming flow with frozen arrays', () => {
   it('should handle complete streaming lifecycle with frozen store sync', () => {
     // Scenario: Zustand store syncs frozen messages to hook during streaming
 
@@ -599,7 +599,7 @@ describe('real-World Scenario: Full Streaming Flow with Frozen Arrays', () => {
 // TESTS: AI SDK ↔ Store Sync Isolation (Root Cause of Bug)
 // ============================================================================
 
-describe('aI SDK to Store Sync Isolation', () => {
+describe('ai sdk to store sync isolation', () => {
   /**
    * This test suite covers the ROOT CAUSE of the "Cannot add property 0" error.
    *

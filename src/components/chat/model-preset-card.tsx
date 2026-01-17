@@ -4,12 +4,10 @@ import { memo, useMemo } from 'react';
 
 import type { SubscriptionTier } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-// Direct import to avoid barrel export pulling in server-only credit.service.ts
-import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/billing/product-logic.service';
 import { ModelAvatarWithRole } from '@/components/chat/model-avatar-with-role';
 import { Icons } from '@/components/icons';
+import { canAccessPreset, SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
-import { canAccessPreset } from '@/lib/config/model-presets';
 import { cn } from '@/lib/ui/cn';
 
 type ModelPresetCardProps = {

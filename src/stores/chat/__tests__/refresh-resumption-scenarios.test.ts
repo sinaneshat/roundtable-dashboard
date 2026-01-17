@@ -192,7 +192,7 @@ describe('refresh During Participant Streaming', () => {
       });
       const _participantCount = 3;
 
-      const assistantMessages = messages.filter(m => m.role === 'assistant');
+      const assistantMessages = messages.filter(m => m.role === MessageRoles.ASSISTANT);
       const lastMessage = assistantMessages[assistantMessages.length - 1];
       const metadata = lastMessage?.metadata as DbAssistantMessageMetadata;
 
@@ -207,7 +207,7 @@ describe('refresh During Participant Streaming', () => {
       const _participants = [createMockParticipant(0), createMockParticipant(1), createMockParticipant(2)];
 
       // Find first incomplete participant
-      const assistantMessages = messages.filter(m => m.role === 'assistant');
+      const assistantMessages = messages.filter(m => m.role === MessageRoles.ASSISTANT);
       let nextParticipantIndex = 0;
 
       for (let i = 0; i < assistantMessages.length; i++) {
@@ -234,7 +234,7 @@ describe('refresh During Participant Streaming', () => {
       });
       const participantCount = 3;
 
-      const assistantMessages = messages.filter(m => m.role === 'assistant');
+      const assistantMessages = messages.filter(m => m.role === MessageRoles.ASSISTANT);
       const completedCount = assistantMessages.filter((m) => {
         const metadata = m.metadata as DbAssistantMessageMetadata;
         return metadata.finishReason === FinishReasons.STOP || metadata.finishReason === FinishReasons.LENGTH;
@@ -316,7 +316,7 @@ describe('refresh During Participant Streaming', () => {
       ];
 
       // P1 needs retry because finishReason is UNKNOWN
-      const assistantMessages = messages.filter(m => m.role === 'assistant');
+      const assistantMessages = messages.filter(m => m.role === MessageRoles.ASSISTANT);
       let nextIndex = 0;
 
       for (const msg of assistantMessages) {
@@ -356,7 +356,7 @@ describe('refresh During Participant Streaming', () => {
       ];
       const participantCount = 2;
 
-      const assistantMessages = messages.filter(m => m.role === 'assistant');
+      const assistantMessages = messages.filter(m => m.role === MessageRoles.ASSISTANT);
       const allComplete = assistantMessages.every((m) => {
         const metadata = m.metadata as DbAssistantMessageMetadata;
         return metadata.finishReason === FinishReasons.STOP || metadata.finishReason === FinishReasons.LENGTH;
@@ -451,7 +451,7 @@ describe('refresh After Round Complete', () => {
       ];
       const participantCount = 2;
 
-      const assistantMessages = messages.filter(m => m.role === 'assistant');
+      const assistantMessages = messages.filter(m => m.role === MessageRoles.ASSISTANT);
       const allComplete = assistantMessages.every((m) => {
         const metadata = m.metadata as DbAssistantMessageMetadata;
         return metadata.finishReason === FinishReasons.STOP || metadata.finishReason === FinishReasons.LENGTH;
@@ -592,7 +592,7 @@ describe('multi-Round Resumption', () => {
 
       // Check if latest round is complete
       const latestRoundMessages = messages.filter(m => m.metadata.roundNumber === maxRound);
-      const latestRoundAssistants = latestRoundMessages.filter(m => m.role === 'assistant');
+      const latestRoundAssistants = latestRoundMessages.filter(m => m.role === MessageRoles.ASSISTANT);
 
       expect(latestRoundAssistants).toHaveLength(0);
     });
@@ -633,7 +633,7 @@ describe('multi-Round Resumption', () => {
       // Check latest round (1)
       const maxRound = Math.max(...messages.map(m => m.metadata.roundNumber));
       const latestRoundAssistants = messages.filter(
-        m => m.metadata.roundNumber === maxRound && m.role === 'assistant',
+        m => m.metadata.roundNumber === maxRound && m.role === MessageRoles.ASSISTANT,
       );
 
       const round1Complete = latestRoundAssistants.length === participantCount

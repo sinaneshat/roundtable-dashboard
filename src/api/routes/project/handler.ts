@@ -79,7 +79,7 @@ export const listProjectsHandler: RouteHandler<typeof listProjectsRoute, ApiEnv>
       filters.push(like(tables.chatProject.name, `%${query.search}%`));
     }
 
-    // Fetch projects with cursor pagination
+    // ✅ PERF: Fetch projects with relations in single query using Drizzle relational
     const projects = await db.query.chatProject.findMany({
       where: buildCursorWhereWithFilters(
         tables.chatProject.createdAt,
@@ -89,26 +89,27 @@ export const listProjectsHandler: RouteHandler<typeof listProjectsRoute, ApiEnv>
       ),
       orderBy: getCursorOrderBy(tables.chatProject.createdAt, 'desc'),
       limit: query.limit + 1,
+      with: {
+        attachments: {
+          columns: { id: true },
+        },
+        threads: {
+          columns: { id: true },
+        },
+      },
     });
 
-    // Get attachment counts and thread counts for each project
-    const projectsWithCounts = await Promise.all(
-      projects.map(async (project) => {
-        const attachments = await db.query.projectAttachment.findMany({
-          where: eq(tables.projectAttachment.projectId, project.id),
-        });
-
-        const threads = await db.query.chatThread.findMany({
-          where: eq(tables.chatThread.projectId, project.id),
-        });
-
-        return {
-          ...project,
-          attachmentCount: attachments.length,
-          threadCount: threads.length,
-        };
-      }),
-    );
+    // Transform to include counts
+    const projectsWithCounts = projects.map(project => ({
+      id: project.id,
+      userId: project.userId,
+      name: project.name,
+      description: project.description,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+      attachmentCount: project.attachments?.length ?? 0,
+      threadCount: project.threads?.length ?? 0,
+    }));
 
     // Apply pagination
     const { items, pagination } = applyCursorPagination(

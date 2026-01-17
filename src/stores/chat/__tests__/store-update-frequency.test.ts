@@ -20,7 +20,7 @@ import { createTestAssistantMessage, createTestChatStore, createTestUserMessage 
 // Test Message Helpers
 // ============================================================================
 
-function mockMessage(opts: { id: string; role: MessageRoles.USER | 'assistant'; text: string; metadata?: Record<string, unknown> }): UIMessage {
+function mockMessage(opts: { id: string; role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT; text: string; metadata?: UIMessage['metadata'] }): UIMessage {
   return {
     id: opts.id,
     role: opts.role,
@@ -261,7 +261,7 @@ describe('store Update Frequency', () => {
       const messages = Array.from({ length: 5 }, (_, i) =>
         mockMessage({
           id: `msg${i}`,
-          role: i % 2 === 0 ? 'user' : 'assistant',
+          role: i % 2 === 0 ? MessageRoles.USER : MessageRoles.ASSISTANT,
           text: `Message ${i}`,
         }));
 

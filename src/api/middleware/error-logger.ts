@@ -63,6 +63,21 @@ function createSanitizedDatabaseError(originalError: Error): Error {
 }
 
 /**
+ * Check if this is an expected 401 authentication error.
+ * These are expected on protected endpoints when user isn't authenticated.
+ * We skip verbose logging for these to reduce console noise in dev.
+ */
+function isExpected401(err: Error, status: number): boolean {
+  if (status !== 401) {
+    return false;
+  }
+  const message = err.message.toLowerCase();
+  return message.includes('authentication required')
+    || message.includes('unauthorized')
+    || message.includes('session');
+}
+
+/**
  * Global error logging middleware
  *
  * Logs ALL errors as structured JSON for Cloudflare Workers Logs indexing.
@@ -95,6 +110,12 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
     errorType = 'HTTPException';
   } else if (err instanceof Error) {
     errorType = err.constructor.name;
+  }
+
+  // Skip verbose logging for expected 401 auth errors
+  // These are normal on protected endpoints when user isn't logged in
+  if (isExpected401(err, status)) {
+    return onError(err, c);
   }
 
   // Extract Cloudflare request context

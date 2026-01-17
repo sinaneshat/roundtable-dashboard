@@ -99,7 +99,10 @@ export function ConfigurationChangesGroup({ group, className, isReadOnly }: Conf
               {actionSummaries.join(', ')}
             </span>
             <span className="hidden md:inline text-xs text-muted-foreground flex-shrink-0">•</span>
-            <span className="hidden md:inline text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+            <span
+              className="hidden md:inline text-xs text-muted-foreground whitespace-nowrap flex-shrink-0"
+
+            >
               {formatRelativeTime(group.timestamp)}
             </span>
           </div>

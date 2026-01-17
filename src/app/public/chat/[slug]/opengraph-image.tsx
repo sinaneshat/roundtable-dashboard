@@ -15,7 +15,7 @@ import {
 import { BRAND } from '@/constants';
 import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { getOGFontsSync } from '@/lib/ui/og-fonts.server';
+import { getOGFontsSync } from '@/lib/ui/og-assets.generated';
 import {
   createGradient,
   getLogoBase64,

@@ -26,9 +26,19 @@ export type ListModelsResponse = InferResponseType<
 /**
  * Get curated AI models with tier-based access control
  * Protected endpoint - requires authentication
+ *
+ * @param options - Service options
+ * @param options.bypassCache - If true, bypasses HTTP cache to get fresh data
+ * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
-export async function listModelsService(options?: { bypassCache?: boolean }) {
-  const client = await createApiClient({ bypassCache: options?.bypassCache });
+export async function listModelsService(options?: {
+  bypassCache?: boolean;
+  cookieHeader?: string;
+}) {
+  const client = await createApiClient({
+    bypassCache: options?.bypassCache,
+    cookieHeader: options?.cookieHeader,
+  });
   return parseResponse(client.models.$get());
 }
 

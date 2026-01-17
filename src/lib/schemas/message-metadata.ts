@@ -13,6 +13,7 @@ import { z } from 'zod';
 import {
   ErrorTypeSchema,
   FinishReasonSchema,
+  MessageRoles,
   PreSearchQueryStateStatusSchema,
   WebSearchContentTypeSchema,
   WebSearchDepthSchema,
@@ -120,7 +121,7 @@ export function messageHasError(
 // ============================================================================
 
 export const PartialUserMetadataSchema = z.object({
-  role: z.literal('user'),
+  role: z.literal(MessageRoles.USER),
   roundNumber: z.number().int().nonnegative(),
   createdAt: z.string().datetime().optional(),
 });
@@ -128,7 +129,7 @@ export const PartialUserMetadataSchema = z.object({
 export type PartialUserMetadata = z.infer<typeof PartialUserMetadataSchema>;
 
 export const PartialAssistantMetadataSchema = z.object({
-  role: z.literal('assistant'),
+  role: z.literal(MessageRoles.ASSISTANT),
   roundNumber: z.number().int().nonnegative(),
   participantId: z.string().min(1),
   participantIndex: z.number().int().nonnegative().optional(),

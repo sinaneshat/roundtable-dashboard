@@ -26,7 +26,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { FinishReasons, MessageRoles, ParticipantStreamStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
-import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
+import type { DbAssistantMessageMetadata, DbMessageMetadata } from '@/db/schemas/chat-metadata';
+import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { createMockParticipant, createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
 
@@ -114,12 +115,12 @@ function simulateServerWithDbValidation(
   // Get participant indices that have actual DB messages
   const participantIndicesWithMessages = new Set<number>();
   for (const msg of dbMessages) {
-    if (msg.role !== 'assistant')
+    if (msg.role !== MessageRoles.ASSISTANT)
       continue;
-    const metadata = msg.metadata as DbAssistantMessageMetadata | null;
+    const metadata = msg.metadata as DbMessageMetadata | null;
     if (!metadata)
       continue;
-    if ('isModerator' in metadata && (metadata as unknown as { isModerator: boolean }).isModerator)
+    if (isModeratorMessageMetadata(metadata))
       continue;
     if ('participantIndex' in metadata && typeof metadata.participantIndex === 'number') {
       participantIndicesWithMessages.add(metadata.participantIndex);
@@ -344,7 +345,7 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
       // P0's message MUST be in merged messages
       const p0Message = mergedMessages.find((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
-        return meta?.participantIndex === 0 && m.role === 'assistant';
+        return meta?.participantIndex === 0 && m.role === MessageRoles.ASSISTANT;
       });
 
       expect(p0Message).toBeDefined();
@@ -527,7 +528,7 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
       // P0's message MUST be preserved
       const p0Preserved = clientMessages.some((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
-        return meta?.participantIndex === 0 && m.role === 'assistant';
+        return meta?.participantIndex === 0 && m.role === MessageRoles.ASSISTANT;
       });
       expect(p0Preserved).toBe(true);
 
@@ -607,7 +608,7 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
       expect(clientMessages).toHaveLength(1); // Only user message
       const p0Lost = !clientMessages.some((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
-        return meta?.participantIndex === 0 && m.role === 'assistant';
+        return meta?.participantIndex === 0 && m.role === MessageRoles.ASSISTANT;
       });
       expect(p0Lost).toBe(true); // P0 IS LOST - this is the bug!
     });

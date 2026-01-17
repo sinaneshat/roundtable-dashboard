@@ -36,6 +36,7 @@ import {
   FileQuestion,
   FileSearch,
   FileText,
+  FileX,
   Gift,
   Globe,
   GraduationCap,
@@ -145,6 +146,7 @@ export const Icons = {
   fileQuestion: FileQuestion,
   fileSearch: FileSearch,
   fileText: FileText,
+  fileX: FileX,
 
   // Communication
   mail: Mail,

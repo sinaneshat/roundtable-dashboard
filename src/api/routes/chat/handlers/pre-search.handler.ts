@@ -20,14 +20,16 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, IdParamSchema, Responses, STREAMING_CONFIG, ThreadRoundParamSchema } from '@/api/core';
-import { FinishReasons, IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PollingStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { CreditActions, FinishReasons, IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PollingStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import type { BillingContext } from '@/api/services/billing';
 import {
   deductCreditsForAction,
   enforceCredits,
+  finalizeCredits,
 } from '@/api/services/billing';
 import type { PreSearchTrackingContext } from '@/api/services/errors';
 import { buildEmptyResponseError, extractErrorMetadata, initializePreSearchTracking, trackPreSearchComplete, trackQueryGeneration, trackWebSearchExecution } from '@/api/services/errors';
-import { loadAttachmentContent } from '@/api/services/messages';
+import { loadAttachmentContent, loadAttachmentContentUrl } from '@/api/services/messages';
 import { initializeOpenRouter, openRouterService } from '@/api/services/models';
 import { analyzeQueryComplexity, IMAGE_ANALYSIS_FOR_SEARCH_PROMPT, simpleOptimizeQuery } from '@/api/services/prompts';
 import {
@@ -64,6 +66,14 @@ import { PreSearchRequestSchema } from '../schema';
 // ============================================================================
 
 /**
+ * Extended billing context for image analysis with execution context
+ * ✅ EXTENDS: BillingContext from @/api/services/billing
+ */
+type ImageAnalysisBillingContext = BillingContext & {
+  executionCtx: ExecutionContext;
+};
+
+/**
  * Analyze images using vision model to extract searchable context
  *
  * This function is critical for web search with image attachments:
@@ -73,6 +83,7 @@ import { PreSearchRequestSchema } from '../schema';
  *
  * @param fileParts - Image file parts loaded from attachments
  * @param env - API environment bindings
+ * @param billingContext - Billing context for credit deduction
  * @returns Description of image contents for search context
  */
 async function analyzeImagesForSearchContext(
@@ -82,8 +93,10 @@ async function analyzeImagesForSearchContext(
     mimeType?: string;
     filename?: string;
     url?: string;
+    image?: string; // URL for image parts from loadAttachmentContentUrl
   }>,
   env: ApiEnv['Bindings'],
+  billingContext?: ImageAnalysisBillingContext,
 ): Promise<string> {
   // Filter for image files only
   const imageFileParts = fileParts.filter(
@@ -105,26 +118,55 @@ async function analyzeImagesForSearchContext(
       text: IMAGE_ANALYSIS_FOR_SEARCH_PROMPT,
     };
 
-    // Build file parts for images
+    // Build file parts for images - support both URL-based and data-based parts
+    // All parts use type: 'file' for UIMessage compatibility
     const filePartsList = imageFileParts
-      .filter(part => part.data && part.mimeType)
+      .filter(part => (part.data || part.url || part.image) && part.mimeType)
       .map((part) => {
-        // Convert Uint8Array to base64 using chunked approach
-        const bytes = part.data!;
-        let binary = '';
-        const chunkSize = 8192;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-          binary += String.fromCharCode(...chunk);
+        // URL-based parts (from loadAttachmentContentUrl in production)
+        // Check for image URL first (ModelImagePartUrl format), then file URL
+        if (part.image && part.image.startsWith('http')) {
+          return {
+            type: 'file' as const,
+            mediaType: part.mimeType,
+            url: part.image,
+          };
         }
-        const base64 = btoa(binary);
-        const dataUrl = `data:${part.mimeType};base64,${base64}`;
-        return {
-          type: 'file' as const,
-          mediaType: part.mimeType,
-          url: dataUrl,
-        };
-      });
+        if (part.url && part.url.startsWith('http')) {
+          return {
+            type: 'file' as const,
+            mediaType: part.mimeType,
+            url: part.url,
+          };
+        }
+        // Data URL (already base64 encoded)
+        if (part.url && part.url.startsWith('data:')) {
+          return {
+            type: 'file' as const,
+            mediaType: part.mimeType,
+            url: part.url,
+          };
+        }
+        // Fallback: Convert Uint8Array to base64 (localhost only)
+        if (part.data) {
+          const bytes = part.data;
+          const chunks: string[] = [];
+          const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+            chunks.push(String.fromCharCode(...chunk));
+          }
+          const base64 = btoa(chunks.join(''));
+          const dataUrl = `data:${part.mimeType};base64,${base64}`;
+          return {
+            type: 'file' as const,
+            mediaType: part.mimeType,
+            url: dataUrl,
+          };
+        }
+        return null;
+      })
+      .filter((part): part is NonNullable<typeof part> => part !== null);
 
     // Call vision model to analyze images
     const result = await openRouterService.generateText({
@@ -141,6 +183,25 @@ async function analyzeImagesForSearchContext(
     });
 
     const description = result.text.trim();
+
+    // ✅ BILLING: Deduct credits for image analysis AI call
+    if (billingContext && result.usage) {
+      const rawInput = result.usage.inputTokens ?? 0;
+      const rawOutput = result.usage.outputTokens ?? 0;
+      const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+      const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+      if (safeInputTokens > 0 || safeOutputTokens > 0) {
+        billingContext.executionCtx.waitUntil(
+          finalizeCredits(billingContext.userId, `presearch-img-analysis-${ulid()}`, {
+            inputTokens: safeInputTokens,
+            outputTokens: safeOutputTokens,
+            action: CreditActions.AI_RESPONSE,
+            threadId: billingContext.threadId,
+            modelId: AIModels.IMAGE_ANALYSIS,
+          }),
+        );
+      }
+    }
 
     if (description) {
       return `[Image Content Analysis]\n${description}`;
@@ -383,15 +444,34 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           let imageContext = '';
           if (body.attachmentIds && body.attachmentIds.length > 0) {
             try {
-              const { fileParts } = await loadAttachmentContent({
-                attachmentIds: body.attachmentIds,
-                r2Bucket: c.env.UPLOADS_R2_BUCKET,
-                db,
-              });
+              // Use URL-based loading in production to avoid memory-intensive base64 encoding
+              const baseUrl = new URL(c.req.url).origin;
+              const canUseUrlLoading = Boolean(baseUrl && user.id && c.env.BETTER_AUTH_SECRET);
+
+              const { fileParts } = canUseUrlLoading
+                ? await loadAttachmentContentUrl({
+                    attachmentIds: body.attachmentIds,
+                    r2Bucket: c.env.UPLOADS_R2_BUCKET,
+                    db,
+                    baseUrl,
+                    userId: user.id,
+                    secret: c.env.BETTER_AUTH_SECRET,
+                    threadId,
+                  })
+                : await loadAttachmentContent({
+                    attachmentIds: body.attachmentIds,
+                    r2Bucket: c.env.UPLOADS_R2_BUCKET,
+                    db,
+                  });
 
               if (fileParts.length > 0) {
                 // Analyze images with vision model to get searchable descriptions
-                imageContext = await analyzeImagesForSearchContext(fileParts, c.env);
+                // ✅ BILLING: Pass billing context for credit deduction
+                imageContext = await analyzeImagesForSearchContext(fileParts, c.env, {
+                  userId: user.id,
+                  threadId,
+                  executionCtx: c.executionCtx,
+                });
               }
             } catch (error) {
               // Log but don't fail - continue without image context
@@ -563,10 +643,35 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 },
               );
             }
+
+            // ✅ BILLING: Deduct credits for query generation AI call (streaming)
+            try {
+              const queryUsage = await queryStream.usage;
+              if (queryUsage) {
+                const rawInput = queryUsage.inputTokens ?? 0;
+                const rawOutput = queryUsage.outputTokens ?? 0;
+                const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+                const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+                if (safeInputTokens > 0 || safeOutputTokens > 0) {
+                  c.executionCtx.waitUntil(
+                    finalizeCredits(user.id, `presearch-query-${streamId}`, {
+                      inputTokens: safeInputTokens,
+                      outputTokens: safeOutputTokens,
+                      action: CreditActions.AI_RESPONSE,
+                      threadId,
+                      modelId: AIModels.WEB_SEARCH,
+                    }),
+                  );
+                }
+              }
+            } catch (billingError) {
+              console.error('[Pre-search] Query generation billing failed:', billingError);
+            }
           } catch {
           // ✅ FALLBACK LEVEL 1: Try non-streaming generation (streaming failed completely)
             try {
-              multiQueryResult = await generateSearchQuery(body.userQuery, c.env);
+              const queryGenResult = await generateSearchQuery(body.userQuery, c.env);
+              multiQueryResult = queryGenResult.output;
 
               // Validate generation succeeded
               if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
@@ -578,6 +683,25 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                     operation: 'non_stream_query_generation',
                   },
                 );
+              }
+
+              // ✅ BILLING: Deduct credits for query generation AI call (non-streaming)
+              if (queryGenResult.usage) {
+                const rawInput = queryGenResult.usage.inputTokens ?? 0;
+                const rawOutput = queryGenResult.usage.outputTokens ?? 0;
+                const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+                const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+                if (safeInputTokens > 0 || safeOutputTokens > 0) {
+                  c.executionCtx.waitUntil(
+                    finalizeCredits(user.id, `presearch-query-fallback-${streamId}`, {
+                      inputTokens: safeInputTokens,
+                      outputTokens: safeOutputTokens,
+                      action: CreditActions.AI_RESPONSE,
+                      threadId,
+                      modelId: AIModels.WEB_SEARCH,
+                    }),
+                  );
+                }
               }
 
               // Send start event for non-streaming result
@@ -819,6 +943,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               },
               c.env,
               complexity,
+              undefined, // logger
+              { userId: user.id, threadId }, // ✅ BILLING: Pass billing context
             );
             const searchDuration = performance.now() - searchStartTime;
 
@@ -1178,7 +1304,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 /**
  * Get all pre-search results for a thread
  * ✅ FOLLOWS: getThreadAnalysesHandler pattern exactly
- * ✅ ORPHAN CLEANUP: Marks stale STREAMING/PENDING searches as FAILED
+ * ✅ ORPHAN CLEANUP: Fire-and-forget via waitUntil (non-blocking)
  */
 export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearchesRoute, ApiEnv> = createHandler(
   {
@@ -1210,92 +1336,91 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
       },
     });
 
-    // Mark stale STREAMING/PENDING searches as FAILED
-    // ✅ FIX: Check KV buffer for recent activity before marking as orphaned
-    // A search with recent KV chunks is still actively running and should not be marked failed
+    // ✅ NON-BLOCKING: Fire-and-forget orphan cleanup via waitUntil
+    // Don't block response - orphan cleanup happens in background
+    // Next request will see updated status if cleanup was needed
     const potentialOrphans = allPreSearches.filter((search) => {
       if (search.status !== MessageStatuses.STREAMING && search.status !== MessageStatuses.PENDING) {
         return false;
       }
-
-      // Check if timestamp has exceeded orphan cleanup timeout
       return hasTimestampExceededTimeout(search.createdAt, STREAMING_CONFIG.ORPHAN_CLEANUP_TIMEOUT_MS);
     });
 
-    // ✅ OPTIMIZED: Parallelize KV checks for all potential orphans
-    const orphanedSearches: typeof potentialOrphans = [];
-    const orphanChecks = await Promise.all(
-      potentialOrphans.map(async (search) => {
-        const streamId = generatePreSearchStreamId(threadId, search.roundNumber);
-        const chunks = await getPreSearchStreamChunks(streamId, c.env);
-
-        // If KV has recent chunks, the stream is still active - don't mark as orphaned
-        if (chunks && chunks.length > 0) {
-          const lastChunkTime = Math.max(...chunks.map(chunk => chunk.timestamp));
-          const isStale = Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
-
-          if (!isStale) {
-            // Stream is still active, skip orphan cleanup for this search
-            return { search, isOrphaned: false };
-          }
-        }
-
-        // No recent KV activity OR no KV available - this is truly orphaned
-        return { search, isOrphaned: true };
-      }),
-    );
-
-    // Filter to only truly orphaned searches
-    for (const check of orphanChecks) {
-      if (check.isOrphaned) {
-        orphanedSearches.push(check.search);
-      }
+    if (potentialOrphans.length > 0) {
+      // ✅ FIRE-AND-FORGET: Orphan cleanup runs after response is sent
+      c.executionCtx.waitUntil(
+        cleanupOrphanedPreSearches(potentialOrphans, threadId, db, c.env),
+      );
     }
 
-    if (orphanedSearches.length > 0) {
-      // ✅ OPTIMIZED: Parallelize KV cleanup and batch database updates
-      // Clean up KV tracking for all orphaned searches in parallel
-      await Promise.all(
-        orphanedSearches.map(search =>
-          clearActivePreSearchStream(threadId, search.roundNumber, c.env),
-        ),
-      );
-
-      // Update orphaned searches to FAILED status (parallel execution)
-      await Promise.all(
-        orphanedSearches.map(search =>
-          db.update(tables.chatPreSearch)
-            .set({
-              status: MessageStatuses.FAILED,
-              errorMessage: 'Search timed out after 2 minutes. This may have been caused by a page refresh or connection issue during streaming.',
-            })
-            .where(eq(tables.chatPreSearch.id, search.id)),
-        ),
-      );
-
-      // ✅ OPTIMIZED: Update in-memory data instead of re-querying database
-      // Mark orphaned searches as FAILED in the existing result set
-      const updatedPreSearches = allPreSearches.map((search) => {
-        const isOrphaned = orphanedSearches.some(orphan => orphan.id === search.id);
-        if (isOrphaned) {
-          return {
-            ...search,
-            status: MessageStatuses.FAILED,
-            errorMessage: 'Search timed out after 2 minutes. This may have been caused by a page refresh or connection issue during streaming.',
-          };
-        }
-        return search;
-      });
-
-      return Responses.ok(c, {
-        items: updatedPreSearches,
-        count: updatedPreSearches.length,
-      });
-    }
-
+    // ✅ RETURN IMMEDIATELY: Don't wait for orphan cleanup
+    // Client sees current state; any orphans will be cleaned on next request
     return Responses.ok(c, {
       items: allPreSearches,
       count: allPreSearches.length,
     });
   },
 );
+
+/**
+ * Background orphan cleanup - runs via waitUntil after response is sent
+ */
+async function cleanupOrphanedPreSearches(
+  potentialOrphans: Array<{
+    id: string;
+    threadId: string;
+    roundNumber: number;
+    status: string;
+    createdAt: Date;
+  }>,
+  threadId: string,
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+  env: ApiEnv['Bindings'],
+): Promise<void> {
+  try {
+    // Check KV for each potential orphan to confirm it's truly orphaned
+    const orphanChecks = await Promise.all(
+      potentialOrphans.map(async (search) => {
+        const streamId = generatePreSearchStreamId(threadId, search.roundNumber);
+        const chunks = await getPreSearchStreamChunks(streamId, env);
+
+        if (chunks && chunks.length > 0) {
+          const lastChunkTime = Math.max(...chunks.map(chunk => chunk.timestamp));
+          const isStale = Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
+          if (!isStale) {
+            return { search, isOrphaned: false };
+          }
+        }
+        return { search, isOrphaned: true };
+      }),
+    );
+
+    const orphanedSearches = orphanChecks
+      .filter(check => check.isOrphaned)
+      .map(check => check.search);
+
+    if (orphanedSearches.length === 0) {
+      return;
+    }
+
+    // Clean up KV and update DB in parallel
+    await Promise.all([
+      // Clear KV tracking
+      ...orphanedSearches.map(search =>
+        clearActivePreSearchStream(threadId, search.roundNumber, env),
+      ),
+      // Update DB status
+      ...orphanedSearches.map(search =>
+        db.update(tables.chatPreSearch)
+          .set({
+            status: MessageStatuses.FAILED,
+            errorMessage: 'Search timed out. May have been caused by page refresh or connection issue.',
+          })
+          .where(eq(tables.chatPreSearch.id, search.id)),
+      ),
+    ]);
+  } catch {
+    // Silently fail - orphan cleanup is best-effort
+    // Will be retried on next request
+  }
+}

@@ -16,7 +16,7 @@ import { MessageRoles } from '@/api/core/enums';
 // Types for optimistic message handling
 type BaseMessage = {
   id: string;
-  role: MessageRoles.USER | 'assistant' | 'system';
+  role: typeof MessageRoles[keyof typeof MessageRoles] | 'system';
   content: string;
   createdAt: Date;
 };
@@ -138,7 +138,7 @@ describe('optimistic Update and Replacement', () => {
       expect(optimistic.id).toBe(tempId);
       expect(optimistic.content).toBe(content);
       expect(optimistic.status).toBe('pending');
-      expect(optimistic.role).toBe('user');
+      expect(optimistic.role).toBe(MessageRoles.USER);
     });
 
     it('should generate unique tempIds', () => {

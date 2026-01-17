@@ -321,7 +321,7 @@ describe('participant Transition Flashing', () => {
 
       // Filter for messageGroups - only skip ASSISTANT messages from streaming round
       const assistantMessagesForGroups = messages.filter((m) => {
-        if (m.role !== 'assistant')
+        if (m.role !== MessageRoles.ASSISTANT)
           return false; // User messages handled separately
         const round = (m.metadata as { roundNumber?: number })?.roundNumber ?? -1;
         return round !== streamingRoundNumber;

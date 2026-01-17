@@ -54,6 +54,8 @@ function getWindowSpeechAPIs(): SpeechRecognitionWindow {
   if (typeof window === 'undefined') {
     return {};
   }
+  // BROWSER API ACCESS: SpeechRecognition/webkitSpeechRecognition are vendor-prefixed
+  // browser APIs not in standard TypeScript Window type definitions.
   const win = window as unknown as SpeechRecognitionWindow;
   return {
     SpeechRecognition: win.SpeechRecognition,

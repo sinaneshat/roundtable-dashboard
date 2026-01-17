@@ -1,4 +1,5 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
+import { headers } from 'next/headers';
 import type React from 'react';
 
 import { getOptionalAuth } from '@/app/auth/actions';
@@ -29,9 +30,16 @@ export default async function PricingLayout({ children }: PricingLayoutProps) {
   // Optional auth - show different UI for logged in users
   const session = await getOptionalAuth();
 
+  // ✅ CRITICAL: Capture cookies SYNCHRONOUSLY before fire-and-forget prefetches
+  // headers() is request-scoped and may not be available in async contexts
+  // Without this, prefetches would fail with 401 as the request context is lost
+  const headersList = await headers();
+  const cookieHeader = headersList.get('cookie') || '';
+
   // ✅ PERF: Fire-and-forget prefetches - don't block rendering
   // Prefetches populate the cache for instant client hydration
   // But we don't await them - let the page render immediately
+  // Pass pre-captured cookieHeader to ensure auth works in async context
   void Promise.all([
     queryClient.prefetchQuery({
       queryKey: queryKeys.products.list(),
@@ -39,16 +47,18 @@ export default async function PricingLayout({ children }: PricingLayoutProps) {
       staleTime: STALE_TIMES.products,
     }),
     queryClient.prefetchQuery({
+      // eslint-disable-next-line @tanstack/query/exhaustive-deps -- cookieHeader is auth context, not cache identity
       queryKey: queryKeys.models.list(),
-      queryFn: () => listModelsService(),
+      queryFn: () => listModelsService({ cookieHeader }),
       staleTime: STALE_TIMES.models,
     }),
     // Prefetch subscriptions for authenticated users
     ...(session?.user
       ? [
           queryClient.prefetchQuery({
+            // eslint-disable-next-line @tanstack/query/exhaustive-deps -- cookieHeader is auth context, not cache identity
             queryKey: queryKeys.subscriptions.list(),
-            queryFn: () => getSubscriptionsService(),
+            queryFn: () => getSubscriptionsService({ cookieHeader }),
             staleTime: STALE_TIMES.subscriptions,
           }),
         ]

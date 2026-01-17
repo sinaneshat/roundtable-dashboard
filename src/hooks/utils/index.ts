@@ -15,6 +15,8 @@ export type { UseCopyToClipboardOptions, UseCopyToClipboardReturn } from './use-
 export { useCopyToClipboard } from './use-copy-to-clipboard';
 export type { UseCountdownRedirectOptions, UseCountdownRedirectReturn } from './use-countdown-redirect';
 export { useCountdownRedirect } from './use-countdown-redirect';
+export type { CreditEstimationResult, UseCreditEstimationOptions } from './use-credit-estimation';
+export { useCreditEstimation } from './use-credit-estimation';
 export { useCurrentPathname } from './use-current-pathname';
 export type { UseDebouncedValueReturn } from './use-debounced-value';
 export { useDebouncedValue } from './use-debounced-value';
@@ -47,8 +49,9 @@ export {
   useFileValidation,
   UseFileValidationOptionsSchema,
 } from './use-file-validation';
-export type { FreeTrialState, FreeTrialStateReturn } from './use-free-trial-state';
+export type { FreeTrialStateReturn } from './use-free-trial-state';
 export { useFreeTrialState } from './use-free-trial-state';
+export { useInView } from './use-in-view';
 export { useIsMounted } from './use-is-mounted';
 export type { UseMediaQueryReturn } from './use-media-query';
 export { useMediaQuery } from './use-media-query';
@@ -69,6 +72,7 @@ export {
   usePostHog,
 } from './use-posthog';
 export { usePostHogIdentify } from './use-posthog-identify';
+export { useExecutePreSearchStream, useGetThreadPreSearchesForPolling } from './use-pre-search-stream';
 export type { ProjectAnalyticsHook } from './use-project-analytics';
 export { useProjectAnalytics } from './use-project-analytics';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
@@ -81,5 +85,5 @@ export { useIsFirstRender, useTimelineAnimations } from './use-timeline-animatio
 // For application code, use toastManager/showApiErrorToast from @/lib/toast
 export { toast, useToast } from './use-toast';
 export type { UseVirtualizedTimelineOptions, UseVirtualizedTimelineResult } from './use-virtualized-timeline';
-export { useVirtualizedTimeline } from './use-virtualized-timeline';
+export { TIMELINE_BOTTOM_PADDING_PX, useVirtualizedTimeline } from './use-virtualized-timeline';
 export { useVisualViewportPosition } from './use-visual-viewport-position';

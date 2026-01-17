@@ -123,7 +123,7 @@ export const ModelProviders = {
 } as const;
 
 export function isModelProvider(value: unknown): value is ModelProvider {
-  return typeof value === 'string' && MODEL_PROVIDERS.includes(value as ModelProvider);
+  return ModelProviderSchema.safeParse(value).success;
 }
 
 export const PROVIDER_STREAMING_DEFAULTS: Record<ModelProvider, StreamingBehavior> = {

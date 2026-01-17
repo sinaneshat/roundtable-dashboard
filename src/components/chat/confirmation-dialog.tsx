@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { cn } from '@/lib/ui';
+import { cn } from '@/lib/ui/cn';
 
 type ConfirmationDialogProps = {
   open: boolean;

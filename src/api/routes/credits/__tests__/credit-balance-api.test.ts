@@ -109,11 +109,12 @@ describe('getUserCreditBalance', () => {
 
   it('returns balance for paid user', async () => {
     const nextRefill = new Date('2025-02-01');
+    const proMonthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
     const record = createMockCreditRecord({
       userId: 'user_paid',
       balance: 75_000,
       planType: PlanTypes.PAID,
-      monthlyCredits: 100_000,
+      monthlyCredits: proMonthlyCredits,
       nextRefillAt: nextRefill,
     });
 
@@ -124,7 +125,7 @@ describe('getUserCreditBalance', () => {
 
     expect(balance.balance).toBe(75_000);
     expect(balance.planType).toBe(PlanTypes.PAID);
-    expect(balance.monthlyCredits).toBe(100_000);
+    expect(balance.monthlyCredits).toBe(proMonthlyCredits);
     expect(balance.nextRefillAt).toEqual(nextRefill);
   });
 

@@ -12,7 +12,9 @@ import {
   CreateUserPresetRequestSchema,
   CustomRoleDetailResponseSchema,
   CustomRoleListResponseSchema,
+  DeletedResponseSchema,
   DeleteThreadResponseSchema,
+  ExistingModeratorMessageSchema,
   GetThreadFeedbackResponseSchema,
   MessagesListResponseSchema,
   ParticipantDetailResponseSchema,
@@ -23,12 +25,14 @@ import {
   RoundFeedbackParamSchema,
   RoundFeedbackRequestSchema,
   RoundModeratorRequestSchema,
+  RoundStatusResponseSchema,
   SetRoundFeedbackResponseSchema,
   StreamChatRequestSchema,
   StreamStatusResponseSchema,
   ThreadDetailResponseSchema,
   ThreadListQuerySchema,
   ThreadListResponseSchema,
+  ThreadSidebarListResponseSchema,
   ThreadSlugStatusResponseSchema,
   ThreadStreamResumptionStateResponseSchema,
   UpdateCustomRoleRequestSchema,
@@ -59,6 +63,27 @@ export const listThreadsRoute = createRoute({
     ...createProtectedRouteResponses(),
   },
 });
+
+export const listSidebarThreadsRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/sidebar',
+  tags: ['chat'],
+  summary: 'List sidebar threads (lightweight)',
+  description: 'Lightweight endpoint for sidebar - only essential fields (id, title, slug, previousSlug, isFavorite, isPublic, timestamps)',
+  request: {
+    query: ThreadListQuerySchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Sidebar threads retrieved',
+      content: {
+        'application/json': { schema: ThreadSidebarListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
 export const createThreadRoute = createRoute({
   method: 'post',
   path: '/chat/threads',
@@ -309,9 +334,7 @@ export const deleteParticipantRoute = createRoute({
       description: 'Participant removed successfully',
       content: {
         'application/json': {
-          schema: createApiResponseSchema(z.object({
-            deleted: z.boolean().openapi({ example: true }),
-          })),
+          schema: createApiResponseSchema(DeletedResponseSchema),
         },
       },
     },
@@ -732,9 +755,7 @@ export const deleteCustomRoleRoute = createRoute({
       description: 'Custom role deleted successfully',
       content: {
         'application/json': {
-          schema: createApiResponseSchema(z.object({
-            deleted: z.boolean().openapi({ example: true }),
-          })),
+          schema: createApiResponseSchema(DeletedResponseSchema),
         },
       },
     },
@@ -846,9 +867,7 @@ export const deleteUserPresetRoute = createRoute({
       description: 'User preset deleted successfully',
       content: {
         'application/json': {
-          schema: createApiResponseSchema(z.object({
-            deleted: z.boolean().openapi({ example: true }),
-          })),
+          schema: createApiResponseSchema(DeletedResponseSchema),
         },
       },
     },
@@ -882,21 +901,39 @@ export const councilModeratorRoundRoute = createRoute({
           }),
         },
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            role: z.string(),
-            parts: z.array(z.any()),
-            metadata: z.any(),
-            roundNumber: z.number(),
-          }).openapi({
-            description: 'Existing council moderator message (if already persisted)',
-          }),
+          schema: ExistingModeratorMessageSchema,
         },
       },
     },
     ...createMutationRouteResponses(),
   },
 });
+
+/**
+ * GET Round Status Route - Internal queue worker endpoint
+ * ✅ FOLLOWS: computeRoundStatus pattern from round-orchestration.service
+ * Used by ROUND_ORCHESTRATION_QUEUE worker to determine next action
+ */
+export const getRoundStatusRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/status',
+  tags: ['chat'],
+  summary: 'Get round execution status (internal)',
+  description: 'Internal endpoint for queue workers to determine next action in round orchestration. Returns current round status, participant completion, and what needs to be triggered next.',
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Round status retrieved successfully',
+      content: {
+        'application/json': { schema: RoundStatusResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
 /**
  * GET Thread Pre-Searches Route - List all pre-searches for thread
  * ✅ FOLLOWS: getThreadSummariesRoute pattern
@@ -996,14 +1033,9 @@ This is the **preferred endpoint** for stream resumption. The frontend doesn't n
 3. If 204: No active stream, proceed normally
 4. If 200: Stream found, process SSE and trigger next participant on completion
 
-**Example**: GET /chat/threads/thread_123/stream`,
+**Example**: GET /chat/threads/thread_123/stream?lastChunkIndex=42`,
   request: {
-    params: z.object({
-      threadId: z.string().openapi({
-        description: 'Thread ID',
-        example: 'thread_abc123',
-      }),
-    }),
+    params: ThreadIdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {

@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
-import { CREDIT_ACTIONS, CREDIT_TRANSACTION_TYPES, PLAN_TYPES, UsageStatusSchema } from '@/api/core/enums';
+import { CreditActionSchema, CreditTransactionTypeSchema, PlanTypeSchema, UsageStatusSchema } from '@/api/core/enums';
 import { createApiResponseSchema, PaginationQuerySchema } from '@/api/core/schemas';
 
 // ============================================================================
@@ -29,7 +29,7 @@ export const CreditBalancePayloadSchema = z.object({
     example: 15,
   }),
   plan: z.object({
-    type: z.enum(PLAN_TYPES).openapi({
+    type: PlanTypeSchema.openapi({
       description: 'Current plan type',
       example: 'free',
     }),
@@ -71,7 +71,7 @@ export const CreditTransactionSchema = z.object({
     description: 'Balance after this transaction',
     example: 8495,
   }),
-  action: z.enum(CREDIT_ACTIONS).nullable().openapi({
+  action: CreditActionSchema.nullable().openapi({
     description: 'Action that triggered this transaction',
     example: 'ai_response',
   }),
@@ -126,11 +126,11 @@ export const CreditTransactionsResponseSchema = createApiResponseSchema(
 ).openapi('CreditTransactionsResponse');
 
 export const CreditTransactionsQuerySchema = PaginationQuerySchema.extend({
-  type: z.enum(CREDIT_TRANSACTION_TYPES).optional().openapi({
+  type: CreditTransactionTypeSchema.optional().openapi({
     description: 'Filter by transaction type',
     example: 'deduction',
   }),
-  action: z.enum(CREDIT_ACTIONS).optional().openapi({
+  action: CreditActionSchema.optional().openapi({
     description: 'Filter by action',
     example: 'ai_response',
   }),
@@ -141,7 +141,7 @@ export const CreditTransactionsQuerySchema = PaginationQuerySchema.extend({
 // ============================================================================
 
 export const CreditEstimateRequestSchema = z.object({
-  action: z.enum(CREDIT_ACTIONS).openapi({
+  action: CreditActionSchema.openapi({
     description: 'Action to estimate cost for',
     example: 'ai_response',
   }),

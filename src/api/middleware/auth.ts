@@ -14,9 +14,12 @@ import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
  * Shared authentication helper - extracts session from request headers
  * and sets context variables. Used by both attachSession and requireSession.
  *
- * Supports two authentication methods following Better Auth patterns:
- * 1. Session cookies (browser/web app authentication)
+ * Supports two authentication methods:
+ * 1. Session cookies (browser/web app authentication + queue consumers via forwarded cookies)
  * 2. API keys via x-api-key header (programmatic access)
+ *
+ * Queue consumers now pass the user's session cookie in the Cookie header,
+ * so they're authenticated through the standard Better Auth flow.
  *
  * With sessionForAPIKeys enabled, Better Auth automatically validates API keys
  * and creates sessions when getSession() is called with x-api-key header.
@@ -26,8 +29,8 @@ async function authenticateSession(c: Context<ApiEnv>): Promise<{
   session: Session | null;
   user: User | null;
 }> {
-  // Better Auth's getSession() automatically handles both:
-  // - Session cookies (standard web authentication)
+  // Better Auth's getSession() automatically handles:
+  // - Session cookies (standard web authentication + queue consumers)
   // - API keys (when sessionForAPIKeys: true is enabled)
   const sessionData = await auth.api.getSession({
     headers: c.req.raw.headers,

@@ -144,6 +144,17 @@ const _TokenUsageSchema = z.object({
 
 export type TokenUsage = z.infer<typeof _TokenUsageSchema>;
 
+/**
+ * Billing context for AI operations that deduct credits
+ * ✅ ZOD-FIRST: Single source of truth for all billing context types
+ */
+export const BillingContextSchema = z.object({
+  userId: z.string(),
+  threadId: z.string(),
+});
+
+export type BillingContext = z.infer<typeof BillingContextSchema>;
+
 const _EnforceCreditsOptionsSchema = z.object({
   skipRoundCheck: z.boolean().optional(),
 });
@@ -341,7 +352,9 @@ export async function isFreeUserWithPendingRound(
 export async function checkFreeUserHasCompletedRound(userId: string): Promise<boolean> {
   const db = await getDbAsync();
 
-  const freeRoundTransaction = await db
+  // ✅ PERF: Check if already recorded - CACHED because once true, always true
+  // Cache tag allows invalidation if ever needed (e.g., admin reset)
+  const hasTransactionResults = await db
     .select()
     .from(tables.creditTransaction)
     .where(
@@ -350,62 +363,72 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
         eq(tables.creditTransaction.action, CreditActions.FREE_ROUND_COMPLETE),
       ),
     )
-    .limit(1);
+    .limit(1)
+    .$withCache({
+      config: { ex: 3600 }, // 1 hour - this is a permanent flag
+      tag: `free-round-complete-${userId}`,
+    });
 
-  if (freeRoundTransaction.length > 0) {
+  if (hasTransactionResults.length > 0) {
     return true;
   }
 
-  // Get the user's thread (free users can only have one)
-  const thread = await db.query.chatThread.findFirst({
-    where: eq(tables.chatThread.userId, userId),
-    columns: { id: true },
-  });
-
-  if (!thread) {
-    return false; // No thread = no round completed
-  }
-
-  // Get enabled participants for this thread
-  const enabledParticipants = await db.query.chatParticipant.findMany({
-    where: and(
-      eq(tables.chatParticipant.threadId, thread.id),
-      eq(tables.chatParticipant.isEnabled, true),
-    ),
-    columns: { id: true },
-  });
-
-  if (enabledParticipants.length === 0) {
-    return false; // No participants = no round can be completed
-  }
-
-  // Get assistant messages in round 0 (first round, 0-based)
-  const round0AssistantMessages = await db
+  // Get thread (free users can only have one) - also cached
+  const threadResults = await db
     .select()
-    .from(tables.chatMessage)
-    .where(
-      and(
-        eq(tables.chatMessage.threadId, thread.id),
-        eq(tables.chatMessage.role, 'assistant'),
-        eq(tables.chatMessage.roundNumber, 0),
-      ),
-    );
+    .from(tables.chatThread)
+    .where(eq(tables.chatThread.userId, userId))
+    .limit(1)
+    .$withCache({
+      config: { ex: 60 },
+      tag: `user-thread-${userId}`,
+    });
 
-  // Count unique participants that have responded in round 0
-  const respondedParticipantIds = new Set(
-    round0AssistantMessages
+  const thread = threadResults[0];
+  if (!thread) {
+    return false;
+  }
+
+  // ✅ PERF: Run participant and message queries in parallel
+  const [participantResults, messageResults] = await Promise.all([
+    db
+      .select()
+      .from(tables.chatParticipant)
+      .where(
+        and(
+          eq(tables.chatParticipant.threadId, thread.id),
+          eq(tables.chatParticipant.isEnabled, true),
+        ),
+      ),
+    db
+      .select()
+      .from(tables.chatMessage)
+      .where(
+        and(
+          eq(tables.chatMessage.threadId, thread.id),
+          eq(tables.chatMessage.role, 'assistant'),
+          eq(tables.chatMessage.roundNumber, 0),
+        ),
+      ),
+  ]);
+
+  const enabledCount = participantResults.length;
+  if (enabledCount === 0) {
+    return false;
+  }
+
+  const respondedIds = new Set(
+    messageResults
       .map(m => m.participantId)
       .filter((id): id is string => id !== null),
   );
 
-  // All participants must have responded
-  const allParticipantsResponded = respondedParticipantIds.size >= enabledParticipants.length;
-
-  if (!allParticipantsResponded) {
+  if (respondedIds.size < enabledCount) {
     return false;
   }
 
-  if (enabledParticipants.length >= 2) {
+  // Only check moderator for multi-participant threads
+  if (enabledCount >= 2) {
     const moderatorMessageId = `${thread.id}_r0_moderator`;
     const moderatorMessage = await db.query.chatMessage.findFirst({
       where: eq(tables.chatMessage.id, moderatorMessageId),
@@ -419,8 +442,8 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
     const hasModeContent = Array.isArray(moderatorMessage.parts)
       && moderatorMessage.parts.length > 0
       && moderatorMessage.parts.some((part) => {
-        const result = DbTextPartSchema.safeParse(part);
-        return result.success && result.data.text.trim().length > 0;
+        const parseResult = DbTextPartSchema.safeParse(part);
+        return parseResult.success && parseResult.data.text.trim().length > 0;
       });
 
     if (!hasModeContent) {
@@ -555,6 +578,11 @@ export async function finalizeCredits(
     actualUsage.modelId,
     getModelById,
   );
+
+  // Skip DB operation only if truly 0 credits (valid scenario for 0 token usage)
+  if (weightedCredits === 0) {
+    return;
+  }
 
   // Get pricing tier and model info for transaction logging
   const pricingTier = getModelPricingTierById(actualUsage.modelId, getModelById);

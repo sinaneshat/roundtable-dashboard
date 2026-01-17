@@ -176,7 +176,6 @@ describe('10-Second Timeout Protection', () => {
       expect(wouldBlockWithoutTimeout).toBe(true);
 
       // With timeout protection, caller should check staleness:
-      // const shouldBlock = shouldWaitForPreSearch(enabled, preSearch) && !isPreSearchStale(preSearch);
       const shouldBlockWithTimeout = wouldBlockWithoutTimeout && !isPreSearchStale(stalePreSearch, 10);
       expect(shouldBlockWithTimeout).toBe(false); // Timeout overrides blocking
     });

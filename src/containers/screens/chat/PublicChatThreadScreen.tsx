@@ -17,7 +17,6 @@ import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
 import { chatMessagesToUIMessages, transformChatParticipants, transformPreSearches } from '@/lib/utils';
 import type { GetPublicThreadResponse } from '@/services/api';
 
-// Extract the data payload type from the API response
 type PublicThreadData = Extract<GetPublicThreadResponse, { success: true }>['data'];
 
 type PublicChatThreadScreenProps = {
@@ -29,8 +28,7 @@ type PublicChatThreadScreenProps = {
 export default function PublicChatThreadScreen({ slug, initialData }: PublicChatThreadScreenProps) {
   const t = useTranslations();
 
-  // ✅ SSR HYDRATION: Use initialData from props first, fallback to React Query
-  // This ensures immediate server render with content - no loading flash
+  // SSR HYDRATION: Use initialData from props first, fallback to React Query
   const { data: threadData, isPending } = usePublicThreadQuery(slug);
   const queryResponse = threadData?.success ? threadData.data : null;
 
@@ -67,7 +65,6 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
   });
 
   // Show loading only when truly pending (no SSR data AND no React Query data)
-  // With SSR props passed directly, this should never show on initial load
   if (isActuallyPending) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
@@ -80,7 +77,6 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
   }
 
   // Error cases are handled by the server page (redirects to sign-in)
-  // This is a fallback for edge cases
   if (!thread) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
@@ -128,7 +124,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div
           id="public-chat-scroll-container"
-          className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-96 sm:pb-[36rem]"
+          className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-16"
         >
           {timeline.length === 0
             ? (
@@ -157,6 +153,8 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
                     isReadOnly={true}
                     preSearches={preSearches}
                     isDataReady={isStoreReady}
+                    disableVirtualization={true}
+                    skipEntranceAnimations={true}
                   />
 
                   <div className="mt-8 mb-8">

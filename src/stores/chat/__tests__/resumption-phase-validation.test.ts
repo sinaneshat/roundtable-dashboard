@@ -222,7 +222,7 @@ describe('participant completion counting', () => {
 
   function countParticipantMessages(messages: Message[], roundNumber: number): number {
     return messages.filter((msg) => {
-      if (msg.role !== 'assistant') {
+      if (msg.role !== MessageRoles.ASSISTANT) {
         return false;
       }
       if (msg.metadata.roundNumber !== roundNumber) {
@@ -292,7 +292,7 @@ describe('client-side phase validation', () => {
     // Check if participants are actually complete
     const enabledParticipants = state.participants.filter(p => p.isEnabled);
     const completedParticipants = state.messages.filter((msg) => {
-      if (msg.role !== 'assistant')
+      if (msg.role !== MessageRoles.ASSISTANT)
         return false;
       if (msg.metadata.roundNumber !== state.resumptionRoundNumber)
         return false;

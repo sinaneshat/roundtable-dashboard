@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
-import { PLAN_TYPES, SUBSCRIPTION_TIERS, UsageStatusSchema } from '@/api/core/enums';
+import { PlanTypeSchema, SubscriptionTierSchema, UsageStatusSchema } from '@/api/core/enums';
 import { createApiResponseSchema } from '@/api/core/schemas';
 
 // ============================================================================
@@ -25,7 +25,7 @@ export const UsageStatsPayloadSchema = z.object({
     description: 'Credit balance information',
   }),
   plan: z.object({
-    type: z.enum(PLAN_TYPES).openapi({
+    type: PlanTypeSchema.openapi({
       description: 'Current plan type (free/paid)',
       example: 'free',
     }),
@@ -50,7 +50,7 @@ export const UsageStatsPayloadSchema = z.object({
       example: null,
     }),
     pendingChange: z.object({
-      pendingTier: z.enum(SUBSCRIPTION_TIERS).openapi({
+      pendingTier: SubscriptionTierSchema.openapi({
         description: 'Tier that will take effect at period end',
         example: 'free',
       }),

@@ -34,12 +34,25 @@ import { createChatStore } from '../store';
 
 type ConversationMode = typeof ChatModes[keyof typeof ChatModes];
 
+type ChangelogChangeData = {
+  previousMode?: ConversationMode;
+  newMode?: ConversationMode;
+  previousValue?: boolean;
+  newValue?: boolean;
+  participantId?: string;
+  modelId?: string;
+  role?: string | null;
+  previousRole?: string | null;
+  newRole?: string | null;
+  newOrder?: Array<{ id: string; priority: number }>;
+};
+
 type ChangelogEntry = {
   id: string;
   threadId: string;
   roundNumber: number;
   changeType: typeof ChangelogChangeTypes[keyof typeof ChangelogChangeTypes];
-  changeData: Record<string, unknown>;
+  changeData: ChangelogChangeData;
   createdAt: Date;
 };
 
@@ -104,7 +117,7 @@ function createChangelogEntry(
   threadId: string,
   roundNumber: number,
   changeType: string,
-  changeData: Record<string, unknown>,
+  changeData: ChangelogChangeData,
 ): ChangelogEntry {
   changelogCounter++;
   return {

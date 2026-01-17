@@ -9,7 +9,7 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createPublicRouteResponses } from '@/api/core';
 
-import { ClearCacheResponseSchema, DetailedHealthResponseSchema, HealthResponseSchema } from './schema';
+import { BenchmarkResponseSchema, ClearCacheResponseSchema, DetailedHealthResponseSchema, HealthResponseSchema } from './schema';
 
 export const healthRoute = createRoute({
   method: 'get',
@@ -62,6 +62,23 @@ export const clearCacheRoute = createRoute({
       description: 'Cache cleared successfully',
       content: {
         'application/json': { schema: ClearCacheResponseSchema },
+      },
+    },
+    ...createPublicRouteResponses(),
+  },
+});
+
+export const benchmarkRoute = createRoute({
+  method: 'get',
+  path: '/benchmark',
+  tags: ['system'],
+  summary: 'Run database query benchmarks',
+  description: 'Benchmarks common database queries to measure performance. Uses performance.now() for timing.',
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Benchmark results',
+      content: {
+        'application/json': { schema: BenchmarkResponseSchema },
       },
     },
     ...createPublicRouteResponses(),

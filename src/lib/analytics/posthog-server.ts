@@ -83,11 +83,13 @@ export function getPostHogClient(): PostHog | null {
 
 /**
  * Zod schema for PostHog cookie structure
- * PostHog stores distinct_id in cookie JSON payload
+ *
+ * PostHog cookie contains additional fields (session_id, etc.) that vary by
+ * version and config. We only extract distinct_id; unknown fields are stripped.
  */
 const PostHogCookieSchema = z.object({
   distinct_id: z.string(),
-}).passthrough();
+});
 
 /**
  * Extract PostHog distinct ID from request cookies

@@ -1,76 +1,59 @@
 /**
  * useVirtualizedTimeline Tests
  *
- * Tests for the virtualized timeline hook that manages
- * window-level virtualization for chat timeline items.
+ * Tests for the virtualized timeline hook following official TanStack Virtual pattern.
  *
- * KEY RACE CONDITIONS AND ISSUES TESTED:
- * 1. flushSync called during render (causes React warning) - CRITICAL
- * 2. Initial render defers getVirtualItems/getTotalSize via RAF
- * 3. onChange callback defers updates via RAF
- * 4. RAF cancellation on unmount
- * 5. Navigation reset clears state properly
- * 6. Rapid update coalescing
- * 7. Proper scroll margin calculation
- * 8. Dynamic item measurement
- *
- * TanStack Virtual internally calls flushSync when calculating measurements.
- * This hook must defer all virtualizer method calls (getVirtualItems, getTotalSize)
- * to requestAnimationFrame to avoid "flushSync called during lifecycle" warnings.
+ * OFFICIAL PATTERN:
+ * - Hook returns virtualizer instance directly
+ * - Consumer calls getVirtualItems() and getTotalSize() in render
+ * - No state caching, no RAF deferral
+ * - This ensures positions are ALWAYS current, never stale
  */
 
 import type { UIMessage } from 'ai';
+import { useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageRoles } from '@/api/core/enums';
-import { act, renderHook } from '@/lib/testing';
+import { renderHook } from '@/lib/testing';
 
 import type { TimelineItem } from '../use-thread-timeline';
-import { useVirtualizedTimeline } from '../use-virtualized-timeline';
+import type { UseVirtualizedTimelineOptions } from '../use-virtualized-timeline';
+import { TIMELINE_BOTTOM_PADDING_PX, useVirtualizedTimeline } from '../use-virtualized-timeline';
 
-// Create mock functions outside of mock to track calls
+// Mock virtualizer instance
 const mockGetVirtualItems = vi.fn(() => []);
 const mockGetTotalSize = vi.fn(() => 0);
 const mockMeasureElement = vi.fn();
 const mockScrollToIndex = vi.fn();
 const mockScrollToOffset = vi.fn();
 
-type VirtualizerInstance = {
-  getVirtualItems: () => unknown[];
-  getTotalSize: () => number;
-  measureElement: (element: Element | null) => void;
-  scrollToIndex: (index: number, options?: object) => void;
-  scrollToOffset: (offset: number, options?: object) => void;
-};
-
 type VirtualizerOptions = {
-  onChange?: (instance: VirtualizerInstance) => void;
+  count?: number;
+  enabled?: boolean;
+  scrollMargin?: number;
   [key: string]: unknown;
 };
 
-let capturedOnChange: ((instance: VirtualizerInstance) => void) | null = null;
+let lastVirtualizerOptions: VirtualizerOptions | null = null;
 
-const mockUseWindowVirtualizer = vi.fn((options: VirtualizerOptions) => {
-  if (options?.onChange) {
-    capturedOnChange = options.onChange;
-  }
-  return {
-    getVirtualItems: mockGetVirtualItems,
-    getTotalSize: mockGetTotalSize,
-    measureElement: mockMeasureElement,
-    scrollToIndex: mockScrollToIndex,
-    scrollToOffset: mockScrollToOffset,
-  };
-});
+const mockVirtualizerInstance = {
+  getVirtualItems: mockGetVirtualItems,
+  getTotalSize: mockGetTotalSize,
+  measureElement: mockMeasureElement,
+  scrollToIndex: mockScrollToIndex,
+  scrollToOffset: mockScrollToOffset,
+  options: { scrollMargin: 0 },
+  shouldAdjustScrollPositionOnItemSizeChange: undefined as unknown,
+};
 
 vi.mock('@tanstack/react-virtual', () => ({
-  useWindowVirtualizer: (options: VirtualizerOptions) => mockUseWindowVirtualizer(options),
+  useWindowVirtualizer: (options: VirtualizerOptions) => {
+    lastVirtualizerOptions = options;
+    mockVirtualizerInstance.options.scrollMargin = options.scrollMargin ?? 0;
+    return mockVirtualizerInstance;
+  },
 }));
-
-// Track RAF callbacks for testing deferred execution
-const rafCallbacks: Array<() => void> = [];
-let rafIdCounter = 0;
-const cancelledRafIds = new Set<number>();
 
 // ============================================================================
 // TEST HELPERS
@@ -96,496 +79,317 @@ function createMockTimelineItem(
     };
   }
 
-  if (type === 'moderator') {
-    return {
-      type: 'moderator',
-      key: `round-${roundNumber}-moderator`,
-      roundNumber,
-      data: {
-        id: `moderator-${roundNumber}`,
-        threadId: 'thread-123',
-        roundNumber,
-        mode: 'analyzing',
-        userQuestion: 'Test question',
-        status: 'complete',
-        moderatorData: null,
-        participantMessageIds: [],
-        errorMessage: null,
-        completedAt: new Date(),
-        createdAt: new Date(),
-      },
-    };
-  }
-
-  // Default to messages for other types
   return createMockTimelineItem(roundNumber, 'messages');
+}
+
+// Wrapper to call the hook with a listRef
+function useTestVirtualizedTimeline(
+  options: Omit<UseVirtualizedTimelineOptions, 'listRef'>,
+) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  // Simulate the DOM element with offsetTop
+  if (!listRef.current) {
+    const mockElement = document.createElement('div');
+    Object.defineProperty(mockElement, 'offsetTop', { value: 100 });
+    listRef.current = mockElement;
+  }
+  return useVirtualizedTimeline({ ...options, listRef });
 }
 
 // ============================================================================
 // SETUP
 // ============================================================================
 
-// Store original RAF/CAF for restoration
-const originalRaf = globalThis.requestAnimationFrame;
-const originalCaf = globalThis.cancelAnimationFrame;
-
 describe('useVirtualizedTimeline', () => {
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
-    // Reset all mocks to default state
     vi.clearAllMocks();
-
-    // Reset RAF tracking
-    rafCallbacks.length = 0;
-    rafIdCounter = 0;
-    cancelledRafIds.clear();
-    capturedOnChange = null;
-
-    // Reset mock return values to defaults
+    lastVirtualizerOptions = null;
     mockGetVirtualItems.mockReturnValue([]);
     mockGetTotalSize.mockReturnValue(0);
-
-    // Mock requestAnimationFrame to capture callbacks
-    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
-      const id = ++rafIdCounter;
-      rafCallbacks.push(() => callback(performance.now()));
-      return id;
-    });
-
-    globalThis.cancelAnimationFrame = vi.fn((id: number) => {
-      cancelledRafIds.add(id);
-    });
-
-    // Capture console errors/warnings to detect flushSync issues
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    // Mock window.scrollY
-    Object.defineProperty(window, 'scrollY', {
-      value: 0,
-      writable: true,
-    });
-
-    // Mock getBoundingClientRect
-    Element.prototype.getBoundingClientRect = vi.fn(() => ({
-      top: 100,
-      left: 0,
-      right: 800,
-      bottom: 600,
-      width: 800,
-      height: 500,
-      x: 0,
-      y: 100,
-      toJSON: () => {},
-    }));
-
-    // Mock querySelector for timeline container
-    vi.spyOn(document, 'querySelector').mockImplementation((selector) => {
-      if (selector === '[data-virtualized-timeline]') {
-        return document.createElement('div');
-      }
-      return null;
-    });
   });
 
   afterEach(() => {
-    consoleErrorSpy.mockRestore();
-    consoleWarnSpy.mockRestore();
-    globalThis.requestAnimationFrame = originalRaf;
-    globalThis.cancelAnimationFrame = originalCaf;
     vi.clearAllMocks();
   });
 
   // ============================================================================
-  // flushSync ISSUE TESTS - CRITICAL RACE CONDITIONS
+  // EXPORTS AND CONSTANTS
   // ============================================================================
 
-  describe('flushSync during render prevention', () => {
-    it('should NOT call getVirtualItems during initial render - defers via RAF', () => {
-      const timelineItems = [
-        createMockTimelineItem(0, 'messages'),
-        createMockTimelineItem(0, 'moderator'),
-        createMockTimelineItem(1, 'messages'),
-      ];
-
-      mockGetVirtualItems.mockClear();
-
-      // Render the hook
-      const { result } = renderHook(() =>
-        useVirtualizedTimeline({
-          timelineItems,
-          isDataReady: true,
-        }),
-      );
-
-      // CRITICAL: Initial render should NOT have called getVirtualItems
-      // because it triggers flushSync which React doesn't allow during render
-      // Instead, RAF should be scheduled
-      expect(rafCallbacks.length).toBeGreaterThan(0);
-
-      // State should be default (empty) until RAF fires
-      expect(result.current.virtualItems).toEqual([]);
-      expect(result.current.totalSize).toBe(0);
-
-      // No flushSync warning should have been logged
-      const flushSyncError = consoleErrorSpy.mock.calls.find(
-        call => typeof call[0] === 'string' && call[0].includes('flushSync'),
-      );
-      expect(flushSyncError).toBeUndefined();
-    });
-
-    it('should NOT call getTotalSize during initial render - defers via RAF', () => {
-      const timelineItems = [createMockTimelineItem(0, 'messages')];
-
-      mockGetTotalSize.mockClear();
-      mockGetTotalSize.mockReturnValue(500);
-
-      const { result } = renderHook(() =>
-        useVirtualizedTimeline({
-          timelineItems,
-          isDataReady: true,
-        }),
-      );
-
-      // totalSize should be 0 (default) until RAF fires
-      expect(result.current.totalSize).toBe(0);
-
-      // Execute RAF callbacks
-      act(() => {
-        rafCallbacks.forEach(cb => cb());
-      });
-
-      // Now totalSize should be populated
-      expect(result.current.totalSize).toBe(500);
-    });
-
-    it('should populate state after RAF callback fires', () => {
-      const timelineItems = [createMockTimelineItem(0, 'messages')];
-
-      mockGetVirtualItems.mockReturnValue([
-        { index: 0, key: '0', start: 0, end: 200, size: 200, lane: 0 },
-        { index: 1, key: '1', start: 200, end: 400, size: 200, lane: 0 },
-      ]);
-      mockGetTotalSize.mockReturnValue(400);
-
-      const { result } = renderHook(() =>
-        useVirtualizedTimeline({
-          timelineItems,
-          isDataReady: true,
-        }),
-      );
-
-      // Before RAF: empty state
-      expect(result.current.virtualItems).toEqual([]);
-
-      // Execute RAF callbacks
-      act(() => {
-        rafCallbacks.forEach(cb => cb());
-      });
-
-      // After RAF: state should be populated
-      expect(result.current.virtualItems).toHaveLength(2);
-      expect(result.current.totalSize).toBe(400);
-    });
-
-    it('should handle rapid re-renders without flushSync errors', () => {
-      const timelineItems = [createMockTimelineItem(0, 'messages')];
-
-      const { rerender } = renderHook(
-        ({ items }) => useVirtualizedTimeline({ timelineItems: items, isDataReady: true }),
-        { initialProps: { items: timelineItems } },
-      );
-
-      // Simulate rapid re-renders (like during streaming)
-      for (let i = 0; i < 10; i++) {
-        rerender({
-          items: [
-            ...timelineItems,
-            createMockTimelineItem(i + 1, 'messages'),
-          ],
-        });
-      }
-
-      // No flushSync errors should occur
-      const flushSyncError = consoleErrorSpy.mock.calls.find(
-        call => typeof call[0] === 'string' && call[0].includes('flushSync'),
-      );
-
-      expect(flushSyncError).toBeUndefined();
+  describe('exports and constants', () => {
+    it('exports TIMELINE_BOTTOM_PADDING_PX constant', () => {
+      expect(TIMELINE_BOTTOM_PADDING_PX).toBe(320);
     });
   });
 
   // ============================================================================
-  // RAF CANCELLATION TESTS - CLEANUP RACE CONDITIONS
-  // ============================================================================
-
-  describe('rAF cancellation on unmount and navigation', () => {
-    it('should cancel pending RAF on unmount', () => {
-      const timelineItems = [createMockTimelineItem(0, 'messages')];
-
-      const { unmount } = renderHook(() =>
-        useVirtualizedTimeline({
-          timelineItems,
-          isDataReady: true,
-        }),
-      );
-
-      // RAF should be pending
-      expect(rafCallbacks.length).toBeGreaterThan(0);
-
-      // Unmount before RAF executes
-      unmount();
-
-      // cancelAnimationFrame should have been called
-      expect(globalThis.cancelAnimationFrame).toHaveBeenCalled();
-    });
-
-    it('should cancel pending RAF when shouldEnable becomes false', () => {
-      const { rerender } = renderHook(
-        ({ items, isDataReady }) => useVirtualizedTimeline({ timelineItems: items, isDataReady }),
-        {
-          initialProps: {
-            items: [createMockTimelineItem(0, 'messages')],
-            isDataReady: true,
-          },
-        },
-      );
-
-      // RAF should be pending
-      expect(rafCallbacks.length).toBeGreaterThan(0);
-
-      // Disable before RAF executes (simulating navigation)
-      rerender({
-        items: [createMockTimelineItem(0, 'messages')],
-        isDataReady: false,
-      });
-
-      // cancelAnimationFrame should have been called
-      expect(globalThis.cancelAnimationFrame).toHaveBeenCalled();
-    });
-
-    it('should reset state when items become empty (navigation)', () => {
-      mockGetVirtualItems.mockReturnValue([
-        { index: 0, key: '0', start: 0, end: 200, size: 200, lane: 0 },
-      ]);
-      mockGetTotalSize.mockReturnValue(200);
-
-      const { result, rerender } = renderHook(
-        ({ items }) => useVirtualizedTimeline({ timelineItems: items, isDataReady: true }),
-        { initialProps: { items: [createMockTimelineItem(0, 'messages')] } },
-      );
-
-      // Execute RAF to populate state
-      act(() => {
-        rafCallbacks.forEach(cb => cb());
-      });
-
-      expect(result.current.virtualItems).toHaveLength(1);
-      expect(result.current.totalSize).toBe(200);
-
-      // Navigate away (empty items)
-      rerender({ items: [] });
-
-      // State should be reset immediately
-      expect(result.current.virtualItems).toEqual([]);
-      expect(result.current.totalSize).toBe(0);
-    });
-  });
-
-  // ============================================================================
-  // onChange CALLBACK RACE CONDITIONS
-  // ============================================================================
-
-  describe('onChange callback race conditions', () => {
-    it('should skip onChange during initial sync phase', () => {
-      const timelineItems = [createMockTimelineItem(0, 'messages')];
-
-      renderHook(() =>
-        useVirtualizedTimeline({
-          timelineItems,
-          isDataReady: true,
-        }),
-      );
-
-      // Simulate TanStack Virtual calling onChange during initialization
-      // This should be skipped because hasInitialSyncRef is false
-      if (capturedOnChange) {
-        capturedOnChange({
-          getVirtualItems: mockGetVirtualItems,
-          getTotalSize: mockGetTotalSize,
-        });
-      }
-
-      // Only the initial sync RAF should be scheduled (not an additional one from onChange)
-      // Note: Test verifies onChange doesn't trigger extra RAF before initial sync
-    });
-
-    it('should defer onChange updates via RAF after initial sync', () => {
-      const timelineItems = [createMockTimelineItem(0, 'messages')];
-
-      mockGetVirtualItems.mockReturnValue([
-        { index: 0, key: '0', start: 0, end: 200, size: 200, lane: 0 },
-      ]);
-
-      renderHook(() =>
-        useVirtualizedTimeline({
-          timelineItems,
-          isDataReady: true,
-        }),
-      );
-
-      // Execute initial RAF
-      act(() => {
-        rafCallbacks.forEach(cb => cb());
-      });
-
-      // Clear RAF tracking
-      rafCallbacks.length = 0;
-
-      // Now simulate onChange being called (e.g., scroll event)
-      if (capturedOnChange) {
-        capturedOnChange({
-          getVirtualItems: mockGetVirtualItems,
-          getTotalSize: mockGetTotalSize,
-        });
-      }
-
-      // A new RAF should be scheduled
-      expect(rafCallbacks.length).toBeGreaterThan(0);
-    });
-  });
-
-  // ============================================================================
-  // BASIC FUNCTIONALITY TESTS
+  // BASIC FUNCTIONALITY
   // ============================================================================
 
   describe('basic functionality', () => {
-    it('returns empty virtualItems when no timeline items provided', () => {
+    it('returns virtualizer instance directly', () => {
       const { result } = renderHook(() =>
-        useVirtualizedTimeline({
-          timelineItems: [],
+        useTestVirtualizedTimeline({
+          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
         }),
       );
 
-      expect(result.current.virtualItems).toEqual([]);
+      expect(result.current.virtualizer).toBe(mockVirtualizerInstance);
+    });
+
+    it('returns measureElement from virtualizer', () => {
+      const { result } = renderHook(() =>
+        useTestVirtualizedTimeline({
+          timelineItems: [createMockTimelineItem(0)],
+          isDataReady: true,
+        }),
+      );
+
+      expect(result.current.measureElement).toBe(mockMeasureElement);
     });
 
     it('disables virtualizer when data is not ready', () => {
-      mockUseWindowVirtualizer.mockClear();
-
       renderHook(() =>
-        useVirtualizedTimeline({
+        useTestVirtualizedTimeline({
           timelineItems: [createMockTimelineItem(0)],
           isDataReady: false,
         }),
       );
 
-      // Verify virtualizer was called with enabled: false
-      expect(mockUseWindowVirtualizer).toHaveBeenCalledWith(
-        expect.objectContaining({
-          enabled: false,
+      expect(lastVirtualizerOptions?.enabled).toBe(false);
+    });
+
+    it('disables virtualizer when timeline items are empty', () => {
+      renderHook(() =>
+        useTestVirtualizedTimeline({
+          timelineItems: [],
+          isDataReady: true,
         }),
       );
+
+      expect(lastVirtualizerOptions?.enabled).toBe(false);
     });
 
     it('enables virtualizer when data is ready and items exist', () => {
-      mockUseWindowVirtualizer.mockClear();
-
       renderHook(() =>
-        useVirtualizedTimeline({
+        useTestVirtualizedTimeline({
           timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
         }),
       );
 
-      expect(mockUseWindowVirtualizer).toHaveBeenCalledWith(
-        expect.objectContaining({
-          enabled: true,
+      expect(lastVirtualizerOptions?.enabled).toBe(true);
+    });
+
+    it('passes correct count to virtualizer', () => {
+      const items = [
+        createMockTimelineItem(0),
+        createMockTimelineItem(1),
+        createMockTimelineItem(2),
+      ];
+
+      renderHook(() =>
+        useTestVirtualizedTimeline({
+          timelineItems: items,
+          isDataReady: true,
         }),
       );
+
+      expect(lastVirtualizerOptions?.count).toBe(3);
     });
   });
 
   // ============================================================================
-  // SCROLL METHODS TESTS
+  // SCROLL METHODS
   // ============================================================================
 
   describe('scroll methods', () => {
     it('provides scrollToIndex method', () => {
       const { result } = renderHook(() =>
-        useVirtualizedTimeline({
+        useTestVirtualizedTimeline({
           timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
         }),
       );
 
       expect(typeof result.current.scrollToIndex).toBe('function');
+      result.current.scrollToIndex(0);
+      expect(mockScrollToIndex).toHaveBeenCalledWith(0, undefined);
     });
 
-    it('provides scrollToBottom method', () => {
+    it('provides scrollToOffset method', () => {
       const { result } = renderHook(() =>
-        useVirtualizedTimeline({
+        useTestVirtualizedTimeline({
           timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
         }),
       );
 
+      expect(typeof result.current.scrollToOffset).toBe('function');
+      result.current.scrollToOffset(100);
+      expect(mockScrollToOffset).toHaveBeenCalledWith(100, undefined);
+    });
+
+    it('provides scrollToBottom method', () => {
+      const { result } = renderHook(() =>
+        useTestVirtualizedTimeline({
+          timelineItems: [createMockTimelineItem(0), createMockTimelineItem(1)],
+          isDataReady: true,
+        }),
+      );
+
       expect(typeof result.current.scrollToBottom).toBe('function');
+      result.current.scrollToBottom();
+      expect(mockScrollToIndex).toHaveBeenCalledWith(1, {
+        align: 'end',
+        behavior: 'auto',
+      });
     });
 
     it('scrollToBottom does nothing with empty items', () => {
       mockScrollToIndex.mockClear();
 
       const { result } = renderHook(() =>
-        useVirtualizedTimeline({
+        useTestVirtualizedTimeline({
           timelineItems: [],
           isDataReady: true,
         }),
       );
 
       result.current.scrollToBottom();
-
       expect(mockScrollToIndex).not.toHaveBeenCalled();
     });
-  });
 
-  // ============================================================================
-  // SCROLL MARGIN TESTS
-  // ============================================================================
-
-  describe('scroll margin calculation', () => {
-    it('calculates scroll margin from container position', () => {
+    it('scrollToBottom accepts behavior option', () => {
       const { result } = renderHook(() =>
-        useVirtualizedTimeline({
+        useTestVirtualizedTimeline({
           timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
         }),
       );
 
-      // scrollMargin should be calculated from getBoundingClientRect
-      expect(result.current.scrollMargin).toBeGreaterThanOrEqual(0);
+      result.current.scrollToBottom({ behavior: 'smooth' });
+      expect(mockScrollToIndex).toHaveBeenCalledWith(0, {
+        align: 'end',
+        behavior: 'smooth',
+      });
     });
+  });
 
-    it('resets scroll margin measurement when items become empty', () => {
-      const { result, rerender } = renderHook(
-        ({ items }) => useVirtualizedTimeline({ timelineItems: items, isDataReady: true }),
-        { initialProps: { items: [createMockTimelineItem(0)] } },
+  // ============================================================================
+  // CONFIGURATION OPTIONS
+  // ============================================================================
+
+  describe('configuration options', () => {
+    it('passes estimateSize to virtualizer', () => {
+      renderHook(() =>
+        useTestVirtualizedTimeline({
+          timelineItems: [createMockTimelineItem(0)],
+          isDataReady: true,
+          estimateSize: 300,
+        }),
       );
 
-      // Initial state
-      expect(result.current.scrollMargin).toBeDefined();
+      expect(lastVirtualizerOptions?.estimateSize).toBeDefined();
+      expect(typeof lastVirtualizerOptions?.estimateSize).toBe('function');
+      expect(lastVirtualizerOptions?.estimateSize?.()).toBe(300);
+    });
 
-      // Clear items (navigation)
-      rerender({ items: [] });
+    it('passes overscan to virtualizer', () => {
+      renderHook(() =>
+        useTestVirtualizedTimeline({
+          timelineItems: [createMockTimelineItem(0)],
+          isDataReady: true,
+          overscan: 10,
+        }),
+      );
 
-      // Add items again
-      rerender({ items: [createMockTimelineItem(0)] });
+      expect(lastVirtualizerOptions?.overscan).toBe(10);
+    });
 
-      // Scroll margin should be re-measured
-      expect(result.current.scrollMargin).toBeDefined();
+    it('passes paddingStart and paddingEnd to virtualizer', () => {
+      renderHook(() =>
+        useTestVirtualizedTimeline({
+          timelineItems: [createMockTimelineItem(0)],
+          isDataReady: true,
+          paddingStart: 50,
+          paddingEnd: 100,
+        }),
+      );
+
+      expect(lastVirtualizerOptions?.paddingStart).toBe(50);
+      expect(lastVirtualizerOptions?.paddingEnd).toBe(100);
+    });
+  });
+
+  // ============================================================================
+  // STREAMING SCROLL ADJUSTMENT
+  // ============================================================================
+
+  describe('streaming scroll adjustment', () => {
+    it('sets shouldAdjustScrollPositionOnItemSizeChange on virtualizer', () => {
+      renderHook(() =>
+        useTestVirtualizedTimeline({
+          timelineItems: [createMockTimelineItem(0)],
+          isDataReady: true,
+          isStreaming: false,
+        }),
+      );
+
+      expect(mockVirtualizerInstance.shouldAdjustScrollPositionOnItemSizeChange).toBeDefined();
+    });
+
+    it('returns false during streaming to prevent scroll jumps', () => {
+      renderHook(() =>
+        useTestVirtualizedTimeline({
+          timelineItems: [createMockTimelineItem(0)],
+          isDataReady: true,
+          isStreaming: true,
+        }),
+      );
+
+      const adjustFn = mockVirtualizerInstance.shouldAdjustScrollPositionOnItemSizeChange as (
+        item: { start: number },
+        delta: number,
+        instance: { scrollOffset: number; scrollDirection: string },
+      ) => boolean;
+
+      const result = adjustFn(
+        { start: 0 },
+        100,
+        { scrollOffset: 500, scrollDirection: 'forward' },
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('uses getIsStreamingFromStore callback for real-time streaming state', () => {
+      const getIsStreamingFromStore = vi.fn(() => true);
+
+      renderHook(() =>
+        useTestVirtualizedTimeline({
+          timelineItems: [createMockTimelineItem(0)],
+          isDataReady: true,
+          isStreaming: false,
+          getIsStreamingFromStore,
+        }),
+      );
+
+      const adjustFn = mockVirtualizerInstance.shouldAdjustScrollPositionOnItemSizeChange as (
+        item: { start: number },
+        delta: number,
+        instance: { scrollOffset: number; scrollDirection: string },
+      ) => boolean;
+
+      const result = adjustFn(
+        { start: 0 },
+        100,
+        { scrollOffset: 500, scrollDirection: 'forward' },
+      );
+
+      expect(getIsStreamingFromStore).toHaveBeenCalled();
+      expect(result).toBe(false);
     });
   });
 });

@@ -99,7 +99,7 @@ export const StreamStatuses = {
 // ============================================================================
 
 // 1. ARRAY CONSTANT
-export const PARTICIPANT_STREAM_STATUSES = ['active', 'completed', 'failed'] as const;
+export const PARTICIPANT_STREAM_STATUSES = ['pending', 'active', 'completed', 'failed'] as const;
 
 // 2. ZOD SCHEMA
 export const ParticipantStreamStatusSchema = z.enum(PARTICIPANT_STREAM_STATUSES).openapi({
@@ -111,13 +111,68 @@ export const ParticipantStreamStatusSchema = z.enum(PARTICIPANT_STREAM_STATUSES)
 export type ParticipantStreamStatus = z.infer<typeof ParticipantStreamStatusSchema>;
 
 // 4. DEFAULT VALUE
-export const DEFAULT_PARTICIPANT_STREAM_STATUS: ParticipantStreamStatus = 'active';
+export const DEFAULT_PARTICIPANT_STREAM_STATUS: ParticipantStreamStatus = 'pending';
 
 // 5. CONSTANT OBJECT
 export const ParticipantStreamStatuses = {
+  PENDING: 'pending' as const,
   ACTIVE: 'active' as const,
   COMPLETED: 'completed' as const,
   FAILED: 'failed' as const,
+} as const;
+
+// ============================================================================
+// ROUND EXECUTION STATUS (Server-side orchestration status)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ROUND_EXECUTION_STATUSES = ['not_started', 'running', 'completed', 'failed', 'incomplete'] as const;
+
+// 2. ZOD SCHEMA
+export const RoundExecutionStatusSchema = z.enum(ROUND_EXECUTION_STATUSES).openapi({
+  description: 'Status of server-side round execution orchestration',
+  example: 'running',
+});
+
+// 3. TYPESCRIPT TYPE
+export type RoundExecutionStatus = z.infer<typeof RoundExecutionStatusSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ROUND_EXECUTION_STATUS: RoundExecutionStatus = 'not_started';
+
+// 5. CONSTANT OBJECT
+export const RoundExecutionStatuses = {
+  NOT_STARTED: 'not_started' as const,
+  RUNNING: 'running' as const,
+  COMPLETED: 'completed' as const,
+  FAILED: 'failed' as const,
+  INCOMPLETE: 'incomplete' as const,
+} as const;
+
+// ============================================================================
+// ROUND EXECUTION PHASE (Server-side orchestration phase)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ROUND_EXECUTION_PHASES = ['participants', 'moderator', 'complete'] as const;
+
+// 2. ZOD SCHEMA
+export const RoundExecutionPhaseSchema = z.enum(ROUND_EXECUTION_PHASES).openapi({
+  description: 'Current phase of server-side round execution',
+  example: 'participants',
+});
+
+// 3. TYPESCRIPT TYPE
+export type RoundExecutionPhase = z.infer<typeof RoundExecutionPhaseSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ROUND_EXECUTION_PHASE: RoundExecutionPhase = 'participants';
+
+// 5. CONSTANT OBJECT
+export const RoundExecutionPhases = {
+  PARTICIPANTS: 'participants' as const,
+  MODERATOR: 'moderator' as const,
+  COMPLETE: 'complete' as const,
 } as const;
 
 // ============================================================================
@@ -273,7 +328,7 @@ export const StreamPhases = {
 
 // 6. TYPE GUARD (optional helper)
 export function isStreamPhase(value: unknown): value is StreamPhase {
-  return typeof value === 'string' && STREAM_PHASES.includes(value as StreamPhase);
+  return StreamPhaseSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -435,3 +490,65 @@ export function parseSSEEventType(data: string): SSEEventType {
 
   return SSEEventTypes.UNKNOWN;
 }
+
+// ============================================================================
+// ROUND ORCHESTRATION QUEUE MESSAGE TYPE
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ROUND_ORCHESTRATION_MESSAGE_TYPES = [
+  'trigger-participant',
+  'trigger-moderator',
+  'check-round-completion',
+  'trigger-pre-search',
+] as const;
+
+// 2. ZOD SCHEMA
+export const RoundOrchestrationMessageTypeSchema = z.enum(ROUND_ORCHESTRATION_MESSAGE_TYPES).openapi({
+  description: 'Round orchestration queue message type discriminator',
+  example: 'trigger-participant',
+});
+
+// 3. TYPESCRIPT TYPE
+export type RoundOrchestrationMessageType = z.infer<typeof RoundOrchestrationMessageTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ROUND_ORCHESTRATION_MESSAGE_TYPE: RoundOrchestrationMessageType = 'trigger-participant';
+
+// 5. CONSTANT OBJECT
+export const RoundOrchestrationMessageTypes = {
+  TRIGGER_PARTICIPANT: 'trigger-participant' as const,
+  TRIGGER_MODERATOR: 'trigger-moderator' as const,
+  CHECK_ROUND_COMPLETION: 'check-round-completion' as const,
+  TRIGGER_PRE_SEARCH: 'trigger-pre-search' as const,
+} as const;
+
+// ============================================================================
+// CHECK ROUND COMPLETION REASON
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const CHECK_ROUND_COMPLETION_REASONS = [
+  'stale_stream',
+  'resume_trigger',
+  'scheduled_check',
+] as const;
+
+// 2. ZOD SCHEMA
+export const CheckRoundCompletionReasonSchema = z.enum(CHECK_ROUND_COMPLETION_REASONS).openapi({
+  description: 'Reason for triggering a round completion check',
+  example: 'resume_trigger',
+});
+
+// 3. TYPESCRIPT TYPE
+export type CheckRoundCompletionReason = z.infer<typeof CheckRoundCompletionReasonSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_CHECK_ROUND_COMPLETION_REASON: CheckRoundCompletionReason = 'scheduled_check';
+
+// 5. CONSTANT OBJECT
+export const CheckRoundCompletionReasons = {
+  STALE_STREAM: 'stale_stream' as const,
+  RESUME_TRIGGER: 'resume_trigger' as const,
+  SCHEDULED_CHECK: 'scheduled_check' as const,
+} as const;

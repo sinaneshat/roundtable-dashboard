@@ -26,6 +26,7 @@
 import type { DeepPartial } from 'ai';
 import { describe, expect, it } from 'vitest';
 
+import { MessageRoles } from '@/api/core/enums';
 import type { ModeratorPayload } from '@/api/routes/chat/schema';
 import type { TestModeratorMetrics } from '@/lib/testing';
 import {
@@ -425,8 +426,8 @@ describe('moderator Factory Integration Tests', () => {
       });
 
       // Verify pattern matches implementation
-      expect(message.role).toBe('assistant');
-      expect(message.metadata.role).toBe('assistant');
+      expect(message.role).toBe(MessageRoles.ASSISTANT);
+      expect(message.metadata.role).toBe(MessageRoles.ASSISTANT);
       expect(message.metadata.isModerator).toBe(true);
       expect(typeof message.metadata.roundNumber).toBe('number');
     });
@@ -476,10 +477,14 @@ describe('moderator JSON Streaming Limitation - Why Progressive Updates May Not 
       //
       // Our schema puts moderator text FIRST specifically for this reason.
 
-      const simulatedPartialParse = (text: string): Record<string, unknown> | null => {
+      type PartialParseResult = {
+        summary?: string;
+      };
+
+      const simulatedPartialParse = (text: string): PartialParseResult | null => {
         // Simplified simulation - real AI SDK parser is more sophisticated
         // Try to extract completed top-level fields
-        const result: Record<string, unknown> = {};
+        const result: PartialParseResult = {};
 
         // Try to find completed moderator text field
         const summaryMatch = text.match(/"summary":\s*"([^"]*)"/);
@@ -563,7 +568,7 @@ describe('moderator Message Structure Tests', () => {
       expect(moderatorMsg.metadata).toBeDefined();
       expect(moderatorMsg.metadata.isModerator).toBe(true);
       expect(moderatorMsg.metadata.roundNumber).toBe(0);
-      expect(moderatorMsg.role).toBe('assistant');
+      expect(moderatorMsg.role).toBe(MessageRoles.ASSISTANT);
     });
 
     it('creates moderator message with proper parts array', () => {
@@ -667,11 +672,15 @@ describe('moderator Edge Cases for Progressive UI Updates', () => {
   });
 
   describe('type Coercion Edge Cases', () => {
+    // Test type that allows string metrics to simulate malformed AI responses
+    type MalformedMetricsPartial = {
+      metrics: { engagement: string | number };
+    };
+
     it('handles string number for metrics', () => {
-      // AI might sometimes return string instead of number
-      // ✅ INTENTIONAL TYPE COERCION: Testing that validation rejects string-as-number values
-      const partial = {
-        metrics: { engagement: '75' as unknown as number },
+      // AI might sometimes return string instead of number - test graceful rejection
+      const partial: MalformedMetricsPartial = {
+        metrics: { engagement: '75' },
       };
       // typeof '75' === 'string', not 'number', so this should fail
       expect(hasModeratorData(partial)).toBe(false);

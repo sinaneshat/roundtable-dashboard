@@ -537,9 +537,18 @@ describe('multi-Round Flow Debugging', () => {
       const participants = createMockParticipants(threadId, 2);
       const thread = createMockThread(threadId, 'test-thread');
 
+      type StateSnapshot = {
+        screenMode: string;
+        waitingToStartStreaming: boolean;
+        isStreaming: boolean;
+        streamingRoundNumber: number | null;
+        nextParticipantToTrigger: number | null;
+        currentParticipantIndex: number;
+      };
+
       const stateLog: Array<{
         step: string;
-        state: Record<string, unknown>;
+        state: StateSnapshot;
       }> = [];
 
       function logState(step: string) {

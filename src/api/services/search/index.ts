@@ -1,4 +1,4 @@
-/* eslint-disable perfectionist/sort-exports */
+/* eslint-disable simple-import-sort/exports */
 /**
  * Search Services - Domain Barrel Export
  *
@@ -7,5 +7,5 @@
 
 export * from './rag-indexing.service';
 export * from './search-context-builder';
-export * from './web-search.service';
 export * from './web-search-cache.service';
+export * from './web-search.service';

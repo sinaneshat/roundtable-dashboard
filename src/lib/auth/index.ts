@@ -15,3 +15,6 @@ export type {
   SessionData,
   User,
 } from './types';
+
+// Utility exports
+export { extractSessionToken } from './utils';

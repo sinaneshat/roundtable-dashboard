@@ -9,7 +9,10 @@ import {
   FileCategorySchema,
   FileValidationErrorCodeSchema,
   getFileCategoryFromMime,
+  IMAGE_MIME_TYPES,
+  MAX_IMAGE_FILE_SIZE,
   MAX_MULTIPART_PARTS,
+  MAX_PDF_FILE_SIZE,
   MAX_SINGLE_UPLOAD_SIZE,
   MAX_TOTAL_FILE_SIZE,
   MIN_MULTIPART_PART_SIZE,
@@ -18,6 +21,8 @@ import {
   UploadStrategySchema,
 } from '@/api/core/enums';
 import { formatFileSize } from '@/lib/format';
+
+const IMAGE_MIME_SET = new Set<string>(IMAGE_MIME_TYPES);
 
 // ============================================================================
 // ZOD SCHEMAS
@@ -82,6 +87,10 @@ const _FileValidationConstantsSchema = z.object({
   maxSingleUploadSize: z.number().int().positive(),
   /** Maximum total file size in bytes */
   maxTotalFileSize: z.number().int().positive(),
+  /** Maximum image file size in bytes */
+  maxImageFileSize: z.number().int().positive(),
+  /** Maximum PDF file size in bytes */
+  maxPdfFileSize: z.number().int().positive(),
   /** Minimum multipart part size in bytes */
   minPartSize: z.number().int().positive(),
   /** Recommended part size in bytes */
@@ -192,6 +201,43 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
         };
       }
 
+      // Validate file size limits for visual content (images and PDFs)
+      // Large files use URL-based delivery where AI providers fetch from signed URLs
+      const isPdf = file.type === 'application/pdf';
+      const isImage = IMAGE_MIME_SET.has(file.type);
+
+      if (isPdf && file.size > MAX_PDF_FILE_SIZE) {
+        return {
+          valid: false,
+          error: {
+            code: 'visual_file_too_large',
+            message: `PDF files must be ${formatFileSize(MAX_PDF_FILE_SIZE)} or smaller. Your file is ${formatFileSize(file.size)}.`,
+            details: {
+              maxSize: MAX_PDF_FILE_SIZE,
+              actualSize: file.size,
+            },
+          },
+          uploadStrategy: UploadStrategies.SINGLE,
+          fileCategory,
+        };
+      }
+
+      if (isImage && file.size > MAX_IMAGE_FILE_SIZE) {
+        return {
+          valid: false,
+          error: {
+            code: 'visual_file_too_large',
+            message: `Image files must be ${formatFileSize(MAX_IMAGE_FILE_SIZE)} or smaller. Your file is ${formatFileSize(file.size)}.`,
+            details: {
+              maxSize: MAX_IMAGE_FILE_SIZE,
+              actualSize: file.size,
+            },
+          },
+          uploadStrategy: UploadStrategies.SINGLE,
+          fileCategory,
+        };
+      }
+
       if (file.size > effectiveMaxSize) {
         return {
           valid: false,
@@ -259,6 +305,8 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
     () => ({
       maxSingleUploadSize: MAX_SINGLE_UPLOAD_SIZE,
       maxTotalFileSize: MAX_TOTAL_FILE_SIZE,
+      maxImageFileSize: MAX_IMAGE_FILE_SIZE,
+      maxPdfFileSize: MAX_PDF_FILE_SIZE,
       minPartSize: MIN_MULTIPART_PART_SIZE,
       recommendedPartSize: RECOMMENDED_PART_SIZE,
       allowedTypes,

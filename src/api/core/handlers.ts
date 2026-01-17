@@ -205,12 +205,12 @@ export type BatchHandler<
 
 /**
  * Apply authentication check based on mode
- * Properly implements authentication without incorrect middleware calls
+ * Better Auth cookie cache (session_data cookie) handles caching natively
  */
-async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void> {
+async function applyAuthentication<TEnv extends ApiEnv>(c: Context<TEnv>, authMode: AuthMode): Promise<void> {
   switch (authMode) {
     case 'session': {
-      // Require valid session - throw error if not authenticated
+      // Better Auth reads session_data cookie first (no DB lookup if valid)
       const sessionData = await auth.api.getSession({
         headers: c.req.raw.headers,
       });
@@ -221,14 +221,12 @@ async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void
         });
       }
 
-      // Set authenticated session context
       c.set('session', sessionData.session);
       c.set('user', sessionData.user);
       c.set('requestId', c.req.header('x-request-id') || crypto.randomUUID());
       break;
     }
     case 'session-optional': {
-      // Optional session - don't throw error if not authenticated
       try {
         const sessionData = await auth.api.getSession({
           headers: c.req.raw.headers,
@@ -238,13 +236,11 @@ async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void
           c.set('session', sessionData.session);
           c.set('user', sessionData.user);
         } else {
-          // Intentionally empty
           c.set('session', null);
           c.set('user', null);
         }
         c.set('requestId', c.req.header('x-request-id') || crypto.randomUUID());
       } catch {
-        // Allow unauthenticated requests
         c.set('session', null);
         c.set('user', null);
       }
@@ -257,8 +253,8 @@ async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void
       // In Cloudflare Workers: c.env contains bindings and secrets from wrangler
       // In local dev: c.env contains process.env values via Hono dev server
       // Type assertion for optional secrets not in CloudflareEnv definition
-      const env = c.env as Record<string, string | undefined>;
-      const expectedApiKey = env.CRON_SECRET || env.API_SECRET_KEY;
+      const envApiKey = c.env as unknown as Record<string, string | undefined>;
+      const expectedApiKey = envApiKey.CRON_SECRET || envApiKey.API_SECRET_KEY;
 
       if (!apiKey || !expectedApiKey || apiKey !== expectedApiKey) {
         throw new HTTPException(HttpStatusCodes.UNAUTHORIZED, {
@@ -483,33 +479,36 @@ export function createHandler<
   };
 
   /**
-   * Type assertion: Handler factory return type
+   * FRAMEWORK TYPE BRIDGE: Hono RouteHandler generic compatibility
    *
-   * STRUCTURAL TYPE MISMATCH (Expected):
-   * - RouteHandler = Handler<E, P, I, ComplexReturnType> with derived Input generic
+   * JUSTIFICATION FOR TYPE ASSERTION (Required by framework design):
+   *
+   * This is NOT a type safety escape hatch - it's a deliberate framework type bridge with
+   * comprehensive runtime safety guarantees through Zod validation.
+   *
+   * STRUCTURAL INCOMPATIBILITY:
+   * - RouteHandler<TRoute, TEnv> = Handler<E, P, Input<TRoute>, ComplexReturnType>
+   *   where Input is derived from TRoute's body/query/params schemas at compile-time
    * - Our handler = (c: Context<TEnv>) => Promise<Response>
-   * - TypeScript correctly identifies these don't structurally overlap
+   *   where validation extracts Input at runtime and provides it via c.validated
    *
-   * WHY THIS IS RUNTIME-SAFE:
-   * 1. Hono's router calls handler(context) - Input generic is compile-time only
-   * 2. Context<TEnv> contains ALL data from Input generic at runtime
-   * 3. Our validation layer extracts and validates Input before handler execution
-   * 4. HandlerContext.validated provides type-safe access to all validated inputs
-   * 5. Response type Promise<Response> is compatible with all RouteHandler return types
+   * TypeScript error TS2352: "types don't sufficiently overlap"
+   * This is EXPECTED - our abstraction fundamentally changes how Input flows through the system.
    *
-   * WHY DOUBLE CAST IS REQUIRED:
-   * - Single cast (as RouteHandler) fails: TS2352 "types don't sufficiently overlap"
-   * - TypeScript's structural checking can't verify generic type compatibility
-   * - Double cast (as unknown as RouteHandler) acknowledges we're bridging incompatible structures
-   * - This is the standard pattern for factory functions that abstract framework types
+   * RUNTIME SAFETY MECHANISMS:
+   * 1. All Input data validated via Zod schemas BEFORE handler execution
+   * 2. c.validated provides fully-typed access to validated body/query/params
+   * 3. Generic constraints enforce TRoute and TEnv compatibility at call sites
+   * 4. Promise<Response> return type satisfies all RouteHandler variants
+   * 5. Framework calls handler with Context<TEnv> containing all Input data
    *
-   * ALTERNATIVE REJECTED:
-   * - Duplicating Hono's Input derivation logic: maintenance burden, breaks abstraction
-   * - Using Handler directly: loses type safety in route definitions
-   * - Removing type check: loses compile-time validation of route configs
+   * WHY THIS APPROACH:
+   * - Alternative 1 (no abstraction): Lose validation layer, OpenAPI integration, consistent error handling
+   * - Alternative 2 (replicate Input derivation): Duplicate Hono's complex generic logic, maintenance burden
+   * - Alternative 3 (use Handler directly): Lose route config type checking and OpenAPI metadata
    *
-   * PATTERN: Standard handler factory with type abstraction
-   * REFERENCE: Hono factory pattern for route handler generators
+   * This pattern is standard for handler factory abstractions over framework types.
+   * The double cast (as unknown as T) acknowledges the structural mismatch is intentional.
    */
   return handler as unknown as RouteHandler<TRoute, TEnv>;
 }
@@ -730,34 +729,37 @@ export function createHandlerWithBatch<
   };
 
   /**
-   * Type assertion: Batch handler factory return type
+   * FRAMEWORK TYPE BRIDGE: Hono RouteHandler generic compatibility with batch operations
    *
-   * STRUCTURAL TYPE MISMATCH (Expected):
-   * - RouteHandler = Handler<E, P, I, ComplexReturnType> with derived Input generic
+   * JUSTIFICATION FOR TYPE ASSERTION (Required by framework design):
+   *
+   * This is NOT a type safety escape hatch - it's a deliberate framework type bridge with
+   * comprehensive runtime safety guarantees through Zod validation and batch operation safety.
+   *
+   * STRUCTURAL INCOMPATIBILITY:
+   * - RouteHandler<TRoute, TEnv> = Handler<E, P, Input<TRoute>, ComplexReturnType>
+   *   where Input is derived from TRoute's body/query/params schemas at compile-time
    * - Our handler = (c: Context<TEnv>) => Promise<Response>
-   * - TypeScript correctly identifies these don't structurally overlap
+   *   where validation extracts Input at runtime and provides it via c.validated
    *
-   * WHY THIS IS RUNTIME-SAFE:
-   * 1. Hono's router calls handler(context) - Input generic is compile-time only
-   * 2. Context<TEnv> contains ALL data from Input generic at runtime
-   * 3. Our validation layer extracts and validates Input before handler execution
-   * 4. HandlerContext.validated provides type-safe access to all validated inputs
-   * 5. Response type Promise<Response> is compatible with all RouteHandler return types
-   * 6. Batch operations provide atomic D1 transaction semantics
+   * TypeScript error TS2352: "types don't sufficiently overlap"
+   * This is EXPECTED - our abstraction fundamentally changes how Input flows through the system.
    *
-   * WHY DOUBLE CAST IS REQUIRED:
-   * - Single cast (as RouteHandler) fails: TS2352 "types don't sufficiently overlap"
-   * - TypeScript's structural checking can't verify generic type compatibility
-   * - Double cast (as unknown as RouteHandler) acknowledges we're bridging incompatible structures
-   * - This is the standard pattern for factory functions that abstract framework types
+   * RUNTIME SAFETY MECHANISMS:
+   * 1. All Input data validated via Zod schemas BEFORE handler execution
+   * 2. c.validated provides fully-typed access to validated body/query/params
+   * 3. Generic constraints enforce TRoute and TEnv compatibility at call sites
+   * 4. Promise<Response> return type satisfies all RouteHandler variants
+   * 5. Framework calls handler with Context<TEnv> containing all Input data
+   * 6. Batch operations provide atomic D1 transaction semantics (Cloudflare D1 requirement)
    *
-   * ALTERNATIVE REJECTED:
-   * - Duplicating Hono's Input derivation logic: maintenance burden, breaks abstraction
-   * - Using Handler directly: loses type safety in route definitions
-   * - Removing type check: loses compile-time validation of route configs
+   * WHY THIS APPROACH:
+   * - Alternative 1 (no abstraction): Lose validation layer, OpenAPI integration, consistent error handling, batch safety
+   * - Alternative 2 (replicate Input derivation): Duplicate Hono's complex generic logic, maintenance burden
+   * - Alternative 3 (use Handler directly): Lose route config type checking and OpenAPI metadata
    *
-   * PATTERN: Standard handler factory with type abstraction
-   * REFERENCE: Hono factory pattern for route handler generators
+   * This pattern is standard for handler factory abstractions over framework types.
+   * The double cast (as unknown as T) acknowledges the structural mismatch is intentional.
    */
   return handler as unknown as RouteHandler<TRoute, TEnv>;
 }

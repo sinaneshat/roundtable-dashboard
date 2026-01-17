@@ -7,15 +7,16 @@ import { ToastAction } from '@/components/ui/toast';
 import { toast as baseToast } from '@/hooks/utils';
 
 function createToastActionElement(label: string, onClick: () => void): ToastActionElement {
-  const element = React.createElement(
+  // Double cast required: React.createElement returns FunctionComponentElement which doesn't
+  // sufficiently overlap with ToastActionElement (ReactElement<typeof ToastAction>)
+  return React.createElement(
     ToastAction,
     {
       altText: label,
       onClick,
     },
     label,
-  );
-  return element as unknown as ToastActionElement;
+  ) as unknown as ToastActionElement;
 }
 
 const activeToasts = new Set<string>();

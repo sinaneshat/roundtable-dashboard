@@ -13,10 +13,11 @@ import { createHandler, Responses } from '@/api/core';
 import type { SubscriptionTier } from '@/api/core/enums';
 import { SubscriptionTiers } from '@/api/core/enums';
 import type { ModelForPricing } from '@/api/services/billing';
-import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/billing';
+import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName } from '@/api/services/billing';
 import { getAllModels } from '@/api/services/models';
 import { getUserTier } from '@/api/services/usage';
 import type { ApiEnv } from '@/api/types';
+import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 
 import type { listModelsRoute } from './route';
 

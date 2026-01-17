@@ -1,53 +1,44 @@
 /**
- * Database Message Type Guards
+ * Message Type Guards - Zod-based validation
  *
- * Following backend-patterns.md: Service layer for business logic
- *
- * Provides Zod-validated type guards for database ChatMessage records:
- * - Type-safe filtering for handlers and services
- * - Separates database concerns from frontend transforms
+ * ✅ ZOD-FIRST PATTERN: Uses .safeParse() from existing schemas
+ * ✅ SINGLE SOURCE OF TRUTH: Delegates to metadata.ts utilities
  */
 
 import type { ChatMessage } from '@/db/validation';
 import { getParticipantMetadata, getPreSearchMetadata } from '@/lib/utils';
 
-// ============================================================================
-// Type Guards
-// ============================================================================
-
-/**
- * Check if database message is pre-search message
- * Uses Zod schema validation for runtime type safety
- */
 export function isDbPreSearchMessage(message: ChatMessage): boolean {
-  if (!message.metadata)
-    return false;
   return getPreSearchMetadata(message.metadata) !== null;
 }
 
-/**
- * Check if database message is participant message
- * Must have participantId column AND valid participant metadata
- */
 export function isDbParticipantMessage(message: ChatMessage): boolean {
-  if (!message.participantId || !message.metadata)
+  if (!message.participantId)
     return false;
   return getParticipantMetadata(message.metadata) !== null;
 }
 
-// ============================================================================
-// Bulk Filtering
-// ============================================================================
-
-export function filterDbToParticipantMessages(messages: ChatMessage[]): ChatMessage[] {
+/**
+ * Filter messages to only participant messages (non-system, non-pre-search)
+ * Generic to preserve the input type (e.g., messages with relations)
+ */
+export function filterDbToParticipantMessages<T extends ChatMessage>(messages: T[]): T[] {
   return messages.filter(isDbParticipantMessage);
 }
 
-export function filterDbToPreSearchMessages(messages: ChatMessage[]): ChatMessage[] {
+/**
+ * Filter messages to only pre-search messages
+ * Generic to preserve the input type (e.g., messages with relations)
+ */
+export function filterDbToPreSearchMessages<T extends ChatMessage>(messages: T[]): T[] {
   return messages.filter(isDbPreSearchMessage);
 }
 
-export function filterDbToConversationMessages(messages: ChatMessage[]): ChatMessage[] {
+/**
+ * Filter messages to conversation messages (excluding pre-search)
+ * Generic to preserve the input type (e.g., messages with relations)
+ */
+export function filterDbToConversationMessages<T extends ChatMessage>(messages: T[]): T[] {
   return messages.filter(msg => !isDbPreSearchMessage(msg));
 }
 

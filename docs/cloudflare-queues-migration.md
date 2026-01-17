@@ -406,6 +406,20 @@ describe('Your Queue Consumer', () => {
 
 ## Deployment Instructions
 
+### Adding a New Queue (One-Time Setup)
+
+When adding a new queue to `wrangler.jsonc`, you must create it once in Cloudflare:
+
+```bash
+# Create for preview
+wrangler queues create your-queue-name-preview
+
+# Create for production
+wrangler queues create your-queue-name-prod
+```
+
+After creation, the queue persists and deploys work automatically.
+
 ### Local Development
 
 Queue already configured in `wrangler.jsonc` (default environment).
@@ -428,7 +442,7 @@ Queue configuration in `wrangler.jsonc` env.preview section automatically applie
 
 **Verify queue creation**:
 ```bash
-wrangler queues list --env preview
+wrangler queues list
 ```
 
 ### Production Environment
@@ -442,7 +456,7 @@ Queue configuration in `wrangler.jsonc` env.production section automatically app
 
 **Verify queue creation**:
 ```bash
-wrangler queues list --env production
+wrangler queues list
 ```
 
 ### Queue Management Commands

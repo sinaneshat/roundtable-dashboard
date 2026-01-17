@@ -6,15 +6,32 @@
 
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { APIError } from 'better-auth/api';
+import { z } from 'zod';
 
+import { BETTER_AUTH_SESSION_COOKIE_NAME } from '@/api/core/enums';
 import { isWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 
+// ============================================================================
+// SCHEMAS
+// ============================================================================
+
 /**
- * Better-auth middleware context type (inferred from createAuthMiddleware)
+ * Schema for auth request body with optional email field
+ * Used by Better Auth middleware for email-based operations
+ */
+const AuthRequestBodySchema = z.object({
+  email: z.string().email().optional(),
+}).passthrough(); // Allow additional Better Auth fields
+
+type AuthRequestBody = z.infer<typeof AuthRequestBodySchema>;
+
+/**
+ * Better-auth middleware context type
+ * Represents the context passed to auth hooks
  */
 type AuthContext = {
   path: string;
-  body?: Record<string, unknown>;
+  body?: AuthRequestBody;
 };
 
 /**
@@ -42,7 +59,7 @@ const ALLOWED_EMAIL_EXCEPTIONS: readonly string[] = [
 /**
  * Configuration for email domain restrictions
  */
-const EMAIL_DOMAIN_CONFIG = {
+export const EMAIL_DOMAIN_CONFIG = {
   /**
    * Allowed email domain for local and preview environments
    */
@@ -69,17 +86,20 @@ export function isRestrictedEnvironment(): boolean {
     const { env } = getCloudflareContext();
     const cfEnv = env?.NEXT_PUBLIC_WEBAPP_ENV;
     if (typeof cfEnv === 'string' && isWebappEnv(cfEnv)) {
-      return cfEnv === WEBAPP_ENVS.LOCAL || cfEnv === WEBAPP_ENVS.PREVIEW;
+      // Only restrict PREVIEW - LOCAL/localhost should allow any email
+      return cfEnv === WEBAPP_ENVS.PREVIEW;
     }
   } catch {
   }
 
   const processEnv = process.env.NEXT_PUBLIC_WEBAPP_ENV;
   if (processEnv && isWebappEnv(processEnv)) {
-    return processEnv === WEBAPP_ENVS.LOCAL || processEnv === WEBAPP_ENVS.PREVIEW;
+    // Only restrict PREVIEW - LOCAL/localhost should allow any email
+    return processEnv === WEBAPP_ENVS.PREVIEW;
   }
 
-  return process.env.NODE_ENV === 'development';
+  // Default: no restriction for local development
+  return false;
 }
 
 /**
@@ -139,14 +159,14 @@ export function validateEmailDomain(ctx: AuthContext): void {
     return;
   }
 
-  // Extract email from request body
-  const email = ctx.body?.email;
-  if (!email || typeof email !== 'string') {
-    return; // Let better-auth handle missing email
+  // Validate and extract email from request body using Zod
+  const bodyParse = AuthRequestBodySchema.safeParse(ctx.body);
+  if (!bodyParse.success || !bodyParse.data.email) {
+    return; // Let better-auth handle missing/invalid email
   }
 
   // Validate email domain
-  if (!isAllowedEmailDomain(email)) {
+  if (!isAllowedEmailDomain(bodyParse.data.email)) {
     throw new APIError('BAD_REQUEST', {
       message: EMAIL_DOMAIN_CONFIG.ERROR_MESSAGE,
     });
@@ -154,10 +174,17 @@ export function validateEmailDomain(ctx: AuthContext): void {
 }
 
 /**
- * Get the allowed email domain for the current environment
+ * Extract session token from cookie header
+ * Used for queue-based operations that need to authenticate with Better Auth
  *
- * @returns {string} The allowed email domain (e.g., '@roundtable.now')
+ * @param {string | undefined} cookieHeader - The Cookie header string
+ * @returns {string} The session token value, or empty string if not found
  */
-export function getAllowedDomain(): string {
-  return EMAIL_DOMAIN_CONFIG.ALLOWED_DOMAIN;
+export function extractSessionToken(cookieHeader: string | undefined): string {
+  if (!cookieHeader) {
+    return '';
+  }
+
+  const sessionTokenMatch = cookieHeader.match(new RegExp(`${BETTER_AUTH_SESSION_COOKIE_NAME.replace(/\./g, '\\.')}=([^;]+)`));
+  return sessionTokenMatch?.[1] || '';
 }

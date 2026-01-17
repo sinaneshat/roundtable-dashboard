@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createMockMessagesListResponse,
+  createMockStreamingResponse,
   createMockThreadDetailResponse,
 } from '@/lib/testing';
 
@@ -49,50 +50,16 @@ function mockFetchImplementation(input: RequestInfo | URL, init?: RequestInit): 
   // Mock responses for different endpoints
   if (url.includes('/moderator')) {
     // Return streaming response for moderator endpoint
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      headers: new Headers({
-        'content-type': 'text/event-stream',
-      }),
-      body: {
-        getReader: () => ({
-          read: vi.fn()
-            .mockResolvedValueOnce({
-              done: false,
-              value: new TextEncoder().encode('0:"Test"\n'),
-            })
-            .mockResolvedValueOnce({
-              done: true,
-              value: undefined,
-            }),
-        }),
-      },
-    } as unknown as Response);
+    return Promise.resolve(createMockStreamingResponse({
+      chunks: ['0:"Test"\n'],
+    }));
   }
 
   if (url.includes('/pre-search')) {
     // Return streaming response for pre-search endpoint
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      headers: new Headers({
-        'content-type': 'text/event-stream',
-      }),
-      body: {
-        getReader: () => ({
-          read: vi.fn()
-            .mockResolvedValueOnce({
-              done: false,
-              value: new TextEncoder().encode('data: {"type":"queries","queries":[{"query":"test","rationale":"test","searchDepth":"basic","index":0,"total":1}]}\n'),
-            })
-            .mockResolvedValueOnce({
-              done: true,
-              value: undefined,
-            }),
-        }),
-      },
-    } as unknown as Response);
+    return Promise.resolve(createMockStreamingResponse({
+      chunks: ['data: {"type":"queries","queries":[{"query":"test","rationale":"test","searchDepth":"basic","index":0,"total":1}]}\n'],
+    }));
   }
 
   if (url.includes('/messages')) {

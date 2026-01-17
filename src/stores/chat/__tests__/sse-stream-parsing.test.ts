@@ -39,9 +39,36 @@ import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 // TEST HELPERS
 // ============================================================================
 
+type SSEEventData = {
+  messageMetadata?: DbAssistantMessageMetadata;
+  delta?: string;
+  finishReason?: string;
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  status?: string;
+  query?: string;
+  rationale?: string;
+  searchDepth?: string;
+  index?: number;
+  total?: number;
+  answer?: string;
+  results?: Array<{ title: string; url: string; content: string; score: number }>;
+  responseTime?: number;
+  summary?: string;
+  insight?: string;
+  participantId?: string;
+  participantIndex?: number;
+  strengths?: string[];
+  areasForImprovement?: string[];
+  score?: number;
+  verdict?: string;
+  recommendations?: string[];
+  message?: string;
+  code?: string;
+};
+
 type ParsedSSEEvent = {
   event: string;
-  data: Record<string, unknown>;
+  data: SSEEventData;
 };
 
 /**
@@ -66,7 +93,7 @@ function parseSSEEvent(eventString: string): ParsedSSEEvent | null {
   try {
     return {
       event,
-      data: JSON.parse(data),
+      data: JSON.parse(data) as SSEEventData,
     };
   } catch {
     return null;
@@ -76,7 +103,7 @@ function parseSSEEvent(eventString: string): ParsedSSEEvent | null {
 /**
  * Creates an SSE event string from structured data
  */
-function createSSEEventString(event: string, data: Record<string, unknown>): string {
+function createSSEEventString(event: string, data: SSEEventData): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 

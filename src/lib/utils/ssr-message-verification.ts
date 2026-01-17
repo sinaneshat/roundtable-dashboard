@@ -1,25 +1,18 @@
 /**
- * SSR Message Verification - Server-side retry for D1 consistency
+ * SSR Message Verification - Transform messages for SSR
  *
- * Handles the race condition where:
- * 1. KV stream-status says participants are complete
- * 2. But D1 database hasn't propagated the messages yet (read replica lag)
+ * SIMPLIFIED: No retry logic. Transform and return immediately.
+ * Client-side will handle any stale data via TanStack Query refetch.
  *
- * Solution: Retry message fetch on server-side until DB is consistent,
- * ensuring proper SSR paint without client-side fallback fetches.
+ * Previous retry logic caused 17+ second delays on page load.
+ * SSR should be fast - return what we have, let client sync if needed.
  */
 
 import type { ThreadStreamResumptionState } from '@/api/routes/chat/schema';
 import type { ChatMessage } from '@/db/validation/chat';
-import { getThreadMessagesService } from '@/services/api';
 
 import { transformChatMessage } from './date-transforms';
-
-const SSR_RETRY_DELAYS = [50, 100, 150]; // ms delays between retries
-const MAX_RETRIES = 3;
-
-// API response messages have string dates, need transformation
-type ApiMessage = Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date };
+import type { ApiMessage } from './ssr-message-verification-schemas';
 
 type VerifyMessagesParams = {
   threadId: string;
@@ -41,66 +34,21 @@ function transformMessages(messages: ApiMessage[]): ChatMessage[] {
 }
 
 /**
- * Verify SSR messages are consistent with stream status
- * If KV says complete but DB is stale, retry until consistent
+ * Transform SSR messages - no retry, immediate return
  *
- * @returns Fresh messages with Date objects (transformed from API response)
+ * SSR must be fast. Any stale data will be synced client-side
+ * via TanStack Query's staleTime and refetch mechanisms.
+ *
+ * @returns Messages with Date objects (transformed from API response)
  */
 export async function verifyAndFetchFreshMessages({
-  threadId,
   currentMessages,
-  streamResumptionState,
 }: VerifyMessagesParams): Promise<VerifyMessagesResult> {
-  // No stream status = nothing to verify, just transform dates
-  if (!streamResumptionState) {
-    return { messages: transformMessages(currentMessages), wasStale: false, retryCount: 0 };
-  }
-
-  // Check if KV says participants are complete
-  const serverSaysComplete = streamResumptionState.participants?.allComplete === true;
-  const expectedParticipants = streamResumptionState.participants?.totalParticipants ?? 0;
-
-  // Count assistant messages in current data
-  const currentAssistantCount = currentMessages.filter(m => m.role === 'assistant').length;
-
-  // Data is consistent - no retry needed, just transform dates
-  if (!serverSaysComplete || expectedParticipants === 0 || currentAssistantCount >= expectedParticipants) {
-    return { messages: transformMessages(currentMessages), wasStale: false, retryCount: 0 };
-  }
-
-  // D1 is stale - need to retry
-  console.error(`[SSR] D1 stale: have ${currentAssistantCount} assistant msgs, expected ${expectedParticipants}`);
-
-  for (let i = 0; i < MAX_RETRIES; i++) {
-    // Wait before retry (D1 propagation typically takes 50-100ms)
-    await new Promise(resolve => setTimeout(resolve, SSR_RETRY_DELAYS[i] ?? 100));
-
-    try {
-      const freshResult = await getThreadMessagesService({ param: { id: threadId } });
-
-      if (freshResult.success && freshResult.data?.items) {
-        const freshMessages = freshResult.data.items;
-        const freshAssistantCount = freshMessages.filter(m => m.role === 'assistant').length;
-
-        if (freshAssistantCount >= expectedParticipants) {
-          console.error(`[SSR] D1 consistent after ${i + 1} retries: ${freshAssistantCount} assistant msgs`);
-          return {
-            messages: transformMessages(freshMessages),
-            wasStale: true,
-            retryCount: i + 1,
-          };
-        }
-      }
-    } catch (error) {
-      console.error(`[SSR] Retry ${i + 1} failed:`, error);
-    }
-  }
-
-  // All retries exhausted - return what we have, transformed
-  console.error(`[SSR] D1 still stale after ${MAX_RETRIES} retries, proceeding with incomplete data`);
+  // Transform and return immediately - no retry logic
+  // Client-side TanStack Query will handle any stale data
   return {
     messages: transformMessages(currentMessages),
-    wasStale: true,
-    retryCount: MAX_RETRIES,
+    wasStale: false,
+    retryCount: 0,
   };
 }

@@ -32,6 +32,7 @@ import {
   MIN_MULTIPART_PART_SIZE,
 } from '@/api/core/enums';
 import {
+  backgroundPdfProcessing,
   createUploadTicket,
   deleteFile,
   deleteMultipartMetadata,
@@ -43,6 +44,7 @@ import {
   markTicketUsed,
   putFile,
   scheduleUploadCleanup,
+  shouldExtractPdfText,
   storeMultipartMetadata,
   validateMultipartOwnership,
   validateR2UploadId,
@@ -407,12 +409,12 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
     const uploadId = ulid();
     const r2Key = generateR2Key(user.id, uploadId, file.name);
 
-    // Upload to storage
-    const fileBuffer = await file.arrayBuffer();
+    // Upload to storage - use arrayBuffer for single uploads (< 100MB)
+    // R2 streams require known content-length which File.stream() doesn't provide
     const uploadResult = await putFile(
       c.env.UPLOADS_R2_BUCKET,
       r2Key,
-      fileBuffer,
+      await file.arrayBuffer(),
       {
         contentType: file.type,
         customMetadata: {
@@ -467,6 +469,24 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
         c.executionCtx.waitUntil(scheduleCleanupTask());
       } else {
         scheduleCleanupTask().catch(() => {});
+      }
+    }
+
+    // Process PDF text extraction SYNCHRONOUSLY to ensure text is ready before AI needs it
+    // Previously used waitUntil() which caused race conditions in production
+    if (shouldExtractPdfText(file.type, file.size) && c.env.UPLOADS_R2_BUCKET) {
+      try {
+        await backgroundPdfProcessing({
+          uploadId,
+          r2Key,
+          fileSize: file.size,
+          mimeType: file.type,
+          r2Bucket: c.env.UPLOADS_R2_BUCKET,
+          db,
+        });
+      } catch (error) {
+        // Log but don't fail upload - extraction is optional
+        console.error(`[Upload] PDF extraction failed for ${uploadId}:`, error);
       }
     }
 
@@ -1033,6 +1053,24 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
     const cleanupMetadata = deleteMultipartMetadata(c.env.KV, uploadId);
     if (c.executionCtx) {
       c.executionCtx.waitUntil(cleanupMetadata);
+    }
+
+    // Process PDF text extraction SYNCHRONOUSLY to ensure text is ready before AI needs it
+    // Previously used waitUntil() which caused race conditions in production
+    if (shouldExtractPdfText(uploadMeta.mimeType, uploadMeta.fileSize) && c.env.UPLOADS_R2_BUCKET) {
+      try {
+        await backgroundPdfProcessing({
+          uploadId,
+          r2Key: uploadMeta.r2Key,
+          fileSize: uploadMeta.fileSize,
+          mimeType: uploadMeta.mimeType,
+          r2Bucket: c.env.UPLOADS_R2_BUCKET,
+          db,
+        });
+      } catch (error) {
+        // Log but don't fail upload - extraction is optional
+        console.error(`[Multipart Upload] PDF extraction failed for ${uploadId}:`, error);
+      }
     }
 
     return Responses.ok(c, updated);

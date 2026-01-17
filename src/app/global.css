@@ -153,6 +153,7 @@
   }
 }
 
+/* TanStack Virtual: Disable scroll anchoring to prevent scroll position jumps during measurement */
 html,
 [data-virtualized-timeline],
 [data-virtualized-timeline] > div,
@@ -160,14 +161,15 @@ html,
   overflow-anchor: none;
 }
 
-[data-virtualized-timeline] {
-  contain: strict;
-}
-
-[data-virtualized-timeline] > div > div {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 200px;
-}
+/*
+ * REMOVED: contain: strict and content-visibility: auto
+ * These CSS properties conflict with TanStack Virtual's measurement system:
+ * - contain: strict includes 'size' containment which prevents dynamic height updates
+ * - content-visibility: auto is browser-level virtualization that conflicts with TanStack's item management
+ *
+ * TanStack Virtual handles its own containment and visibility - do not add CSS containment here.
+ * See: https://tanstack.com/virtual/latest/docs/introduction
+ */
 
 @keyframes collapsible-down {
   from {

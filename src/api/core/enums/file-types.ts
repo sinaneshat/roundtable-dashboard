@@ -102,6 +102,11 @@ export const ImageMimeTypeSchema = z.enum(IMAGE_MIME_TYPES).openapi({
 
 export type ImageMimeType = z.infer<typeof ImageMimeTypeSchema>;
 
+// ✅ Type guard: Check if MIME type is an image
+export function isImageMimeType(mimeType: unknown): mimeType is ImageMimeType {
+  return ImageMimeTypeSchema.safeParse(mimeType).success;
+}
+
 export const ImageMimeTypes = {
   PNG: 'image/png' as const,
   JPEG: 'image/jpeg' as const,
@@ -135,6 +140,11 @@ export const DocumentMimeTypeSchema = z.enum(DOCUMENT_MIME_TYPES).openapi({
 });
 
 export type DocumentMimeType = z.infer<typeof DocumentMimeTypeSchema>;
+
+// ✅ Type guard: Check if MIME type is a document (PDF, DOC, etc.)
+export function isDocumentMimeType(mimeType: unknown): mimeType is DocumentMimeType {
+  return DocumentMimeTypeSchema.safeParse(mimeType).success;
+}
 
 export const DocumentMimeTypes = {
   PDF: 'application/pdf' as const,
@@ -266,10 +276,30 @@ export const VisualMimeTypeSchema = z.enum(VISUAL_MIME_TYPES).openapi({
 
 export type VisualMimeType = z.infer<typeof VisualMimeTypeSchema>;
 
-const VISUAL_MIME_SET = new Set<string>(VISUAL_MIME_TYPES);
+export function isVisualMimeType(mimeType: unknown): mimeType is VisualMimeType {
+  return VisualMimeTypeSchema.safeParse(mimeType).success;
+}
 
-export function isVisualMimeType(mimeType: string): mimeType is VisualMimeType {
-  return VISUAL_MIME_SET.has(mimeType);
+// ============================================================================
+// AI MODEL PROCESSABLE MIME TYPES
+// All file types that should be converted to data URLs for AI consumption.
+// External AI providers cannot access localhost URLs, so ALL attachments
+// must be converted to base64 data URLs before sending to models.
+// ============================================================================
+
+export const AI_PROCESSABLE_MIME_TYPES = [
+  // Visual types (images + PDF)
+  ...IMAGE_MIME_TYPES,
+  'application/pdf',
+  // Text extractable types
+  ...TEXT_EXTRACTABLE_MIME_TYPES,
+] as const;
+
+// De-duplicated set for runtime checks
+export const AI_PROCESSABLE_MIME_SET = new Set<string>(AI_PROCESSABLE_MIME_TYPES);
+
+export function isAiProcessableMimeType(mimeType: string): boolean {
+  return AI_PROCESSABLE_MIME_SET.has(mimeType);
 }
 
 // ============================================================================
@@ -277,7 +307,7 @@ export function isVisualMimeType(mimeType: string): mimeType is VisualMimeType {
 // ============================================================================
 
 // 1. ARRAY CONSTANT - Source of truth
-export const INCOMPATIBILITY_REASONS = ['noVision'] as const;
+export const INCOMPATIBILITY_REASONS = ['noVision', 'noFileSupport'] as const;
 
 // 2. DEFAULT VALUE
 export const DEFAULT_INCOMPATIBILITY_REASON: IncompatibilityReason = 'noVision';
@@ -294,6 +324,7 @@ export type IncompatibilityReason = z.infer<typeof IncompatibilityReasonSchema>;
 // 5. CONSTANT OBJECT - For usage in code (prevents typos)
 export const IncompatibilityReasons = {
   NO_VISION: 'noVision' as const,
+  NO_FILE_SUPPORT: 'noFileSupport' as const,
 } as const;
 
 // ============================================================================
@@ -347,6 +378,36 @@ export const RECOMMENDED_PART_SIZE = 10 * 1024 * 1024;
 export const MAX_TOTAL_FILE_SIZE = 5 * 1024 * 1024 * 1024;
 export const MAX_FILENAME_LENGTH = 255;
 export const MAX_MULTIPART_PARTS = 10000;
+
+/**
+ * Threshold for switching from base64 to URL-based file delivery.
+ *
+ * Files at or below this size use base64 encoding (fast, reliable).
+ * Files above this size use signed public URLs for AI provider access.
+ *
+ * This limit exists because base64 encoding requires significant memory
+ * in Cloudflare Workers (128MB limit):
+ * - 4MB file → ~5.3MB base64 string (33% larger)
+ * - Plus Uint8Array copy: ~4MB
+ * - Plus ArrayBuffer: ~4MB
+ * - Total per file: ~13.3MB
+ *
+ * @see MAX_BASE64_FILE_SIZE in src/api/types/uploads.ts (backend equivalent)
+ */
+export const URL_FILE_SIZE_THRESHOLD = 4 * 1024 * 1024; // 4MB
+
+/**
+ * Maximum image file size when using URL-based delivery.
+ * AI providers (OpenAI, Anthropic, Google) can fetch images from URLs.
+ * ChatGPT supports ~20MB images.
+ */
+export const MAX_IMAGE_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+
+/**
+ * Maximum PDF file size when using URL-based delivery.
+ * AI providers can fetch PDFs from URLs for document analysis.
+ */
+export const MAX_PDF_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
 // ============================================================================
 // UPLOAD STATUS (Frontend Upload Lifecycle)
@@ -471,6 +532,7 @@ export const FileCategories = {
 
 export const FILE_VALIDATION_ERROR_CODES = [
   'file_too_large',
+  'visual_file_too_large',
   'invalid_type',
   'empty_file',
   'filename_too_long',
@@ -485,6 +547,7 @@ export type FileValidationErrorCode = z.infer<typeof FileValidationErrorCodeSche
 
 export const FileValidationErrorCodes = {
   FILE_TOO_LARGE: 'file_too_large' as const,
+  VISUAL_FILE_TOO_LARGE: 'visual_file_too_large' as const,
   INVALID_TYPE: 'invalid_type' as const,
   EMPTY_FILE: 'empty_file' as const,
   FILENAME_TOO_LONG: 'filename_too_long' as const,
@@ -562,4 +625,71 @@ export function getPreviewTypeFromMime(mimeType: string): FilePreviewType {
   if (CODE_MIMES.includes(mimeType))
     return FilePreviewTypes.CODE;
   return FilePreviewTypes.UNKNOWN;
+}
+
+// ============================================================================
+// FILE TYPE COLOR (UI color classification for file type badges)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const FILE_TYPE_COLORS = [
+  'red',
+  'purple',
+  'yellow',
+  'blue',
+  'zinc',
+] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_FILE_TYPE_COLOR: FileTypeColor = 'zinc';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const FileTypeColorSchema = z.enum(FILE_TYPE_COLORS).openapi({
+  description: 'Tailwind color name for file type badge background',
+  example: 'blue',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type FileTypeColor = z.infer<typeof FileTypeColorSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const FileTypeColors = {
+  RED: 'red' as const,
+  PURPLE: 'purple' as const,
+  YELLOW: 'yellow' as const,
+  BLUE: 'blue' as const,
+  ZINC: 'zinc' as const,
+} as const;
+
+// 6️⃣ CSS CLASS MAPPING - Tailwind background classes for each color
+export const FILE_TYPE_COLOR_CLASSES: Record<FileTypeColor, string> = {
+  [FileTypeColors.RED]: 'bg-red-500',
+  [FileTypeColors.PURPLE]: 'bg-purple-500',
+  [FileTypeColors.YELLOW]: 'bg-yellow-500',
+  [FileTypeColors.BLUE]: 'bg-blue-500',
+  [FileTypeColors.ZINC]: 'bg-zinc-600',
+};
+
+/**
+ * Get Tailwind color name for file type badge
+ * SINGLE SOURCE OF TRUTH for file type color classification
+ */
+export function getFileTypeColor(mimeType: string): FileTypeColor {
+  if (mimeType === DocumentMimeTypes.PDF)
+    return FileTypeColors.RED;
+  if (IMAGE_MIMES.includes(mimeType))
+    return FileTypeColors.PURPLE;
+  if (mimeType.startsWith('text/javascript') || mimeType.startsWith('application/javascript'))
+    return FileTypeColors.YELLOW;
+  if (mimeType.startsWith('text/') || mimeType.includes('json'))
+    return FileTypeColors.BLUE;
+  return FileTypeColors.ZINC;
+}
+
+/**
+ * Get Tailwind CSS background class for file type badge
+ * Combines getFileTypeColor with class mapping for convenience
+ */
+export function getFileTypeColorClass(mimeType: string): string {
+  return FILE_TYPE_COLOR_CLASSES[getFileTypeColor(mimeType)];
 }

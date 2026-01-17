@@ -15,7 +15,8 @@ import {
 } from '@/components/seo';
 import { LiquidGlassFilters } from '@/components/ui/liquid-glass-filters';
 import { BRAND } from '@/constants';
-import { cn, spaceGrotesk } from '@/lib/ui';
+import { cn } from '@/lib/ui/cn';
+import { spaceGrotesk } from '@/lib/ui/fonts';
 import { createMetadata } from '@/utils';
 
 export const viewport: Viewport = {
@@ -35,22 +36,22 @@ export async function generateMetadata(): Promise<Metadata> {
     title: `${BRAND.fullName} - ${BRAND.tagline}`,
     description: BRAND.description,
     keywords: [
-      t('aiCollaboration'),
-      t('multipleAiModels'),
-      t('brainstorming'),
+      t('agenticAi'),
+      t('multiAgentAi'),
+      t('aiCouncil'),
+      t('llmCouncil'),
+      t('aiDebate'),
+      t('aiConsensus'),
+      t('aiOrchestration'),
+      t('collectiveAiIntelligence'),
+      t('collaborativeAiReasoning'),
+      t('multiAgentSystem'),
+      t('aiAgents'),
       t('chatgpt'),
       t('claude'),
       t('gemini'),
       t('gpt4'),
-      t('compareAi'),
-      t('multiModelChat'),
-      t('aiDebate'),
       t('aiProblemSolving'),
-      t('bestAiChat'),
-      t('chatWithMultipleAi'),
-      t('aiComparisonTool'),
-      t('aiChat'),
-      t('collaborativeAi'),
       BRAND.name,
     ],
   });
@@ -82,14 +83,21 @@ export default async function Layout({ children }: { children: React.ReactNode }
           primaryAnswer={tAeo('primaryAnswer')}
           contentType={contentType}
           entities={[
+            tAeo('relatedQuestions.whatIsAgenticAi'),
+            tAeo('relatedQuestions.vsChatGpt'),
+            tAeo('relatedQuestions.multiAgent'),
             tAeo('relatedQuestions.howItWorks'),
-            tAeo('relatedQuestions.benefits'),
-            tAeo('relatedQuestions.howToUse', { brand: BRAND.displayName }),
+            tAeo('relatedQuestions.aiConsensus'),
+            tAeo('relatedQuestions.vsLlmCouncil'),
           ]}
           relatedQuestions={[
+            tAeo('relatedQuestions.whatIsAgenticAi'),
+            tAeo('relatedQuestions.vsChatGpt'),
+            tAeo('relatedQuestions.multiAgent'),
             tAeo('relatedQuestions.howItWorks'),
             tAeo('relatedQuestions.benefits'),
-            tAeo('relatedQuestions.howToUse', { brand: BRAND.displayName }),
+            tAeo('relatedQuestions.aiConsensus'),
+            tAeo('relatedQuestions.whatProblemsCanSolve'),
           ]}
         />
       </head>
@@ -99,12 +107,12 @@ export default async function Layout({ children }: { children: React.ReactNode }
         <SoftwareApplicationSchema
           baseUrl={baseUrl}
           features={[
-            tFeatures('multiModelCollaboration'),
-            tFeatures('realtimeChat'),
-            tFeatures('sessionManagement'),
+            tFeatures('contextAwareCollaboration'),
+            tFeatures('aiDebateDeliberation'),
+            tFeatures('multiModelSynthesis'),
+            tFeatures('collaborativeReasoning'),
+            tFeatures('realtimeConvergence'),
             tFeatures('publicSharing'),
-            tFeatures('usageTracking'),
-            tFeatures('multipleParticipants'),
           ]}
         />
         {env.NEXT_PUBLIC_WEBAPP_ENV !== 'local' && (

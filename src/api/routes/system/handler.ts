@@ -1,12 +1,15 @@
 import type { RouteHandler } from '@hono/zod-openapi';
+import { and, eq } from 'drizzle-orm';
 
+import { runBenchmarkSuite } from '@/api/common/benchmark';
 import { createHandler, Responses } from '@/api/core';
-import { HealthStatuses } from '@/api/core/enums';
+import { CreditActions, HealthStatuses, StripeSubscriptionStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
+import * as tables from '@/db';
 import { STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
 
-import type { clearCacheRoute, detailedHealthRoute, healthRoute } from './route';
+import type { benchmarkRoute, clearCacheRoute, detailedHealthRoute, healthRoute } from './route';
 import type { HealthCheckContext } from './schema';
 
 /**
@@ -121,6 +124,7 @@ function checkEnvironment(c: HealthCheckContext) {
 /**
  * Clear all backend caches handler
  * Invalidates all known cache tags to force fresh data
+ * NOTE: Route only registered in preview/local environments (see api/index.ts)
  */
 export const clearCacheHandler: RouteHandler<typeof clearCacheRoute, ApiEnv> = createHandler(
   {
@@ -165,5 +169,139 @@ export const clearCacheHandler: RouteHandler<typeof clearCacheRoute, ApiEnv> = c
         `Failed to clear caches: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
+  },
+);
+
+/**
+ * Database query benchmark handler
+ * Runs common queries and measures execution time
+ * NOTE: Route only registered in preview/local environments (see api/index.ts)
+ */
+export const benchmarkHandler: RouteHandler<typeof benchmarkRoute, ApiEnv> = createHandler(
+  {
+    auth: 'public',
+    operationName: 'benchmark',
+  },
+  async (c) => {
+    const db = await getDbAsync();
+
+    // Use a test user ID for benchmarks (won't affect real data)
+    const testUserId = 'benchmark-test-user-id';
+
+    const suite = await runBenchmarkSuite([
+      // Basic query - SELECT 1
+      {
+        name: 'SELECT 1 (baseline)',
+        fn: async () => {
+          await db.run('SELECT 1');
+        },
+        iterations: 5,
+      },
+
+      // User credit balance lookup
+      {
+        name: 'userCreditBalance lookup',
+        fn: async () => {
+          await db
+            .select()
+            .from(tables.userCreditBalance)
+            .where(eq(tables.userCreditBalance.userId, testUserId))
+            .limit(1);
+        },
+        iterations: 5,
+      },
+
+      // User chat usage lookup
+      {
+        name: 'userChatUsage lookup',
+        fn: async () => {
+          await db
+            .select()
+            .from(tables.userChatUsage)
+            .where(eq(tables.userChatUsage.userId, testUserId))
+            .limit(1);
+        },
+        iterations: 5,
+      },
+
+      // Stripe customer lookup
+      {
+        name: 'stripeCustomer lookup',
+        fn: async () => {
+          await db
+            .select()
+            .from(tables.stripeCustomer)
+            .where(eq(tables.stripeCustomer.userId, testUserId))
+            .limit(1);
+        },
+        iterations: 5,
+      },
+
+      // Stripe subscription with JOIN
+      {
+        name: 'stripeCustomer+subscription JOIN',
+        fn: async () => {
+          await db
+            .select()
+            .from(tables.stripeCustomer)
+            .leftJoin(
+              tables.stripeSubscription,
+              and(
+                eq(tables.stripeSubscription.customerId, tables.stripeCustomer.id),
+                eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
+              ),
+            )
+            .where(eq(tables.stripeCustomer.userId, testUserId))
+            .limit(1);
+        },
+        iterations: 5,
+      },
+
+      // Credit transaction lookup (indexed)
+      {
+        name: 'creditTransaction lookup (indexed)',
+        fn: async () => {
+          await db
+            .select()
+            .from(tables.creditTransaction)
+            .where(
+              and(
+                eq(tables.creditTransaction.userId, testUserId),
+                eq(tables.creditTransaction.action, CreditActions.FREE_ROUND_COMPLETE),
+              ),
+            )
+            .limit(1);
+        },
+        iterations: 5,
+      },
+
+      // Chat thread lookup
+      {
+        name: 'chatThread lookup',
+        fn: async () => {
+          await db
+            .select()
+            .from(tables.chatThread)
+            .where(eq(tables.chatThread.userId, testUserId))
+            .limit(1);
+        },
+        iterations: 5,
+      },
+
+      // Thread list (common sidebar query)
+      {
+        name: 'chatThread list (limit 50)',
+        fn: async () => {
+          await db
+            .select()
+            .from(tables.chatThread)
+            .where(eq(tables.chatThread.userId, testUserId))
+            .limit(50);
+        },
+        iterations: 3,
+      },
+    ]);
+
+    return Responses.ok(c, suite);
   },
 );

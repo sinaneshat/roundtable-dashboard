@@ -1,4 +1,5 @@
 import { BRAND } from '@/constants';
+import { APP_VERSION } from '@/constants/version';
 
 // Stable default values to prevent re-renders
 const DEFAULT_FEATURES = [
@@ -68,7 +69,7 @@ export function SoftwareApplicationSchema(props: SoftwareApplicationSchemaProps)
     baseUrl = 'https://roundtable.now',
     name = BRAND.fullName,
     description = BRAND.description,
-    version = '1.0.0',
+    version = APP_VERSION,
     price = 0,
     currency = 'USD',
     ratingValue,

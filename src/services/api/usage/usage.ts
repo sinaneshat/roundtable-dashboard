@@ -41,8 +41,15 @@ export type GetUsageStatsResponse = InferResponseType<
  *
  * @param options - Service options
  * @param options.bypassCache - If true, bypasses HTTP cache to get fresh data
+ * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
-export async function getUserUsageStatsService(options?: { bypassCache?: boolean }) {
-  const client = await createApiClient({ bypassCache: options?.bypassCache });
+export async function getUserUsageStatsService(options?: {
+  bypassCache?: boolean;
+  cookieHeader?: string;
+}) {
+  const client = await createApiClient({
+    bypassCache: options?.bypassCache,
+    cookieHeader: options?.cookieHeader,
+  });
   return parseResponse(client.usage.stats.$get());
 }

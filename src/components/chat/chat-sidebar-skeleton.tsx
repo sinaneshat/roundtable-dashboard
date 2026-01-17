@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/sidebar';
 import { cn } from '@/lib/ui/cn';
 
-const SKELETON_WIDTHS = ['70%', '55%', '85%', '45%', '65%', '78%', '52%', '62%', '48%', '73%', '58%', '80%', '42%', '67%', '54%'];
+const SIDEBAR_SKELETON_WIDTHS = ['70%', '55%', '85%', '45%', '65%', '78%', '52%', '62%', '48%', '73%', '58%', '80%', '42%', '67%', '54%'];
 export function SidebarThreadSkeletons({
   count = 7,
   animated = false,
@@ -28,7 +28,7 @@ export function SidebarThreadSkeletons({
       aria-hidden="true"
     >
       {Array.from({ length: count }, (_, i) => {
-        const widthIndex = i % SKELETON_WIDTHS.length;
+        const widthIndex = i % SIDEBAR_SKELETON_WIDTHS.length;
         const opacity = i < 4 ? 1 : i < 5 ? 0.7 : i < 6 ? 0.5 : 0.3;
 
         return (
@@ -39,7 +39,7 @@ export function SidebarThreadSkeletons({
               animated && 'animate-pulse',
             )}
             style={{
-              width: SKELETON_WIDTHS[widthIndex],
+              width: SIDEBAR_SKELETON_WIDTHS[widthIndex],
               opacity,
             }}
           />

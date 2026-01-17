@@ -37,6 +37,20 @@ export const CitableSourceMetadataSchema = z.object({
   mimeType: z.string().optional(),
   /** File size in bytes for attachments */
   fileSize: z.number().optional(),
+  /** Domain for search results */
+  domain: z.string().optional(),
+  /** Published date for search results */
+  publishedDate: z.string().optional(),
+  /** Search query that returned this result */
+  query: z.string().optional(),
+  /** Author of content */
+  author: z.string().optional(),
+  /** Word count */
+  wordCount: z.number().optional(),
+  /** Reading time in minutes */
+  readingTime: z.number().optional(),
+  /** Description/excerpt */
+  description: z.string().optional(),
 });
 
 export type CitableSourceMetadata = z.infer<typeof CitableSourceMetadataSchema>;
@@ -99,19 +113,45 @@ export const CitableContextResultSchema = z.object({
 
 export type CitableContextResult = z.infer<typeof CitableContextResultSchema>;
 
-// AvailableCitationSourceType uses array constant pattern
+// ============================================================================
+// AVAILABLE CITATION SOURCE TYPE ENUM (5-PART PATTERN)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const AVAILABLE_CITATION_SOURCE_TYPES = ['github', 'file'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_AVAILABLE_CITATION_SOURCE_TYPE: AvailableCitationSourceType = 'file';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const AvailableCitationSourceTypeSchema = z.enum(AVAILABLE_CITATION_SOURCE_TYPES);
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type AvailableCitationSourceType = z.infer<typeof AvailableCitationSourceTypeSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const AvailableCitationSourceTypes = {
+  GITHUB: 'github' as const,
+  FILE: 'file' as const,
+} as const;
 
 export const AvailableSourceSchema = z.object({
   id: z.string(),
   sourceType: CitationSourceTypeSchema,
   title: z.string(),
+  // Attachment-specific fields
   downloadUrl: z.string().optional(),
   filename: z.string().optional(),
   mimeType: z.string().optional(),
   fileSize: z.number().optional(),
+  // Search-specific fields
+  url: z.string().optional(),
+  domain: z.string().optional(),
+  // Context fields
+  threadTitle: z.string().optional(),
+  description: z.string().optional(),
+  /** Content excerpt/quote for citation display */
+  excerpt: z.string().optional(),
 });
 
 /** Available source for citation UI */

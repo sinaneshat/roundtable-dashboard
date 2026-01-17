@@ -35,6 +35,7 @@ export function useSubscriptionsQuery() {
     gcTime: 5 * 60 * 1000, // 5 minutes - keep in memory for instant UI
     enabled: isAuthenticated,
     retry: false,
+    throwOnError: false,
   });
 }
 
@@ -56,5 +57,6 @@ export function useSubscriptionQuery(subscriptionId: string) {
     gcTime: 5 * 60 * 1000, // 5 minutes - keep in memory for instant UI
     enabled: isAuthenticated && !!subscriptionId,
     retry: false,
+    throwOnError: false,
   });
 }

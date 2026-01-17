@@ -21,7 +21,10 @@ import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 type AutoModeAnalysisOptions = {
   prompt: string;
-  hasVisualFiles?: boolean;
+  /** ✅ GRANULAR: Whether image files are attached - requires supports_vision */
+  hasImageFiles?: boolean;
+  /** ✅ GRANULAR: Whether document files (PDFs, DOC, etc.) are attached - requires supports_file */
+  hasDocumentFiles?: boolean;
   /**
    * Set of model IDs accessible to the user from the client's models API.
    * Used to filter server response - prevents setting participants that would
@@ -69,12 +72,12 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
   })));
 
   const analyzeAndApply = useCallback(async (options: AutoModeAnalysisOptions): Promise<boolean> => {
-    const { prompt, hasVisualFiles = false, accessibleModelIds } = options;
+    const { prompt, hasImageFiles = false, hasDocumentFiles = false, accessibleModelIds } = options;
 
     chatStoreActions.setIsAnalyzingPrompt(true);
 
     try {
-      const result = await streamConfig({ prompt, hasVisualFiles });
+      const result = await streamConfig({ prompt, hasImageFiles, hasDocumentFiles });
 
       if (result) {
         const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;

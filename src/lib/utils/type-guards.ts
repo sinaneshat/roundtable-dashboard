@@ -7,6 +7,8 @@
 
 import type { z } from 'zod';
 
+import { MessagePartTypes } from '@/api/core/enums';
+
 // ============================================================================
 // BASIC TYPE GUARDS
 // ============================================================================
@@ -29,6 +31,13 @@ export function isStringRecord(value: unknown): value is Record<string, string> 
 
 export function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
+}
+
+/**
+ * Check if value is a valid ErrorCode enum value
+ */
+export function isValidErrorCode(code: string, validCodes: readonly string[]): boolean {
+  return validCodes.includes(code);
 }
 
 export function isNumber(value: unknown): value is number {
@@ -114,9 +123,9 @@ export function hasShape<T extends Record<string, unknown>>(
 
 export function isTextPart(
   value: unknown,
-): value is { type: 'text'; text: string } {
+): value is { type: typeof MessagePartTypes.TEXT; text: string } {
   return hasShape(value, {
-    type: (v): v is 'text' => v === 'text',
+    type: (v): v is typeof MessagePartTypes.TEXT => v === MessagePartTypes.TEXT,
     text: isNonEmptyString,
   });
 }

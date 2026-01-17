@@ -76,6 +76,30 @@ export const HealthStatuses = {
 } as const;
 
 // ============================================================================
+// HEALTH CHECK DETAIL TYPE
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const HEALTH_CHECK_DETAIL_TYPES = ['health_check'] as const;
+
+// 2. ZOD SCHEMA
+export const HealthCheckDetailTypeSchema = z.enum(HEALTH_CHECK_DETAIL_TYPES).openapi({
+  description: 'Type discriminator for health check details',
+  example: 'health_check',
+});
+
+// 3. TYPESCRIPT TYPE
+export type HealthCheckDetailType = z.infer<typeof HealthCheckDetailTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_HEALTH_CHECK_DETAIL_TYPE: HealthCheckDetailType = 'health_check';
+
+// 5. CONSTANT OBJECT
+export const HealthCheckDetailTypes = {
+  HEALTH_CHECK: 'health_check' as const,
+} as const;
+
+// ============================================================================
 // ENVIRONMENT
 // ============================================================================
 
@@ -216,7 +240,7 @@ export const OgTypes = {
 } as const;
 
 export function isValidOgType(value: unknown): value is OgType {
-  return typeof value === 'string' && OG_TYPES.includes(value as OgType);
+  return OgTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -429,7 +453,7 @@ export const CircuitBreakerStates = {
 } as const;
 
 export function isCircuitBreakerState(value: unknown): value is CircuitBreakerState {
-  return typeof value === 'string' && CIRCUIT_BREAKER_STATES.includes(value as CircuitBreakerState);
+  return CircuitBreakerStateSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -470,4 +494,31 @@ export const DATE_FORMAT_VARIANT_OPTIONS: Record<DateFormatVariant, Intl.DateTim
   [DateFormatVariants.SHORT]: { year: 'numeric', month: 'short', day: 'numeric' },
   [DateFormatVariants.MEDIUM]: { year: 'numeric', month: 'long', day: 'numeric' },
   [DateFormatVariants.LONG]: { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' },
+} as const;
+
+// ============================================================================
+// TASK PRIORITY
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_TASK_PRIORITY: TaskPriority = 'medium';
+
+// 3. ZOD SCHEMA
+export const TaskPrioritySchema = z.enum(TASK_PRIORITIES).openapi({
+  description: 'Task priority level',
+  example: 'medium',
+});
+
+// 4. TYPESCRIPT TYPE
+export type TaskPriority = z.infer<typeof TaskPrioritySchema>;
+
+// 5. CONSTANT OBJECT
+export const TaskPriorities = {
+  LOW: 'low' as const,
+  MEDIUM: 'medium' as const,
+  HIGH: 'high' as const,
+  URGENT: 'urgent' as const,
 } as const;

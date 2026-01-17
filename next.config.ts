@@ -28,6 +28,12 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: !isProd,
   experimental: {
+    // Turbopack filesystem caching - faster dev restarts
+    turbopackFileSystemCacheForDev: true,
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
     optimizePackageImports: [
       // Icons
       'lucide-react',
@@ -45,7 +51,7 @@ const nextConfig: NextConfig = {
       // State Management
       'zustand',
       '@tanstack/react-query',
-      '@tanstack/react-virtual',
+      // NOTE: @tanstack/react-virtual removed - tree-shaking breaks internal module refs
       // Form/Validation
       'zod',
       'react-hook-form',

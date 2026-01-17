@@ -65,6 +65,7 @@ function getThreadActiveStreamKey(threadId: string): string {
  *
  * ✅ RESUMABLE STREAMS: AI SDK pattern - track active round with all participants
  * ✅ FIX: Now tracks round-level state for proper multi-participant resumption
+ * ✅ FIX: Now stores attachmentIds for sharing across all participants in the round
  *
  * @param threadId - Thread ID
  * @param streamId - Stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})
@@ -73,6 +74,7 @@ function getThreadActiveStreamKey(threadId: string): string {
  * @param totalParticipants - Total number of participants in this round
  * @param env - Cloudflare environment bindings
  * @param logger - Optional logger
+ * @param attachmentIds - Optional attachment IDs to share with subsequent participants
  */
 export async function setThreadActiveStream(
   threadId: string,
@@ -82,6 +84,7 @@ export async function setThreadActiveStream(
   totalParticipants: number,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
+  attachmentIds?: string[],
 ): Promise<void> {
   // ✅ LOCAL DEV: Skip tracking if KV not available
   if (!env?.KV) {
@@ -110,6 +113,8 @@ export async function setThreadActiveStream(
       createdAt: existing?.roundNumber === roundNumber ? existing.createdAt : new Date().toISOString(),
       totalParticipants,
       participantStatuses,
+      // ✅ FIX: Store attachmentIds - preserve from existing if not provided (for P1+)
+      attachmentIds: attachmentIds ?? existing?.attachmentIds,
     };
 
     await env.KV.put(

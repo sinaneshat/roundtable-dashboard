@@ -188,6 +188,13 @@ const OperationLogContextSchema = z.object({
   totalParticipants: z.number().int().nonnegative().optional(),
   participantStatuses: z.record(z.string(), z.string()).optional(),
   finishedCount: z.number().int().nonnegative().optional(),
+  // Round orchestration properties
+  completedParticipants: z.number().int().nonnegative().optional(),
+  failedParticipants: z.number().int().nonnegative().optional(),
+  allParticipantsComplete: z.boolean().optional(),
+  completedIndices: z.array(z.number()).optional(),
+  activeIndices: z.array(z.number()).optional(),
+  incompleteIndices: z.array(z.number()).optional(),
   // Streaming orchestration properties
   messageIdsToCheck: z.array(z.string()).optional(),
   totalPreviousMessages: z.number().int().nonnegative().optional(),

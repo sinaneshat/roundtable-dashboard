@@ -744,7 +744,7 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       // Verify user message is available in messages for query extraction
       const state = store.getState();
       const round1UserMessages = state.messages.filter(
-        m => m.role === 'user'
+        m => m.role === MessageRoles.USER
           && m.metadata
           && typeof m.metadata === 'object'
           && 'roundNumber' in m.metadata
@@ -1168,7 +1168,7 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       // No round 1 user message in messages array
       const state = store.getState();
       const round1UserMsgs = state.messages.filter(
-        m => m.role === 'user'
+        m => m.role === MessageRoles.USER
           && m.metadata
           && typeof m.metadata === 'object'
           && 'roundNumber' in m.metadata

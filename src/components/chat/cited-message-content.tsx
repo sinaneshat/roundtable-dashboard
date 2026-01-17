@@ -3,32 +3,25 @@
 /**
  * CitedMessageContent Component
  *
- * Renders AI response text with inline citations. Parses the text for citation
- * markers (e.g., [mem_abc123]) and renders them as interactive citation badges
- * that show source details on hover.
- *
- * This component wraps Streamdown to preserve markdown rendering while adding
- * citation support.
+ * Renders AI response text with citations stripped from inline text and shown
+ * in a unified Sources tooltip at the end of the response. Uses carousel
+ * navigation for browsing multiple sources.
  *
  * @module components/chat/cited-message-content
  */
 
 import { useMemo } from 'react';
+import Markdown from 'react-markdown';
 import { Streamdown } from 'streamdown';
 
 import { CitationSegmentTypes } from '@/api/core/enums';
+import type { AvailableSource } from '@/api/types/citations';
 import type { DbCitation } from '@/db/schemas/chat-metadata';
 import { cn } from '@/lib/ui/cn';
 import { parseCitations } from '@/lib/utils';
 
-import {
-  InlineCitation,
-  InlineCitationCard,
-  InlineCitationCardBody,
-  InlineCitationCardTrigger,
-  InlineCitationQuote,
-  InlineCitationSource,
-} from '../ai-elements/inline-citation';
+import type { SourceData } from '../ai-elements/inline-citation';
+import { SourcesFooter } from '../ai-elements/inline-citation';
 import { streamdownComponents } from '../markdown/unified-markdown-components';
 
 // ============================================================================
@@ -40,10 +33,14 @@ export type CitedMessageContentProps = {
   text: string;
   /** Optional resolved citation data from message metadata */
   citations?: DbCitation[];
+  /** Optional available sources for fallback during streaming (before citations are resolved) */
+  availableSources?: AvailableSource[];
   /** Whether the message is currently streaming */
   isStreaming?: boolean;
   /** Additional class name for the wrapper */
   className?: string;
+  /** Skip transitions and use SSR-friendly rendering (ReactMarkdown instead of Streamdown) */
+  skipTransitions?: boolean;
 };
 
 // ============================================================================
@@ -51,27 +48,25 @@ export type CitedMessageContentProps = {
 // ============================================================================
 
 /**
- * Renders message content with inline citations
+ * Renders message content with citations shown in a unified footer
  *
- * Citations are ALWAYS parsed and rendered as interactive badges, even during
- * streaming. During streaming, badges show with basic info (display number,
- * source type). After streaming completes, resolved metadata (title, excerpt,
- * download URL) is available for full citation cards.
- *
- * If citations array is not provided, the component will parse the text and
- * render basic citation badges without resolved source data.
+ * Citations markers are stripped from text and all sources are displayed
+ * in a single Sources tooltip at the end of the response with carousel navigation.
  */
 export function CitedMessageContent({
   text,
   citations,
+  availableSources,
   isStreaming: _isStreaming = false,
   className,
+  skipTransitions = false,
 }: CitedMessageContentProps) {
   const parsedResult = useMemo(
     () => parseCitations(text),
     [text],
   );
 
+  // Build citation map from resolved citations
   const citationMap = useMemo(() => {
     if (!citations) {
       return new Map<string, DbCitation>();
@@ -79,112 +74,107 @@ export function CitedMessageContent({
     return new Map(citations.map(c => [c.id, c]));
   }, [citations]);
 
-  if (parsedResult.citations.length === 0) {
+  // Build fallback map from availableSources (for during streaming before citations are resolved)
+  const availableSourceMap = useMemo(() => {
+    if (!availableSources) {
+      return new Map<string, AvailableSource>();
+    }
+    return new Map(availableSources.map(s => [s.id, s]));
+  }, [availableSources]);
+
+  // Strip citation markers and collect source data
+  const { plainText, sourceData } = useMemo(() => {
+    // Join all text segments, ignoring citation markers
+    const textParts: string[] = [];
+    const sources: SourceData[] = [];
+    const seenIds = new Set<string>();
+
+    for (const segment of parsedResult.segments) {
+      if (segment.type === CitationSegmentTypes.TEXT) {
+        textParts.push(segment.content);
+      } else if (segment.type === CitationSegmentTypes.CITATION) {
+        const { citation } = segment;
+
+        // Skip duplicates
+        if (seenIds.has(citation.sourceId))
+          continue;
+        seenIds.add(citation.sourceId);
+
+        const resolvedCitation = citationMap.get(citation.sourceId);
+        const fallbackSource = availableSourceMap.get(citation.sourceId);
+
+        sources.push({
+          id: citation.sourceId,
+          sourceType: citation.sourceType,
+          // ✅ REQUIRED FIELD: AvailableSource.title is required per Zod schema
+          title: resolvedCitation?.title || fallbackSource?.title || citation.sourceId,
+          url: resolvedCitation?.url || fallbackSource?.url,
+          description: fallbackSource?.description,
+          // ✅ FIX: Use excerpt from resolved citation OR fallback source for quote display
+          excerpt: resolvedCitation?.excerpt || fallbackSource?.excerpt,
+          downloadUrl: resolvedCitation?.downloadUrl || fallbackSource?.downloadUrl,
+          filename: resolvedCitation?.filename || fallbackSource?.filename,
+          mimeType: resolvedCitation?.mimeType || fallbackSource?.mimeType,
+          fileSize: resolvedCitation?.fileSize || fallbackSource?.fileSize,
+          threadTitle: resolvedCitation?.threadTitle || fallbackSource?.threadTitle,
+        });
+      }
+    }
+
+    return {
+      plainText: textParts.join(''),
+      sourceData: sources,
+    };
+  }, [parsedResult, citationMap, availableSourceMap]);
+
+  // ✅ FIX: Show availableSources even when AI didn't include inline citations
+  // This happens when pre-search ran but AI wasn't instructed to cite sources
+  const fallbackSources = useMemo((): SourceData[] => {
+    if (sourceData.length > 0 || !availableSources || availableSources.length === 0) {
+      return [];
+    }
+    return availableSources.map(s => ({
+      id: s.id,
+      sourceType: s.sourceType,
+      title: s.title,
+      url: s.url,
+      description: s.description,
+      excerpt: s.excerpt,
+      downloadUrl: s.downloadUrl,
+      filename: s.filename,
+      mimeType: s.mimeType,
+      fileSize: s.fileSize,
+      threadTitle: s.threadTitle,
+    }));
+  }, [sourceData.length, availableSources]);
+
+  // Final sources: use parsed citations if available, otherwise fallback to availableSources
+  const finalSources = sourceData.length > 0 ? sourceData : fallbackSources;
+
+  // Helper to render markdown with SSR support
+  const renderMarkdown = (content: string) => {
+    if (skipTransitions) {
+      return <Markdown components={streamdownComponents}>{content}</Markdown>;
+    }
+    return <Streamdown components={streamdownComponents}>{content}</Streamdown>;
+  };
+
+  // No citations and no available sources - render plain markdown
+  if (finalSources.length === 0) {
     return (
       <div dir="auto" className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
-        <Streamdown components={streamdownComponents}>
-          {text}
-        </Streamdown>
+        {renderMarkdown(text)}
       </div>
     );
   }
 
+  // Render text with unified Sources footer
+  // Use plainText (with citations stripped) if inline citations were found, otherwise original text
+  const displayText = sourceData.length > 0 ? plainText : text;
   return (
     <div dir="auto" className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
-      {parsedResult.segments.map((segment) => {
-        if (segment.type === CitationSegmentTypes.TEXT) {
-          const textKey = `text-${segment.content.slice(0, 20).replace(/\W/g, '')}-${segment.content.length}`;
-          return (
-            <Streamdown
-              key={textKey}
-              components={streamdownComponents}
-            >
-              {segment.content}
-            </Streamdown>
-          );
-        }
-
-        if (segment.type !== CitationSegmentTypes.CITATION) {
-          return null;
-        }
-        const { citation } = segment;
-        const resolvedCitation = citationMap.get(citation.sourceId);
-        const citationKey = `citation-${citation.sourceId}-${citation.displayNumber}`;
-
-        return (
-          <InlineCitation key={citationKey}>
-            <InlineCitationCard>
-              <InlineCitationCardTrigger
-                displayNumber={citation.displayNumber}
-                sourceType={citation.sourceType}
-              />
-              <InlineCitationCardBody>
-                <InlineCitationSource
-                  title={resolvedCitation?.title || citation.sourceId}
-                  sourceType={citation.sourceType}
-                  description={resolvedCitation?.excerpt}
-                  url={resolvedCitation?.url}
-                  threadTitle={resolvedCitation?.threadTitle}
-                  // Attachment-specific props
-                  downloadUrl={resolvedCitation?.downloadUrl}
-                  filename={resolvedCitation?.filename}
-                  mimeType={resolvedCitation?.mimeType}
-                  fileSize={resolvedCitation?.fileSize}
-                />
-                {resolvedCitation?.excerpt && (
-                  <InlineCitationQuote>
-                    {resolvedCitation.excerpt}
-                  </InlineCitationQuote>
-                )}
-              </InlineCitationCardBody>
-            </InlineCitationCard>
-          </InlineCitation>
-        );
-      })}
+      {renderMarkdown(displayText)}
+      <SourcesFooter sources={finalSources} />
     </div>
-  );
-}
-
-// ============================================================================
-// Simple Citation Badge (for use outside full CitedMessageContent)
-// ============================================================================
-
-export type SimpleCitationBadgeProps = {
-  citation: DbCitation;
-  className?: string;
-};
-
-/**
- * A standalone citation badge for simple use cases
- */
-export function SimpleCitationBadge({ citation, className }: SimpleCitationBadgeProps) {
-  return (
-    <InlineCitation className={className}>
-      <InlineCitationCard>
-        <InlineCitationCardTrigger
-          displayNumber={citation.displayNumber}
-          sourceType={citation.sourceType}
-        />
-        <InlineCitationCardBody>
-          <InlineCitationSource
-            title={citation.title || citation.id}
-            sourceType={citation.sourceType}
-            description={citation.excerpt}
-            url={citation.url}
-            threadTitle={citation.threadTitle}
-            // Attachment-specific props
-            downloadUrl={citation.downloadUrl}
-            filename={citation.filename}
-            mimeType={citation.mimeType}
-            fileSize={citation.fileSize}
-          />
-          {citation.excerpt && (
-            <InlineCitationQuote>
-              {citation.excerpt}
-            </InlineCitationQuote>
-          )}
-        </InlineCitationCardBody>
-      </InlineCitationCard>
-    </InlineCitation>
   );
 }

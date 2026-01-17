@@ -14,6 +14,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ModelIds } from '@/api/core/enums';
+import { APP_VERSION } from '@/constants/version';
 
 // ============================================================================
 // Test Utilities
@@ -396,14 +397,14 @@ describe('environment Configuration', () => {
 
   it('should use default version when not provided', () => {
     const version = undefined;
-    const defaultVersion = version || '1.0.0';
+    const defaultVersion = version || APP_VERSION;
 
-    expect(defaultVersion).toBe('1.0.0');
+    expect(defaultVersion).toBe(APP_VERSION);
   });
 
   it('should use provided version when available', () => {
     const version = '2.5.0';
-    const finalVersion = version || '1.0.0';
+    const finalVersion = version || APP_VERSION;
 
     expect(finalVersion).toBe('2.5.0');
   });

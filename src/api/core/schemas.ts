@@ -22,6 +22,7 @@
 import { z } from '@hono/zod-openapi';
 
 import { API } from '@/constants';
+import { APP_VERSION } from '@/constants/version';
 
 import {
   AuthFailureReasonSchema,
@@ -800,6 +801,11 @@ export const SSEStreamMetadataSchema = z.object({
     description: 'Moderator message ID for moderator phase',
     example: 'moderator_abc123',
   }),
+  /** Whether auto-trigger was queued for round recovery */
+  autoTriggerQueued: z.boolean().optional().openapi({
+    description: 'Whether auto-trigger was queued for round recovery',
+    example: true,
+  }),
 }).openapi('SSEStreamMetadata');
 
 export type SSEStreamMetadata = z.infer<typeof SSEStreamMetadataSchema>;
@@ -866,7 +872,7 @@ export const HealthDependencySchema = z.object({
   }),
   details: z.unknown().optional().openapi({
     description: 'Additional health details',
-    example: { version: '1.0.0' },
+    example: { version: APP_VERSION },
   }),
 }).openapi('HealthDependency');
 

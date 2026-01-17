@@ -12,6 +12,13 @@ export function isAppError(error: unknown): error is AppError {
 }
 
 /**
+ * Type guard for valid HTTP status codes
+ */
+function isValidStatusCode(code: number): code is 400 | 401 | 403 | 404 | 409 | 500 {
+  return [400, 401, 403, 404, 409, 500].includes(code);
+}
+
+/**
  * Error Response Helper
  *
  * Format errors for API responses consistently.
@@ -29,6 +36,11 @@ export function isAppError(error: unknown): error is AppError {
  */
 export function formatErrorResponse(c: Context, error: unknown): Response {
   if (isAppError(error)) {
+    // Use type guard instead of type assertion
+    const statusCode = isValidStatusCode(error.statusCode)
+      ? error.statusCode
+      : HttpStatusCodes.INTERNAL_SERVER_ERROR;
+
     return c.json(
       {
         success: false,
@@ -42,7 +54,7 @@ export function formatErrorResponse(c: Context, error: unknown): Response {
           timestamp: new Date().toISOString(),
         },
       },
-      error.statusCode as 400 | 401 | 403 | 404 | 409 | 500,
+      statusCode,
     );
   }
 

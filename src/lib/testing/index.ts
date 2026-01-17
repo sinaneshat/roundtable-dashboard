@@ -21,6 +21,11 @@ export {
 } from './api-mocks';
 
 // ============================================================================
+// API Test Mocks (backend testing utilities)
+// ============================================================================
+export * from './api-test-mocks';
+
+// ============================================================================
 // Billing & Pricing Test Factories
 // ============================================================================
 export * from './billing-test-factories';
@@ -34,12 +39,22 @@ export { createStoreWrapper, createTestChatStore, getStoreState, resetStoreToDef
 // Chat Test Factories (high-level factories with test-friendly defaults)
 // ============================================================================
 export * from './chat-test-factories';
+
+// ============================================================================
+// Testing Enums (5-part pattern enums for test utilities)
+// ============================================================================
+export * from './enums';
 export * from './helpers';
 // ============================================================================
 // Metadata Helpers (type-safe metadata extraction for tests)
 // ============================================================================
 export * from './metadata-helpers';
 export { render, renderHook } from './render';
+// ============================================================================
+// Stripe Test Mocks (Stripe API types)
+// ============================================================================
+export * from './stripe-test-mocks';
+
 // ============================================================================
 // Subscription Test Mocks
 // ============================================================================
@@ -54,4 +69,6 @@ export * from './typed-test-mocks';
 // Testing Library Utilities (imported from canonical sources)
 // ============================================================================
 export { act, screen, waitFor, within } from '@testing-library/react';
+// Exception: Re-exporting default export as named export is acceptable for testing utilities
+// This centralizes test imports and follows testing-library community conventions
 export { default as userEvent } from '@testing-library/user-event';

@@ -611,7 +611,7 @@ describe('concurrent Round Operations', () => {
 
       // When streaming, verify message round matches
       const streamingRound = store.getState().streamingRoundNumber;
-      const latestUserMessage = messages.filter(m => m.role === 'user').pop();
+      const latestUserMessage = messages.filter(m => m.role === MessageRoles.USER).pop();
       const messageRound = (latestUserMessage?.metadata as { roundNumber?: number })?.roundNumber;
 
       expect(streamingRound).toBe(messageRound);

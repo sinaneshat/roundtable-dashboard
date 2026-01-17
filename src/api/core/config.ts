@@ -25,6 +25,7 @@ import {
   LogFormatSchema,
   LogLevels,
 } from '@/api/core/enums';
+import { APP_VERSION } from '@/constants/version';
 
 import type { LogLevel } from './enums';
 
@@ -46,7 +47,7 @@ const coreEnvironmentSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   NEXT_PUBLIC_API_URL: z.string().url().optional(),
   NEXT_PUBLIC_APP_NAME: z.string().min(1).default('Roundtable'),
-  NEXT_PUBLIC_APP_VERSION: z.string().min(1).default('1.0.0'),
+  NEXT_PUBLIC_APP_VERSION: z.string().min(1).default(APP_VERSION),
   API_BASE_PATH: z.string().min(1).default('/api'),
   API_VERSION: ApiVersionSchema.default('v1'),
 }).openapi('CoreEnvironmentConfig');
@@ -290,7 +291,7 @@ async function parseEnvironment() {
 export const APP_CONFIG = {
   // Application metadata
   NAME: 'Roundtable',
-  VERSION: '1.0.0',
+  VERSION: APP_VERSION,
   DESCRIPTION: 'Chat with multiple AI models at once',
 
   // API configuration

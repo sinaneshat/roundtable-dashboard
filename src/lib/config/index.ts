@@ -2,7 +2,29 @@
  * Config Barrel Export
  *
  * Single import point for all configuration utilities.
+ *
+ * NOTE: Hono context-dependent utilities (getWebappEnvFromContext, getAllowedOriginsFromContext,
+ * isDevelopmentFromContext) are NOT exported here. Import directly from '@/lib/config/base-urls'
+ * for those utilities that require Context<ApiEnv>.
  */
+
+// Base URLs configuration (non-context-dependent utilities only)
+export type { WebappEnv } from './base-urls';
+export {
+  BASE_URLS,
+  DEFAULT_WEBAPP_ENV,
+  getApiBaseUrl,
+  getApiUrlAsync,
+  getAppBaseUrl,
+  getBaseUrls,
+  getProductionApiUrl,
+  getWebappEnv,
+  getWebappEnvAsync,
+  isWebappEnv,
+  WEBAPP_ENV_VALUES,
+  WEBAPP_ENVS,
+  WebappEnvSchema,
+} from './base-urls';
 
 // Chat modes UI configuration
 export type { ChatModeConfig, ChatModeMetadata, ChatModeOption } from './chat-modes';
@@ -50,6 +72,14 @@ export {
   ToastNamespaces,
   ToastNamespaceSchema,
 } from './model-presets';
+// Participant limits configuration
+export {
+  EXAMPLE_PARTICIPANT_COUNTS,
+  getExampleParticipantCount,
+  MAX_PARTICIPANTS_LIMIT,
+  MIN_PARTICIPANTS_REQUIRED,
+  MIN_PARTICIPANTS_TO_SEND,
+} from './participant-limits';
 
 // Participant settings configuration
 export type { ParticipantSettings } from './participant-settings';
@@ -58,3 +88,11 @@ export {
   normalizeParticipantSettings,
   ParticipantSettingsSchema,
 } from './participant-settings';
+// Role prompts configuration
+export { createRoleSystemPrompt } from './role-prompts';
+
+// Tier names configuration
+export {
+  getTierDisplayName,
+  SUBSCRIPTION_TIER_NAMES,
+} from './tier-names';

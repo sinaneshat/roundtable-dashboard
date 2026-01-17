@@ -6,6 +6,8 @@ import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { ChatCustomRole, ChatParticipant, ChatProject, ChatThread, ChatUserPreset } from '@/db/validation';
 
+import type { ParticipantWithThread, ThreadWithParticipants } from './permissions-schemas';
+
 // ============================================================================
 // THREAD OWNERSHIP VERIFICATION
 // ============================================================================
@@ -45,15 +47,13 @@ export async function verifyThreadOwnership(
   userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
   options: { includeParticipants: true },
-): Promise<ChatThread & {
-  participants: Array<ChatParticipant>;
-}>;
+): Promise<ThreadWithParticipants>;
 export async function verifyThreadOwnership(
   threadId: string,
   userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
   options?: { includeParticipants?: boolean },
-): Promise<ChatThread | (ChatThread & { participants: Array<ChatParticipant> })> {
+): Promise<ChatThread | ThreadWithParticipants> {
   const thread = await db.query.chatThread.findFirst({
     where: eq(tables.chatThread.id, threadId),
     with: options?.includeParticipants
@@ -114,9 +114,7 @@ export async function verifyParticipantOwnership(
   participantId: string,
   userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ChatParticipant & {
-  thread: ChatThread;
-}> {
+): Promise<ParticipantWithThread> {
   const participant = await db.query.chatParticipant.findFirst({
     where: eq(tables.chatParticipant.id, participantId),
     with: {

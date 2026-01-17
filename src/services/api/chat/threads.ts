@@ -146,13 +146,50 @@ export type GetThreadStreamResumptionStateResponse = InferResponseType<
 /**
  * List chat threads with cursor pagination
  * Protected endpoint - requires authentication
+ *
+ * @param args - Request arguments with query params
+ * @param options - Service options
+ * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
-export async function listThreadsService(args?: ListThreadsRequest) {
-  const client = await createApiClient();
+export async function listThreadsService(
+  args?: ListThreadsRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = await createApiClient({ cookieHeader: options?.cookieHeader });
   const params: ListThreadsRequest = {
     query: args?.query ?? {},
   };
   return parseResponse(client.chat.threads.$get(params));
+}
+
+// ============================================================================
+// Type Inference - Sidebar Thread Operations
+// ============================================================================
+
+export type ListSidebarThreadsRequest = InferRequestType<
+  ApiClientType['chat']['threads']['sidebar']['$get']
+>;
+
+export type ListSidebarThreadsResponse = InferResponseType<
+  ApiClientType['chat']['threads']['sidebar']['$get']
+>;
+
+/**
+ * List sidebar threads with lightweight payload (essential fields only)
+ * Protected endpoint - requires authentication
+ *
+ * @param args - Request arguments with query params
+ * @param options - Service options
+ * @param options.cookieHeader - Pre-captured cookie header for server-side prefetches
+ */
+export async function listSidebarThreadsService(
+  args?: ListSidebarThreadsRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = await createApiClient({ cookieHeader: options?.cookieHeader });
+  return parseResponse(client.chat.threads.sidebar.$get({
+    query: args?.query ?? {},
+  }));
 }
 
 /**
@@ -272,9 +309,16 @@ export async function getThreadMessagesService(data: GetThreadMessagesRequest) {
 /**
  * Get configuration changelog for a thread
  * Protected endpoint - requires authentication (ownership check)
+ *
+ * @param data - Request arguments with thread id
+ * @param options - Service options
+ * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
-export async function getThreadChangelogService(data: GetThreadChangelogRequest) {
-  const client = await createApiClient();
+export async function getThreadChangelogService(
+  data: GetThreadChangelogRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = await createApiClient({ cookieHeader: options?.cookieHeader });
   const params: GetThreadChangelogRequest = {
     param: data.param ?? { id: '' },
   };

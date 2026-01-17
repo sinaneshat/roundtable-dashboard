@@ -9,8 +9,6 @@ import type { BorderVariant } from '@/api/core/enums';
 import { AiSdkStatuses, BorderVariants, ComponentSizes, ComponentVariants, PlanTypes } from '@/api/core/enums';
 import { ChatInputDropzoneOverlay } from '@/components/chat/chat-input-attachments';
 import { ChatInputAttachments } from '@/components/chat/chat-input-attachments-lazy';
-import { FreeTrialAlert } from '@/components/chat/free-trial-alert';
-import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization-lazy';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -19,6 +17,7 @@ import { useUsageStatsQuery } from '@/hooks/queries';
 import type { PendingAttachment } from '@/hooks/utils';
 import {
   useAutoResizeTextarea,
+  useCreditEstimation,
   useDragDrop,
   useFreeTrialState,
   useSpeechRecognition,
@@ -74,7 +73,7 @@ export const ChatInput = memo(({
   enableSpeech = true,
   minHeight = 72,
   maxHeight = 200,
-  showCreditAlert = false,
+  showCreditAlert: _showCreditAlert = false,
   attachments = EMPTY_ATTACHMENTS,
   onAddAttachments,
   onRemoveAttachment,
@@ -84,7 +83,7 @@ export const ChatInput = memo(({
   isHydrating = false,
   isSubmitting = false,
   isModelsLoading = false,
-  hideInternalAlerts = false,
+  hideInternalAlerts: _hideInternalAlerts = false,
   borderVariant = BorderVariants.DEFAULT,
 }: ChatInputProps) => {
   const t = useTranslations();
@@ -94,24 +93,31 @@ export const ChatInput = memo(({
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
   const { isFreeUser, hasUsedTrial } = useFreeTrialState();
 
+  // Real-time credit estimation based on selected models and their pricing tiers
+  const creditEstimate = useCreditEstimation({
+    participants,
+    autoMode: false,
+    enableWebSearch: false,
+  });
+
   const isQuotaExceeded = useMemo(() => {
     if (!statsData?.success || !statsData.data) {
       return false;
     }
-
-    const { credits, plan } = statsData.data;
+    const { plan } = statsData.data;
     if (plan?.type !== PlanTypes.PAID) {
       return false;
     }
-    return credits.available <= 0;
-  }, [statsData]);
+    // Block if user can't afford the estimated credits for this round
+    return !creditEstimate.canAfford;
+  }, [statsData, creditEstimate.canAfford]);
 
   const isFreeUserBlocked = isFreeUser && hasUsedTrial;
 
   const isInputDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
   const isMicDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
-  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || isFreeUserBlocked;
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || creditEstimate.isLoading || isFreeUserBlocked;
   const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
 
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -212,11 +218,10 @@ export const ChatInput = memo(({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!isSubmitDisabled && hasValidInput) {
-        const form = e.currentTarget.form || e.currentTarget;
-        const submitEvent = new Event('submit', { bubbles: true, cancelable: true }) as unknown as FormEvent<HTMLFormElement>;
-        Object.defineProperty(submitEvent, 'currentTarget', { value: form, writable: false });
-        Object.defineProperty(submitEvent, 'target', { value: form, writable: false });
-        onSubmit(submitEvent);
+        const form = e.currentTarget.form;
+        if (form) {
+          form.requestSubmit();
+        }
       }
     }
   };
@@ -225,16 +230,16 @@ export const ChatInput = memo(({
 
   return (
     <div className="w-full">
-      {enableAttachments && onAddAttachments && (
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          onChange={handleFileInputChange}
-          className="hidden"
-          accept="image/*,application/pdf,text/*,.md,.json,.csv,.xml,.html,.css,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.go,.rs,.rb,.php"
-        />
-      )}
+      {/* Always render file input to prevent hydration mismatch - it's hidden anyway */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        onChange={enableAttachments && onAddAttachments ? handleFileInputChange : undefined}
+        className="hidden"
+        accept="image/*,application/pdf,text/*,.md,.json,.csv,.xml,.html,.css,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.go,.rs,.rb,.php"
+        disabled={!enableAttachments || !onAddAttachments}
+      />
 
       <div
         className={cn(
@@ -245,13 +250,10 @@ export const ChatInput = memo(({
           'shadow-lg',
           'transition-all duration-200',
           isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && 'cursor-not-allowed',
-          // When header handles alerts, use passed borderVariant for consistent borders
-          hideInternalAlerts && borderVariant === BorderVariants.SUCCESS && 'border-green-500/30',
-          hideInternalAlerts && borderVariant === BorderVariants.WARNING && 'border-amber-500/30',
-          hideInternalAlerts && borderVariant === BorderVariants.ERROR && 'border-destructive',
-          // When no header, apply borders based on internal state
-          !hideInternalAlerts && (isOverLimit || showNoModelsError || (isQuotaExceeded && !isFreeUser)) && 'border-destructive',
-          !hideInternalAlerts && isFreeUser && !isOverLimit && !showNoModelsError && (hasUsedTrial ? 'border-amber-500/30' : 'border-green-500/30'),
+          // Border colors passed from parent via borderVariant
+          borderVariant === BorderVariants.SUCCESS && 'border-green-500/30',
+          borderVariant === BorderVariants.WARNING && 'border-amber-500/30',
+          borderVariant === BorderVariants.ERROR && 'border-destructive/30',
           className,
         )}
         {...(enableAttachments ? dragHandlers : {})}
@@ -259,35 +261,6 @@ export const ChatInput = memo(({
         {enableAttachments && <ChatInputDropzoneOverlay isDragging={isDragging} />}
 
         <div className="flex flex-col overflow-hidden h-full">
-          {showCreditAlert && !hideInternalAlerts && <QuotaAlertExtension />}
-          {isFreeUser && !hideInternalAlerts && <FreeTrialAlert />}
-          {showNoModelsError && (
-            <div
-              className={cn(
-                'flex items-center gap-3 px-3 py-2',
-                'border-0 border-b border-destructive/20',
-                'bg-destructive/10',
-              )}
-            >
-              <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
-                {t('chat.input.noModelsSelected')}
-              </p>
-            </div>
-          )}
-
-          {isOverLimit && (
-            <div
-              className={cn(
-                'flex items-center gap-3 px-3 py-2',
-                'border-0 border-b border-destructive/20',
-                'bg-destructive/10',
-              )}
-            >
-              <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
-                {t('chat.input.messageTooLong')}
-              </p>
-            </div>
-          )}
 
           {enableSpeech && isSpeechSupported && (
             <VoiceVisualization
@@ -305,8 +278,8 @@ export const ChatInput = memo(({
 
           <form
             onSubmit={(e) => {
+              e.preventDefault();
               if (isSubmitDisabled || !hasValidInput) {
-                e.preventDefault();
                 return;
               }
               onSubmit(e);

@@ -80,10 +80,16 @@ function createAssistantMessage(
 // Action Call Tracker - Simulates Store Actions
 // ============================================================================
 
+type ActionParams = {
+  roundNumber?: number;
+  participantIndex?: number;
+  messageId?: string;
+};
+
 type ActionCallLog = {
   action: string;
   timestamp: number;
-  params?: Record<string, unknown>;
+  params?: ActionParams;
 };
 
 function createMockStore() {

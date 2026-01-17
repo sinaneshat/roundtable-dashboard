@@ -17,9 +17,9 @@ import {
   UploadStatuses,
 } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
+import { ChatInputContainer } from '@/components/chat/chat-input-container';
 import { ChatInputHeader } from '@/components/chat/chat-input-header';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
-import { ChatInputUpgradeBanner } from '@/components/chat/chat-input-upgrade-banner';
 import { QuickStartSkeleton } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
@@ -54,6 +54,8 @@ import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { showApiErrorToast, toastManager } from '@/lib/toast';
 import {
   getIncompatibleModelIds,
+  isDocumentFile,
+  isImageFile,
   isVisionRequiredMimeType,
   threadHasVisionRequiredFiles,
 } from '@/lib/utils';
@@ -198,7 +200,7 @@ export default function ChatOverviewScreen() {
   const { data: customRolesData } = useCustomRolesQuery(modelModal.value && !isStreaming);
   // syncToPreferences=true for Overview screen - handles preference persistence
   const { analyzeAndApply } = useAutoModeAnalysis(true);
-  const { borderVariant: headerBorderVariant } = useFreeTrialState();
+  const { borderVariant: _headerBorderVariant } = useFreeTrialState();
 
   const allEnabledModels = useMemo(
     () => modelsData?.data?.items || [],
@@ -548,7 +550,15 @@ export default function ChatOverviewScreen() {
   });
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
-  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting || isModelsLoading || isAnalyzingPrompt;
+
+  // Core operation blocking (excludes loading states for hydration safety)
+  const isOperationBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting || isAnalyzingPrompt;
+
+  // Full UI blocking includes loading states
+  const isInitialUIInputBlocked = isOperationBlocked || isModelsLoading;
+
+  // Toggle can work even while models load - only block during active operations
+  const isToggleDisabled = isOperationBlocked;
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
 
   const lastResetPathRef = useRef<string | null>(null);
@@ -629,9 +639,12 @@ export default function ChatOverviewScreen() {
         }
 
         if (autoMode && inputValue.trim()) {
-          // Check if visual files are attached to restrict model selection to vision-capable models
-          const hasVisualFiles = chatAttachments.attachments.some(att =>
-            isVisionRequiredMimeType(att.file.type),
+          // ✅ GRANULAR: Check file types separately for proper model capability filtering
+          const hasImageFiles = chatAttachments.attachments.some(att =>
+            isImageFile(att.file.type),
+          );
+          const hasDocumentFiles = chatAttachments.attachments.some(att =>
+            isDocumentFile(att.file.type),
           );
 
           // Pass accessible model IDs to filter server response
@@ -641,7 +654,8 @@ export default function ChatOverviewScreen() {
           // Consolidated auto mode analysis - updates both chat store and preferences
           await analyzeAndApply({
             prompt: inputValue.trim(),
-            hasVisualFiles,
+            hasImageFiles,
+            hasDocumentFiles,
             accessibleModelIds: accessibleSet,
           });
         }
@@ -735,8 +749,8 @@ export default function ChatOverviewScreen() {
     setPersistedWebSearch(enabled);
   }, [setEnableWebSearch, setPersistedWebSearch]);
 
-  const handlePresetSelect = useCallback((preset: ModelPreset) => {
-    const result = filterPresetParticipants(
+  const handlePresetSelect = useCallback(async (preset: ModelPreset) => {
+    const result = await filterPresetParticipants(
       preset,
       incompatibleModelIdsRef.current,
       t as (key: string, values?: { count: number }) => string,
@@ -772,9 +786,10 @@ export default function ChatOverviewScreen() {
       onWebSearchToggle={handleWebSearchToggle}
       onAttachmentClick={handleAttachmentClick}
       attachmentCount={chatAttachments.attachments.length}
-      enableAttachments={!isInitialUIInputBlocked}
-      disabled={isInitialUIInputBlocked}
+      enableAttachments={!isOperationBlocked}
+      disabled={isOperationBlocked}
       autoMode={autoMode}
+      isModelsLoading={isModelsLoading}
     />
   ), [
     selectedParticipants,
@@ -786,12 +801,15 @@ export default function ChatOverviewScreen() {
     handleWebSearchToggle,
     handleAttachmentClick,
     chatAttachments.attachments.length,
-    isInitialUIInputBlocked,
+    isOperationBlocked,
+    isModelsLoading,
     autoMode,
   ]);
 
   const sharedChatInputProps = useMemo(() => {
-    const status: ChatStatus = isInitialUIInputBlocked ? 'submitted' : 'ready';
+    // Use isOperationBlocked (not isInitialUIInputBlocked) to avoid hydration mismatch
+    // isModelsLoading differs SSR/client but shouldn't block showing ready UI
+    const status: ChatStatus = isOperationBlocked ? 'submitted' : 'ready';
     return {
       value: inputValue,
       onChange: setInputValue,
@@ -799,21 +817,23 @@ export default function ChatOverviewScreen() {
       status,
       placeholder: t('chat.input.placeholder'),
       participants: selectedParticipants,
-      onRemoveParticipant: isInitialUIInputBlocked ? undefined : removeParticipant,
+      onRemoveParticipant: isOperationBlocked ? undefined : removeParticipant,
       attachments: chatAttachments.attachments,
       onAddAttachments: chatAttachments.addFiles,
       onRemoveAttachment: chatAttachments.removeAttachment,
-      enableAttachments: !isInitialUIInputBlocked,
+      enableAttachments: !isOperationBlocked,
       attachmentClickRef,
       toolbar: chatInputToolbar,
       isSubmitting: formActions.isSubmitting,
       isUploading: chatAttachments.isUploading,
+      isModelsLoading, // Pass loading state for internal UI updates
     };
   }, [
     inputValue,
     setInputValue,
     handlePromptSubmit,
-    isInitialUIInputBlocked,
+    isOperationBlocked,
+    isModelsLoading,
     t,
     selectedParticipants,
     removeParticipant,
@@ -924,17 +944,20 @@ export default function ChatOverviewScreen() {
                           exit={{ opacity: 0 }}
                           transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                         >
-                          <div className="flex flex-col">
-                            <ChatInputUpgradeBanner />
+                          <ChatInputContainer
+                            participants={selectedParticipants}
+                            inputValue={inputValue}
+                            isModelsLoading={isModelsLoading}
+                          >
                             <ChatInputHeader
                               autoMode={autoMode}
                               onAutoModeChange={setAutoMode}
                               isAnalyzing={isAnalyzingPrompt}
-                              disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
-                              borderVariant={headerBorderVariant}
+                              disabled={isToggleDisabled && !isAnalyzingPrompt}
+                              className="border-0 rounded-none"
                             />
-                            <ChatInput {...sharedChatInputProps} className="rounded-t-none border-t-0" hideInternalAlerts borderVariant={headerBorderVariant} />
-                          </div>
+                            <ChatInput {...sharedChatInputProps} className="border-0 shadow-none rounded-none" hideInternalAlerts />
+                          </ChatInputContainer>
                         </motion.div>
                       )}
                     </div>
@@ -951,17 +974,20 @@ export default function ChatOverviewScreen() {
                       exit={{ opacity: 0 }}
                       transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                     >
-                      <div className="flex flex-col">
-                        <ChatInputUpgradeBanner />
+                      <ChatInputContainer
+                        participants={selectedParticipants}
+                        inputValue={inputValue}
+                        isModelsLoading={isModelsLoading}
+                      >
                         <ChatInputHeader
                           autoMode={autoMode}
                           onAutoModeChange={setAutoMode}
                           isAnalyzing={isAnalyzingPrompt}
-                          disabled={isInitialUIInputBlocked && !isAnalyzingPrompt}
-                          borderVariant={headerBorderVariant}
+                          disabled={isToggleDisabled && !isAnalyzingPrompt}
+                          className="border-0 rounded-none"
                         />
-                        <ChatInput {...sharedChatInputProps} className="rounded-t-none border-t-0" hideInternalAlerts borderVariant={headerBorderVariant} />
-                      </div>
+                        <ChatInput {...sharedChatInputProps} className="border-0 shadow-none rounded-none" hideInternalAlerts />
+                      </ChatInputContainer>
                     </motion.div>
                   </div>
                 </div>
@@ -1022,7 +1048,7 @@ export default function ChatOverviewScreen() {
             current_tier: userTierConfig.tier,
             can_upgrade: userTierConfig.can_upgrade,
           }}
-          incompatibleModelIds={incompatibleModelIds}
+          visionIncompatibleModelIds={visionIncompatibleModelIds}
         />
       )}
 

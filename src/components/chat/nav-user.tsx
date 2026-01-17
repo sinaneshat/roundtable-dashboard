@@ -24,12 +24,18 @@ import {
   useSubscriptionsQuery,
 } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
-import { signOut, useSession } from '@/lib/auth/client';
+import { deleteUser, signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
+import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 import { showApiErrorToast } from '@/lib/toast';
 
 const CancelSubscriptionDialog = dynamic(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => m.CancelSubscriptionDialog),
+  { ssr: false },
+);
+
+const DeleteAccountDialog = dynamic(
+  () => import('@/components/chat/delete-account-dialog').then(m => m.DeleteAccountDialog),
   { ssr: false },
 );
 
@@ -50,9 +56,12 @@ export function NavUser({ initialSession }: NavUserProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const showCancelDialog = useBoolean(false);
+  const showDeleteDialog = useBoolean(false);
   const showFeedbackModal = useBoolean(false);
+  const isDeleting = useBoolean(false);
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
+  const showDeleteAccountOption = getWebappEnv() !== WEBAPP_ENVS.PROD;
 
   const user = clientSession?.user ?? initialSession?.user;
 
@@ -108,6 +117,22 @@ export function NavUser({ initialSession }: NavUserProps) {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    isDeleting.onTrue();
+    try {
+      await deleteUser({
+        callbackURL: '/auth/sign-in',
+      });
+      await signOut();
+      router.replace('/auth/sign-in');
+    } catch (error) {
+      showApiErrorToast('Delete Account Failed', error);
+    } finally {
+      isDeleting.onFalse();
+      showDeleteDialog.onFalse();
+    }
+  };
+
   const mounted = useBoolean(false);
   useEffect(() => {
     mounted.onTrue();
@@ -149,7 +174,7 @@ export function NavUser({ initialSession }: NavUserProps) {
           data-sidebar="menu-button"
           data-size="lg"
           title={displayName}
-          className="peer/menu-button flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-full px-4 py-2 text-start text-sm outline-hidden ring-sidebar-ring transition-all duration-200 hover:bg-accent hover:bg-white/[0.07] focus-visible:ring-2 active:bg-accent active:scale-[0.998] disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pe-10 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-accent data-[active=true]:font-medium data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground data-[state=open]:hover:bg-accent group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem] group-data-[collapsible=icon]:!flex-shrink-0 group-data-[collapsible=icon]:!flex-grow-0 group-data-[collapsible=icon]:items-center! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:gap-0! group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:rounded-full! group-data-[collapsible=icon]:aspect-square [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 h-11"
+          className="peer/menu-button flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-lg px-4 py-2 text-start text-sm outline-hidden ring-sidebar-ring transition-all duration-200 hover:bg-accent hover:bg-white/[0.07] focus-visible:ring-2 active:bg-accent active:scale-[0.998] disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pe-10 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-accent data-[active=true]:font-medium data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground data-[state=open]:hover:bg-accent group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem] group-data-[collapsible=icon]:!flex-shrink-0 group-data-[collapsible=icon]:!flex-grow-0 group-data-[collapsible=icon]:items-center! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:gap-0! group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:rounded-lg! group-data-[collapsible=icon]:aspect-square [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 h-11"
         >
           <Avatar className="h-8 w-8 rounded-full">
             <AvatarImage
@@ -214,7 +239,7 @@ export function NavUser({ initialSession }: NavUserProps) {
                   )
                 : (
                     <DropdownMenuItem asChild className="text-emerald-400 focus:text-emerald-300 focus:bg-emerald-500/10">
-                      <Link href="/chat/pricing" className="flex items-center gap-2.5">
+                      <Link href="/chat/pricing" prefetch={true} className="flex items-center gap-2.5">
                         <Icons.sparkles className="size-4" />
                         <div className="flex-1">
                           <p className="text-xs font-semibold">{t('userMenu.upgradeToPro')}</p>
@@ -233,6 +258,18 @@ export function NavUser({ initialSession }: NavUserProps) {
                   <p className="text-[10px] text-muted-foreground">{t('userMenu.feedbackDescription')}</p>
                 </div>
               </DropdownMenuItem>
+              {showDeleteAccountOption && (
+                <DropdownMenuItem
+                  onClick={showDeleteDialog.onTrue}
+                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                >
+                  <Icons.trash />
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold">{t('userMenu.deleteAccount')}</p>
+                    <p className="text-[10px] text-muted-foreground/70">{t('userMenu.deleteAccountDescription')}</p>
+                  </div>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <Icons.logOut />
@@ -256,6 +293,14 @@ export function NavUser({ initialSession }: NavUserProps) {
         <FeedbackModal
           open={showFeedbackModal.value}
           onOpenChange={showFeedbackModal.setValue}
+        />
+      )}
+      {showDeleteDialog.value && (
+        <DeleteAccountDialog
+          open={showDeleteDialog.value}
+          onOpenChange={showDeleteDialog.setValue}
+          onConfirm={handleDeleteAccount}
+          isProcessing={isDeleting.value}
         />
       )}
     </>

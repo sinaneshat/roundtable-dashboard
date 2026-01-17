@@ -53,7 +53,7 @@ export class CloudflareKVCache extends Cache {
 
   override async put(
     hashedQuery: string,
-    response: unknown[],
+    response: unknown,
     tables: string[],
     isTag: boolean,
     config?: CacheConfig,

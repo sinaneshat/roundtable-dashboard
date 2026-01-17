@@ -5,6 +5,7 @@
  */
 
 import chroma from 'chroma-js';
+import { useCallback, useSyncExternalStore } from 'react';
 
 /**
  * Cache for extracted colors to avoid re-processing
@@ -213,4 +214,55 @@ export function getCachedImageColor(imageSrc: string, defaultColor = 'muted-fore
  */
 export function hasColorCached(imageSrc: string): boolean {
   return colorCache.has(imageSrc);
+}
+
+/**
+ * Subscribers for color cache updates
+ */
+const colorCacheSubscribers = new Set<() => void>();
+
+function notifyColorCacheUpdate(): void {
+  for (const callback of colorCacheSubscribers) {
+    callback();
+  }
+}
+
+function subscribeToColorCache(callback: () => void): () => void {
+  colorCacheSubscribers.add(callback);
+  return () => colorCacheSubscribers.delete(callback);
+}
+
+/**
+ * React 19-compatible hook for extracting image colors
+ * Uses useSyncExternalStore for proper state management
+ */
+export function useImageColor(imageSrc: string, defaultColor = 'muted-foreground'): string {
+  const getSnapshot = useCallback(() => {
+    return colorCache.get(imageSrc) ?? defaultColor;
+  }, [imageSrc, defaultColor]);
+
+  const color = useSyncExternalStore(
+    subscribeToColorCache,
+    getSnapshot,
+    () => defaultColor,
+  );
+
+  // Trigger async extraction if not cached
+  if (!colorCache.has(imageSrc)) {
+    extractColorFromImage(imageSrc, false)
+      .then((extractedColor) => {
+        if (colorCache.get(imageSrc) !== extractedColor) {
+          colorCache.set(imageSrc, extractedColor);
+          notifyColorCacheUpdate();
+        }
+      })
+      .catch(() => {
+        if (!colorCache.has(imageSrc)) {
+          colorCache.set(imageSrc, defaultColor);
+          notifyColorCacheUpdate();
+        }
+      });
+  }
+
+  return color;
 }

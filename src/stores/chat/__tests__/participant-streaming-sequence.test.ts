@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FinishReason } from '@/api/core/enums';
-import { UIMessageRoles } from '@/api/core/enums';
+import { StreamPartTypes, UIMessageRoles } from '@/api/core/enums';
 
 /**
  * Participant Streaming Sequence Tests
@@ -83,22 +83,22 @@ function processStreamPart(
   part: StreamPart,
 ): ParticipantStreamState {
   switch (part.type) {
-    case 'start':
+    case StreamPartTypes.START:
       return { ...state, status: 'streaming', startTime: Date.now() };
 
-    case 'text-delta':
+    case StreamPartTypes.TEXT_DELTA:
       return {
         ...state,
         chunks: [...state.chunks, part.text || ''],
       };
 
-    case 'reasoning-delta':
+    case StreamPartTypes.REASONING_DELTA:
       return {
         ...state,
         reasoningChunks: [...state.reasoningChunks, part.text || ''],
       };
 
-    case 'finish':
+    case StreamPartTypes.FINISH:
       return {
         ...state,
         status: 'complete',
@@ -107,7 +107,7 @@ function processStreamPart(
         usage: part.usage,
       };
 
-    case 'error':
+    case StreamPartTypes.ERROR:
       return { ...state, status: 'error', endTime: Date.now() };
 
     default:
@@ -186,9 +186,9 @@ describe('participant Streaming Sequence', () => {
       expect(roundState.currentParticipantIndex).toBe(0);
 
       // P0 streams
-      p0State = processStreamPart(p0State, { type: 'start' });
-      p0State = processStreamPart(p0State, { type: 'text-delta', text: 'P0 response' });
-      p0State = processStreamPart(p0State, { type: 'finish', finishReason: 'stop' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.START });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.TEXT_DELTA, text: 'P0 response' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       roundState.participantStates.set(0, p0State);
 
       expect(canAdvanceToNextParticipant(p0State)).toBe(true);
@@ -201,9 +201,9 @@ describe('participant Streaming Sequence', () => {
       expect(roundState.currentParticipantIndex).toBe(1);
 
       // P1 streams
-      p1State = processStreamPart(p1State, { type: 'start' });
-      p1State = processStreamPart(p1State, { type: 'text-delta', text: 'P1 response' });
-      p1State = processStreamPart(p1State, { type: 'finish', finishReason: 'stop' });
+      p1State = processStreamPart(p1State, { type: StreamPartTypes.START });
+      p1State = processStreamPart(p1State, { type: StreamPartTypes.TEXT_DELTA, text: 'P1 response' });
+      p1State = processStreamPart(p1State, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       roundState.participantStates.set(1, p1State);
 
       // Advance to P2
@@ -211,9 +211,9 @@ describe('participant Streaming Sequence', () => {
       let p2State = initializeParticipantStream(0, 2, 'thread-123');
       roundState.participantStates.set(2, p2State);
 
-      p2State = processStreamPart(p2State, { type: 'start' });
-      p2State = processStreamPart(p2State, { type: 'text-delta', text: 'P2 response' });
-      p2State = processStreamPart(p2State, { type: 'finish', finishReason: 'stop' });
+      p2State = processStreamPart(p2State, { type: StreamPartTypes.START });
+      p2State = processStreamPart(p2State, { type: StreamPartTypes.TEXT_DELTA, text: 'P2 response' });
+      p2State = processStreamPart(p2State, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       roundState.participantStates.set(2, p2State);
 
       // Verify order
@@ -237,8 +237,8 @@ describe('participant Streaming Sequence', () => {
       };
 
       let p0State = initializeParticipantStream(0, 0, 'thread-123');
-      p0State = processStreamPart(p0State, { type: 'start' });
-      p0State = processStreamPart(p0State, { type: 'text-delta', text: 'Still streaming...' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.START });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.TEXT_DELTA, text: 'Still streaming...' });
       roundState.participantStates.set(0, p0State);
 
       // P0 is still streaming
@@ -259,9 +259,9 @@ describe('participant Streaming Sequence', () => {
       };
 
       let p0State = initializeParticipantStream(0, 0, 'thread-123');
-      p0State = processStreamPart(p0State, { type: 'start' });
-      p0State = processStreamPart(p0State, { type: 'text-delta', text: 'Solo response' });
-      p0State = processStreamPart(p0State, { type: 'finish', finishReason: 'stop' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.START });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.TEXT_DELTA, text: 'Solo response' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       roundState.participantStates.set(0, p0State);
 
       expect(areAllParticipantsComplete(roundState)).toBe(true);
@@ -280,9 +280,9 @@ describe('participant Streaming Sequence', () => {
 
       // P0 completes
       let p0State = initializeParticipantStream(0, 0, 'thread-123');
-      p0State = processStreamPart(p0State, { type: 'start' });
-      p0State = processStreamPart(p0State, { type: 'text-delta', text: 'P0 moderator of the topic' });
-      p0State = processStreamPart(p0State, { type: 'finish', finishReason: 'stop' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.START });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.TEXT_DELTA, text: 'P0 moderator of the topic' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       roundState.participantStates.set(0, p0State);
       roundState.currentParticipantIndex = 1;
 
@@ -303,17 +303,17 @@ describe('participant Streaming Sequence', () => {
 
       // P0 completes
       let p0State = initializeParticipantStream(0, 0, 'thread-123');
-      p0State = processStreamPart(p0State, { type: 'start' });
-      p0State = processStreamPart(p0State, { type: 'text-delta', text: 'First perspective' });
-      p0State = processStreamPart(p0State, { type: 'finish', finishReason: 'stop' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.START });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.TEXT_DELTA, text: 'First perspective' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       roundState.participantStates.set(0, p0State);
       roundState.currentParticipantIndex = 1;
 
       // P1 completes
       let p1State = initializeParticipantStream(0, 1, 'thread-123');
-      p1State = processStreamPart(p1State, { type: 'start' });
-      p1State = processStreamPart(p1State, { type: 'text-delta', text: 'Second perspective' });
-      p1State = processStreamPart(p1State, { type: 'finish', finishReason: 'stop' });
+      p1State = processStreamPart(p1State, { type: StreamPartTypes.START });
+      p1State = processStreamPart(p1State, { type: StreamPartTypes.TEXT_DELTA, text: 'Second perspective' });
+      p1State = processStreamPart(p1State, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       roundState.participantStates.set(1, p1State);
       roundState.currentParticipantIndex = 2;
 
@@ -348,15 +348,15 @@ describe('participant Streaming Sequence', () => {
 
       // P0 completes
       let p0State = initializeParticipantStream(0, 0, 'thread-123');
-      p0State = processStreamPart(p0State, { type: 'start' });
-      p0State = processStreamPart(p0State, { type: 'text-delta', text: 'Complete' });
-      p0State = processStreamPart(p0State, { type: 'finish', finishReason: 'stop' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.START });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.TEXT_DELTA, text: 'Complete' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       roundState.participantStates.set(0, p0State);
 
       // P1 is streaming (not complete)
       let p1State = initializeParticipantStream(0, 1, 'thread-123');
-      p1State = processStreamPart(p1State, { type: 'start' });
-      p1State = processStreamPart(p1State, { type: 'text-delta', text: 'In progress...' });
+      p1State = processStreamPart(p1State, { type: StreamPartTypes.START });
+      p1State = processStreamPart(p1State, { type: StreamPartTypes.TEXT_DELTA, text: 'In progress...' });
       roundState.participantStates.set(1, p1State);
       roundState.currentParticipantIndex = 2;
 
@@ -373,13 +373,13 @@ describe('participant Streaming Sequence', () => {
 
       expect(state.status).toBe('pending');
 
-      state = processStreamPart(state, { type: 'start' });
+      state = processStreamPart(state, { type: StreamPartTypes.START });
       expect(state.status).toBe('streaming');
 
-      state = processStreamPart(state, { type: 'text-delta', text: 'Content' });
+      state = processStreamPart(state, { type: StreamPartTypes.TEXT_DELTA, text: 'Content' });
       expect(state.status).toBe('streaming');
 
-      state = processStreamPart(state, { type: 'finish', finishReason: 'stop' });
+      state = processStreamPart(state, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       expect(state.status).toBe('complete');
     });
 
@@ -388,24 +388,24 @@ describe('participant Streaming Sequence', () => {
 
       expect(state.status).toBe('pending');
 
-      state = processStreamPart(state, { type: 'start' });
+      state = processStreamPart(state, { type: StreamPartTypes.START });
       expect(state.status).toBe('streaming');
 
-      state = processStreamPart(state, { type: 'error' });
+      state = processStreamPart(state, { type: StreamPartTypes.ERROR });
       expect(state.status).toBe('error');
     });
 
     it('should record timing for complete streams', () => {
       let state = initializeParticipantStream(0, 0, 'thread-123');
 
-      state = processStreamPart(state, { type: 'start' });
+      state = processStreamPart(state, { type: StreamPartTypes.START });
       const startTime = state.startTime;
       expect(startTime).toBeDefined();
 
       // Simulate some streaming time
-      state = processStreamPart(state, { type: 'text-delta', text: 'Content' });
+      state = processStreamPart(state, { type: StreamPartTypes.TEXT_DELTA, text: 'Content' });
 
-      state = processStreamPart(state, { type: 'finish', finishReason: 'stop' });
+      state = processStreamPart(state, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       const endTime = state.endTime;
 
       expect(endTime).toBeDefined();
@@ -415,9 +415,9 @@ describe('participant Streaming Sequence', () => {
     it('should capture finish reason', () => {
       let state = initializeParticipantStream(0, 0, 'thread-123');
 
-      state = processStreamPart(state, { type: 'start' });
+      state = processStreamPart(state, { type: StreamPartTypes.START });
       state = processStreamPart(state, {
-        type: 'finish',
+        type: StreamPartTypes.FINISH,
         finishReason: 'length',
         usage: { inputTokens: 100, outputTokens: 500, totalTokens: 600 },
       });
@@ -431,10 +431,10 @@ describe('participant Streaming Sequence', () => {
     it('should build message from stream chunks', () => {
       let state = initializeParticipantStream(0, 0, 'thread-123');
 
-      state = processStreamPart(state, { type: 'start' });
-      state = processStreamPart(state, { type: 'text-delta', text: 'Hello ' });
-      state = processStreamPart(state, { type: 'text-delta', text: 'world!' });
-      state = processStreamPart(state, { type: 'finish', finishReason: 'stop' });
+      state = processStreamPart(state, { type: StreamPartTypes.START });
+      state = processStreamPart(state, { type: StreamPartTypes.TEXT_DELTA, text: 'Hello ' });
+      state = processStreamPart(state, { type: StreamPartTypes.TEXT_DELTA, text: 'world!' });
+      state = processStreamPart(state, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
 
       const metadata: ParticipantMetadata = {
         roundNumber: 0,
@@ -447,7 +447,7 @@ describe('participant Streaming Sequence', () => {
       const message = buildMessageFromState(state, metadata);
 
       expect(message.id).toBe('thread-123_r0_p0');
-      expect(message.role).toBe('assistant');
+      expect(message.role).toBe(UIMessageRoles.ASSISTANT);
       expect(message.content).toBe('Hello world!');
       expect(message.parts).toHaveLength(1);
       expect(message.parts[0].type).toBe('text');
@@ -457,11 +457,11 @@ describe('participant Streaming Sequence', () => {
     it('should include reasoning in message parts', () => {
       let state = initializeParticipantStream(0, 0, 'thread-123');
 
-      state = processStreamPart(state, { type: 'start' });
-      state = processStreamPart(state, { type: 'reasoning-delta', text: 'Let me think...' });
-      state = processStreamPart(state, { type: 'reasoning-delta', text: ' analyzing options.' });
-      state = processStreamPart(state, { type: 'text-delta', text: 'The answer is 42.' });
-      state = processStreamPart(state, { type: 'finish', finishReason: 'stop' });
+      state = processStreamPart(state, { type: StreamPartTypes.START });
+      state = processStreamPart(state, { type: StreamPartTypes.REASONING_DELTA, text: 'Let me think...' });
+      state = processStreamPart(state, { type: StreamPartTypes.REASONING_DELTA, text: ' analyzing options.' });
+      state = processStreamPart(state, { type: StreamPartTypes.TEXT_DELTA, text: 'The answer is 42.' });
+      state = processStreamPart(state, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
 
       const metadata: ParticipantMetadata = {
         roundNumber: 0,
@@ -483,8 +483,8 @@ describe('participant Streaming Sequence', () => {
     it('should handle empty content gracefully', () => {
       let state = initializeParticipantStream(0, 0, 'thread-123');
 
-      state = processStreamPart(state, { type: 'start' });
-      state = processStreamPart(state, { type: 'finish', finishReason: 'content-filter' });
+      state = processStreamPart(state, { type: StreamPartTypes.START });
+      state = processStreamPart(state, { type: StreamPartTypes.FINISH, finishReason: 'content-filter' });
 
       const metadata: ParticipantMetadata = {
         roundNumber: 0,
@@ -514,9 +514,9 @@ describe('participant Streaming Sequence', () => {
       // All complete
       for (let i = 0; i < 3; i++) {
         let state = initializeParticipantStream(0, i, 'thread-123');
-        state = processStreamPart(state, { type: 'start' });
-        state = processStreamPart(state, { type: 'text-delta', text: `P${i}` });
-        state = processStreamPart(state, { type: 'finish', finishReason: 'stop' });
+        state = processStreamPart(state, { type: StreamPartTypes.START });
+        state = processStreamPart(state, { type: StreamPartTypes.TEXT_DELTA, text: `P${i}` });
+        state = processStreamPart(state, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
         roundState.participantStates.set(i, state);
       }
 
@@ -535,14 +535,14 @@ describe('participant Streaming Sequence', () => {
       // P0 and P1 complete
       for (let i = 0; i < 2; i++) {
         let state = initializeParticipantStream(0, i, 'thread-123');
-        state = processStreamPart(state, { type: 'start' });
-        state = processStreamPart(state, { type: 'finish', finishReason: 'stop' });
+        state = processStreamPart(state, { type: StreamPartTypes.START });
+        state = processStreamPart(state, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
         roundState.participantStates.set(i, state);
       }
 
       // P2 still streaming
       let p2State = initializeParticipantStream(0, 2, 'thread-123');
-      p2State = processStreamPart(p2State, { type: 'start' });
+      p2State = processStreamPart(p2State, { type: StreamPartTypes.START });
       roundState.participantStates.set(2, p2State);
 
       expect(areAllParticipantsComplete(roundState)).toBe(false);
@@ -559,14 +559,14 @@ describe('participant Streaming Sequence', () => {
 
       // P0 errors
       let p0State = initializeParticipantStream(0, 0, 'thread-123');
-      p0State = processStreamPart(p0State, { type: 'start' });
-      p0State = processStreamPart(p0State, { type: 'error' });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.START });
+      p0State = processStreamPart(p0State, { type: StreamPartTypes.ERROR });
       roundState.participantStates.set(0, p0State);
 
       // P1 completes
       let p1State = initializeParticipantStream(0, 1, 'thread-123');
-      p1State = processStreamPart(p1State, { type: 'start' });
-      p1State = processStreamPart(p1State, { type: 'finish', finishReason: 'stop' });
+      p1State = processStreamPart(p1State, { type: StreamPartTypes.START });
+      p1State = processStreamPart(p1State, { type: StreamPartTypes.FINISH, finishReason: 'stop' });
       roundState.participantStates.set(1, p1State);
 
       expect(areAllParticipantsComplete(roundState)).toBe(true);
@@ -576,7 +576,7 @@ describe('participant Streaming Sequence', () => {
   describe('aI SDK Message Metadata', () => {
     type StreamMetadataCallback = {
       part: {
-        type: 'start' | 'finish' | 'start-step' | 'finish-step';
+        type: typeof StreamPartTypes.START | typeof StreamPartTypes.FINISH | typeof StreamPartTypes.START_STEP | typeof StreamPartTypes.FINISH_STEP;
         finishReason?: string;
         totalUsage?: { inputTokens: number; outputTokens: number };
       };
@@ -607,11 +607,11 @@ describe('participant Streaming Sequence', () => {
         model: 'gpt-4o',
       });
 
-      if (callback.part.type === 'start') {
+      if (callback.part.type === StreamPartTypes.START) {
         return baseMetadata;
       }
 
-      if (callback.part.type === 'finish') {
+      if (callback.part.type === StreamPartTypes.FINISH) {
         return {
           ...baseMetadata,
           // Could include additional finish-time metadata
@@ -622,7 +622,7 @@ describe('participant Streaming Sequence', () => {
     }
 
     it('should inject metadata on stream start', () => {
-      const metadata = getMessageMetadata({ part: { type: 'start' } });
+      const metadata = getMessageMetadata({ part: { type: StreamPartTypes.START } });
 
       expect(metadata).toBeDefined();
       expect(metadata?.roundNumber).toBe(0);
@@ -644,10 +644,10 @@ describe('participant Streaming Sequence', () => {
     });
 
     it('should not inject metadata on step events', () => {
-      const metadata = getMessageMetadata({ part: { type: 'start-step' } });
+      const metadata = getMessageMetadata({ part: { type: StreamPartTypes.START_STEP } });
       expect(metadata).toBeUndefined();
 
-      const finishStepMetadata = getMessageMetadata({ part: { type: 'finish-step' } });
+      const finishStepMetadata = getMessageMetadata({ part: { type: StreamPartTypes.FINISH_STEP } });
       expect(finishStepMetadata).toBeUndefined();
     });
   });

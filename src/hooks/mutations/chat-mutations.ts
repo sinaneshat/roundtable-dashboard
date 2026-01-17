@@ -52,59 +52,24 @@ export function useUpdateThreadMutation() {
 
   return useMutation({
     mutationFn: updateThreadService,
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(variables.param.id) });
-      await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
-      if ('slug' in variables.json && typeof variables.json.slug === 'string') {
-        await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.json.slug) });
-      }
+    onSuccess: (data, variables) => {
+      const threadId = variables.param.id;
+      const updatedThread = data.success && data.data ? data.data : null;
 
-      const previousThread = queryClient.getQueryData(queryKeys.threads.detail(variables.param.id));
-      const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
-      const previousBySlug = ('slug' in variables.json && typeof variables.json.slug === 'string')
-        ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.json.slug))
-        : null;
-
-      queryClient.setQueryData(
-        queryKeys.threads.detail(variables.param.id),
-        (old) => {
-          const parsedData = validateThreadDetailPayloadCache(old);
-          if (!parsedData)
-            return old;
-
-          const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
-          if (!updatePayload.success)
-            return old;
-
-          return {
-            success: true,
-            data: {
-              ...parsedData,
-              thread: {
-                ...parsedData.thread,
-                ...updatePayload.data,
-              },
-            },
-          };
-        },
-      );
-
+      // Immediately update sidebar/list caches with the new title from the response
+      // This prevents waiting for a refetch and shows the update instantly
       queryClient.setQueriesData(
         {
           queryKey: queryKeys.threads.all,
           predicate: (query) => {
             if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
               return false;
-            return query.queryKey[1] === 'list';
+            return query.queryKey[1] === 'list' || query.queryKey[1] === 'sidebar';
           },
         },
         (old) => {
           const parsedQuery = validateInfiniteQueryCache(old);
           if (!parsedQuery)
-            return old;
-
-          const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
-          if (!updatePayload.success)
             return old;
 
           return {
@@ -119,12 +84,19 @@ export function useUpdateThreadMutation() {
                   ...page.data,
                   items: page.data.items.map((thread) => {
                     const threadData = ChatThreadCacheSchema.safeParse(thread);
-                    if (!threadData.success)
+                    if (!threadData.success || threadData.data.id !== threadId)
                       return thread;
 
-                    return threadData.data.id === variables.param.id
-                      ? { ...threadData.data, ...updatePayload.data }
-                      : thread;
+                    // Merge the response data with existing thread
+                    return {
+                      ...thread,
+                      ...(updatedThread || {}),
+                      // Also apply the request variables as fallback
+                      ...('title' in variables.json && { title: variables.json.title }),
+                      ...('isFavorite' in variables.json && { isFavorite: variables.json.isFavorite }),
+                      ...('isPublic' in variables.json && { isPublic: variables.json.isPublic }),
+                      ...('slug' in variables.json && { slug: variables.json.slug }),
+                    };
                   }),
                 },
               };
@@ -133,51 +105,57 @@ export function useUpdateThreadMutation() {
         },
       );
 
-      if ('slug' in variables.json && variables.json.slug) {
-        const slug = variables.json.slug;
-        if (typeof slug === 'string') {
-          queryClient.setQueryData(
-            queryKeys.threads.bySlug(slug),
-            (old) => {
-              const parsedData = validateThreadDetailPayloadCache(old);
-              if (!parsedData)
-                return old;
+      // Update thread detail cache if present
+      queryClient.setQueryData(
+        queryKeys.threads.detail(threadId),
+        (old) => {
+          const parsedData = validateThreadDetailPayloadCache(old);
+          if (!parsedData)
+            return old;
 
-              const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
-              if (!updatePayload.success)
-                return old;
-
-              return {
-                success: true,
-                data: {
-                  ...parsedData,
-                  thread: {
-                    ...parsedData.thread,
-                    ...updatePayload.data,
-                  },
-                },
-              };
+          return {
+            success: true,
+            data: {
+              ...parsedData,
+              thread: {
+                ...parsedData.thread,
+                ...(updatedThread || {}),
+                ...('title' in variables.json && { title: variables.json.title }),
+                ...('isFavorite' in variables.json && { isFavorite: variables.json.isFavorite }),
+                ...('isPublic' in variables.json && { isPublic: variables.json.isPublic }),
+                ...('slug' in variables.json && { slug: variables.json.slug }),
+              },
             },
-          );
-        }
-      }
+          };
+        },
+      );
 
-      return {
-        previousThread,
-        previousThreads,
-        previousBySlug,
-        slug: ('slug' in variables.json && typeof variables.json.slug === 'string') ? variables.json.slug : null,
-      };
-    },
-    onError: (_error, variables, context) => {
-      if (context?.previousThread) {
-        queryClient.setQueryData(queryKeys.threads.detail(variables.param.id), context.previousThread);
-      }
-      if (context?.previousThreads) {
-        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
-      }
-      if (context?.slug && context?.previousBySlug) {
-        queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
+      // Update slug-based cache if slug was provided
+      const newSlug = 'slug' in variables.json ? variables.json.slug : null;
+      if (typeof newSlug === 'string') {
+        queryClient.setQueryData(
+          queryKeys.threads.bySlug(newSlug),
+          (old) => {
+            const parsedData = validateThreadDetailPayloadCache(old);
+            if (!parsedData)
+              return old;
+
+            return {
+              success: true,
+              data: {
+                ...parsedData,
+                thread: {
+                  ...parsedData.thread,
+                  ...(updatedThread || {}),
+                  ...('title' in variables.json && { title: variables.json.title }),
+                  ...('isFavorite' in variables.json && { isFavorite: variables.json.isFavorite }),
+                  ...('isPublic' in variables.json && { isPublic: variables.json.isPublic }),
+                  slug: newSlug,
+                },
+              },
+            };
+          },
+        );
       }
     },
     retry: false,
@@ -203,7 +181,7 @@ export function useDeleteThreadMutation() {
           predicate: (query) => {
             if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
               return false;
-            return query.queryKey[1] === 'list';
+            return query.queryKey[1] === 'list' || query.queryKey[1] === 'sidebar';
           },
         },
         (old) => {

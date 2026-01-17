@@ -11,38 +11,46 @@
 
 import { eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
+import { z } from 'zod';
 
-import { invalidateThreadMessagesCache } from '@/api/common/cache-utils';
+import { invalidateMessagesCache } from '@/api/common/cache-utils';
 import { FinishReasons, FinishReasonSchema, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { CoreSchemas } from '@/api/core/schemas';
 import { extractErrorMetadata } from '@/api/services/errors';
 import type { AvailableSource, CitationSourceMap } from '@/api/types/citations';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { DbMessageParts } from '@/db/schemas/chat-metadata';
 import type { MessagePart, StreamingFinishResult } from '@/lib/schemas/message-schemas';
-import { createParticipantMetadata, hasCitations, isObject, parseCitations, toDbCitations } from '@/lib/utils';
+import { cleanCitationExcerpt, createParticipantMetadata, hasCitations, isObject, parseCitations, toDbCitations } from '@/lib/utils';
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
-export type SaveMessageParams = {
-  messageId: string;
-  threadId: string;
-  participantId: string;
-  participantIndex: number;
-  participantRole: string | null;
-  modelId: string;
-  roundNumber: number;
-  text: string;
-  reasoningDeltas: string[];
-  finishResult: StreamingFinishResult;
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-  citationSourceMap?: CitationSourceMap;
-  availableSources?: AvailableSource[];
-  reasoningDuration?: number;
-  emptyResponseError?: string | null;
-};
+/**
+ * Schema for saveStreamedMessage parameters
+ * Following type-inference-patterns.md: Zod-first type inference
+ */
+export const SaveMessageParamsSchema = z.object({
+  messageId: CoreSchemas.id(),
+  threadId: CoreSchemas.id(),
+  participantId: CoreSchemas.id(),
+  participantIndex: z.number().int().nonnegative(),
+  participantRole: z.string().nullable(),
+  modelId: z.string().min(1),
+  roundNumber: z.number().int().nonnegative(),
+  text: z.string(),
+  reasoningDeltas: z.array(z.string()),
+  finishResult: z.custom<StreamingFinishResult>(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  citationSourceMap: z.custom<CitationSourceMap>().optional(),
+  availableSources: z.array(z.custom<AvailableSource>()).optional(),
+  reasoningDuration: z.number().nonnegative().optional(),
+  emptyResponseError: z.string().nullable().optional(),
+});
+
+export type SaveMessageParams = z.infer<typeof SaveMessageParamsSchema>;
 
 // ============================================================================
 // Reasoning Extraction
@@ -255,7 +263,8 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
               return undefined;
             return {
               title: source.title,
-              excerpt: source.content.slice(0, 300),
+              // Clean and format the excerpt for better display
+              excerpt: cleanCitationExcerpt(source.content, 200),
               url: source.metadata.url,
               threadId: source.metadata.threadId,
               threadTitle: source.metadata.threadTitle,
@@ -308,6 +317,8 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
         threadId,
         participantId,
         role: MessageRoles.ASSISTANT,
+        // TYPE BRIDGE: MessagePart[] and DbMessageParts are structurally identical
+        // Zod schemas. Cast needed because TypeScript treats them as separate types.
         parts: parts as DbMessageParts,
         roundNumber,
         metadata: messageMetadata,
@@ -335,6 +346,7 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
           threadId,
           participantId,
           role: MessageRoles.TOOL,
+          // TYPE BRIDGE: Same as above - MessagePart[] to DbMessageParts
           parts: toolParts as DbMessageParts,
           roundNumber,
           metadata: null,
@@ -343,8 +355,10 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
       }
     }
 
-    invalidateThreadMessagesCache(threadId);
-  } catch {
+    await invalidateMessagesCache(db, threadId);
+  } catch (error) {
+    // ✅ DEBUG: Log the error instead of silently swallowing
+    console.error(`[PERSIST] FAILED to save message id=${messageId}:`, error);
     // Non-blocking - allow round to continue
   }
 }

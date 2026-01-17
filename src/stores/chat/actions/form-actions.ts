@@ -105,9 +105,16 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   );
 
   const handleCreateThread = useCallback(async (attachmentIds?: string[], _attachmentInfos?: AttachmentInfo[]) => {
-    const prompt = formState.inputValue.trim();
+    // ✅ CRITICAL FIX: Use fresh state from storeApi instead of stale formState closure
+    // After auto mode analysis updates the store, formState still has old values
+    // This was causing enableWebSearch and participants from auto mode to be ignored
+    const freshState = storeApi.getState();
+    const prompt = freshState.inputValue.trim();
+    const freshSelectedMode = freshState.selectedMode;
+    const freshSelectedParticipants = freshState.selectedParticipants;
+    const freshEnableWebSearch = freshState.enableWebSearch;
 
-    if (!prompt || formState.selectedParticipants.length === 0 || !formState.selectedMode) {
+    if (!prompt || freshSelectedParticipants.length === 0 || !freshSelectedMode) {
       return;
     }
 
@@ -116,9 +123,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       const createThreadRequest = toCreateThreadRequest({
         message: prompt,
-        mode: formState.selectedMode,
-        participants: formState.selectedParticipants,
-        enableWebSearch: formState.enableWebSearch,
+        mode: freshSelectedMode,
+        participants: freshSelectedParticipants,
+        enableWebSearch: freshEnableWebSearch,
       }, attachmentIds);
 
       const response = await createThreadMutation.mutateAsync({
@@ -197,7 +204,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       actions.setInputValue('');
       actions.clearAttachments();
 
-      if (formState.enableWebSearch) {
+      if (freshEnableWebSearch) {
         actions.addPreSearch(createPlaceholderPreSearch({
           threadId: thread.id,
           roundNumber: 0,
@@ -220,10 +227,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       actions.setIsCreatingThread(false);
     }
   }, [
-    formState.inputValue,
-    formState.selectedMode,
-    formState.selectedParticipants,
-    formState.enableWebSearch,
+    storeApi,
     createThreadMutation,
     actions,
     queryClient,

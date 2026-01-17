@@ -326,7 +326,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('error Handling', () => {
+  describe('error handling', () => {
     it('should call onError callback when error occurs', async () => {
       const onError = vi.fn();
       const testError = new Error('Test error');
@@ -369,7 +369,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('incomplete Round Resumption', () => {
+  describe('incomplete round resumption', () => {
     it('should support resumption via continueFromParticipant', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -422,7 +422,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('streaming State Management', () => {
+  describe('streaming state management', () => {
     it('should track isStreaming state correctly', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -468,7 +468,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('animation Tracking', () => {
+  describe('animation tracking', () => {
     it('should call clearAnimations callback when provided', async () => {
       const clearAnimations = vi.fn();
       const { result } = renderHook(() =>
@@ -508,7 +508,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('edge Cases', () => {
+  describe('edge cases', () => {
     it('should handle empty participants array', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -594,7 +594,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('messages State', () => {
+  describe('messages state', () => {
     it('should allow setting messages manually', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -637,7 +637,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('isReady State', () => {
+  describe('isReady state', () => {
     it('should provide isReady state', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
@@ -652,7 +652,7 @@ describe('useMultiParticipantChat', () => {
     });
   });
 
-  describe('pre-Search Integration', () => {
+  describe('pre-search integration', () => {
     it('should handle pre-search start callback', async () => {
       const onPreSearchStart = vi.fn();
       const { result } = renderHook(() =>

@@ -83,10 +83,15 @@ function setupStore(): ChatStoreApi {
   return store;
 }
 
+type PatchChanges = {
+  mode?: ChatModes;
+  enableWebSearch?: boolean;
+};
+
 async function simulatePatchRequest(
   store: ChatStoreApi,
   roundNumber: number,
-  changes: Record<string, unknown>,
+  changes: PatchChanges,
 ): Promise<void> {
   recordCall('PATCH', roundNumber);
   await new Promise(resolve => setTimeout(resolve, 10));

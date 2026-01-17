@@ -6,7 +6,7 @@ import {
   CREDIT_TRANSACTION_TYPES,
   PLAN_TYPES,
   PlanTypes,
-} from '@/api/core/enums/billing';
+} from '@/api/core/enums';
 import type { CreditTransactionMetadata } from '@/db/validation/credits';
 
 import { user } from './auth';
@@ -16,7 +16,7 @@ import { chatThread } from './chat';
  * User Credit Balance
  *
  * Tracks user's credit balance for the token-based billing system.
- * Two plans: 'free' (5K signup credits) and 'paid' ($59/month, 100K credits).
+ * Two plans: 'free' (5K signup credits) and 'paid' ($59/month, 2M credits).
  *
  * Credit System:
  * - 1 credit = 1000 tokens (configurable in product-logic.service.ts)
@@ -48,7 +48,7 @@ export const userCreditBalance = sqliteTable(
       .notNull()
       .default(PlanTypes.FREE),
 
-    // Monthly auto-refill amount (0 for free, 100_000 for paid)
+    // Monthly auto-refill amount (0 for free, 2_000_000 for paid)
     monthlyCredits: integer('monthly_credits').notNull().default(0),
 
     // Refill timestamps

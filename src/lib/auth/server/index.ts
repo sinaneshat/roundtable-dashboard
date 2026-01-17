@@ -11,7 +11,7 @@ import { db } from '@/db';
 import * as authSchema from '@/db/tables/auth';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
-import { isAllowedEmailDomain, isRestrictedEnvironment, validateEmailDomain } from '../utils';
+import { EMAIL_DOMAIN_CONFIG, isAllowedEmailDomain, isRestrictedEnvironment, validateEmailDomain } from '../utils';
 
 /**
  * Get auth secret from available sources.
@@ -144,7 +144,7 @@ function createAuth() {
 
             // Validate email domain for all user creation methods
             if (user.email && !isAllowedEmailDomain(user.email)) {
-              throw new Error('Access restricted: Only @deadpixel.ai email addresses are allowed in preview environments');
+              throw new Error(EMAIL_DOMAIN_CONFIG.ERROR_MESSAGE);
             }
           },
         },
@@ -163,7 +163,7 @@ function createAuth() {
             });
 
             if (user?.email && !isAllowedEmailDomain(user.email)) {
-              throw new Error('Access restricted: Only @deadpixel.ai email addresses are allowed in preview environments');
+              throw new Error(EMAIL_DOMAIN_CONFIG.ERROR_MESSAGE);
             }
           },
         },
@@ -177,6 +177,8 @@ function createAuth() {
       cookieCache: {
         enabled: true,
         maxAge: 60 * 15, // 15 minutes cache
+        strategy: 'compact', // Base64url + HMAC-SHA256 - smallest, best perf
+        refreshCache: true, // Stateless refresh without DB lookup
       },
     },
 
@@ -202,6 +204,9 @@ function createAuth() {
     user: {
       changeEmail: {
         enabled: false, // Disabled for security
+      },
+      deleteUser: {
+        enabled: true,
       },
     },
 

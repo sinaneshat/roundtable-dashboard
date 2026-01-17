@@ -8,8 +8,7 @@ import { Suspense } from 'react';
 import type { SubscriptionChangeType, SubscriptionTier } from '@/api/core/enums';
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers, SubscriptionTierSchema } from '@/api/core/enums';
 import type { Subscription } from '@/api/routes/billing/schema';
-// Direct import to avoid barrel export pulling in server-only credit.service.ts
-import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/billing/product-logic.service';
+import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId } from '@/api/services/billing/product-logic.service';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
+import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import { cn } from '@/lib/ui/cn';
 
 // Glass button styles for billing pages (consistent with chat toolbar)

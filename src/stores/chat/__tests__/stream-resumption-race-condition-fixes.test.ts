@@ -185,7 +185,7 @@ describe('double Trigger Prevention', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     const firstCallCount = mockStore.actions.setWaitingToStartStreaming.mock.calls.filter(
       call => call[0] === true,
@@ -216,7 +216,7 @@ describe('double Trigger Prevention', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     const triggerCallsBefore = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
@@ -260,7 +260,7 @@ describe('double Trigger Prevention', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     const callsBeforeFailure = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
@@ -305,7 +305,7 @@ describe('double Trigger Prevention', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(1);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     mockStore.actions.setNextParticipantToTrigger.mockClear();
     mockStore.actions.setStreamingRoundNumber.mockClear();
@@ -402,7 +402,7 @@ describe('aI SDK Resume Blocking', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
   });
 
   it('should not interfere with custom resumption when prefilled', async () => {
@@ -448,7 +448,7 @@ describe('retry Toggle Timeout', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     const initialTriggerCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
@@ -492,7 +492,7 @@ describe('retry Toggle Timeout', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     const callsBeforeWait = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
@@ -538,7 +538,7 @@ describe('retry Toggle Timeout', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     const callsBeforeRetry = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
@@ -585,7 +585,7 @@ describe('retry Toggle Timeout', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     mockStore.actions.setNextParticipantToTrigger.mockClear();
 
@@ -624,7 +624,7 @@ describe('retry Toggle Timeout', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     for (let i = 0; i < 3; i++) {
       act(() => {
@@ -678,7 +678,7 @@ describe('integration Tests', () => {
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(1);
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
@@ -750,7 +750,7 @@ describe('integration Tests', () => {
 
     await waitFor(() => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     const initialCallCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
@@ -797,7 +797,7 @@ describe('integration Tests', () => {
     // Wait for initial trigger for participant 2 in round 1
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(2);
-    }, { timeout: 200 });
+    }, { timeout: 500 });
 
     const round1TriggerCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.length;
 

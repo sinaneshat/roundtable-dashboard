@@ -14,7 +14,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import type { GetSubscriptionsResponse } from '@/services/api';
 import {
   cancelSubscriptionService,
   getUserUsageStatsService,
@@ -29,42 +28,14 @@ import {
  * Automatically handles:
  * - Upgrades (new > current): Applied immediately with proration
  * - Downgrades (new < current): Scheduled for end of billing period
- * - Updates cache immediately with fresh data from API response
- * - Invalidates subscription queries to ensure consistency
+ * - Invalidates subscription queries to fetch fresh data
  */
 export function useSwitchSubscriptionMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: switchSubscriptionService,
-    onSuccess: async (response) => {
-      // Immediately update the subscriptions list cache with the updated subscription
-      if (response.success && response.data?.subscription) {
-        const updatedSubscription = response.data.subscription;
-
-        queryClient.setQueryData<GetSubscriptionsResponse>(
-          queryKeys.subscriptions.list(),
-          (oldData) => {
-            if (!oldData || !oldData.success || !oldData.data?.items) {
-              return oldData;
-            }
-
-            const updatedItems = oldData.data.items.map((sub: typeof updatedSubscription) =>
-              sub.id === updatedSubscription.id ? updatedSubscription : sub,
-            );
-
-            return {
-              ...oldData,
-              data: {
-                items: updatedItems,
-                count: oldData.data.count,
-              },
-            };
-          },
-        );
-      }
-
-      // Invalidate subscriptions all queries
+    onSuccess: async () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
       });
@@ -96,42 +67,14 @@ export function useSwitchSubscriptionMutation() {
  *
  * - Default: Cancel at period end (user retains access)
  * - Optional: Cancel immediately (user loses access)
- * - Updates cache immediately with fresh data from API response
- * - Invalidates subscription queries to ensure consistency
+ * - Invalidates subscription queries to fetch fresh data
  */
 export function useCancelSubscriptionMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: cancelSubscriptionService,
-    onSuccess: async (response) => {
-      // Immediately update the subscriptions list cache with the updated subscription
-      if (response.success && response.data?.subscription) {
-        const updatedSubscription = response.data.subscription;
-
-        queryClient.setQueryData<GetSubscriptionsResponse>(
-          queryKeys.subscriptions.list(),
-          (oldData) => {
-            if (!oldData || !oldData.success || !oldData.data?.items) {
-              return oldData;
-            }
-
-            const updatedItems = oldData.data.items.map((sub: typeof updatedSubscription) =>
-              sub.id === updatedSubscription.id ? updatedSubscription : sub,
-            );
-
-            return {
-              ...oldData,
-              data: {
-                items: updatedItems,
-                count: oldData.data.count,
-              },
-            };
-          },
-        );
-      }
-
-      // Invalidate subscriptions all queries
+    onSuccess: async () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
       });

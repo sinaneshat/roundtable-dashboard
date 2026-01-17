@@ -12,6 +12,8 @@
 import type { IncompatibilityReason } from '@/api/core/enums';
 import {
   IncompatibilityReasons,
+  isDocumentMimeType,
+  isImageMimeType,
   isVisualMimeType,
 } from '@/api/core/enums';
 
@@ -24,6 +26,20 @@ import {
  */
 export function isVisionRequiredMimeType(mimeType: string): boolean {
   return isVisualMimeType(mimeType);
+}
+
+/**
+ * ✅ GRANULAR: Check if MIME type is an image (requires supports_vision)
+ */
+export function isImageFile(mimeType: string): boolean {
+  return isImageMimeType(mimeType);
+}
+
+/**
+ * ✅ GRANULAR: Check if MIME type is a document/PDF (requires supports_file)
+ */
+export function isDocumentFile(mimeType: string): boolean {
+  return isDocumentMimeType(mimeType);
 }
 
 // ============================================================================
@@ -40,10 +56,13 @@ export type FileForCapabilityCheck = {
 
 /**
  * Model capabilities relevant for file processing
+ * ✅ GRANULAR: Separates vision (images) from file (PDFs/documents)
  */
 export type ModelFileCapabilities = {
   /** Whether the model supports vision/image inputs */
   vision: boolean;
+  /** Whether the model supports file/document inputs (PDFs, DOC, etc.) */
+  file?: boolean;
 };
 
 /**
@@ -57,7 +76,22 @@ export function filesRequireVision(files: FileForCapabilityCheck[]): boolean {
 }
 
 /**
+ * ✅ GRANULAR: Check if any files are images (require supports_vision)
+ */
+export function filesHaveImages(files: FileForCapabilityCheck[]): boolean {
+  return files.some(file => isImageFile(file.mimeType));
+}
+
+/**
+ * ✅ GRANULAR: Check if any files are documents/PDFs (require supports_file)
+ */
+export function filesHaveDocuments(files: FileForCapabilityCheck[]): boolean {
+  return files.some(file => isDocumentFile(file.mimeType));
+}
+
+/**
  * Check if a model is compatible with a set of files
+ * ✅ GRANULAR: Checks both vision (images) and file (documents) capabilities
  *
  * @param modelCapabilities - The model's capabilities
  * @param files - Files to check compatibility with
@@ -67,8 +101,12 @@ export function isModelCompatibleWithFiles(
   modelCapabilities: ModelFileCapabilities,
   files: FileForCapabilityCheck[],
 ): boolean {
-  // If files require vision and model doesn't support it, incompatible
-  if (filesRequireVision(files) && !modelCapabilities.vision) {
+  // Check image compatibility (requires supports_vision)
+  if (filesHaveImages(files) && !modelCapabilities.vision) {
+    return false;
+  }
+  // Check document compatibility (requires supports_file)
+  if (filesHaveDocuments(files) && !modelCapabilities.file) {
     return false;
   }
   return true;
@@ -76,6 +114,7 @@ export function isModelCompatibleWithFiles(
 
 /**
  * Get the reason why a model is incompatible with files
+ * ✅ GRANULAR: Differentiates between vision (images) and file (documents) incompatibility
  *
  * @param modelCapabilities - The model's capabilities
  * @param files - Files to check compatibility with
@@ -85,8 +124,13 @@ export function getIncompatibilityReason(
   modelCapabilities: ModelFileCapabilities,
   files: FileForCapabilityCheck[],
 ): IncompatibilityReason | null {
-  if (filesRequireVision(files) && !modelCapabilities.vision) {
+  // Check image incompatibility first
+  if (filesHaveImages(files) && !modelCapabilities.vision) {
     return IncompatibilityReasons.NO_VISION;
+  }
+  // Check document/file incompatibility
+  if (filesHaveDocuments(files) && !modelCapabilities.file) {
+    return IncompatibilityReasons.NO_FILE_SUPPORT;
   }
   return null;
 }
@@ -132,9 +176,67 @@ export function getIncompatibleModelIds<T extends { id: string; capabilities: Mo
   return incompatibleIds;
 }
 
+/**
+ * ✅ GRANULAR: Get detailed incompatibility info for each model
+ * Returns which models are incompatible and why (vision vs file)
+ */
+export type ModelIncompatibilityInfo = {
+  /** All incompatible model IDs */
+  incompatibleIds: Set<string>;
+  /** Model IDs incompatible due to missing vision support (images) */
+  visionIncompatibleIds: Set<string>;
+  /** Model IDs incompatible due to missing file support (PDFs) */
+  fileIncompatibleIds: Set<string>;
+};
+
+export function getDetailedIncompatibleModelIds<T extends { id: string; capabilities: ModelFileCapabilities }>(
+  models: T[],
+  files: FileForCapabilityCheck[],
+): ModelIncompatibilityInfo {
+  const incompatibleIds = new Set<string>();
+  const visionIncompatibleIds = new Set<string>();
+  const fileIncompatibleIds = new Set<string>();
+
+  // No files = no incompatibilities
+  if (files.length === 0) {
+    return { incompatibleIds, visionIncompatibleIds, fileIncompatibleIds };
+  }
+
+  const hasImages = filesHaveImages(files);
+  const hasDocuments = filesHaveDocuments(files);
+
+  for (const model of models) {
+    // Check vision incompatibility (images)
+    if (hasImages && !model.capabilities.vision) {
+      incompatibleIds.add(model.id);
+      visionIncompatibleIds.add(model.id);
+    }
+    // Check file incompatibility (documents) - only if not already incompatible due to vision
+    if (hasDocuments && !model.capabilities.file) {
+      incompatibleIds.add(model.id);
+      fileIncompatibleIds.add(model.id);
+    }
+  }
+
+  return { incompatibleIds, visionIncompatibleIds, fileIncompatibleIds };
+}
+
 // ============================================================================
 // THREAD-LEVEL FILE CHECKING
 // ============================================================================
+
+/**
+ * Helper to extract mediaType from a message part
+ */
+function getPartMediaType(part: unknown): string | null {
+  if (typeof part !== 'object' || part === null)
+    return null;
+  if (!('type' in part) || part.type !== 'file')
+    return null;
+  if (!('mediaType' in part) || typeof part.mediaType !== 'string')
+    return null;
+  return part.mediaType;
+}
 
 /**
  * Check if thread messages contain vision-required files
@@ -150,14 +252,42 @@ export function threadHasVisionRequiredFiles(
     if (!msg.parts)
       return false;
     return msg.parts.some((part) => {
-      // Type guard: check if part is a file part with mediaType
-      if (typeof part !== 'object' || part === null)
-        return false;
-      if (!('type' in part) || part.type !== 'file')
-        return false;
-      if (!('mediaType' in part) || typeof part.mediaType !== 'string')
-        return false;
-      return isVisionRequiredMimeType(part.mediaType);
+      const mediaType = getPartMediaType(part);
+      return mediaType !== null && isVisionRequiredMimeType(mediaType);
+    });
+  });
+}
+
+/**
+ * ✅ GRANULAR: Check if thread messages contain image files
+ * Used to determine if non-vision models should be disabled
+ */
+export function threadHasImageFiles(
+  messages: Array<{ parts?: unknown[] }>,
+): boolean {
+  return messages.some((msg) => {
+    if (!msg.parts)
+      return false;
+    return msg.parts.some((part) => {
+      const mediaType = getPartMediaType(part);
+      return mediaType !== null && isImageFile(mediaType);
+    });
+  });
+}
+
+/**
+ * ✅ GRANULAR: Check if thread messages contain document files (PDFs)
+ * Used to determine if non-file-supporting models should be disabled
+ */
+export function threadHasDocumentFiles(
+  messages: Array<{ parts?: unknown[] }>,
+): boolean {
+  return messages.some((msg) => {
+    if (!msg.parts)
+      return false;
+    return msg.parts.some((part) => {
+      const mediaType = getPartMediaType(part);
+      return mediaType !== null && isDocumentFile(mediaType);
     });
   });
 }

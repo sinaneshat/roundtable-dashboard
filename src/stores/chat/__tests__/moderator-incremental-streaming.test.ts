@@ -152,7 +152,7 @@ describe('moderator Incremental Streaming Updates', () => {
 
       const messages = store.getState().messages;
       expect(messages[0]?.id).toBe(moderatorId);
-      expect(messages[0]?.role).toBe('assistant');
+      expect(messages[0]?.role).toBe(UIMessageRoles.ASSISTANT);
       expect(messages[0]?.metadata?.isModerator).toBe(true);
       expect(messages[0]?.metadata?.roundNumber).toBe(0);
     });

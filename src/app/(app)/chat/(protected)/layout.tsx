@@ -9,7 +9,7 @@ import { BRAND, LIMITS } from '@/constants';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
-import { getSubscriptionsService, getUserUsageStatsService, listModelsService, listThreadsService } from '@/services/api';
+import { getSubscriptionsService, getUserUsageStatsService, listModelsService, listSidebarThreadsService } from '@/services/api';
 import { createMetadata } from '@/utils';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -53,9 +53,9 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
       staleTime: STALE_TIMES.subscriptions,
     }),
     queryClient.prefetchInfiniteQuery({
-      queryKey: [...queryKeys.threads.lists()],
-      queryFn: () => listThreadsService({ query: { limit: LIMITS.INITIAL_PAGE } }),
-      staleTime: STALE_TIMES.threads,
+      queryKey: [...queryKeys.threads.sidebar()],
+      queryFn: () => listSidebarThreadsService({ query: { limit: LIMITS.INITIAL_PAGE } }),
+      staleTime: STALE_TIMES.threadsSidebar,
       initialPageParam: undefined,
     }),
   ]).catch(() => {

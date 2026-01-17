@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { MessageRoles } from '@/api/core/enums';
-import { CreditActions, CreditTransactionTypes, PlanTypes } from '@/api/core/enums';
+import { CreditActions, CreditTransactionTypes, MessageRoles, PlanTypes } from '@/api/core/enums';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 /**
  * Free User Credit Journey Integration Tests
@@ -60,7 +60,7 @@ type MockThread = {
 type MockMessage = {
   id: string;
   threadId: string;
-  role: MessageRoles.USER | 'assistant' | 'system';
+  role: typeof MessageRoles[keyof typeof MessageRoles];
   roundIndex: number;
   participantId?: string | null;
   content: string;
@@ -234,7 +234,7 @@ class MockDatabase {
 
   addMessage(
     threadId: string,
-    role: MessageRoles.USER | 'assistant',
+    role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT,
     content: string,
     roundIndex: number,
     participantId?: string,
@@ -263,7 +263,7 @@ class MockDatabase {
   checkRoundComplete(threadId: string, roundIndex: number): boolean {
     const enabledParticipants = this.getEnabledParticipants(threadId);
     const assistantMessages = this.messages.filter(
-      m => m.threadId === threadId && m.roundIndex === roundIndex && m.role === 'assistant',
+      m => m.threadId === threadId && m.roundIndex === roundIndex && m.role === MessageRoles.ASSISTANT,
     );
 
     const respondedParticipantIds = new Set(
@@ -354,7 +354,7 @@ describe('free User Credit Journey Integration', () => {
 
       const balanceBefore = db.getCreditBalance(freeUser.id)!.balance;
 
-      db.addMessage(thread!.id, 'user', 'Hello world', 0);
+      db.addMessage(thread!.id, MessageRoles.USER, 'Hello world', 0);
 
       const balanceAfter = db.getCreditBalance(freeUser.id)!.balance;
       expect(balanceAfter).toBe(balanceBefore);
@@ -362,7 +362,7 @@ describe('free User Credit Journey Integration', () => {
 
     it('assistant response deducts credits', () => {
       const thread = db.createThread(freeUser.id, 'Test Thread');
-      db.addMessage(thread!.id, 'user', 'Hello', 0);
+      db.addMessage(thread!.id, MessageRoles.USER, 'Hello', 0);
 
       const balanceBefore = db.getCreditBalance(freeUser.id)!.balance;
 
@@ -370,7 +370,7 @@ describe('free User Credit Journey Integration', () => {
       const streamingCost = 250; // Example cost
       db.deductCredits(freeUser.id, streamingCost, CreditActions.AI_RESPONSE, thread!.id);
 
-      db.addMessage(thread!.id, 'assistant', 'Hi there!', 0, 'participant-1');
+      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Hi there!', 0, 'participant-1');
 
       const balanceAfter = db.getCreditBalance(freeUser.id)!.balance;
       expect(balanceAfter).toBe(balanceBefore - streamingCost);
@@ -390,17 +390,17 @@ describe('free User Credit Journey Integration', () => {
       );
 
       // User message
-      db.addMessage(thread!.id, 'user', 'Question', 0);
+      db.addMessage(thread!.id, MessageRoles.USER, 'Question', 0);
 
       // First two participants respond
-      db.addMessage(thread!.id, 'assistant', 'Response 1', 0, 'p1');
+      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 1', 0, 'p1');
       expect(db.checkRoundComplete(thread!.id, 0)).toBe(false);
 
-      db.addMessage(thread!.id, 'assistant', 'Response 2', 0, 'p2');
+      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 2', 0, 'p2');
       expect(db.checkRoundComplete(thread!.id, 0)).toBe(false);
 
       // Third participant responds
-      db.addMessage(thread!.id, 'assistant', 'Response 3', 0, 'p3');
+      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 3', 0, 'p3');
       expect(db.checkRoundComplete(thread!.id, 0)).toBe(true);
     });
 
@@ -411,14 +411,14 @@ describe('free User Credit Journey Integration', () => {
         { id: 'p2', threadId: thread!.id, modelId: 'model-2', enabled: true },
       );
 
-      db.addMessage(thread!.id, 'user', 'Question', 0);
+      db.addMessage(thread!.id, MessageRoles.USER, 'Question', 0);
 
       // Participants respond with credit deductions
       db.deductCredits(freeUser.id, 200, CreditActions.AI_RESPONSE, thread!.id);
-      db.addMessage(thread!.id, 'assistant', 'Response 1', 0, 'p1');
+      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 1', 0, 'p1');
 
       db.deductCredits(freeUser.id, 200, CreditActions.AI_RESPONSE, thread!.id);
-      db.addMessage(thread!.id, 'assistant', 'Response 2', 0, 'p2');
+      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 2', 0, 'p2');
 
       // Round complete
       const roundComplete = db.checkRoundComplete(thread!.id, 0);
@@ -512,8 +512,8 @@ describe('free User Credit Journey Integration', () => {
 
     it('messages remain visible after credits exhausted', () => {
       const thread = db.createThread(freeUser.id, 'Test Thread');
-      db.addMessage(thread!.id, 'user', 'Message 1', 0);
-      db.addMessage(thread!.id, 'assistant', 'Response 1', 0, 'p1');
+      db.addMessage(thread!.id, MessageRoles.USER, 'Message 1', 0);
+      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 1', 0, 'p1');
 
       db.zeroOutCredits(freeUser.id);
 
@@ -596,13 +596,13 @@ describe('free User Credit Journey Integration', () => {
     });
 
     it('paid users not affected by free round marker', () => {
-      paidDb.getCreditBalance(paidUser.id)!.balance = 100000;
+      paidDb.getCreditBalance(paidUser.id)!.balance = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       // Simulate free round complete (shouldn't happen for paid, but test the flag)
       paidDb.zeroOutCredits(paidUser.id);
 
       // Give back credits
-      paidDb.getCreditBalance(paidUser.id)!.balance = 100000;
+      paidDb.getCreditBalance(paidUser.id)!.balance = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       // Paid user should still be able to use credits despite marker
       const canUse = paidDb.getCreditBalance(paidUser.id)!.balance > 100;

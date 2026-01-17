@@ -21,7 +21,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes, TimelineItemTypes } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils';
 import {
@@ -118,10 +118,10 @@ function createPreSearch(
     roundNumber,
     userQuery: `Query ${roundNumber}`,
     status: statusMap[status],
-    searchData: status === 'complete' ? { queries: [], results: [], moderatorSummary: 'Done', successCount: 1, failureCount: 0, totalResults: 0, totalTime: 100 } : null,
+    searchData: status === MessageStatuses.COMPLETE ? { queries: [], results: [], moderatorSummary: 'Done', successCount: 1, failureCount: 0, totalResults: 0, totalTime: 100 } : null,
     errorMessage: null,
     createdAt: new Date(),
-    completedAt: status === 'complete' ? new Date() : null,
+    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
   } as StoredPreSearch;
 }
 
@@ -321,7 +321,7 @@ describe('timeline Duplication Detection', () => {
       );
 
       const timeline = result.current;
-      const messagesItem = timeline.find(item => item.type === 'messages' && item.roundNumber === 0);
+      const messagesItem = timeline.find(item => item.type === TimelineItemTypes.MESSAGES && item.roundNumber === 0);
 
       expect(messagesItem).toBeDefined();
 
@@ -336,9 +336,9 @@ describe('timeline Duplication Detection', () => {
   describe('pre-Search Duplication', () => {
     it('timeline has at most ONE pre-search per round', () => {
       const preSearches = [
-        createPreSearch(0, 'complete'),
-        createPreSearch(0, 'streaming'), // Duplicate round 0
-        createPreSearch(1, 'pending'),
+        createPreSearch(0, MessageStatuses.COMPLETE),
+        createPreSearch(0, MessageStatuses.STREAMING), // Duplicate round 0
+        createPreSearch(1, MessageStatuses.PENDING),
       ];
 
       const { result } = renderHook(() =>
@@ -354,7 +354,7 @@ describe('timeline Duplication Detection', () => {
       // Count pre-search items per round
       const preSearchCountByRound = new Map<number, number>();
       for (const item of timeline) {
-        if (item.type === 'pre-search') {
+        if (item.type === TimelineItemTypes.PRE_SEARCH) {
           preSearchCountByRound.set(
             item.roundNumber,
             (preSearchCountByRound.get(item.roundNumber) || 0) + 1,
@@ -371,13 +371,13 @@ describe('timeline Duplication Detection', () => {
     it('store.addPreSearch deduplicates by roundNumber', () => {
       const store = createChatStore();
 
-      store.getState().addPreSearch(createPreSearch(0, 'pending'));
+      store.getState().addPreSearch(createPreSearch(0, MessageStatuses.PENDING));
       expect(store.getState().preSearches).toHaveLength(1);
 
-      store.getState().addPreSearch(createPreSearch(0, 'streaming'));
+      store.getState().addPreSearch(createPreSearch(0, MessageStatuses.STREAMING));
       expect(store.getState().preSearches).toHaveLength(1); // Still 1
 
-      store.getState().addPreSearch(createPreSearch(1, 'pending'));
+      store.getState().addPreSearch(createPreSearch(1, MessageStatuses.PENDING));
       expect(store.getState().preSearches).toHaveLength(2);
     });
   });
@@ -428,10 +428,10 @@ describe('second Round Specific Duplication Issues', () => {
 
   it('second round pre-search should not duplicate first round pre-search', () => {
     // Add pre-search for round 0
-    store.getState().addPreSearch(createPreSearch(0, 'complete'));
+    store.getState().addPreSearch(createPreSearch(0, MessageStatuses.COMPLETE));
 
     // Start round 1 with web search
-    store.getState().addPreSearch(createPreSearch(1, 'pending'));
+    store.getState().addPreSearch(createPreSearch(1, MessageStatuses.PENDING));
 
     const preSearches = store.getState().preSearches;
 
@@ -477,7 +477,7 @@ describe('full Flow E2E - No Duplication', () => {
     // ===== ROUND 0 =====
     store.getState().setExpectedParticipantIds(getParticipantModelIds(participants));
     store.getState().setStreamingRoundNumber(0);
-    store.getState().addPreSearch(createPreSearch(0, 'complete'));
+    store.getState().addPreSearch(createPreSearch(0, MessageStatuses.COMPLETE));
     store.getState().setMessages([
       createUserMsg(0),
       createAssistantMsg(0, 0),
@@ -494,7 +494,7 @@ describe('full Flow E2E - No Duplication', () => {
     store.getState().setStreamingRoundNumber(1);
     store.getState().prepareForNewMessage('Question 1', []);
     store.getState().setIsStreaming(true);
-    store.getState().addPreSearch(createPreSearch(1, 'complete'));
+    store.getState().addPreSearch(createPreSearch(1, MessageStatuses.COMPLETE));
 
     const r1Msgs = store.getState().messages;
     store.getState().setMessages([
@@ -514,7 +514,7 @@ describe('full Flow E2E - No Duplication', () => {
     store.getState().setStreamingRoundNumber(2);
     store.getState().prepareForNewMessage('Question 2', []);
     store.getState().setIsStreaming(true);
-    store.getState().addPreSearch(createPreSearch(2, 'complete'));
+    store.getState().addPreSearch(createPreSearch(2, MessageStatuses.COMPLETE));
 
     const r2Msgs = store.getState().messages;
     store.getState().setMessages([
@@ -587,7 +587,7 @@ describe('full Flow E2E - No Duplication', () => {
       createUserMsg(0),
       createAssistantMsg(0, 0),
     ]);
-    store.getState().addPreSearch(createPreSearch(0, 'complete'));
+    store.getState().addPreSearch(createPreSearch(0, MessageStatuses.COMPLETE));
 
     // Round 1 was streaming when page was refreshed
     const r0Msgs = store.getState().messages;
@@ -595,7 +595,7 @@ describe('full Flow E2E - No Duplication', () => {
       ...r0Msgs,
       createUserMsg(1),
     ]);
-    store.getState().addPreSearch(createPreSearch(1, 'streaming'));
+    store.getState().addPreSearch(createPreSearch(1, MessageStatuses.STREAMING));
 
     // Resumption: pre-search completes
     store.getState().updatePreSearchStatus(1, MessageStatuses.COMPLETE);

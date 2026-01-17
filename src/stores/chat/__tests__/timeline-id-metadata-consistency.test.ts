@@ -348,7 +348,7 @@ describe('participant Index Consistency', () => {
     expect(messagesItem?.type).toBe('messages');
 
     const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
-    const assistants = messagesData.filter(m => m.role === 'assistant');
+    const assistants = messagesData.filter(m => m.role === MessageRoles.ASSISTANT);
 
     // Should be sorted: p0, p1, p2
     expect((assistants[0]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(0);
@@ -453,7 +453,7 @@ describe('metadata Integrity', () => {
     expect(messagesItem?.type).toBe('messages');
 
     const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
-    const assistantMsg = messagesData.find(m => m.role === 'assistant');
+    const assistantMsg = messagesData.find(m => m.role === MessageRoles.ASSISTANT);
     const meta = assistantMsg?.metadata as DbAssistantMessageMetadata;
 
     expect(meta.roundNumber).toBe(1);
@@ -483,7 +483,7 @@ describe('metadata Integrity', () => {
     expect(messagesItem?.type).toBe('messages');
 
     const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
-    const userMsg = messagesData.find(m => m.role === 'user');
+    const userMsg = messagesData.find(m => m.role === MessageRoles.USER);
     const userMeta = userMsg?.metadata as DbUserMessageMetadata;
 
     expect(userMeta.roundNumber).toBe(5);

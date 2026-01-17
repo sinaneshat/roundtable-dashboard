@@ -38,9 +38,16 @@ export type GetThreadPreSearchesResponse = InferResponseType<
 /**
  * Get all pre-search results for a thread
  * Protected endpoint - requires authentication
+ *
+ * @param data - Request arguments with thread id
+ * @param options - Service options
+ * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
-export async function getThreadPreSearchesService(data: GetThreadPreSearchesRequest) {
-  const client = await createApiClient();
+export async function getThreadPreSearchesService(
+  data: GetThreadPreSearchesRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = await createApiClient({ cookieHeader: options?.cookieHeader });
   const params: GetThreadPreSearchesRequest = {
     param: data.param ?? { id: '' },
   };

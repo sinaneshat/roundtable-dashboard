@@ -25,6 +25,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { MessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import {
   createTestAssistantMessage,
@@ -265,7 +266,7 @@ describe('participant Message Order', () => {
       ];
 
       // Verify message order reflects timeline
-      expect(storeMessages[0]?.role).toBe('user');
+      expect(storeMessages[0]?.role).toBe(MessageRoles.USER);
       expect((storeMessages[1]?.metadata as DbAssistantMessageMetadata).participantIndex).toBe(0);
       expect((storeMessages[2]?.metadata as DbAssistantMessageMetadata).participantIndex).toBe(1);
     });

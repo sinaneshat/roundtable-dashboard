@@ -46,9 +46,14 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
   };
 
   // ✅ PERF FIX: Use Set for O(n) deduplication instead of O(n²) findIndex
+  // ✅ SECURITY FIX: Filter out blob: URLs which browsers block with security errors
   const visibleImages = useMemo(() => {
     const seenUrls = new Set<string>();
     return allImages.filter((img) => {
+      // Skip blob: URLs - browsers block cross-origin blob URLs with security errors
+      if (img.url.startsWith('blob:')) {
+        return false;
+      }
       if (seenUrls.has(img.url) || failedImages.has(img.url)) {
         return false;
       }

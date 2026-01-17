@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FinishReasons, MessageRoles, ModelIds, ParticipantStreamStatuses } from '@/api/core/enums';
-import { act, createMockParticipant, createMockThread } from '@/lib/testing';
+import { act, createMockParticipant, createMockStreamingResponse, createMockThread } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
@@ -38,30 +38,10 @@ const fetchCalls: FetchCall[] = [];
 let originalFetch: typeof global.fetch;
 
 function createMockSSEResponse(chunks: string[]) {
-  let chunkIndex = 0;
-
-  return {
-    ok: true,
-    status: 200,
-    headers: new Headers({
-      'content-type': 'text/event-stream',
-      'cache-control': 'no-cache',
-    }),
-    body: {
-      getReader: () => ({
-        read: vi.fn().mockImplementation(async () => {
-          if (chunkIndex >= chunks.length) {
-            return { done: true, value: undefined };
-          }
-          const chunk = chunks[chunkIndex++];
-          return {
-            done: false,
-            value: new TextEncoder().encode(chunk),
-          };
-        }),
-      }),
-    },
-  } as unknown as Response;
+  return createMockStreamingResponse({
+    chunks,
+    contentType: 'text/event-stream',
+  });
 }
 
 function createStreamChunks(content: string, includeMetadata = true) {

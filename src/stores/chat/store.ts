@@ -24,6 +24,7 @@ import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isOb
 import { rlog } from '@/lib/utils/dev-logger';
 
 import type { SendMessage, StartRound } from './store-action-types';
+import { isUpsertOptions } from './store-action-types';
 import type { ResetFormPreferences } from './store-defaults';
 import {
   ANIMATION_DEFAULTS,
@@ -351,6 +352,7 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
       return newMsg;
     });
 
+    // ✅ DEBUG: Log message content changes during streaming
     set({ messages: mergedMessages }, false, 'thread/setMessages');
   },
   setIsStreaming: (isStreaming: boolean) =>
@@ -378,13 +380,12 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
 
   upsertStreamingMessage: (optionsOrMessage) => {
     // Accepts UIMessage directly or { message, insertOnly } options object
-    const isOptionsObject = optionsOrMessage !== null
-      && typeof optionsOrMessage === 'object'
-      && 'message' in optionsOrMessage
-      && typeof optionsOrMessage.message === 'object';
+    // Use type guard for proper type narrowing
+    const isOptionsObject = isUpsertOptions(optionsOrMessage);
+
     const message = (isOptionsObject
       ? optionsOrMessage.message
-      : optionsOrMessage) as UIMessage;
+      : optionsOrMessage);
     const insertOnly = isOptionsObject ? optionsOrMessage.insertOnly : undefined;
 
     set((draft) => {
@@ -1253,8 +1254,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants');
   },
 
-  prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[], providedFileParts?: ExtendedFilePart[]) =>
-    set((draft) => {
+  prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[], providedFileParts?: ExtendedFilePart[]) => {
+    // ✅ DEBUG: Log attachment IDs being prepared
+    rlog.msg('cite-prepare', `msgLen=${message.length} parts=${participantIds.length} attIds=${attachmentIds?.length ?? 0} fileParts=${providedFileParts?.length ?? 0}`);
+
+    return set((draft) => {
       const messageCount = draft.messages.length;
       const lastMessage = messageCount > 0 ? draft.messages[messageCount - 1] : null;
       const lastRoundNum = lastMessage ? getRoundNumber(lastMessage.metadata) : null;
@@ -1326,7 +1330,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
           },
         });
       }
-    }, false, 'operations/prepareForNewMessage'),
+    }, false, 'operations/prepareForNewMessage');
+  },
 
   completeStreaming: () => {
     const currentState = get();

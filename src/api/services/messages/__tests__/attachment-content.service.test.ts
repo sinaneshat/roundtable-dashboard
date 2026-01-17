@@ -1,0 +1,513 @@
+/**
+ * Attachment Content Service Tests
+ *
+ * Tests for loadAttachmentContent which converts uploaded files to base64 data URLs
+ * for AI model consumption. External AI providers cannot access localhost URLs,
+ * so ALL attachments must be converted to data URLs before sending to models.
+ *
+ * Key behaviors tested:
+ * - Text files (text/plain) are converted to base64 data URLs
+ * - Images and PDFs are converted to base64 data URLs
+ * - Unsupported MIME types are skipped
+ * - Empty/missing attachments return empty results
+ *
+ * NOTE: Size limits are now enforced in frontend validation (use-file-validation.ts),
+ * not in this service. Large files are supported via URL-based delivery in
+ * loadAttachmentContentUrl() for production environments.
+ */
+
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Import after mocks
+import { getFile } from '@/api/services/uploads';
+import type {
+  LoadAttachmentContentParams,
+} from '@/api/types/uploads';
+
+import { loadAttachmentContent } from '../attachment-content.service';
+
+// Mock dependencies
+vi.mock('@/api/services/uploads', () => ({
+  getFile: vi.fn(),
+}));
+
+vi.mock('@/db', () => ({
+  upload: {
+    id: 'id',
+    mimeType: 'mimeType',
+    filename: 'filename',
+    fileSize: 'fileSize',
+    r2Key: 'r2Key',
+  },
+}));
+
+// ============================================================================
+// Test Helpers
+// ============================================================================
+
+function createMockDb(uploads: Array<{
+  id: string;
+  mimeType: string;
+  filename: string;
+  fileSize: number;
+  r2Key: string;
+}>) {
+  return {
+    select: vi.fn().mockReturnThis(),
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockResolvedValue(uploads),
+  } as unknown as LoadAttachmentContentParams['db'];
+}
+
+function createTextContent(text: string): ArrayBuffer {
+  const encoder = new TextEncoder();
+  return encoder.encode(text).buffer;
+}
+
+function createMockLogger() {
+  return {
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  } as unknown as LoadAttachmentContentParams['logger'];
+}
+
+// ============================================================================
+// Tests: Text File Processing
+// ============================================================================
+
+describe('attachment Content Service', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('text File Processing (text/plain)', () => {
+    it('should convert text/plain files to base64 data URLs', async () => {
+      const textContent = 'Hello, this is a test file content.';
+      const textBuffer = createTextContent(textContent);
+
+      const uploads = [{
+        id: 'upload-1',
+        mimeType: 'text/plain',
+        filename: 'test.txt',
+        fileSize: textBuffer.byteLength,
+        r2Key: 'uploads/user-1/upload-1_test.txt',
+      }];
+
+      const db = createMockDb(uploads);
+      const logger = createMockLogger();
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: textBuffer,
+        found: true,
+        contentType: 'text/plain',
+        contentLength: textBuffer.byteLength,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-1'],
+        r2Bucket: undefined,
+        db,
+        logger,
+      });
+
+      expect(result.fileParts).toHaveLength(1);
+      expect(result.fileParts[0]?.mimeType).toBe('text/plain');
+      expect(result.fileParts[0]?.filename).toBe('test.txt');
+      expect(result.fileParts[0]?.url).toMatch(/^data:text\/plain;base64,/);
+      expect(result.stats.loaded).toBe(1);
+      expect(result.stats.skipped).toBe(0);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should convert text/markdown files to base64 data URLs', async () => {
+      const markdownContent = '# Heading\n\nSome **bold** text.';
+      const textBuffer = createTextContent(markdownContent);
+
+      const uploads = [{
+        id: 'upload-md',
+        mimeType: 'text/markdown',
+        filename: 'readme.md',
+        fileSize: textBuffer.byteLength,
+        r2Key: 'uploads/user-1/upload-md_readme.md',
+      }];
+
+      const db = createMockDb(uploads);
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: textBuffer,
+        found: true,
+        contentType: 'text/markdown',
+        contentLength: textBuffer.byteLength,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-md'],
+        r2Bucket: undefined,
+        db,
+      });
+
+      expect(result.fileParts).toHaveLength(1);
+      expect(result.fileParts[0]?.mimeType).toBe('text/markdown');
+      expect(result.fileParts[0]?.url).toMatch(/^data:text\/markdown;base64,/);
+    });
+
+    it('should convert text/csv files to base64 data URLs', async () => {
+      const csvContent = 'name,age,city\nAlice,30,NYC\nBob,25,LA';
+      const textBuffer = createTextContent(csvContent);
+
+      const uploads = [{
+        id: 'upload-csv',
+        mimeType: 'text/csv',
+        filename: 'data.csv',
+        fileSize: textBuffer.byteLength,
+        r2Key: 'uploads/user-1/upload-csv_data.csv',
+      }];
+
+      const db = createMockDb(uploads);
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: textBuffer,
+        found: true,
+        contentType: 'text/csv',
+        contentLength: textBuffer.byteLength,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-csv'],
+        r2Bucket: undefined,
+        db,
+      });
+
+      expect(result.fileParts).toHaveLength(1);
+      expect(result.fileParts[0]?.mimeType).toBe('text/csv');
+    });
+
+    it('should convert application/json files to base64 data URLs', async () => {
+      const jsonContent = JSON.stringify({ key: 'value', count: 42 });
+      const textBuffer = createTextContent(jsonContent);
+
+      const uploads = [{
+        id: 'upload-json',
+        mimeType: 'application/json',
+        filename: 'config.json',
+        fileSize: textBuffer.byteLength,
+        r2Key: 'uploads/user-1/upload-json_config.json',
+      }];
+
+      const db = createMockDb(uploads);
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: textBuffer,
+        found: true,
+        contentType: 'application/json',
+        contentLength: textBuffer.byteLength,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-json'],
+        r2Bucket: undefined,
+        db,
+      });
+
+      expect(result.fileParts).toHaveLength(1);
+      expect(result.fileParts[0]?.mimeType).toBe('application/json');
+      expect(result.fileParts[0]?.url).toMatch(/^data:application\/json;base64,/);
+    });
+  });
+
+  // ============================================================================
+  // Tests: Visual File Processing (Images, PDFs)
+  // ============================================================================
+
+  describe('visual File Processing (Images, PDFs)', () => {
+    it('should convert image/png files to base64 data URLs', async () => {
+      // Minimal PNG header for testing
+      const pngBuffer = new Uint8Array([
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+      ]).buffer;
+
+      const uploads = [{
+        id: 'upload-png',
+        mimeType: 'image/png',
+        filename: 'screenshot.png',
+        fileSize: pngBuffer.byteLength,
+        r2Key: 'uploads/user-1/upload-png_screenshot.png',
+      }];
+
+      const db = createMockDb(uploads);
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: pngBuffer,
+        found: true,
+        contentType: 'image/png',
+        contentLength: pngBuffer.byteLength,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-png'],
+        r2Bucket: undefined,
+        db,
+      });
+
+      expect(result.fileParts).toHaveLength(1);
+      expect(result.fileParts[0]?.mimeType).toBe('image/png');
+      expect(result.fileParts[0]?.url).toMatch(/^data:image\/png;base64,/);
+    });
+
+    it('should convert application/pdf files to base64 data URLs', async () => {
+      const pdfContent = '%PDF-1.4\n% Test PDF';
+      const pdfBuffer = createTextContent(pdfContent);
+
+      const uploads = [{
+        id: 'upload-pdf',
+        mimeType: 'application/pdf',
+        filename: 'document.pdf',
+        fileSize: pdfBuffer.byteLength,
+        r2Key: 'uploads/user-1/upload-pdf_document.pdf',
+      }];
+
+      const db = createMockDb(uploads);
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: pdfBuffer,
+        found: true,
+        contentType: 'application/pdf',
+        contentLength: pdfBuffer.byteLength,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-pdf'],
+        r2Bucket: undefined,
+        db,
+      });
+
+      expect(result.fileParts).toHaveLength(1);
+      expect(result.fileParts[0]?.mimeType).toBe('application/pdf');
+      expect(result.fileParts[0]?.url).toMatch(/^data:application\/pdf;base64,/);
+    });
+  });
+
+  // ============================================================================
+  // Tests: Unsupported MIME Types
+  // ============================================================================
+
+  describe('unsupported MIME Types', () => {
+    it('should skip unsupported MIME types (video/mp4)', async () => {
+      const uploads = [{
+        id: 'upload-video',
+        mimeType: 'video/mp4',
+        filename: 'video.mp4',
+        fileSize: 1024,
+        r2Key: 'uploads/user-1/upload-video_video.mp4',
+      }];
+
+      const db = createMockDb(uploads);
+      const logger = createMockLogger();
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-video'],
+        r2Bucket: undefined,
+        db,
+        logger,
+      });
+
+      expect(result.fileParts).toHaveLength(0);
+      expect(result.stats.skipped).toBe(1);
+      expect(result.stats.loaded).toBe(0);
+      expect(getFile).not.toHaveBeenCalled();
+    });
+
+    it('should skip unknown MIME types', async () => {
+      const uploads = [{
+        id: 'upload-unknown',
+        mimeType: 'application/octet-stream',
+        filename: 'unknown.bin',
+        fileSize: 1024,
+        r2Key: 'uploads/user-1/upload-unknown_unknown.bin',
+      }];
+
+      const db = createMockDb(uploads);
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-unknown'],
+        r2Bucket: undefined,
+        db,
+      });
+
+      expect(result.fileParts).toHaveLength(0);
+      expect(result.stats.skipped).toBe(1);
+    });
+  });
+
+  // ============================================================================
+  // Tests: Large File Processing
+  // ============================================================================
+
+  describe('large File Processing', () => {
+    it('should process large files (size validation happens at frontend)', async () => {
+      // Note: Size limits are now enforced in frontend validation (use-file-validation.ts)
+      // This service processes all valid MIME types regardless of size
+      const largeContent = 'x'.repeat(1000);
+      const textBuffer = createTextContent(largeContent);
+
+      const largeFile = {
+        id: 'upload-large',
+        mimeType: 'text/plain',
+        filename: 'large.txt',
+        fileSize: 50 * 1024 * 1024, // 50MB - larger than old limit
+        r2Key: 'uploads/user-1/upload-large_large.txt',
+      };
+
+      const db = createMockDb([largeFile]);
+      const logger = createMockLogger();
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: textBuffer,
+        found: true,
+        contentType: 'text/plain',
+        contentLength: textBuffer.byteLength,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-large'],
+        r2Bucket: undefined,
+        db,
+        logger,
+      });
+
+      // Large files should now be processed successfully
+      expect(result.fileParts).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+      expect(getFile).toHaveBeenCalled();
+    });
+  });
+
+  // ============================================================================
+  // Tests: Edge Cases
+  // ============================================================================
+
+  describe('edge Cases', () => {
+    it('should return empty results for empty attachmentIds', async () => {
+      const db = createMockDb([]);
+
+      const result = await loadAttachmentContent({
+        attachmentIds: [],
+        r2Bucket: undefined,
+        db,
+      });
+
+      expect(result.fileParts).toHaveLength(0);
+      expect(result.errors).toHaveLength(0);
+      expect(result.stats.total).toBe(0);
+    });
+
+    it('should return empty results for undefined attachmentIds', async () => {
+      const db = createMockDb([]);
+
+      const result = await loadAttachmentContent({
+        attachmentIds: undefined as unknown as string[],
+        r2Bucket: undefined,
+        db,
+      });
+
+      expect(result.fileParts).toHaveLength(0);
+      expect(result.stats.total).toBe(0);
+    });
+
+    it('should handle file not found in storage', async () => {
+      const uploads = [{
+        id: 'upload-missing',
+        mimeType: 'text/plain',
+        filename: 'missing.txt',
+        fileSize: 100,
+        r2Key: 'uploads/user-1/upload-missing_missing.txt',
+      }];
+
+      const db = createMockDb(uploads);
+      const logger = createMockLogger();
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: null,
+        found: false,
+        contentType: null,
+        contentLength: 0,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-missing'],
+        r2Bucket: undefined,
+        db,
+        logger,
+      });
+
+      expect(result.fileParts).toHaveLength(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]?.error).toContain('not found');
+    });
+
+    it('should process multiple files of different types', async () => {
+      const textBuffer = createTextContent('text content');
+      const jsonBuffer = createTextContent('{"key": "value"}');
+
+      const uploads = [
+        {
+          id: 'upload-txt',
+          mimeType: 'text/plain',
+          filename: 'file.txt',
+          fileSize: textBuffer.byteLength,
+          r2Key: 'uploads/user-1/upload-txt_file.txt',
+        },
+        {
+          id: 'upload-json',
+          mimeType: 'application/json',
+          filename: 'data.json',
+          fileSize: jsonBuffer.byteLength,
+          r2Key: 'uploads/user-1/upload-json_data.json',
+        },
+        {
+          id: 'upload-video',
+          mimeType: 'video/mp4', // Unsupported - should be skipped
+          filename: 'video.mp4',
+          fileSize: 1024,
+          r2Key: 'uploads/user-1/upload-video_video.mp4',
+        },
+      ];
+
+      const db = createMockDb(uploads);
+
+      vi.mocked(getFile)
+        .mockResolvedValueOnce({
+          data: textBuffer,
+          found: true,
+          contentType: 'text/plain',
+          contentLength: textBuffer.byteLength,
+        })
+        .mockResolvedValueOnce({
+          data: jsonBuffer,
+          found: true,
+          contentType: 'application/json',
+          contentLength: jsonBuffer.byteLength,
+        });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-txt', 'upload-json', 'upload-video'],
+        r2Bucket: undefined,
+        db,
+      });
+
+      expect(result.fileParts).toHaveLength(2); // txt and json
+      expect(result.stats.loaded).toBe(2);
+      expect(result.stats.skipped).toBe(1); // video
+      expect(result.stats.total).toBe(3);
+    });
+  });
+});

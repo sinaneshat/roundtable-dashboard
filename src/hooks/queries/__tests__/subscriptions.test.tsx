@@ -10,7 +10,6 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,6 +22,8 @@ import {
   createSubscriptionErrorResponse,
   createSubscriptionListErrorResponse,
   createSubscriptionListResponse,
+  renderHook,
+  waitFor,
 } from '@/lib/testing';
 
 import { useSubscriptionQuery, useSubscriptionsQuery } from '../subscriptions';

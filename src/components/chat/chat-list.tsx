@@ -66,8 +66,6 @@ function ChatItem({
 }: ChatItemProps) {
   const t = useTranslations();
   const chatUrl = `/chat/${chat.slug}`;
-  const [shouldPrefetch, setShouldPrefetch] = useState(false);
-  const handleMouseEnter = useCallback(() => setShouldPrefetch(true), []);
 
   const handleRenameFormSubmit = useCallback((title: string) => {
     onRenameSubmit(chat, title);
@@ -91,8 +89,7 @@ function ChatItem({
             >
               <Link
                 href={chatUrl}
-                prefetch={shouldPrefetch ? null : false}
-                onMouseEnter={handleMouseEnter}
+                prefetch={false}
               >
                 <div
                   className="truncate overflow-hidden text-ellipsis whitespace-nowrap"

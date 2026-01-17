@@ -7,24 +7,25 @@
  *
  * Coverage:
  * - Mutation execution
- * - Cache updates (optimistic and on success)
- * - Query invalidation
+ * - Query invalidation (server is source of truth)
  * - Error handling
  * - Related query updates (usage, models)
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import {
+  act,
   createActiveSubscription,
   createCanceledSubscription,
   createMockPrice,
   createMockSubscription,
+  renderHook,
+  waitFor,
 } from '@/lib/testing';
 import type { GetSubscriptionsResponse } from '@/services/api';
 import * as apiServices from '@/services/api';
@@ -68,16 +69,30 @@ function createWrapper(queryClient: QueryClient) {
 // useSwitchSubscriptionMutation Tests
 // ============================================================================
 
+// Default mock data for services called in onSuccess
+const defaultMockUsageData = {
+  success: true as const,
+  data: { creditsUsed: 0, creditsLimit: 1000, modelsUsed: 0, modelsLimit: 10 },
+};
+
+const defaultMockModelsData = {
+  success: true as const,
+  data: { items: [], count: 0 },
+};
+
 describe('useSwitchSubscriptionMutation', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
     queryClient = createTestQueryClient();
     vi.clearAllMocks();
+    // Mock services called in onSuccess to prevent hanging
+    vi.spyOn(apiServices, 'getUserUsageStatsService').mockResolvedValue(defaultMockUsageData);
+    vi.spyOn(apiServices, 'listModelsService').mockResolvedValue(defaultMockModelsData);
   });
 
-  describe('successful Subscription Switch', () => {
-    it('should switch subscription and update cache', async () => {
+  describe('successful subscription switch', () => {
+    it('should switch subscription and invalidate cache', async () => {
       const oldSubscription = createActiveSubscription({
         id: 'sub_old',
         priceId: 'price_monthly_basic',
@@ -116,6 +131,7 @@ describe('useSwitchSubscriptionMutation', () => {
       });
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
       const { result } = renderHook(() => useSwitchSubscriptionMutation(), {
         wrapper: createWrapper(queryClient),
@@ -133,12 +149,12 @@ describe('useSwitchSubscriptionMutation', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      // Verify cache was updated
-      const cachedData = queryClient.getQueryData<GetSubscriptionsResponse>(
-        queryKeys.subscriptions.list(),
+      // Verify cache was invalidated (not directly updated - will refetch on next access)
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queryKey: queryKeys.subscriptions.all,
+        }),
       );
-
-      expect(cachedData?.data?.items[0].priceId).toBe('price_monthly_pro');
       expect(apiServices.switchSubscriptionService).toHaveBeenCalledWith(
         expect.objectContaining({
           param: { id: 'sub_old' },
@@ -293,7 +309,7 @@ describe('useSwitchSubscriptionMutation', () => {
     });
   });
 
-  describe('error Handling', () => {
+  describe('error handling', () => {
     it('should handle API errors', async () => {
       const mockErrorResponse = {
         success: false as const,
@@ -378,8 +394,8 @@ describe('useSwitchSubscriptionMutation', () => {
     });
   });
 
-  describe('cache Update Logic', () => {
-    it('should update subscription in list cache', async () => {
+  describe('cache invalidation logic', () => {
+    it('should invalidate subscription cache after switch', async () => {
       const subscription1 = createActiveSubscription({ id: 'sub_1', priceId: 'price_old_1' });
       const subscription2 = createActiveSubscription({ id: 'sub_2', priceId: 'price_old_2' });
       const subscription3 = createActiveSubscription({ id: 'sub_3', priceId: 'price_old_3' });
@@ -404,6 +420,7 @@ describe('useSwitchSubscriptionMutation', () => {
       });
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
       const { result } = renderHook(() => useSwitchSubscriptionMutation(), {
         wrapper: createWrapper(queryClient),
@@ -420,17 +437,15 @@ describe('useSwitchSubscriptionMutation', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      // Verify only sub_2 was updated
-      const cachedData = queryClient.getQueryData<GetSubscriptionsResponse>(
-        queryKeys.subscriptions.list(),
+      // Verify invalidation was called (cache will be refetched on next access)
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queryKey: queryKeys.subscriptions.all,
+        }),
       );
 
-      expect(cachedData?.data?.items[0].id).toBe('sub_1');
-      expect(cachedData?.data?.items[0].priceId).toBe('price_old_1');
-      expect(cachedData?.data?.items[1].id).toBe('sub_2');
-      expect(cachedData?.data?.items[1].priceId).toBe('price_new_2');
-      expect(cachedData?.data?.items[2].id).toBe('sub_3');
-      expect(cachedData?.data?.items[2].priceId).toBe('price_old_3');
+      // Mutation response contains updated subscription
+      expect(result.current.data?.data?.subscription.priceId).toBe('price_new_2');
     });
 
     it('should handle cache update when no existing cache', async () => {
@@ -477,9 +492,12 @@ describe('useCancelSubscriptionMutation', () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     vi.clearAllMocks();
+    // Mock services called in onSuccess to prevent hanging
+    vi.spyOn(apiServices, 'getUserUsageStatsService').mockResolvedValue(defaultMockUsageData);
+    vi.spyOn(apiServices, 'listModelsService').mockResolvedValue(defaultMockModelsData);
   });
 
-  describe('successful Subscription Cancellation', () => {
+  describe('successful subscription cancellation', () => {
     it('should cancel subscription at period end (default)', async () => {
       const canceledSubscription = createCanceledSubscription({
         id: 'sub_cancel',
@@ -552,7 +570,7 @@ describe('useCancelSubscriptionMutation', () => {
       expect(result.current.data?.data?.subscription.canceledAt).toBeTruthy();
     });
 
-    it('should update cache with canceled subscription', async () => {
+    it('should invalidate cache after subscription cancellation', async () => {
       const activeSubscription = createActiveSubscription({ id: 'sub_test' });
       const canceledSubscription = createCanceledSubscription({ id: 'sub_test' });
 
@@ -574,6 +592,7 @@ describe('useCancelSubscriptionMutation', () => {
       });
 
       vi.spyOn(apiServices, 'cancelSubscriptionService').mockResolvedValue(mockResponse);
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
       const { result } = renderHook(() => useCancelSubscriptionMutation(), {
         wrapper: createWrapper(queryClient),
@@ -590,12 +609,15 @@ describe('useCancelSubscriptionMutation', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      // Verify cache was updated
-      const cachedData = queryClient.getQueryData<GetSubscriptionsResponse>(
-        queryKeys.subscriptions.list(),
+      // Verify cache was invalidated (will refetch on next access)
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queryKey: queryKeys.subscriptions.all,
+        }),
       );
 
-      expect(cachedData?.data?.items[0].cancelAtPeriodEnd).toBe(true);
+      // Mutation response contains canceled subscription
+      expect(result.current.data?.data?.subscription.cancelAtPeriodEnd).toBe(true);
     });
 
     it('should invalidate related queries after cancellation', async () => {
@@ -658,7 +680,7 @@ describe('useCancelSubscriptionMutation', () => {
     });
   });
 
-  describe('error Handling', () => {
+  describe('error handling', () => {
     it('should handle cancellation errors', async () => {
       const mockErrorResponse = {
         success: false as const,
@@ -743,7 +765,7 @@ describe('useCancelSubscriptionMutation', () => {
     });
   });
 
-  describe('grace Period Handling', () => {
+  describe('grace period handling', () => {
     it('should handle cancellation during grace period', async () => {
       const now = new Date();
       const gracePeriodSubscription = createMockSubscription({

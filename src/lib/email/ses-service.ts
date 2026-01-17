@@ -9,12 +9,14 @@ import { BRAND } from '@/constants';
 import { MagicLink } from '@/emails/templates';
 
 /**
- * Get SES credentials using OpenNext.js pattern
+ * Get SES credentials using OpenNext.js pattern with type-safe validation
  * Priority: Cloudflare runtime → process.env fallback
+ *
+ * Following type-inference-patterns.md: No type casting, validated access only
  */
 async function getSesCredentials(): Promise<{
-  accessKeyId: string | undefined;
-  secretAccessKey: string | undefined;
+  accessKeyId: string;
+  secretAccessKey: string;
   region: string;
   fromEmail: string;
   replyToEmail: string;
@@ -23,20 +25,20 @@ async function getSesCredentials(): Promise<{
   try {
     const { getCloudflareContext } = await import('@opennextjs/cloudflare');
     const { env } = getCloudflareContext();
+
+    // Return type-safe validated credentials
     return {
-      // AWS secrets from Cloudflare env (wrangler secrets)
-      accessKeyId: (env.AWS_SES_ACCESS_KEY_ID as string) || process.env.AWS_SES_ACCESS_KEY_ID,
-      secretAccessKey: (env.AWS_SES_SECRET_ACCESS_KEY as string) || process.env.AWS_SES_SECRET_ACCESS_KEY,
-      // NEXT_PUBLIC_* vars are build-time inlined, but also check runtime env for Workers
-      region: (env.NEXT_PUBLIC_AWS_SES_REGION as string) || process.env.NEXT_PUBLIC_AWS_SES_REGION || 'us-east-1',
-      fromEmail: (env.NEXT_PUBLIC_FROM_EMAIL as string) || process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@example.com',
-      replyToEmail: (env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL as string) || process.env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || 'noreply@example.com',
+      accessKeyId: env.AWS_SES_ACCESS_KEY_ID || process.env.AWS_SES_ACCESS_KEY_ID || '',
+      secretAccessKey: env.AWS_SES_SECRET_ACCESS_KEY || process.env.AWS_SES_SECRET_ACCESS_KEY || '',
+      region: env.NEXT_PUBLIC_AWS_SES_REGION || process.env.NEXT_PUBLIC_AWS_SES_REGION || 'us-east-1',
+      fromEmail: env.NEXT_PUBLIC_FROM_EMAIL || process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@example.com',
+      replyToEmail: env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || process.env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || 'noreply@example.com',
     };
   } catch {
     // Fallback to process.env for local dev and build time
     return {
-      accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY,
+      accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID || '',
+      secretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY || '',
       region: process.env.NEXT_PUBLIC_AWS_SES_REGION || 'us-east-1',
       fromEmail: process.env.NEXT_PUBLIC_FROM_EMAIL || 'noreply@example.com',
       replyToEmail: process.env.NEXT_PUBLIC_SES_REPLY_TO_EMAIL || 'noreply@example.com',
@@ -58,12 +60,16 @@ async function getSesCredentials(): Promise<{
  * @see https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html
  */
 class EmailService {
-  private async getAwsClient(): Promise<AwsClient | null> {
+  private async getAwsClient(): Promise<AwsClient> {
     const { accessKeyId, secretAccessKey } = await getSesCredentials();
-    if (accessKeyId && secretAccessKey) {
-      return new AwsClient({ accessKeyId, secretAccessKey });
+
+    if (!accessKeyId || !secretAccessKey) {
+      throw new Error(
+        'Email service not configured. Please provide AWS_SES_ACCESS_KEY_ID and AWS_SES_SECRET_ACCESS_KEY environment variables.',
+      );
     }
-    return null;
+
+    return new AwsClient({ accessKeyId, secretAccessKey });
   }
 
   private async getConfig() {
@@ -82,15 +88,9 @@ class EmailService {
     text?: string;
   }) {
     // Get credentials at runtime (not module load)
+    // getAwsClient throws if credentials are missing - fail fast
     const awsClient = await this.getAwsClient();
     const config = await this.getConfig();
-
-    // Validate AWS client is configured
-    if (!awsClient) {
-      throw new Error(
-        'Email service not configured. Please provide AWS_SES_ACCESS_KEY_ID and AWS_SES_SECRET_ACCESS_KEY environment variables.',
-      );
-    }
 
     const toAddresses = Array.isArray(to) ? to : [to];
 

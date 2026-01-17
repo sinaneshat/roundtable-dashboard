@@ -5,11 +5,7 @@
  * Prevents client errors (4xx) from retrying while allowing transient errors (5xx, network) to retry
  */
 
-type ErrorWithStatus = Error & { status: number };
-
-function isErrorWithStatus(error: Error): error is ErrorWithStatus {
-  return 'status' in error && typeof error.status === 'number';
-}
+import { isErrorWithStatus } from './mutation-retry-schemas';
 
 /**
  * Standard retry function for mutations

@@ -17,7 +17,13 @@ export const revalidate = 86400;
 
 // Pre-generate pages for all active public threads at build time
 // Uses RPC service - no direct database access in pages
+// NOTE: Skip in development to avoid blocking renders on 404 endpoint
 export async function generateStaticParams(): Promise<{ slug: string }[]> {
+  // Skip in dev - this endpoint 404s and blocks every render
+  if (process.env.NODE_ENV === 'development') {
+    return [];
+  }
+
   try {
     const response = await listPublicThreadSlugsService();
     if (!response.success || !response.data?.slugs) {
@@ -144,10 +150,17 @@ function getErrorMessage(statusCode: number | undefined, reason: string): { mess
 export default async function PublicChatThreadPage({ params }: PageParams) {
   const { slug } = await params;
   const queryClient = getQueryClient();
+  const ssrStart = Date.now();
+
+  // eslint-disable-next-line no-console
+  console.log(`[SSR:PUBLIC] fetch-start slug=${slug}`);
 
   let response;
   try {
     response = await getCachedPublicThreadForMetadata(slug);
+
+    // eslint-disable-next-line no-console
+    console.log(`[SSR:PUBLIC] fetch-done ms=${Date.now() - ssrStart} msgs=${response.success ? response.data?.messages?.length ?? 0 : 0} success=${response.success}`);
 
     queryClient.setQueryData(queryKeys.threads.public(slug), response);
 

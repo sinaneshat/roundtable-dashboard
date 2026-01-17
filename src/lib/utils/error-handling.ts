@@ -5,6 +5,8 @@ import { ERROR_CODES } from '@/api/core/enums';
 import type { ValidationError } from '@/api/core/schemas';
 import { ValidationErrorSchema } from '@/api/core/schemas';
 
+import { hasProperty, isNonEmptyString, isObject, isValidErrorCode } from './type-guards';
+
 // ============================================================================
 // ERROR MESSAGE CONSTANTS
 // ============================================================================
@@ -12,17 +14,19 @@ import { ValidationErrorSchema } from '@/api/core/schemas';
 const UNKNOWN_ERROR_MESSAGE = 'An unknown error occurred' as const;
 
 // ============================================================================
-// ERROR DETAILS SCHEMA
+// CLIENT ERROR DETAILS SCHEMA
 // ============================================================================
 
-export const ErrorDetailsSchema = z.object({
+// ClientErrorDetailsSchema: Used for parsing error responses on the frontend/client-side
+// Note: Different from @/api/common/error-handling ErrorDetailsSchema which uses discriminated unions for API error construction
+export const ClientErrorDetailsSchema = z.object({
   errorName: z.string().optional(),
   stack: z.string().optional(),
   errorType: z.string().optional(),
   context: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 }).optional();
 
-export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
+export type ClientErrorDetails = z.infer<typeof ClientErrorDetailsSchema>;
 
 type ErrorContextValue = string | number | boolean | null;
 
@@ -47,42 +51,33 @@ export const ApiErrorDetailsSchema = z.object({
   code: z.string().optional(),
   status: z.number().int().positive().optional(),
   validationErrors: z.array(ValidationErrorSchema).optional(),
-  details: ErrorDetailsSchema,
+  details: ClientErrorDetailsSchema,
   meta: RequestMetaSchema.optional(),
 });
 
 export type ApiErrorDetails = z.infer<typeof ApiErrorDetailsSchema>;
 
 // ============================================================================
-// TYPE GUARDS
+// ERROR CODE VALIDATION
 // ============================================================================
 
-export function isValidErrorCode(code: string): code is ErrorCode {
-  return (ERROR_CODES as readonly string[]).includes(code);
+export function isErrorCode(code: string): code is ErrorCode {
+  return isValidErrorCode(code, ERROR_CODES);
 }
 
-function hasStringProperty(obj: object, key: string): boolean {
-  if (typeof obj !== 'object' || obj === null)
-    return false;
-  return key in obj && typeof (obj as { [K in typeof key]?: unknown })[key] === 'string';
-}
+// ============================================================================
+// ERROR DETAILS EXTRACTION
+// ============================================================================
 
-function isNonNullObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function extractErrorDetails(context: unknown): ErrorDetails | undefined {
-  if (!isNonNullObject(context)) {
+function extractErrorDetails(context: unknown): ClientErrorDetails | undefined {
+  if (!isObject(context)) {
     return undefined;
   }
 
-  const details: NonNullable<ErrorDetails> = {};
+  const details: NonNullable<ClientErrorDetails> = {};
 
-  if (hasStringProperty(context, 'errorType')) {
-    // context is already validated as Record<string, unknown> by isNonNullObject
-    if (typeof context.errorType === 'string') {
-      details.errorType = context.errorType;
-    }
+  if (hasProperty(context, 'errorType', isNonEmptyString)) {
+    details.errorType = context.errorType;
   }
 
   const contextRecord: Record<string, ErrorContextValue> = {};
@@ -111,6 +106,15 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   }
 
   if (typeof error === 'string') {
+    // Attempt to parse stringified JSON error objects
+    try {
+      const parsed = JSON.parse(error);
+      if (typeof parsed === 'object' && parsed !== null) {
+        return getApiErrorDetails(parsed);
+      }
+    } catch {
+      // Not valid JSON, treat as plain string message
+    }
     return { message: error };
   }
 
@@ -157,7 +161,7 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
       result.details = extractErrorDetails(apiError.details);
     }
 
-    if ('context' in apiError && isNonNullObject(apiError.context)) {
+    if ('context' in apiError && isObject(apiError.context)) {
       result.details = result.details ?? extractErrorDetails(apiError.context);
     }
   }

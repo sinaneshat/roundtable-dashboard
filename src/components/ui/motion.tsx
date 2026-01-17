@@ -1,7 +1,7 @@
 'use client';
 
 import type { HTMLMotionProps, Variants } from 'motion/react';
-import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
+import { LayoutGroup, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/ui/cn';
@@ -93,31 +93,6 @@ export function ScrollAwareParticipant({
   );
 }
 
-/**
- * Timeline entrance - fade in when scrolled into view
- */
-export function TimelineEntrance({
-  children,
-  className,
-  skipAnimation = false,
-  index = 0,
-}: SimpleEntranceProps) {
-  if (skipAnimation) {
-    return <div className={cn(className)}>{children}</div>;
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      whileInView={{ opacity: 1 }}
-      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
-      transition={{ duration: 0.25, delay: index * 0.03, ease: ANIMATION_EASE.enter }}
-      className={cn(className)}
-    >
-      {children}
-    </motion.div>
-  );
-}
 
 /**
  * PreSearch card - fade in when scrolled into view
@@ -144,30 +119,6 @@ export function ScrollFromTop({
   );
 }
 
-/**
- * Moderator card - fade in when scrolled into view
- */
-export function ScrollFromBottom({
-  children,
-  className,
-  skipAnimation = false,
-}: Omit<SimpleEntranceProps, 'index'>) {
-  if (skipAnimation) {
-    return <div className={cn('w-full', className)}>{children}</div>;
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      whileInView={{ opacity: 1 }}
-      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
-      transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
-      className={cn('w-full', className)}
-    >
-      {children}
-    </motion.div>
-  );
-}
 
 /**
  * Accordion card entrance - fade in when scrolled into view
@@ -260,65 +211,6 @@ export function AnimatedStreamingItem({
   );
 }
 
-// =============================================================================
-// ACCORDION CONTENT - Smooth height animations with AnimatePresence
-// =============================================================================
-
-type AnimatedAccordionContentProps = {
-  children: ReactNode;
-  className?: string;
-  isOpen: boolean;
-  onAnimationComplete?: () => void;
-};
-
-/**
- * Animated accordion content - smooth height transition using auto height
- * Uses Motion's unique ability to animate to/from height: 'auto'
- */
-export function AnimatedAccordionContent({
-  children,
-  className,
-  isOpen,
-  onAnimationComplete,
-}: AnimatedAccordionContentProps) {
-  return (
-    <AnimatePresence mode="wait" initial={false}>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{
-            opacity: 1,
-            height: 'auto',
-            transition: {
-              height: {
-                type: 'spring',
-                stiffness: 500,
-                damping: 40,
-                mass: 0.8,
-              },
-              opacity: { duration: 0.2, ease: ANIMATION_EASE.enter },
-            },
-          }}
-          exit={{
-            opacity: 0,
-            height: 0,
-            transition: {
-              height: { duration: 0.2, ease: ANIMATION_EASE.exit },
-              opacity: { duration: 0.15, ease: ANIMATION_EASE.exit },
-            },
-          }}
-          onAnimationComplete={onAnimationComplete}
-          className={cn('overflow-hidden', className)}
-        >
-          {/* Content renders without layout animations to prevent scroll issues */}
-          <div>
-            {children}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
 
 // =============================================================================
 // STREAMING MESSAGE CONTENT - Smooth height transitions during text streaming

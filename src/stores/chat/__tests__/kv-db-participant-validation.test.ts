@@ -19,7 +19,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { FinishReasons, MessageRoles, ParticipantStreamStatuses } from '@/api/core/enums';
-import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
+import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
+import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { createMockParticipant, createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 
 // ============================================================================
@@ -74,14 +75,14 @@ function getDbValidatedNextParticipant(
   const participantIndicesWithMessages = new Set<number>();
 
   for (const msg of dbMessages) {
-    if (msg.role !== 'assistant')
+    if (msg.role !== MessageRoles.ASSISTANT)
       continue;
-    const metadata = msg.metadata as DbAssistantMessageMetadata | null;
+    const metadata = msg.metadata as DbMessageMetadata | null;
     if (!metadata)
       continue;
 
     // Skip moderator messages
-    if ('isModerator' in metadata && (metadata as unknown as { isModerator: boolean }).isModerator === true) {
+    if (isModeratorMessageMetadata(metadata)) {
       continue;
     }
 
@@ -297,17 +298,12 @@ describe('kV/DB Participant Mismatch Bug', () => {
           metadata: {
             role: MessageRoles.ASSISTANT,
             roundNumber: 0,
-            participantId: 'moderator',
-            participantIndex: -1,
-            participantRole: 'Moderator',
             model: 'gpt-4',
             finishReason: FinishReasons.STOP,
             usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
             hasError: false,
-            isTransient: false,
-            isPartialResponse: false,
             isModerator: true,
-          } as unknown as DbAssistantMessageMetadata,
+          } satisfies DbMessageMetadata,
         },
       ];
 

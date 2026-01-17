@@ -22,10 +22,11 @@ import { timing } from 'hono/timing';
 import { trimTrailingSlash } from 'hono/trailing-slash';
 import notFound from 'stoker/middlewares/not-found';
 
+import { APP_VERSION } from '@/constants/version';
 import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
 
 import { createOpenApiApp } from './core/app';
-import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, protectMutations, RateLimiterFactory, requireSession } from './middleware';
+import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, RateLimiterFactory } from './middleware';
 // API Keys routes
 import {
   createApiKeyHandler,
@@ -86,6 +87,7 @@ import {
   executePreSearchHandler,
   getCustomRoleHandler,
   getPublicThreadHandler,
+  getRoundStatusHandler,
   getThreadBySlugHandler,
   getThreadChangelogHandler,
   getThreadFeedbackHandler,
@@ -98,6 +100,7 @@ import {
   getUserPresetHandler,
   listCustomRolesHandler,
   listPublicThreadSlugsHandler,
+  listSidebarThreadsHandler,
   listThreadsHandler,
   listUserPresetsHandler,
   resumeThreadStreamHandler,
@@ -122,6 +125,7 @@ import {
   executePreSearchRoute,
   getCustomRoleRoute,
   getPublicThreadRoute,
+  getRoundStatusRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
   getThreadFeedbackRoute,
@@ -134,6 +138,7 @@ import {
   getUserPresetRoute,
   listCustomRolesRoute,
   listPublicThreadSlugsRoute,
+  listSidebarThreadsRoute,
   listThreadsRoute,
   listUserPresetsRoute,
   resumeThreadStreamRoute,
@@ -215,11 +220,13 @@ import {
 // ============================================================================
 // System/health routes
 import {
+  benchmarkHandler,
   clearCacheHandler,
   detailedHealthHandler,
   healthHandler,
 } from './routes/system/handler';
 import {
+  benchmarkRoute,
   clearCacheRoute,
   detailedHealthRoute,
   healthRoute,
@@ -267,6 +274,13 @@ import {
 import {
   getUserUsageStatsRoute,
 } from './routes/usage/route';
+
+// ============================================================================
+// Environment Detection (sync, build-time check)
+// ============================================================================
+// NEXT_PUBLIC_WEBAPP_ENV is inlined at build time - safe for sync access
+const WEBAPP_ENV = process.env.NEXT_PUBLIC_WEBAPP_ENV || 'development';
+const IS_DEV_ENVIRONMENT = WEBAPP_ENV === 'local' || WEBAPP_ENV === 'development' || WEBAPP_ENV === 'preview';
 
 // ============================================================================
 // Step 1: Create the main OpenAPIHono app with defaultHook (following docs)
@@ -430,16 +444,14 @@ app.use('*', async (c, next) => {
   const path = c.req.path;
   const method = c.req.method;
 
-  // Skip session for truly public endpoints - handlers use requireOptionalSession if needed
-  // These routes NEVER need authentication:
-  // - Public chat threads (read-only, auth checked in handler if needed)
-  // - System/health endpoints
-  // - OpenAPI documentation
-  // - Webhook endpoints (use signature verification instead)
-  // - Product listings (public catalog)
-  // - Models listing (public)
-  // - Static asset paths
+  // Skip session for routes where:
+  // 1. Truly public endpoints (never need auth)
+  // 2. Routes with handlers that do their own auth (avoid double session lookup)
+  //
+  // ⚠️ PERF: createHandler with auth:'session' already calls getSession()
+  // Running attachSession middleware first would cause DOUBLE DB lookup
   if (
+    // Public endpoints - never need auth
     path.startsWith('/chat/public/')
     || path.startsWith('/system/')
     || path === '/health'
@@ -457,6 +469,18 @@ app.use('*', async (c, next) => {
     || path.endsWith('.png')
     || path.endsWith('.jpg')
     || path.endsWith('.svg')
+    // Routes with createHandler auth - handlers do their own session lookup
+    // These routes all use createHandler with auth:'session' which does its own getSession()
+    || path === '/chat'
+    || path.startsWith('/chat/threads/')
+    || path.startsWith('/chat/roles/')
+    || path.startsWith('/chat/presets/')
+    || path.startsWith('/usage/')
+    || path.startsWith('/uploads/')
+    || path.startsWith('/api-keys/')
+    || path.startsWith('/projects/')
+    || path.startsWith('/mcp/')
+    || path.startsWith('/billing/')
   ) {
     c.set('session', null);
     c.set('user', null);
@@ -500,116 +524,96 @@ app.notFound(notFound);
 // CRITICAL: Routes must be registered with .openapi() for RPC to work
 // ============================================================================
 
-// Apply CSRF protection and authentication to protected routes
-// Following Hono best practices: apply CSRF only to authenticated routes
-app.use('/auth/me', csrfProtection, requireSession);
+// ============================================================================
+// CSRF Protection for Mutation Routes
+// ============================================================================
+// ⚠️ PERF: Handlers use createHandler with auth:'session' which calls getSession()
+// DO NOT add requireSession middleware here - it causes DOUBLE session lookup
+// Only apply CSRF protection for POST/PATCH/PUT/DELETE routes
 
-// Protected API keys endpoints
-app.use('/auth/api-keys', csrfProtection, requireSession);
+// Auth endpoints - CSRF only (handlers do their own auth)
+app.use('/auth/me', csrfProtection);
+app.use('/auth/api-keys', csrfProtection);
 
-// Protected billing endpoints (checkout, portal, sync, subscriptions)
-app.use('/billing/checkout', csrfProtection, requireSession);
-app.use('/billing/portal', csrfProtection, requireSession);
-app.use('/billing/sync-after-checkout', csrfProtection, requireSession);
-app.use('/billing/sync-credits-after-checkout', csrfProtection, requireSession);
-app.use('/billing/subscriptions', csrfProtection, requireSession);
-app.use('/billing/subscriptions/:id', csrfProtection, requireSession);
-app.use('/billing/subscriptions/:id/switch', csrfProtection, requireSession);
-app.use('/billing/subscriptions/:id/cancel', csrfProtection, requireSession);
+// Billing endpoints - CSRF only (handlers do their own auth)
+app.use('/billing/checkout', csrfProtection);
+app.use('/billing/portal', csrfProtection);
+app.use('/billing/sync-after-checkout', csrfProtection);
+app.use('/billing/sync-credits-after-checkout', csrfProtection);
+app.use('/billing/subscriptions', csrfProtection);
+app.use('/billing/subscriptions/:id', csrfProtection);
+app.use('/billing/subscriptions/:id/switch', csrfProtection);
+app.use('/billing/subscriptions/:id/cancel', csrfProtection);
 
 // Test endpoints (development/test only)
 if (process.env.NODE_ENV !== 'production') {
-  app.use('/test/*', csrfProtection, requireSession);
+  app.use('/test/*', csrfProtection);
 }
 
-// Protected chat endpoints (ChatGPT pattern with smart access control)
-// POST /chat/threads - create thread (requires auth + CSRF)
-// GET /chat/threads - list threads (requires auth, no CSRF for safe method)
-app.on('POST', '/chat/threads', csrfProtection, requireSession);
-app.on('GET', '/chat/threads', requireSession);
+// Chat endpoints - CSRF only for mutations (handlers do their own auth)
+app.on('POST', '/chat/threads', csrfProtection);
+app.on('POST', '/chat', csrfProtection);
+app.on(['PATCH', 'DELETE'], '/chat/threads/:id', csrfProtection);
 
-// POST /chat - stream AI response (AI SDK v6 pattern - requires auth + CSRF)
-// This is the OFFICIAL AI SDK endpoint for streaming chat responses
-app.on('POST', '/chat', csrfProtection, requireSession);
+// Participant management - CSRF only
+app.use('/chat/threads/:id/participants', csrfProtection);
+app.use('/chat/participants/:id', csrfProtection);
 
-// /chat/threads/:id - mixed access pattern
-// GET: public access for public threads (handler checks ownership/public status)
-// PATCH/DELETE: protected mutations (requires auth + CSRF)
-app.use('/chat/threads/:id', protectMutations);
+// Custom role routes - CSRF only
+app.use('/chat/custom-roles', csrfProtection);
+app.use('/chat/custom-roles/:id', csrfProtection);
 
-// GET /chat/threads/slug/:slug - get thread by slug (requires auth)
-app.use('/chat/threads/slug/:slug', requireSession);
+// Pre-search routes - CSRF only for POST
+app.on('POST', '/chat/threads/:threadId/rounds/:roundNumber/pre-search', csrfProtection);
 
-// GET /chat/threads/:id/messages - get messages (requires auth)
-app.use('/chat/threads/:id/messages', requireSession);
+// Moderator routes - CSRF only for POST
+app.on('POST', '/chat/threads/:threadId/rounds/:roundNumber/moderator', csrfProtection);
 
-// GET /chat/threads/:id/changelog - get thread configuration changelog (requires auth)
-app.use('/chat/threads/:id/changelog', requireSession);
+// Feedback routes - CSRF only for POST
+app.on('POST', '/chat/threads/:threadId/rounds/:roundNumber/feedback', csrfProtection);
 
-// GET /chat/threads/:id/slug-status - poll for slug updates (requires auth)
-app.use('/chat/threads/:id/slug-status', requireSession);
+// Project routes - CSRF only
+app.use('/projects', csrfProtection);
+app.on(['PATCH', 'DELETE'], '/projects/:id', csrfProtection);
+app.use('/projects/:id/knowledge', csrfProtection);
+app.use('/projects/:id/knowledge/:fileId', csrfProtection);
 
-// Participant management routes (protected)
-app.use('/chat/threads/:id/participants', csrfProtection, requireSession);
-app.use('/chat/participants/:id', csrfProtection, requireSession);
-
-// Custom role routes (protected)
-app.use('/chat/custom-roles', csrfProtection, requireSession);
-app.use('/chat/custom-roles/:id', csrfProtection, requireSession);
-
-// Pre-search routes (protected)
-app.use('/chat/threads/:threadId/rounds/:roundNumber/pre-search', csrfProtection, requireSession);
-app.use('/chat/threads/:id/pre-searches', requireSession); // GET pre-searches for thread
-
-// Round summary routes (protected)
-app.use('/chat/threads/:threadId/rounds/:roundNumber/moderator', csrfProtection, requireSession);
-app.use('/chat/threads/:threadId/rounds/:roundNumber/moderator/resume', requireSession); // GET resume (no CSRF for safe method)
-app.use('/chat/threads/:id/summaries', requireSession); // GET summaries for thread
-
-// Round feedback routes (protected)
-app.use('/chat/threads/:threadId/rounds/:roundNumber/feedback', csrfProtection, requireSession);
-app.use('/chat/threads/:id/feedback', requireSession); // GET feedback for thread
-
-// Project routes (protected)
-app.use('/projects', csrfProtection, requireSession);
-app.use('/projects/:id', protectMutations);
-app.use('/projects/:id/knowledge', csrfProtection, requireSession);
-app.use('/projects/:id/knowledge/:fileId', csrfProtection, requireSession);
-
-// Upload routes (protected - file attachments for chat)
-// NOTE: Download routes have separate rate limiting - don't apply upload rate limiter to them
+// Upload routes - CSRF + rate limiting only (handlers do their own auth)
+// NOTE: Download routes have separate rate limiting
 app.use('/uploads', async (c, next) => {
   // Skip rate limiting for download routes - they have their own rate limiter
   if (c.req.path.includes('/download')) {
     return next();
   }
   return RateLimiterFactory.create('upload')(c, next);
-}, csrfProtection, async (c, next) => {
-  // Skip session requirement for download routes - they use signed URLs
-  if (c.req.path.includes('/download')) {
-    return next();
-  }
-  return requireSession(c, next);
-});
-app.use('/uploads/ticket', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
-app.use('/uploads/ticket/upload', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
-app.use('/uploads/:id', protectMutations);
-app.use('/uploads/:id/download', RateLimiterFactory.create('download')); // Download has its own rate limit + session-optional auth
-app.use('/uploads/:id/download-url', RateLimiterFactory.create('download'), requireSession);
-app.use('/uploads/multipart', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
-app.use('/uploads/multipart/:id', protectMutations);
-app.use('/uploads/multipart/:id/parts', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
-app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+}, csrfProtection);
+app.use('/uploads/ticket', RateLimiterFactory.create('upload'), csrfProtection);
+app.use('/uploads/ticket/upload', RateLimiterFactory.create('upload'), csrfProtection);
+app.on(['PATCH', 'DELETE'], '/uploads/:id', csrfProtection);
+app.use('/uploads/:id/download', RateLimiterFactory.create('download'));
+app.use('/uploads/:id/download-url', RateLimiterFactory.create('download'));
+app.use('/uploads/multipart', RateLimiterFactory.create('upload'), csrfProtection);
+app.on(['PATCH', 'DELETE'], '/uploads/multipart/:id', csrfProtection);
+app.use('/uploads/multipart/:id/parts', RateLimiterFactory.create('upload'), csrfProtection);
+app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), csrfProtection);
 
 // Register all routes directly on the app
-const appRoutes = app
+// Build route chain with conditional dev-only routes
+let routeChain = app
   // ============================================================================
   // System Routes - Health monitoring and diagnostics
   // ============================================================================
   .openapi(healthRoute, healthHandler) // Basic health check for monitoring
-  .openapi(detailedHealthRoute, detailedHealthHandler) // Detailed health check with environment and dependencies
-  .openapi(clearCacheRoute, clearCacheHandler) // Clear all backend caches
+  .openapi(detailedHealthRoute, detailedHealthHandler); // Detailed health check with environment and dependencies
 
+// Dev-only routes - only registered in local/preview/development environments
+if (IS_DEV_ENVIRONMENT) {
+  routeChain = routeChain
+    .openapi(clearCacheRoute, clearCacheHandler) // Clear all backend caches (dev only)
+    .openapi(benchmarkRoute, benchmarkHandler); // Database query benchmark (dev only)
+}
+
+const appRoutes = routeChain
   // ============================================================================
   // Auth Routes - User authentication and session management (protected)
   // ============================================================================
@@ -651,6 +655,7 @@ const appRoutes = app
   // ============================================================================
   // Thread Management
   .openapi(listThreadsRoute, listThreadsHandler) // List threads with cursor pagination
+  .openapi(listSidebarThreadsRoute, listSidebarThreadsHandler) // List sidebar threads (lightweight)
   .openapi(createThreadRoute, createThreadHandler) // Create thread with mode and configuration
   .openapi(getThreadRoute, getThreadHandler) // Get thread details with participants
   .openapi(getThreadBySlugRoute, getThreadBySlugHandler) // Get thread by slug (authenticated)
@@ -689,6 +694,8 @@ const appRoutes = app
   .openapi(executePreSearchRoute, executePreSearchHandler) // Stream pre-search execution (auto-creates)
   // Council Moderator (protected, backend-triggered only)
   .openapi(councilModeratorRoundRoute, councilModeratorRoundHandler) // Stream council moderator generation (text streaming like participants)
+  // Round Orchestration (protected, queue worker internal API)
+  .openapi(getRoundStatusRoute, getRoundStatusHandler) // Get round status for queue worker orchestration
   // Round Feedback (protected)
   .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler) // Set/update round feedback (like/dislike)
   .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler) // Get all round feedback for a thread
@@ -727,13 +734,16 @@ const appRoutes = app
   // ============================================================================
   .openapi(getCreditBalanceRoute, getCreditBalanceHandler) // Get credit balance and plan info
   .openapi(getCreditTransactionsRoute, getCreditTransactionsHandler) // Get credit transaction history
-  .openapi(estimateCreditCostRoute, estimateCreditCostHandler) // Estimate credit cost for action
+  .openapi(estimateCreditCostRoute, estimateCreditCostHandler); // Estimate credit cost for action
 
-  // ============================================================================
-  // Test Routes - Development/test only utilities (protected)
-  // ============================================================================
-  .openapi(setUserCreditsRoute, setUserCreditsHandler) // Set user credits (test only)
+// Test Routes - Development/test only utilities (protected)
+// Only registered in local/preview/development environments
+let creditsChain = appRoutes;
+if (IS_DEV_ENVIRONMENT) {
+  creditsChain = creditsChain.openapi(setUserCreditsRoute, setUserCreditsHandler); // Set user credits (dev only)
+}
 
+const finalRoutes = creditsChain
   // ============================================================================
   // Models Routes - Simplified OpenRouter models endpoint (public)
   // ============================================================================
@@ -777,17 +787,17 @@ const appRoutes = app
 // This enables full type safety for RPC clients
 // ============================================================================
 
-export type AppType = typeof appRoutes;
+export type AppType = typeof finalRoutes;
 
 // ============================================================================
 // Step 6: OpenAPI documentation endpoints
 // ============================================================================
 
 // OpenAPI specification document endpoint
-appRoutes.doc('/doc', c => ({
+finalRoutes.doc('/doc', c => ({
   openapi: '3.0.0',
   info: {
-    version: '1.0.0',
+    version: APP_VERSION,
     title: 'Roundtable API',
     description: 'roundtable.now API - Collaborative AI brainstorming platform. Built with Hono, Zod, and OpenAPI.',
     contact: { name: 'Roundtable', url: 'https://roundtable.now' },
@@ -827,7 +837,7 @@ appRoutes.doc('/doc', c => ({
 }));
 
 // OpenAPI JSON endpoint (redirect to the doc endpoint)
-appRoutes.get('/openapi.json', async (c) => {
+finalRoutes.get('/openapi.json', async (c) => {
   // Redirect to the existing doc endpoint which contains the full OpenAPI spec
   return c.redirect('/api/v1/doc');
 });
@@ -839,7 +849,7 @@ appRoutes.get('/openapi.json', async (c) => {
 // Scalar API documentation UI
 // CSP headers set directly in Hono since Next.js headers() don't apply to Hono routes in Cloudflare Workers
 // Middleware to set permissive CSP for Scalar before the response is generated
-appRoutes.use('/scalar', async (c, next) => {
+finalRoutes.use('/scalar', async (c, next) => {
   await next();
 
   // Get the response that was set
@@ -871,20 +881,20 @@ appRoutes.use('/scalar', async (c, next) => {
   });
 });
 
-appRoutes.get('/scalar', Scalar({
+finalRoutes.get('/scalar', Scalar({
   url: '/api/v1/doc',
 }));
 
 // Health endpoints are now properly registered as OpenAPI routes above
 
 // LLM-friendly documentation
-appRoutes.get('/llms.txt', async (c) => {
+finalRoutes.get('/llms.txt', async (c) => {
   try {
-    const document = appRoutes.getOpenAPI31Document({
+    const document = finalRoutes.getOpenAPI31Document({
       openapi: '3.1.0',
       info: {
         title: 'Application API',
-        version: '1.0.0',
+        version: APP_VERSION,
       },
     });
     const markdown = await createMarkdownFromOpenApi(JSON.stringify(document));
@@ -898,4 +908,4 @@ appRoutes.get('/llms.txt', async (c) => {
 // Step 8: Export the app (default export for Cloudflare Workers/Bun)
 // ============================================================================
 
-export default appRoutes;
+export default finalRoutes;

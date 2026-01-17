@@ -236,6 +236,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   const itemsRef = useRef<UploadItem[]>(items);
   const activeUploadsRef = useRef<Set<string>>(new Set());
   const retryCountRef = useRef<Map<string, number>>(new Map());
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
   itemsRef.current = items;
 
@@ -259,14 +260,21 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
 
   const performSingleUpload = useCallback(
     async (item: UploadItem): Promise<void> => {
+      // Create abort controller for this upload
+      const abortController = new AbortController();
+      abortControllersRef.current.set(item.id, abortController);
+
       updateItem(item.id, {
         status: UploadStatuses.UPLOADING,
         progress: { loaded: 0, total: item.file.size, percent: 0 },
       });
 
       try {
-        // Pass file directly - secure upload service handles ticket + upload
-        const result = await uploadSingle.mutateAsync(item.file);
+        // Pass file and abort signal - secure upload service handles ticket + upload
+        const result = await uploadSingle.mutateAsync({
+          file: item.file,
+          signal: abortController.signal,
+        });
 
         if (result.success && result.data) {
           updateItem(item.id, {
@@ -284,11 +292,16 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           throw new Error('Upload failed');
         }
       } catch (error) {
+        // Handle abort gracefully - user cancelled, not an error
+        if (error instanceof Error && error.name === 'AbortError')
+          return;
         console.error('[File Upload] Single upload failed:', error);
         const errorMessage = error instanceof Error ? error.message : 'Upload failed';
         updateItem(item.id, { status: UploadStatuses.FAILED, error: errorMessage });
         onError?.(item, error instanceof Error ? error : new Error(errorMessage));
         throw error;
+      } finally {
+        abortControllersRef.current.delete(item.id);
       }
     },
     [onComplete, onError, updateItem, uploadSingle],
@@ -299,6 +312,10 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       const { file } = item;
       const partSize = RECOMMENDED_PART_SIZE;
       const totalParts = Math.ceil(file.size / partSize);
+
+      // Create abort controller for this upload
+      const abortController = new AbortController();
+      abortControllersRef.current.set(item.id, abortController);
 
       updateItem(item.id, {
         status: UploadStatuses.UPLOADING,
@@ -312,6 +329,11 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       });
 
       try {
+        // Check if already aborted
+        if (abortController.signal.aborted) {
+          throw new DOMException('Upload cancelled', 'AbortError');
+        }
+
         const createResult = await createMultipart.mutateAsync({
           json: {
             filename: file.name,
@@ -332,9 +354,14 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         let uploadedBytes = 0;
 
         for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+          // Check if aborted before each part
+          if (abortController.signal.aborted) {
+            throw new DOMException('Upload cancelled', 'AbortError');
+          }
+
           const currentItem = itemsRef.current.find(i => i.id === item.id);
           if (currentItem?.status === UploadStatuses.CANCELLED) {
-            throw new Error('Upload cancelled');
+            throw new DOMException('Upload cancelled', 'AbortError');
           }
 
           const start = (partNumber - 1) * partSize;
@@ -348,6 +375,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
               partNumber: partNumber.toString(),
             },
             body: partData,
+            signal: abortController.signal,
           });
 
           if (!partResult.success || !partResult.data) {
@@ -397,6 +425,22 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           onComplete?.({ ...updatedItem, status: UploadStatuses.COMPLETED });
         }
       } catch (error) {
+        // Handle abort gracefully - user cancelled, cleanup on server
+        if (error instanceof Error && error.name === 'AbortError') {
+          const currentItem = itemsRef.current.find(i => i.id === item.id);
+          if (currentItem?.multipartUploadId && currentItem?.uploadId) {
+            try {
+              await abortMultipart.mutateAsync({
+                param: { id: currentItem.uploadId },
+                query: { uploadId: currentItem.multipartUploadId },
+              });
+            } catch {
+              // Ignore abort cleanup errors
+            }
+          }
+          return;
+        }
+
         console.error('[File Upload] Multipart upload failed:', error);
         const errorMessage = error instanceof Error ? error.message : 'Multipart upload failed';
 
@@ -415,6 +459,8 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         updateItem(item.id, { status: UploadStatuses.FAILED, error: errorMessage });
         onError?.(item, error instanceof Error ? error : new Error(errorMessage));
         throw error;
+      } finally {
+        abortControllersRef.current.delete(item.id);
       }
     },
     [abortMultipart, completeMultipart, createMultipart, onComplete, onError, updateItem, uploadPart],
@@ -472,6 +518,13 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       const item = itemsRef.current.find(i => i.id === id);
       if (!item)
         return;
+
+      // Abort the in-flight HTTP request immediately
+      const abortController = abortControllersRef.current.get(id);
+      if (abortController) {
+        abortController.abort();
+        abortControllersRef.current.delete(id);
+      }
 
       updateItem(id, { status: UploadStatuses.CANCELLED });
       activeUploadsRef.current.delete(id);
@@ -746,7 +799,10 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
       abortControllerRef.current = new AbortController();
 
       try {
-        const result = await uploadMutation.mutateAsync(file);
+        const result = await uploadMutation.mutateAsync({
+          file,
+          signal: abortControllerRef.current?.signal,
+        });
 
         if (result.success && result.data) {
           setProgress({ loaded: file.size, total: file.size, percent: 100 });
@@ -757,6 +813,12 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
 
         throw new Error('Upload failed');
       } catch (err) {
+        // Handle abort gracefully
+        if (err instanceof Error && err.name === 'AbortError') {
+          setStatus(UploadStatuses.CANCELLED);
+          return null;
+        }
+
         console.error('[File Upload] Single file upload failed:', err);
         const errorMessage = err instanceof Error ? err.message : 'Upload failed';
         setError(errorMessage);

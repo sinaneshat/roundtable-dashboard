@@ -2,7 +2,7 @@ import type { z } from '@hono/zod-openapi';
 
 import type { ChatMode, PlaceholderPrefix, QueryAnalysisResult, WebSearchActiveAnswerMode } from '@/api/core/enums';
 import { ChatModes, PlaceholderPrefixes, QueryAnalysisComplexities, WebSearchActiveAnswerModes, WebSearchDepths } from '@/api/core/enums';
-import type { ModeratorPayload } from '@/api/routes/chat/schema';
+import type { ModeratorPayload, ParticipantResponse } from '@/api/routes/chat/schema';
 import type { AttachmentCitationInfo } from '@/api/types/citations';
 
 export type PromptPlaceholder<T>
@@ -778,29 +778,6 @@ ${JSON.stringify(MODERATOR_JSON_STRUCTURE, null, 2)}`;
  */
 
 // ============================================================================
-// Role Template Helpers
-// ============================================================================
-
-/**
- * Create system prompt for custom participant roles
- * ✅ SINGLE SOURCE: Used for user-defined participant roles
- *
- * Used by:
- * - /src/components/chat/role-selector.tsx - Custom role system prompts
- *
- * @param roleName - The role name to create a system prompt for
- * @param mode - Optional conversation mode
- * @returns System prompt string for the role with roundtable instructions
- *
- * @example
- * createRoleSystemPrompt('Security Expert', 'debating')
- * // Returns full roundtable-aware prompt for Security Expert role in debate mode
- */
-export function createRoleSystemPrompt(roleName: string, mode?: ChatMode | null): string {
-  return buildParticipantSystemPrompt(roleName, mode);
-}
-
-// ============================================================================
 // Analyze Prompt - Auto Mode Configuration Analysis
 // ============================================================================
 
@@ -834,7 +811,7 @@ export type AnalyzeModelInfo = {
  * @param minModels - Minimum participants required
  * @param roleNames - Available role names
  * @param chatModes - Available chat modes
- * @param hasVisualFiles - Whether user has attached visual files
+ * @param requiresVision - Whether user has attached image files requiring vision support
  * @param freeTierMaxModels - Max models for free tier (for prompt guidance)
  * @returns System prompt for AI orchestrator analysis
  */
@@ -844,7 +821,7 @@ export function buildAnalyzeSystemPrompt(
   minModels: number,
   roleNames: readonly string[],
   chatModes: string[],
-  hasVisualFiles: boolean = false,
+  requiresVision: boolean = false,
   freeTierMaxModels: number = 3,
 ): string {
   const modelList = models.map((m) => {
@@ -857,17 +834,17 @@ export function buildAnalyzeSystemPrompt(
     return `- ${m.id}: ${m.description}${tagStr}`;
   }).join('\n');
 
-  const visualFilesNote = hasVisualFiles
+  const visionRequiredNote = requiresVision
     ? `
 
-## ⚠️ CRITICAL CONSTRAINT: VISUAL FILES ATTACHED
-The user has attached visual files (images or PDFs) that need to be analyzed.
+## ⚠️ CRITICAL CONSTRAINT: IMAGE FILES ATTACHED
+The user has attached image files that need to be analyzed.
 **YOU MUST ONLY SELECT MODELS MARKED WITH [vision] TAG.**
-All models in the list below already support vision - select from them for optimal image/PDF analysis.
+All models in the list below already support vision - select from them for optimal image analysis.
 `
     : '';
 
-  return `You are an expert AI orchestrator that analyzes user prompts and configures optimal multi-model chat sessions. Your goal is to maximize response quality by intelligently selecting models, assigning roles, choosing the right conversation mode, and deciding whether web search would help.${visualFilesNote}
+  return `You are an expert AI orchestrator that analyzes user prompts and configures optimal multi-model chat sessions. Your goal is to maximize response quality by intelligently selecting models, assigning roles, choosing the right conversation mode, and deciding whether web search would help.${visionRequiredNote}
 
 ## YOUR TASK
 Analyze the user's prompt deeply. Consider:
@@ -1013,20 +990,12 @@ Think carefully. Your configuration directly impacts the quality of help the use
  * Participant response type for moderator prompt building
  * Contains participant info and their response content
  */
-export type ModeratorParticipantResponse = {
-  participantIndex: number;
-  participantRole: string;
-  modelId: string;
-  modelName: string;
-  responseContent: string;
-};
-
 /**
  * Build participant list for moderator prompt context
  * @param participantResponses - Array of participant responses
  * @returns Formatted participant list string
  */
-export function buildModeratorParticipantList(participantResponses: ModeratorParticipantResponse[]): string {
+export function buildModeratorParticipantList(participantResponses: ParticipantResponse[]): string {
   return participantResponses
     .map(p => `${p.participantRole} (${p.modelName})`)
     .join(', ');
@@ -1037,7 +1006,7 @@ export function buildModeratorParticipantList(participantResponses: ModeratorPar
  * @param participantResponses - Array of participant responses
  * @returns Formatted transcript string
  */
-export function buildModeratorTranscript(participantResponses: ModeratorParticipantResponse[]): string {
+export function buildModeratorTranscript(participantResponses: ParticipantResponse[]): string {
   return participantResponses
     .map(p => `**${p.participantRole} (${p.modelName}):**\n${p.responseContent}`)
     .join('\n\n');
@@ -1070,7 +1039,7 @@ export function buildCouncilModeratorSystemPrompt(
   roundNumber: number,
   mode: ChatMode,
   userQuestion: string,
-  participantResponses: ModeratorParticipantResponse[],
+  participantResponses: ParticipantResponse[],
 ): string {
   const participantList = buildModeratorParticipantList(participantResponses);
   const participantCount = participantResponses.length;
@@ -1187,30 +1156,58 @@ ${att.textContent}
     } else {
       // Binary files (images, PDFs) - metadata only, content passed as multimodal
       return `<file id="${att.citationId}" index="${index + 1}" name="${att.filename}" type="${att.mimeType}" size="${sizeKB}KB">
-[Visual content - analyze directly from the image/document above]
+[Visual/document content provided as multimodal input - cite this file when referencing its content]
 </file>`;
     }
   });
 
+  // Build citation ID list with emphasis
+  const citationList = attachments
+    .map((att, i) => `  ${i + 1}. "${att.filename}" → cite as [${att.citationId}]`)
+    .join('\n');
+
+  // Strong citation requirements with specific excerpt instructions
   return `
+
+## 🚨 MANDATORY: File Citation Requirements
+
+**YOU MUST CITE uploaded files when using their content. This is NOT optional.**
+
+### Available Files to Cite:
+${citationList}
+
+### Citation Rules (MUST FOLLOW):
+
+1. **EVERY claim from a file needs a citation**
+   When you state ANY fact, name, date, number, or detail from a file, add the citation marker immediately after.
+
+2. **Use the EXACT citation format: [att_xxxxxxxx]**
+   Do NOT abbreviate, modify, or skip the citation ID. Copy it exactly as shown above.
+
+3. **Quote or paraphrase specific content**
+   Don't just cite - show WHAT you're citing by quoting or describing the specific part.
+
+### Correct Citation Examples:
+
+✅ GOOD (shows specific content + citation):
+- "According to the document, the user's first workplace was 'Company ABC' [${attachments[0]?.citationId || 'att_example'}]."
+- "The resume states: 'Worked at XYZ Corp from 2018-2020' [${attachments[0]?.citationId || 'att_example'}]."
+- "The file shows the configuration uses port 3000 [${attachments[0]?.citationId || 'att_example'}]."
+
+❌ BAD (no citation or no specific content):
+- "The first workplace was Company ABC." ← MISSING CITATION
+- "Based on the document, they worked somewhere." ← TOO VAGUE
+- "The file mentions some experience." ← NOT SPECIFIC
+
+### For PDFs and Images:
+When referencing visual content (PDFs, images), you MUST still cite:
+- "The PDF shows the user worked at Company X from 2017-2020 [${attachments[0]?.citationId || 'att_example'}]."
+- "Looking at the resume image, the education section lists MIT [${attachments[0]?.citationId || 'att_example'}]."
 
 <uploaded-files>
 ${fileEntries.join('\n\n')}
 </uploaded-files>
 
-## Citation Instructions
-When you use information from the uploaded files above, you MUST cite the source using its exact ID in square brackets.
-
-**Format**: Place the citation marker [att_xxxxxxxx] immediately after the information you're referencing.
-
-**Examples**:
-- "The configuration shows port 3000 [att_abc12345]"
-- "According to the document [att_xyz98765], the API endpoint is..."
-- "The code implements a retry mechanism [att_def45678] with exponential backoff"
-
-**Rules**:
-1. Use the EXACT citation ID from the file's "id" attribute (e.g., att_abc12345)
-2. Place citations inline, right after the relevant statement
-3. You may cite the same source multiple times if referencing different parts
-4. Do NOT modify or abbreviate the citation ID`;
+---
+**Remember: NO citation = INCOMPLETE RESPONSE. Always cite your sources from the uploaded files.**`;
 }

@@ -57,8 +57,8 @@ export const UIBillingIntervals = {
   MONTH: 'month' as const,
 } as const;
 
-export function isUIBillingInterval(value: string): value is UIBillingInterval {
-  return UI_BILLING_INTERVALS.includes(value as UIBillingInterval);
+export function isUIBillingInterval(value: unknown): value is UIBillingInterval {
+  return UIBillingIntervalSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -136,8 +136,11 @@ export const ACTIVE_SUBSCRIPTION_STATUSES = [
 
 export type ActiveSubscriptionStatus = (typeof ACTIVE_SUBSCRIPTION_STATUSES)[number];
 
-export function isActiveSubscriptionStatus(status: StripeSubscriptionStatus): status is ActiveSubscriptionStatus {
-  return (ACTIVE_SUBSCRIPTION_STATUSES as readonly StripeSubscriptionStatus[]).includes(status);
+// Zod schema for active subscription status subset
+const ActiveSubscriptionStatusSchema = z.enum(ACTIVE_SUBSCRIPTION_STATUSES);
+
+export function isActiveSubscriptionStatus(status: unknown): status is ActiveSubscriptionStatus {
+  return ActiveSubscriptionStatusSchema.safeParse(status).success;
 }
 
 // ============================================================================
@@ -169,7 +172,7 @@ export const SyncedSubscriptionStatuses = {
 } as const;
 
 export function isSyncedSubscriptionStatus(value: unknown): value is SyncedSubscriptionStatus {
-  return typeof value === 'string' && SYNCED_SUBSCRIPTION_STATUSES.includes(value as SyncedSubscriptionStatus);
+  return SyncedSubscriptionStatusSchema.safeParse(value).success;
 }
 
 export function hasSubscription(status: SyncedSubscriptionStatus): status is StripeSubscriptionStatus {
@@ -299,7 +302,7 @@ export const PlanTypes = {
 } as const;
 
 export function isPlanType(value: unknown): value is PlanType {
-  return typeof value === 'string' && PLAN_TYPES.includes(value as PlanType);
+  return PlanTypeSchema.safeParse(value).success;
 }
 
 export function parsePlanType(value: unknown): PlanType {
@@ -345,7 +348,7 @@ export const CreditTransactionTypes = {
 } as const;
 
 export function isCreditTransactionType(value: unknown): value is CreditTransactionType {
-  return typeof value === 'string' && CREDIT_TRANSACTION_TYPES.includes(value as CreditTransactionType);
+  return CreditTransactionTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -454,7 +457,7 @@ export const PurchaseTypes = {
 } as const;
 
 export function isPurchaseType(value: unknown): value is PurchaseType {
-  return PURCHASE_TYPES.includes(value as PurchaseType);
+  return PurchaseTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -482,7 +485,7 @@ export const SubscriptionPlanTypes = {
 } as const;
 
 export function isSubscriptionPlanType(value: unknown): value is SubscriptionPlanType {
-  return SUBSCRIPTION_PLAN_TYPES.includes(value as SubscriptionPlanType);
+  return SubscriptionPlanTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -518,7 +521,7 @@ export const BillingErrorTypes = {
 } as const;
 
 export function isBillingErrorType(value: unknown): value is BillingErrorType {
-  return typeof value === 'string' && BILLING_ERROR_TYPES.includes(value as BillingErrorType);
+  return BillingErrorTypeSchema.safeParse(value).success;
 }
 
 export function parseBillingErrorType(value: unknown): BillingErrorType {
@@ -552,7 +555,7 @@ export const PaymentMethodTypes = {
 } as const;
 
 export function isPaymentMethodType(value: unknown): value is PaymentMethodType {
-  return typeof value === 'string' && PAYMENT_METHOD_TYPES.includes(value as PaymentMethodType);
+  return PaymentMethodTypeSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -627,12 +630,39 @@ export const MODEL_TIER_THRESHOLDS: Record<ModelPricingTier, { min: number; max:
 } as const;
 
 export function isModelPricingTier(value: unknown): value is ModelPricingTier {
-  return typeof value === 'string' && MODEL_PRICING_TIERS.includes(value as ModelPricingTier);
+  return ModelPricingTierSchema.safeParse(value).success;
 }
 
 export function getModelTierMultiplier(tier: ModelPricingTier): number {
   return MODEL_TIER_CREDIT_MULTIPLIERS[tier];
 }
+
+// ============================================================================
+// MODEL COST CATEGORY (UI-facing cost display)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const MODEL_COST_CATEGORIES = ['free', 'low', 'medium', 'high'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_MODEL_COST_CATEGORY: ModelCostCategory = 'low';
+
+// 3. ZOD SCHEMA
+export const ModelCostCategorySchema = z.enum(MODEL_COST_CATEGORIES).openapi({
+  description: 'UI-facing model cost category for display purposes',
+  example: 'medium',
+});
+
+// 4. TYPESCRIPT TYPE
+export type ModelCostCategory = z.infer<typeof ModelCostCategorySchema>;
+
+// 5. CONSTANT OBJECT
+export const ModelCostCategories = {
+  FREE: 'free' as const,
+  LOW: 'low' as const,
+  MEDIUM: 'medium' as const,
+  HIGH: 'high' as const,
+} as const;
 
 // ============================================================================
 // INVOICE STATUS
@@ -692,12 +722,16 @@ export const StripeProratioBehaviors = {
 // STRIPE BILLING REASON
 // ============================================================================
 
-// 1️⃣ ARRAY CONSTANT - Source of truth for values
+// 1️⃣ ARRAY CONSTANT - Source of truth for values (matches Stripe.Invoice.BillingReason)
 export const STRIPE_BILLING_REASONS = [
-  'subscription_create',
-  'subscription_update',
-  'subscription_cycle',
+  'automatic_pending_invoice_item_invoice',
   'manual',
+  'quote_accept',
+  'subscription',
+  'subscription_create',
+  'subscription_cycle',
+  'subscription_threshold',
+  'subscription_update',
   'upcoming',
 ] as const;
 
@@ -715,12 +749,57 @@ export type StripeBillingReason = z.infer<typeof StripeBillingReasonSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const StripeBillingReasons = {
-  SUBSCRIPTION_CREATE: 'subscription_create' as const,
-  SUBSCRIPTION_UPDATE: 'subscription_update' as const,
-  SUBSCRIPTION_CYCLE: 'subscription_cycle' as const,
+  AUTOMATIC_PENDING_INVOICE_ITEM_INVOICE: 'automatic_pending_invoice_item_invoice' as const,
   MANUAL: 'manual' as const,
+  QUOTE_ACCEPT: 'quote_accept' as const,
+  SUBSCRIPTION: 'subscription' as const,
+  SUBSCRIPTION_CREATE: 'subscription_create' as const,
+  SUBSCRIPTION_CYCLE: 'subscription_cycle' as const,
+  SUBSCRIPTION_THRESHOLD: 'subscription_threshold' as const,
+  SUBSCRIPTION_UPDATE: 'subscription_update' as const,
   UPCOMING: 'upcoming' as const,
 } as const;
+
+// ============================================================================
+// TIER CREDIT LIMITS (single source of truth for credit amounts)
+// ============================================================================
+
+/**
+ * Monthly credit allocations by subscription tier.
+ * FREE: One-time signup bonus only, no monthly refill
+ * PRO: Monthly recurring credits
+ */
+export const TIER_MONTHLY_CREDITS = {
+  [SubscriptionTiers.FREE]: 0,
+  [SubscriptionTiers.PRO]: 2_000_000,
+} as const satisfies Record<SubscriptionTier, number>;
+
+/**
+ * One-time signup credit bonus (free tier only)
+ */
+export const SIGNUP_BONUS_CREDITS = 5_000 as const;
+
+/**
+ * Price in cents for subscription plans
+ */
+export const TIER_PRICE_CENTS = {
+  [SubscriptionTiers.FREE]: 0,
+  [SubscriptionTiers.PRO]: 5900, // $59.00
+} as const satisfies Record<SubscriptionTier, number>;
+
+/**
+ * Get monthly credits for a subscription tier
+ */
+export function getMonthlyCreditsForPlanTier(tier: SubscriptionTier): number {
+  return TIER_MONTHLY_CREDITS[tier];
+}
+
+/**
+ * Get price in cents for a subscription tier
+ */
+export function getTierPriceCents(tier: SubscriptionTier): number {
+  return TIER_PRICE_CENTS[tier];
+}
 
 // ============================================================================
 // TRIAL STATE (free trial status for UI display)
@@ -748,5 +827,5 @@ export const TrialStates = {
 } as const;
 
 export function isValidTrialState(value: unknown): value is TrialState {
-  return typeof value === 'string' && TRIAL_STATES.includes(value as TrialState);
+  return TrialStateSchema.safeParse(value).success;
 }

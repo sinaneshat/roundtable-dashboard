@@ -19,11 +19,11 @@ import { createError } from '@/api/common/error-handling';
 import { getErrorMessage, getErrorName, toError } from '@/api/common/error-types';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/api/core';
-import { MessagePartTypes, MessageRoles, PlanTypes, PollingStatuses } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, PlanTypes, PollingStatuses, RoundExecutionPhases } from '@/api/core/enums';
 import {
   checkFreeUserHasCompletedRound,
-  deductCreditsForAction,
   enforceCredits,
+  finalizeCredits,
   getUserCreditBalance,
   zeroOutFreeUserCredits,
 } from '@/api/services/billing';
@@ -34,10 +34,10 @@ import {
 } from '@/api/services/errors';
 import { filterDbToParticipantMessages } from '@/api/services/messages';
 import { extractModeratorModelName, initializeOpenRouter, openRouterService } from '@/api/services/models';
-import type { ModeratorParticipantResponse } from '@/api/services/prompts';
 import {
   buildCouncilModeratorSystemPrompt,
 } from '@/api/services/prompts';
+import { getRoundExecutionState } from '@/api/services/round-orchestration';
 import {
   appendParticipantStreamChunk,
   clearActiveParticipantStream,
@@ -54,14 +54,11 @@ import * as tables from '@/db';
 import type { DbModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
-import { requireParticipantMetadata } from '@/lib/utils';
+import { getParticipantIndex } from '@/lib/utils';
 
 import type { councilModeratorRoundRoute } from '../route';
-import type { MessageWithParticipant, ModeratorPromptConfig, ParticipantResponse } from '../schema';
-import {
-  MessageWithParticipantSchema,
-  RoundModeratorRequestSchema,
-} from '../schema';
+import type { ModeratorPromptConfig, ParticipantResponse } from '../schema';
+import { RoundModeratorRequestSchema } from '../schema';
 
 // ============================================================================
 // Constants
@@ -74,7 +71,7 @@ const MODERATOR_PARTICIPANT_INDEX = NO_PARTICIPANT_SENTINEL;
 // Prompt Building - Uses Centralized Prompts Service
 // ============================================================================
 // ✅ SINGLE SOURCE: Moderator prompts defined in prompts.service.ts
-// See: buildCouncilModeratorSystemPrompt, ModeratorParticipantResponse
+// See: buildCouncilModeratorSystemPrompt, ParticipantResponse (from schema)
 
 // ============================================================================
 // Council Moderator Generation (Text Streaming - Like Participants)
@@ -119,7 +116,7 @@ function generateCouncilModerator(
     roundNumber,
     mode,
     userQuestion,
-    participantResponses as ModeratorParticipantResponse[],
+    participantResponses,
   );
 
   // Build initial moderator metadata (streaming state)
@@ -163,6 +160,14 @@ function generateCouncilModerator(
       try {
         const db = await getDbAsync();
 
+        // ✅ NaN HANDLING: Use Number.isFinite() to handle NaN from failed AI responses
+        const rawInputTokens = finishResult.usage?.inputTokens ?? 0;
+        const rawOutputTokens = finishResult.usage?.outputTokens ?? 0;
+        const rawTotalTokens = finishResult.usage?.totalTokens ?? 0;
+        const safeInputTokens = Number.isFinite(rawInputTokens) ? rawInputTokens : 0;
+        const safeOutputTokens = Number.isFinite(rawOutputTokens) ? rawOutputTokens : 0;
+        const safeTotalTokens = Number.isFinite(rawTotalTokens) ? rawTotalTokens : safeInputTokens + safeOutputTokens;
+
         // Build complete moderator metadata
         const completeMetadata: DbModeratorMessageMetadata = {
           ...streamMetadata,
@@ -170,9 +175,9 @@ function generateCouncilModerator(
           usage: finishResult.usage
             ? {
                 // Map AI SDK format (inputTokens/outputTokens) to schema format (promptTokens/completionTokens)
-                promptTokens: finishResult.usage.inputTokens || 0,
-                completionTokens: finishResult.usage.outputTokens || 0,
-                totalTokens: finishResult.usage.totalTokens || 0,
+                promptTokens: safeInputTokens,
+                completionTokens: safeOutputTokens,
+                totalTokens: safeTotalTokens,
               }
             : undefined,
           createdAt: new Date().toISOString(),
@@ -212,9 +217,21 @@ function generateCouncilModerator(
         // phase=moderator instead of complete, triggering participant re-execution.
         // By calling these here (in onFinish which runs before response ends), we ensure
         // KV state is correct even if consumeSseStream hasn't finished buffering.
-        console.error(`[moderator] onFinish: marking stream complete and clearing active key for r${roundNumber}`);
         await completeParticipantStreamBuffer(messageId, env);
         await clearActiveParticipantStream(threadId, roundNumber, MODERATOR_PARTICIPANT_INDEX, env);
+
+        // =========================================================================
+        // ✅ CREDIT FINALIZATION: Deduct actual tokens used by moderator
+        // Uses actual token counts instead of fixed estimate for accurate billing
+        // =========================================================================
+        await finalizeCredits(userId, messageId, {
+          inputTokens: safeInputTokens,
+          outputTokens: safeOutputTokens,
+          action: 'ai_response',
+          threadId,
+          messageId,
+          modelId: moderatorModelId,
+        });
 
         // =========================================================================
         // ✅ FREE USER SINGLE-ROUND: Zero out credits after moderator completes
@@ -233,13 +250,11 @@ function generateCouncilModerator(
         const finishData = {
           text: finishResult.text,
           finishReason: finishResult.finishReason,
-          usage: finishResult.usage
-            ? {
-                inputTokens: finishResult.usage.inputTokens || 0,
-                outputTokens: finishResult.usage.outputTokens || 0,
-                totalTokens: finishResult.usage.totalTokens || 0,
-              }
-            : { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          usage: {
+            inputTokens: safeInputTokens,
+            outputTokens: safeOutputTokens,
+            totalTokens: safeTotalTokens,
+          },
         };
 
         const trackAnalytics = async () => {
@@ -336,15 +351,23 @@ function generateCouncilModerator(
       }
 
       if (part.type === 'finish') {
+        // ✅ NaN HANDLING: Use Number.isFinite() to handle NaN from failed AI responses
+        const rawInput = part.totalUsage?.inputTokens ?? 0;
+        const rawOutput = part.totalUsage?.outputTokens ?? 0;
+        const rawTotal = part.totalUsage?.totalTokens ?? 0;
+        const safeInput = Number.isFinite(rawInput) ? rawInput : 0;
+        const safeOutput = Number.isFinite(rawOutput) ? rawOutput : 0;
+        const safeTotal = Number.isFinite(rawTotal) ? rawTotal : safeInput + safeOutput;
+
         return {
           ...streamMetadata,
           finishReason: part.finishReason,
           usage: part.totalUsage
             ? {
                 // Map AI SDK format to schema format
-                promptTokens: part.totalUsage.inputTokens || 0,
-                completionTokens: part.totalUsage.outputTokens || 0,
-                totalTokens: part.totalUsage.totalTokens || 0,
+                promptTokens: safeInput,
+                completionTokens: safeOutput,
+                totalTokens: safeTotal,
               }
             : undefined,
         };
@@ -431,7 +454,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
   async (c) => {
     const { user } = c.auth();
     const { threadId, roundNumber } = c.validated.params;
-    const body = c.validated.body;
+    // Note: body.participantMessageIds is validated but D1 is source of truth for finding messages
 
     const db = await getDbAsync();
     const roundNum = Number.parseInt(roundNumber, 10);
@@ -475,73 +498,70 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
       });
     }
 
-    // Get participant messages for this round
-    let participantMessages: MessageWithParticipant[] | null = null;
+    // =========================================================================
+    // ✅ D1-FIRST APPROACH: Query database for participant messages FIRST
+    // =========================================================================
+    // RATIONALE: The onFinish callback in streaming handler runs AFTER the stream
+    // response is sent to the client. Order of operations:
+    //   1. saveStreamedMessage (D1 write) - awaited
+    //   2. markParticipantCompleted (KV update) - runs after saveStreamedMessage
+    //   3. Stream response completes, sent to client
+    //   4. Frontend sees stream complete, triggers moderator
+    //
+    // Since saveStreamedMessage completes BEFORE markParticipantCompleted,
+    // D1 is the source of truth. If D1 has all participant messages, proceed
+    // regardless of KV state. Only fall back to KV check for better error info
+    // when D1 doesn't have expected messages.
+    // =========================================================================
 
-    if (body.participantMessageIds && body.participantMessageIds.length > 0) {
-      const messageIds = body.participantMessageIds;
+    // =========================================================================
+    // ✅ D1 QUERY: Single attempt - no blocking polling
+    // =========================================================================
+    // Query D1 once - if data isn't ready, return 202 immediately.
+    // The frontend will poll again. No server-side delays.
+    // =========================================================================
 
-      const foundMessages = await db.query.chatMessage.findMany({
-        where: (fields, { inArray, eq: eqOp, and: andOp }) =>
-          andOp(
-            inArray(fields.id, messageIds),
-            eqOp(fields.threadId, threadId),
-            eqOp(fields.role, MessageRoles.ASSISTANT),
-          ),
-        with: { participant: true },
-        orderBy: [
-          asc(tables.chatMessage.roundNumber),
-          asc(tables.chatMessage.createdAt),
-          asc(tables.chatMessage.id),
-        ],
-      });
+    // Query by round number (most reliable - doesn't depend on frontend IDs)
+    const roundMessages = await db.query.chatMessage.findMany({
+      where: (fields, { and: andOp, eq: eqOp }) =>
+        andOp(
+          eqOp(fields.threadId, threadId),
+          eqOp(fields.role, MessageRoles.ASSISTANT),
+          eqOp(fields.roundNumber, roundNum),
+        ),
+      with: { participant: true },
+      orderBy: [
+        asc(tables.chatMessage.roundNumber),
+        asc(tables.chatMessage.createdAt),
+        asc(tables.chatMessage.id),
+      ],
+    });
 
-      const participantOnlyFoundMessages = filterDbToParticipantMessages(foundMessages);
+    const participantMessages = filterDbToParticipantMessages(roundMessages);
 
-      if (participantOnlyFoundMessages.length > 0) {
-        const validationResult = MessageWithParticipantSchema.array().safeParse(participantOnlyFoundMessages);
-        if (validationResult.success) {
-          participantMessages = validationResult.data;
-        }
-      }
-    }
+    // =========================================================================
+    // ✅ KV FALLBACK: Check KV when D1 has no messages
+    // =========================================================================
+    // If D1 doesn't have participant messages, check KV for status
+    if (!participantMessages || participantMessages.length === 0) {
+      const roundState = await getRoundExecutionState(threadId, roundNum, c.env);
 
-    // Fallback: query by round number
-    if (!participantMessages) {
-      const roundMessages = await db.query.chatMessage.findMany({
-        where: (fields, { and: andOp, eq: eqOp }) =>
-          andOp(
-            eqOp(fields.threadId, threadId),
-            eqOp(fields.role, MessageRoles.ASSISTANT),
-            eqOp(fields.roundNumber, roundNum),
-          ),
-        with: { participant: true },
-        orderBy: [
-          asc(tables.chatMessage.roundNumber),
-          asc(tables.chatMessage.createdAt),
-          asc(tables.chatMessage.id),
-        ],
-      });
-
-      const participantOnlyMessages = filterDbToParticipantMessages(roundMessages);
-
-      if (participantOnlyMessages.length === 0) {
+      if (roundState && roundState.phase !== RoundExecutionPhases.MODERATOR) {
+        // KV shows participants still running - return detailed status
+        const completedCount = roundState.completedParticipants + roundState.failedParticipants;
         return Responses.polling(c, {
           status: PollingStatuses.PENDING,
-          message: `Messages for round ${roundNum} are still being processed. Please poll for completion.`,
+          message: `Waiting for participants to complete (${completedCount}/${roundState.totalParticipants}). Please poll for completion.`,
           retryAfterMs: 1000,
         });
       }
 
-      const validationResult = MessageWithParticipantSchema.array().safeParse(participantOnlyMessages);
-      if (validationResult.success) {
-        participantMessages = validationResult.data;
-      } else {
-        throw createError.internal('Failed to validate participant messages', {
-          errorType: 'validation',
-          field: 'participantMessages',
-        });
-      }
+      // KV is null or shows MODERATOR phase but D1 has no messages - still processing
+      return Responses.polling(c, {
+        status: PollingStatuses.PENDING,
+        message: `Messages for round ${roundNum} are still being processed. Please poll for completion.`,
+        retryAfterMs: 1000,
+      });
     }
 
     if (!participantMessages || participantMessages.length === 0) {
@@ -561,14 +581,16 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     const userQuestion = extractTextFromParts(userMessage.parts);
 
     // Build participant responses with schema-typed structure
+    // ✅ LENIENT: Use getParticipantIndex instead of requireParticipantMetadata to avoid strict Zod validation
     const participantResponses: ParticipantResponse[] = participantMessages
-      .map((msg): ParticipantResponse => {
+      .map((msg, idx): ParticipantResponse => {
         const participant = msg.participant!;
         const modelName = extractModeratorModelName(participant.modelId);
-        const metadata = requireParticipantMetadata(msg.metadata);
+        // Lenient extraction - fallback to array index if metadata extraction fails
+        const participantIndex = getParticipantIndex(msg.metadata) ?? idx;
 
         return {
-          participantIndex: metadata.participantIndex,
+          participantIndex,
           participantRole: participant.role || 'AI Assistant',
           modelId: participant.modelId,
           modelName,
@@ -577,13 +599,13 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
       })
       .sort((a, b) => a.participantIndex - b.participantIndex);
 
-    // ✅ CREDITS: Enforce and deduct credits for analysis generation
+    // ✅ CREDITS: Enforce credits for moderator generation
     // Skip round completion check because moderator is PART of completing the round
     // Without this, multi-participant threads hit a circular dependency:
     // - Round isn't complete until moderator runs
     // - But enforceCredits blocks moderator if round "appears complete" (all participants done)
-    await enforceCredits(user.id, 2, { skipRoundCheck: true }); // Analysis requires ~2 credits
-    await deductCreditsForAction(user.id, 'analysisGeneration', { threadId });
+    // NOTE: Actual deduction happens in onFinish via finalizeCredits() with real token counts
+    await enforceCredits(user.id, 2, { skipRoundCheck: true }); // Analysis requires ~2 credits estimate
 
     // ✅ RESUMABLE STREAMS: Initialize stream buffer for resumption
     await initializeParticipantStreamBuffer(messageId, threadId, roundNum, MODERATOR_PARTICIPANT_INDEX, c.env);
