@@ -9,6 +9,7 @@ import { Icons } from '@/components/icons';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { LinkLoadingIndicator } from '@/components/ui/link-loading-indicator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useSidebar } from '@/components/ui/sidebar';
 import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { useSidebarThreadsQuery } from '@/hooks/queries';
 import { useDebouncedValue } from '@/hooks/utils';
@@ -74,6 +75,7 @@ function SearchResultItem({
 export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   const router = useRouter();
   const t = useTranslations();
+  const { isMobile, setOpenMobile } = useSidebar();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -103,7 +105,11 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     setSearchQuery('');
     setSelectedIndex(0);
     onClose();
-  }, [onClose]);
+    // Close mobile sidebar when closing search after navigation
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [onClose, isMobile, setOpenMobile]);
 
   useEffect(() => {
     if (isOpen) {

@@ -15,7 +15,7 @@ import type { StorageMetadata, StorageResult } from '@/api/types/uploads';
 // LOCAL FILE STORAGE FALLBACK (Development Only)
 // ============================================================================
 
-const LOCAL_STORAGE_DIR = '.wrangler/state/uploads';
+const LOCAL_STORAGE_DIR = '.uploads';
 const IS_LOCAL_DEV = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local' || process.env.NODE_ENV === 'development';
 
 /**

@@ -170,9 +170,8 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
 // URL-Based Loading (All files use signed URLs for AI provider access)
 // ============================================================================
 
-// File part for AI model consumption - includes binary-only parts (no URL field)
-// to prevent AI providers from attempting to download from localhost URLs
-export type UrlFilePart = ModelFilePartUrl | ModelImagePartUrl | ModelFilePartBinary;
+// File part for AI model consumption - includes both URL-based and full model parts
+export type UrlFilePart = ModelFilePartUrl | ModelImagePartUrl | ModelFilePartBinary | ModelFilePart;
 
 export type LoadAttachmentContentUrlParams = LoadAttachmentContentParams & {
   /** Base URL of the application for generating signed URLs */
@@ -313,12 +312,16 @@ export async function loadAttachmentContentUrl(
           const { data } = await getFile(r2Bucket, upload.r2Key);
           if (data) {
             const uint8Data = new Uint8Array(data);
+            const base64 = uint8ArrayToBase64(uint8Data);
+            const dataUrl = `data:${upload.mimeType};base64,${base64}`;
             fileParts.push({
               type: MessagePartTypes.FILE,
               data: uint8Data,
               mimeType: upload.mimeType,
               filename: upload.filename,
-            } satisfies ModelFilePartBinary);
+              url: dataUrl,
+              mediaType: upload.mimeType,
+            } satisfies ModelFilePart);
 
             // Add text fallback for non-vision models
             extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF appears to be scanned/image-based. Text extraction was unsuccessful. If you have vision capabilities, please examine the attached PDF image. Otherwise, please ask the user to provide a text-based version or describe the contents.]`);
@@ -400,12 +403,16 @@ export async function loadAttachmentContentUrl(
           }
 
           const uint8Data = new Uint8Array(freshData);
+          const base64 = uint8ArrayToBase64(uint8Data);
+          const dataUrl = `data:${upload.mimeType};base64,${base64}`;
           fileParts.push({
             type: MessagePartTypes.FILE,
             data: uint8Data,
             mimeType: upload.mimeType,
             filename: upload.filename,
-          } satisfies ModelFilePartBinary);
+            url: dataUrl,
+            mediaType: upload.mimeType,
+          } satisfies ModelFilePart);
 
           // Add text fallback explaining the PDF situation for non-vision models
           // This ensures the AI knows about the attachment even if file parts are filtered
@@ -456,15 +463,19 @@ export async function loadAttachmentContentUrl(
       }
 
       const uint8Data = new Uint8Array(data);
+      const base64 = uint8ArrayToBase64(uint8Data);
+      const dataUrl = `data:${upload.mimeType};base64,${base64}`;
 
       fileParts.push({
         type: MessagePartTypes.FILE,
         data: uint8Data,
         mimeType: upload.mimeType,
         filename: upload.filename,
-      } satisfies ModelFilePartBinary);
+        url: dataUrl,
+        mediaType: upload.mimeType,
+      } satisfies ModelFilePart);
 
-      logger?.debug('Loaded file as Uint8Array', LogHelpers.operation({
+      logger?.debug('Loaded file as Uint8Array with data URL', LogHelpers.operation({
         operationName: 'loadAttachmentContentUrl',
         uploadId: upload.id,
         filename: upload.filename,

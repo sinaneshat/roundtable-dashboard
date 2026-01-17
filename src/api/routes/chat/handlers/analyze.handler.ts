@@ -33,6 +33,7 @@ import {
   SubscriptionTiers,
 } from '@/api/core/enums';
 import {
+  AI_TIMEOUT_CONFIG,
   canAccessModelByPricing,
   checkFreeUserHasCompletedRound,
   enforceCredits,
@@ -247,6 +248,8 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
           system: systemPrompt,
           prompt,
           temperature: ANALYSIS_TEMPERATURE,
+          // ✅ STREAMING TIMEOUT: 30 min for prompt analysis
+          abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.default),
         });
 
         // Track best partial result for fallback

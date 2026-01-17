@@ -2,7 +2,7 @@
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ChatSidebarItem } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
@@ -20,6 +20,7 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { useToggleFavoriteMutation, useUpdateThreadMutation } from '@/hooks/mutations';
 import { useCurrentPathname } from '@/hooks/utils';
@@ -135,6 +136,7 @@ export function ChatList({
   onShareClick,
 }: ChatListProps) {
   const pathname = useCurrentPathname();
+  const { isMobile, setOpenMobile } = useSidebar();
   const [chatToDelete, setChatToDelete] = useState<ChatSidebarItem | null>(null);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const toggleFavoriteMutation = useToggleFavoriteMutation();
@@ -143,6 +145,15 @@ export function ChatList({
   const hasTriggeredAnimationRef = useRef(false);
   const [hasAnimated, setHasAnimated] = useState(false);
   const shouldAnimate = !disableAnimations && !hasAnimated;
+
+  // Auto-close sidebar on mobile when navigating to a thread
+  const prevPathnameRef = useRef(pathname);
+  useEffect(() => {
+    if (isMobile && pathname !== prevPathnameRef.current) {
+      setOpenMobile(false);
+    }
+    prevPathnameRef.current = pathname;
+  }, [pathname, isMobile, setOpenMobile]);
 
   useLayoutEffect(() => {
     if (!disableAnimations && !hasTriggeredAnimationRef.current) {

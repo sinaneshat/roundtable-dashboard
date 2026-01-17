@@ -31,6 +31,10 @@ export default defineCloudflareConfig({
   // Enable cache interception for improved cold start performance on ISR/SSG routes
   enableCacheInterception: true,
 
+  // PERF: Disable route preloading to reduce cold start time
+  // @see https://developers.cloudflare.com/changelog/2025-06-05-open-next-size/
+  routePreloadingBehavior: 'none',
+
   // Cache purge via Durable Object to buffer requests and avoid API rate limits
   cachePurge: purgeCache({ type: 'durableObject' }),
 });

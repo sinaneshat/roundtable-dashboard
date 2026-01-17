@@ -560,17 +560,42 @@ export const TITLE_GENERATION_CONFIG = {
  * @see https://developers.cloudflare.com/workers/platform/limits/
  */
 export const AI_TIMEOUT_CONFIG = {
-  /** Default timeout for AI operations (10 min) */
-  default: 600_000,
+  /**
+   * Default timeout for AI operations (30 min)
+   * Cloudflare Workers have UNLIMITED wall-clock duration as long as client is connected.
+   * @see https://developers.cloudflare.com/workers/platform/limits/
+   */
+  default: 30 * 60 * 1000, // 30 minutes
 
-  /** Title generation timeout (10s) - quick operation */
-  titleGeneration: 10_000,
+  /** Title generation timeout (15s) - quick operation with buffer */
+  titleGeneration: 15_000,
 
-  /** Per-attempt timeout for streaming (10 min) - max allowed per AI SDK call */
-  perAttemptMs: 600_000,
+  /**
+   * Total timeout for streaming operations (30 min)
+   * Cloudflare has no wall-clock limit - streams can run indefinitely.
+   * Set high to allow long AI responses (reasoning models, complex queries).
+   */
+  totalMs: 30 * 60 * 1000, // 30 minutes
 
-  /** Moderator/council analysis timeout (5 min) - complex multi-response synthesis */
-  moderatorAnalysisMs: 300_000,
+  /**
+   * Per-step timeout for multi-step operations (15 min)
+   * Applies to each individual LLM call in agentic workflows.
+   */
+  stepMs: 15 * 60 * 1000, // 15 minutes per step
+
+  /**
+   * Chunk timeout for stream health detection (90s)
+   * CRITICAL: Must be under Cloudflare's 100-second idle timeout.
+   * If no chunk received within this time, stream is considered stale.
+   * Set to 90s to catch issues before Cloudflare returns HTTP 524.
+   */
+  chunkMs: 90_000, // 90 seconds between chunks
+
+  /** Per-attempt timeout for streaming (30 min) - kept for backwards compat */
+  perAttemptMs: 30 * 60 * 1000, // 30 minutes
+
+  /** Moderator/council analysis timeout (15 min) - complex multi-response synthesis */
+  moderatorAnalysisMs: 15 * 60 * 1000, // 15 minutes
 } as const;
 
 export const AI_RETRY_CONFIG = {
