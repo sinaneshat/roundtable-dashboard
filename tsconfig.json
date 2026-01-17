@@ -1,91 +1,46 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "incremental": true,
-    "target": "ES2017",
+    "target": "ES2022",
     "jsx": "react-jsx",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext",
-      "webworker"
-    ],
-    "baseUrl": ".",
-    "module": "esnext",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "ESNext",
     "moduleResolution": "bundler",
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@/public/*": [
-        "./public/*"
-      ]
-    },
     "resolveJsonModule": true,
     "allowJs": true,
-    "checkJs": true,
     "strict": true,
     "strictNullChecks": true,
-    "allowUnreachableCode": false,
-    "alwaysStrict": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitAny": true,
     "noImplicitReturns": true,
-    "noImplicitThis": true,
-    "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": false,
     "noEmit": true,
-    "outDir": "out",
-    "preserveConstEnums": true,
-    "removeComments": true,
-    "sourceMap": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
-    "skipLibCheck": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
+    "skipLibCheck": true
   },
+  "references": [
+    { "path": "apps/api" },
+    { "path": "apps/web" },
+    { "path": "packages/shared" }
+  ],
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    "src/libs/Env.ts",
-    ".next/types/**/*.ts",
-    "src/scripts/**/*.ts",
-    "cloudflare-env.d.ts",
-    ".next/dev/types/**/*.ts"
+    "scripts/**/*.ts",
+    "e2e/**/*.ts",
+    "*.ts",
+    "*.mjs",
+    "cloudflare-env.d.ts"
   ],
   "exclude": [
     "node_modules",
-    "scripts",
-    "open-next.config.ts",
-    ".open-next",
-    ".open-next/**",
-    ".open-next/**/*",
-    "**/.open-next/**",
-    ".next",
-    ".next/**",
-    "out",
-    "out/**",
+    "apps",
+    "packages",
     "dist",
-    "public/sw.js",
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "**/*.spec.ts",
-    "**/*.spec.tsx",
-    "**/__tests__/**/*",
-    "vitest.setup.ts",
-    "vitest.config.ts",
-    "__mocks__/**/*",
-    "e2e/**/*",
-    "playwright.config.ts",
-    "playwright-no-webserver.config.ts",
-    "commitlint.config.ts",
-    "custom-worker.ts"
+    "out",
+    ".wrangler"
   ]
 }

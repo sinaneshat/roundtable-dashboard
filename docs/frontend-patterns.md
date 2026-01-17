@@ -7,7 +7,7 @@ This document outlines established frontend patterns, architectural decisions, a
 ## Table of Contents
 
 1. [Overview & Architecture](#overview--architecture)
-2. [Next.js App Router Patterns](#nextjs-app-router-patterns)
+2. [TanStack Start + Router Patterns](#tanstack-start--router-patterns)
 3. [Component Architecture](#component-architecture)
 4. [Data Fetching & State Management](#data-fetching--state-management)
 5. [API Integration & Services](#api-integration--services)
@@ -29,17 +29,18 @@ This document outlines established frontend patterns, architectural decisions, a
 ```typescript
 // Primary Frontend Stack
 {
-  "framework": "Next.js 15 (App Router)",
+  "framework": "TanStack Start (on Cloudflare Pages)",
+  "routing": "TanStack Router (File-based)",
   "ui": "shadcn/ui + Radix UI",
   "styling": "Tailwind CSS v4 + CVA",
   "state": "TanStack Query v5 + Zustand",
   "api": "Hono RPC Client (Type-safe)",
-  "i18n": "next-intl (English-only)",
-  "email": "React Email v4",
+  "i18n": "Custom i18n (English-only)",
   "auth": "Better Auth Integration",
   "icons": "Lucide React + Custom SVGs",
   "forms": "React Hook Form + Zod",
-  "typography": "Inter (US English)"
+  "typography": "Inter (US English)",
+  "build": "Vite"
 }
 ```
 
@@ -58,139 +59,228 @@ This document outlines established frontend patterns, architectural decisions, a
 ### Directory Structure Philosophy
 
 ```bash
-src/
-├── app/                    # Next.js 15 App Router (File-based routing)
-│   ├── (app)/             # Route groups for layout isolation
-│   │   └── dashboard/     # Protected dashboard routes
-│   ├── auth/              # Authentication flow pages
-│   ├── @modal/            # Parallel route for modals
-│   └── globals.css        # Global styles and CSS variables
-├── components/            # Reusable UI components
-│   ├── ui/                # shadcn/ui base components
-│   ├── dashboard/         # Domain-specific dashboard components
-│   ├── auth/              # Authentication components
-│   └── providers/         # Context providers and wrappers
-├── containers/            # Page-level containers and screens
-├── hooks/                 # Custom React hooks
-│   └── utils/             # Utility hooks (useBoolean)
-├── services/              # API client services and utilities
-├── lib/                   # Utility functions and configurations
-├── i18n/                  # Internationalization setup and locales
-├── emails/                # React Email templates
-├── icons/                 # Custom SVG icons and icon utilities
-└── styles/                # Global styles and theme utilities
+apps/web/src/
+├── routes/                    # TanStack Router file-based routing
+│   ├── __root.tsx            # Root layout (renders for all routes)
+│   ├── index.tsx             # Landing page (/)
+│   ├── _protected.tsx        # Protected route layout
+│   ├── _protected/           # Protected routes group
+│   │   └── chat/             # Chat dashboard routes
+│   │       ├── index.tsx     # /chat
+│   │       ├── $slug.tsx     # /chat/:slug (dynamic)
+│   │       └── chat.tsx      # Layout for /chat/*
+│   ├── public/               # Public routes
+│   │   └── chat/$slug.tsx    # Public chat view
+│   └── auth/                 # Authentication pages
+│       ├── sign-in.tsx       # /auth/sign-in
+│       └── callback.tsx      # /auth/callback
+├── components/               # Reusable UI components
+│   ├── ui/                   # shadcn/ui base components
+│   ├── dashboard/            # Domain-specific dashboard components
+│   ├── auth/                 # Authentication components
+│   └── providers/            # Context providers and wrappers
+├── containers/               # Page-level containers and screens
+├── hooks/                    # Custom React hooks
+│   └── utils/                # Utility hooks (useBoolean)
+├── services/                 # API client services and utilities
+├── lib/                      # Utility functions and configurations
+├── i18n/                     # Internationalization setup (English-only)
+├── emails/                   # React Email templates (shared with API)
+├── icons/                    # Custom SVG icons and icon utilities
+└── styles/                   # Global styles and theme utilities
 ```
 
 ---
 
-## Next.js App Router Patterns
+## TanStack Start + Router Patterns
 
-### Route Organization Strategy
+### Monorepo Architecture
 
-**Route Groups for Layout Isolation:**
+**Project Structure:**
+```bash
+billing-dashboard/
+├── apps/
+│   ├── web/              # TanStack Start frontend (Cloudflare Pages)
+│   │   ├── src/routes/   # File-based routing
+│   │   └── vite.config.ts
+│   └── api/              # Hono backend (Cloudflare Workers)
+│       ├── src/api/routes/
+│       └── wrangler.jsonc
+└── packages/
+    └── shared/           # Shared code between apps
+```
+
+### Route File Patterns
+
+**TanStack Router uses file-based routing with specific naming conventions:**
+
+| File Pattern | Route | Purpose |
+|--------------|-------|---------|
+| `__root.tsx` | `/` | Root layout (renders for all routes) |
+| `index.tsx` | `/` | Landing page |
+| `_layout.tsx` | N/A | Layout route (prefix with `_`) |
+| `$param.tsx` | `/:param` | Dynamic segment (prefix with `$`) |
+| `_protected.tsx` | N/A | Protected routes layout |
+| `_protected/chat.tsx` | `/chat` | Route under protected layout |
+
+**Root Layout Pattern:**
 ```typescript
-// File: src/app/(app)/layout.tsx
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+// File: src/routes/__root.tsx
+import { createRootRoute, Outlet } from '@tanstack/react-router';
+import { AppProviders } from '@/components/providers/app-providers';
+
+export const Route = createRootRoute({
+  component: RootComponent,
+});
+
+function RootComponent() {
+  return (
+    <AppProviders>
+      <div className="min-h-screen bg-background">
+        <Outlet /> {/* Nested routes render here */}
+      </div>
+    </AppProviders>
+  );
+}
+
+// Pattern: Root layout wraps all routes with providers
+// Outlet renders nested route components
+```
+
+**Index Route Pattern:**
+```typescript
+// File: src/routes/index.tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { LandingPage } from '@/containers/landing-page';
+
+export const Route = createFileRoute('/')({
+  component: LandingPage,
+});
+
+// Pattern: Index routes use createFileRoute('/') for homepage
+// Component is a pure presentation container
+```
+
+**Layout Route Pattern:**
+```typescript
+// File: src/routes/_protected.tsx
+import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import { authClient } from '@/lib/auth/client';
+
+export const Route = createFileRoute('/_protected')({
+  beforeLoad: async () => {
+    const session = await authClient.getSession();
+    if (!session.data) {
+      throw redirect({ to: '/auth/sign-in' });
+    }
+  },
+  component: ProtectedLayout,
+});
+
+function ProtectedLayout() {
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar />
       <main className="flex-1 lg:pl-64">
         <AppHeader />
         <div className="container mx-auto px-6 py-8">
-          {children}
+          <Outlet /> {/* Protected routes render here */}
         </div>
       </main>
     </div>
-  )
+  );
 }
 
-// Pattern: (app) route group isolates dashboard layout
-// src/app/(app)/chat/page.tsx ✓
-// src/app/(app)/settings/page.tsx ✓
+// Pattern: Layout routes (prefix _) don't create URL segments
+// beforeLoad hook handles auth checks and redirects
+// Outlet renders nested protected routes
 ```
 
-**Parallel Routes for Modal Management:**
+**Dynamic Route Pattern:**
 ```typescript
-// File: src/app/(app)/@modal/default.tsx
-export default function Default() {
-  return null // Default parallel route returns null
+// File: src/routes/_protected/chat/$slug.tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { ChatThread } from '@/containers/chat-thread';
+
+export const Route = createFileRoute('/_protected/chat/$slug')({
+  component: ChatThreadPage,
+});
+
+function ChatThreadPage() {
+  const { slug } = Route.useParams(); // Type-safe params
+  return <ChatThread threadId={slug} />;
 }
 
-// File: src/app/(app)/@modal/(.)setup/page.tsx
-import { Modal } from '@/components/ui/modal'
-
-export default function SetupModal() {
-  return (
-    <Modal>
-      <SetupForm />
-    </Modal>
-  )
-}
-
-// Pattern: @modal parallel route with intercepting routes
-// Enables modal navigation without losing page state
+// Pattern: Dynamic segments use $ prefix
+// useParams() provides type-safe parameter access
 ```
 
-**Intercepting Routes for UX Enhancement:**
+**Server Functions Pattern:**
 ```typescript
-// File: src/app/(app)/setup/(.)modal/page.tsx
-// Intercepts /setup route when navigated from dashboard
-// Shows modal instead of full page navigation
+// File: src/routes/_protected/chat/index.tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { createServerFn } from '@tanstack/react-start';
+import { ChatOverview } from '@/containers/chat-overview';
 
-// Pattern: (.) intercepts same segment level
-// (..) intercepts parent segment level
-// (...) intercepts from root
+// Server function for data prefetching
+const loadChatData = createServerFn('GET', async () => {
+  // This runs on the server (Cloudflare Pages)
+  const response = await fetch('https://api.example.com/chat/threads');
+  return response.json();
+});
+
+export const Route = createFileRoute('/_protected/chat/')({
+  loader: async () => {
+    // Loader runs on server during SSR
+    const data = await loadChatData();
+    return { threads: data };
+  },
+  component: ChatOverviewPage,
+});
+
+function ChatOverviewPage() {
+  const { threads } = Route.useLoaderData(); // Type-safe loader data
+  return <ChatOverview threads={threads} />;
+}
+
+// Pattern: Server functions use createServerFn() for SSR
+// Loader fetches data on server before rendering
+// useLoaderData() provides type-safe data access
 ```
 
-### Page Component Patterns
-
-**Standard Page Structure:**
+**Pending Component Pattern:**
 ```typescript
-// File: src/app/(app)/chat/page.tsx
-import { Metadata } from 'next'
-import { getTranslations } from 'next-intl/server'
-import { DashboardContainer } from '@/containers/dashboard-container'
+// File: src/routes/_protected/chat/$slug.tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { ChatThreadSkeleton } from '@/components/skeletons';
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations('dashboard')
-  return {
-    title: t('meta.title'),
-    description: t('meta.description')
-  }
-}
+export const Route = createFileRoute('/_protected/chat/$slug')({
+  component: ChatThreadPage,
+  pendingComponent: ChatThreadSkeleton, // Shows during navigation
+});
 
-export default function DashboardPage() {
-  return <DashboardContainer />
-}
-
-// Pattern: Pages are thin wrappers around containers
-// Metadata generation uses i18n translations
-// Business logic stays in containers/components
+// Pattern: pendingComponent shows loading state during route transitions
+// Replaces Next.js loading.tsx pattern
 ```
 
-**Loading and Error Boundaries:**
+**Error Boundary Pattern:**
 ```typescript
-// File: src/app/(app)/chat/loading.tsx
-import { DashboardSkeleton } from '@/components/skeletons'
+// File: src/routes/_protected/chat/$slug.tsx
+import { createFileRoute, ErrorComponent } from '@tanstack/react-router';
 
-export default function Loading() {
-  return <DashboardSkeleton />
-}
+export const Route = createFileRoute('/_protected/chat/$slug')({
+  component: ChatThreadPage,
+  errorComponent: ({ error, reset }) => (
+    <div className="p-6">
+      <h2>Error loading chat</h2>
+      <pre>{error.message}</pre>
+      <button onClick={reset}>Try again</button>
+    </div>
+  ),
+});
 
-// File: src/app/(app)/chat/error.tsx
-'use client'
-
-import { ErrorBoundary } from '@/components/ui/error-boundary'
-
-export default function Error({ error, reset }: {
-  error: Error & { digest?: string }
-  reset: () => void
-}) {
-  return <ErrorBoundary error={error} reset={reset} />
-}
-
-// Pattern: Each route segment can have loading/error states
-// Use typed error boundaries with reset functionality
+// Pattern: errorComponent handles route-level errors
+// Replaces Next.js error.tsx pattern
 ```
 
 ---
@@ -622,7 +712,7 @@ import { hc } from 'hono/client'
 import type { AppType } from '@/api/routes'
 import { env } from '@/lib/env'
 
-export const api = hc<AppType>(env.NEXT_PUBLIC_API_URL, {
+export const api = hc<AppType>(import.meta.env.VITE_API_URL, {
   headers: () => ({
     'Content-Type': 'application/json',
   }),
@@ -798,33 +888,38 @@ api.$fetch = async (input, init) => {
 
 ## Internationalization (i18n)
 
-### next-intl Configuration
+### Custom i18n Configuration (English-only)
 
 **i18n Setup and Configuration:**
 ```typescript
 // File: src/i18n/config.ts
-import { defineRouting } from 'next-intl/routing'
-import { createSharedPathnamesNavigation } from 'next-intl/navigation'
+// Simple English-only i18n without framework dependency
 
-export const routing = defineRouting({
-  locales: ['en'],
-  defaultLocale: 'en',
-  pathnames: {
-    '/dashboard': {
-      en: '/dashboard'
-    },
-    '/settings': {
-      en: '/settings'
-    }
-  }
-})
+export const defaultLocale = 'en' as const;
+export const locales = ['en'] as const;
 
-export const { Link, redirect, usePathname, useRouter } =
-  createSharedPathnamesNavigation(routing)
+export type Locale = typeof locales[number];
 
-// Pattern: Shared pathname navigation for type safety
-// Localized pathnames for better UX
-// Centralized routing configuration
+// Load translation files
+export async function getTranslations(namespace: string, locale: Locale = 'en') {
+  const translations = await import(`./locales/${locale}/${namespace}.json`);
+  return translations.default;
+}
+
+// Create translation hook for client components
+export function useTranslations(namespace: string) {
+  const [translations, setTranslations] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getTranslations(namespace).then(setTranslations);
+  }, [namespace]);
+
+  return (key: string) => translations[key] || key;
+}
+
+// Pattern: Custom lightweight i18n for English-only app
+// No framework dependency - reduces bundle size
+// Async translation loading for code splitting
 ```
 
 **Translation Key Organization:**
@@ -1542,10 +1637,11 @@ export function DashboardIcon({ className, ...props }: DashboardIconProps) {
 
 ### Image Optimization
 
-**Next.js Image Component Usage:**
+**Image Component Usage:**
 ```typescript
 // File: src/components/ui/optimized-image.tsx
-import Image from 'next/image'
+// Note: TanStack Start doesn't have built-in image optimization like Next.js
+// Use standard <img> tags with responsive attributes or implement custom optimization
 import { cn } from '@/lib/utils'
 
 interface OptimizedImageProps {
@@ -1564,21 +1660,18 @@ export function OptimizedImage({
   width,
   height,
   className,
-  priority = false,
-  fill = false,
+  loading = 'lazy',
   ...props
 }: OptimizedImageProps) {
   return (
-    <Image
+    <img
       src={src}
       alt={alt}
-      width={fill ? undefined : width}
-      height={fill ? undefined : height}
-      fill={fill}
-      priority={priority}
+      width={width}
+      height={height}
+      loading={loading}
       className={cn(
         "object-cover",
-        fill && "absolute inset-0",
         className
       )}
       {...props}
@@ -1586,9 +1679,13 @@ export function OptimizedImage({
   )
 }
 
-// Pattern: Wrapper for Next.js Image optimization
-// Sensible defaults for common use cases
-// Fill mode for responsive containers
+// Pattern: Standard img with responsive attributes
+// Use Cloudflare Images or external CDN for optimization
+// Loading attribute for lazy loading
+// For advanced optimization, consider:
+// - Cloudflare Images API
+// - Third-party image CDN (imgix, Cloudinary)
+// - Build-time image optimization in Vite
 ```
 
 ---
@@ -1800,26 +1897,33 @@ export function AnalyticsOverview() {
 
 **Route-Level Code Splitting:**
 ```typescript
-// File: src/app/(app)/analytics/page.tsx
-import dynamic from 'next/dynamic'
-import { LoadingSkeleton } from '@/components/ui/loading-skeleton'
+// File: src/routes/_protected/analytics/index.tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { lazy, Suspense } from 'react';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 
-// Dynamic import with loading state
-const AnalyticsDashboard = dynamic(
-  () => import('@/containers/analytics-container'),
-  {
-    loading: () => <LoadingSkeleton className="min-h-[600px]" />,
-    ssr: false, // Client-side only for heavy charts
-  }
-)
+// Lazy load heavy components
+const AnalyticsDashboard = lazy(() =>
+  import('@/containers/analytics-container').then(module => ({
+    default: module.AnalyticsContainer
+  }))
+);
 
-export default function AnalyticsPage() {
-  return <AnalyticsDashboard />
+export const Route = createFileRoute('/_protected/analytics/')({
+  component: AnalyticsPage,
+});
+
+function AnalyticsPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton className="min-h-[600px]" />}>
+      <AnalyticsDashboard />
+    </Suspense>
+  );
 }
 
-// Pattern: Dynamic imports for route-level optimization
-// SSR disabled for client-heavy components
-// Consistent loading states
+// Pattern: React.lazy() for route-level code splitting
+// Suspense for loading states
+// Vite handles code splitting automatically
 ```
 
 ### Image and Asset Optimization
@@ -1827,7 +1931,6 @@ export default function AnalyticsPage() {
 **Optimized Asset Loading:**
 ```typescript
 // File: src/components/ui/avatar.tsx
-import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 interface AvatarProps {
@@ -1851,12 +1954,11 @@ export function Avatar({ src, alt, size = 'md', className }: AvatarProps) {
       className
     )}>
       {src ? (
-        <Image
+        <img
           src={src}
           alt={alt}
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 32px, 48px"
+          className="object-cover w-full h-full"
+          loading="lazy"
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-muted">
@@ -1869,9 +1971,9 @@ export function Avatar({ src, alt, size = 'md', className }: AvatarProps) {
   )
 }
 
-// Pattern: Responsive image sizes
+// Pattern: Standard img tag with lazy loading
 // Fallback for missing images
-// Next.js Image optimization
+// Consider using Cloudflare Images for optimization
 ```
 
 ---
@@ -2082,20 +2184,33 @@ const DropdownMenuContent = React.forwardRef<
 This frontend patterns guide establishes the architectural foundation for the roundtable.now frontend. These patterns ensure:
 
 - **Consistency**: Unified component architecture and styling approach
-- **Performance**: Optimized loading, caching, and code splitting strategies
+- **Performance**: Optimized loading, caching, and code splitting strategies (Vite + Cloudflare Pages)
 - **Accessibility**: WCAG-compliant components with full keyboard navigation
 - **Localization**: English-only with translation key management for consistency
-- **Type Safety**: End-to-end TypeScript inference from API to UI
-- **Developer Experience**: Clear patterns for data fetching, state management, and error handling
+- **Type Safety**: End-to-end TypeScript inference from API to UI via Hono RPC
+- **Developer Experience**: Clear patterns for data fetching, state management, and routing
 
 ### Key Implementation Principles
 
-1. **Component Composition**: Build complex UIs from simple, reusable primitives
-2. **Data Co-location**: Keep data fetching close to components that need it
-3. **Progressive Enhancement**: Start with semantic HTML, enhance with JavaScript
-4. **Performance Budget**: Lazy load non-critical components and routes
-5. **Error Recovery**: Graceful degradation with meaningful error states
-6. **LTR Layout**: Design for left-to-right reading pattern (English)
+1. **File-Based Routing**: TanStack Router with type-safe params and loaders
+2. **Component Composition**: Build complex UIs from simple, reusable primitives
+3. **Server Functions**: Use `createServerFn()` for SSR and data prefetching
+4. **Data Co-location**: Keep data fetching close to components that need it
+5. **Progressive Enhancement**: Start with semantic HTML, enhance with JavaScript
+6. **Performance Budget**: Lazy load non-critical components with React.lazy()
+7. **Error Recovery**: Graceful degradation with meaningful error states
+8. **LTR Layout**: Design for left-to-right reading pattern (English)
+
+### TanStack Start Specifics
+
+1. **Routing**: Use `createFileRoute()` instead of Next.js page patterns
+2. **Layouts**: Use `_layout.tsx` prefix and `<Outlet />` instead of Next.js layouts
+3. **Dynamic Routes**: Use `$param.tsx` instead of `[param].tsx`
+4. **Environment Variables**: Use `import.meta.env.VITE_*` instead of `process.env.NEXT_PUBLIC_*`
+5. **Images**: Use standard `<img>` tags or Cloudflare Images API (no built-in optimization)
+6. **Loading States**: Use `pendingComponent` in routes instead of `loading.tsx`
+7. **Error Handling**: Use `errorComponent` in routes instead of `error.tsx`
+8. **Deployment**: Vite build + Wrangler deploy to Cloudflare Pages
 
 ### Reference Documentation
 
@@ -2106,5 +2221,6 @@ For project setup and deployment, see `CLAUDE.md`
 ---
 
 **Last Updated**: January 2025
-**Frontend Stack Version**: Next.js 15 + shadcn/ui + TanStack Query v5
-**Platform Type**: User management and collaboration platform
+**Frontend Stack Version**: TanStack Start + TanStack Router + shadcn/ui + TanStack Query v5
+**Platform Type**: User management and collaboration platform (Cloudflare Pages + Workers)
+**Build Tool**: Vite 7.x

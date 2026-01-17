@@ -1,0 +1,37 @@
+# Static assets - immutable, cached for 1 year
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Build output chunks - immutable
+/_next/chunks/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Images and media - cached for 1 week
+/static/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/*.ico
+  Cache-Control: public, max-age=604800
+
+/*.png
+  Cache-Control: public, max-age=604800
+
+/*.jpg
+  Cache-Control: public, max-age=604800
+
+/*.svg
+  Cache-Control: public, max-age=604800
+
+/*.webp
+  Cache-Control: public, max-age=604800
+
+# Fonts - immutable, cached for 1 year
+/*.woff
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+# API responses - no cache by default (controlled by app)
+/api/*
+  Cache-Control: no-store

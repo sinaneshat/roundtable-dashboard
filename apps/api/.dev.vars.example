@@ -1,0 +1,68 @@
+# API Secrets for Local Wrangler Development
+# Copy this file to .dev.vars and add your actual secret values
+#
+# These secrets are loaded by wrangler during local development.
+# For deployed environments, use `wrangler secret put <NAME>` instead.
+#
+# SECURITY: Never commit .dev.vars - it contains real secrets!
+
+# ============================================================================
+# AUTHENTICATION SECRETS
+# ============================================================================
+
+# Better Auth Session Encryption
+# Minimum 32 characters, used to encrypt session cookies
+BETTER_AUTH_SECRET=your-better-auth-secret-min-32-characters-here
+
+# Google OAuth Client Secret
+# Get from: https://console.cloud.google.com/apis/credentials
+AUTH_GOOGLE_SECRET=your-google-oauth-client-secret
+
+# ============================================================================
+# CLOUDFLARE TURNSTILE (CAPTCHA)
+# ============================================================================
+
+# Turnstile Secret Key (for server-side verification)
+# Get from: https://dash.cloudflare.com/?to=/:account/turnstile
+TURNSTILE_SECRET_KEY=your-turnstile-secret-key
+
+# ============================================================================
+# AWS SES EMAIL SERVICE
+# ============================================================================
+
+# AWS IAM credentials with SES permissions
+# Create dedicated IAM user with only SES:SendEmail permission
+AWS_SES_ACCESS_KEY_ID=your-aws-access-key-id
+AWS_SES_SECRET_ACCESS_KEY=your-aws-secret-access-key
+
+# ============================================================================
+# STRIPE PAYMENTS
+# ============================================================================
+
+# Stripe Secret Key
+# Local/Preview: Use test mode key (sk_test_...)
+# Production: Use live mode key (sk_live_...)
+# Get from: https://dashboard.stripe.com/test/apikeys
+STRIPE_SECRET_KEY=sk_test_your_test_secret_key_here
+
+# Stripe Webhook Signing Secret
+# Create webhook at: https://dashboard.stripe.com/test/webhooks
+# Endpoint URL: https://api-{env}.roundtable.now/api/v1/billing/webhook
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+
+# ============================================================================
+# AI SERVICES
+# ============================================================================
+
+# OpenRouter API Key (Multi-Model AI)
+# Get from: https://openrouter.ai/keys
+OPENROUTER_API_KEY=sk-or-v1-your-openrouter-api-key-here
+
+# ============================================================================
+# ANALYTICS
+# ============================================================================
+
+# PostHog Project API Key (Server-side events)
+# Get from: https://app.posthog.com/project/settings
+POSTHOG_API_KEY=phc_your_posthog_project_api_key
+POSTHOG_HOST=https://us.i.posthog.com

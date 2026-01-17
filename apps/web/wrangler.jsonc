@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "roundtable-web",
+  "compatibility_date": "2025-01-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "@tanstack/react-start/server-entry",
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "dev": {
+    "port": 5173
+  },
+  "vars": {
+    "VITE_API_URL": "http://localhost:8787/api/v1",
+    "VITE_APP_NAME": "Roundtable",
+    "VITE_WEBAPP_ENV": "local"
+  },
+  "env": {
+    "preview": {
+      "name": "roundtable-web-preview",
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 0.1
+      },
+      "vars": {
+        "VITE_API_URL": "https://api-preview.roundtable.now/api/v1",
+        "VITE_APP_NAME": "Roundtable",
+        "VITE_WEBAPP_ENV": "preview"
+      }
+    },
+    "production": {
+      "name": "roundtable-web",
+      "observability": {
+        "enabled": true
+      },
+      "vars": {
+        "VITE_API_URL": "https://api.roundtable.now/api/v1",
+        "VITE_APP_NAME": "Roundtable",
+        "VITE_WEBAPP_ENV": "prod"
+      }
+    }
+  }
+}

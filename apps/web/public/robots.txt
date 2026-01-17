@@ -1,0 +1,26 @@
+# Roundtable - Collaborative AI Brainstorming Platform
+# https://roundtable.now
+
+User-agent: *
+
+# Allow public pages
+Allow: /
+Allow: /auth/sign-in
+Allow: /chat/pricing
+Allow: /public/chat/
+
+# Disallow protected and private content
+Disallow: /chat/
+Disallow: /auth/callback
+Disallow: /api/
+Disallow: /_build/
+
+# LLM-friendly metadata
+Allow: /llms.txt
+Allow: /.well-known/
+
+# Sitemap
+Sitemap: https://roundtable.now/sitemap.xml
+
+# Crawl-delay for respectful crawling
+Crawl-delay: 1

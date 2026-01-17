@@ -4,7 +4,7 @@ This document provides a comprehensive overview of the testing infrastructure fo
 
 ## Setup Summary
 
-The testing infrastructure has been configured following official Next.js, Vitest, React Testing Library, and Playwright best practices.
+The testing infrastructure has been configured following official TanStack Start, Vitest, React Testing Library, and Playwright best practices.
 
 ## Installed Dependencies
 
@@ -50,7 +50,7 @@ The testing infrastructure has been configured following official Next.js, Vites
 
 ### 1. `vitest.config.ts`
 
-Vitest v4 configuration optimized for Next.js and React Testing Library:
+Vitest v4 configuration optimized for TanStack Start and React Testing Library:
 
 - **Test Environment**: `jsdom` for DOM-like testing
 - **Coverage Provider**: `v8` for fast coverage reports
@@ -61,7 +61,7 @@ Vitest v4 configuration optimized for Next.js and React Testing Library:
 
 ### 2. `playwright.config.ts`
 
-Playwright E2E test configuration following Next.js official patterns:
+Playwright E2E test configuration following TanStack Start patterns:
 
 - **Test Directory**: `./e2e` for all E2E test files
 - **Base URL**: `http://localhost:3000` configured for local dev server
@@ -297,7 +297,7 @@ From Vitest:
 
 ### E2E Testing
 - [Playwright Documentation](https://playwright.dev/docs/intro)
-- [Next.js Playwright Guide](https://nextjs.org/docs/app/guides/testing/playwright)
+- [TanStack Start Documentation](https://tanstack.com/start)
 - [Playwright Best Practices](https://playwright.dev/docs/best-practices)
 - [Playwright Locators](https://playwright.dev/docs/locators)
 

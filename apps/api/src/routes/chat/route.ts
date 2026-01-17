@@ -1,0 +1,1106 @@
+import { createRoute, z } from '@hono/zod-openapi';
+import * as HttpStatusCodes from 'stoker/http-status-codes';
+
+import { ApiErrorResponseSchema, createApiResponseSchema, createMutationRouteResponses, createProtectedRouteResponses, createPublicRouteResponses, CursorPaginationQuerySchema, IdParamSchema, ThreadIdParamSchema, ThreadRoundParamSchema, ThreadSlugParamSchema } from '@/core';
+
+import {
+  AddParticipantRequestSchema,
+  AnalyzePromptRequestSchema,
+  ChangelogListResponseSchema,
+  CreateCustomRoleRequestSchema,
+  CreateThreadRequestSchema,
+  CreateUserPresetRequestSchema,
+  CustomRoleDetailResponseSchema,
+  CustomRoleListResponseSchema,
+  DeletedResponseSchema,
+  DeleteThreadResponseSchema,
+  ExistingModeratorMessageSchema,
+  GetThreadFeedbackResponseSchema,
+  MessagesListResponseSchema,
+  ParticipantDetailResponseSchema,
+  PreSearchListResponseSchema,
+  PreSearchRequestSchema,
+  PreSearchResponseSchema,
+  PublicThreadSlugsResponseSchema,
+  RoundFeedbackParamSchema,
+  RoundFeedbackRequestSchema,
+  RoundModeratorRequestSchema,
+  RoundStatusResponseSchema,
+  SetRoundFeedbackResponseSchema,
+  StreamChatRequestSchema,
+  StreamStatusResponseSchema,
+  ThreadDetailResponseSchema,
+  ThreadListQuerySchema,
+  ThreadListResponseSchema,
+  ThreadSidebarListResponseSchema,
+  ThreadSlugStatusResponseSchema,
+  ThreadStreamResumptionStateResponseSchema,
+  UpdateCustomRoleRequestSchema,
+  UpdateParticipantRequestSchema,
+  UpdateThreadRequestSchema,
+  UpdateThreadResponseSchema,
+  UpdateUserPresetRequestSchema,
+  UserPresetDetailResponseSchema,
+  UserPresetListResponseSchema,
+} from './schema';
+
+export const listThreadsRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads',
+  tags: ['chat'],
+  summary: 'List chat threads with cursor pagination',
+  description: 'Get chat threads for the authenticated user with infinite scroll support',
+  request: {
+    query: ThreadListQuerySchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Threads retrieved successfully with pagination cursor',
+      content: {
+        'application/json': { schema: ThreadListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+export const listSidebarThreadsRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/sidebar',
+  tags: ['chat'],
+  summary: 'List sidebar threads (lightweight)',
+  description: 'Lightweight endpoint for sidebar - only essential fields (id, title, slug, previousSlug, isFavorite, isPublic, timestamps)',
+  request: {
+    query: ThreadListQuerySchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Sidebar threads retrieved',
+      content: {
+        'application/json': { schema: ThreadSidebarListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+export const createThreadRoute = createRoute({
+  method: 'post',
+  path: '/chat/threads',
+  tags: ['chat'],
+  summary: 'Create chat thread',
+  description: 'Create a new chat thread with specified mode and configuration',
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: CreateThreadRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Thread created successfully',
+      content: {
+        'application/json': { schema: ThreadDetailResponseSchema },
+      },
+    },
+    [HttpStatusCodes.FORBIDDEN]: {
+      description: 'Model access denied - subscription tier insufficient for selected model(s)',
+      content: {
+        'application/json': { schema: ApiErrorResponseSchema },
+      },
+    },
+    [HttpStatusCodes.TOO_MANY_REQUESTS]: {
+      description: 'Thread quota exceeded - upgrade subscription or wait for quota reset',
+      content: {
+        'application/json': { schema: ApiErrorResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const getThreadRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id',
+  tags: ['chat'],
+  summary: 'Get thread details',
+  description: 'Get details of a specific chat thread',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Thread retrieved successfully',
+      content: {
+        'application/json': { schema: ThreadDetailResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const updateThreadRoute = createRoute({
+  method: 'patch',
+  path: '/chat/threads/:id',
+  tags: ['chat'],
+  summary: 'Update thread',
+  description: 'Update thread title, mode, status, or metadata',
+  request: {
+    params: IdParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: UpdateThreadRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Thread updated successfully',
+      content: {
+        'application/json': { schema: UpdateThreadResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const deleteThreadRoute = createRoute({
+  method: 'delete',
+  path: '/chat/threads/:id',
+  tags: ['chat'],
+  summary: 'Delete thread',
+  description: 'Delete a chat thread (soft delete - sets status to deleted)',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Thread deleted successfully',
+      content: {
+        'application/json': {
+          schema: DeleteThreadResponseSchema,
+        },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const getPublicThreadRoute = createRoute({
+  method: 'get',
+  path: '/chat/public/:slug',
+  tags: ['chat'],
+  summary: 'Get public thread by slug',
+  description: 'Get a publicly shared thread without authentication (read-only)',
+  request: {
+    params: ThreadSlugParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Public thread retrieved successfully',
+      content: {
+        'application/json': { schema: ThreadDetailResponseSchema },
+      },
+    },
+    ...createPublicRouteResponses(),
+  },
+});
+
+export const listPublicThreadSlugsRoute = createRoute({
+  method: 'get',
+  path: '/chat/public/slugs',
+  tags: ['chat'],
+  summary: 'List all public thread slugs',
+  description: 'Get all public thread slugs for SSG/ISR page generation. Returns active public threads only.',
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Public thread slugs retrieved successfully',
+      content: {
+        'application/json': { schema: PublicThreadSlugsResponseSchema },
+      },
+    },
+    ...createPublicRouteResponses(),
+  },
+});
+
+export const getThreadBySlugRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/slug/:slug',
+  tags: ['chat'],
+  summary: 'Get thread by slug',
+  description: 'Get thread details by slug for the authenticated user (ensures ownership)',
+  request: {
+    params: ThreadSlugParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Thread retrieved successfully',
+      content: {
+        'application/json': { schema: ThreadDetailResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const getThreadSlugStatusRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/slug-status',
+  tags: ['chat'],
+  summary: 'Get thread slug status',
+  description: 'Lightweight endpoint to check if thread slug has been updated (for polling during AI title generation)',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Thread slug status retrieved successfully',
+      content: {
+        'application/json': {
+          schema: ThreadSlugStatusResponseSchema,
+        },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const addParticipantRoute = createRoute({
+  method: 'post',
+  path: '/chat/threads/:id/participants',
+  tags: ['chat'],
+  summary: 'Add participant to thread',
+  description: 'Add an AI model with a role to the thread',
+  request: {
+    params: IdParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: AddParticipantRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Participant added successfully',
+      content: {
+        'application/json': { schema: ParticipantDetailResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const updateParticipantRoute = createRoute({
+  method: 'patch',
+  path: '/chat/participants/:id',
+  tags: ['chat'],
+  summary: 'Update participant',
+  description: 'Update participant role, priority, or settings',
+  request: {
+    params: IdParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: UpdateParticipantRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Participant updated successfully',
+      content: {
+        'application/json': { schema: ParticipantDetailResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const deleteParticipantRoute = createRoute({
+  method: 'delete',
+  path: '/chat/participants/:id',
+  tags: ['chat'],
+  summary: 'Remove participant',
+  description: 'Remove a participant from the thread',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Participant removed successfully',
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(DeletedResponseSchema),
+        },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const getThreadMessagesRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/messages',
+  tags: ['chat'],
+  summary: 'Get thread messages',
+  description: 'Retrieve all messages for a thread ordered by creation time',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Messages retrieved successfully',
+      content: {
+        'application/json': { schema: MessagesListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const getThreadChangelogRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/changelog',
+  tags: ['chat'],
+  summary: 'Get thread configuration changelog',
+  description: 'Retrieve configuration changes (mode, participants) for a thread',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Changelog retrieved successfully',
+      content: {
+        'application/json': { schema: ChangelogListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * GET Thread Round Changelog Route
+ *
+ * ✅ PERF OPTIMIZATION: Returns only changelog entries for a specific round
+ * Used for incremental changelog updates after config changes mid-conversation
+ * Much more efficient than fetching all changelogs
+ */
+export const getThreadRoundChangelogRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/changelog',
+  tags: ['chat'],
+  summary: 'Get changelog for a specific round',
+  description: 'Retrieve configuration changes for a specific round. More efficient than fetching all changelogs - used for incremental updates after config changes mid-conversation.',
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Round changelog retrieved successfully',
+      content: {
+        'application/json': { schema: ChangelogListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * POST Pre-Search Route - Execute or return existing search
+ * ✅ FOLLOWS: councilModeratorRoundRoute pattern exactly
+ * ✅ IDEMPOTENT: Returns existing if already completed
+ * ✅ DATABASE-FIRST: Creates record before streaming
+ */
+export const executePreSearchRoute = createRoute({
+  method: 'post',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/pre-search',
+  tags: ['chat'],
+  summary: 'Execute pre-search for conversation round (streaming)',
+  description: 'Generate and execute web search queries before participant streaming. Streams search progress in real-time using SSE. Returns completed search immediately if already exists. Follows same architectural pattern as council moderator.',
+  request: {
+    params: ThreadRoundParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: PreSearchRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Pre-search streaming in progress OR completed search returned (if already exists). Content-Type: text/plain for streaming, application/json for completed.',
+      content: {
+        'text/plain': {
+          schema: z.string().describe('Streaming SSE data'),
+        },
+        'application/json': {
+          schema: PreSearchResponseSchema.describe('Completed search (if already exists)'),
+        },
+      },
+    },
+    [HttpStatusCodes.ACCEPTED]: {
+      description: 'Stream is active but buffer not ready - client should poll. Returns polling metadata including retryAfterMs.',
+      content: {
+        'application/json': {
+          schema: StreamStatusResponseSchema.describe('Polling status with retry delay'),
+        },
+      },
+    },
+    [HttpStatusCodes.CONFLICT]: {
+      description: 'Pre-search already in progress for this round',
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+
+export const streamChatRoute = createRoute({
+  method: 'post',
+  path: '/chat',
+  tags: ['chat'],
+  summary: 'Stream AI chat responses (AI SDK v6)',
+  description: `**Real-time AI streaming endpoint using Server-Sent Events (SSE)**
+## Overview
+Official AI SDK v6 streaming endpoint with multi-participant orchestration support. Streams AI responses token-by-token using the \`toUIMessageStreamResponse()\` format from Vercel AI SDK.
+**Key Features:**
+- Real-time token streaming (characters appear as generated)
+- Multi-participant support (sequential model responses)
+- Automatic message persistence to database
+- Send only last message (backend loads history)
+- Reasoning and text parts support
+- Error recovery with structured metadata
+## Request Pattern
+**Send Only Last Message (Official AI SDK v6 Pattern):**
+\`\`\`typescript
+POST /chat {
+  "message": { id: "msg_1", role: "user", parts: [...] },
+  "id": "thread_abc123",
+  "participantIndex": 0
+}
+POST /chat {
+  "messages": [msg1, msg2, ..., msg50],
+  "id": "thread_abc123"
+}
+\`\`\`
+## Multi-Participant Orchestration
+Stream multiple AI models sequentially for "roundtable discussion" effect:
+\`\`\`typescript
+POST /chat { message: userMsg, id: "thread_1", participantIndex: 0 }
+POST /chat { message: userMsg, id: "thread_1", participantIndex: 1 }
+POST /chat { message: userMsg, id: "thread_1", participantIndex: 2 }
+\`\`\`
+**Important:** Stream participants **sequentially** (not concurrently) to avoid race conditions.
+## SSE Stream Format
+**Content-Type:** \`text/event-stream; charset=utf-8\`
+**Event Protocol:** AI SDK custom streaming format with type prefixes:
+- \`0:\` - Text chunks (append to message content)
+- \`1:\` - Function call chunks (tool usage)
+- \`2:\` - Metadata chunks (usage, finish reason)
+- \`3:\` - Error chunks
+- \`e:\` - End of stream marker
+**Example Stream:**
+\`\`\`
+data: 0:"The"
+data: 0:" answer"
+data: 0:" is"
+data: 0:"..."
+data: 2:[{"finishReason":"stop","usage":{"promptTokens":150,"completionTokens":45}}]
+data: e:{"finishReason":"stop"}
+\`\`\`
+## Message Persistence
+**Automatic Backend Handling:**
+1. **User message:** Saved by participant 0 only (deduplication)
+2. **Assistant messages:** Saved via \`onFinish\` callback after stream completes
+3. **Metadata:** Includes round number, participant context, error state, token usage
+**Round Number Tracking:**
+- Automatically calculated: \`Math.ceil(assistantMessageCount / participantCount)\`
+- Example: 3 participants, 9 messages → Round 3
+## Error Handling
+**HTTP Errors (before stream starts):**
+- \`400\`: Invalid message format
+- \`401\`: Authentication required
+- \`403\`: Insufficient subscription tier
+- \`429\`: Rate limit exceeded
+**Stream Errors (during streaming):**
+\`\`\`
+data: 3:{"error":"Model unavailable","code":"model_unavailable","isTransient":true}
+\`\`\`
+**Transient errors** (retry recommended):
+- \`rate_limit_exceeded\`, \`model_unavailable\`, \`timeout\`
+**Permanent errors** (don't retry):
+- \`content_filter\`, \`invalid_request\`, \`insufficient_quota\`
+## Complete Guide
+For detailed implementation examples, error handling, and best practices, see:
+**📖 [API Streaming Guide](/docs/api-streaming-guide.md)**
+Includes:
+- Python and TypeScript examples
+- SSE parsing implementations
+- Retry strategies
+- Common pitfalls and solutions`,
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: StreamChatRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: `**Server-Sent Events (SSE) stream with AI SDK v6 protocol**
+Stream returns real-time tokens using AI SDK's custom protocol:
+**Event Types:**
+- \`data: 0:"text"\` - Text chunk (append to message)
+- \`data: 2:[metadata]\` - Completion metadata (usage, finish reason)
+- \`data: e:{"finishReason":"stop"}\` - End of stream
+- \`data: 3:{error}\` - Error chunk
+**Parsing Example:**
+\`\`\`typescript
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  const line = decoder.decode(value);
+  if (line.startsWith('data: 0:')) {
+    const chunk = JSON.parse(line.slice(8));
+  }
+}
+\`\`\`
+See [API Streaming Guide](/docs/api-streaming-guide.md) for complete implementation.`,
+      content: {
+        'text/event-stream; charset=utf-8': {
+          // ✅ JUSTIFIED z.any(): SSE streams have dynamic format (AI SDK UIMessageStream protocol)
+          // Multiple event types with different structures - cannot be represented with single static Zod schema
+          // Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-ui/stream-protocol
+          // Event types: text chunks, metadata, finish reason, errors
+          schema: z.any().openapi({
+            description: 'AI SDK UIMessageStream format. Dynamic SSE protocol with multiple event types: text chunks (0:), metadata (2:), errors (e:), finish reason, token usage. Use AI SDK client libraries (useChat, streamText) for automatic parsing. Cannot be represented with static schema due to protocol dynamism.',
+            example: 'data: 0:"Hello"\ndata: 0:" World"\ndata: 2:[{"finishReason":"stop","usage":{"promptTokens":150,"completionTokens":45}}]\ndata: e:{"finishReason":"stop"}\n\n',
+          }),
+        },
+      },
+    },
+    [HttpStatusCodes.FORBIDDEN]: {
+      description: 'Model access denied - subscription tier insufficient for selected model(s)',
+      content: {
+        'application/json': { schema: ApiErrorResponseSchema },
+      },
+    },
+    [HttpStatusCodes.TOO_MANY_REQUESTS]: {
+      description: 'Message quota exceeded - upgrade subscription or wait for quota reset',
+      content: {
+        'application/json': { schema: ApiErrorResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+
+/**
+ * POST /chat/analyze - Auto Mode Prompt Analysis (Streaming)
+ * Analyzes user prompt and streams optimal model/role/mode configuration
+ * Used by Auto Mode feature for intelligent chat setup
+ *
+ * SSE Events:
+ * - start: Analysis started
+ * - config: Partial/incremental config update
+ * - done: Final config with complete analysis
+ * - failed: Error with fallback config
+ */
+export const analyzePromptRoute = createRoute({
+  method: 'post',
+  path: '/chat/analyze',
+  tags: ['chat'],
+  summary: 'Analyze prompt for auto mode configuration (streaming)',
+  description: 'Analyzes user prompt and streams optimal participants, mode, and web search settings via SSE based on prompt complexity and user tier.',
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: AnalyzePromptRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'SSE stream of config updates (events: start, config, done, failed)',
+      content: {
+        'text/event-stream': {
+          schema: z.string().openapi({
+            description: 'Server-Sent Events stream with analyze events',
+            example: 'event: config\ndata: {"config":{"participants":[...],"mode":"analyzing","enableWebSearch":false}}\n\n',
+          }),
+        },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+
+export const listCustomRolesRoute = createRoute({
+  method: 'get',
+  path: '/chat/custom-roles',
+  tags: ['chat'],
+  summary: 'List custom roles with cursor pagination',
+  description: 'Get custom role templates for the authenticated user with infinite scroll support',
+  request: {
+    query: CursorPaginationQuerySchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Custom roles retrieved successfully',
+      content: {
+        'application/json': { schema: CustomRoleListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const createCustomRoleRoute = createRoute({
+  method: 'post',
+  path: '/chat/custom-roles',
+  tags: ['chat'],
+  summary: 'Create custom role',
+  description: 'Create a new reusable custom role template with system prompt',
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: CreateCustomRoleRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Custom role created successfully',
+      content: {
+        'application/json': { schema: CustomRoleDetailResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const getCustomRoleRoute = createRoute({
+  method: 'get',
+  path: '/chat/custom-roles/:id',
+  tags: ['chat'],
+  summary: 'Get custom role details',
+  description: 'Get details of a specific custom role',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Custom role retrieved successfully',
+      content: {
+        'application/json': { schema: CustomRoleDetailResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const updateCustomRoleRoute = createRoute({
+  method: 'patch',
+  path: '/chat/custom-roles/:id',
+  tags: ['chat'],
+  summary: 'Update custom role',
+  description: 'Update custom role name, description, system prompt, or metadata',
+  request: {
+    params: IdParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: UpdateCustomRoleRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Custom role updated successfully',
+      content: {
+        'application/json': { schema: CustomRoleDetailResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const deleteCustomRoleRoute = createRoute({
+  method: 'delete',
+  path: '/chat/custom-roles/:id',
+  tags: ['chat'],
+  summary: 'Delete custom role',
+  description: 'Delete a custom role template',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Custom role deleted successfully',
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(DeletedResponseSchema),
+        },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const listUserPresetsRoute = createRoute({
+  method: 'get',
+  path: '/chat/user-presets',
+  tags: ['chat'],
+  summary: 'List user presets with cursor pagination',
+  description: 'Get user-created model presets from localStorage with infinite scroll support',
+  request: {
+    query: CursorPaginationQuerySchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'User presets retrieved successfully',
+      content: {
+        'application/json': { schema: UserPresetListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const createUserPresetRoute = createRoute({
+  method: 'post',
+  path: '/chat/user-presets',
+  tags: ['chat'],
+  summary: 'Create user preset',
+  description: 'Create a new user preset with model-role pairs and mode',
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: CreateUserPresetRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'User preset created successfully',
+      content: {
+        'application/json': { schema: UserPresetDetailResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const getUserPresetRoute = createRoute({
+  method: 'get',
+  path: '/chat/user-presets/:id',
+  tags: ['chat'],
+  summary: 'Get user preset details',
+  description: 'Get details of a specific user preset',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'User preset retrieved successfully',
+      content: {
+        'application/json': { schema: UserPresetDetailResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const updateUserPresetRoute = createRoute({
+  method: 'patch',
+  path: '/chat/user-presets/:id',
+  tags: ['chat'],
+  summary: 'Update user preset',
+  description: 'Update user preset name, model-role pairs, or mode',
+  request: {
+    params: IdParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: UpdateUserPresetRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'User preset updated successfully',
+      content: {
+        'application/json': { schema: UserPresetDetailResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const deleteUserPresetRoute = createRoute({
+  method: 'delete',
+  path: '/chat/user-presets/:id',
+  tags: ['chat'],
+  summary: 'Delete user preset',
+  description: 'Delete a user preset from localStorage',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'User preset deleted successfully',
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(DeletedResponseSchema),
+        },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const councilModeratorRoundRoute = createRoute({
+  method: 'post',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/moderator',
+  tags: ['chat'],
+  summary: 'Generate council moderator round summary (streaming)',
+  description: 'Generate an executive-grade council moderator summary of all participant responses in a round. Streams moderator text in real-time as a chatMessage with metadata.isModerator: true. Frontend renders via ChatMessageList component alongside participant messages. Returns immediately if moderator message already exists for this round.',
+  request: {
+    params: ThreadRoundParamSchema,
+    body: {
+      required: false,
+      content: {
+        'application/json': {
+          schema: RoundModeratorRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Council moderator summary streaming in progress OR existing moderator message returned. Streams as text/event-stream following AI SDK UIMessageStream protocol. If moderator message already exists for this round, returns the chatMessage data as JSON.',
+      content: {
+        'text/event-stream': {
+          schema: z.any().openapi({
+            description: 'AI SDK UIMessageStream format for council moderator summary. Dynamic SSE protocol - cannot be represented with static schema.',
+          }),
+        },
+        'application/json': {
+          schema: ExistingModeratorMessageSchema,
+        },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+
+/**
+ * GET Round Status Route - Internal queue worker endpoint
+ * ✅ FOLLOWS: computeRoundStatus pattern from round-orchestration.service
+ * Used by ROUND_ORCHESTRATION_QUEUE worker to determine next action
+ */
+export const getRoundStatusRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/status',
+  tags: ['chat'],
+  summary: 'Get round execution status (internal)',
+  description: 'Internal endpoint for queue workers to determine next action in round orchestration. Returns current round status, participant completion, and what needs to be triggered next.',
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Round status retrieved successfully',
+      content: {
+        'application/json': { schema: RoundStatusResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * GET Thread Pre-Searches Route - List all pre-searches for thread
+ * ✅ FOLLOWS: getThreadSummariesRoute pattern
+ */
+export const getThreadPreSearchesRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/pre-searches',
+  tags: ['chat'],
+  summary: 'Get pre-search results for thread',
+  description: 'Retrieve all pre-search results for a thread, showing past search results for each round',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Pre-searches retrieved successfully',
+      content: {
+        'application/json': { schema: PreSearchListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+export const setRoundFeedbackRoute = createRoute({
+  method: 'put',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/feedback',
+  tags: ['chat'],
+  summary: 'Set round feedback (like/dislike)',
+  description: 'Set or update user feedback for a conversation round. Pass null to remove feedback.',
+  request: {
+    params: RoundFeedbackParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: RoundFeedbackRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Feedback set successfully',
+      content: {
+        'application/json': { schema: SetRoundFeedbackResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const getThreadFeedbackRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/feedback',
+  tags: ['chat'],
+  summary: 'Get all round feedback for a thread',
+  description: 'Get all round feedback (likes/dislikes) for a thread for the current user.',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Feedback retrieved successfully',
+      content: {
+        'application/json': { schema: GetThreadFeedbackResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * GET /chat/threads/:threadId/stream
+ * ✅ RESUMABLE STREAMS: Resume active stream (AI SDK documentation pattern)
+ */
+export const resumeThreadStreamRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/stream',
+  tags: ['chat'],
+  summary: 'Resume active stream for thread (AI SDK pattern)',
+  description: `Resume the active stream for a thread. Follows the AI SDK Chatbot Resume Streams documentation pattern.
+
+This is the **preferred endpoint** for stream resumption. The frontend doesn't need to construct the stream ID - the backend automatically looks up which stream is active and returns it.
+
+**Response Types**:
+- text/event-stream: SSE stream with buffered chunks (if active stream exists)
+- 204 No Content: No active stream for this thread
+
+**Response Headers** (on 200 OK):
+- X-Stream-Id: The stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})
+- X-Round-Number: The round number of the active stream
+- X-Participant-Index: The participant index of the active stream
+
+**Usage Pattern** (AI SDK):
+1. useChat mounts with resume: true
+2. AI SDK calls GET /chat/threads/{id}/stream
+3. If 204: No active stream, proceed normally
+4. If 200: Stream found, process SSE and trigger next participant on completion
+
+**Example**: GET /chat/threads/thread_123/stream?lastChunkIndex=42`,
+  request: {
+    params: ThreadIdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Active stream found - returning buffered SSE chunks',
+      content: {
+        'text/event-stream': {
+          // ✅ JUSTIFIED z.any(): SSE streams have dynamic format (AI SDK protocol)
+          // Cannot be represented with static Zod schema - each event has different structure
+          // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
+          schema: z.any().openapi({
+            description: 'Server-Sent Events (SSE) stream with buffered chunks. Dynamic format following AI SDK Stream Protocol.',
+          }),
+        },
+      },
+    },
+    [HttpStatusCodes.NO_CONTENT]: {
+      description: 'No active stream for this thread',
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * GET /chat/threads/:threadId/stream-status
+ * ✅ RESUMABLE STREAMS: Get stream resumption state for server-side prefetching
+ * Returns metadata only (not the SSE stream itself)
+ */
+export const getThreadStreamResumptionStateRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/stream-status',
+  tags: ['chat'],
+  summary: 'Get thread stream resumption state',
+  description: `Get metadata about active stream for a thread. Used for server-side prefetching to enable Zustand pre-fill before React renders.
+
+**Key Difference from GET /stream**:
+- GET /stream returns the SSE stream itself (used by AI SDK resume)
+- GET /stream-status returns only metadata (used for server-side state check)
+
+**Response Format**:
+Returns \`ThreadStreamResumptionState\` with:
+- hasActiveStream: Whether thread has an active stream in KV
+- streamId: Active stream ID (if any)
+- roundNumber: Round number of the active stream
+- totalParticipants: Total participants in the round
+- participantStatuses: Status of each participant
+- nextParticipantToTrigger: Index of next participant needing generation
+- roundComplete: Whether all participants have finished
+
+**Usage Pattern** (Server Component):
+1. Server component calls GET /stream-status
+2. Passes resumption state as prop to client component
+3. Client pre-fills Zustand store before effects run
+4. AI SDK resume and incomplete-round-resumption coordinate properly
+
+**Example**: GET /chat/threads/thread_123/stream-status`,
+  request: {
+    params: ThreadIdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Stream resumption state retrieved successfully',
+      content: {
+        'application/json': { schema: ThreadStreamResumptionStateResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});

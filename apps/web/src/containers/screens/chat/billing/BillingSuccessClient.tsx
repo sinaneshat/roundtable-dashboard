@@ -1,0 +1,193 @@
+import { PlanTypes, PurchaseTypes, StatusVariants, StripeSubscriptionStatuses, SubscriptionTiers } from '@roundtable/shared';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+
+import { StatusPage, StatusPageActions } from '@/components/billing';
+import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
+import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
+import { useCountdownRedirect } from '@/hooks/utils';
+import { useRouter, useTranslations } from '@/lib/compat';
+import type { Subscription } from '@/types/billing';
+
+export function BillingSuccessClient() {
+  const router = useRouter();
+  const t = useTranslations();
+  const [isReady, setIsReady] = useState(false);
+
+  const { countdown } = useCountdownRedirect({
+    enabled: isReady,
+    redirectPath: '/chat',
+  });
+
+  const syncMutation = useSyncAfterCheckoutMutation();
+
+  const subscriptionsQuery = useSubscriptionsQuery();
+  const usageStatsQuery = useUsageStatsQuery();
+
+  const hasInitiatedSync = useRef(false);
+  const readyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  type ApiResponse<T> = { success: boolean; data?: T };
+  type SubscriptionsResponse = { items?: Subscription[] };
+  type SyncResponse = {
+    purchaseType?: string;
+    tierChange?: { newTier?: string };
+  };
+  type UsageStatsResponse = {
+    plan?: { type?: string };
+  };
+
+  const subscriptionData = subscriptionsQuery.data as ApiResponse<SubscriptionsResponse> | undefined;
+  const usageStats = usageStatsQuery.data as ApiResponse<UsageStatsResponse> | undefined;
+
+  const syncResult = syncMutation.data as ApiResponse<SyncResponse> | undefined;
+  const syncedTier = syncResult?.data?.tierChange?.newTier;
+
+  const displaySubscription = useMemo((): Subscription | null => {
+    return (
+      subscriptionData?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
+      ?? subscriptionData?.data?.items?.[0]
+      ?? null
+    );
+  }, [subscriptionData]);
+
+  useEffect(() => {
+    if (!hasInitiatedSync.current) {
+      syncMutation.mutate(undefined);
+      hasInitiatedSync.current = true;
+      router.prefetch('/chat');
+    }
+  }, [syncMutation, router]);
+
+  useEffect(() => {
+    if (isReady || !syncMutation.isSuccess) {
+      return;
+    }
+
+    const queriesFetched
+      = subscriptionsQuery.isFetched && !subscriptionsQuery.isFetching
+        && usageStatsQuery.isFetched && !usageStatsQuery.isFetching;
+
+    if (queriesFetched) {
+      startTransition(() => setIsReady(true));
+      return;
+    }
+
+    if (readyTimeoutRef.current) {
+      clearTimeout(readyTimeoutRef.current);
+    }
+
+    readyTimeoutRef.current = setTimeout(() => {
+      setIsReady(true);
+      readyTimeoutRef.current = null;
+    }, 2000);
+
+    return () => {
+      if (readyTimeoutRef.current) {
+        clearTimeout(readyTimeoutRef.current);
+        readyTimeoutRef.current = null;
+      }
+    };
+  }, [
+    syncMutation.isSuccess,
+    subscriptionsQuery.isFetched,
+    subscriptionsQuery.isFetching,
+    usageStatsQuery.isFetched,
+    usageStatsQuery.isFetching,
+    isReady,
+  ]);
+
+  const isLoadingData = syncMutation.isPending || (!isReady && !syncMutation.isError);
+
+  if (isLoadingData) {
+    return (
+      <StatusPage
+        variant={StatusVariants.LOADING}
+        title={t('billing.success.processingSubscription')}
+        description={t('billing.success.confirmingPayment')}
+      />
+    );
+  }
+
+  if (syncMutation.isError) {
+    return (
+      <StatusPage
+        variant={StatusVariants.ERROR}
+        title={t('billing.failure.syncFailed')}
+        description={t('billing.failure.syncFailedDescription')}
+        actions={(
+          <StatusPageActions
+            primaryLabel={t('actions.goHome')}
+            primaryHref="/chat"
+          />
+        )}
+      />
+    );
+  }
+
+  if (syncResult?.data?.purchaseType === PurchaseTypes.NONE) {
+    return (
+      <StatusPage
+        variant={StatusVariants.ERROR}
+        title={t('billing.failure.noPurchaseFound')}
+        description={t('billing.failure.noPurchaseFoundDescription')}
+        actions={(
+          <StatusPageActions
+            primaryLabel={t('billing.success.viewPricing')}
+            primaryHref="/chat/pricing"
+          />
+        )}
+      />
+    );
+  }
+
+  const isPaidPlan = (syncedTier !== undefined && syncedTier !== SubscriptionTiers.FREE)
+    || (syncedTier === undefined && usageStats?.data?.plan?.type === PlanTypes.PAID);
+  const tierName = isPaidPlan ? t('subscription.tiers.pro.name') : t('subscription.tiers.free.name');
+
+  const successTitle = t('billing.success.title');
+  const successDescription = t('billing.success.description');
+
+  const activeUntilDate = displaySubscription?.currentPeriodEnd
+    ? new Date(displaySubscription.currentPeriodEnd).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null;
+
+  return (
+    <StatusPage
+      variant={StatusVariants.SUCCESS}
+      title={successTitle}
+      description={successDescription}
+      actions={(
+        <StatusPageActions
+          primaryLabel={t('billing.success.startChat')}
+          primaryHref="/chat"
+        />
+      )}
+    >
+      {displaySubscription && isPaidPlan && (
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-3 py-1 text-green-500 font-medium">
+            {tierName}
+          </span>
+          {activeUntilDate && (
+            <>
+              <span className="text-muted-foreground/50">•</span>
+              <span>
+                Active until
+                {' '}
+                {activeUntilDate}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        {t('billing.success.autoRedirect', { seconds: countdown })}
+      </p>
+    </StatusPage>
+  );
+}
