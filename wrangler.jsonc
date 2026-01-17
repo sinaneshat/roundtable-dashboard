@@ -399,9 +399,9 @@
         {
           "binding": "DB",
           "database_name": "roundtable-dashboard-db-prod",
-          "database_id": "8d7d88e0-7f78-4fa8-a70b-9aa32895ad6a",
+          "database_id": "74073b18-b9ef-4801-8176-4159905047d1",
           "migrations_dir": "./src/db/migrations",
-          "preview_database_id": "8d7d88e0-7f78-4fa8-a70b-9aa32895ad6a"
+          "preview_database_id": "74073b18-b9ef-4801-8176-4159905047d1"
         }
       ],
       "kv_namespaces": [
