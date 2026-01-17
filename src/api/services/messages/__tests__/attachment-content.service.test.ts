@@ -353,9 +353,8 @@ describe('attachment Content Service', () => {
   // ============================================================================
 
   describe('large File Processing', () => {
-    it('should process large files (size validation happens at frontend)', async () => {
-      // Note: Size limits are now enforced in frontend validation (use-file-validation.ts)
-      // This service processes all valid MIME types regardless of size
+    it('should process files within memory-safe limit (25MB)', async () => {
+      // Files within MAX_BASE64_FILE_SIZE (25MB) are processed
       const largeContent = 'x'.repeat(1000);
       const textBuffer = createTextContent(largeContent);
 
@@ -363,7 +362,7 @@ describe('attachment Content Service', () => {
         id: 'upload-large',
         mimeType: 'text/plain',
         filename: 'large.txt',
-        fileSize: 50 * 1024 * 1024, // 50MB - larger than old limit
+        fileSize: 20 * 1024 * 1024, // 20MB - within 25MB limit
         r2Key: 'uploads/user-1/upload-large_large.txt',
       };
 
@@ -384,10 +383,36 @@ describe('attachment Content Service', () => {
         logger,
       });
 
-      // Large files should now be processed successfully
+      // Files within limit should be processed successfully
       expect(result.fileParts).toHaveLength(1);
       expect(result.errors).toHaveLength(0);
       expect(getFile).toHaveBeenCalled();
+    });
+
+    it('should skip files exceeding memory-safe limit (25MB)', async () => {
+      // Files over MAX_BASE64_FILE_SIZE are skipped to prevent OOM in Workers
+      const largeFile = {
+        id: 'upload-large',
+        mimeType: 'text/plain',
+        filename: 'large.txt',
+        fileSize: 30 * 1024 * 1024, // 30MB - exceeds 25MB limit
+        r2Key: 'uploads/user-1/upload-large_large.txt',
+      };
+
+      const db = createMockDb([largeFile]);
+      const logger = createMockLogger();
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-large'],
+        r2Bucket: undefined,
+        db,
+        logger,
+      });
+
+      // Large files should be skipped (not loaded into memory)
+      expect(result.fileParts).toHaveLength(0);
+      expect(result.stats.skipped).toBe(1);
+      expect(getFile).not.toHaveBeenCalled();
     });
   });
 

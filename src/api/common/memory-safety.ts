@@ -17,48 +17,50 @@ import { z } from 'zod';
 // ============================================================================
 
 /**
- * Cloudflare Worker memory limit in bytes (256MB on Paid plan)
+ * Cloudflare Worker memory limit in bytes (128MB)
+ * This is a HARD PLATFORM LIMIT - cannot be configured higher
  * We use a conservative threshold to leave headroom for:
- * - V8 runtime overhead
+ * - V8 runtime overhead (~20-30MB)
  * - Framework allocations
  * - Response buffering
- * @see wrangler.jsonc limits.memory_mb configuration
+ * @see https://developers.cloudflare.com/workers/platform/limits/
  */
-export const WORKER_MEMORY_LIMIT = 256 * 1024 * 1024; // 256MB (paid plan)
+export const WORKER_MEMORY_LIMIT = 128 * 1024 * 1024; // 128MB (hard limit)
 
 /**
- * Safe memory budget per request (80% of limit = ~200MB)
- * Leaves ~50MB headroom for runtime overhead
+ * Safe memory budget per request (70% of limit = ~90MB)
+ * Leaves ~38MB headroom for V8 runtime overhead
  */
-export const SAFE_REQUEST_MEMORY_BUDGET = Math.floor(WORKER_MEMORY_LIMIT * 0.80);
+export const SAFE_REQUEST_MEMORY_BUDGET = Math.floor(WORKER_MEMORY_LIMIT * 0.70);
 
 /**
- * Critical memory threshold (90% of limit = ~230MB)
+ * Critical memory threshold (85% of limit = ~109MB)
  * If we approach this, start aggressive cleanup
  */
-export const CRITICAL_MEMORY_THRESHOLD = Math.floor(WORKER_MEMORY_LIMIT * 0.90);
+export const CRITICAL_MEMORY_THRESHOLD = Math.floor(WORKER_MEMORY_LIMIT * 0.85);
 
 /**
- * Maximum size for a single allocation (50MB)
- * Prevents any single operation from consuming too much memory
+ * Maximum size for a single allocation (20MB)
+ * With base64 overhead (~33%), a 20MB file = ~27MB in memory
+ * Must leave room for other allocations within 128MB limit
  */
-export const MAX_SINGLE_ALLOCATION = 50 * 1024 * 1024;
+export const MAX_SINGLE_ALLOCATION = 20 * 1024 * 1024;
 
 // ============================================================================
 // Memory Budget Tracker
 // ============================================================================
 
 export const MemoryBudgetConfigSchema = z.object({
-  /** Total budget in bytes */
+  /** Total budget in bytes (~90MB safe budget) */
   totalBudget: z.number().int().positive().default(SAFE_REQUEST_MEMORY_BUDGET),
   /** Maximum messages to load */
   maxMessages: z.number().int().positive().default(75),
   /** Maximum attachments to process */
   maxAttachments: z.number().int().positive().default(10),
-  /** Maximum attachment content size per file (10MB) */
-  maxAttachmentContentSize: z.number().int().positive().default(10 * 1024 * 1024), // 10MB
-  /** Maximum total attachment content (50MB) */
-  maxTotalAttachmentContent: z.number().int().positive().default(50 * 1024 * 1024), // 50MB
+  /** Maximum attachment content size per file (15MB raw = ~20MB with base64) */
+  maxAttachmentContentSize: z.number().int().positive().default(15 * 1024 * 1024), // 15MB
+  /** Maximum total attachment content (30MB raw = ~40MB with base64, leaves room for other allocations) */
+  maxTotalAttachmentContent: z.number().int().positive().default(30 * 1024 * 1024), // 30MB
   /** Maximum system prompt size */
   maxSystemPromptSize: z.number().int().positive().default(100 * 1024), // 100KB
   /** Maximum RAG results */
@@ -251,8 +253,8 @@ export type RequestComplexity = {
 
 /**
  * Calculate dynamic limits based on request complexity
- * More complex requests get stricter limits to stay within budget
- * With 256MB memory, we have more headroom for larger files
+ * More complex requests get stricter limits to stay within 128MB budget
+ * Must account for: V8 overhead (~30MB) + messages + attachments + system prompt
  */
 export function calculateDynamicLimits(complexity: RequestComplexity): MemoryBudgetConfig {
   const base = MemoryBudgetConfigSchema.parse({});
@@ -263,10 +265,10 @@ export function calculateDynamicLimits(complexity: RequestComplexity): MemoryBud
   let maxAttachmentContentSize = base.maxAttachmentContentSize;
   let maxRagResults = base.maxRagResults;
 
-  // Reduce limits based on complexity (with 256MB, limits are less aggressive)
+  // Reduce limits based on complexity to stay within 128MB
   if (complexity.attachmentCount > 5) {
     maxMessages = Math.min(maxMessages, 50);
-    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 5 * 1024 * 1024); // 5MB
+    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 8 * 1024 * 1024); // 8MB per file
   }
 
   if (complexity.hasRag && complexity.hasWebSearch) {
@@ -277,14 +279,14 @@ export function calculateDynamicLimits(complexity: RequestComplexity): MemoryBud
 
   if (complexity.messageCount > 100) {
     maxAttachments = Math.min(maxAttachments, 5);
-    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 5 * 1024 * 1024); // 5MB
+    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 5 * 1024 * 1024); // 5MB per file
   }
 
-  // If everything is enabled, use reduced but still reasonable limits
+  // If everything is enabled, use conservative limits to fit in 128MB
   if (complexity.hasRag && complexity.hasWebSearch && complexity.attachmentCount > 0 && complexity.messageCount > 50) {
     maxMessages = 40;
     maxAttachments = 3;
-    maxAttachmentContentSize = 3 * 1024 * 1024; // 3MB
+    maxAttachmentContentSize = 5 * 1024 * 1024; // 5MB per file
     maxRagResults = 2;
   }
 

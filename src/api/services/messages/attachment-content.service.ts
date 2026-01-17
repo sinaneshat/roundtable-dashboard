@@ -85,6 +85,18 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
         continue;
       }
 
+      // Skip files too large for memory-safe processing (128MB worker limit)
+      if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
+        logger?.warn('File too large for memory-safe processing, skipping', LogHelpers.operation({
+          operationName: 'loadAttachmentContent',
+          uploadId: upload.id,
+          fileSize: upload.fileSize,
+          maxSize: MAX_BASE64_FILE_SIZE,
+        }));
+        skipped++;
+        continue;
+      }
+
       // Fetch file content from storage
       const { data } = await getFile(r2Bucket, upload.r2Key);
 

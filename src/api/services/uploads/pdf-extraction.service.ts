@@ -18,8 +18,8 @@ import * as tables from '@/db';
 // CONSTANTS
 // ============================================================================
 
-/** Maximum file size to process (50MB - matches base64 limit) */
-const MAX_PDF_SIZE_FOR_EXTRACTION = 50 * 1024 * 1024;
+/** Maximum file size to process (25MB - matches base64 limit for 128MB worker memory) */
+const MAX_PDF_SIZE_FOR_EXTRACTION = 25 * 1024 * 1024;
 
 /** Maximum extracted text length to store (2MB - reasonable for large documents) */
 const MAX_EXTRACTED_TEXT_LENGTH = 2 * 1024 * 1024;

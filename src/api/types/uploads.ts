@@ -476,17 +476,20 @@ export function isModelImagePartUrl(value: unknown): value is ModelImagePartUrl 
 // ============================================================================
 
 /**
- * Maximum file size to convert to base64 for AI model input (50MB)
+ * Maximum file size to convert to base64 for AI model input (25MB)
  *
- * Memory calculation for Cloudflare Workers (128MB limit):
- * - 50MB file → ~67MB base64 string (33% larger)
- * - Plus processing overhead: ~15MB
- * - Total per file: ~82MB (within 128MB worker limit)
+ * Memory calculation for Cloudflare Workers (128MB HARD platform limit):
+ * - V8 runtime + framework overhead: ~30MB
+ * - PDF.js initialization + parsing: ~15MB
+ * - Messages + system prompt + RAG: ~10MB
+ * - Available for file processing: ~73MB
+ * - 25MB file → ~33MB base64 string (33% overhead)
+ * - File + base64 in memory during encoding: ~58MB
+ * - Total: 30 + 15 + 10 + 58 = ~113MB (safe margin within 128MB)
  *
- * Increased to 50MB to match industry standards (ChatGPT allows 512MB uploads).
- * Most PDFs and documents are under 50MB.
+ * @see https://developers.cloudflare.com/workers/platform/limits/
  */
-export const MAX_BASE64_FILE_SIZE = 50 * 1024 * 1024;
+export const MAX_BASE64_FILE_SIZE = 25 * 1024 * 1024;
 
 /** Default URL expiration time (1 hour) */
 export const DEFAULT_URL_EXPIRATION_MS = 60 * 60 * 1000;
