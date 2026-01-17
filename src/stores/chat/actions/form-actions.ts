@@ -152,7 +152,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         {
           queryKey: queryKeys.threads.all,
           predicate: (query) => {
-            return query.queryKey.length >= 2 && query.queryKey[1] === 'list';
+            const key = query.queryKey[1];
+            return query.queryKey.length >= 2 && (key === 'list' || key === 'sidebar');
           },
         },
         (old: unknown) => {
