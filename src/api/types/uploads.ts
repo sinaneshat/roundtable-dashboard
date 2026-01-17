@@ -475,10 +475,12 @@ export function isModelImagePartUrl(value: unknown): value is ModelImagePartUrl 
 // CONSTANTS
 // ============================================================================
 
+const IS_LOCAL_DEV = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local' || process.env.NODE_ENV === 'development';
+
 /**
- * Maximum file size to load into worker memory (5MB)
+ * Maximum file size to load into worker memory
  *
- * CONSERVATIVE limit for Cloudflare Workers (128MB HARD platform limit):
+ * PRODUCTION (5MB): Conservative for Cloudflare Workers (128MB HARD platform limit)
  * - V8 runtime + framework overhead: ~30MB
  * - PDF.js initialization + parsing: ~20MB (can spike higher)
  * - Messages + system prompt + RAG: ~15MB
@@ -488,14 +490,18 @@ export function isModelImagePartUrl(value: unknown): value is ModelImagePartUrl 
  * - File copy + base64: ~12MB
  * - Total: 30 + 20 + 15 + 10 + 12 = ~87MB (safer margin within 128MB)
  *
- * Files larger than 5MB should use:
+ * LOCAL DEV (25MB): Node.js has much more memory available
+ * - No worker memory constraints
+ * - Allows testing larger files without Cloudflare infrastructure
+ *
+ * Files larger than the limit should use:
  * 1. Pre-extracted text (no file loading needed)
  * 2. Cloudflare AI toMarkdown() for PDFs (processing offloaded)
  * 3. URL-based delivery (AI provider fetches directly)
  *
  * @see https://developers.cloudflare.com/workers/platform/limits/
  */
-export const MAX_BASE64_FILE_SIZE = 5 * 1024 * 1024;
+export const MAX_BASE64_FILE_SIZE = IS_LOCAL_DEV ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
 
 /** Default URL expiration time (1 hour) */
 export const DEFAULT_URL_EXPIRATION_MS = 60 * 60 * 1000;
