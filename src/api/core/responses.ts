@@ -18,6 +18,7 @@ import type { z } from 'zod';
 
 import type { DatabaseOperation, HealthStatus, PollingStatus } from '@/api/core/enums';
 import { HealthStatuses } from '@/api/core/enums';
+import { formatPerformanceForResponse } from '@/api/middleware/performance-tracking';
 
 import type {
   ApiResponse,
@@ -50,16 +51,33 @@ function extractResponseMetadata(c: Context) {
 
 /**
  * Get performance metrics from context if available
+ * Enhanced with detailed DB timing in preview/local environments
  */
 function getPerformanceMetadata(c: Context) {
   const startTime = c.get('startTime');
-  if (startTime) {
-    return {
-      duration: Date.now() - startTime,
-      memoryUsage: process.memoryUsage().heapUsed,
-    };
+  const isPerformanceTracking = c.get('performanceTracking');
+
+  if (!startTime) {
+    return {};
   }
-  return {};
+
+  // Basic timing for all environments
+  const basicMetrics = {
+    duration: Date.now() - startTime,
+  };
+
+  // Enhanced metrics only in preview/local with performance tracking enabled
+  if (isPerformanceTracking) {
+    const perfData = formatPerformanceForResponse();
+    if (perfData) {
+      return {
+        ...basicMetrics,
+        performance: perfData,
+      };
+    }
+  }
+
+  return basicMetrics;
 }
 
 // ============================================================================

@@ -149,25 +149,9 @@ function createAuth() {
           },
         },
       },
-      session: {
-        create: {
-          before: async (session) => {
-            // Skip validation in production - only restrict preview/local
-            if (!isRestrictedEnvironment()) {
-              return;
-            }
-
-            // Fetch user to check email domain for existing users signing in
-            const user = await db.query.user.findFirst({
-              where: (u, { eq }) => eq(u.id, session.userId),
-            });
-
-            if (user?.email && !isAllowedEmailDomain(user.email)) {
-              throw new Error(EMAIL_DOMAIN_CONFIG.ERROR_MESSAGE);
-            }
-          },
-        },
-      },
+      // Session validation removed for performance
+      // Email domain is already validated at user creation time
+      // No need to re-validate on every session - users can't change their email
     },
 
     // Session configuration

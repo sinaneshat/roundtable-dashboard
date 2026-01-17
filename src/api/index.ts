@@ -26,7 +26,7 @@ import { APP_VERSION } from '@/constants/version';
 import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
 
 import { createOpenApiApp } from './core/app';
-import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, RateLimiterFactory } from './middleware';
+import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, performanceTracking, RateLimiterFactory } from './middleware';
 // API Keys routes
 import {
   createApiKeyHandler,
@@ -342,6 +342,9 @@ if (process.env.DEBUG_REQUESTS === 'true') {
 // Formatting
 app.use('*', prettyJSON());
 app.use('*', trimTrailingSlash());
+
+// Performance tracking (preview/local only) - must be early to capture full request timing
+app.use('*', performanceTracking);
 
 // Core middleware
 app.use('*', contextStorage());

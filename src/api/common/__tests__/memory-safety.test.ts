@@ -44,14 +44,14 @@ describe('memory Safety Constants', () => {
     // Cloudflare Worker has 128MB limit
     expect(WORKER_MEMORY_LIMIT).toBe(128 * 1024 * 1024);
 
-    // Safe budget is 80% of limit
-    expect(SAFE_REQUEST_MEMORY_BUDGET).toBe(Math.floor(WORKER_MEMORY_LIMIT * 0.80));
+    // Safe budget is 70% of limit
+    expect(SAFE_REQUEST_MEMORY_BUDGET).toBe(Math.floor(WORKER_MEMORY_LIMIT * 0.70));
 
-    // Critical threshold is 90% of limit
-    expect(CRITICAL_MEMORY_THRESHOLD).toBe(Math.floor(WORKER_MEMORY_LIMIT * 0.90));
+    // Critical threshold is 85% of limit
+    expect(CRITICAL_MEMORY_THRESHOLD).toBe(Math.floor(WORKER_MEMORY_LIMIT * 0.85));
 
-    // Max single allocation is 20MB
-    expect(MAX_SINGLE_ALLOCATION).toBe(20 * 1024 * 1024);
+    // Max single allocation is 10MB (conservative)
+    expect(MAX_SINGLE_ALLOCATION).toBe(10 * 1024 * 1024);
   });
 });
 
@@ -66,8 +66,8 @@ describe('memoryBudgetConfigSchema', () => {
     expect(config.totalBudget).toBe(SAFE_REQUEST_MEMORY_BUDGET);
     expect(config.maxMessages).toBe(75);
     expect(config.maxAttachments).toBe(10);
-    expect(config.maxAttachmentContentSize).toBe(50 * 1024);
-    expect(config.maxTotalAttachmentContent).toBe(500 * 1024);
+    expect(config.maxAttachmentContentSize).toBe(5 * 1024 * 1024); // 5MB (conservative for 128MB worker limit)
+    expect(config.maxTotalAttachmentContent).toBe(10 * 1024 * 1024); // 10MB
     expect(config.maxSystemPromptSize).toBe(100 * 1024);
     expect(config.maxRagResults).toBe(3);
     expect(config.maxCitationSources).toBe(15);
@@ -321,7 +321,7 @@ describe('calculateDynamicLimits', () => {
     });
 
     expect(limits.maxMessages).toBe(50); // Reduced
-    expect(limits.maxAttachmentContentSize).toBe(30 * 1024); // Reduced
+    expect(limits.maxAttachmentContentSize).toBe(5 * 1024 * 1024); // Reduced to 5MB for >3 attachments
   });
 
   it('should reduce limits for RAG + web search', () => {
@@ -334,7 +334,7 @@ describe('calculateDynamicLimits', () => {
     });
 
     expect(limits.maxMessages).toBe(50);
-    expect(limits.maxAttachments).toBe(5);
+    expect(limits.maxAttachments).toBe(3); // Reduced to 3 for RAG + web search
     expect(limits.maxRagResults).toBe(2);
   });
 
@@ -347,8 +347,8 @@ describe('calculateDynamicLimits', () => {
       hasProject: false,
     });
 
-    expect(limits.maxAttachments).toBe(5);
-    expect(limits.maxAttachmentContentSize).toBe(20 * 1024);
+    expect(limits.maxAttachments).toBe(3); // Reduced to 3 for >50 messages
+    expect(limits.maxAttachmentContentSize).toBe(5 * 1024 * 1024); // Reduced to 5MB
   });
 
   it('should use minimum limits for complex requests', () => {
@@ -360,9 +360,10 @@ describe('calculateDynamicLimits', () => {
       hasProject: true,
     });
 
-    expect(limits.maxMessages).toBe(40);
-    expect(limits.maxAttachments).toBe(3);
-    expect(limits.maxAttachmentContentSize).toBe(20 * 1024);
+    // Most restrictive limits for complex requests within 128MB worker memory
+    expect(limits.maxMessages).toBe(30);
+    expect(limits.maxAttachments).toBe(2);
+    expect(limits.maxAttachmentContentSize).toBe(3 * 1024 * 1024); // 3MB for complex requests
     expect(limits.maxRagResults).toBe(2);
   });
 });

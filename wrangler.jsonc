@@ -185,9 +185,11 @@
   "env": {
     "preview": {
       "name": "roundtable-dashboard-preview",
-      // Smart Placement: routes worker near D1/R2 backends for reduced latency
+      // Smart Placement: DISABLED - was routing to Toronto (YYZ) while D1 is in EEUR
+      // Worker now runs at edge closest to user, reducing TTFB significantly
+      // D1 latency is acceptable from edge (~50-100ms) vs cross-continent (~200ms)
       "placement": {
-        "mode": "smart"
+        "mode": "off"
       },
       // Observability with sampling to reduce log volume
       "observability": {
@@ -241,9 +243,9 @@
         {
           "binding": "DB",
           "database_name": "roundtable-dashboard-db-preview",
-          "database_id": "45ba3c83-ee28-4138-a4af-fed442b3ad05",
+          "database_id": "ce0a7c86-7ac5-46c8-bf25-3df0a2345f9c",
           "migrations_dir": "./src/db/migrations",
-          "preview_database_id": "45ba3c83-ee28-4138-a4af-fed442b3ad05"
+          "preview_database_id": "ce0a7c86-7ac5-46c8-bf25-3df0a2345f9c"
         }
       ],
       "kv_namespaces": [
@@ -339,9 +341,11 @@
     },
     "production": {
       "name": "roundtable-dashboard-production",
-      // Smart Placement: optimizes worker location near D1/R2 backends
+      // Smart Placement: DISABLED - was routing to Toronto (YYZ) while D1 is in EEUR
+      // Worker now runs at edge closest to user, reducing TTFB significantly
+      // D1 latency is acceptable from edge (~50-100ms) vs cross-continent (~200ms)
       "placement": {
-        "mode": "smart"
+        "mode": "off"
       },
       // Observability: 100% sampling for full log visibility
       // Note: Remove head_sampling_rate to get all logs (or set to 1.0)
@@ -395,9 +399,9 @@
         {
           "binding": "DB",
           "database_name": "roundtable-dashboard-db-prod",
-          "database_id": "8d7d88e0-7f78-4fa8-a70b-9aa32895ad6a",
+          "database_id": "74073b18-b9ef-4801-8176-4159905047d1",
           "migrations_dir": "./src/db/migrations",
-          "preview_database_id": "8d7d88e0-7f78-4fa8-a70b-9aa32895ad6a"
+          "preview_database_id": "74073b18-b9ef-4801-8176-4159905047d1"
         }
       ],
       "kv_namespaces": [
