@@ -140,7 +140,13 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
           return lowestPriceA - lowestPriceB;
         });
 
-      return Responses.collection(c, products);
+      const response = Responses.collection(c, products);
+
+      // Products rarely change - cache aggressively
+      response.headers.set('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+      response.headers.set('CDN-Cache-Control', 'max-age=86400');
+
+      return response;
     } catch {
       throw createError.internal('Failed to retrieve products', ErrorContextBuilders.database('select', 'stripeProduct'));
     }

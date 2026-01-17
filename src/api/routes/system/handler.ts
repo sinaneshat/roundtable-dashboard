@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { runBenchmarkSuite } from '@/api/common/benchmark';
 import { createHandler, Responses } from '@/api/core';
 import { CreditActions, HealthStatuses, StripeSubscriptionStatuses } from '@/api/core/enums';
+import { withDbTiming } from '@/api/middleware';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -65,14 +66,17 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
 
 /**
  * Check database connectivity
+ * Uses withDbTiming to track query performance in preview/local
  */
 async function checkDatabase(_c: HealthCheckContext) {
   const startTime = Date.now();
 
   try {
-    // Use the established pattern for database access
-    const db = await getDbAsync();
-    await db.run('SELECT 1');
+    // Use withDbTiming to track this query for performance monitoring
+    await withDbTiming('health:SELECT_1', async () => {
+      const db = await getDbAsync();
+      await db.run('SELECT 1');
+    });
 
     return {
       status: HealthStatuses.HEALTHY,

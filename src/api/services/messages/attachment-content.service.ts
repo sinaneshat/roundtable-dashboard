@@ -264,22 +264,11 @@ export async function loadAttachmentContentUrl(
         continue;
       }
 
-      // Check file size limit
-      if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
-        logger?.warn('File too large for processing, skipping', LogHelpers.operation({
-          operationName: 'loadAttachmentContentUrl',
-          uploadId: upload.id,
-          fileSize: upload.fileSize,
-          maxSize: MAX_BASE64_FILE_SIZE,
-        }));
-        skipped++;
-        continue;
-      }
-
       const isPdf = upload.mimeType === PDF_MIME_TYPE;
       const isTextExtractable = TEXT_EXTRACTABLE_MIME_SET.has(upload.mimeType);
 
-      // PDFs and text-extractable files: try text extraction first
+      // PDFs and text-extractable files: check for pre-extracted text FIRST
+      // This allows large PDFs to work if they have extracted text (no binary loading needed)
       if (isPdf || isTextExtractable) {
         // Check for pre-extracted text from background processing
         const extractedText = getExtractedText(upload.metadata);
@@ -302,6 +291,19 @@ export async function loadAttachmentContentUrl(
         const requiresVision = upload.metadata && typeof upload.metadata === 'object' && 'requiresVision' in upload.metadata && (upload.metadata as { requiresVision?: boolean }).requiresVision === true;
 
         if (requiresVision) {
+          // For vision PDFs, check size before loading binary
+          if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
+            logger?.warn('Scanned PDF too large for binary loading, providing text fallback', LogHelpers.operation({
+              operationName: 'loadAttachmentContentUrl',
+              uploadId: upload.id,
+              fileSize: upload.fileSize,
+              maxSize: MAX_BASE64_FILE_SIZE,
+            }));
+            // Provide text fallback for large scanned PDFs
+            extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF is a scanned/image-based document (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB). It's too large to process visually. Please upload a text-based PDF or a smaller scanned document (max 5MB for visual processing).]`);
+            continue;
+          }
+
           logger?.info('PDF marked as requiring vision (scanned/image), loading binary', LogHelpers.operation({
             operationName: 'loadAttachmentContentUrl',
             uploadId: upload.id,
@@ -411,7 +413,31 @@ export async function loadAttachmentContentUrl(
           continue;
         }
 
+        // Large PDF without extracted text - provide helpful message instead of failing
+        if (isPdf && upload.fileSize > MAX_BASE64_FILE_SIZE) {
+          logger?.warn('Large PDF without extracted text, providing fallback message', LogHelpers.operation({
+            operationName: 'loadAttachmentContentUrl',
+            uploadId: upload.id,
+            fileSize: upload.fileSize,
+            maxSize: MAX_BASE64_FILE_SIZE,
+          }));
+          extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB) is too large to process directly. Text extraction was not completed. Please try re-uploading the file, or use a smaller PDF (max 5MB for in-memory processing).]`);
+          continue;
+        }
+
         // Non-PDF text file without extraction capability - load as binary
+      }
+
+      // Check file size before binary loading (applies to images and other files)
+      if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
+        logger?.warn('File too large for binary loading, skipping', LogHelpers.operation({
+          operationName: 'loadAttachmentContentUrl',
+          uploadId: upload.id,
+          fileSize: upload.fileSize,
+          maxSize: MAX_BASE64_FILE_SIZE,
+        }));
+        skipped++;
+        continue;
       }
 
       // UNIFIED: Load all files as Uint8Array binary data
@@ -831,23 +857,11 @@ export async function loadMessageAttachmentsUrl(
           continue;
         }
 
-        // Check file size limit
-        if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
-          logger?.warn('File too large for processing, skipping', LogHelpers.operation({
-            operationName: 'loadMessageAttachmentsUrl',
-            messageId,
-            uploadId,
-            fileSize: upload.fileSize,
-            maxSize: MAX_BASE64_FILE_SIZE,
-          }));
-          skipped++;
-          continue;
-        }
-
         const isPdf = upload.mimeType === PDF_MIME_TYPE;
         const isTextExtractable = TEXT_EXTRACTABLE_MIME_SET.has(upload.mimeType);
 
-        // PDFs and text files: try text extraction first
+        // PDFs and text files: check for pre-extracted text FIRST
+        // This allows large PDFs to work if they have extracted text (no binary loading needed)
         if (isPdf || isTextExtractable) {
           const extractedText = getExtractedText(upload.metadata);
 
@@ -982,6 +996,38 @@ export async function loadMessageAttachmentsUrl(
             loaded++;
             continue;
           }
+
+          // Large PDF without extracted text - provide helpful message instead of failing
+          if (isPdf && upload.fileSize > MAX_BASE64_FILE_SIZE) {
+            logger?.warn('Large PDF without extracted text in message, providing fallback', LogHelpers.operation({
+              operationName: 'loadMessageAttachmentsUrl',
+              messageId,
+              uploadId,
+              fileSize: upload.fileSize,
+              maxSize: MAX_BASE64_FILE_SIZE,
+            }));
+            const fallbackText = `[PDF: ${upload.filename}]\n\n[This PDF (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB) is too large to process directly. Text extraction was not completed. Please try re-uploading the file, or use a smaller PDF.]`;
+            const existing = extractedTextByMessageId.get(messageId) || '';
+            extractedTextByMessageId.set(
+              messageId,
+              existing ? `${existing}\n\n---\n\n${fallbackText}` : fallbackText,
+            );
+            loaded++; // Count as loaded since we're providing useful info
+            continue;
+          }
+        }
+
+        // Check file size before binary loading (applies to images and other files)
+        if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
+          logger?.warn('File too large for binary loading in message, skipping', LogHelpers.operation({
+            operationName: 'loadMessageAttachmentsUrl',
+            messageId,
+            uploadId,
+            fileSize: upload.fileSize,
+            maxSize: MAX_BASE64_FILE_SIZE,
+          }));
+          skipped++;
+          continue;
         }
 
         // UNIFIED: Load all files as Uint8Array binary

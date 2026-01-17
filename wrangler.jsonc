@@ -243,9 +243,9 @@
         {
           "binding": "DB",
           "database_name": "roundtable-dashboard-db-preview",
-          "database_id": "45ba3c83-ee28-4138-a4af-fed442b3ad05",
+          "database_id": "ce0a7c86-7ac5-46c8-bf25-3df0a2345f9c",
           "migrations_dir": "./src/db/migrations",
-          "preview_database_id": "45ba3c83-ee28-4138-a4af-fed442b3ad05"
+          "preview_database_id": "ce0a7c86-7ac5-46c8-bf25-3df0a2345f9c"
         }
       ],
       "kv_namespaces": [
