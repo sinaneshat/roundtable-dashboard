@@ -119,34 +119,52 @@ export async function performanceTracking(c: Context, next: Next): Promise<void 
 }
 
 /**
- * Create a timed DB wrapper
+ * Create a timed DB wrapper (context-aware version)
  * Wraps database calls to track their execution time
  */
-export function withDbTiming<T>(
+export function withDbTimingContext<T>(
+  c: Context,
   queryName: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  if (!isPerformanceTrackingEnabled() || !currentRequestMetrics) {
+  const metrics = c.get('performanceMetrics') as PerformanceMetrics | undefined;
+  if (!isPerformanceTrackingEnabled() || !metrics) {
     return fn();
   }
 
   const start = Date.now();
   return fn().finally(() => {
     const duration = Date.now() - start;
-    recordDbQuery(queryName, duration);
+    recordDbQueryWithContext(c, queryName, duration);
   });
+}
+
+/**
+ * Legacy wrapper for withDbTiming (no-op when context unavailable)
+ * @deprecated Use withDbTimingContext with context instead
+ */
+export function withDbTiming<T>(
+  queryName: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  // Without context, just run the function (no tracking)
+  return fn();
 }
 
 /**
  * Format performance metrics for API response
  * Returns object to be included in response meta
  */
-export function formatPerformanceForResponse(): Record<string, unknown> | undefined {
-  if (!isPerformanceTrackingEnabled() || !currentRequestMetrics) {
+export function formatPerformanceForResponse(c?: Context): Record<string, unknown> | undefined {
+  if (!isPerformanceTrackingEnabled()) {
     return undefined;
   }
 
-  const metrics = currentRequestMetrics;
+  const metrics = c?.get('performanceMetrics') as PerformanceMetrics | undefined;
+  if (!metrics) {
+    return undefined;
+  }
+
   const now = Date.now();
 
   return {
