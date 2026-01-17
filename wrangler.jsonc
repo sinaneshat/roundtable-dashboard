@@ -258,13 +258,13 @@
       "r2_buckets": [
         {
           "binding": "NEXT_INC_CACHE_R2_BUCKET",
-          "bucket_name": "roundtable-dashboard-r2-cache-preview",
-          "preview_bucket_name": "roundtable-dashboard-r2-cache-preview"
+          "bucket_name": "roundtable-dashboard-r2-cache-preview-weur",
+          "preview_bucket_name": "roundtable-dashboard-r2-cache-preview-weur"
         },
         {
           "binding": "UPLOADS_R2_BUCKET",
-          "bucket_name": "roundtable-dashboard-r2-uploads-preview",
-          "preview_bucket_name": "roundtable-dashboard-r2-uploads-preview"
+          "bucket_name": "roundtable-dashboard-r2-uploads-preview-weur",
+          "preview_bucket_name": "roundtable-dashboard-r2-uploads-preview-weur"
         }
       ],
       "browser": {
@@ -414,13 +414,13 @@
       "r2_buckets": [
         {
           "binding": "NEXT_INC_CACHE_R2_BUCKET",
-          "bucket_name": "roundtable-dashboard-r2-cache-prod",
-          "preview_bucket_name": "roundtable-dashboard-r2-cache-prod"
+          "bucket_name": "roundtable-dashboard-r2-cache-prod-weur",
+          "preview_bucket_name": "roundtable-dashboard-r2-cache-prod-weur"
         },
         {
           "binding": "UPLOADS_R2_BUCKET",
-          "bucket_name": "roundtable-dashboard-r2-uploads-prod",
-          "preview_bucket_name": "roundtable-dashboard-r2-uploads-prod"
+          "bucket_name": "roundtable-dashboard-r2-uploads-prod-weur",
+          "preview_bucket_name": "roundtable-dashboard-r2-uploads-prod-weur"
         }
       ],
       "browser": {
