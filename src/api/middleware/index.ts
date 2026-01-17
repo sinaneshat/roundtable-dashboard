@@ -13,7 +13,7 @@ export {
   formatPerformanceForResponse,
   getCurrentPerformanceMetrics,
   performanceTracking,
-  recordDbQuery,
+  recordDbQueryWithContext,
   withDbTiming,
 } from './performance-tracking';
 export { RateLimiterFactory } from './rate-limiter-factory';

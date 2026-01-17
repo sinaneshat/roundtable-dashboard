@@ -272,8 +272,9 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
           {
             queryKey: queryKeys.threads.all,
             predicate: (query) => {
-              // Only update infinite queries (thread lists)
-              return query.queryKey.length >= 2 && query.queryKey[1] === 'list';
+              // Update both list and sidebar infinite queries
+              const key = query.queryKey[1];
+              return query.queryKey.length >= 2 && (key === 'list' || key === 'sidebar');
             },
           },
           (old: unknown) => {

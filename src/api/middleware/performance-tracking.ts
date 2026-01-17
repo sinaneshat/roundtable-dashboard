@@ -6,7 +6,6 @@
  *
  * Adds to context:
  * - startTime: Request start timestamp
- * - dbQueries: Array of DB query timings
  * - performanceMetrics: Aggregated performance data
  */
 
@@ -30,9 +29,6 @@ export type PerformanceMetrics = {
   cfRay?: string;
 };
 
-// Global state for tracking (reset per request)
-let currentRequestMetrics: PerformanceMetrics | null = null;
-
 /**
  * Check if performance tracking should be enabled
  * Only in preview/local/development environments
@@ -43,33 +39,37 @@ function isPerformanceTrackingEnabled(): boolean {
 }
 
 /**
- * Get current performance metrics (for use in response builders)
+ * Get current performance metrics from context
  */
-export function getCurrentPerformanceMetrics(): PerformanceMetrics | null {
-  return currentRequestMetrics;
+export function getCurrentPerformanceMetrics(c?: Context): PerformanceMetrics | null {
+  if (!c) {
+    return null;
+  }
+  return c.get('performanceMetrics') as PerformanceMetrics | null;
 }
 
 /**
- * Record a DB query timing
- * Call this from instrumented DB access points
+ * Record a DB query timing (requires context)
  */
-export function recordDbQuery(query: string, duration: number): void {
-  if (!currentRequestMetrics) {
+export function recordDbQueryWithContext(c: Context, query: string, duration: number): void {
+  const metrics = c.get('performanceMetrics') as PerformanceMetrics | undefined;
+  if (!metrics) {
     return;
   }
 
-  currentRequestMetrics.dbQueries.push({
-    query: query.slice(0, 100), // Truncate long queries
+  metrics.dbQueries.push({
+    query: query.slice(0, 100),
     duration,
     timestamp: Date.now(),
   });
-  currentRequestMetrics.dbQueryCount++;
-  currentRequestMetrics.dbTotalTime += duration;
+  metrics.dbQueryCount++;
+  metrics.dbTotalTime += duration;
 }
 
 /**
  * Performance tracking middleware
  * Sets up timing and extracts Cloudflare placement info
+ * Stores metrics in request context (not global state) for concurrency safety
  */
 export async function performanceTracking(c: Context, next: Next): Promise<void | Response> {
   // Skip if not enabled
@@ -79,92 +79,92 @@ export async function performanceTracking(c: Context, next: Next): Promise<void 
 
   const startTime = Date.now();
 
-  // Initialize metrics for this request
-  currentRequestMetrics = {
+  // Initialize metrics in context (request-scoped, not global)
+  const metrics: PerformanceMetrics = {
     requestStartTime: startTime,
     dbQueryCount: 0,
     dbTotalTime: 0,
     dbQueries: [],
+    cfRay: c.req.header('cf-ray') || undefined,
+    cfPlacement: c.req.header('cf-placement') || undefined,
   };
 
-  // Store start time in context for response builders
+  // Store in context immediately so it's available during request processing
   c.set('startTime', startTime);
   c.set('performanceTracking', true);
-
-  // Extract Cloudflare headers if available
-  const cfRay = c.req.header('cf-ray');
-  const cfPlacement = c.req.header('cf-placement');
-
-  if (cfRay) {
-    currentRequestMetrics.cfRay = cfRay;
-  }
-  if (cfPlacement) {
-    currentRequestMetrics.cfPlacement = cfPlacement;
-  }
+  c.set('performanceMetrics', metrics);
 
   await next();
 
-  // Calculate total duration
-  const endTime = Date.now();
-  currentRequestMetrics.totalDuration = endTime - startTime;
+  // Calculate total duration (metrics is still the same object reference)
+  metrics.totalDuration = Date.now() - startTime;
 
-  // Store final metrics in context for potential logging
-  c.set('performanceMetrics', currentRequestMetrics);
-
-  // Add performance headers to response (only in preview/local)
+  // Add performance headers to response
   if (c.res) {
     const headers = new Headers(c.res.headers);
+    headers.set('X-Response-Time', `${metrics.totalDuration}ms`);
+    headers.set('X-DB-Query-Count', String(metrics.dbQueryCount));
+    headers.set('X-DB-Total-Time', `${metrics.dbTotalTime}ms`);
 
-    // Add timing headers
-    headers.set('X-Response-Time', `${currentRequestMetrics.totalDuration}ms`);
-    headers.set('X-DB-Query-Count', String(currentRequestMetrics.dbQueryCount));
-    headers.set('X-DB-Total-Time', `${currentRequestMetrics.dbTotalTime}ms`);
-
-    if (currentRequestMetrics.cfPlacement) {
-      headers.set('X-CF-Placement', currentRequestMetrics.cfPlacement);
+    if (metrics.cfPlacement) {
+      headers.set('X-CF-Placement', metrics.cfPlacement);
     }
 
-    // Clone response with new headers
     c.res = new Response(c.res.body, {
       status: c.res.status,
       statusText: c.res.statusText,
       headers,
     });
   }
-
-  // Reset for next request
-  currentRequestMetrics = null;
 }
 
 /**
- * Create a timed DB wrapper
+ * Create a timed DB wrapper (context-aware version)
  * Wraps database calls to track their execution time
  */
-export function withDbTiming<T>(
+export function withDbTimingContext<T>(
+  c: Context,
   queryName: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  if (!isPerformanceTrackingEnabled() || !currentRequestMetrics) {
+  const metrics = c.get('performanceMetrics') as PerformanceMetrics | undefined;
+  if (!isPerformanceTrackingEnabled() || !metrics) {
     return fn();
   }
 
   const start = Date.now();
   return fn().finally(() => {
     const duration = Date.now() - start;
-    recordDbQuery(queryName, duration);
+    recordDbQueryWithContext(c, queryName, duration);
   });
+}
+
+/**
+ * Legacy wrapper for withDbTiming (no-op when context unavailable)
+ * @deprecated Use withDbTimingContext with context instead
+ */
+export function withDbTiming<T>(
+  queryName: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  // Without context, just run the function (no tracking)
+  return fn();
 }
 
 /**
  * Format performance metrics for API response
  * Returns object to be included in response meta
  */
-export function formatPerformanceForResponse(): Record<string, unknown> | undefined {
-  if (!isPerformanceTrackingEnabled() || !currentRequestMetrics) {
+export function formatPerformanceForResponse(c?: Context): Record<string, unknown> | undefined {
+  if (!isPerformanceTrackingEnabled()) {
     return undefined;
   }
 
-  const metrics = currentRequestMetrics;
+  const metrics = c?.get('performanceMetrics') as PerformanceMetrics | undefined;
+  if (!metrics) {
+    return undefined;
+  }
+
   const now = Date.now();
 
   return {
