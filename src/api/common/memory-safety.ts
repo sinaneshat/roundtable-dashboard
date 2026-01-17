@@ -17,31 +17,32 @@ import { z } from 'zod';
 // ============================================================================
 
 /**
- * Cloudflare Worker memory limit in bytes (128MB)
+ * Cloudflare Worker memory limit in bytes (256MB on Paid plan)
  * We use a conservative threshold to leave headroom for:
  * - V8 runtime overhead
  * - Framework allocations
  * - Response buffering
+ * @see wrangler.jsonc limits.memory_mb configuration
  */
-export const WORKER_MEMORY_LIMIT = 128 * 1024 * 1024; // 128MB
+export const WORKER_MEMORY_LIMIT = 256 * 1024 * 1024; // 256MB (paid plan)
 
 /**
- * Safe memory budget per request (80% of limit = ~100MB)
- * Leaves 28MB headroom for runtime overhead
+ * Safe memory budget per request (80% of limit = ~200MB)
+ * Leaves ~50MB headroom for runtime overhead
  */
 export const SAFE_REQUEST_MEMORY_BUDGET = Math.floor(WORKER_MEMORY_LIMIT * 0.80);
 
 /**
- * Critical memory threshold (90% of limit = ~115MB)
+ * Critical memory threshold (90% of limit = ~230MB)
  * If we approach this, start aggressive cleanup
  */
 export const CRITICAL_MEMORY_THRESHOLD = Math.floor(WORKER_MEMORY_LIMIT * 0.90);
 
 /**
- * Maximum size for a single allocation (20MB)
+ * Maximum size for a single allocation (50MB)
  * Prevents any single operation from consuming too much memory
  */
-export const MAX_SINGLE_ALLOCATION = 20 * 1024 * 1024;
+export const MAX_SINGLE_ALLOCATION = 50 * 1024 * 1024;
 
 // ============================================================================
 // Memory Budget Tracker
@@ -54,10 +55,10 @@ export const MemoryBudgetConfigSchema = z.object({
   maxMessages: z.number().int().positive().default(75),
   /** Maximum attachments to process */
   maxAttachments: z.number().int().positive().default(10),
-  /** Maximum attachment content size per file */
-  maxAttachmentContentSize: z.number().int().positive().default(50 * 1024), // 50KB
-  /** Maximum total attachment content */
-  maxTotalAttachmentContent: z.number().int().positive().default(500 * 1024), // 500KB
+  /** Maximum attachment content size per file (10MB) */
+  maxAttachmentContentSize: z.number().int().positive().default(10 * 1024 * 1024), // 10MB
+  /** Maximum total attachment content (50MB) */
+  maxTotalAttachmentContent: z.number().int().positive().default(50 * 1024 * 1024), // 50MB
   /** Maximum system prompt size */
   maxSystemPromptSize: z.number().int().positive().default(100 * 1024), // 100KB
   /** Maximum RAG results */
@@ -251,6 +252,7 @@ export type RequestComplexity = {
 /**
  * Calculate dynamic limits based on request complexity
  * More complex requests get stricter limits to stay within budget
+ * With 256MB memory, we have more headroom for larger files
  */
 export function calculateDynamicLimits(complexity: RequestComplexity): MemoryBudgetConfig {
   const base = MemoryBudgetConfigSchema.parse({});
@@ -261,10 +263,10 @@ export function calculateDynamicLimits(complexity: RequestComplexity): MemoryBud
   let maxAttachmentContentSize = base.maxAttachmentContentSize;
   let maxRagResults = base.maxRagResults;
 
-  // Reduce limits based on complexity
+  // Reduce limits based on complexity (with 256MB, limits are less aggressive)
   if (complexity.attachmentCount > 5) {
     maxMessages = Math.min(maxMessages, 50);
-    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 30 * 1024);
+    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 5 * 1024 * 1024); // 5MB
   }
 
   if (complexity.hasRag && complexity.hasWebSearch) {
@@ -275,14 +277,14 @@ export function calculateDynamicLimits(complexity: RequestComplexity): MemoryBud
 
   if (complexity.messageCount > 100) {
     maxAttachments = Math.min(maxAttachments, 5);
-    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 20 * 1024);
+    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 5 * 1024 * 1024); // 5MB
   }
 
-  // If everything is enabled, use minimum limits
+  // If everything is enabled, use reduced but still reasonable limits
   if (complexity.hasRag && complexity.hasWebSearch && complexity.attachmentCount > 0 && complexity.messageCount > 50) {
     maxMessages = 40;
     maxAttachments = 3;
-    maxAttachmentContentSize = 20 * 1024;
+    maxAttachmentContentSize = 3 * 1024 * 1024; // 3MB
     maxRagResults = 2;
   }
 

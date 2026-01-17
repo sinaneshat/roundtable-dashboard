@@ -41,13 +41,6 @@ function setupSelectMock(
   messageResult: unknown[],
   participantCount: number = 2,
 ) {
-  // Mock db.query.creditTransaction.findFirst for the transaction check
-  if (transactionResult.length > 0) {
-    mockDb.query.creditTransaction.findFirst.mockResolvedValue(transactionResult[0]);
-  } else {
-    mockDb.query.creditTransaction.findFirst.mockResolvedValue(null);
-  }
-
   // Create participant array based on count
   const participantArray = Array.from({ length: participantCount }, (_, i) => ({
     id: `p${i + 1}`,
@@ -55,31 +48,44 @@ function setupSelectMock(
     isEnabled: true,
   }));
 
-  // Mock db.select() for participant and message count queries
+  // Mock db.select() - handles 4 sequential calls:
+  // 1. Transaction check: .from().where().limit().$withCache()
+  // 2. Thread check: .from().where().limit().$withCache()
+  // 3. Participant query: .from().where() (no limit)
+  // 4. Message query: .from().where() (no limit)
   const fromMock = vi.fn();
   let callCount = 0;
 
   fromMock.mockImplementation(() => {
     callCount++;
-    const whereMock = vi.fn();
 
-    // First select call is for participant count, second is for message count
     if (callCount === 1) {
-      // Return array for participant count (function counts length)
-      whereMock.mockResolvedValue(participantArray);
-    } else {
-      // Return for message count
-      whereMock.mockResolvedValue(messageResult);
-    }
-
-    return {
-      where: whereMock,
-      innerJoin: vi.fn().mockReturnValue({
+      // Transaction check - needs .where().limit().$withCache()
+      return {
         where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockImplementation(() => withCache(Promise.resolve([]))),
+          limit: vi.fn().mockImplementation(() => withCache(Promise.resolve(transactionResult))),
         }),
-      }),
-    };
+      };
+    } else if (callCount === 2) {
+      // Thread check - needs .where().limit().$withCache()
+      return {
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockImplementation(() =>
+            withCache(Promise.resolve([{ id: 'thread-1', userId: 'user-1' }])),
+          ),
+        }),
+      };
+    } else if (callCount === 3) {
+      // Participant query - just .where() (no limit)
+      return {
+        where: vi.fn().mockResolvedValue(participantArray),
+      };
+    } else {
+      // Message query - just .where() (no limit)
+      return {
+        where: vi.fn().mockResolvedValue(messageResult),
+      };
+    }
   });
 
   (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -385,33 +391,44 @@ describe('credit zeroing', () => {
 
 describe('subsequent operations blocked', () => {
   it('blocks free users after round completion', async () => {
-    // Mock db.select() for credit balance check - return FREE plan user with credits
-    (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([
-            {
-              id: 'balance-1',
-              userId: 'user-blocked',
-              balance: 1000,
-              reservedCredits: 0,
-              planType: PlanTypes.FREE,
-              monthlyCredits: 0,
-              nextRefillAt: null,
-            },
-          ]),
-        }),
-      }),
-    });
+    const userBalance = {
+      id: 'balance-1',
+      userId: 'user-blocked',
+      balance: 1000,
+      reservedCredits: 0,
+      planType: PlanTypes.FREE,
+      monthlyCredits: 0,
+      nextRefillAt: null,
+    };
 
-    // Mock db.query.creditTransaction.findFirst to return a transaction (round completed)
-    mockDb.query.creditTransaction.findFirst.mockResolvedValue({
+    const freeRoundTransaction = {
       id: 'tx-complete',
       userId: 'user-blocked',
       action: CreditActions.FREE_ROUND_COMPLETE,
-    });
+    };
 
-    mockDb.query.chatThread.findFirst.mockResolvedValue(undefined);
+    // Mock db.select() - handles multiple queries with proper chaining
+    let selectCallCount = 0;
+    (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: vi.fn().mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) {
+          // First call: credit balance check
+          return {
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockImplementation(() => withCache(Promise.resolve([userBalance]))),
+            }),
+          };
+        } else {
+          // Second call: transaction check (FREE_ROUND_COMPLETE)
+          return {
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockImplementation(() => withCache(Promise.resolve([freeRoundTransaction]))),
+            }),
+          };
+        }
+      }),
+    });
 
     await expect(
       enforceCredits('user-blocked', 100),
@@ -419,33 +436,44 @@ describe('subsequent operations blocked', () => {
   });
 
   it('provides upgrade message in error', async () => {
-    // Mock db.select() for credit balance check - return FREE plan user with credits
-    (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([
-            {
-              id: 'balance-2',
-              userId: 'user-upgrade',
-              balance: 1000,
-              reservedCredits: 0,
-              planType: PlanTypes.FREE,
-              monthlyCredits: 0,
-              nextRefillAt: null,
-            },
-          ]),
-        }),
-      }),
-    });
+    const userBalance = {
+      id: 'balance-2',
+      userId: 'user-upgrade',
+      balance: 1000,
+      reservedCredits: 0,
+      planType: PlanTypes.FREE,
+      monthlyCredits: 0,
+      nextRefillAt: null,
+    };
 
-    // Mock db.query.creditTransaction.findFirst to return a transaction (round completed)
-    mockDb.query.creditTransaction.findFirst.mockResolvedValue({
+    const freeRoundTransaction = {
       id: 'tx-complete',
       userId: 'user-upgrade',
       action: CreditActions.FREE_ROUND_COMPLETE,
-    });
+    };
 
-    mockDb.query.chatThread.findFirst.mockResolvedValue(undefined);
+    // Mock db.select() - handles multiple queries with proper chaining
+    let selectCallCount = 0;
+    (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: vi.fn().mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) {
+          // First call: credit balance check
+          return {
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockImplementation(() => withCache(Promise.resolve([userBalance]))),
+            }),
+          };
+        } else {
+          // Second call: transaction check (FREE_ROUND_COMPLETE)
+          return {
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockImplementation(() => withCache(Promise.resolve([freeRoundTransaction]))),
+            }),
+          };
+        }
+      }),
+    });
 
     await expect(
       enforceCredits('user-upgrade', 100),
@@ -455,32 +483,51 @@ describe('subsequent operations blocked', () => {
 
 describe('transaction marker', () => {
   it('returns true when transaction exists', async () => {
-    // Mock db.query.creditTransaction.findFirst to return a transaction
-    mockDb.query.creditTransaction.findFirst.mockResolvedValue({
+    const freeRoundTransaction = {
       id: 'tx-complete',
       userId: 'user-tx',
       action: CreditActions.FREE_ROUND_COMPLETE,
+    };
+
+    // Mock db.select() for transaction check - returns existing transaction
+    (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockImplementation(() => withCache(Promise.resolve([freeRoundTransaction]))),
+        }),
+      }),
     });
 
     const result = await checkFreeUserHasCompletedRound('user-tx');
 
     expect(result).toBe(true);
-    expect(mockDb.query.chatThread.findFirst).not.toHaveBeenCalled();
+    // Should not query for thread since transaction exists
+    expect(mockDb.select).toHaveBeenCalledTimes(1);
   });
 
   it('prevents redundant queries after completion', async () => {
-    // Mock db.query.creditTransaction.findFirst to return a transaction
-    mockDb.query.creditTransaction.findFirst.mockResolvedValue({
+    const freeRoundTransaction = {
       id: 'tx-complete',
       userId: 'user-redundant',
       action: CreditActions.FREE_ROUND_COMPLETE,
+    };
+
+    // Mock db.select() for transaction check - returns existing transaction
+    (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockImplementation(() => withCache(Promise.resolve([freeRoundTransaction]))),
+        }),
+      }),
     });
 
     await checkFreeUserHasCompletedRound('user-redundant');
     await checkFreeUserHasCompletedRound('user-redundant');
     await checkFreeUserHasCompletedRound('user-redundant');
 
-    expect(mockDb.query.chatThread.findFirst).not.toHaveBeenCalled();
+    // Each call should only query once (transaction check) since transaction exists
+    // 3 calls = 3 transaction checks, no thread queries
+    expect(mockDb.select).toHaveBeenCalledTimes(3);
   });
 });
 
