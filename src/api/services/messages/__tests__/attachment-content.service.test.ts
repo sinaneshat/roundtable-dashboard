@@ -353,8 +353,8 @@ describe('attachment Content Service', () => {
   // ============================================================================
 
   describe('large File Processing', () => {
-    it('should process files within memory-safe limit (25MB)', async () => {
-      // Files within MAX_BASE64_FILE_SIZE (25MB) are processed
+    it('should process files within memory-safe limit (10MB)', async () => {
+      // Files within MAX_BASE64_FILE_SIZE (10MB) are processed
       const largeContent = 'x'.repeat(1000);
       const textBuffer = createTextContent(largeContent);
 
@@ -362,7 +362,7 @@ describe('attachment Content Service', () => {
         id: 'upload-large',
         mimeType: 'text/plain',
         filename: 'large.txt',
-        fileSize: 20 * 1024 * 1024, // 20MB - within 25MB limit
+        fileSize: 8 * 1024 * 1024, // 8MB - within 10MB limit
         r2Key: 'uploads/user-1/upload-large_large.txt',
       };
 
@@ -389,13 +389,13 @@ describe('attachment Content Service', () => {
       expect(getFile).toHaveBeenCalled();
     });
 
-    it('should skip files exceeding memory-safe limit (25MB)', async () => {
+    it('should skip files exceeding memory-safe limit (10MB)', async () => {
       // Files over MAX_BASE64_FILE_SIZE are skipped to prevent OOM in Workers
       const largeFile = {
         id: 'upload-large',
         mimeType: 'text/plain',
         filename: 'large.txt',
-        fileSize: 30 * 1024 * 1024, // 30MB - exceeds 25MB limit
+        fileSize: 15 * 1024 * 1024, // 15MB - exceeds 10MB limit
         r2Key: 'uploads/user-1/upload-large_large.txt',
       };
 

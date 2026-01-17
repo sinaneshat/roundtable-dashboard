@@ -18,8 +18,21 @@ import * as tables from '@/db';
 // CONSTANTS
 // ============================================================================
 
-/** Maximum file size to process (25MB - matches base64 limit for 128MB worker memory) */
-const MAX_PDF_SIZE_FOR_EXTRACTION = 25 * 1024 * 1024;
+/**
+ * Maximum file size for synchronous PDF text extraction (10MB)
+ *
+ * Memory budget for 128MB worker limit:
+ * - V8/framework overhead: ~30MB
+ * - PDF file in memory: 10MB
+ * - PDF.js parsing structures: ~15MB
+ * - Extracted text buffer: ~5MB
+ * - System prompt + messages: ~10MB
+ * - Safety margin: ~58MB remaining
+ *
+ * Files larger than 10MB should use URL-based visual processing
+ * where the AI provider fetches directly, not the worker.
+ */
+const MAX_PDF_SIZE_FOR_EXTRACTION = 10 * 1024 * 1024;
 
 /** Maximum extracted text length to store (2MB - reasonable for large documents) */
 const MAX_EXTRACTED_TEXT_LENGTH = 2 * 1024 * 1024;

@@ -66,8 +66,8 @@ describe('memoryBudgetConfigSchema', () => {
     expect(config.totalBudget).toBe(SAFE_REQUEST_MEMORY_BUDGET);
     expect(config.maxMessages).toBe(75);
     expect(config.maxAttachments).toBe(10);
-    expect(config.maxAttachmentContentSize).toBe(15 * 1024 * 1024); // 15MB
-    expect(config.maxTotalAttachmentContent).toBe(30 * 1024 * 1024); // 30MB
+    expect(config.maxAttachmentContentSize).toBe(10 * 1024 * 1024); // 10MB (fits 128MB worker limit)
+    expect(config.maxTotalAttachmentContent).toBe(20 * 1024 * 1024); // 20MB
     expect(config.maxSystemPromptSize).toBe(100 * 1024);
     expect(config.maxRagResults).toBe(3);
     expect(config.maxCitationSources).toBe(15);
@@ -321,7 +321,7 @@ describe('calculateDynamicLimits', () => {
     });
 
     expect(limits.maxMessages).toBe(50); // Reduced
-    expect(limits.maxAttachmentContentSize).toBe(8 * 1024 * 1024); // Reduced to 8MB
+    expect(limits.maxAttachmentContentSize).toBe(5 * 1024 * 1024); // Reduced to 5MB for >3 attachments
   });
 
   it('should reduce limits for RAG + web search', () => {
@@ -334,7 +334,7 @@ describe('calculateDynamicLimits', () => {
     });
 
     expect(limits.maxMessages).toBe(50);
-    expect(limits.maxAttachments).toBe(5);
+    expect(limits.maxAttachments).toBe(3); // Reduced to 3 for RAG + web search
     expect(limits.maxRagResults).toBe(2);
   });
 
@@ -347,7 +347,7 @@ describe('calculateDynamicLimits', () => {
       hasProject: false,
     });
 
-    expect(limits.maxAttachments).toBe(5);
+    expect(limits.maxAttachments).toBe(3); // Reduced to 3 for >50 messages
     expect(limits.maxAttachmentContentSize).toBe(5 * 1024 * 1024); // Reduced to 5MB
   });
 
@@ -360,9 +360,10 @@ describe('calculateDynamicLimits', () => {
       hasProject: true,
     });
 
-    expect(limits.maxMessages).toBe(40);
-    expect(limits.maxAttachments).toBe(3);
-    expect(limits.maxAttachmentContentSize).toBe(5 * 1024 * 1024); // 5MB for complex requests
+    // Most restrictive limits for complex requests within 128MB worker memory
+    expect(limits.maxMessages).toBe(30);
+    expect(limits.maxAttachments).toBe(2);
+    expect(limits.maxAttachmentContentSize).toBe(3 * 1024 * 1024); // 3MB for complex requests
     expect(limits.maxRagResults).toBe(2);
   });
 });
