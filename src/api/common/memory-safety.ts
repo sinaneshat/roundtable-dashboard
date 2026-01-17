@@ -57,10 +57,10 @@ export const MemoryBudgetConfigSchema = z.object({
   maxMessages: z.number().int().positive().default(75),
   /** Maximum attachments to process */
   maxAttachments: z.number().int().positive().default(10),
-  /** Maximum attachment content size per file (5MB - matches MAX_BASE64_FILE_SIZE) */
-  maxAttachmentContentSize: z.number().int().positive().default(5 * 1024 * 1024), // 5MB
-  /** Maximum total attachment content (10MB for multiple files) */
-  maxTotalAttachmentContent: z.number().int().positive().default(10 * 1024 * 1024), // 10MB
+  /** Maximum attachment content size per file (10MB - matches MAX_BASE64_FILE_SIZE) */
+  maxAttachmentContentSize: z.number().int().positive().default(10 * 1024 * 1024), // 10MB
+  /** Maximum total attachment content (20MB for multiple files) */
+  maxTotalAttachmentContent: z.number().int().positive().default(20 * 1024 * 1024), // 20MB
   /** Maximum system prompt size */
   maxSystemPromptSize: z.number().int().positive().default(100 * 1024), // 100KB
   /** Maximum RAG results */
@@ -268,7 +268,7 @@ export function calculateDynamicLimits(complexity: RequestComplexity): MemoryBud
   // Reduce limits based on complexity to stay within 128MB
   if (complexity.attachmentCount > 3) {
     maxMessages = Math.min(maxMessages, 50);
-    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 5 * 1024 * 1024); // 5MB per file
+    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 7 * 1024 * 1024); // 7MB per file
   }
 
   if (complexity.hasRag && complexity.hasWebSearch) {
@@ -279,14 +279,14 @@ export function calculateDynamicLimits(complexity: RequestComplexity): MemoryBud
 
   if (complexity.messageCount > 50) {
     maxAttachments = Math.min(maxAttachments, 3);
-    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 5 * 1024 * 1024); // 5MB per file
+    maxAttachmentContentSize = Math.min(maxAttachmentContentSize, 7 * 1024 * 1024); // 7MB per file
   }
 
   // If everything is enabled, use minimal limits to fit in 128MB
   if (complexity.hasRag && complexity.hasWebSearch && complexity.attachmentCount > 0 && complexity.messageCount > 30) {
     maxMessages = 30;
     maxAttachments = 2;
-    maxAttachmentContentSize = 3 * 1024 * 1024; // 3MB per file
+    maxAttachmentContentSize = 5 * 1024 * 1024; // 5MB per file
     maxRagResults = 2;
   }
 

@@ -50,14 +50,16 @@ import {
   MODEL_PRESETS,
   ToastNamespaces,
 } from '@/lib/config/model-presets';
+import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { showApiErrorToast, toastManager } from '@/lib/toast';
 import {
-  getIncompatibleModelIds,
+  getDetailedIncompatibleModelIds,
   isDocumentFile,
   isImageFile,
   isVisionRequiredMimeType,
-  threadHasVisionRequiredFiles,
+  threadHasDocumentFiles,
+  threadHasImageFiles,
 } from '@/lib/utils';
 import {
   useAutoModeAnalysis,
@@ -292,31 +294,60 @@ export default function ChatOverviewScreen() {
     modelOrder,
   });
 
-  const { incompatibleModelIds, visionIncompatibleModelIds } = useMemo(() => {
+  const { incompatibleModelIds, visionIncompatibleModelIds, fileIncompatibleModelIds } = useMemo(() => {
     const incompatible = new Set<string>();
     const visionIncompatible = new Set<string>();
+    const fileIncompatible = new Set<string>();
 
+    // Add inaccessible models
     for (const model of allEnabledModels) {
       if (!model.is_accessible_to_user) {
         incompatible.add(model.id);
       }
     }
 
-    const existingVisionFiles = threadHasVisionRequiredFiles(messages);
-    const newVisionFiles = chatAttachments.attachments.some(att =>
-      isVisionRequiredMimeType(att.file.type),
+    // Check for image files (require vision capability)
+    const existingImageFiles = threadHasImageFiles(messages);
+    const newImageFiles = chatAttachments.attachments.some(att =>
+      isImageFile(att.file.type),
     );
+    const hasImageFiles = existingImageFiles || newImageFiles;
 
-    if (existingVisionFiles || newVisionFiles) {
-      const files = [{ mimeType: 'image/png' }];
-      const visionIncompatibleIds = getIncompatibleModelIds(allEnabledModels, files);
-      for (const id of visionIncompatibleIds) {
+    // Check for document files (require file/PDF capability)
+    const existingDocFiles = threadHasDocumentFiles(messages);
+    const newDocFiles = chatAttachments.attachments.some(att =>
+      isDocumentFile(att.file.type),
+    );
+    const hasDocumentFiles = existingDocFiles || newDocFiles;
+
+    // Build file list for detailed incompatibility check
+    const filesToCheck: { mimeType: string }[] = [];
+    if (hasImageFiles) {
+      filesToCheck.push({ mimeType: 'image/png' });
+    }
+    if (hasDocumentFiles) {
+      filesToCheck.push({ mimeType: 'application/pdf' });
+    }
+
+    // Get detailed incompatibility info (separates vision vs file issues)
+    if (filesToCheck.length > 0) {
+      const detailed = getDetailedIncompatibleModelIds(allEnabledModels, filesToCheck);
+      for (const id of detailed.incompatibleIds) {
         incompatible.add(id);
+      }
+      for (const id of detailed.visionIncompatibleIds) {
         visionIncompatible.add(id);
+      }
+      for (const id of detailed.fileIncompatibleIds) {
+        fileIncompatible.add(id);
       }
     }
 
-    return { incompatibleModelIds: incompatible, visionIncompatibleModelIds: visionIncompatible };
+    return {
+      incompatibleModelIds: incompatible,
+      visionIncompatibleModelIds: visionIncompatible,
+      fileIncompatibleModelIds: fileIncompatible,
+    };
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
   const incompatibleModelIdsRef = useRef(incompatibleModelIds);
@@ -454,17 +485,20 @@ export default function ChatOverviewScreen() {
       hasCompletedInitialMountRef.current = true;
     }
 
+    // Check for any files that require capability filtering
     const hasVisionAttachments = chatAttachments.attachments.some(att =>
       isVisionRequiredMimeType(att.file.type),
     );
+    const hasDocAttachments = chatAttachments.attachments.some(att =>
+      isDocumentFile(att.file.type),
+    );
+    const hasAnyCapabilityRequiredFiles = hasVisionAttachments || hasDocAttachments;
 
-    // Skip incompatible filter when autoMode is enabled
+    // Skip incompatible filter when autoMode is enabled UNLESS files are attached
     // Server validates model accessibility in auto mode - trust those results
-    // This prevents race conditions where client's models list shows different
-    // accessibility than what the server determined during analyze
-    // ✅ VISION FIX: ALWAYS check vision incompatibility when files are attached
-    // Even in auto mode, we need to filter out non-vision models before submission
-    if (autoMode && !hasVisionAttachments) {
+    // EXCEPTION: ALWAYS check capability incompatibility when files are attached
+    // Even in auto mode, we need to filter out incompatible models before submission
+    if (autoMode && !hasAnyCapabilityRequiredFiles) {
       return;
     }
 
@@ -480,12 +514,19 @@ export default function ChatOverviewScreen() {
       return;
     }
 
-    // Only show toast for models deselected due to vision incompatibility (not access control)
+    // Collect models deselected due to capability issues (not access control)
     const visionDeselected = incompatibleSelected.filter(
       p => visionIncompatibleModelIds.has(p.modelId),
     );
+    const fileDeselected = incompatibleSelected.filter(
+      p => fileIncompatibleModelIds.has(p.modelId) && !visionIncompatibleModelIds.has(p.modelId),
+    );
 
     const visionModelNames = visionDeselected
+      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .filter((name): name is string => Boolean(name));
+
+    const fileModelNames = fileDeselected
       .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
@@ -501,20 +542,41 @@ export default function ChatOverviewScreen() {
     setSelectedParticipants(reindexed);
     setPersistedModelIds(reindexed.map(p => p.modelId));
 
-    // Only show "images/PDFs" toast when:
-    // 1. Models are actually deselected due to vision incompatibility
-    // 2. NOT on initial page load (only when user adds new files)
-    if (visionModelNames.length > 0 && !isInitialMount) {
-      const modelList = visionModelNames.length <= 2
-        ? visionModelNames.join(' and ')
-        : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;
+    // Show toast when models are deselected due to capability issues (not on initial load)
+    if (!isInitialMount) {
+      // Show toast for vision incompatibility (images)
+      if (visionModelNames.length > 0) {
+        const modelList = visionModelNames.length <= 2
+          ? visionModelNames.join(' and ')
+          : `${visionModelNames.slice(0, 2).join(', ')} and ${visionModelNames.length - 2} more`;
 
-      toastManager.warning(
-        t('chat.models.modelsDeselected'),
-        t('chat.models.modelsDeselectedDescription', { models: modelList }),
-      );
+        toastManager.warning(
+          t('chat.models.modelsDeselected'),
+          t('chat.models.modelsDeselectedDueToImages', { models: modelList }),
+        );
+      }
+
+      // Show separate toast for file/PDF incompatibility
+      if (fileModelNames.length > 0) {
+        const modelList = fileModelNames.length <= 2
+          ? fileModelNames.join(' and ')
+          : `${fileModelNames.slice(0, 2).join(', ')} and ${fileModelNames.length - 2} more`;
+
+        toastManager.warning(
+          t('chat.models.modelsDeselected'),
+          t('chat.models.modelsDeselectedDueToDocuments', { models: modelList }),
+        );
+      }
+
+      // Warn if remaining models are below minimum required
+      if (reindexed.length < MIN_PARTICIPANTS_REQUIRED && reindexed.length > 0) {
+        toastManager.error(
+          t('chat.models.belowMinimum'),
+          t('chat.models.belowMinimumDescription', { min: MIN_PARTICIPANTS_REQUIRED, current: reindexed.length }),
+        );
+      }
     }
-  }, [autoMode, incompatibleModelIds, visionIncompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds, allEnabledModels, t, chatAttachments.attachments]);
+  }, [autoMode, incompatibleModelIds, visionIncompatibleModelIds, fileIncompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds, allEnabledModels, t, chatAttachments.attachments]);
 
   const threadActions = useMemo(
     () => currentThread && !showInitialUI
@@ -605,7 +667,7 @@ export default function ChatOverviewScreen() {
       const existingThreadId = currentThread?.id || createdThreadId;
 
       if (existingThreadId) {
-        if (!inputValue.trim() || selectedParticipants.length === 0 || isSubmitBlocked) {
+        if (!inputValue.trim() || selectedParticipants.length < MIN_PARTICIPANTS_REQUIRED || isSubmitBlocked) {
           return;
         }
 
@@ -661,7 +723,7 @@ export default function ChatOverviewScreen() {
         }
 
         const currentParticipants = storeApi.getState().selectedParticipants;
-        if (currentParticipants.length === 0) {
+        if (currentParticipants.length < MIN_PARTICIPANTS_REQUIRED) {
           return;
         }
 
@@ -1049,6 +1111,7 @@ export default function ChatOverviewScreen() {
             can_upgrade: userTierConfig.can_upgrade,
           }}
           visionIncompatibleModelIds={visionIncompatibleModelIds}
+          fileIncompatibleModelIds={fileIncompatibleModelIds}
         />
       )}
 

@@ -398,10 +398,11 @@
         "title": "Build Custom"
       },
       "cannotSelectModel": "Cannot Select Model",
+      "clearFilters": "Clear",
       "clearRole": "Clear role",
       "limitReached": "Model limit reached",
       "minimumRequired": {
-        "description": "Select at least {count} model to continue"
+        "description": "Select at least {count} models to continue"
       },
       "modal": {
         "customRolePlaceholder": "Enter custom role instructions...",
@@ -419,6 +420,8 @@
       "noVisionTooltip": "This model cannot process images",
       "modelsDeselectedDueToImages": "{models} cannot process images and were deselected",
       "modelsDeselectedDueToDocuments": "{models} cannot process PDF documents and were deselected",
+      "belowMinimum": "Not enough models",
+      "belowMinimumDescription": "You need at least {min} models selected. Currently have {current}.",
       "presetModelsExcluded": "Some models excluded",
       "presetModelsExcludedDescription": "Some models in this preset are not available on your plan.",
       "presets": {

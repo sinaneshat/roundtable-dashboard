@@ -25,14 +25,14 @@ const IS_LOCAL_DEV = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local' || process.e
 /**
  * Maximum file size for in-worker PDF.js extraction
  *
- * PRODUCTION (5MB): Conservative for 128MB worker limit
+ * PRODUCTION (10MB): Balanced for 128MB worker limit
  * - V8/framework overhead: ~30MB
- * - PDF file in memory: 5MB
+ * - PDF file in memory: 10MB
  * - PDF.js parsing structures: ~20MB (can spike)
  * - Extracted text buffer: ~5MB
  * - Streaming orchestration: ~10MB
  * - System prompt + messages: ~15MB
- * - Safety margin: ~43MB remaining
+ * - Total: ~90MB (38MB safety margin)
  *
  * LOCAL DEV (25MB): Node.js has much more memory available
  * - No worker memory constraints
@@ -42,7 +42,7 @@ const IS_LOCAL_DEV = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local' || process.e
  * 1. Cloudflare AI toMarkdown() - processing offloaded to CF infrastructure
  * 2. URL-based visual processing - AI provider fetches directly
  */
-const MAX_PDF_SIZE_FOR_EXTRACTION = IS_LOCAL_DEV ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
+const MAX_PDF_SIZE_FOR_EXTRACTION = IS_LOCAL_DEV ? 25 * 1024 * 1024 : 10 * 1024 * 1024;
 
 /**
  * Maximum file size for Cloudflare AI toMarkdown() extraction (100MB)

@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useIsMounted, useMediaQuery } from '@/hooks/utils';
 import { getChatModeById } from '@/lib/config/chat-modes';
+import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
@@ -83,7 +84,7 @@ export const ChatInputToolbarMenu = memo(({
 
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
-  const hasNoModelsSelected = selectedParticipants.length === 0;
+  const hasNoModelsSelected = selectedParticipants.length < MIN_PARTICIPANTS_REQUIRED;
 
   const handleAttachClick = useCallback(() => {
     onAttachmentClick?.();
@@ -283,7 +284,7 @@ export const ChatInputToolbarMenu = memo(({
                     )}
                     >
                       {hasNoModelsSelected
-                        ? t('chat.models.minimumRequired.description', { count: 1 })
+                        ? t('chat.models.minimumRequired.description', { count: MIN_PARTICIPANTS_REQUIRED })
                         : `${selectedParticipants.length} ${t('chat.toolbar.selected')}`}
                     </span>
                   </div>
@@ -457,45 +458,7 @@ export const ChatInputToolbarMenu = memo(({
         </Button>
       )}
 
-      {/* Inline web search toggle (hidden in auto mode) */}
-      {!autoMode && (
-        <Button
-          type="button"
-          variant={ComponentVariants.GLASS}
-          size={ComponentSizes.ICON}
-          disabled={disabled}
-          onClick={() => onWebSearchToggle?.(!enableWebSearch)}
-          aria-label={enableWebSearch ? t('chat.toolbar.tooltips.webSearchEnabled') : t('chat.toolbar.tooltips.webSearch')}
-          aria-pressed={enableWebSearch}
-          className={cn(
-            'size-9 transition-colors',
-            enableWebSearch
-              ? 'bg-blue-500/20 text-blue-300'
-              : 'text-muted-foreground',
-          )}
-        >
-          <Icons.globe className="size-4" />
-        </Button>
-      )}
-
-      {/* Inline attachment button (shown only in auto mode on mobile) */}
-      {autoMode && onAttachmentClick && (
-        <Button
-          type="button"
-          variant={ComponentVariants.GLASS}
-          size={ComponentSizes.ICON}
-          disabled={disabled || !enableAttachments}
-          onClick={handleAttachClick}
-          className={cn(
-            'size-9 transition-colors',
-            attachmentCount > 0
-              ? 'bg-amber-500/20 text-amber-300'
-              : 'text-muted-foreground',
-          )}
-        >
-          <Icons.paperclip className="size-4" />
-        </Button>
-      )}
+      {/* Removed: Inline web search and attachment buttons on mobile - accessible via menu drawer */}
     </div>
   );
 });

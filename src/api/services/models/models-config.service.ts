@@ -1,7 +1,9 @@
 import { z } from '@hono/zod-openapi';
 
-import type { ModelId } from '@/api/core/enums';
+import type { ModelCapabilityTag, ModelId } from '@/api/core/enums';
 import {
+  ModelCapabilityTags,
+  ModelCapabilityTagSchema,
   ModelCategorySchema,
   ModelIds,
   ModelIdSchema,
@@ -68,11 +70,51 @@ export const HardcodedModelSchema = z.object({
   supports_temperature: z.boolean(),
   supports_reasoning_stream: z.boolean(),
   streaming_behavior: StreamingBehaviorSchema.optional(),
+  tags: z.array(ModelCapabilityTagSchema), // User-facing capability filter tags
 });
 
 export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
 
-export const HARDCODED_MODELS: readonly HardcodedModel[] = [
+/**
+ * Derive capability tags from model properties
+ * - fast: Input cost < $0.50/M (affordable/quick models)
+ * - vision: Supports image/visual input
+ * - reasoning: Enhanced reasoning/thinking capability
+ * - pdf: Supports PDF/document processing
+ */
+function deriveModelTags(model: {
+  pricing: { prompt: string };
+  supports_vision: boolean;
+  is_reasoning_model: boolean;
+  supports_file: boolean;
+}): ModelCapabilityTag[] {
+  const tags: ModelCapabilityTag[] = [];
+
+  // Fast: input price < $0.50/M
+  const inputPrice = Number.parseFloat(model.pricing.prompt) * 1_000_000;
+  if (inputPrice < 0.5) {
+    tags.push(ModelCapabilityTags.FAST);
+  }
+
+  if (model.supports_vision) {
+    tags.push(ModelCapabilityTags.VISION);
+  }
+
+  if (model.is_reasoning_model) {
+    tags.push(ModelCapabilityTags.REASONING);
+  }
+
+  if (model.supports_file) {
+    tags.push(ModelCapabilityTags.PDF);
+  }
+
+  return tags;
+}
+
+// Base model data without tags (tags are derived automatically)
+type BaseModelData = Omit<HardcodedModel, 'tags'>;
+
+const BASE_MODELS: readonly BaseModelData[] = [
   {
     id: 'openai/gpt-oss-120b',
     name: 'GPT-OSS 120B',
@@ -741,6 +783,12 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 ] as const;
 
+// Derive HARDCODED_MODELS with computed tags from BASE_MODELS
+export const HARDCODED_MODELS: readonly HardcodedModel[] = BASE_MODELS.map(model => ({
+  ...model,
+  tags: deriveModelTags(model),
+})) as HardcodedModel[];
+
 // ============================================================================
 // USER-FACING MODELS - Curated list for UI selection (Dec 2025)
 // ============================================================================
@@ -877,4 +925,43 @@ export function isOSeriesModel(modelId: string): boolean {
 export function isNanoOrMiniVariant(modelId: string): boolean {
   const lowerModelId = modelId.toLowerCase();
   return lowerModelId.includes('nano') || lowerModelId.includes('mini');
+}
+
+// ============================================================================
+// MODEL TAG FILTERING
+// ============================================================================
+
+/**
+ * ✅ GET MODEL TAGS: Returns the capability tags for a model
+ */
+export function getModelTags(modelId: string): ModelCapabilityTag[] {
+  const model = getModelById(modelId);
+  return model?.tags ?? [];
+}
+
+/**
+ * ✅ MODEL HAS TAG: Check if a model has a specific capability tag
+ */
+export function modelHasTag(modelId: string, tag: ModelCapabilityTag): boolean {
+  return getModelTags(modelId).includes(tag);
+}
+
+/**
+ * ✅ MODEL HAS ALL TAGS: Check if a model has all specified tags
+ */
+export function modelHasAllTags(modelId: string, tags: ModelCapabilityTag[]): boolean {
+  const modelTags = getModelTags(modelId);
+  return tags.every(tag => modelTags.includes(tag));
+}
+
+/**
+ * ✅ FILTER MODELS BY TAGS: Get models that have all specified tags
+ */
+export function filterModelsByTags<T extends { id: string }>(
+  models: T[],
+  requiredTags: ModelCapabilityTag[],
+): T[] {
+  if (requiredTags.length === 0)
+    return models;
+  return models.filter(model => modelHasAllTags(model.id, requiredTags));
 }

@@ -6,8 +6,19 @@ import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ModelSelectionTab, SubscriptionTier } from '@/api/core/enums';
-import { ChatModes, DEFAULT_MODEL_SELECTION_TAB, ModelSelectionTabs, PlanTypes, PREDEFINED_ROLE_TEMPLATES, SubscriptionTiers } from '@/api/core/enums';
+import type { ModelCapabilityTag, ModelSelectionTab, SubscriptionTier } from '@/api/core/enums';
+import {
+  ChatModes,
+  DEFAULT_MODEL_SELECTION_TAB,
+  MODEL_CAPABILITY_TAG_LABELS,
+  MODEL_CAPABILITY_TAGS,
+  ModelCapabilityTags,
+  ModelSelectionTabs,
+  PlanTypes,
+  PREDEFINED_ROLE_TEMPLATES,
+  SubscriptionTiers,
+} from '@/api/core/enums';
+import { modelHasTag } from '@/api/services/models/models-config.service';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,6 +45,7 @@ import { useUsageStatsQuery, useUserPresetsQuery } from '@/hooks/queries';
 import { useBoolean } from '@/hooks/utils';
 import { canAccessPreset, createRoleSystemPrompt, MODEL_PRESETS } from '@/lib/config';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
+import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { toastManager } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';
@@ -104,6 +116,19 @@ export function ModelSelectionModal({
   const shouldApplyPresetRef = useRef(false);
   const [selectedModelForRole, setSelectedModelForRole] = useState<string | null>(null);
   const [pendingRoles, setPendingRoles] = useState<Record<string, { role: string; customRoleId?: string }>>({});
+  const [selectedTags, setSelectedTags] = useState<Set<ModelCapabilityTag>>(() => new Set());
+
+  const toggleTag = useCallback((tag: ModelCapabilityTag) => {
+    setSelectedTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) {
+        next.delete(tag);
+      } else {
+        next.add(tag);
+      }
+      return next;
+    });
+  }, []);
 
   const {
     data: userPresetsData,
@@ -137,24 +162,41 @@ export function ModelSelectionModal({
   const isPaidUser = usageData?.data?.plan?.type === PlanTypes.PAID;
   const canCreateCustomRoles = isPaidUser;
 
-  const isFiltering = searchQuery.trim().length > 0;
+  const isSearching = searchQuery.trim().length > 0;
+  const isTagFiltering = selectedTags.size > 0;
+  const isFiltering = isSearching || isTagFiltering;
 
   const filteredModels = useMemo(() => {
-    if (!isFiltering) {
-      return orderedModels;
+    let filtered = orderedModels;
+
+    // Filter by search query
+    if (isSearching) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((om) => {
+        const model = om.model;
+        return (
+          model.name.toLowerCase().includes(query)
+          || model.description?.toLowerCase().includes(query)
+          || model.provider.toLowerCase().includes(query)
+          || model.id.toLowerCase().includes(query)
+        );
+      });
     }
 
-    const query = searchQuery.toLowerCase();
-    return orderedModels.filter((om) => {
-      const model = om.model;
-      return (
-        model.name.toLowerCase().includes(query)
-        || model.description?.toLowerCase().includes(query)
-        || model.provider.toLowerCase().includes(query)
-        || model.id.toLowerCase().includes(query)
-      );
-    });
-  }, [orderedModels, searchQuery, isFiltering]);
+    // Filter by selected tags (model must have ALL selected tags)
+    if (isTagFiltering) {
+      filtered = filtered.filter((om) => {
+        for (const tag of selectedTags) {
+          if (!modelHasTag(om.model.id, tag)) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    return filtered;
+  }, [orderedModels, searchQuery, isSearching, isTagFiltering, selectedTags]);
 
   const handleReorder = useCallback((reorderedItems: typeof orderedModels) => {
     if (isFiltering) {
@@ -818,7 +860,7 @@ export function ModelSelectionModal({
                       </TabsContent>
 
                       <TabsContent value={ModelSelectionTabs.CUSTOM} className="mt-0 h-[min(520px,55vh)] flex flex-col">
-                        <div className="shrink-0 mb-4">
+                        <div className="shrink-0 space-y-3 mb-4">
                           <Input
                             ref={searchInputRef}
                             type="text"
@@ -839,9 +881,63 @@ export function ModelSelectionModal({
                               : undefined}
                             endIconClickable={!!searchQuery}
                           />
+
+                          {/* Capability tag filters - inline scrollable */}
+                          <div className="flex items-center justify-center gap-2">
+                            <ScrollArea orientation="horizontal" className="flex-1 -mx-1">
+                              <div className="flex items-center gap-1.5 px-1 pb-1">
+                                {MODEL_CAPABILITY_TAGS.map((tag) => {
+                                  const isSelected = selectedTags.has(tag);
+                                  const TagIcon = tag === ModelCapabilityTags.FAST
+                                    ? Icons.zap
+                                    : tag === ModelCapabilityTags.VISION
+                                      ? Icons.eye
+                                      : tag === ModelCapabilityTags.REASONING
+                                        ? Icons.brain
+                                        : Icons.fileText; // PDF
+
+                                  return (
+                                    <button
+                                      key={tag}
+                                      type="button"
+                                      onClick={() => toggleTag(tag)}
+                                      className={cn(
+                                        'inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium transition-all shrink-0',
+                                        'border whitespace-nowrap active:scale-95',
+                                        isSelected
+                                          ? 'bg-primary/20 border-primary/40 text-primary shadow-sm'
+                                          : 'bg-muted/40 border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground hover:border-border/50',
+                                      )}
+                                    >
+                                      <TagIcon className="size-3.5" />
+                                      {MODEL_CAPABILITY_TAG_LABELS[tag]}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </ScrollArea>
+                            {/* Clear button - sticky on right, vertically centered */}
+                            {selectedTags.size > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedTags(new Set())}
+                                className={cn(
+                                  'shrink-0 inline-flex items-center justify-center',
+                                  'size-8 rounded-full',
+                                  'bg-muted/60 hover:bg-destructive/20',
+                                  'text-muted-foreground hover:text-destructive',
+                                  'border border-transparent hover:border-destructive/30',
+                                  'transition-all active:scale-95',
+                                )}
+                                title={t('chat.models.clearFilters')}
+                              >
+                                <Icons.x className="size-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
 
-                        {selectedCount === 0 && (
+                        {selectedCount < MIN_PARTICIPANTS_REQUIRED && (
                           <div
                             className={cn(
                               'flex items-center gap-2 px-3 py-2 rounded-xl mb-2',
@@ -850,7 +946,7 @@ export function ModelSelectionModal({
                             )}
                           >
                             <Icons.alertCircle className="size-3.5 shrink-0" />
-                            <span>{t('chat.models.minimumRequired.description', { count: 1 })}</span>
+                            <span>{t('chat.models.minimumRequired.description', { count: MIN_PARTICIPANTS_REQUIRED })}</span>
                           </div>
                         )}
 

@@ -353,8 +353,8 @@ describe('attachment Content Service', () => {
   // ============================================================================
 
   describe('large File Processing', () => {
-    it('should process files within memory-safe limit (5MB)', async () => {
-      // Files within MAX_BASE64_FILE_SIZE (5MB) are processed
+    it('should process files within memory-safe limit (10MB)', async () => {
+      // Files within MAX_BASE64_FILE_SIZE (10MB) are processed
       const largeContent = 'x'.repeat(1000);
       const textBuffer = createTextContent(largeContent);
 
@@ -362,7 +362,7 @@ describe('attachment Content Service', () => {
         id: 'upload-large',
         mimeType: 'text/plain',
         filename: 'large.txt',
-        fileSize: 4 * 1024 * 1024, // 4MB - within 5MB limit
+        fileSize: 8 * 1024 * 1024, // 8MB - within 10MB limit
         r2Key: 'uploads/user-1/upload-large_large.txt',
       };
 
@@ -389,13 +389,14 @@ describe('attachment Content Service', () => {
       expect(getFile).toHaveBeenCalled();
     });
 
-    it('should skip files exceeding memory-safe limit (5MB)', async () => {
+    it('should skip files exceeding memory-safe limit', async () => {
       // Files over MAX_BASE64_FILE_SIZE are skipped to prevent OOM in Workers
+      // Using 30MB to exceed both 10MB (prod) and 25MB (local) limits
       const largeFile = {
         id: 'upload-large',
         mimeType: 'text/plain',
         filename: 'large.txt',
-        fileSize: 8 * 1024 * 1024, // 8MB - exceeds 5MB limit
+        fileSize: 30 * 1024 * 1024, // 30MB - exceeds both 10MB and 25MB limits
         r2Key: 'uploads/user-1/upload-large_large.txt',
       };
 
@@ -532,6 +533,204 @@ describe('attachment Content Service', () => {
       expect(result.fileParts).toHaveLength(2); // txt and json
       expect(result.stats.loaded).toBe(2);
       expect(result.stats.skipped).toBe(1); // video
+      expect(result.stats.total).toBe(3);
+    });
+  });
+
+  // ============================================================================
+  // Tests: PDF Processing (New 10MB Limit)
+  // ============================================================================
+
+  describe('pdf processing', () => {
+    it('should process PDF files within 10MB limit (e.g., 5.8MB dashboard export)', async () => {
+      // Simulates the test.pdf file (5.8MB Iran Monitor dashboard export)
+      const pdfBuffer = new ArrayBuffer(100); // Mock buffer
+
+      const pdfFile = {
+        id: 'upload-dashboard-pdf',
+        mimeType: 'application/pdf',
+        filename: 'dashboard-export.pdf',
+        fileSize: 5.8 * 1024 * 1024, // 5.8MB - within new 10MB limit
+        r2Key: 'uploads/user-1/upload-dashboard-pdf_dashboard-export.pdf',
+      };
+
+      const db = createMockDb([pdfFile]);
+      const logger = createMockLogger();
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: pdfBuffer,
+        found: true,
+        contentType: 'application/pdf',
+        contentLength: pdfBuffer.byteLength,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-dashboard-pdf'],
+        r2Bucket: undefined,
+        db,
+        logger,
+      });
+
+      // PDF within 10MB limit should be processed
+      expect(result.fileParts).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+      expect(result.fileParts[0]?.mimeType).toBe('application/pdf');
+      expect(getFile).toHaveBeenCalled();
+    });
+
+    it('should process PDF files at exactly 10MB', async () => {
+      // Test boundary condition - exactly at the limit
+      const pdfBuffer = new ArrayBuffer(100);
+
+      const pdfFile = {
+        id: 'upload-large-pdf',
+        mimeType: 'application/pdf',
+        filename: 'large-document.pdf',
+        fileSize: 10 * 1024 * 1024, // Exactly 10MB
+        r2Key: 'uploads/user-1/upload-large-pdf_large-document.pdf',
+      };
+
+      const db = createMockDb([pdfFile]);
+      const logger = createMockLogger();
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: pdfBuffer,
+        found: true,
+        contentType: 'application/pdf',
+        contentLength: pdfBuffer.byteLength,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-large-pdf'],
+        r2Bucket: undefined,
+        db,
+        logger,
+      });
+
+      // PDFs at exactly 10MB should be processed
+      expect(result.fileParts).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should skip PDF files exceeding MAX_BASE64_FILE_SIZE limit', async () => {
+      // Files over MAX_BASE64_FILE_SIZE (10MB prod / 25MB local) should be skipped
+      // Using 30MB to exceed both environments
+      const oversizedPdf = {
+        id: 'upload-oversized-pdf',
+        mimeType: 'application/pdf',
+        filename: 'oversized.pdf',
+        fileSize: 30 * 1024 * 1024, // 30MB - exceeds both 10MB and 25MB limits
+        r2Key: 'uploads/user-1/upload-oversized-pdf_oversized.pdf',
+      };
+
+      const db = createMockDb([oversizedPdf]);
+      const logger = createMockLogger();
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-oversized-pdf'],
+        r2Bucket: undefined,
+        db,
+        logger,
+      });
+
+      // Oversized PDFs should be skipped
+      expect(result.fileParts).toHaveLength(0);
+      expect(result.stats.skipped).toBe(1);
+      expect(getFile).not.toHaveBeenCalled();
+      expect(logger?.warn).toHaveBeenCalled();
+    });
+
+    it('should process image files within 10MB limit', async () => {
+      // Images (like screenshots) are common in PDFs that are exported dashboards
+      const imageBuffer = new ArrayBuffer(100);
+
+      const imageFile = {
+        id: 'upload-screenshot',
+        mimeType: 'image/png',
+        filename: 'dashboard-screenshot.png',
+        fileSize: 8 * 1024 * 1024, // 8MB - within 10MB limit
+        r2Key: 'uploads/user-1/upload-screenshot_dashboard-screenshot.png',
+      };
+
+      const db = createMockDb([imageFile]);
+      const logger = createMockLogger();
+
+      vi.mocked(getFile).mockResolvedValue({
+        data: imageBuffer,
+        found: true,
+        contentType: 'image/png',
+        contentLength: imageBuffer.byteLength,
+      });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-screenshot'],
+        r2Bucket: undefined,
+        db,
+        logger,
+      });
+
+      // Images within limit should be processed for vision models
+      expect(result.fileParts).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+      expect(result.fileParts[0]?.mimeType).toBe('image/png');
+    });
+
+    it('should handle multiple mixed-size files correctly', async () => {
+      const smallPdfBuffer = new ArrayBuffer(100);
+      const mediumPdfBuffer = new ArrayBuffer(100);
+
+      const uploads = [
+        {
+          id: 'upload-small-pdf',
+          mimeType: 'application/pdf',
+          filename: 'small.pdf',
+          fileSize: 2 * 1024 * 1024, // 2MB
+          r2Key: 'uploads/user-1/upload-small-pdf_small.pdf',
+        },
+        {
+          id: 'upload-medium-pdf',
+          mimeType: 'application/pdf',
+          filename: 'medium.pdf',
+          fileSize: 8 * 1024 * 1024, // 8MB - within 10MB limit
+          r2Key: 'uploads/user-1/upload-medium-pdf_medium.pdf',
+        },
+        {
+          id: 'upload-oversized-pdf',
+          mimeType: 'application/pdf',
+          filename: 'oversized.pdf',
+          fileSize: 30 * 1024 * 1024, // 30MB - exceeds both 10MB and 25MB limits
+          r2Key: 'uploads/user-1/upload-oversized-pdf_oversized.pdf',
+        },
+      ];
+
+      const db = createMockDb(uploads);
+      const logger = createMockLogger();
+
+      vi.mocked(getFile)
+        .mockResolvedValueOnce({
+          data: smallPdfBuffer,
+          found: true,
+          contentType: 'application/pdf',
+          contentLength: smallPdfBuffer.byteLength,
+        })
+        .mockResolvedValueOnce({
+          data: mediumPdfBuffer,
+          found: true,
+          contentType: 'application/pdf',
+          contentLength: mediumPdfBuffer.byteLength,
+        });
+
+      const result = await loadAttachmentContent({
+        attachmentIds: ['upload-small-pdf', 'upload-medium-pdf', 'upload-oversized-pdf'],
+        r2Bucket: undefined,
+        db,
+        logger,
+      });
+
+      // 2 PDFs within limit should be processed, 1 should be skipped
+      expect(result.fileParts).toHaveLength(2);
+      expect(result.stats.loaded).toBe(2);
+      expect(result.stats.skipped).toBe(1);
       expect(result.stats.total).toBe(3);
     });
   });

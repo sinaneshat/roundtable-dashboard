@@ -709,6 +709,7 @@ export {
 // Model enums
 export {
   DEFAULT_JSON_MODE_QUALITY,
+  DEFAULT_MODEL_CAPABILITY_TAGS,
   DEFAULT_MODEL_CATEGORY,
   DEFAULT_MODEL_CATEGORY_FILTER,
   DEFAULT_MODEL_ID,
@@ -719,9 +720,15 @@ export {
   JsonModeQualities,
   type JsonModeQuality,
   JsonModeQualitySchema,
+  MODEL_CAPABILITY_TAG_ICONS,
+  MODEL_CAPABILITY_TAG_LABELS,
+  MODEL_CAPABILITY_TAGS,
   MODEL_CATEGORIES,
   MODEL_IDS,
   MODEL_PROVIDERS,
+  type ModelCapabilityTag,
+  ModelCapabilityTags,
+  ModelCapabilityTagSchema,
   ModelCategories,
   type ModelCategory,
   type ModelCategoryFilter,
