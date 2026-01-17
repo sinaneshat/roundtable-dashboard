@@ -480,15 +480,19 @@ const IS_LOCAL_DEV = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local' || process.e
 /**
  * Maximum file size to load into worker memory
  *
- * PRODUCTION (5MB): Conservative for Cloudflare Workers (128MB HARD platform limit)
+ * PRODUCTION (10MB): Balanced for Cloudflare Workers (128MB HARD platform limit)
+ * Memory breakdown for vision-only files (no PDF.js):
  * - V8 runtime + framework overhead: ~30MB
- * - PDF.js initialization + parsing: ~20MB (can spike higher)
- * - Messages + system prompt + RAG: ~15MB
- * - Streaming orchestration state: ~10MB
- * - Available for file processing: ~53MB
- * - 5MB file → ~7MB base64 string (33% overhead)
- * - File copy + base64: ~12MB
- * - Total: 30 + 20 + 15 + 10 + 12 = ~87MB (safer margin within 128MB)
+ * - Messages + system prompt + streaming: ~25MB
+ * - 10MB file → ~13MB base64 string (33% overhead)
+ * - Total: 30 + 25 + 23 = ~78MB (50MB safety margin)
+ *
+ * Memory breakdown with PDF.js text extraction:
+ * - V8 runtime + framework overhead: ~30MB
+ * - PDF.js initialization + parsing: ~20MB (can spike)
+ * - Messages + streaming: ~25MB
+ * - File + base64: ~23MB
+ * - Total: ~98MB (30MB safety margin)
  *
  * LOCAL DEV (25MB): Node.js has much more memory available
  * - No worker memory constraints
@@ -501,7 +505,7 @@ const IS_LOCAL_DEV = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local' || process.e
  *
  * @see https://developers.cloudflare.com/workers/platform/limits/
  */
-export const MAX_BASE64_FILE_SIZE = IS_LOCAL_DEV ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
+export const MAX_BASE64_FILE_SIZE = IS_LOCAL_DEV ? 25 * 1024 * 1024 : 10 * 1024 * 1024;
 
 /** Default URL expiration time (1 hour) */
 export const DEFAULT_URL_EXPIRATION_MS = 60 * 60 * 1000;

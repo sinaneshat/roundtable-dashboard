@@ -299,7 +299,7 @@ export async function loadAttachmentContentUrl(
               maxSize: MAX_BASE64_FILE_SIZE,
             }));
             // Provide text fallback for large scanned PDFs
-            extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF is a scanned/image-based document (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB). It's too large to process visually. Please upload a text-based PDF or a smaller scanned document (max 5MB for visual processing).]`);
+            extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF is a scanned/image-based document (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB). It's too large to process visually. Please upload a text-based PDF or a smaller scanned document (max 10MB for visual processing).]`);
             continue;
           }
 
@@ -428,7 +428,7 @@ export async function loadAttachmentContentUrl(
             fileSize: upload.fileSize,
             maxSize: MAX_BASE64_FILE_SIZE,
           }));
-          extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB) is too large to process directly. Text extraction was not completed. Please try re-uploading the file, or use a smaller PDF (max 5MB for in-memory processing).]`);
+          extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB) is too large to process directly. Text extraction was not completed. Please try re-uploading the file, or use a smaller PDF (max 10MB for in-memory processing).]`);
           continue;
         }
 
