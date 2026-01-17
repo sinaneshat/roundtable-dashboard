@@ -45,6 +45,7 @@ import {
   putFile,
   scheduleUploadCleanup,
   shouldExtractPdfText,
+  shouldExtractPdfTextWithAI,
   storeMultipartMetadata,
   validateMultipartOwnership,
   validateR2UploadId,
@@ -474,7 +475,11 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
 
     // Process PDF text extraction SYNCHRONOUSLY to ensure text is ready before AI needs it
     // Previously used waitUntil() which caused race conditions in production
-    if (shouldExtractPdfText(file.type, file.size) && c.env.UPLOADS_R2_BUCKET) {
+    // Small PDFs (≤10MB) use in-worker PDF.js, larger PDFs (10-100MB) use Cloudflare AI
+    const canExtractInWorker = shouldExtractPdfText(file.type, file.size);
+    const canExtractWithAI = shouldExtractPdfTextWithAI(file.type, file.size);
+
+    if ((canExtractInWorker || canExtractWithAI) && c.env.UPLOADS_R2_BUCKET) {
       try {
         await backgroundPdfProcessing({
           uploadId,
@@ -483,6 +488,7 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
           mimeType: file.type,
           r2Bucket: c.env.UPLOADS_R2_BUCKET,
           db,
+          ai: c.env.AI, // Cloudflare AI binding for large file extraction
         });
       } catch (error) {
         // Log but don't fail upload - extraction is optional
@@ -1057,7 +1063,11 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
 
     // Process PDF text extraction SYNCHRONOUSLY to ensure text is ready before AI needs it
     // Previously used waitUntil() which caused race conditions in production
-    if (shouldExtractPdfText(uploadMeta.mimeType, uploadMeta.fileSize) && c.env.UPLOADS_R2_BUCKET) {
+    // Small PDFs (≤10MB) use in-worker PDF.js, larger PDFs (10-100MB) use Cloudflare AI
+    const canExtractInWorkerMultipart = shouldExtractPdfText(uploadMeta.mimeType, uploadMeta.fileSize);
+    const canExtractWithAIMultipart = shouldExtractPdfTextWithAI(uploadMeta.mimeType, uploadMeta.fileSize);
+
+    if ((canExtractInWorkerMultipart || canExtractWithAIMultipart) && c.env.UPLOADS_R2_BUCKET) {
       try {
         await backgroundPdfProcessing({
           uploadId,
@@ -1066,6 +1076,7 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
           mimeType: uploadMeta.mimeType,
           r2Bucket: c.env.UPLOADS_R2_BUCKET,
           db,
+          ai: c.env.AI, // Cloudflare AI binding for large file extraction
         });
       } catch (error) {
         // Log but don't fail upload - extraction is optional

@@ -1,9 +1,11 @@
 /**
  * PDF Text Extraction Service
  *
- * Extracts text from PDF files using unpdf (serverless PDF.js build).
- * Designed for Cloudflare Workers with memory-safe processing.
+ * Two extraction methods available:
+ * 1. Cloudflare AI toMarkdown() - Offloads processing to CF infrastructure (recommended)
+ * 2. unpdf (serverless PDF.js) - In-worker processing for small files
  *
+ * @see https://developers.cloudflare.com/workers/ai/features/markdown-conversion/
  * @see https://github.com/unjs/unpdf
  */
 
@@ -19,7 +21,7 @@ import * as tables from '@/db';
 // ============================================================================
 
 /**
- * Maximum file size for synchronous PDF text extraction (10MB)
+ * Maximum file size for in-worker PDF.js extraction (10MB)
  *
  * Memory budget for 128MB worker limit:
  * - V8/framework overhead: ~30MB
@@ -29,10 +31,17 @@ import * as tables from '@/db';
  * - System prompt + messages: ~10MB
  * - Safety margin: ~58MB remaining
  *
- * Files larger than 10MB should use URL-based visual processing
- * where the AI provider fetches directly, not the worker.
+ * Files larger than 10MB should use:
+ * 1. Cloudflare AI toMarkdown() - processing offloaded to CF infrastructure
+ * 2. URL-based visual processing - AI provider fetches directly
  */
 const MAX_PDF_SIZE_FOR_EXTRACTION = 10 * 1024 * 1024;
+
+/**
+ * Maximum file size for Cloudflare AI toMarkdown() extraction (100MB)
+ * Processing happens on Cloudflare's infrastructure, not in the worker.
+ */
+const MAX_PDF_SIZE_FOR_AI_EXTRACTION = 100 * 1024 * 1024;
 
 /** Maximum extracted text length to store (2MB - reasonable for large documents) */
 const MAX_EXTRACTED_TEXT_LENGTH = 2 * 1024 * 1024;
@@ -91,6 +100,8 @@ export type ProcessPdfUploadParams = {
   mimeType: string;
   r2Bucket: R2Bucket;
   db: Awaited<ReturnType<typeof getDbAsync>>;
+  /** Cloudflare AI binding for toMarkdown() - offloads processing to CF infrastructure */
+  ai?: Ai;
 };
 
 // ============================================================================
@@ -146,10 +157,90 @@ export async function extractPdfText(buffer: ArrayBuffer): Promise<PdfExtraction
 }
 
 /**
- * Check if a file should have PDF text extraction.
+ * Extract text from PDF using Cloudflare AI toMarkdown().
+ * Processing happens on Cloudflare's infrastructure, NOT in the worker.
+ * Supports files up to 100MB without impacting worker memory.
+ *
+ * @param r2Object - R2 object containing the PDF
+ * @param ai - Cloudflare AI binding
+ * @returns Extraction result with markdown text or error
+ * @see https://developers.cloudflare.com/workers/ai/features/markdown-conversion/
+ */
+export async function extractPdfTextWithCloudflareAI(
+  r2Object: R2ObjectBody,
+  ai: Ai,
+): Promise<PdfExtractionResult> {
+  try {
+    console.error('[PDF Extraction] Using Cloudflare AI toMarkdown() for extraction...');
+
+    // Stream directly to AI - no need to buffer in worker memory
+    const arrayBuffer = await r2Object.arrayBuffer();
+    const blob = new Blob([arrayBuffer], { type: PDF_MIME_TYPE });
+
+    const result = await ai.toMarkdown([{
+      name: 'document.pdf',
+      blob,
+    }]);
+
+    // toMarkdown returns array of results
+    const docResult = result[0];
+    if (!docResult) {
+      return {
+        success: false,
+        error: 'Cloudflare AI returned empty result',
+      };
+    }
+
+    // Check if conversion returned an error
+    if (docResult.format === 'error') {
+      return {
+        success: false,
+        error: `Cloudflare AI conversion failed: ${docResult.error}`,
+      };
+    }
+
+    const text = docResult.data;
+    if (!text || text.length < MIN_CHARS_PER_PAGE) {
+      return {
+        success: false,
+        error: `PDF appears to be scanned/image-only (only ${text?.length ?? 0} chars extracted). Visual AI processing recommended.`,
+      };
+    }
+
+    // Truncate if too long
+    const truncatedText = text.length > MAX_EXTRACTED_TEXT_LENGTH
+      ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[Text truncated due to length...]`
+      : text;
+
+    return {
+      success: true,
+      text: truncatedText,
+      // toMarkdown doesn't provide page count
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[PDF Extraction] Cloudflare AI extraction failed:', errorMessage);
+    return {
+      success: false,
+      error: `Cloudflare AI extraction failed: ${errorMessage}`,
+    };
+  }
+}
+
+/**
+ * Check if a file should use in-worker PDF.js extraction (small files).
  */
 export function shouldExtractPdfText(mimeType: string, fileSize: number): boolean {
   return mimeType === PDF_MIME_TYPE && fileSize <= MAX_PDF_SIZE_FOR_EXTRACTION;
+}
+
+/**
+ * Check if a file should use Cloudflare AI extraction (large files).
+ */
+export function shouldExtractPdfTextWithAI(mimeType: string, fileSize: number): boolean {
+  return mimeType === PDF_MIME_TYPE
+    && fileSize > MAX_PDF_SIZE_FOR_EXTRACTION
+    && fileSize <= MAX_PDF_SIZE_FOR_AI_EXTRACTION;
 }
 
 /**
@@ -157,41 +248,62 @@ export function shouldExtractPdfText(mimeType: string, fileSize: number): boolea
  *
  * This function:
  * 1. Validates the upload is a PDF within size limits
- * 2. Fetches the file from R2
- * 3. Extracts text using unpdf
+ * 2. For small files (≤10MB): Uses in-worker PDF.js extraction
+ * 3. For large files (10-100MB): Uses Cloudflare AI toMarkdown() if available
  * 4. Updates the upload record with extracted text in metadata
  *
  * Designed to be called in background (waitUntil) after upload completion.
  */
 export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<PdfExtractionResult> {
-  const { uploadId, r2Key, fileSize, mimeType, r2Bucket, db } = params;
+  const { uploadId, r2Key, fileSize, mimeType, r2Bucket, db, ai } = params;
 
   // Skip non-PDFs
   if (mimeType !== PDF_MIME_TYPE) {
     return { success: true, text: undefined };
   }
 
-  // Skip oversized files
-  if (fileSize > MAX_PDF_SIZE_FOR_EXTRACTION) {
+  // Check if file is within any extraction limit
+  const canUseInWorker = fileSize <= MAX_PDF_SIZE_FOR_EXTRACTION;
+  const canUseCloudflareAI = ai && fileSize <= MAX_PDF_SIZE_FOR_AI_EXTRACTION;
+
+  if (!canUseInWorker && !canUseCloudflareAI) {
     return {
       success: false,
-      error: `File too large for text extraction (max ${MAX_PDF_SIZE_FOR_EXTRACTION / 1024 / 1024}MB)`,
+      error: `File too large for text extraction (max ${MAX_PDF_SIZE_FOR_AI_EXTRACTION / 1024 / 1024}MB)`,
     };
   }
 
   try {
-    // Fetch file from R2
-    const { data } = await getFile(r2Bucket, r2Key);
+    let result: PdfExtractionResult;
 
-    if (!data) {
-      return {
-        success: false,
-        error: 'File not found in storage',
-      };
+    // Use Cloudflare AI for larger files (offloads to CF infrastructure)
+    if (!canUseInWorker && canUseCloudflareAI) {
+      console.error(`[PDF Extraction] Large file (${(fileSize / 1024 / 1024).toFixed(1)}MB), using Cloudflare AI`);
+
+      // Get R2 object directly for streaming to AI
+      const r2Object = await r2Bucket.get(r2Key);
+      if (!r2Object) {
+        return {
+          success: false,
+          error: 'File not found in storage',
+        };
+      }
+
+      result = await extractPdfTextWithCloudflareAI(r2Object, ai);
+    } else {
+      // Use in-worker PDF.js for small files
+      console.error(`[PDF Extraction] Small file (${(fileSize / 1024 / 1024).toFixed(1)}MB), using in-worker PDF.js`);
+
+      const { data } = await getFile(r2Bucket, r2Key);
+      if (!data) {
+        return {
+          success: false,
+          error: 'File not found in storage',
+        };
+      }
+
+      result = await extractPdfText(data);
     }
-
-    // Extract text
-    const result = await extractPdfText(data);
 
     if (result.success && result.text) {
       // Update upload record with extracted text
