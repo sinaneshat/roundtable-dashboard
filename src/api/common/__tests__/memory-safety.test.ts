@@ -50,8 +50,8 @@ describe('memory Safety Constants', () => {
     // Critical threshold is 85% of limit
     expect(CRITICAL_MEMORY_THRESHOLD).toBe(Math.floor(WORKER_MEMORY_LIMIT * 0.85));
 
-    // Max single allocation is 20MB
-    expect(MAX_SINGLE_ALLOCATION).toBe(20 * 1024 * 1024);
+    // Max single allocation is 10MB (conservative)
+    expect(MAX_SINGLE_ALLOCATION).toBe(10 * 1024 * 1024);
   });
 });
 
@@ -66,8 +66,8 @@ describe('memoryBudgetConfigSchema', () => {
     expect(config.totalBudget).toBe(SAFE_REQUEST_MEMORY_BUDGET);
     expect(config.maxMessages).toBe(75);
     expect(config.maxAttachments).toBe(10);
-    expect(config.maxAttachmentContentSize).toBe(10 * 1024 * 1024); // 10MB (fits 128MB worker limit)
-    expect(config.maxTotalAttachmentContent).toBe(20 * 1024 * 1024); // 20MB
+    expect(config.maxAttachmentContentSize).toBe(5 * 1024 * 1024); // 5MB (conservative for 128MB worker limit)
+    expect(config.maxTotalAttachmentContent).toBe(10 * 1024 * 1024); // 10MB
     expect(config.maxSystemPromptSize).toBe(100 * 1024);
     expect(config.maxRagResults).toBe(3);
     expect(config.maxCitationSources).toBe(15);

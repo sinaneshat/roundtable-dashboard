@@ -21,21 +21,22 @@ import * as tables from '@/db';
 // ============================================================================
 
 /**
- * Maximum file size for in-worker PDF.js extraction (10MB)
+ * Maximum file size for in-worker PDF.js extraction (5MB)
  *
- * Memory budget for 128MB worker limit:
+ * CONSERVATIVE memory budget for 128MB worker limit:
  * - V8/framework overhead: ~30MB
- * - PDF file in memory: 10MB
- * - PDF.js parsing structures: ~15MB
+ * - PDF file in memory: 5MB
+ * - PDF.js parsing structures: ~20MB (can spike)
  * - Extracted text buffer: ~5MB
- * - System prompt + messages: ~10MB
- * - Safety margin: ~58MB remaining
+ * - Streaming orchestration: ~10MB
+ * - System prompt + messages: ~15MB
+ * - Safety margin: ~43MB remaining
  *
- * Files larger than 10MB should use:
+ * Files larger than 5MB should use:
  * 1. Cloudflare AI toMarkdown() - processing offloaded to CF infrastructure
  * 2. URL-based visual processing - AI provider fetches directly
  */
-const MAX_PDF_SIZE_FOR_EXTRACTION = 10 * 1024 * 1024;
+const MAX_PDF_SIZE_FOR_EXTRACTION = 5 * 1024 * 1024;
 
 /**
  * Maximum file size for Cloudflare AI toMarkdown() extraction (100MB)

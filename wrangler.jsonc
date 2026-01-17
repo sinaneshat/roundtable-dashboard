@@ -185,9 +185,11 @@
   "env": {
     "preview": {
       "name": "roundtable-dashboard-preview",
-      // Smart Placement: routes worker near D1/R2 backends for reduced latency
+      // Smart Placement: DISABLED - was routing to Toronto (YYZ) while D1 is in EEUR
+      // Worker now runs at edge closest to user, reducing TTFB significantly
+      // D1 latency is acceptable from edge (~50-100ms) vs cross-continent (~200ms)
       "placement": {
-        "mode": "smart"
+        "mode": "off"
       },
       // Observability with sampling to reduce log volume
       "observability": {
@@ -339,9 +341,11 @@
     },
     "production": {
       "name": "roundtable-dashboard-production",
-      // Smart Placement: optimizes worker location near D1/R2 backends
+      // Smart Placement: DISABLED - was routing to Toronto (YYZ) while D1 is in EEUR
+      // Worker now runs at edge closest to user, reducing TTFB significantly
+      // D1 latency is acceptable from edge (~50-100ms) vs cross-continent (~200ms)
       "placement": {
-        "mode": "smart"
+        "mode": "off"
       },
       // Observability: 100% sampling for full log visibility
       // Note: Remove head_sampling_rate to get all logs (or set to 1.0)

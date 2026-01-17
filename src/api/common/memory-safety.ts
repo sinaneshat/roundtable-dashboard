@@ -40,11 +40,11 @@ export const SAFE_REQUEST_MEMORY_BUDGET = Math.floor(WORKER_MEMORY_LIMIT * 0.70)
 export const CRITICAL_MEMORY_THRESHOLD = Math.floor(WORKER_MEMORY_LIMIT * 0.85);
 
 /**
- * Maximum size for a single allocation (20MB)
- * With base64 overhead (~33%), a 20MB file = ~27MB in memory
- * Must leave room for other allocations within 128MB limit
+ * Maximum size for a single allocation (10MB)
+ * With base64 overhead (~33%), a 10MB file = ~13MB in memory
+ * Conservative limit to ensure stability within 128MB limit
  */
-export const MAX_SINGLE_ALLOCATION = 20 * 1024 * 1024;
+export const MAX_SINGLE_ALLOCATION = 10 * 1024 * 1024;
 
 // ============================================================================
 // Memory Budget Tracker
@@ -57,10 +57,10 @@ export const MemoryBudgetConfigSchema = z.object({
   maxMessages: z.number().int().positive().default(75),
   /** Maximum attachments to process */
   maxAttachments: z.number().int().positive().default(10),
-  /** Maximum attachment content size per file (10MB - matches MAX_BASE64_FILE_SIZE) */
-  maxAttachmentContentSize: z.number().int().positive().default(10 * 1024 * 1024), // 10MB
-  /** Maximum total attachment content (20MB for multiple files) */
-  maxTotalAttachmentContent: z.number().int().positive().default(20 * 1024 * 1024), // 20MB
+  /** Maximum attachment content size per file (5MB - matches MAX_BASE64_FILE_SIZE) */
+  maxAttachmentContentSize: z.number().int().positive().default(5 * 1024 * 1024), // 5MB
+  /** Maximum total attachment content (10MB for multiple files) */
+  maxTotalAttachmentContent: z.number().int().positive().default(10 * 1024 * 1024), // 10MB
   /** Maximum system prompt size */
   maxSystemPromptSize: z.number().int().positive().default(100 * 1024), // 100KB
   /** Maximum RAG results */
