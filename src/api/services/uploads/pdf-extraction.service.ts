@@ -18,11 +18,11 @@ import * as tables from '@/db';
 // CONSTANTS
 // ============================================================================
 
-/** Maximum file size to process (10MB - leaves room for extraction overhead) */
-const MAX_PDF_SIZE_FOR_EXTRACTION = 10 * 1024 * 1024;
+/** Maximum file size to process (50MB - matches base64 limit) */
+const MAX_PDF_SIZE_FOR_EXTRACTION = 50 * 1024 * 1024;
 
-/** Maximum extracted text length to store (500KB - reasonable for most documents) */
-const MAX_EXTRACTED_TEXT_LENGTH = 500 * 1024;
+/** Maximum extracted text length to store (2MB - reasonable for large documents) */
+const MAX_EXTRACTED_TEXT_LENGTH = 2 * 1024 * 1024;
 
 /** PDF MIME type */
 const PDF_MIME_TYPE = 'application/pdf';
