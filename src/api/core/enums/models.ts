@@ -218,3 +218,46 @@ export const ModelIds = {
 
 // 4. DEFAULT VALUE - Uses ModelIds for single source of truth
 export const DEFAULT_MODEL_ID: ModelId = ModelIds.OPENAI_GPT_4O_MINI;
+
+// ============================================================================
+// MODEL CAPABILITY TAGS - User-facing filter tags for model selection
+// ============================================================================
+
+// 1. ARRAY CONSTANT - Source of truth for tag values
+export const MODEL_CAPABILITY_TAGS = ['fast', 'vision', 'reasoning', 'pdf'] as const;
+
+// 2. ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const ModelCapabilityTagSchema = z.enum(MODEL_CAPABILITY_TAGS).openapi({
+  description: 'User-facing model capability tag for filtering',
+  example: 'vision',
+});
+
+// 3. TYPESCRIPT TYPE - Inferred from Zod schema
+export type ModelCapabilityTag = z.infer<typeof ModelCapabilityTagSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_MODEL_CAPABILITY_TAGS: ModelCapabilityTag[] = [];
+
+// 5. CONSTANT OBJECT - For usage in code (prevents typos)
+export const ModelCapabilityTags = {
+  FAST: 'fast' as const, // Quick response, lower cost models
+  VISION: 'vision' as const, // Supports image/visual input
+  REASONING: 'reasoning' as const, // Enhanced reasoning/thinking
+  PDF: 'pdf' as const, // Supports PDF/document processing
+} as const;
+
+// Tag display labels for UI
+export const MODEL_CAPABILITY_TAG_LABELS: Record<ModelCapabilityTag, string> = {
+  [ModelCapabilityTags.FAST]: 'Fast',
+  [ModelCapabilityTags.VISION]: 'Vision',
+  [ModelCapabilityTags.REASONING]: 'Reasoning',
+  [ModelCapabilityTags.PDF]: 'PDF',
+} as const;
+
+// Tag icons for UI (Lucide icon names)
+export const MODEL_CAPABILITY_TAG_ICONS: Record<ModelCapabilityTag, string> = {
+  [ModelCapabilityTags.FAST]: 'zap',
+  [ModelCapabilityTags.VISION]: 'eye',
+  [ModelCapabilityTags.REASONING]: 'brain',
+  [ModelCapabilityTags.PDF]: 'fileText',
+} as const;

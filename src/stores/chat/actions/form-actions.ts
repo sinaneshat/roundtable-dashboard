@@ -13,6 +13,7 @@ import {
   useCreateThreadMutation,
   useUpdateThreadMutation,
 } from '@/hooks/mutations';
+import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
@@ -100,7 +101,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
   const isFormValid = Boolean(
     formState.inputValue.trim()
-    && formState.selectedParticipants.length > 0
+    && formState.selectedParticipants.length >= MIN_PARTICIPANTS_REQUIRED
     && formState.selectedMode,
   );
 
@@ -114,7 +115,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     const freshSelectedParticipants = freshState.selectedParticipants;
     const freshEnableWebSearch = freshState.enableWebSearch;
 
-    if (!prompt || freshSelectedParticipants.length === 0 || !freshSelectedMode) {
+    if (!prompt || freshSelectedParticipants.length < MIN_PARTICIPANTS_REQUIRED || !freshSelectedMode) {
       return;
     }
 
