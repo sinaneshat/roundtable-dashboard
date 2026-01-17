@@ -19,10 +19,11 @@ import type { ApiEnv } from '@/api/types';
 const isLocalDevelopment = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
 
 // Paths that skip rate limiting entirely (health checks, benchmarks)
+// Note: c.req.path in Hono middleware doesn't include /api/v1 prefix
 const RATE_LIMIT_SKIP_PATHS = [
-  '/api/v1/health',
-  '/api/v1/system',
-  '/api/v1/benchmark',
+  '/health',
+  '/system',
+  '/benchmark',
 ] as const;
 
 export type RateLimitConfig = {
