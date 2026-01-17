@@ -9,8 +9,9 @@
 
 import { eq, inArray } from 'drizzle-orm';
 
-import { AI_PROCESSABLE_MIME_SET, IMAGE_MIME_TYPES, MessagePartTypes, TEXT_EXTRACTABLE_MIME_TYPES } from '@/api/core/enums';
-import { generateAiPublicUrl, getFile } from '@/api/services/uploads';
+import { AI_PROCESSABLE_MIME_SET, MessagePartTypes, TEXT_EXTRACTABLE_MIME_TYPES } from '@/api/core/enums';
+import { getFile } from '@/api/services/uploads';
+import { extractPdfText, shouldExtractPdfText } from '@/api/services/uploads/pdf-extraction.service';
 import { LogHelpers } from '@/api/types/logger';
 import type {
   LoadAttachmentContentParams,
@@ -18,6 +19,7 @@ import type {
   LoadMessageAttachmentsParams,
   LoadMessageAttachmentsResult,
   ModelFilePart,
+  ModelFilePartBinary,
   ModelFilePartUrl,
   ModelImagePartUrl,
 } from '@/api/types/uploads';
@@ -156,7 +158,9 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
 // URL-Based Loading (All files use signed URLs for AI provider access)
 // ============================================================================
 
-export type UrlFilePart = ModelFilePartUrl | ModelImagePartUrl;
+// File part for AI model consumption - includes binary-only parts (no URL field)
+// to prevent AI providers from attempting to download from localhost URLs
+export type UrlFilePart = ModelFilePartUrl | ModelImagePartUrl | ModelFilePartBinary;
 
 export type LoadAttachmentContentUrlParams = LoadAttachmentContentParams & {
   /** Base URL of the application for generating signed URLs */
@@ -182,28 +186,27 @@ export type LoadAttachmentContentUrlResult = {
   };
 };
 
-const IMAGE_MIME_SET = new Set<string>(IMAGE_MIME_TYPES);
 const TEXT_EXTRACTABLE_MIME_SET = new Set<string>(TEXT_EXTRACTABLE_MIME_TYPES);
 const PDF_MIME_TYPE = 'application/pdf';
 
 /**
- * Load attachment content with environment-aware delivery.
+ * Load attachment content using unified Uint8Array approach.
  *
- * - Production/Preview: Uses signed public URLs (AI providers fetch directly)
- * - Local development: Falls back to base64 (AI providers can't access localhost)
+ * UNIFIED FLOW (same for local/preview/prod):
+ * - Always loads files as Uint8Array binary data
+ * - AI SDK handles provider-specific delivery (no environment branching)
+ * - PDFs: Extract text when possible, else send binary for visual processing
+ * - Images: Always binary data (most reliable across providers)
  *
- * URL-based delivery is more efficient:
- * - Avoids memory-intensive base64 encoding in Workers
- * - Allows AI providers to fetch files in parallel
- * - Supports much larger files (up to 100MB for PDFs, 20MB for images)
+ * This ensures identical behavior across all environments.
  */
 export async function loadAttachmentContentUrl(
   params: LoadAttachmentContentUrlParams,
 ): Promise<LoadAttachmentContentUrlResult> {
-  const { attachmentIds, r2Bucket, db, logger, baseUrl, userId, secret, threadId } = params;
+  const { attachmentIds, r2Bucket, db, logger } = params;
 
   const fileParts: UrlFilePart[] = [];
-  const extractedTexts: string[] = []; // Collect extracted text from PDFs/documents
+  const extractedTexts: string[] = [];
   const errors: Array<{ uploadId: string; error: string }> = [];
   let skipped = 0;
 
@@ -216,9 +219,6 @@ export async function loadAttachmentContentUrl(
     };
   }
 
-  // Check if we're in local development (AI providers can't access localhost)
-  const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
-
   // Load attachment metadata from database
   const uploads = await db
     .select()
@@ -226,15 +226,14 @@ export async function loadAttachmentContentUrl(
     .where(inArray(tables.upload.id, attachmentIds));
 
   if (uploads.length === 0 && attachmentIds.length > 0) {
-    logger?.error('No uploads found in DB for given IDs (URL mode) - possible race condition', LogHelpers.operation({
+    logger?.error('No uploads found in DB - possible race condition', LogHelpers.operation({
       operationName: 'loadAttachmentContentUrl',
       attachmentCount: attachmentIds.length,
       foundUploads: 0,
     }));
   }
 
-  const deliveryMode = isLocalhost ? 'base64' : 'url';
-  logger?.info(`Loading attachment content (${deliveryMode} mode) for AI model`, LogHelpers.operation({
+  logger?.info('Loading attachment content (unified Uint8Array mode)', LogHelpers.operation({
     operationName: 'loadAttachmentContentUrl',
     attachmentCount: attachmentIds.length,
     foundUploads: uploads.length,
@@ -244,7 +243,7 @@ export async function loadAttachmentContentUrl(
     try {
       // Skip files that AI models can't process
       if (!AI_PROCESSABLE_MIME_SET.has(upload.mimeType)) {
-        logger?.debug('Skipping unsupported file type for AI processing', LogHelpers.operation({
+        logger?.debug('Skipping unsupported file type', LogHelpers.operation({
           operationName: 'loadAttachmentContentUrl',
           uploadId: upload.id,
           mimeType: upload.mimeType,
@@ -253,210 +252,196 @@ export async function loadAttachmentContentUrl(
         continue;
       }
 
-      const isImage = IMAGE_MIME_SET.has(upload.mimeType);
+      // Check file size limit
+      if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
+        logger?.warn('File too large for processing, skipping', LogHelpers.operation({
+          operationName: 'loadAttachmentContentUrl',
+          uploadId: upload.id,
+          fileSize: upload.fileSize,
+          maxSize: MAX_BASE64_FILE_SIZE,
+        }));
+        skipped++;
+        continue;
+      }
 
-      if (isLocalhost) {
-        // LOCAL DEV: Use base64 encoding (AI providers can't access localhost URLs)
-        // Use same format as original loadAttachmentContent for compatibility
-        const { data } = await getFile(r2Bucket, upload.r2Key);
+      const isPdf = upload.mimeType === PDF_MIME_TYPE;
+      const isTextExtractable = TEXT_EXTRACTABLE_MIME_SET.has(upload.mimeType);
 
-        if (!data) {
-          logger?.error('File not found in storage (URL mode)', LogHelpers.operation({
+      // PDFs and text-extractable files: try text extraction first
+      if (isPdf || isTextExtractable) {
+        // Check for pre-extracted text from background processing
+        const extractedText = getExtractedText(upload.metadata);
+
+        if (extractedText && extractedText.length > 0) {
+          const fileTypeLabel = isPdf ? 'PDF' : 'Document';
+          extractedTexts.push(`[${fileTypeLabel}: ${upload.filename}]\n\n${extractedText}`);
+
+          logger?.debug('Using pre-extracted text', LogHelpers.operation({
             operationName: 'loadAttachmentContentUrl',
             uploadId: upload.id,
             filename: upload.filename,
-            r2Key: upload.r2Key,
+            mimeType: upload.mimeType,
+            fileSize: extractedText.length,
           }));
-          errors.push({
-            uploadId: upload.id,
-            error: 'File not found in storage',
-          });
           continue;
         }
 
-        const uint8Data = new Uint8Array(data);
-        const base64 = arrayBufferToBase64(data);
-        const dataUrl = `data:${upload.mimeType};base64,${base64}`;
+        // Check if background processing already determined this is a scanned/image PDF
+        const requiresVision = upload.metadata && typeof upload.metadata === 'object' && 'requiresVision' in upload.metadata && (upload.metadata as { requiresVision?: boolean }).requiresVision === true;
 
-        // Use type:'file' with both data (Uint8Array) and url (data URL) for all files
-        // This matches the format expected by the AI SDK and streaming orchestration
-        fileParts.push({
-          type: MessagePartTypes.FILE,
-          data: uint8Data,
-          mimeType: upload.mimeType,
-          filename: upload.filename,
-          url: dataUrl,
-          mediaType: upload.mimeType,
-        // TYPE BRIDGE: Local dev creates hybrid with both data (Uint8Array) and url (data URL)
-        // to satisfy both AI SDK (needs data) and UI (needs url). Production uses URL-only.
-        } as unknown as UrlFilePart);
+        if (requiresVision) {
+          logger?.info('PDF marked as requiring vision (scanned/image), loading binary', LogHelpers.operation({
+            operationName: 'loadAttachmentContentUrl',
+            uploadId: upload.id,
+            filename: upload.filename,
+          }));
 
-        logger?.debug('Loaded attachment (base64 for local dev)', LogHelpers.operation({
+          const { data } = await getFile(r2Bucket, upload.r2Key);
+          if (data) {
+            const uint8Data = new Uint8Array(data);
+            fileParts.push({
+              type: MessagePartTypes.FILE,
+              data: uint8Data,
+              mimeType: upload.mimeType,
+              filename: upload.filename,
+            } satisfies ModelFilePartBinary);
+
+            // Add text fallback for non-vision models
+            extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF appears to be scanned/image-based. Text extraction was unsuccessful. If you have vision capabilities, please examine the attached PDF image. Otherwise, please ask the user to provide a text-based version or describe the contents.]`);
+          } else {
+            errors.push({ uploadId: upload.id, error: 'File not found in storage' });
+          }
+          continue;
+        }
+
+        // No pre-extracted text - try synchronous extraction (fixes race condition)
+        if (shouldExtractPdfText(upload.mimeType, upload.fileSize)) {
+          logger?.info('Triggering synchronous PDF extraction', LogHelpers.operation({
+            operationName: 'loadAttachmentContentUrl',
+            uploadId: upload.id,
+            filename: upload.filename,
+            sizeKB: Math.round(upload.fileSize / 1024),
+          }));
+
+          const { data } = await getFile(r2Bucket, upload.r2Key);
+          if (!data) {
+            logger?.error('File not found in storage', LogHelpers.operation({
+              operationName: 'loadAttachmentContentUrl',
+              uploadId: upload.id,
+              r2Key: upload.r2Key,
+            }));
+            errors.push({ uploadId: upload.id, error: 'File not found in storage' });
+            continue;
+          }
+
+          const extractionResult = await extractPdfText(data);
+          if (extractionResult.success && extractionResult.text) {
+            const fileTypeLabel = isPdf ? 'PDF' : 'Document';
+            extractedTexts.push(`[${fileTypeLabel}: ${upload.filename}]\n\n${extractionResult.text}`);
+
+            logger?.info('Synchronous extraction succeeded', LogHelpers.operation({
+              operationName: 'loadAttachmentContentUrl',
+              uploadId: upload.id,
+              fileSize: extractionResult.text.length,
+            }));
+
+            // Update DB for future requests (fire-and-forget)
+            db.update(tables.upload)
+              .set({
+                metadata: {
+                  extractedText: extractionResult.text,
+                  totalPages: extractionResult.totalPages,
+                  extractedAt: new Date().toISOString(),
+                },
+                updatedAt: new Date(),
+              })
+              .where(eq(tables.upload.id, upload.id))
+              .catch(err => logger?.error('Failed to save extracted text', LogHelpers.operation({
+                operationName: 'loadAttachmentContentUrl',
+                uploadId: upload.id,
+                error: err instanceof Error ? err.message : 'Unknown',
+              })));
+            continue;
+          }
+
+          // Extraction failed - fall back to binary for visual processing
+          // Also add a text fallback for models without vision support
+          // NOTE: PDF.js may consume/transfer the ArrayBuffer, so we re-fetch for binary
+          logger?.warn('Extraction failed, using binary fallback', LogHelpers.operation({
+            operationName: 'loadAttachmentContentUrl',
+            uploadId: upload.id,
+            error: extractionResult.error,
+          }));
+
+          // Re-fetch file since PDF.js may have consumed the original ArrayBuffer
+          const { data: freshData } = await getFile(r2Bucket, upload.r2Key);
+          if (!freshData || freshData.byteLength === 0) {
+            logger?.error('File re-fetch failed for binary fallback', LogHelpers.operation({
+              operationName: 'loadAttachmentContentUrl',
+              uploadId: upload.id,
+            }));
+            errors.push({ uploadId: upload.id, error: 'File re-fetch failed for binary fallback' });
+            // Note: stats counter will be incremented at the end based on errors.length
+            continue;
+          }
+
+          const uint8Data = new Uint8Array(freshData);
+          fileParts.push({
+            type: MessagePartTypes.FILE,
+            data: uint8Data,
+            mimeType: upload.mimeType,
+            filename: upload.filename,
+          } satisfies ModelFilePartBinary);
+
+          // Add text fallback explaining the PDF situation for non-vision models
+          // This ensures the AI knows about the attachment even if file parts are filtered
+          extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF appears to be scanned/image-based. Text extraction was unsuccessful. If you have vision capabilities, please examine the attached PDF image. Otherwise, please ask the user to provide a text-based version or describe the contents.]`);
+          continue;
+        }
+
+        // Non-PDF text file without extraction capability - load as binary
+      }
+
+      // UNIFIED: Load all files as Uint8Array binary data
+      // AI SDK handles provider-specific delivery
+      const { data } = await getFile(r2Bucket, upload.r2Key);
+
+      if (!data) {
+        logger?.error('File not found in storage', LogHelpers.operation({
           operationName: 'loadAttachmentContentUrl',
           uploadId: upload.id,
           filename: upload.filename,
-          mimeType: upload.mimeType,
-          sizeKB: Math.round(upload.fileSize / 1024),
+          r2Key: upload.r2Key,
         }));
-      } else {
-        // PRODUCTION/PREVIEW: Handle based on file type
-        if (isImage) {
-          // Image: use type:'image' with URL (images are small, download quickly)
-          const urlResult = await generateAiPublicUrl({
-            uploadId: upload.id,
-            userId,
-            baseUrl,
-            secret,
-            threadId,
-          });
-
-          if (!urlResult.success) {
-            logger?.error('URL generation failed for image', LogHelpers.operation({
-              operationName: 'loadAttachmentContentUrl',
-              uploadId: upload.id,
-              filename: upload.filename,
-              error: urlResult.error,
-            }));
-            errors.push({ uploadId: upload.id, error: urlResult.error });
-            continue;
-          }
-
-          fileParts.push({
-            type: 'image',
-            image: urlResult.url,
-            mimeType: upload.mimeType,
-          } as ModelImagePartUrl);
-
-          logger?.debug('Generated URL for image attachment', LogHelpers.operation({
-            operationName: 'loadAttachmentContentUrl',
-            uploadId: upload.id,
-            filename: upload.filename,
-            mimeType: upload.mimeType,
-            sizeKB: Math.round(upload.fileSize / 1024),
-          }));
-        } else if (upload.mimeType === PDF_MIME_TYPE || TEXT_EXTRACTABLE_MIME_SET.has(upload.mimeType)) {
-          // PDF/Text files: Use extracted text instead of URL
-          // OpenAI times out downloading files from our signed URL endpoint (2-5s timeout)
-          // Solution: Use the pre-extracted text from upload metadata, sent as text content (not file part)
-          const extractedText = getExtractedText(upload.metadata);
-
-          if (extractedText && extractedText.length > 0) {
-            const fileTypeLabel = upload.mimeType === PDF_MIME_TYPE ? 'PDF' : 'Document';
-            // Add to extractedTexts array - will be combined into extractedTextContent
-            extractedTexts.push(`[${fileTypeLabel}: ${upload.filename}]\n\n${extractedText}`);
-
-            logger?.debug('Using extracted text for document', LogHelpers.operation({
-              operationName: 'loadAttachmentContentUrl',
-              uploadId: upload.id,
-              filename: upload.filename,
-              mimeType: upload.mimeType,
-              fileSize: extractedText.length,
-            }));
-          } else {
-            // No extracted text available - check size before loading to prevent memory exhaustion
-            // Cloudflare Workers have 128MB limit, loading large PDFs as base64 can crash the worker
-            if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
-              logger?.warn('PDF too large for base64 fallback, skipping (text extraction may have failed)', LogHelpers.operation({
-                operationName: 'loadAttachmentContentUrl',
-                uploadId: upload.id,
-                filename: upload.filename,
-                mimeType: upload.mimeType,
-                sizeKB: Math.round(upload.fileSize / 1024),
-                maxSize: Math.round(MAX_BASE64_FILE_SIZE / 1024),
-              }));
-              skipped++;
-            } else {
-              // File is small enough - send PDF as base64 binary for visual content
-              // AI SDK v6 pattern: models that support PDF files (Google, Anthropic, OpenAI gpt-4o)
-              // can process visual content directly when sent as binary data
-              const { data } = await getFile(r2Bucket, upload.r2Key);
-
-              if (data) {
-                const uint8Data = new Uint8Array(data);
-                const base64 = arrayBufferToBase64(data);
-                const dataUrl = `data:${upload.mimeType};base64,${base64}`;
-
-                // Send as file part with binary data for AI SDK compatibility
-                // TYPE BRIDGE: Hybrid format with both data (Uint8Array) and url (data URL)
-                // to satisfy AI SDK (needs data) and UI rendering (needs url)
-                fileParts.push({
-                  type: MessagePartTypes.FILE,
-                  data: uint8Data,
-                  mimeType: upload.mimeType,
-                  filename: upload.filename,
-                  url: dataUrl,
-                  mediaType: upload.mimeType,
-                } as unknown as UrlFilePart);
-
-                logger?.info('Loaded visual PDF as base64 (no extracted text)', LogHelpers.operation({
-                  operationName: 'loadAttachmentContentUrl',
-                  uploadId: upload.id,
-                  filename: upload.filename,
-                  mimeType: upload.mimeType,
-                  sizeKB: Math.round(upload.fileSize / 1024),
-                }));
-              } else {
-                logger?.warn('Failed to load PDF from storage, skipping', LogHelpers.operation({
-                  operationName: 'loadAttachmentContentUrl',
-                  uploadId: upload.id,
-                  filename: upload.filename,
-                  mimeType: upload.mimeType,
-                }));
-                skipped++;
-              }
-            }
-          }
-        } else {
-          // Other file types: use URL
-          const urlResult = await generateAiPublicUrl({
-            uploadId: upload.id,
-            userId,
-            baseUrl,
-            secret,
-            threadId,
-          });
-
-          if (!urlResult.success) {
-            logger?.error('URL generation failed', LogHelpers.operation({
-              operationName: 'loadAttachmentContentUrl',
-              uploadId: upload.id,
-              filename: upload.filename,
-              error: urlResult.error,
-            }));
-            errors.push({ uploadId: upload.id, error: urlResult.error });
-            continue;
-          }
-
-          fileParts.push({
-            type: MessagePartTypes.FILE,
-            url: urlResult.url,
-            mimeType: upload.mimeType,
-            filename: upload.filename,
-            mediaType: upload.mimeType,
-          } as ModelFilePartUrl);
-
-          logger?.debug('Generated URL for file attachment', LogHelpers.operation({
-            operationName: 'loadAttachmentContentUrl',
-            uploadId: upload.id,
-            filename: upload.filename,
-            mimeType: upload.mimeType,
-            sizeKB: Math.round(upload.fileSize / 1024),
-          }));
-        }
+        errors.push({ uploadId: upload.id, error: 'File not found in storage' });
+        continue;
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger?.error('Failed to load attachment (URL mode)', LogHelpers.operation({
+
+      const uint8Data = new Uint8Array(data);
+
+      fileParts.push({
+        type: MessagePartTypes.FILE,
+        data: uint8Data,
+        mimeType: upload.mimeType,
+        filename: upload.filename,
+      } satisfies ModelFilePartBinary);
+
+      logger?.debug('Loaded file as Uint8Array', LogHelpers.operation({
         operationName: 'loadAttachmentContentUrl',
         uploadId: upload.id,
         filename: upload.filename,
         mimeType: upload.mimeType,
+        sizeKB: Math.round(upload.fileSize / 1024),
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger?.error('Failed to load attachment', LogHelpers.operation({
+        operationName: 'loadAttachmentContentUrl',
+        uploadId: upload.id,
+        filename: upload.filename,
         error: errorMessage,
       }));
-      errors.push({
-        uploadId: upload.id,
-        error: errorMessage,
-      });
+      errors.push({ uploadId: upload.id, error: errorMessage });
     }
   }
 
@@ -467,7 +452,6 @@ export async function loadAttachmentContentUrl(
     skipped,
   };
 
-  // Combine all extracted texts into a single content string
   const extractedTextContent = extractedTexts.length > 0
     ? extractedTexts.join('\n\n---\n\n')
     : null;
@@ -722,20 +706,23 @@ export type LoadMessageAttachmentsUrlResult = {
 };
 
 /**
- * Load message attachments with environment-aware delivery.
+ * Load message attachments using unified Uint8Array approach.
  *
- * - Production/Preview: Uses signed public URLs (no memory-intensive base64)
- * - Local development: Falls back to base64 (AI providers can't access localhost)
+ * UNIFIED FLOW (same for local/preview/prod):
+ * - Always loads files as Uint8Array binary data
+ * - AI SDK handles provider-specific delivery (no environment branching)
+ * - PDFs: Extract text when possible, else send binary for visual processing
+ * - Images/other files: Always binary data (most reliable across providers)
  *
- * This is the memory-efficient version that avoids loading file data into memory.
+ * This ensures identical behavior across all environments.
  */
 export async function loadMessageAttachmentsUrl(
   params: LoadMessageAttachmentsUrlParams,
 ): Promise<LoadMessageAttachmentsUrlResult> {
-  const { messageIds, r2Bucket, db, logger, baseUrl, userId, secret, threadId } = params;
+  const { messageIds, r2Bucket, db, logger } = params;
 
   const filePartsByMessageId = new Map<string, UrlFilePart[]>();
-  const extractedTextByMessageId = new Map<string, string>(); // Extracted text from PDFs/documents
+  const extractedTextByMessageId = new Map<string, string>();
   const errors: Array<{ messageId: string; uploadId: string; error: string }> = [];
   let totalUploads = 0;
   let loaded = 0;
@@ -757,30 +744,6 @@ export async function loadMessageAttachmentsUrl(
     };
   }
 
-  // Check if we're in local development (AI providers can't access localhost)
-  const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
-
-  // For localhost, fall back to base64 version
-  if (isLocalhost) {
-    logger?.info('Using base64 fallback for localhost (AI providers cannot access local URLs)', LogHelpers.operation({
-      operationName: 'loadMessageAttachmentsUrl',
-      messageCount: messageIds.length,
-    }));
-
-    const base64Result = await loadMessageAttachments({ messageIds, r2Bucket, db, logger });
-    // Convert Map<string, ModelFilePart[]> to Map<string, UrlFilePart[]> for type compatibility
-    const convertedMap = new Map<string, UrlFilePart[]>();
-    for (const [msgId, parts] of base64Result.filePartsByMessageId) {
-      convertedMap.set(msgId, parts as unknown as UrlFilePart[]);
-    }
-    return {
-      filePartsByMessageId: convertedMap,
-      extractedTextByMessageId: new Map(), // Empty for base64 fallback
-      errors: base64Result.errors,
-      stats: base64Result.stats,
-    };
-  }
-
   const messageUploadsRaw = await db
     .select()
     .from(tables.messageUpload)
@@ -788,7 +751,7 @@ export async function loadMessageAttachmentsUrl(
     .where(inArray(tables.messageUpload.messageId, messageIds));
 
   if (messageUploadsRaw.length === 0) {
-    logger?.debug('No attachments found for messages (URL mode)', LogHelpers.operation({
+    logger?.debug('No attachments found for messages', LogHelpers.operation({
       operationName: 'loadMessageAttachmentsUrl',
       messageCount: messageIds.length,
     }));
@@ -806,7 +769,7 @@ export async function loadMessageAttachmentsUrl(
     };
   }
 
-  // Group by message ID for efficient processing
+  // Group by message ID
   const uploadsByMessageId = new Map<
     string,
     Array<{
@@ -829,7 +792,7 @@ export async function loadMessageAttachmentsUrl(
 
   totalUploads = messageUploadsRaw.length;
 
-  logger?.info('Loading message attachments via signed URLs', LogHelpers.operation({
+  logger?.info('Loading message attachments (unified Uint8Array mode)', LogHelpers.operation({
     operationName: 'loadMessageAttachmentsUrl',
     messageCount: messageIds.length,
     messagesWithAttachments: uploadsByMessageId.size,
@@ -840,14 +803,13 @@ export async function loadMessageAttachmentsUrl(
   for (const [messageId, uploads] of uploadsByMessageId) {
     const messageParts: UrlFilePart[] = [];
 
-    // Sort by display order
     uploads.sort((a, b) => a.displayOrder - b.displayOrder);
 
     for (const { uploadId, upload } of uploads) {
       try {
-        // Skip files that AI models can't process
+        // Skip unsupported file types
         if (!AI_PROCESSABLE_MIME_SET.has(upload.mimeType)) {
-          logger?.debug('Skipping unsupported file type (URL mode)', LogHelpers.operation({
+          logger?.debug('Skipping unsupported file type', LogHelpers.operation({
             operationName: 'loadMessageAttachmentsUrl',
             messageId,
             uploadId,
@@ -857,58 +819,30 @@ export async function loadMessageAttachmentsUrl(
           continue;
         }
 
-        const isImage = IMAGE_MIME_SET.has(upload.mimeType);
-
-        if (isImage) {
-          // Image: use type:'image' with URL (images are small, download quickly)
-          const urlResult = await generateAiPublicUrl({
-            uploadId: upload.id,
-            userId,
-            baseUrl,
-            secret,
-            threadId,
-          });
-
-          if (!urlResult.success) {
-            logger?.error('URL generation failed for image', LogHelpers.operation({
-              operationName: 'loadMessageAttachmentsUrl',
-              messageId,
-              uploadId,
-              filename: upload.filename,
-              error: urlResult.error,
-            }));
-            errors.push({ messageId, uploadId, error: urlResult.error });
-            failed++;
-            continue;
-          }
-
-          messageParts.push({
-            type: 'image',
-            image: urlResult.url,
-            mimeType: upload.mimeType,
-          } as ModelImagePartUrl);
-
-          loaded++;
-
-          logger?.debug('Generated URL for image attachment', LogHelpers.operation({
+        // Check file size limit
+        if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
+          logger?.warn('File too large for processing, skipping', LogHelpers.operation({
             operationName: 'loadMessageAttachmentsUrl',
             messageId,
             uploadId,
-            filename: upload.filename,
-            mimeType: upload.mimeType,
-            sizeKB: Math.round(upload.fileSize / 1024),
+            fileSize: upload.fileSize,
+            maxSize: MAX_BASE64_FILE_SIZE,
           }));
-        } else if (upload.mimeType === PDF_MIME_TYPE || TEXT_EXTRACTABLE_MIME_SET.has(upload.mimeType)) {
-          // PDF/Text files: Use extracted text instead of URL
-          // OpenAI times out downloading files from our signed URL endpoint (2-5s timeout)
-          // Store extracted text separately - will be added to message content (not as file part)
+          skipped++;
+          continue;
+        }
+
+        const isPdf = upload.mimeType === PDF_MIME_TYPE;
+        const isTextExtractable = TEXT_EXTRACTABLE_MIME_SET.has(upload.mimeType);
+
+        // PDFs and text files: try text extraction first
+        if (isPdf || isTextExtractable) {
           const extractedText = getExtractedText(upload.metadata);
 
           if (extractedText && extractedText.length > 0) {
-            const fileTypeLabel = upload.mimeType === PDF_MIME_TYPE ? 'PDF' : 'Document';
+            const fileTypeLabel = isPdf ? 'PDF' : 'Document';
             const formattedText = `[${fileTypeLabel}: ${upload.filename}]\n\n${extractedText}`;
 
-            // Append to existing extracted text for this message
             const existing = extractedTextByMessageId.get(messageId) || '';
             extractedTextByMessageId.set(
               messageId,
@@ -917,126 +851,177 @@ export async function loadMessageAttachmentsUrl(
 
             loaded++;
 
-            logger?.debug('Using extracted text for document', LogHelpers.operation({
+            logger?.debug('Using pre-extracted text', LogHelpers.operation({
               operationName: 'loadMessageAttachmentsUrl',
               messageId,
               uploadId,
               filename: upload.filename,
-              mimeType: upload.mimeType,
               fileSize: extractedText.length,
             }));
-          } else {
-            // No extracted text available - check size before loading to prevent memory exhaustion
-            // Cloudflare Workers have 128MB limit, loading large PDFs as base64 can crash the worker
-            if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
-              logger?.warn('PDF too large for base64 fallback, skipping (text extraction may have failed)', LogHelpers.operation({
-                operationName: 'loadMessageAttachmentsUrl',
-                messageId,
-                uploadId,
-                filename: upload.filename,
-                mimeType: upload.mimeType,
-                sizeKB: Math.round(upload.fileSize / 1024),
-                maxSize: Math.round(MAX_BASE64_FILE_SIZE / 1024),
-              }));
-              skipped++;
-            } else {
-              // File is small enough - send PDF as base64 binary for visual content
-              // AI SDK v6 pattern: models that support PDF files can process visual content
-              const { data } = await getFile(r2Bucket, upload.r2Key);
-
-              if (data) {
-                const uint8Data = new Uint8Array(data);
-                const base64 = arrayBufferToBase64(data);
-                const dataUrl = `data:${upload.mimeType};base64,${base64}`;
-
-                // Send as file part with binary data for AI SDK compatibility
-                messageParts.push({
-                  type: MessagePartTypes.FILE,
-                  data: uint8Data,
-                  mimeType: upload.mimeType,
-                  filename: upload.filename,
-                  url: dataUrl,
-                  mediaType: upload.mimeType,
-                } as unknown as UrlFilePart);
-
-                loaded++;
-
-                logger?.info('Loaded visual PDF as base64 (no extracted text)', LogHelpers.operation({
-                  operationName: 'loadMessageAttachmentsUrl',
-                  messageId,
-                  uploadId,
-                  filename: upload.filename,
-                  mimeType: upload.mimeType,
-                  sizeKB: Math.round(upload.fileSize / 1024),
-                }));
-              } else {
-                logger?.warn('Failed to load PDF from storage, skipping', LogHelpers.operation({
-                  operationName: 'loadMessageAttachmentsUrl',
-                  messageId,
-                  uploadId,
-                  filename: upload.filename,
-                  mimeType: upload.mimeType,
-                }));
-                skipped++;
-              }
-            }
-          }
-        } else {
-          // Other file types: use URL
-          const urlResult = await generateAiPublicUrl({
-            uploadId: upload.id,
-            userId,
-            baseUrl,
-            secret,
-            threadId,
-          });
-
-          if (!urlResult.success) {
-            logger?.error('URL generation failed for file', LogHelpers.operation({
-              operationName: 'loadMessageAttachmentsUrl',
-              messageId,
-              uploadId,
-              filename: upload.filename,
-              error: urlResult.error,
-            }));
-            errors.push({ messageId, uploadId, error: urlResult.error });
-            failed++;
             continue;
           }
 
-          messageParts.push({
-            type: MessagePartTypes.FILE,
-            url: urlResult.url,
-            mimeType: upload.mimeType,
-            filename: upload.filename,
-            mediaType: upload.mimeType,
-          } as ModelFilePartUrl);
+          // No pre-extracted text - try synchronous extraction
+          if (shouldExtractPdfText(upload.mimeType, upload.fileSize)) {
+            logger?.info('Triggering synchronous PDF extraction', LogHelpers.operation({
+              operationName: 'loadMessageAttachmentsUrl',
+              messageId,
+              uploadId,
+              filename: upload.filename,
+              sizeKB: Math.round(upload.fileSize / 1024),
+            }));
 
-          loaded++;
+            const { data } = await getFile(r2Bucket, upload.r2Key);
+            if (!data) {
+              logger?.error('File not found in storage', LogHelpers.operation({
+                operationName: 'loadMessageAttachmentsUrl',
+                messageId,
+                uploadId,
+                r2Key: upload.r2Key,
+              }));
+              errors.push({ messageId, uploadId, error: 'File not found' });
+              failed++;
+              continue;
+            }
 
-          logger?.debug('Generated URL for file attachment', LogHelpers.operation({
+            const extractionResult = await extractPdfText(data);
+            if (extractionResult.success && extractionResult.text) {
+              const fileTypeLabel = isPdf ? 'PDF' : 'Document';
+              const formattedText = `[${fileTypeLabel}: ${upload.filename}]\n\n${extractionResult.text}`;
+
+              const existing = extractedTextByMessageId.get(messageId) || '';
+              extractedTextByMessageId.set(
+                messageId,
+                existing ? `${existing}\n\n---\n\n${formattedText}` : formattedText,
+              );
+
+              loaded++;
+
+              logger?.info('Synchronous extraction succeeded', LogHelpers.operation({
+                operationName: 'loadMessageAttachmentsUrl',
+                messageId,
+                uploadId,
+                fileSize: extractionResult.text.length,
+              }));
+
+              // Update DB for future requests (fire-and-forget)
+              db.update(tables.upload)
+                .set({
+                  metadata: {
+                    extractedText: extractionResult.text,
+                    totalPages: extractionResult.totalPages,
+                    extractedAt: new Date().toISOString(),
+                  },
+                  updatedAt: new Date(),
+                })
+                .where(eq(tables.upload.id, upload.id))
+                .catch(err => logger?.error('Failed to save extracted text', LogHelpers.operation({
+                  operationName: 'loadMessageAttachmentsUrl',
+                  uploadId: upload.id,
+                  error: err instanceof Error ? err.message : 'Unknown',
+                })));
+              continue;
+            }
+
+            // Extraction failed - use binary as fallback
+            // NOTE: PDF.js may consume/transfer the ArrayBuffer, so we re-fetch for binary
+            logger?.warn('Extraction failed, using binary', LogHelpers.operation({
+              operationName: 'loadMessageAttachmentsUrl',
+              messageId,
+              uploadId,
+              error: extractionResult.error,
+            }));
+
+            // Re-fetch file since PDF.js may have consumed the original ArrayBuffer
+            const { data: freshData } = await getFile(r2Bucket, upload.r2Key);
+            if (!freshData || freshData.byteLength === 0) {
+              logger?.error('File re-fetch failed for binary fallback', LogHelpers.operation({
+                operationName: 'loadMessageAttachmentsUrl',
+                messageId,
+                uploadId,
+              }));
+              errors.push({ messageId, uploadId, error: 'File re-fetch failed for binary fallback' });
+              failed++;
+              continue;
+            }
+
+            const uint8Data = new Uint8Array(freshData);
+            // Include url and mediaType for UIMessage validation compatibility
+            // AI SDK uses 'data' when present, so url won't be fetched
+            const base64 = arrayBufferToBase64(freshData);
+            const dataUrl = `data:${upload.mimeType};base64,${base64}`;
+            messageParts.push({
+              type: MessagePartTypes.FILE,
+              data: uint8Data,
+              mimeType: upload.mimeType,
+              filename: upload.filename,
+              url: dataUrl,
+              mediaType: upload.mimeType,
+            } satisfies ModelFilePart);
+
+            // Add text fallback for non-vision models (same as loadAttachmentContentUrl)
+            const scannedPdfText = `[PDF: ${upload.filename}]\n\n[This PDF appears to be scanned/image-based. Text extraction was unsuccessful. If you have vision capabilities, please examine the attached PDF image. Otherwise, please ask the user to provide a text-based version or describe the contents.]`;
+            const existing = extractedTextByMessageId.get(messageId) || '';
+            extractedTextByMessageId.set(
+              messageId,
+              existing ? `${existing}\n\n---\n\n${scannedPdfText}` : scannedPdfText,
+            );
+
+            loaded++;
+            continue;
+          }
+        }
+
+        // UNIFIED: Load all files as Uint8Array binary
+        const { data } = await getFile(r2Bucket, upload.r2Key);
+
+        if (!data) {
+          logger?.error('File not found in storage', LogHelpers.operation({
             operationName: 'loadMessageAttachmentsUrl',
             messageId,
             uploadId,
             filename: upload.filename,
-            mimeType: upload.mimeType,
-            sizeKB: Math.round(upload.fileSize / 1024),
+            r2Key: upload.r2Key,
           }));
+          errors.push({ messageId, uploadId, error: 'File not found' });
+          failed++;
+          continue;
         }
+
+        const uint8Data = new Uint8Array(data);
+        // Include url and mediaType for UIMessage validation compatibility
+        const base64 = arrayBufferToBase64(data);
+        const dataUrl = `data:${upload.mimeType};base64,${base64}`;
+
+        messageParts.push({
+          type: MessagePartTypes.FILE,
+          data: uint8Data,
+          mimeType: upload.mimeType,
+          filename: upload.filename,
+          url: dataUrl,
+          mediaType: upload.mimeType,
+        } satisfies ModelFilePart);
+
+        loaded++;
+
+        logger?.debug('Loaded file as Uint8Array with data URL', LogHelpers.operation({
+          operationName: 'loadMessageAttachmentsUrl',
+          messageId,
+          uploadId,
+          filename: upload.filename,
+          mimeType: upload.mimeType,
+          sizeKB: Math.round(upload.fileSize / 1024),
+        }));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        logger?.error('Failed to process message attachment (URL mode)', LogHelpers.operation({
+        logger?.error('Failed to process attachment', LogHelpers.operation({
           operationName: 'loadMessageAttachmentsUrl',
           messageId,
           uploadId,
           filename: upload.filename,
           error: errorMessage,
         }));
-        errors.push({
-          messageId,
-          uploadId,
-          error: errorMessage,
-        });
+        errors.push({ messageId, uploadId, error: errorMessage });
         failed++;
       }
     }
@@ -1054,9 +1039,11 @@ export async function loadMessageAttachmentsUrl(
     skipped,
   };
 
-  logger?.info('Message attachment URL generation complete', LogHelpers.operation({
+  logger?.info('Message attachment loading complete', LogHelpers.operation({
     operationName: 'loadMessageAttachmentsUrl',
     stats,
+    filePartsCount: filePartsByMessageId.size,
+    resultCount: extractedTextByMessageId.size,
   }));
 
   return { filePartsByMessageId, extractedTextByMessageId, errors, stats };

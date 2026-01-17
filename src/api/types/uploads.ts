@@ -94,6 +94,37 @@ export const ModelFilePartSchema = z.object({
 export type ModelFilePart = z.infer<typeof ModelFilePartSchema>;
 
 /**
+ * Binary-only file part for AI model consumption
+ *
+ * IMPORTANT: This schema has NO `url` field to prevent AI providers from
+ * attempting to download from URLs (especially localhost URLs which fail).
+ *
+ * Use this for file parts where you want to send binary data directly to the model.
+ * Some AI providers (like Azure via OpenRouter) will try to download from `url`
+ * if present, which fails for localhost URLs.
+ *
+ * AI SDK v6 LanguageModelV2 FilePart format:
+ * - type: 'file'
+ * - data: Uint8Array | URL | Buffer
+ * - mimeType: string
+ * - filename?: string
+ */
+export const ModelFilePartBinarySchema = z.object({
+  type: z.literal('file'),
+  /** File data as Uint8Array - sent directly to AI provider */
+  data: z.custom<Uint8Array>(val => val instanceof Uint8Array, {
+    message: 'data must be Uint8Array',
+  }),
+  /** MIME type of the file */
+  mimeType: z.string(),
+  /** Original filename for reference */
+  filename: z.string().optional(),
+});
+
+/** Binary-only file part (no URL field) for AI model consumption */
+export type ModelFilePartBinary = z.infer<typeof ModelFilePartBinarySchema>;
+
+/**
  * Image part ready for AI model consumption
  *
  * AI SDK v6 PATTERN: Images must use type:'image' with raw base64 in 'image' field

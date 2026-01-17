@@ -1205,7 +1205,6 @@ export async function prepareValidatedMessages(
 
         logger?.info('Injected file parts into message for AI model', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
-          filePartsCount: fileParts.length,
           stats,
         }));
       }
@@ -1424,8 +1423,16 @@ export async function prepareValidatedMessages(
 
   if (db) {
     try {
+      // Skip the new message ID to avoid double-loading attachments
+      // (attachments for new message are already loaded via loadAttachmentContentUrl)
+      const newMessageId = newMessage?.id;
       const messageIdsToCheck = previousMessages
         .filter((msg) => {
+          // Skip the new message - its attachments were already loaded
+          if (newMessageId && msg.id === newMessageId) {
+            return false;
+          }
+
           if (msg.role === MessageRoles.USER) {
             return true;
           }
@@ -1735,7 +1742,6 @@ export async function prepareValidatedMessages(
     ...fileDataFromHistory,
     ...fileDataFromNewMessage,
   ]);
-
   let typedMessages: UIMessage[] = [];
 
   try {

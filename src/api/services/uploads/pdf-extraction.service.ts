@@ -38,14 +38,24 @@ let pdfJsInitialized = false;
  * Only needs to be called once per worker instance.
  */
 async function ensurePdfJsInitialized(): Promise<void> {
-  if (pdfJsInitialized)
+  if (pdfJsInitialized) {
     return;
+  }
 
   try {
+    console.error('[PDF Extraction] Initializing PDF.js module...');
     await definePDFJSModule(() => import('unpdf/pdfjs'));
     pdfJsInitialized = true;
+    console.error('[PDF Extraction] PDF.js initialized successfully');
   } catch (error) {
-    console.error('[PDF Extraction] Failed to initialize PDF.js:', error);
+    // Log critical initialization failure with full details for debugging Workers issues
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error('[PDF Extraction] Failed to initialize PDF.js:', {
+      message: errorMessage,
+      stack: errorStack,
+      errorType: error?.constructor?.name,
+    });
     throw error;
   }
 }
@@ -74,6 +84,9 @@ export type ProcessPdfUploadParams = {
 // MAIN FUNCTIONS
 // ============================================================================
 
+/** Minimum chars per page to consider extraction successful (scanned PDFs have very little text) */
+const MIN_CHARS_PER_PAGE = 50;
+
 /**
  * Extract text from a PDF buffer.
  *
@@ -87,6 +100,19 @@ export async function extractPdfText(buffer: ArrayBuffer): Promise<PdfExtraction
     const pdf = await getDocumentProxy(new Uint8Array(buffer));
     const { totalPages, text } = await extractText(pdf, { mergePages: true });
 
+    // Check if extraction yielded meaningful content
+    // Scanned PDFs (image-only) typically have very little or no text
+    const charsPerPage = text.length / Math.max(totalPages, 1);
+    const hasMinimumContent = text.length >= MIN_CHARS_PER_PAGE && charsPerPage >= MIN_CHARS_PER_PAGE;
+
+    if (!hasMinimumContent) {
+      return {
+        success: false,
+        error: `PDF appears to be scanned/image-only (only ${text.length} chars extracted from ${totalPages} pages). Visual AI processing recommended.`,
+        totalPages,
+      };
+    }
+
     // Truncate if too long
     const truncatedText = text.length > MAX_EXTRACTED_TEXT_LENGTH
       ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[Text truncated due to length...]`
@@ -99,8 +125,6 @@ export async function extractPdfText(buffer: ArrayBuffer): Promise<PdfExtraction
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[PDF Extraction] Failed to extract text:', errorMessage);
-
     return {
       success: false,
       error: errorMessage,
@@ -136,7 +160,6 @@ export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<
 
   // Skip oversized files
   if (fileSize > MAX_PDF_SIZE_FOR_EXTRACTION) {
-    console.error(`[PDF Extraction] Skipping ${uploadId}: file too large (${Math.round(fileSize / 1024 / 1024)}MB)`);
     return {
       success: false,
       error: `File too large for text extraction (max ${MAX_PDF_SIZE_FOR_EXTRACTION / 1024 / 1024}MB)`,
@@ -170,14 +193,25 @@ export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<
           updatedAt: new Date(),
         })
         .where(eq(tables.upload.id, uploadId));
-
-      console.error(`[PDF Extraction] Success for ${uploadId}: ${result.totalPages} pages, ${result.text.length} chars`);
+    } else if (!result.success && result.error) {
+      // Extraction failed (e.g., scanned PDF) - save error to DB for reference
+      await db
+        .update(tables.upload)
+        .set({
+          metadata: {
+            extractionError: result.error,
+            totalPages: result.totalPages,
+            extractedAt: new Date().toISOString(),
+            requiresVision: true, // Mark as needing visual AI processing
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(tables.upload.id, uploadId));
     }
 
     return result;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[PDF Extraction] Error processing ${uploadId}:`, errorMessage);
 
     // Update upload with error status but don't fail the upload
     await db

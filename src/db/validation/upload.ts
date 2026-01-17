@@ -36,6 +36,7 @@ export const UploadMetadataSchema = z.object({
   extractedText: z.string().optional(),
   extractedAt: z.string().optional(), // ISO timestamp when extraction completed
   extractionError: z.string().optional(), // Error message if extraction failed
+  requiresVision: z.boolean().optional(), // True if text extraction failed, needs visual AI processing
   // User-provided context
   description: z.string().max(500).optional(),
   // Processing error details

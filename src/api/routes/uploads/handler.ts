@@ -472,21 +472,21 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
       }
     }
 
-    // Process PDF text extraction in background
+    // Process PDF text extraction SYNCHRONOUSLY to ensure text is ready before AI needs it
+    // Previously used waitUntil() which caused race conditions in production
     if (shouldExtractPdfText(file.type, file.size) && c.env.UPLOADS_R2_BUCKET) {
-      const pdfProcessingTask = backgroundPdfProcessing({
-        uploadId,
-        r2Key,
-        fileSize: file.size,
-        mimeType: file.type,
-        r2Bucket: c.env.UPLOADS_R2_BUCKET,
-        db,
-      });
-
-      if (c.executionCtx) {
-        c.executionCtx.waitUntil(pdfProcessingTask);
-      } else {
-        pdfProcessingTask.catch(() => {});
+      try {
+        await backgroundPdfProcessing({
+          uploadId,
+          r2Key,
+          fileSize: file.size,
+          mimeType: file.type,
+          r2Bucket: c.env.UPLOADS_R2_BUCKET,
+          db,
+        });
+      } catch (error) {
+        // Log but don't fail upload - extraction is optional
+        console.error(`[Upload] PDF extraction failed for ${uploadId}:`, error);
       }
     }
 
@@ -1055,21 +1055,21 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
       c.executionCtx.waitUntil(cleanupMetadata);
     }
 
-    // Process PDF text extraction in background
+    // Process PDF text extraction SYNCHRONOUSLY to ensure text is ready before AI needs it
+    // Previously used waitUntil() which caused race conditions in production
     if (shouldExtractPdfText(uploadMeta.mimeType, uploadMeta.fileSize) && c.env.UPLOADS_R2_BUCKET) {
-      const pdfProcessingTask = backgroundPdfProcessing({
-        uploadId,
-        r2Key: uploadMeta.r2Key,
-        fileSize: uploadMeta.fileSize,
-        mimeType: uploadMeta.mimeType,
-        r2Bucket: c.env.UPLOADS_R2_BUCKET,
-        db,
-      });
-
-      if (c.executionCtx) {
-        c.executionCtx.waitUntil(pdfProcessingTask);
-      } else {
-        pdfProcessingTask.catch(() => {});
+      try {
+        await backgroundPdfProcessing({
+          uploadId,
+          r2Key: uploadMeta.r2Key,
+          fileSize: uploadMeta.fileSize,
+          mimeType: uploadMeta.mimeType,
+          r2Bucket: c.env.UPLOADS_R2_BUCKET,
+          db,
+        });
+      } catch (error) {
+        // Log but don't fail upload - extraction is optional
+        console.error(`[Multipart Upload] PDF extraction failed for ${uploadId}:`, error);
       }
     }
 
