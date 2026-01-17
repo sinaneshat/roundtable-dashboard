@@ -150,17 +150,10 @@ function getErrorMessage(statusCode: number | undefined, reason: string): { mess
 export default async function PublicChatThreadPage({ params }: PageParams) {
   const { slug } = await params;
   const queryClient = getQueryClient();
-  const ssrStart = Date.now();
-
-  // eslint-disable-next-line no-console
-  console.log(`[SSR:PUBLIC] fetch-start slug=${slug}`);
 
   let response;
   try {
     response = await getCachedPublicThreadForMetadata(slug);
-
-    // eslint-disable-next-line no-console
-    console.log(`[SSR:PUBLIC] fetch-done ms=${Date.now() - ssrStart} msgs=${response.success ? response.data?.messages?.length ?? 0 : 0} success=${response.success}`);
 
     queryClient.setQueryData(queryKeys.threads.public(slug), response);
 

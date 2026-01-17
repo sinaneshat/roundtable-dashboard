@@ -107,7 +107,7 @@ function generateCode() {
     .join('\n');
 
   const imageExports = Object.keys(images)
-    .map((key) => `  '${key}': IMG_${key.toUpperCase()},`)
+    .map((key) => `  ${key}: IMG_${key.toUpperCase()},`)
     .join('\n');
 
   return `/**
@@ -146,7 +146,9 @@ let cachedFonts: OGFontConfig[] | null = null;
  * Get OG fonts (cached, instant - no network calls)
  */
 export function getOGFontsSync(): OGFontConfig[] {
-  if (cachedFonts) return cachedFonts;
+  if (cachedFonts) {
+    return cachedFonts;
+  }
 
   cachedFonts = [
     { name: 'Geist', data: base64ToArrayBuffer(FONT_400), style: 'normal', weight: 400 },

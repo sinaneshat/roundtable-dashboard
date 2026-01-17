@@ -13,6 +13,7 @@ import type { ModelPreferencesState } from '@/stores/preferences';
 import PostHogProvider from './posthog-provider';
 import { PreferencesStoreProvider } from './preferences-store-provider';
 import { QueryClientProvider } from './query-client-provider';
+import { ServiceWorkerProvider } from './service-worker-provider';
 
 // Lazy-loaded - only shown when app version changes
 const VersionUpdateModal = dynamic(
@@ -50,29 +51,31 @@ export function AppProviders({
   initialPreferences,
 }: AppProvidersProps) {
   return (
-    <PostHogProvider
-      apiKey={env.NEXT_PUBLIC_POSTHOG_API_KEY}
-      apiHost={env.NEXT_PUBLIC_POSTHOG_HOST}
-      environment={env.NEXT_PUBLIC_WEBAPP_ENV}
-    >
-      <QueryClientProvider>
-        <PreferencesStoreProvider initialState={initialPreferences}>
-          <NuqsAdapter>
-            <NextIntlClientProvider
-              messages={messages}
-              locale={locale}
-              timeZone={timeZone}
-              now={now}
-            >
-              <GlobalErrorBoundary>
-                {env.NEXT_PUBLIC_MAINTENANCE === 'true' ? <MaintenanceMessage /> : children}
-              </GlobalErrorBoundary>
-              <VersionUpdateModal />
-              <Toaster />
-            </NextIntlClientProvider>
-          </NuqsAdapter>
-        </PreferencesStoreProvider>
-      </QueryClientProvider>
-    </PostHogProvider>
+    <ServiceWorkerProvider>
+      <PostHogProvider
+        apiKey={env.NEXT_PUBLIC_POSTHOG_API_KEY}
+        apiHost={env.NEXT_PUBLIC_POSTHOG_HOST}
+        environment={env.NEXT_PUBLIC_WEBAPP_ENV}
+      >
+        <QueryClientProvider>
+          <PreferencesStoreProvider initialState={initialPreferences}>
+            <NuqsAdapter>
+              <NextIntlClientProvider
+                messages={messages}
+                locale={locale}
+                timeZone={timeZone}
+                now={now}
+              >
+                <GlobalErrorBoundary>
+                  {env.NEXT_PUBLIC_MAINTENANCE === 'true' ? <MaintenanceMessage /> : children}
+                </GlobalErrorBoundary>
+                <VersionUpdateModal />
+                <Toaster />
+              </NextIntlClientProvider>
+            </NuqsAdapter>
+          </PreferencesStoreProvider>
+        </QueryClientProvider>
+      </PostHogProvider>
+    </ServiceWorkerProvider>
   );
 }

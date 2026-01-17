@@ -364,22 +364,23 @@ export const STREAMING_CONFIG = {
   STREAM_TIMEOUT_MS: 90_000,
 
   /**
-   * Orphan cleanup timeout in milliseconds (5 minutes)
+   * Orphan cleanup timeout in milliseconds (30 minutes)
    * Applied to: cleanup operations in list endpoints
    *
    * Rationale: Grace period for legitimate long-running AI operations.
-   * Matches Cloudflare's max CPU time (5 min) for consistency.
+   * Extended to match AI_TIMEOUT_CONFIG.totalMs for consistency.
+   * Cloudflare has NO wall-clock limit - only constraint is 100s idle timeout.
    * Used by getThreadAnalysesHandler, getThreadPreSearchesHandler.
    */
-  ORPHAN_CLEANUP_TIMEOUT_MS: 5 * 60 * 1000,
+  ORPHAN_CLEANUP_TIMEOUT_MS: 30 * 60 * 1000,
 
   /**
    * Stale chunk timeout in milliseconds (90 seconds)
    * Applied to: stream resumption handlers
    *
    * Rationale: If no chunks received for 90s, consider stream stale.
-   * Matches Cloudflare's ~100s idle timeout for consistent behavior.
-   * Accounts for AI models that may "think" before streaming begins.
+   * Set under Cloudflare's 100s idle timeout to detect stale streams
+   * before HTTP 524. Accounts for AI models that may "think" before streaming.
    */
   STALE_CHUNK_TIMEOUT_MS: 90_000,
 } as const;

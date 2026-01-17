@@ -21,6 +21,7 @@ import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/api/core';
 import { MessagePartTypes, MessageRoles, PlanTypes, PollingStatuses, RoundExecutionPhases } from '@/api/core/enums';
 import {
+  AI_TIMEOUT_CONFIG,
   checkFreeUserHasCompletedRound,
   enforceCredits,
   finalizeCredits,
@@ -135,6 +136,9 @@ function generateCouncilModerator(
     prompt: 'Analyze this council discussion and produce the moderator analysis in markdown format.',
     temperature: 0.3,
     maxOutputTokens: 8192,
+    // ✅ STREAMING TIMEOUT: 15 min for complex moderator analysis
+    // Cloudflare has UNLIMITED wall-clock - only constraint is 100s idle timeout
+    abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.moderatorAnalysisMs),
     // ✅ TELEMETRY: Enable OpenTelemetry for moderator analysis streaming
     // Exports traces to configured OTEL collector when instrumentation.ts registers @vercel/otel
     experimental_telemetry: {

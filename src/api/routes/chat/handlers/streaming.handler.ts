@@ -758,10 +758,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           }),
         }),
         maxRetries: AI_RETRY_CONFIG.maxAttempts, // AI SDK handles retries
-        // ✅ BACKGROUND STREAMING: Only use timeout signal, NOT HTTP abort signal
-        // This allows AI generation to continue even if client disconnects
-        // Chunks are buffered to KV via consumeSseStream for resumption
-        abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
+        // ✅ STREAMING TIMEOUT: 30 min to allow long AI responses (reasoning models, complex queries)
+        // Cloudflare has UNLIMITED wall-clock duration - only constraint is 100s idle timeout.
+        // Active SSE streams sending data are NOT affected by idle timeout.
+        // @see https://developers.cloudflare.com/workers/platform/limits/
+        abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.totalMs),
         // ✅ TELEMETRY: Enable telemetry for OpenTelemetry integration
         experimental_telemetry: {
           isEnabled: true,

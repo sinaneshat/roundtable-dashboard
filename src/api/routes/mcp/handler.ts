@@ -849,7 +849,8 @@ async function toolGenerateResponses(
       maxOutputTokens,
       ...(supportsTemperature && { temperature: participant.settings?.temperature ?? 0.7 }),
       maxRetries: AI_RETRY_CONFIG.maxAttempts,
-      abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
+      // ✅ STREAMING TIMEOUT: 30 min for MCP operations
+      abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.totalMs),
     });
 
     let fullText = '';
