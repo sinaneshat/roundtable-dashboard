@@ -68,7 +68,7 @@ function getPerformanceMetadata(c: Context) {
 
   // Enhanced metrics only in preview/local with performance tracking enabled
   if (isPerformanceTracking) {
-    const perfData = formatPerformanceForResponse();
+    const perfData = formatPerformanceForResponse(c);
     if (perfData) {
       return {
         ...basicMetrics,
