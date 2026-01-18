@@ -6,50 +6,63 @@
  * - Hono API routes
  * - Durable Objects for scheduling
  * - Queue handlers for async tasks
+ *
+ * IMPORTANT: Uses async lazy initialization to avoid Cloudflare Workers
+ * startup CPU limit. Heavy modules (schemas, routes, services) are loaded
+ * on first request, not at module evaluation time.
+ *
+ * @see https://developers.cloudflare.com/workers/platform/limits/#worker-startup-time
  */
 
 import type { MessageBatch } from '@cloudflare/workers-types';
 
-import app from './src/index';
-import type {
-  RoundOrchestrationQueueMessage,
-  TitleGenerationQueueMessage,
-} from './src/types/queues';
-import { handleRoundOrchestrationQueue } from './src/workers/round-orchestration-queue';
-import { handleTitleGenerationQueue } from './src/workers/title-generation-queue';
-
-// Re-export AppType for client type inference
+// Re-export AppType for client type inference (static type, no runtime cost)
 export type { AppType } from './src/index';
 
-// Export Durable Object classes
+// Export Durable Object classes (lightweight, no heavy dependencies)
 export { UploadCleanupScheduler } from './src/workers/upload-cleanup-scheduler';
+
+// Lazy-loaded app instance (initialized on first request)
+let app: Awaited<ReturnType<typeof import('./src/index').createApp>> | null = null;
 
 // Export the main worker handler with queue support
 export default {
-  fetch: app.fetch,
+  /**
+   * HTTP request handler with lazy app initialization.
+   * Defers all heavy schema/route loading to first request time.
+   */
+  async fetch(
+    request: Request,
+    env: CloudflareEnv,
+    ctx: ExecutionContext,
+  ): Promise<Response> {
+    if (!app) {
+      const { createApp } = await import('./src/index');
+      app = await createApp();
+    }
+    return app.fetch(request, env, ctx);
+  },
 
   /**
-   * Queue handler for Cloudflare Queues
-   * Routes messages to appropriate consumers based on queue name
+   * Queue handler for Cloudflare Queues.
+   * Uses dynamic imports to avoid loading heavy modules at startup.
    */
-  queue: async (
+  async queue(
     batch: MessageBatch<unknown>,
     env: CloudflareEnv,
-  ): Promise<void> => {
+  ): Promise<void> {
     // Title generation queue
     if (batch.queue.startsWith('title-generation-queue')) {
-      return handleTitleGenerationQueue(
-        batch as MessageBatch<TitleGenerationQueueMessage>,
-        env,
-      );
+      const { handleTitleGenerationQueue } = await import('./src/workers/title-generation-queue');
+      type TitleMsg = import('./src/types/queues').TitleGenerationQueueMessage;
+      return handleTitleGenerationQueue(batch as MessageBatch<TitleMsg>, env);
     }
 
     // Round orchestration queue
     if (batch.queue.startsWith('round-orchestration-queue')) {
-      return handleRoundOrchestrationQueue(
-        batch as MessageBatch<RoundOrchestrationQueueMessage>,
-        env,
-      );
+      const { handleRoundOrchestrationQueue } = await import('./src/workers/round-orchestration-queue');
+      type RoundMsg = import('./src/types/queues').RoundOrchestrationQueueMessage;
+      return handleRoundOrchestrationQueue(batch as MessageBatch<RoundMsg>, env);
     }
 
     console.error(`[QueueRouter] Unknown queue: ${batch.queue}`);

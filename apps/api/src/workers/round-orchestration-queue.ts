@@ -17,25 +17,24 @@
  * @see src/api/types/queues.ts for message schemas
  */
 
+/**
+ * IMPORTANT: Uses dynamic imports to prevent heavy schema files from being bundled
+ * at worker startup. The chat schema (1861+ lines) is only loaded when needed.
+ * This prevents "Script startup exceeded CPU limits" deployment errors.
+ */
+
 import type { Message, MessageBatch } from '@cloudflare/workers-types';
 import { BETTER_AUTH_SESSION_COOKIE_NAME, MessagePartTypes, RoundOrchestrationMessageTypes, UIMessageRoles } from '@roundtable/shared/enums';
 
 import type { WebappEnv } from '@/lib/config/base-urls';
 import { BASE_URLS, isWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 import { calculateExponentialBackoff } from '@/lib/utils/queue-utils';
-import { RoundStatusSchema } from '@/routes/chat/schema';
 import type {
   CheckRoundCompletionQueueMessage,
   RoundOrchestrationQueueMessage,
   TriggerModeratorQueueMessage,
   TriggerParticipantQueueMessage,
   TriggerPreSearchQueueMessage,
-} from '@/types/queues';
-import {
-  CheckRoundCompletionQueueMessageSchema,
-  TriggerModeratorQueueMessageSchema,
-  TriggerParticipantQueueMessageSchema,
-  TriggerPreSearchQueueMessageSchema,
 } from '@/types/queues';
 
 // ============================================================================
@@ -199,6 +198,9 @@ async function triggerPreSearch(
  * 2. Gets current round state from internal API
  * 3. Determines what needs to happen next
  * 4. Queues appropriate trigger message
+ *
+ * IMPORTANT: Uses dynamic import for RoundStatusSchema to avoid
+ * loading 1861+ line schema file at worker startup.
  */
 async function checkRoundCompletion(
   message: CheckRoundCompletionQueueMessage,
@@ -223,6 +225,9 @@ async function checkRoundCompletion(
     }
     throw new Error(`Failed to get round status: ${stateResponse.status} ${stateResponse.statusText}`);
   }
+
+  // Lazy-load schema to avoid startup CPU limit
+  const { RoundStatusSchema } = await import('@/routes/chat/schema');
 
   // Validate response with Zod schema - single source of truth
   const parseResult = RoundStatusSchema.safeParse(await stateResponse.json());
@@ -290,6 +295,9 @@ async function checkRoundCompletion(
 
 /**
  * Process a single queue message with error handling and retry logic
+ *
+ * IMPORTANT: Uses dynamic imports for Zod schemas to avoid loading
+ * heavy schema files at worker startup.
  */
 async function processQueueMessage(
   msg: Message<RoundOrchestrationQueueMessage>,
@@ -298,6 +306,14 @@ async function processQueueMessage(
   try {
     const { body } = msg;
     const messageType = body.type;
+
+    // Lazy-load schemas to avoid startup CPU limit
+    const {
+      CheckRoundCompletionQueueMessageSchema,
+      TriggerModeratorQueueMessageSchema,
+      TriggerParticipantQueueMessageSchema,
+      TriggerPreSearchQueueMessageSchema,
+    } = await import('@/types/queues');
 
     // Validate and narrow types using Zod schemas for proper TypeScript inference
     if (messageType === 'trigger-participant') {
