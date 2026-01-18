@@ -8,6 +8,7 @@ import { useChatStore, useModelPreferencesStore } from '@/components/providers';
 import { useModelsQuery } from '@/hooks/queries';
 import { useBoolean, useChatAttachments } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
 import {
   chatMessagesToUIMessages,
@@ -19,7 +20,7 @@ import {
   threadHasImageFiles,
 } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
-import type { ApiMessage, ApiParticipant, ChatThread, ThreadDetailData, ThreadStreamResumptionState } from '@/services/api';
+import type { ApiMessage, ApiParticipant, ChatThread, Model, ThreadDetailData, ThreadStreamResumptionState } from '@/services/api';
 import {
   areAllParticipantsCompleteForRound,
   getModeratorMessageForRound,
@@ -176,7 +177,7 @@ export default function ChatThreadScreen({
 
     // Get detailed incompatibility info
     // Map models to the shape expected by getDetailedIncompatibleModelIds
-    const modelsWithCapabilities = allEnabledModels.map(m => ({
+    const modelsWithCapabilities = allEnabledModels.map((m: Model) => ({
       id: m.id,
       capabilities: {
         vision: m.supports_vision,
@@ -230,11 +231,11 @@ export default function ChatThreadScreen({
     );
 
     const visionModelNames = visionDeselected
-      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .map((p: ParticipantConfig) => allEnabledModels.find((m: Model) => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
     const fileModelNames = fileDeselected
-      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .map((p: ParticipantConfig) => allEnabledModels.find((m: Model) => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
     const compatibleParticipants = selectedParticipants.filter(

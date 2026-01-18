@@ -19,7 +19,7 @@ import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
-import type { Product, Subscription } from '@/services/api';
+import type { Price, Product, Subscription } from '@/services/api';
 
 const CancelSubscriptionDialog = dynamic(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => ({ default: m.CancelSubscriptionDialog })),
@@ -67,12 +67,12 @@ export function PublicPricingScreen() {
       product.prices !== undefined
       && product.prices !== null
       && product.prices.some(
-        price => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
+        (price: Price) => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
       ))
     .map(product => ({
       ...product,
       prices: product.prices.filter(
-        price => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
+        (price: Price) => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
       ),
     }))
     .sort((a, b) => (a.prices?.[0]?.unitAmount ?? 0) - (b.prices?.[0]?.unitAmount ?? 0));

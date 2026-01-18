@@ -24,7 +24,7 @@ export function getParticipantDisplayName(participant: ChatParticipant | undefin
   const modelName = participant.modelId.split('/').pop() ?? participant.modelId;
   return modelName
     .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
 

@@ -13,6 +13,7 @@ import { useDebouncedValue } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
+import type { ChatSidebarItem } from '@/services/api';
 
 type CommandSearchProps = {
   isOpen: boolean;
@@ -94,7 +95,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     }
     return threadsData.pages.flatMap((page) => {
       if (page.success && page.data?.items) {
-        return page.data.items.map(item => ({
+        return page.data.items.map((item: ChatSidebarItem) => ({
           id: item.id,
           slug: item.slug ?? '',
           title: item.title ?? '',

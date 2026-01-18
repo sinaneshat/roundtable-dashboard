@@ -65,7 +65,7 @@ export function useUpdateAttachmentMutation() {
 
         queryClient.setQueryData<ListAttachmentsResponse>(
           queryKeys.uploads.list(),
-          (oldData) => {
+          (oldData: ListAttachmentsResponse | undefined) => {
             if (!oldData?.success || !oldData.data?.items) {
               return oldData;
             }
@@ -75,7 +75,7 @@ export function useUpdateAttachmentMutation() {
               data: {
                 ...oldData.data,
                 items: oldData.data.items.map(
-                  item => (item.id === updatedAttachment.id ? updatedAttachment : item),
+                  (item: typeof oldData.data.items[number]) => (item.id === updatedAttachment.id ? updatedAttachment : item),
                 ),
               },
             };
@@ -108,7 +108,7 @@ export function useDeleteAttachmentMutation() {
 
       queryClient.setQueryData<ListAttachmentsResponse>(
         queryKeys.uploads.list(),
-        (oldData) => {
+        (oldData: ListAttachmentsResponse | undefined) => {
           if (!oldData?.success || !oldData.data?.items) {
             return oldData;
           }
@@ -117,7 +117,7 @@ export function useDeleteAttachmentMutation() {
             ...oldData,
             data: {
               ...oldData.data,
-              items: oldData.data.items.filter(item => item.id !== attachmentId),
+              items: oldData.data.items.filter((item: typeof oldData.data.items[number]) => item.id !== attachmentId),
             },
           };
         },

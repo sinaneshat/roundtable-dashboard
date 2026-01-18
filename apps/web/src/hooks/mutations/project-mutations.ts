@@ -50,7 +50,7 @@ export function useUpdateProjectMutation() {
 
         queryClient.setQueryData<ListProjectsResponse>(
           queryKeys.projects.list(),
-          (oldData) => {
+          (oldData: ListProjectsResponse | undefined) => {
             if (!oldData?.success || !oldData.data?.items)
               return oldData;
 
@@ -59,7 +59,7 @@ export function useUpdateProjectMutation() {
               data: {
                 ...oldData.data,
                 items: oldData.data.items.map(
-                  project => (project.id === updatedProject.id ? updatedProject : project),
+                  (project: typeof oldData.data.items[number]) => (project.id === updatedProject.id ? updatedProject : project),
                 ),
               },
             };
@@ -92,7 +92,7 @@ export function useDeleteProjectMutation() {
 
       queryClient.setQueryData<ListProjectsResponse>(
         queryKeys.projects.list(),
-        (oldData) => {
+        (oldData: ListProjectsResponse | undefined) => {
           if (!oldData?.success || !oldData.data?.items)
             return oldData;
 
@@ -100,7 +100,7 @@ export function useDeleteProjectMutation() {
             ...oldData,
             data: {
               ...oldData.data,
-              items: oldData.data.items.filter(project => project.id !== projectId),
+              items: oldData.data.items.filter((project: typeof oldData.data.items[number]) => project.id !== projectId),
             },
           };
         },

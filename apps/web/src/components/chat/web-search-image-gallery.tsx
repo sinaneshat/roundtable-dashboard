@@ -39,7 +39,7 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
     }
 
     if (result.images && result.images.length > 0) {
-      result.images.forEach((img) => {
+      result.images.forEach((img: { url: string; description?: string; alt?: string }) => {
         images.push({
           url: img.url,
           title: result.title,

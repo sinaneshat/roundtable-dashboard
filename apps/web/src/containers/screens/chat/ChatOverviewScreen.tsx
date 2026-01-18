@@ -59,6 +59,7 @@ import {
   threadHasImageFiles,
 } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
+import type { Model } from '@/services/api';
 import {
   useAutoModeAnalysis,
   useChatFormActions,
@@ -238,8 +239,8 @@ export default function ChatOverviewScreen() {
     if (allEnabledModels.length === 0)
       return [];
     return allEnabledModels
-      .filter(m => m.is_accessible_to_user)
-      .map(m => m.id);
+      .filter((m: Model) => m.is_accessible_to_user)
+      .map((m: Model) => m.id);
   }, [allEnabledModels]);
 
   // Get the first preset (Quick Perspectives) for default selection
@@ -280,7 +281,7 @@ export default function ChatOverviewScreen() {
 
     const defaultIds = accessibleModelIds.slice(0, 3);
     if (defaultIds.length > 0) {
-      return defaultIds.map((modelId, index) => ({
+      return defaultIds.map((modelId: string, index: number) => ({
         id: modelId,
         modelId,
         role: '',
@@ -344,7 +345,7 @@ export default function ChatOverviewScreen() {
     // Get detailed incompatibility info (separates vision vs file issues)
     if (filesToCheck.length > 0) {
       // Map models to the shape expected by getDetailedIncompatibleModelIds
-      const modelsWithCapabilities = allEnabledModels.map(m => ({
+      const modelsWithCapabilities = allEnabledModels.map((m: Model) => ({
         id: m.id,
         capabilities: {
           vision: m.supports_vision,
@@ -438,14 +439,14 @@ export default function ChatOverviewScreen() {
       init.modelOrder = true;
       let fullOrder: string[];
       if (persistedModelOrder.length > 0) {
-        const availableIds = new Set(allEnabledModels.map(m => m.id));
-        const validPersistedOrder = persistedModelOrder.filter(id => availableIds.has(id));
+        const availableIds = new Set(allEnabledModels.map((m: Model) => m.id));
+        const validPersistedOrder = persistedModelOrder.filter((id: string) => availableIds.has(id));
         const newModelIds = allEnabledModels
-          .filter(m => !validPersistedOrder.includes(m.id))
-          .map(m => m.id);
+          .filter((m: Model) => !validPersistedOrder.includes(m.id))
+          .map((m: Model) => m.id);
         fullOrder = [...validPersistedOrder, ...newModelIds];
       } else {
-        fullOrder = allEnabledModels.map(m => m.id);
+        fullOrder = allEnabledModels.map((m: Model) => m.id);
       }
       setModelOrder(fullOrder);
     }
@@ -543,11 +544,11 @@ export default function ChatOverviewScreen() {
     );
 
     const visionModelNames = visionDeselected
-      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .map((p: ParticipantConfig) => allEnabledModels.find((m: Model) => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
     const fileModelNames = fileDeselected
-      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .map((p: ParticipantConfig) => allEnabledModels.find((m: Model) => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
     const compatibleParticipants = selectedParticipants.filter(

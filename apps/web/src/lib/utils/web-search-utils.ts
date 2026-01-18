@@ -10,7 +10,7 @@
 import type { WebSearchDepth } from '@roundtable/shared';
 import { WebSearchDepths } from '@roundtable/shared';
 
-import type { StoredPreSearch } from '@/services/api';
+import type { PreSearchQuery, StoredPreSearch } from '@/services/api';
 
 // ============================================================================
 // DYNAMIC TIMEOUT CALCULATION
@@ -151,7 +151,7 @@ export function extractTimeoutInputFromPreSearch(preSearch: StoredPreSearch | nu
   if (searchData?.queries && searchData.queries.length > 0) {
     // Full data available - extract from queries
     return {
-      queries: searchData.queries.map(q => ({
+      queries: searchData.queries.map((q: PreSearchQuery) => ({
         searchDepth: q.searchDepth,
         sourceCount: TIMEOUT_CONFIG.DEFAULT_RESULTS_PER_QUERY, // Individual queries don't have sourceCount
       })),

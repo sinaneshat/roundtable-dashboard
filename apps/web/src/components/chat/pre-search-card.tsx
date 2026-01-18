@@ -10,7 +10,7 @@ import { FadeIn } from '@/components/ui/motion';
 import { queryKeys } from '@/lib/data/query-keys';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
-import type { PreSearchDataPayload, StoredPreSearch } from '@/services/api';
+import type { PreSearchDataPayload, PreSearchResult, StoredPreSearch } from '@/services/api';
 import { AnimationIndices } from '@/stores/chat';
 
 import { PreSearchStream } from './pre-search-stream';
@@ -119,7 +119,7 @@ export function PreSearchCard({
     if (!preSearch.searchData?.results)
       return 0;
     return preSearch.searchData.results.reduce(
-      (sum, r) => sum + (r.results?.length || 0),
+      (sum: number, r: PreSearchResult) => sum + (r.results?.length || 0),
       0,
     );
   }, [preSearch.searchData]);

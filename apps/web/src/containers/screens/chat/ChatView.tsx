@@ -28,6 +28,7 @@ import type { ModelPreset } from '@/lib/config/model-presets';
 import { filterPresetParticipants, ToastNamespaces } from '@/lib/config/model-presets';
 import { useTranslations } from '@/lib/i18n';
 import { isFilePart } from '@/lib/schemas/message-schemas';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
 import {
   getDetailedIncompatibleModelIds,
@@ -39,7 +40,7 @@ import {
   isVisionRequiredMimeType,
 } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
-import type { ApiChangelog } from '@/services/api';
+import type { ApiChangelog, Model, RoundFeedbackData } from '@/services/api';
 import {
   useAutoModeAnalysis,
   useChatFormActions,
@@ -209,7 +210,7 @@ export function ChatView({
     }
     const items = changelogResponse.data.items;
     const seen = new Set<string>();
-    return items.filter((item) => {
+    return items.filter((item: ApiChangelog) => {
       if (seen.has(item.id))
         return false;
       seen.add(item.id);
@@ -297,7 +298,7 @@ export function ChatView({
 
     // Get detailed incompatibility info
     // Map models to the shape expected by getDetailedIncompatibleModelIds
-    const modelsWithCapabilities = allEnabledModels.map(m => ({
+    const modelsWithCapabilities = allEnabledModels.map((m: Model) => ({
       id: m.id,
       capabilities: {
         vision: m.supports_vision,
@@ -343,7 +344,7 @@ export function ChatView({
   useEffect(() => {
     if (feedbackSuccess && feedbackData?.success && feedbackData.data) {
       const feedbackArray = feedbackData.data;
-      const feedbackKey = feedbackArray.map(f => `${f.roundNumber}:${f.feedbackType ?? 'none'}`).join(',');
+      const feedbackKey = feedbackArray.map((f: RoundFeedbackData) => `${f.roundNumber}:${f.feedbackType ?? 'none'}`).join(',');
       if (feedbackKey !== lastLoadedFeedbackRef.current) {
         lastLoadedFeedbackRef.current = feedbackKey;
         feedbackActions.loadFeedback(feedbackArray);
@@ -403,11 +404,11 @@ export function ChatView({
     );
 
     const visionModelNames = visionDeselected
-      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .map((p: ParticipantConfig) => allEnabledModels.find((m: Model) => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
     const fileModelNames = fileDeselected
-      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .map((p: ParticipantConfig) => allEnabledModels.find((m: Model) => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
     const compatibleParticipants = selectedParticipants
@@ -499,7 +500,7 @@ export function ChatView({
 
       // Build set of accessible model IDs to filter server response
       const accessibleModelIds = new Set(
-        allEnabledModels.filter(m => m.is_accessible_to_user).map(m => m.id),
+        allEnabledModels.filter((m: Model) => m.is_accessible_to_user).map((m: Model) => m.id),
       );
 
       // Consolidated auto mode analysis - updates store directly

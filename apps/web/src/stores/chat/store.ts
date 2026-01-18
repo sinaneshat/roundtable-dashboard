@@ -29,7 +29,7 @@ import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
+import type { ChatParticipant, ChatThread, PreSearchQuery, PreSearchResult, StoredPreSearch, WebSearchResultItem } from '@/services/api';
 
 import type { SendMessage, StartRound } from './store-action-types';
 import { isUpsertOptions } from './store-action-types';
@@ -233,17 +233,17 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
         const results = partialData.results ?? [];
         // TYPE BOUNDARY: Build search data with defaults for optional fields
         ps.searchData = {
-          queries: (partialData.queries ?? []).map(q => ({
+          queries: (partialData.queries ?? []).map((q: PreSearchQuery) => ({
             query: q.query,
             rationale: q.rationale ?? '',
             searchDepth: q.searchDepth ?? WebSearchDepths.BASIC,
             index: q.index,
             total: q.total ?? 1,
           })),
-          results: results.map(r => ({
+          results: results.map((r: PreSearchResult) => ({
             query: r.query,
             answer: r.answer ?? null,
-            results: r.results.map(item => ({
+            results: r.results.map((item: WebSearchResultItem) => ({
               title: item.title,
               url: item.url,
               content: item.content ?? '',

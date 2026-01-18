@@ -199,7 +199,7 @@ export function WebSearchResultItem({
               <span>{t('keyPoints')}</span>
             </div>
             <ul className="text-xs text-foreground/80 space-y-0.5 pl-4">
-              {result.keyPoints.slice(0, 3).map((point, idx) => (
+              {result.keyPoints.slice(0, 3).map((point: string, idx: number) => (
                 // eslint-disable-next-line react/no-array-index-key -- index is stable for static key points
                 <li key={idx} className="list-disc list-outside">
                   {point}

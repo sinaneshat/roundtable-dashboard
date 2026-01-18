@@ -40,7 +40,7 @@ export function useDeleteApiKeyMutation() {
 
       queryClient.setQueryData<ListApiKeysResponse>(
         queryKeys.apiKeys.list(),
-        (oldData) => {
+        (oldData: ListApiKeysResponse | undefined) => {
           if (!oldData?.success || !oldData.data?.items)
             return oldData;
 
@@ -48,7 +48,7 @@ export function useDeleteApiKeyMutation() {
             ...oldData,
             data: {
               ...oldData.data,
-              items: oldData.data.items.filter(key => key.id !== keyId),
+              items: oldData.data.items.filter((key: typeof oldData.data.items[number]) => key.id !== keyId),
             },
           };
         },

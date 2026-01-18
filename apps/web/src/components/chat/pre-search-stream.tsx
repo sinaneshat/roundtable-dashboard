@@ -14,7 +14,7 @@ import { PreSearchQuerySkeleton, PreSearchResultsSkeleton, PreSearchSkeleton } f
 import { useBoolean, useExecutePreSearchStream, useGetThreadPreSearchesForPolling } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
-import type { PreSearchDataPayload, StoredPreSearch } from '@/services/api';
+import type { PreSearchDataPayload, PreSearchQuery, PreSearchResult, StoredPreSearch, WebSearchResultItem as WebSearchResultItemType } from '@/services/api';
 
 import { WebSearchResultItem } from './web-search-result-item';
 
@@ -531,8 +531,8 @@ function PreSearchStreamComponent({
   const summary = displayData?.summary;
   const totalResults = displayData?.totalResults;
   const totalTime = displayData?.totalTime;
-  const validQueries = queries.filter((q): q is NonNullable<typeof q> => q != null);
-  const validResults = results.filter((r): r is NonNullable<typeof r> => r != null);
+  const validQueries = queries.filter((q: PreSearchQuery | null | undefined): q is PreSearchQuery => q != null);
+  const validResults = results.filter((r: PreSearchResult | null | undefined): r is PreSearchResult => r != null);
   const isStreamingNow = preSearch.status === MessageStatuses.STREAMING;
   const isEffectivelyComplete = isStreamComplete || preSearch.status === MessageStatuses.COMPLETE;
 
@@ -557,13 +557,13 @@ function PreSearchStreamComponent({
           index={0}
         >
           <WebSearchConfigurationDisplay
-            queries={validQueries.filter(q => q?.query).map(q => ({
+            queries={validQueries.filter((q: PreSearchQuery) => q?.query).map((q: PreSearchQuery) => ({
               query: q.query,
               rationale: q.rationale,
               searchDepth: q.searchDepth ?? WebSearchDepths.BASIC,
               index: q.index,
             }))}
-            results={validResults.flatMap(r => r.results || [])}
+            results={validResults.flatMap((r: PreSearchResult) => r.results || [])}
             searchPlan={summary}
             isStreamingPlan={isStreamingNow && !summary}
             totalResults={totalResults}
@@ -572,12 +572,12 @@ function PreSearchStreamComponent({
         </AnimatedStreamingItem>
       )}
 
-      {validQueries.map((query, queryIndex) => {
+      {validQueries.map((query: PreSearchQuery, queryIndex: number) => {
         if (!query?.query) {
           return null;
         }
 
-        const searchResult = validResults.find(r => r?.index === query?.index) || validResults.find(r => r?.query === query?.query);
+        const searchResult = validResults.find((r: PreSearchResult) => r?.index === query?.index) || validResults.find((r: PreSearchResult) => r?.query === query?.query);
         const hasResult = !!searchResult;
         const uniqueKey = `query-${query?.query || queryIndex}`;
         const hasResultsData = hasResult && searchResult.results && searchResult.results.length > 0;
@@ -636,7 +636,7 @@ function PreSearchStreamComponent({
               {/* Results list - show actual results if available */}
               {hasResultsData && (
                 <div className="pl-6">
-                  {searchResult.results.map((result, idx) => (
+                  {searchResult.results.map((result: WebSearchResultItemType, idx: number) => (
                     <WebSearchResultItem
                       key={result.url}
                       result={result}
