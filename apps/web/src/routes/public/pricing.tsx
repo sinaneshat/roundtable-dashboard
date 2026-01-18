@@ -3,8 +3,8 @@ import { z } from 'zod';
 
 import { PublicChatLayout } from '@/components/layouts/public-chat-layout';
 import { PublicPricingScreen } from '@/containers/screens/chat/billing/PublicPricingScreen';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
-const siteUrl = 'https://roundtable.now';
 const pageTitle = 'Pricing - Roundtable';
 const pageDescription = 'Choose your Roundtable plan - collaborative AI brainstorming with multiple AI models working together.';
 
@@ -18,27 +18,30 @@ export const Route = createFileRoute('/public/pricing')({
   component: PublicPricingPage,
   // Enable preloading for faster navigation
   preload: true,
-  head: () => ({
-    meta: [
-      { title: pageTitle },
-      { name: 'description', content: pageDescription },
-      // Open Graph
-      { property: 'og:title', content: pageTitle },
-      { property: 'og:description', content: pageDescription },
-      { property: 'og:type', content: 'website' },
-      { property: 'og:url', content: `${siteUrl}/pricing` },
-      { property: 'og:image', content: `${siteUrl}/static/og-image.png` },
-      // Twitter Card
-      { name: 'twitter:card', content: 'summary_large_image' },
-      { name: 'twitter:title', content: pageTitle },
-      { name: 'twitter:description', content: pageDescription },
-      // SEO
-      { name: 'robots', content: 'index, follow' },
-    ],
-    links: [
-      { rel: 'canonical', href: `${siteUrl}/pricing` },
-    ],
-  }),
+  head: () => {
+    const siteUrl = getAppBaseUrl();
+    return {
+      meta: [
+        { title: pageTitle },
+        { name: 'description', content: pageDescription },
+        // Open Graph
+        { property: 'og:title', content: pageTitle },
+        { property: 'og:description', content: pageDescription },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:url', content: `${siteUrl}/pricing` },
+        { property: 'og:image', content: `${siteUrl}/static/og-image.png` },
+        // Twitter Card
+        { name: 'twitter:card', content: 'summary_large_image' },
+        { name: 'twitter:title', content: pageTitle },
+        { name: 'twitter:description', content: pageDescription },
+        // SEO
+        { name: 'robots', content: 'index, follow' },
+      ],
+      links: [
+        { rel: 'canonical', href: `${siteUrl}/pricing` },
+      ],
+    };
+  },
 });
 
 function PublicPricingPage() {
