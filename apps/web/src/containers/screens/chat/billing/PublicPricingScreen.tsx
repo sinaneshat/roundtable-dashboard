@@ -19,7 +19,7 @@ import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
-import type { Price, Product, Subscription } from '@/services/api';
+import type { Price, Product, Subscription } from '@/types/billing';
 
 const CancelSubscriptionDialog = dynamic(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => ({ default: m.CancelSubscriptionDialog })),
@@ -63,16 +63,18 @@ export function PublicPricingScreen() {
   const shouldShowLoading = !hasMounted || isLoadingProducts || (!hasValidProductData && !shouldShowError);
 
   const monthlyProducts = products
-    .filter((product): product is typeof product & { prices: NonNullable<typeof product.prices> } =>
-      product.prices !== undefined
-      && product.prices !== null
-      && product.prices.some(
-        (price: Price) => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
-      ))
+    .filter((product): product is typeof product & { prices: NonNullable<typeof product.prices> } => {
+      const prices = product.prices as NonNullable<typeof product.prices> | undefined;
+      return prices !== undefined
+        && prices !== null
+        && prices.some(
+          price => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
+        );
+    })
     .map(product => ({
       ...product,
       prices: product.prices.filter(
-        (price: Price) => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
+        price => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
       ),
     }))
     .sort((a, b) => (a.prices?.[0]?.unitAmount ?? 0) - (b.prices?.[0]?.unitAmount ?? 0));
@@ -185,8 +187,8 @@ export function PublicPricingScreen() {
   }
 
   const product = monthlyProducts[0];
-  const price = product?.prices?.[0];
-  const subscription = price ? getSubscriptionForPrice(price.id) : undefined;
+  const price: Price | undefined = product?.prices?.[0];
+  const subscription: Subscription | undefined = price ? getSubscriptionForPrice(price.id) : undefined;
   const hasCurrentSubscription = !!subscription;
   const canCancel = isSubscriptionCancelable(subscription);
 

@@ -139,8 +139,8 @@ export function validateModelForOperation(
   }
 
   if (requiredCapabilities.minJsonQuality) {
-    const requiredLevel = JSON_QUALITY_ORDER[requiredCapabilities.minJsonQuality];
-    const modelLevel = JSON_QUALITY_ORDER[capabilities.jsonModeQuality];
+    const requiredLevel = JSON_QUALITY_ORDER[requiredCapabilities.minJsonQuality] ?? 0;
+    const modelLevel = JSON_QUALITY_ORDER[capabilities.jsonModeQuality] ?? 0;
 
     if (modelLevel < requiredLevel) {
       issues.push(

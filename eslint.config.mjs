@@ -22,6 +22,7 @@ export default antfu(
       '**/routeTree.gen.ts',
       '**/dist/**/*',
       '**/.output/**/*',
+      '**/public/*.js',
     ],
     isInEditor: false,
     lessOpinionated: false,

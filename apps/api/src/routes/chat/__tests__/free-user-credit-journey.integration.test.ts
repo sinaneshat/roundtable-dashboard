@@ -385,9 +385,10 @@ describe('free User Credit Journey Integration', () => {
         throw new Error('Thread not created');
       db.addMessage(thread.id, MessageRoles.USER, 'Hello', 0);
 
-      const balanceBefore = db.getCreditBalance(freeUser.id);
-      if (!balanceBefore)
+      const balanceBeforeObj = db.getCreditBalance(freeUser.id);
+      if (!balanceBeforeObj)
         throw new Error('Balance not found');
+      const balanceBefore = balanceBeforeObj.balance; // Capture value, not reference
 
       // Simulate assistant response (would normally happen via streaming)
       const streamingCost = 250; // Example cost
@@ -398,7 +399,9 @@ describe('free User Credit Journey Integration', () => {
       const balanceAfter = db.getCreditBalance(freeUser.id);
       if (!balanceAfter)
         throw new Error('Balance not found after response');
-      expect(balanceAfter.balance).toBe(balanceBefore.balance - streamingCost);
+      // balanceBefore is captured AFTER thread creation (5000 - 100 = 4900)
+      // After deducting streamingCost: 4900 - 250 = 4650
+      expect(balanceAfter.balance).toBe(balanceBefore - streamingCost);
     });
   });
 
@@ -656,7 +659,7 @@ describe('free User Credit Journey Integration', () => {
       currentBalance = paidDb.getCreditBalance(paidUser.id);
       if (!currentBalance)
         throw new Error('Balance not found');
-      expect(currentBalance).toBe(9700); // 9800 - 100
+      expect(currentBalance.balance).toBe(9700); // 9800 - 100
 
       // Verify all three threads exist
       const threads = paidDb.getUserThreads(paidUser.id);

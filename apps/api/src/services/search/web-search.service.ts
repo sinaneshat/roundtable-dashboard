@@ -294,25 +294,13 @@ export async function generateSearchQuery(
  */
 // Browser Type Definitions (Zod-derived types)
 
-const _CloudflareBrowserSchema = z.custom<Awaited<ReturnType<typeof import('@cloudflare/puppeteer').default.launch>>>();
-type CloudflareBrowser = z.infer<typeof _CloudflareBrowserSchema>;
+type CloudflareBrowser = Awaited<ReturnType<typeof import('@cloudflare/puppeteer').default.launch>>;
+type LocalBrowser = Awaited<ReturnType<typeof import('puppeteer').default.launch>>;
 
-const _LocalBrowserSchema = z.custom<Awaited<ReturnType<typeof import('puppeteer').default.launch>>>();
-type LocalBrowser = z.infer<typeof _LocalBrowserSchema>;
-
-const _BrowserResultSchema = z.union([
-  z.object({
-    type: z.literal(BrowserEnvironments.CLOUDFLARE),
-    browser: _CloudflareBrowserSchema,
-  }),
-  z.object({
-    type: z.literal(BrowserEnvironments.LOCAL),
-    browser: _LocalBrowserSchema,
-  }),
-  z.null(),
-]);
-
-type BrowserResult = z.infer<typeof _BrowserResultSchema>;
+type BrowserResult
+  = | { type: typeof BrowserEnvironments.CLOUDFLARE; browser: CloudflareBrowser }
+    | { type: typeof BrowserEnvironments.LOCAL; browser: LocalBrowser }
+    | null;
 
 const _PageOperationConfigSchema = z.object({
   url: z.string().url(),
@@ -356,7 +344,7 @@ type ExtractedSearchResult = z.infer<typeof _ExtractedSearchResultSchema>;
 // Browser Operation Helpers
 
 async function extractWithCloudflareBrowser(
-  browser: CloudflareBrowser,
+  browser: CloudflareBrowser | LocalBrowser,
   config: PageOperationConfig,
   extractFormat: string,
 ): Promise<ExtractedContent> {
@@ -393,7 +381,7 @@ async function extractWithCloudflareBrowser(
       } catch {}
     }
 
-    const extracted = await page.evaluate(createContentExtractor(), extractFormat);
+    const extracted = await (page.evaluate as (fn: unknown, arg: string) => Promise<ExtractedContent>)(createContentExtractor(), extractFormat);
     await page.close();
     return extracted;
   } catch {
@@ -403,7 +391,7 @@ async function extractWithCloudflareBrowser(
 }
 
 async function extractWithLocalBrowser(
-  browser: LocalBrowser,
+  browser: CloudflareBrowser | LocalBrowser,
   config: PageOperationConfig,
   extractFormat: string,
 ): Promise<ExtractedContent> {
@@ -440,7 +428,7 @@ async function extractWithLocalBrowser(
       } catch {}
     }
 
-    const extracted = await page.evaluate(createContentExtractor(), extractFormat);
+    const extracted = await (page.evaluate as (fn: unknown, arg: string) => Promise<ExtractedContent>)(createContentExtractor(), extractFormat);
     await page.close();
     return extracted;
   } catch {
@@ -450,7 +438,7 @@ async function extractWithLocalBrowser(
 }
 
 async function searchWithCloudflareBrowser(
-  browser: CloudflareBrowser,
+  browser: CloudflareBrowser | LocalBrowser,
   searchUrl: string,
   maxResults: number,
   userAgent: string,
@@ -464,7 +452,7 @@ async function searchWithCloudflareBrowser(
       timeout: 15000,
     });
 
-    const results = await page.evaluate(createSearchExtractor(), maxResults);
+    const results = await (page.evaluate as (fn: unknown, arg: number) => Promise<ExtractedSearchResult[]>)(createSearchExtractor(), maxResults);
     await page.close();
     return results;
   } catch {
@@ -474,7 +462,7 @@ async function searchWithCloudflareBrowser(
 }
 
 async function searchWithLocalBrowser(
-  browser: LocalBrowser,
+  browser: CloudflareBrowser | LocalBrowser,
   searchUrl: string,
   maxResults: number,
   userAgent: string,
@@ -488,7 +476,7 @@ async function searchWithLocalBrowser(
       timeout: 15000,
     });
 
-    const results = await page.evaluate(createSearchExtractor(), maxResults);
+    const results = await (page.evaluate as (fn: unknown, arg: number) => Promise<ExtractedSearchResult[]>)(createSearchExtractor(), maxResults);
     await page.close();
     return results;
   } catch {
@@ -924,13 +912,20 @@ async function extractPageContent(
 
   try {
     // Use discriminated union to call type-specific helper
-    // TypeScript narrows the browser type based on the 'type' field
-    let extracted: ExtractedContent;
-    if (browserResult.type === BrowserEnvironments.CLOUDFLARE) {
-      extracted = await extractWithCloudflareBrowser(browserResult.browser, config, format);
-    } else {
-      extracted = await extractWithLocalBrowser(browserResult.browser, config, format);
-    }
+    const extracted: ExtractedContent = await (async () => {
+      if (browserResult.type === BrowserEnvironments.CLOUDFLARE) {
+        return await extractWithCloudflareBrowser(
+          browserResult.browser,
+          config,
+          format,
+        );
+      }
+      return await extractWithLocalBrowser(
+        browserResult.browser,
+        config,
+        format,
+      );
+    })();
     await browserResult.browser.close();
 
     // Convert raw HTML to markdown if format is 'markdown'
@@ -1027,13 +1022,22 @@ async function searchWithBrowser(
 
   try {
     // Use discriminated union to call type-specific helper
-    // TypeScript narrows the browser type based on the 'type' field
-    let results: ExtractedSearchResult[];
-    if (browserResult.type === BrowserEnvironments.CLOUDFLARE) {
-      results = await searchWithCloudflareBrowser(browserResult.browser, searchUrl, maxResults, userAgent);
-    } else {
-      results = await searchWithLocalBrowser(browserResult.browser, searchUrl, maxResults, userAgent);
-    }
+    const results: ExtractedSearchResult[] = await (async () => {
+      if (browserResult.type === BrowserEnvironments.CLOUDFLARE) {
+        return await searchWithCloudflareBrowser(
+          browserResult.browser,
+          searchUrl,
+          maxResults,
+          userAgent,
+        );
+      }
+      return await searchWithLocalBrowser(
+        browserResult.browser,
+        searchUrl,
+        maxResults,
+        userAgent,
+      );
+    })();
     await browserResult.browser.close();
 
     return results;

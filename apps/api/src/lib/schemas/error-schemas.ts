@@ -203,5 +203,5 @@ export function getErrorCategoryMessage(category: ErrorCategory): string {
     model_content_filter: 'Content was filtered by safety systems',
   };
 
-  return messages[category] || messages.unknown;
+  return messages[category] as string;
 }

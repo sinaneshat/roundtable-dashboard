@@ -493,8 +493,8 @@ export async function syncUserQuotaFromSubscription(
   const oldQuotas = getTierQuotas(currentUsage.subscriptionTier);
 
   // Determine if this is a downgrade or period reset
-  const isDowngrade = newQuotas.threadsPerMonth < oldQuotas.threadsPerMonth
-    || newQuotas.messagesPerMonth < oldQuotas.messagesPerMonth;
+  const isDowngrade = (newQuotas?.threadsPerMonth ?? 0) < (oldQuotas?.threadsPerMonth ?? 0)
+    || (newQuotas?.messagesPerMonth ?? 0) < (oldQuotas?.messagesPerMonth ?? 0);
 
   // Detect upgrade from free tier to paid tier (pro)
   const isUpgradeFromFree = currentUsage.subscriptionTier === SubscriptionTiers.FREE && tier !== SubscriptionTiers.FREE;
@@ -603,7 +603,7 @@ export async function getMaxModels(tier: SubscriptionTier, _isAnnual = false): P
     free: 5,
     pro: 7,
   };
-  return fallbackMaxModels[tier];
+  return fallbackMaxModels[tier] ?? 5;
 }
 
 /**

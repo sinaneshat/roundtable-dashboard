@@ -12,6 +12,7 @@ import {
   MODEL_PRICING_TIERS,
   MODEL_TIER_THRESHOLDS,
   ModelCostCategories,
+  PlanTypes,
   SUBSCRIPTION_TIERS,
   SubscriptionTiers,
 } from '@roundtable/shared/enums';
@@ -89,7 +90,7 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
       analysisPerMonth: 1000,
     },
     upgradeMessage: 'You have access to all models',
-    monthlyCredits: CREDIT_CONFIG.PLANS.paid.monthlyCredits,
+    monthlyCredits: CREDIT_CONFIG.PLANS[PlanTypes.PAID]?.monthlyCredits ?? 10000,
   },
 } as const;
 
@@ -97,9 +98,13 @@ function deriveTierRecord<T>(
   extractor: (config: TierConfiguration) => T,
 ): Record<SubscriptionTier, T> {
   return Object.fromEntries(
-    SUBSCRIPTION_TIERS.map(tier => [tier, extractor(TIER_CONFIG[tier])]),
-  // TYPE INFERENCE: Object.fromEntries returns { [k: string]: T } but we know keys
-  // are SubscriptionTier from SUBSCRIPTION_TIERS const array
+    SUBSCRIPTION_TIERS.map((tier: SubscriptionTier) => {
+      const config = TIER_CONFIG[tier];
+      if (!config) {
+        throw new Error(`Missing tier configuration for ${tier}`);
+      }
+      return [tier, extractor(config)];
+    }),
   ) as Record<SubscriptionTier, T>;
 }
 
@@ -149,16 +154,20 @@ export function calculateBaseCredits(inputTokens: number, outputTokens: number):
   return tokensToCredits(inputTokens + outputTokens);
 }
 
-export function getPlanConfig(planType: 'paid') {
-  return CREDIT_CONFIG.PLANS[planType];
+export function getPlanConfig(_planType: 'paid'): { signupCredits: number; monthlyCredits: number; priceInCents: number } {
+  const config = CREDIT_CONFIG.PLANS[PlanTypes.PAID];
+  if (!config) {
+    throw new Error('Paid plan configuration not found');
+  }
+  return config;
 }
 
 export function getModelPricingTier(model: ModelForPricing): ModelPricingTier {
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
 
   for (const tier of MODEL_PRICING_TIERS) {
-    const { min, max } = MODEL_TIER_THRESHOLDS[tier];
-    if (inputPricePerMillion >= min && inputPricePerMillion < max) {
+    const thresholds = MODEL_TIER_THRESHOLDS[tier as ModelPricingTier];
+    if (thresholds && inputPricePerMillion >= thresholds.min && inputPricePerMillion < thresholds.max) {
       return tier;
     }
   }
@@ -222,7 +231,8 @@ export function estimateWeightedCredits(
 }
 
 export function getTierName(tier: SubscriptionTier): string {
-  return TIER_CONFIG[tier].name;
+  const config = TIER_CONFIG[tier];
+  return config?.name ?? 'Unknown';
 }
 
 export function getTiersInOrder(): SubscriptionTier[] {
@@ -230,7 +240,7 @@ export function getTiersInOrder(): SubscriptionTier[] {
 }
 
 export function getMaxOutputTokensForTier(tier: SubscriptionTier): number {
-  return MAX_OUTPUT_TOKENS_BY_TIER[tier];
+  return MAX_OUTPUT_TOKENS_BY_TIER[tier] ?? 512;
 }
 
 /**
@@ -253,15 +263,16 @@ export function getSafeMaxOutputTokens(
 }
 
 export function getMaxModelPricingForTier(tier: SubscriptionTier): number | null {
-  return MAX_MODEL_PRICING_BY_TIER[tier];
+  return MAX_MODEL_PRICING_BY_TIER[tier] ?? null;
 }
 
 export function getMaxModelsForTier(tier: SubscriptionTier): number {
-  return MAX_MODELS_BY_TIER[tier];
+  return MAX_MODELS_BY_TIER[tier] ?? 3;
 }
 
 export function getMonthlyCreditsForTier(tier: SubscriptionTier): number {
-  return TIER_CONFIG[tier].monthlyCredits;
+  const config = TIER_CONFIG[tier];
+  return config?.monthlyCredits ?? 0;
 }
 
 export function getTierFromProductId(productId: string): SubscriptionTier {
@@ -300,7 +311,7 @@ export function costPerMillion(pricePerToken: string | number): number {
 
 export function isModelFree(model: ModelForPricing): boolean {
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
-  const freeLimit = MAX_MODEL_PRICING_BY_TIER.free;
+  const freeLimit = MAX_MODEL_PRICING_BY_TIER.free ?? null;
   return freeLimit !== null && inputPricePerMillion <= freeLimit;
 }
 
@@ -328,12 +339,13 @@ export function getModelPricingDisplay(model: ModelForPricing): string {
 }
 
 export function getTierUpgradeMessage(tier: SubscriptionTier): string {
-  return TIER_CONFIG[tier].upgradeMessage;
+  const config = TIER_CONFIG[tier];
+  return config?.upgradeMessage ?? 'Upgrade to unlock more features';
 }
 
 export function getRequiredTierForModel(model: ModelForPricing): SubscriptionTier {
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
-  const freeLimit = MAX_MODEL_PRICING_BY_TIER[SubscriptionTiers.FREE];
+  const freeLimit = MAX_MODEL_PRICING_BY_TIER[SubscriptionTiers.FREE] ?? null;
   if (freeLimit !== null && inputPricePerMillion <= freeLimit) {
     return SubscriptionTiers.FREE;
   }
@@ -368,7 +380,7 @@ export function enrichWithTierAccess(
   }
 
   const requiredTier = getRequiredTierForModel(model);
-  const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
+  const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier] ?? null;
   const isAccessible = canAccessModelByPricing(userTier, model);
 
   return {

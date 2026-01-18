@@ -46,6 +46,7 @@ import {
   getUserCreditBalance,
   isFreeUserWithPendingRound,
 } from '@/services/billing';
+import type { ModelForPricing } from '@/services/billing/product-logic.service';
 import { trackThreadCreated } from '@/services/errors';
 import { getModelById } from '@/services/models';
 import { generateTitleFromMessage, generateUniqueSlug, updateThreadTitleAndSlug } from '@/services/prompts';
@@ -74,6 +75,24 @@ import {
   ThreadListQuerySchema,
   UpdateThreadRequestSchema,
 } from '../schema';
+
+// Helper to ensure getModelById returns correct type for enrichWithTierAccess
+function getModelForPricing(modelId: string): ModelForPricing | undefined {
+  const model = getModelById(modelId);
+  if (!model)
+    return undefined;
+  // Extract only the fields required by ModelForPricing to avoid type mismatch
+  return {
+    id: model.id,
+    name: model.name,
+    pricing: model.pricing,
+    pricing_display: model.pricing_display,
+    context_length: model.context_length,
+    created: model.created ?? null,
+    provider: model.provider,
+    capabilities: model.capabilities,
+  };
+}
 
 export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> = createHandler(
   {
@@ -293,9 +312,19 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       }
       // Skip pricing check for free users on their first (free) round
       if (!skipPricingCheck) {
-        const canAccess = canAccessModelByPricing(userTier, model);
+        const modelForPricing = getModelForPricing(participant.modelId);
+        if (!modelForPricing) {
+          throw createError.badRequest(
+            `Model "${participant.modelId}" pricing information not found`,
+            {
+              errorType: 'validation',
+              field: 'participants.modelId',
+            },
+          );
+        }
+        const canAccess = canAccessModelByPricing(userTier, modelForPricing);
         if (!canAccess) {
-          const requiredTier = getRequiredTierForModel(model);
+          const requiredTier = getRequiredTierForModel(modelForPricing);
           throw createError.unauthorized(
             `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan does not include access to ${model.name}. Upgrade to ${SUBSCRIPTION_TIER_NAMES[requiredTier]} or higher to use this model.`,
             {
@@ -763,9 +792,9 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
     ]);
 
     // ✅ DRY: Use enrichWithTierAccess helper (single source of truth)
-    const participants = rawParticipants.map(participant => ({
+    const participants = rawParticipants.map((participant: typeof tables.chatParticipant.$inferSelect) => ({
       ...participant,
-      ...enrichWithTierAccess(participant.modelId, userTier, getModelById),
+      ...enrichWithTierAccess(participant.modelId, userTier, getModelForPricing),
     }));
     const threadOwner = threadOwnerResult[0];
     if (!threadOwner) {
@@ -1765,15 +1794,15 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     ]);
 
     // ✅ DRY: Use enrichWithTierAccess helper (single source of truth)
-    const participants = rawParticipants.map(participant => ({
+    const participants = rawParticipants.map((participant: typeof tables.chatParticipant.$inferSelect) => ({
       ...participant,
-      ...enrichWithTierAccess(participant.modelId, userTier, getModelById),
+      ...enrichWithTierAccess(participant.modelId, userTier, getModelForPricing),
     }));
 
     // ✅ ATTACHMENT SUPPORT: Load message attachments for user messages
     const userMessageIds = rawMessages
-      .filter(m => m.role === MessageRoles.USER)
-      .map(m => m.id);
+      .filter((m: typeof tables.chatMessage.$inferSelect) => m.role === MessageRoles.USER)
+      .map((m: typeof tables.chatMessage.$inferSelect) => m.id);
 
     type MessageAttachment = {
       messageId: string;
@@ -1829,15 +1858,15 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     }));
     const signedPaths = await generateBatchSignedPaths(c, allUploads);
 
-    const messages = rawMessages.map((msg) => {
+    const messages = rawMessages.map((msg: typeof tables.chatMessage.$inferSelect) => {
       const attachments = attachmentsByMessage.get(msg.id);
       if (!attachments || attachments.length === 0 || msg.role !== MessageRoles.USER) {
         return msg;
       }
 
       const existingParts = msg.parts ?? [];
-      const nonFileParts = existingParts.filter(p => p.type !== MessagePartTypes.FILE);
-      const fileParts: ExtendedFilePart[] = attachments.map((att): ExtendedFilePart => {
+      const nonFileParts = existingParts.filter((p: { type: string; [key: string]: unknown }) => p.type !== MessagePartTypes.FILE);
+      const fileParts: ExtendedFilePart[] = attachments.map((att: MessageAttachment): ExtendedFilePart => {
         const signedPath = signedPaths.get(att.uploadId);
         if (!signedPath)
           throw new Error(`Missing signed path for upload ${att.uploadId}`);

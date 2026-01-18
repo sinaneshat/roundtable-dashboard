@@ -1,5 +1,8 @@
-import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
+'use client';
+
 import type { ComponentProps } from 'react';
+
+import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
 
 import { Icons } from '@/components/icons';
 import { cn } from '@/lib/ui/cn';

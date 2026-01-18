@@ -8,7 +8,7 @@
  * ENSURES: Backend and frontend always create valid metadata
  */
 
-import type { CitationSourceType, ErrorType, FinishReason } from '@roundtable/shared/enums';
+import type { ErrorType, FinishReason } from '@roundtable/shared/enums';
 import { FinishReasons, MessageRoles } from '@roundtable/shared/enums';
 import type { LanguageModelUsage } from 'ai';
 
@@ -17,6 +17,7 @@ import type {
   DbCitation,
 } from '@/db/schemas/chat-metadata';
 import type { RoundNumber } from '@/lib/schemas/round-schemas';
+import type { AvailableSource } from '@/types/citations';
 
 // ============================================================================
 // Type-Safe Builder Parameters
@@ -69,24 +70,7 @@ export type ParticipantMetadataParams = {
   citations?: DbCitation[];
 
   // Available sources (files/context available to AI, shown even without inline citations)
-  availableSources?: Array<{
-    id: string;
-    sourceType: CitationSourceType;
-    title: string;
-    // Attachment-specific fields
-    downloadUrl?: string;
-    filename?: string;
-    mimeType?: string;
-    fileSize?: number;
-    // Search-specific fields
-    url?: string;
-    domain?: string;
-    // Context fields
-    threadTitle?: string;
-    description?: string;
-    // Content excerpt for quote display in Sources tooltip
-    excerpt?: string;
-  }>;
+  availableSources?: AvailableSource[];
 
   // Reasoning duration in seconds (for "Thought for X seconds" display on page refresh)
   reasoningDuration?: number;
@@ -170,8 +154,30 @@ export function updateParticipantMetadata(
   updates: Partial<ParticipantMetadataParams>,
 ): DbAssistantMessageMetadata {
   return createParticipantMetadata({
-    ...existing,
-    ...updates,
+    roundNumber: existing.roundNumber,
+    participantId: existing.participantId,
+    participantIndex: existing.participantIndex,
+    participantRole: existing.participantRole,
+    model: existing.model,
+    finishReason: updates.finishReason ?? existing.finishReason,
+    usage: updates.usage ?? existing.usage,
+    hasError: updates.hasError ?? existing.hasError,
+    errorType: updates.errorType ?? existing.errorType,
+    errorMessage: updates.errorMessage ?? existing.errorMessage,
+    errorCategory: updates.errorCategory ?? existing.errorCategory,
+    isTransient: updates.isTransient ?? existing.isTransient,
+    isPartialResponse: updates.isPartialResponse ?? existing.isPartialResponse,
+    providerMessage: updates.providerMessage ?? existing.providerMessage,
+    openRouterError: updates.openRouterError ?? existing.openRouterError,
+    retryAttempts: updates.retryAttempts ?? existing.retryAttempts,
+    isEmptyResponse: updates.isEmptyResponse ?? existing.isEmptyResponse,
+    statusCode: updates.statusCode ?? existing.statusCode,
+    responseBody: updates.responseBody ?? existing.responseBody,
+    aborted: updates.aborted ?? existing.aborted,
+    createdAt: updates.createdAt ?? existing.createdAt,
+    citations: updates.citations ?? existing.citations,
+    availableSources: updates.availableSources ?? (existing.availableSources as ParticipantMetadataParams['availableSources']),
+    reasoningDuration: updates.reasoningDuration ?? existing.reasoningDuration,
   });
 }
 

@@ -14,7 +14,7 @@ import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId } from '@/lib/utils/product-logic';
-import type { Subscription } from '@/services/api';
+import type { Subscription } from '@/types/billing';
 
 // Glass button styles for billing pages (consistent with chat toolbar)
 const glassButtonPrimary = 'h-11 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors';
@@ -74,7 +74,7 @@ function SubscriptionChangedContent() {
     if (!data.data?.items || data.data.items.length === 0) {
       return null;
     }
-    const items = data.data.items;
+    const items = data.data.items as Subscription[];
     return items.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE) ?? items[0] ?? null;
   }, [subscriptionData]);
 
@@ -135,8 +135,9 @@ function SubscriptionChangedContent() {
     );
   }
 
-  const newTierString = displaySubscription?.price?.productId
-    ? getTierFromProductId(displaySubscription.price.productId)
+  const priceProductId = (displaySubscription as Subscription & { price?: { productId?: string } })?.price?.productId;
+  const newTierString = priceProductId
+    ? getTierFromProductId(priceProductId)
     : SubscriptionTiers.FREE;
 
   const newTierResult = SubscriptionTierSchema.safeParse(newTierString);

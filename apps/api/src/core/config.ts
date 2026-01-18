@@ -548,6 +548,9 @@ export function getLoggingConfigSync() {
  */
 export async function shouldLog(level: LogLevel): Promise<boolean> {
   const config = await getLoggingConfig();
+  if (!config) {
+    return false;
+  }
   return config.enabled && config.levels.includes(level);
 }
 

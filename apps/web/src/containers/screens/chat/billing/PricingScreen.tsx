@@ -16,7 +16,7 @@ import {
 import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
-import type { Product, Subscription } from '@/services/api';
+import type { Product, Subscription } from '@/types/billing';
 
 export default function PricingScreen() {
   const navigate = useNavigate();
@@ -43,7 +43,7 @@ export default function PricingScreen() {
 
   const shouldShowError = productsError || (typedProductsData && !typedProductsData.success);
 
-  const activeSubscription = subscriptions.find(
+  const activeSubscription: Subscription | undefined = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
 

@@ -39,14 +39,25 @@ This monorepo deploys two Cloudflare Workers:
 
 ### Step 1: Connect Repository
 
-In the Cloudflare Dashboard, connect your repository to **4 Workers**:
+In the Cloudflare Dashboard, connect your repository to **4 Workers**.
 
-| Worker Name | Root Directory | Deploy Command |
-|-------------|----------------|----------------|
-| `roundtable-api-preview` | `apps/api` | `pnpm deploy:preview` |
-| `roundtable-api-production` | `apps/api` | `pnpm deploy:production` |
-| `roundtable-web-preview` | `apps/web` | `pnpm deploy:preview` |
-| `roundtable-web` | `apps/web` | `pnpm deploy:production` |
+**Important**: Root directory must be `/` (empty) to run from monorepo root where pnpm workspace and turbo are configured.
+
+| Worker Name | Root Directory | Build Command | Deploy Command |
+|-------------|----------------|---------------|----------------|
+| `roundtable-api-preview` | `/` | `pnpm install` | `npx turbo run deploy:preview --filter=@roundtable/api` |
+| `roundtable-api-production` | `/` | `pnpm install` | `npx turbo run deploy:production --filter=@roundtable/api` |
+| `roundtable-web-preview` | `/` | `pnpm install` | `npx turbo run deploy:preview --filter=@roundtable/web` |
+| `roundtable-web` | `/` | `pnpm install` | `npx turbo run deploy:production --filter=@roundtable/web` |
+
+### Custom Domains
+
+| Worker | Custom Domain |
+|--------|---------------|
+| `roundtable-api-preview` | `api-preview.roundtable.now` |
+| `roundtable-api-production` | `api.roundtable.now` |
+| `roundtable-web-preview` | `app-preview.roundtable.now` |
+| `roundtable-web` | `roundtable.now` |
 
 ### Step 2: Configure Build Watch Paths
 

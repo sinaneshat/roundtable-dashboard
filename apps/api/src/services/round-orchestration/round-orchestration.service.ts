@@ -627,7 +627,7 @@ export async function computeRoundStatus(
     status = RoundExecutionStatuses.RUNNING;
     phase = RoundExecutionPhases.MODERATOR;
     moderatorStatus = kvState?.moderatorStatus || ParticipantStreamStatuses.PENDING;
-  } else if (kvState?.status === RoundExecutionStatuses.RUNNING) {
+  } else if (kvState?.status === RoundExecutionStatuses.RUNNING && kvState) {
     status = RoundExecutionStatuses.RUNNING;
     phase = kvState.phase;
     moderatorStatus = kvState.moderatorStatus;

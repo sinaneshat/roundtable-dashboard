@@ -26,6 +26,24 @@ import type { listModelsRoute } from './route';
 // ============================================================================
 
 /**
+ * Convert HardcodedModel to ModelForPricing format
+ * ✅ Following pattern from streaming.handler.ts
+ * Extracts only fields needed for pricing calculations and tier access control
+ */
+function toModelForPricing(model: ReturnType<typeof getAllModels>[number]): ModelForPricing {
+  return {
+    id: model.id,
+    name: model.name,
+    pricing: model.pricing,
+    context_length: model.context_length,
+    pricing_display: model.pricing_display,
+    created: model.created,
+    provider: model.provider,
+    capabilities: model.capabilities,
+  };
+}
+
+/**
  * Enrich model with tier access information
  * ✅ DRY: Uses product-logic.service helpers for tier calculations
  */
@@ -83,7 +101,10 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection
     // ============================================================================
     // ✅ DRY: Uses enrichModelWithTierAccess helper
-    const modelsWithTierInfo = allModels.map(model => enrichModelWithTierAccess(model, userTier));
+    // Convert HardcodedModel to ModelForPricing format before enriching
+    const modelsWithTierInfo = allModels.map(model =>
+      enrichModelWithTierAccess(toModelForPricing(model), userTier),
+    );
 
     // ============================================================================
     // ✅ ORDERING: Accessible first, then by price (cheapest first)

@@ -22,7 +22,8 @@ import type { DbMessageParts } from '@/db/schemas/chat-metadata';
 import type { MessagePart, StreamingFinishResult } from '@/lib/schemas/message-schemas';
 import { cleanCitationExcerpt, createParticipantMetadata, hasCitations, isObject, parseCitations, toDbCitations } from '@/lib/utils';
 import { extractErrorMetadata } from '@/services/errors';
-import type { AvailableSource, CitationSourceMap } from '@/types/citations';
+import type { CitationSourceMap } from '@/types/citations';
+import { AvailableSourceSchema } from '@/types/citations';
 
 // ============================================================================
 // Type Definitions
@@ -45,7 +46,7 @@ export const SaveMessageParamsSchema = z.object({
   finishResult: z.custom<StreamingFinishResult>(),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
   citationSourceMap: z.custom<CitationSourceMap>().optional(),
-  availableSources: z.array(z.custom<AvailableSource>()).optional(),
+  availableSources: z.array(AvailableSourceSchema).optional(),
   reasoningDuration: z.number().nonnegative().optional(),
   emptyResponseError: z.string().nullable().optional(),
 });

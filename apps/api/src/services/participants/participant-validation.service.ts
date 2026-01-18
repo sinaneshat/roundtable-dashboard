@@ -15,6 +15,31 @@ import { getModelById } from '@/services/models';
 import { getEnabledParticipantCount } from './participant-query.service';
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Adapter to convert getModelById to ModelForPricing type expected by billing functions
+ * Strips Zod .openapi() index signatures from model types
+ */
+function getModelForPricing(modelId: string): ModelForPricing | undefined {
+  const model = getModelById(modelId);
+  if (!model)
+    return undefined;
+
+  return {
+    id: model.id,
+    name: model.name,
+    pricing: model.pricing,
+    context_length: model.context_length,
+    pricing_display: model.pricing_display,
+    created: model.created,
+    provider: model.provider,
+    capabilities: model.capabilities,
+  };
+}
+
+// ============================================================================
 // SCHEMAS
 // ============================================================================
 
@@ -62,7 +87,7 @@ export async function validateTierLimits(
   db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<void> {
   const currentModelCount = await getEnabledParticipantCount(threadId, db);
-  const maxModels = MAX_MODELS_BY_TIER[userTier];
+  const maxModels = MAX_MODELS_BY_TIER[userTier] ?? 1;
 
   if (currentModelCount >= maxModels) {
     throw createError.badRequest(
@@ -84,7 +109,7 @@ export async function validateModelAccess(
   userTier: SubscriptionTier,
   options?: ValidateModelAccessOptions,
 ): Promise<ModelForPricing> {
-  const model = getModelById(modelId);
+  const model = getModelForPricing(modelId);
 
   if (!model) {
     throw createError.badRequest(

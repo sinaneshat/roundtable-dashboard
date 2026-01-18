@@ -24,7 +24,6 @@ import {
 import type { ModelMessage, UIMessage } from 'ai';
 import { convertToModelMessages, validateUIMessages } from 'ai';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { ulid } from 'ulid';
 import { z } from 'zod';
 
 import { createError } from '@/common/error-handling';
@@ -1840,7 +1839,6 @@ export async function prepareValidatedMessages(
     modelMessages = await convertToModelMessages([
       ...nonEmptyMessages,
       {
-        id: `user-continuation-${ulid()}`,
         role: UIMessageRoles.USER,
         parts: [{ type: 'text', text: lastUserText.text }],
       },

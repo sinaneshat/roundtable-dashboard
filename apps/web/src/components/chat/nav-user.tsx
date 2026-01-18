@@ -27,7 +27,7 @@ import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls
 import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
 import dynamic from '@/lib/utils/dynamic';
-import type { Subscription } from '@/services/api';
+import type { Subscription } from '@/types/billing';
 
 const CancelSubscriptionDialog = dynamic<CancelSubscriptionDialogProps>(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => ({ default: m.CancelSubscriptionDialog })),
@@ -79,11 +79,9 @@ export function NavUser({ initialSession }: NavUserProps) {
 
   const displayName = user?.name || t('user.defaultName');
   const displayEmail = user?.email || '';
-  const subscriptions: Subscription[] = (() => {
-    if (!subscriptionsData?.success || !subscriptionsData.data?.items)
-      return [];
-    return subscriptionsData.data.items;
-  })();
+  const subscriptions: Subscription[] = subscriptionsData?.success && subscriptionsData.data?.items
+    ? (subscriptionsData.data.items as Subscription[])
+    : [];
   const activeSubscription = subscriptions.find(
     (sub: Subscription) => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );

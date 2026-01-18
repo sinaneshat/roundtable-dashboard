@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Liquid Glass SVG Filter Definitions
  *

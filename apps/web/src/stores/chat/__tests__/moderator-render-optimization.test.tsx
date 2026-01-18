@@ -154,10 +154,8 @@ function MessageListWithTracking({ messages, onRender }: MessageListWithTracking
 // - ThreadHeaderProvider
 // - TooltipProvider
 
-// SKIP: This test file needs refactoring to work with TanStack Router provider setup
-// The TestWrapper pattern conflicts with the router-based TestProviders
 // TODO: Refactor to properly test render optimization with router context
-describe.skip('moderator Render Optimization', () => {
+describe.todo('moderator Render Optimization', () => {
   let renderTracker: Map<string, number>;
   let onRender: (id: string) => void;
 

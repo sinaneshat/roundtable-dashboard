@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { getTranslations } from '@/lib/i18n';
+import { useTranslations } from '@/lib/i18n';
 
 const TERMS_SECTIONS = [
   'acceptance',
@@ -22,25 +22,24 @@ const TERMS_SECTIONS = [
   'contact',
 ] as const;
 
-export default async function TermsScreen() {
-  const t = await getTranslations('legal.terms');
-  const tActions = await getTranslations('actions');
+export default function TermsScreen() {
+  const t = useTranslations();
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-8">
         <Button asChild variant="ghost" size="sm" startIcon={<Icons.arrowLeft />}>
           <Link to="/auth/sign-in">
-            {tActions('back')}
+            {t('actions.back')}
           </Link>
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-3xl">{t('title')}</CardTitle>
+          <CardTitle className="text-3xl">{t('legal.terms.title')}</CardTitle>
           <CardDescription>
-            {t('lastUpdated', { date: '2024-01-01' })}
+            {t('legal.terms.lastUpdated', { date: '2024-01-01' })}
           </CardDescription>
         </CardHeader>
         <CardContent className="prose prose-sm dark:prose-invert max-w-none">
@@ -48,10 +47,10 @@ export default async function TermsScreen() {
             {TERMS_SECTIONS.map(section => (
               <div key={section}>
                 <h2 className="text-xl font-semibold mb-3">
-                  {t(`${section}.title`)}
+                  {t(`legal.terms.${section}.title`)}
                 </h2>
                 <p className="text-muted-foreground">
-                  {t(`${section}.content`)}
+                  {t(`legal.terms.${section}.content`)}
                 </p>
               </div>
             ))}

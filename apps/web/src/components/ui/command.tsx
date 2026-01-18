@@ -1,17 +1,20 @@
+'use client';
+
+import type { ComponentProps } from 'react';
+
 import type { DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive } from 'cmdk';
-import type { ComponentProps } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { cn } from '@/lib/ui/cn';
 import { glassCard } from '@/lib/ui/glassmorphism';
+import { cn } from '@/lib/ui/cn';
 
 type CommandBaseProps = ComponentProps<typeof CommandPrimitive>;
 
-type CommandProps = {
-  glass?: boolean;
-} & CommandBaseProps;
+interface CommandProps extends CommandBaseProps {
+  glass?: boolean
+}
 
 function Command({ className, glass = false, ...props }: CommandProps) {
   return (
@@ -131,7 +134,7 @@ function CommandItem({
 function CommandShortcut({
   className,
   ...props
-}: ComponentProps<'span'>) {
+}: ComponentProps<"span">) {
   return (
     <span
       data-slot="command-shortcut"
@@ -153,5 +156,5 @@ export {
   CommandItem,
   CommandList,
   CommandSeparator,
-  CommandShortcut,
+  CommandShortcut
 };

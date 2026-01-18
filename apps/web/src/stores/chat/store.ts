@@ -14,7 +14,7 @@
  * - context.ts: useChatStore hook with zustand useStore
  */
 
-import type { ChatMode, ScreenMode } from '@roundtable/shared';
+import type { ChatMode, FeedbackType, ScreenMode } from '@roundtable/shared';
 import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses, TextPartStates, UploadStatuses, WebSearchDepths } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { castDraft, enableMapSet } from 'immer';
@@ -164,11 +164,15 @@ const createFeedbackSlice: SliceCreator<FeedbackSlice> = set => ({
     }, false, 'feedback/setFeedback'),
   setPendingFeedback: feedback =>
     set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
-  loadFeedbackFromServer: data =>
+  loadFeedbackFromServer: (data) => {
     set({
-      feedbackByRound: new Map(data.map(f => [f.roundNumber, f.feedbackType])),
+      feedbackByRound: new Map(data.map((f) => {
+        const feedback = f as { roundNumber: number; feedbackType: FeedbackType | null };
+        return [feedback.roundNumber, feedback.feedbackType];
+      })),
       hasLoadedFeedback: true,
-    }, false, 'feedback/loadFeedbackFromServer'),
+    }, false, 'feedback/loadFeedbackFromServer');
+  },
 });
 
 const createUISlice: SliceCreator<UISlice> = set => ({

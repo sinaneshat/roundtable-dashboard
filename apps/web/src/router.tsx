@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { createRouter as createTanStackRouter } from '@tanstack/react-router';
 
+import NotFoundScreen from '@/containers/screens/general/NotFoundScreen';
 import { getQueryClient } from '@/lib/data/query-client';
 
 import { routeTree } from './routeTree.gen';
@@ -20,21 +21,6 @@ export type RouterContext = {
  * Note: Type assertion used because strictNullChecks is disabled in tsconfig.
  * TanStack Router's type system requires strictNullChecks for full type safety.
  */
-/**
- * Default 404 component for unmatched routes
- */
-function NotFoundComponent() {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background">
-      <h1 className="text-4xl font-bold text-foreground">404</h1>
-      <p className="mt-2 text-muted-foreground">Page not found</p>
-      <a href="/" className="mt-4 text-primary hover:underline">
-        Go home
-      </a>
-    </div>
-  );
-}
-
 export function getRouter() {
   const queryClient = getQueryClient();
 
@@ -43,7 +29,7 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: 'intent',
     context: { queryClient },
-    defaultNotFoundComponent: NotFoundComponent,
+    defaultNotFoundComponent: NotFoundScreen,
   } as unknown as Parameters<typeof createTanStackRouter>[0]);
 
   return router;

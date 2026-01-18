@@ -12,7 +12,7 @@ import {
 import type { RoundStatus } from '../../schema';
 
 // Mock the round-orchestration service
-vi.mock('@/api/services/round-orchestration/round-orchestration.service', () => ({
+vi.mock('@/services/round-orchestration/round-orchestration.service', () => ({
   computeRoundStatus: vi.fn(),
   getIncompleteParticipants: vi.fn(),
   getRoundExecutionState: vi.fn(),

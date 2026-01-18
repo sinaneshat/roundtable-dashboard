@@ -343,8 +343,11 @@ export function ChatView({
   const lastLoadedFeedbackRef = useRef<string>('');
   useEffect(() => {
     if (feedbackSuccess && feedbackData?.success && feedbackData.data) {
-      const feedbackArray = feedbackData.data;
-      const feedbackKey = feedbackArray.map((f: RoundFeedbackData) => `${f.roundNumber}:${f.feedbackType ?? 'none'}`).join(',');
+      const feedbackArray: RoundFeedbackData[] = feedbackData.data as RoundFeedbackData[];
+      const feedbackKey = feedbackArray.map((feedback) => {
+        const fb = feedback as Record<string, unknown>;
+        return `${fb.roundNumber as number}:${(fb.feedbackType as string | null) ?? 'none'}`;
+      }).join(',');
       if (feedbackKey !== lastLoadedFeedbackRef.current) {
         lastLoadedFeedbackRef.current = feedbackKey;
         feedbackActions.loadFeedback(feedbackArray);
@@ -499,7 +502,7 @@ export function ChatView({
       );
 
       // Build set of accessible model IDs to filter server response
-      const accessibleModelIds = new Set(
+      const accessibleModelIds: Set<string> = new Set(
         allEnabledModels.filter((m: Model) => m.is_accessible_to_user).map((m: Model) => m.id),
       );
 

@@ -121,6 +121,7 @@ import {
   getUserTier,
 } from '@/services/usage';
 import type { ApiEnv } from '@/types';
+import type { AvailableSource } from '@/types/citations';
 import type { CheckRoundCompletionQueueMessage, TriggerModeratorQueueMessage, TriggerParticipantQueueMessage } from '@/types/queues';
 
 import type { streamChatRoute } from '../route';
@@ -151,6 +152,31 @@ const DEFAULT_MAX_CONTEXT_MESSAGES = 75;
  * Absolute maximum to prevent extreme memory usage
  */
 const ABSOLUTE_MAX_CONTEXT_MESSAGES = 100;
+
+// ============================================================================
+// Type Adapters
+// ============================================================================
+
+/**
+ * Adapter to convert getModelById to ModelForPricing type expected by billing functions
+ * Strips Zod .openapi() index signatures from model types
+ */
+function getModelForPricing(modelId: string): import('@/services/billing').ModelForPricing | undefined {
+  const model = getModelById(modelId);
+  if (!model)
+    return undefined;
+
+  return {
+    id: model.id,
+    name: model.name,
+    pricing: model.pricing,
+    context_length: model.context_length,
+    pricing_display: model.pricing_display,
+    created: model.created,
+    provider: model.provider,
+    capabilities: model.capabilities,
+  };
+}
 
 // ============================================================================
 // Streaming Chat Handler
@@ -224,7 +250,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         calculateRoundNumber({
           threadId,
           participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-          message,
+          // UIMessage is structurally compatible with RoundCalculationMessage (subset of fields)
+          // Cast needed due to Zod .openapi() adding index signatures
+          message: message as unknown as Parameters<typeof import('@/services/threads/round.service').calculateRoundNumber>[0]['message'],
           regenerateRound,
           db,
         }),
@@ -448,13 +476,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const earlyCheckFirstParticipant = participants[0];
       if ((participantIndex ?? 0) === 0 && earlyCheckFirstParticipant !== undefined) {
         let highestMultiplierModel = earlyCheckFirstParticipant;
-        let maxMultiplier = getModelCreditMultiplierById(earlyCheckFirstParticipant.modelId, getModelById);
+        let maxMultiplier = getModelCreditMultiplierById(earlyCheckFirstParticipant.modelId, getModelForPricing);
         for (let i = 1; i < participants.length; i++) {
           const p = participants[i];
           if (p === undefined) {
             continue;
           }
-          const multiplier = getModelCreditMultiplierById(p.modelId, getModelById);
+          const multiplier = getModelCreditMultiplierById(p.modelId, getModelForPricing);
           if (multiplier > maxMultiplier) {
             maxMultiplier = multiplier;
             highestMultiplierModel = p;
@@ -463,7 +491,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         const earlyEstimatedCredits = estimateWeightedCredits(
           participants.length,
           highestMultiplierModel.modelId,
-          getModelById,
+          getModelForPricing,
         );
         // enforceCredits throws if insufficient - fail fast before loading messages
         await enforceCredits(user.id, earlyEstimatedCredits);
@@ -532,7 +560,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Moderator messages are round summaries that should not be included in
       // the context sent to AI models - they would cause models to repeat the summary
       const previousDbMessages = allDbMessages.filter(
-        msg => !msg.metadata || !isModeratorMessageMetadata(msg.metadata),
+        (msg: typeof allDbMessages[number]) => !msg.metadata || !isModeratorMessageMetadata(msg.metadata),
       );
 
       // Convert to UIMessages for validation
@@ -598,7 +626,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Small files use base64, large files get signed public URLs for AI provider access
       const rawModelMessages = await prepareValidatedMessages({
         previousDbMessages,
-        newMessage: message,
+        newMessage: message as import('ai').UIMessage,
         r2Bucket: c.env.UPLOADS_R2_BUCKET,
         db,
         attachmentIds: resolvedAttachmentIds,
@@ -619,7 +647,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Build system prompt with RAG context and citation support
       const userQuery = extractUserQuery([
         ...previousMessages,
-        message,
+        message as import('ai').UIMessage,
       ]);
       const baseSystemPrompt
         = participant.settings?.systemPrompt
@@ -652,28 +680,39 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
       // Include ALL citable sources in metadata (not just attachments)
       // This enables frontend to show citation sources for all types during streaming
-      const availableSources = citableSources.map(source => ({
-        id: source.id,
-        sourceType: source.type,
-        title: source.title,
-        // Sanitize content excerpt - removes HTML tags, iframes, scripts from scraped content
-        ...(source.content && { excerpt: cleanCitationExcerpt(source.content, 300) }),
-        // Attachment-specific fields (optional for other types)
-        ...(source.type === 'attachment' && {
-          downloadUrl: source.metadata.downloadUrl,
-          filename: source.metadata.filename,
-          mimeType: source.metadata.mimeType,
-          fileSize: source.metadata.fileSize,
-        }),
-        // Search-specific fields
-        ...(source.type === 'search' && {
-          url: source.metadata.url,
-          domain: source.metadata.domain,
-        }),
-        // Memory/thread fields
-        ...(source.metadata.threadTitle && { threadTitle: source.metadata.threadTitle }),
-        ...(source.metadata.description && { description: source.metadata.description }),
-      }));
+      const availableSources: AvailableSource[] = citableSources.map((source): AvailableSource => {
+        const baseSource: AvailableSource = {
+          id: source.id,
+          sourceType: source.type,
+          title: source.title,
+        };
+
+        if (source.content) {
+          baseSource.excerpt = cleanCitationExcerpt(source.content, 300);
+        }
+
+        if (source.type === 'attachment') {
+          baseSource.downloadUrl = source.metadata.downloadUrl;
+          baseSource.filename = source.metadata.filename;
+          baseSource.mimeType = source.metadata.mimeType;
+          baseSource.fileSize = source.metadata.fileSize;
+        }
+
+        if (source.type === 'search') {
+          baseSource.url = source.metadata.url;
+          baseSource.domain = source.metadata.domain;
+        }
+
+        if (source.metadata.threadTitle) {
+          baseSource.threadTitle = source.metadata.threadTitle;
+        }
+
+        if (source.metadata.description) {
+          baseSource.description = source.metadata.description;
+        }
+
+        return baseSource;
+      });
 
       // Calculate token limits
       const systemPromptTokens = Math.ceil(systemPrompt.length / 4);
@@ -899,13 +938,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       }
       // ✅ PERF: Single pass to find highest multiplier (O(n) instead of O(2n))
       let highestMultiplierModel = firstParticipant;
-      let maxMultiplier = getModelCreditMultiplierById(firstParticipant.modelId, getModelById);
+      let maxMultiplier = getModelCreditMultiplierById(firstParticipant.modelId, getModelForPricing);
       for (let i = 1; i < participants.length; i++) {
         const p = participants[i];
         if (p === undefined) {
           continue;
         }
-        const multiplier = getModelCreditMultiplierById(p.modelId, getModelById);
+        const multiplier = getModelCreditMultiplierById(p.modelId, getModelForPricing);
         if (multiplier > maxMultiplier) {
           maxMultiplier = multiplier;
           highestMultiplierModel = p;
@@ -914,7 +953,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const estimatedCredits = estimateWeightedCredits(
         participants.length,
         highestMultiplierModel.modelId,
-        getModelById,
+        getModelForPricing,
       );
 
       // ✅ ROUND ORCHESTRATION: Initialize round state when P0 starts

@@ -2,6 +2,11 @@ import { TextDecoder as NodeTextDecoder, TextEncoder as NodeTextEncoder } from '
 
 import { afterAll, afterEach, vi } from 'vitest';
 
+// Mock cloudflare:workers module
+vi.mock('cloudflare:workers', () => ({
+  env: {},
+}));
+
 // TextEncoder/TextDecoder polyfills
 Object.defineProperty(globalThis, 'TextDecoder', {
   value: NodeTextDecoder,

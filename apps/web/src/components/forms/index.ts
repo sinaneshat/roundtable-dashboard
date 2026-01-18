@@ -1,4 +1,3 @@
-// Component exports
 export { FormProvider } from './form-provider';
 export { RHFCheckbox } from './rhf-checkbox';
 export { RHFComboBox } from './rhf-combobox';

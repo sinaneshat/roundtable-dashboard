@@ -33,12 +33,38 @@ import type { UserCreditBalance } from '@/db/validation';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { getModelById } from '@/services/models';
 
+import type { ModelForPricing } from './product-logic.service';
 import {
   calculateWeightedCredits,
   getActionCreditCost,
   getModelPricingTierById,
   getPlanConfig,
 } from './product-logic.service';
+
+// ============================================================================
+// TYPE HELPERS
+// ============================================================================
+
+/**
+ * Convert getModelById result to ModelForPricing type
+ * HardcodedModel has all required fields but needs type adaptation
+ */
+function toModelForPricing(modelId: string): ModelForPricing | undefined {
+  const model = getModelById(modelId);
+  if (!model)
+    return undefined;
+
+  return {
+    id: modelId,
+    name: model.name,
+    pricing: model.pricing,
+    pricing_display: model.pricing_display ?? null,
+    context_length: model.context_length,
+    created: model.created ?? null,
+    provider: model.provider,
+    capabilities: model.capabilities,
+  };
+}
 
 // ============================================================================
 // OPTIMISTIC LOCKING CONFIGURATION
@@ -495,7 +521,7 @@ export async function zeroOutFreeUserCredits(userId: string): Promise<void> {
 
 async function provisionPaidUserCredits(userId: string): Promise<void> {
   const db = await getDbAsync();
-  const planConfig = getPlanConfig(PlanTypes.PAID);
+  const planConfig = getPlanConfig('paid');
   const now = new Date();
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
@@ -583,7 +609,7 @@ export async function finalizeCredits(
     actualUsage.inputTokens,
     actualUsage.outputTokens,
     actualUsage.modelId,
-    getModelById,
+    toModelForPricing,
   );
 
   // Skip DB operation only if truly 0 credits (valid scenario for 0 token usage)
@@ -592,9 +618,9 @@ export async function finalizeCredits(
   }
 
   // Get pricing tier and model info for transaction logging
-  const pricingTier = getModelPricingTierById(actualUsage.modelId, getModelById);
+  const pricingTier = getModelPricingTierById(actualUsage.modelId, toModelForPricing);
   const totalTokens = actualUsage.inputTokens + actualUsage.outputTokens;
-  const model = getModelById(actualUsage.modelId);
+  const model = toModelForPricing(actualUsage.modelId);
   const inputPricingMicro = model ? Math.round(Number.parseFloat(model.pricing.prompt) * 1_000_000 * 1_000_000) : undefined;
   const outputPricingMicro = model ? Math.round(Number.parseFloat(model.pricing.completion) * 1_000_000 * 1_000_000) : undefined;
 
@@ -820,7 +846,7 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
     return;
   }
 
-  const planConfig = getPlanConfig(PlanTypes.PAID);
+  const planConfig = getPlanConfig('paid');
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
 
@@ -869,7 +895,7 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     return;
   }
 
-  const planConfig = getPlanConfig(PlanTypes.PAID);
+  const planConfig = getPlanConfig('paid');
   const now = new Date();
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);

@@ -10,7 +10,7 @@ type EmailHighlightProps = {
   style?: CSSProperties;
 };
 
-const colorStyles: Record<string, string> = {
+const colorStyles: Record<NonNullable<EmailHighlightProps['color']>, string> = {
   brand: colors.primary,
   accent: colors.accent,
   destructive: colors.destructive,
@@ -23,9 +23,15 @@ export function EmailHighlight({
   weight = 'semibold',
   style,
 }: EmailHighlightProps) {
+  const weightMap: Record<string, string> = {
+    medium: typography.fontWeight.medium,
+    semibold: typography.fontWeight.semibold,
+    bold: typography.fontWeight.bold,
+  };
+
   const highlightStyle: CSSProperties = {
-    color: colorStyles[color],
-    fontWeight: typography.fontWeight[weight],
+    color: colorStyles[color as NonNullable<EmailHighlightProps['color']>],
+    fontWeight: weightMap[weight] ?? typography.fontWeight.semibold,
     ...style,
   };
 

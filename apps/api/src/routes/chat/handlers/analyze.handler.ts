@@ -33,6 +33,7 @@ import { z } from 'zod';
 import { createHandler } from '@/core';
 import { PROMPT_ANALYSIS_MODEL_ID } from '@/core/ai-models';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
+import type { ModelForPricing } from '@/services/billing';
 import {
   AI_TIMEOUT_CONFIG,
   canAccessModelByPricing,
@@ -151,7 +152,7 @@ function validateAndCleanConfig(
       break;
 
     // Type guard narrows p.role to valid ShortRoleName or returns null
-    const validatedRole = isValidShortRoleName(p.role) ? p.role : null;
+    const validatedRole: string | null = isValidShortRoleName(p.role) ? (p.role ?? null) : null;
 
     validParticipants.push({
       modelId: p.modelId,
@@ -193,7 +194,7 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
 
     // Get user tier and model limits
     const userTier = await getUserTier(user.id);
-    const maxModels = MAX_MODELS_BY_TIER[userTier];
+    const maxModels = MAX_MODELS_BY_TIER[userTier] ?? 3;
 
     // Free users get 1 free round - skip credit enforcement if they haven't used it yet
     const isFreeUser = userTier === SubscriptionTiers.FREE;
@@ -207,19 +208,30 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
     }
 
     // Filter models accessible to user's tier
-    let accessibleModels = HARDCODED_MODELS.filter(
-      model => canAccessModelByPricing(userTier, model),
-    );
+    const accessibleModels = HARDCODED_MODELS.filter((model) => {
+      const modelForPricing: ModelForPricing = {
+        id: model.id,
+        name: model.name,
+        pricing: model.pricing,
+        context_length: model.context_length,
+        created: model.created,
+        pricing_display: model.pricing_display,
+        provider: model.provider,
+        capabilities: model.capabilities,
+      };
+      return canAccessModelByPricing(userTier, modelForPricing);
+    });
 
     // ✅ GRANULAR FILTERING: Filter by both image and document capabilities
+    let filteredModels = accessibleModels;
     if (requiresVision) {
-      accessibleModels = accessibleModels.filter(model => model.supports_vision);
+      filteredModels = filteredModels.filter(model => model.supports_vision);
     }
     if (requiresFile) {
-      accessibleModels = accessibleModels.filter(model => model.supports_file);
+      filteredModels = filteredModels.filter(model => model.supports_file);
     }
 
-    const accessibleModelIds = accessibleModels.map(m => m.id);
+    const accessibleModelIds = filteredModels.map(m => m.id);
 
     // Build system prompt with user's accessible options
     // ✅ SINGLE SOURCE: Uses buildAnalyzeSystemPrompt from prompts.service.ts

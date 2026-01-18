@@ -32,7 +32,7 @@ function getConsoleMethod(level: DevLogLevel): typeof console.debug {
     [DevLogLevels.WARN]: console.warn.bind(console),
     [DevLogLevels.ERROR]: console.error.bind(console),
   };
-  return consoleMethodMap[level];
+  return consoleMethodMap[level] as typeof console.debug;
 }
 
 function logWarning(message: string): void {

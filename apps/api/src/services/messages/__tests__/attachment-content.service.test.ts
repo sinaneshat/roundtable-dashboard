@@ -27,7 +27,7 @@ import type {
 import { loadAttachmentContent } from '../attachment-content.service';
 
 // Mock dependencies
-vi.mock('@/api/services/uploads', () => ({
+vi.mock('@/services/uploads', () => ({
   getFile: vi.fn(),
 }));
 

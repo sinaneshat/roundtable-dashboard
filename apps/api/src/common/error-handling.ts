@@ -122,15 +122,14 @@ class AppError extends Error {
       return undefined;
     }
 
-    switch (this.context.errorType) {
-      case 'authentication':
-        return {
-          ...this.context,
-          attemptedEmail: this.context.attemptedEmail ? '[REDACTED]' : undefined,
-        };
-      default:
-        return this.context;
+    if (this.context.errorType === 'authentication' && 'attemptedEmail' in this.context) {
+      return {
+        ...this.context,
+        attemptedEmail: this.context.attemptedEmail ? '[REDACTED]' : undefined,
+      };
     }
+
+    return this.context;
   }
 }
 

@@ -5,6 +5,7 @@
  * TanStack Start handles client-side caching via TanStack Query.
  */
 
+import type { SubscriptionTier } from '@roundtable/shared/enums';
 import { SUBSCRIPTION_TIERS } from '@roundtable/shared/enums';
 
 import type { getDbAsync } from '@/db';
@@ -67,7 +68,7 @@ export async function invalidateModelsCache(
     await db.$cache.invalidate({
       tags: [
         ModelsCacheTags.static,
-        ...SUBSCRIPTION_TIERS.map(tier => ModelsCacheTags.byTier(tier)),
+        ...SUBSCRIPTION_TIERS.map((tier: SubscriptionTier) => ModelsCacheTags.byTier(tier)),
       ],
     });
   }

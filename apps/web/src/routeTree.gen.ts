@@ -11,7 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PublicPricingRouteImport } from './routes/public/pricing'
+import { Route as LegalTermsRouteImport } from './routes/legal/terms'
+import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
 import { Route as AuthSignInRouteImport } from './routes/auth/sign-in'
+import { Route as AuthErrorRouteImport } from './routes/auth/error'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ProtectedChatRouteImport } from './routes/_protected/chat'
@@ -32,9 +36,29 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PublicPricingRoute = PublicPricingRouteImport.update({
+  id: '/public/pricing',
+  path: '/public/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalTermsRoute = LegalTermsRouteImport.update({
+  id: '/legal/terms',
+  path: '/legal/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalPrivacyRoute = LegalPrivacyRouteImport.update({
+  id: '/legal/privacy',
+  path: '/legal/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthSignInRoute = AuthSignInRouteImport.update({
   id: '/auth/sign-in',
   path: '/auth/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthErrorRoute = AuthErrorRouteImport.update({
+  id: '/auth/error',
+  path: '/auth/error',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -96,7 +120,11 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ProtectedChatRouteWithChildren
   '/api/$': typeof ApiSplatRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/error': typeof AuthErrorRoute
   '/auth/sign-in': typeof AuthSignInRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
+  '/public/pricing': typeof PublicPricingRoute
   '/chat/$slug': typeof ProtectedChatSlugRoute
   '/chat/pricing': typeof ProtectedChatPricingRoute
   '/public/chat/$slug': typeof PublicChatSlugRoute
@@ -109,7 +137,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/$': typeof ApiSplatRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/error': typeof AuthErrorRoute
   '/auth/sign-in': typeof AuthSignInRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
+  '/public/pricing': typeof PublicPricingRoute
   '/chat/$slug': typeof ProtectedChatSlugRoute
   '/chat/pricing': typeof ProtectedChatPricingRoute
   '/public/chat/$slug': typeof PublicChatSlugRoute
@@ -125,7 +157,11 @@ export interface FileRoutesById {
   '/_protected/chat': typeof ProtectedChatRouteWithChildren
   '/api/$': typeof ApiSplatRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/error': typeof AuthErrorRoute
   '/auth/sign-in': typeof AuthSignInRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
+  '/public/pricing': typeof PublicPricingRoute
   '/_protected/chat/$slug': typeof ProtectedChatSlugRoute
   '/_protected/chat/pricing': typeof ProtectedChatPricingRoute
   '/public/chat/$slug': typeof PublicChatSlugRoute
@@ -141,7 +177,11 @@ export interface FileRouteTypes {
     | '/chat'
     | '/api/$'
     | '/auth/callback'
+    | '/auth/error'
     | '/auth/sign-in'
+    | '/legal/privacy'
+    | '/legal/terms'
+    | '/public/pricing'
     | '/chat/$slug'
     | '/chat/pricing'
     | '/public/chat/$slug'
@@ -154,7 +194,11 @@ export interface FileRouteTypes {
     | '/'
     | '/api/$'
     | '/auth/callback'
+    | '/auth/error'
     | '/auth/sign-in'
+    | '/legal/privacy'
+    | '/legal/terms'
+    | '/public/pricing'
     | '/chat/$slug'
     | '/chat/pricing'
     | '/public/chat/$slug'
@@ -169,7 +213,11 @@ export interface FileRouteTypes {
     | '/_protected/chat'
     | '/api/$'
     | '/auth/callback'
+    | '/auth/error'
     | '/auth/sign-in'
+    | '/legal/privacy'
+    | '/legal/terms'
+    | '/public/pricing'
     | '/_protected/chat/$slug'
     | '/_protected/chat/pricing'
     | '/public/chat/$slug'
@@ -184,7 +232,11 @@ export interface RootRouteChildren {
   ProtectedRoute: typeof ProtectedRouteWithChildren
   ApiSplatRoute: typeof ApiSplatRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthErrorRoute: typeof AuthErrorRoute
   AuthSignInRoute: typeof AuthSignInRoute
+  LegalPrivacyRoute: typeof LegalPrivacyRoute
+  LegalTermsRoute: typeof LegalTermsRoute
+  PublicPricingRoute: typeof PublicPricingRoute
   PublicChatSlugRoute: typeof PublicChatSlugRoute
 }
 
@@ -204,11 +256,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/public/pricing': {
+      id: '/public/pricing'
+      path: '/public/pricing'
+      fullPath: '/public/pricing'
+      preLoaderRoute: typeof PublicPricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/terms': {
+      id: '/legal/terms'
+      path: '/legal/terms'
+      fullPath: '/legal/terms'
+      preLoaderRoute: typeof LegalTermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/privacy': {
+      id: '/legal/privacy'
+      path: '/legal/privacy'
+      fullPath: '/legal/privacy'
+      preLoaderRoute: typeof LegalPrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/sign-in': {
       id: '/auth/sign-in'
       path: '/auth/sign-in'
       fullPath: '/auth/sign-in'
       preLoaderRoute: typeof AuthSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/error': {
+      id: '/auth/error'
+      path: '/auth/error'
+      fullPath: '/auth/error'
+      preLoaderRoute: typeof AuthErrorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -325,7 +405,11 @@ const rootRouteChildren: RootRouteChildren = {
   ProtectedRoute: ProtectedRouteWithChildren,
   ApiSplatRoute: ApiSplatRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  AuthErrorRoute: AuthErrorRoute,
   AuthSignInRoute: AuthSignInRoute,
+  LegalPrivacyRoute: LegalPrivacyRoute,
+  LegalTermsRoute: LegalTermsRoute,
+  PublicPricingRoute: PublicPricingRoute,
   PublicChatSlugRoute: PublicChatSlugRoute,
 }
 export const routeTree = rootRouteImport

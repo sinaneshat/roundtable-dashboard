@@ -16,18 +16,21 @@ import type { GetProductResponse, ListProductsResponse, Price, Product } from '@
  * Creates a mock price for testing
  */
 export function createMockPrice(overrides?: Partial<Price>): Price {
-  const hasIntervalKey = overrides && 'interval' in overrides;
-  const defaultInterval = hasIntervalKey ? (overrides.interval ?? UIBillingIntervals.MONTH) : UIBillingIntervals.MONTH;
+  const opts = (overrides ?? {}) as Record<string, unknown>;
+  const hasIntervalKey = 'interval' in opts;
+  const defaultInterval = hasIntervalKey ? ((opts.interval as string | undefined) ?? UIBillingIntervals.MONTH) : UIBillingIntervals.MONTH;
 
-  return {
-    id: overrides?.id ?? 'price_test_123',
-    productId: overrides?.productId ?? 'prod_test_123',
-    unitAmount: overrides?.unitAmount ?? 999,
-    currency: overrides?.currency ?? 'usd',
-    interval: defaultInterval,
-    trialPeriodDays: overrides?.trialPeriodDays ?? null,
-    active: overrides?.active ?? true,
+  const price: Price = {
+    id: (opts.id as string | undefined) ?? 'price_test_123',
+    productId: (opts.productId as string | undefined) ?? 'prod_test_123',
+    unitAmount: (opts.unitAmount as number | undefined) ?? 999,
+    currency: (opts.currency as string | undefined) ?? 'usd',
+    interval: defaultInterval as string,
+    trialPeriodDays: (opts.trialPeriodDays as number | null | undefined) ?? null,
+    active: (opts.active as boolean | undefined) ?? true,
   };
+
+  return price;
 }
 
 /**

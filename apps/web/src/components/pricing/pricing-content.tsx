@@ -8,7 +8,7 @@ import { PricingCard } from '@/components/ui/pricing-card';
 import { useIsMounted } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { isSubscriptionActive } from '@/lib/utils';
-import type { Price, Product, Subscription } from '@/services/api';
+import type { Price, Product, Subscription } from '@/types/billing';
 
 type PricingContentProps = {
   products: Product[];
@@ -56,7 +56,7 @@ export function PricingContent({
 
   const hasAnyActiveSubscription = subscriptions.some(isSubscriptionActive);
 
-  const getSubscriptionForPrice = (priceId: string) => {
+  const getSubscriptionForPrice = (priceId: string): Subscription | undefined => {
     return subscriptions.find(
       sub => sub.priceId === priceId && isSubscriptionActive(sub),
     );
@@ -67,19 +67,20 @@ export function PricingContent({
   };
 
   const monthlyProducts = products
-    .filter((product) => {
+    .filter((product): product is typeof product & { prices: NonNullable<typeof product.prices> } => {
       if (!product.prices || product.prices.length === 0) {
         return false;
       }
-      return product.prices.some((price: Price) => {
+      const pricesArray = product.prices as Price[];
+      return pricesArray.some((price) => {
         return price.interval === 'month'
           && price.unitAmount !== null
           && price.unitAmount !== undefined;
       });
     })
     .map((product) => {
-      const prices = product.prices ?? [];
-      const filteredPrices = prices.filter((price: Price) => {
+      const prices = (product.prices ?? []) as Price[];
+      const filteredPrices = prices.filter((price) => {
         return price.interval === 'month'
           && price.unitAmount !== null
           && price.unitAmount !== undefined;
@@ -187,13 +188,13 @@ function ProductGrid({
     <div className="w-full max-w-md mx-auto">
       <div className="grid grid-cols-1 gap-6 w-full">
         {products.map((product, index) => {
-          const price = product.prices?.[0];
+          const price = product.prices?.[0] as Price | undefined;
 
           if (!price || price.unitAmount === undefined || price.unitAmount === null) {
             return null;
           }
 
-          const subscription = getSubscriptionForPrice(price.id);
+          const subscription: Subscription | undefined = getSubscriptionForPrice(price.id);
           const hasSubscription = hasActiveSubscription(price.id);
 
           const cardContent = (

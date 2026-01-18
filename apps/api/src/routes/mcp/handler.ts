@@ -110,6 +110,31 @@ import {
 } from './schema';
 
 // ============================================================================
+// Type Adapters
+// ============================================================================
+
+/**
+ * Adapter to convert getModelById to ModelForPricing type expected by billing functions
+ * Strips Zod .openapi() index signatures from model types
+ */
+function getModelForPricing(modelId: string): import('@/services/billing').ModelForPricing | undefined {
+  const model = getModelById(modelId);
+  if (!model)
+    return undefined;
+
+  return {
+    id: model.id,
+    name: model.name,
+    pricing: model.pricing,
+    context_length: model.context_length,
+    pricing_display: model.pricing_display,
+    created: model.created,
+    provider: model.provider,
+    capabilities: model.capabilities,
+  };
+}
+
+// ============================================================================
 // Helper: Build MCP Response
 // ============================================================================
 
@@ -566,7 +591,10 @@ async function toolCreateThread(
     const model = modelById.get(p.modelId);
     if (!model)
       throw createError.badRequest(`Model not found: ${p.modelId}`, ErrorContextBuilders.resourceNotFound('model', p.modelId));
-    if (!isFreeUserWithFreeRound && !canAccessModelByPricing(userTier, model)) {
+    const modelForPricing = getModelForPricing(p.modelId);
+    if (!modelForPricing)
+      throw createError.badRequest(`Model pricing not found: ${p.modelId}`, ErrorContextBuilders.resourceNotFound('model', p.modelId));
+    if (!isFreeUserWithFreeRound && !canAccessModelByPricing(userTier, modelForPricing)) {
       throw createError.unauthorized(`Model requires higher tier: ${p.modelId}`, ErrorContextBuilders.authorization('model', p.modelId, user.id));
     }
   }
@@ -657,7 +685,10 @@ async function toolGetThread(
         dbMessages.map(m => ({
           id: m.id,
           role: m.role,
-          content: m.parts.map(p => p.type === MessagePartTypes.TEXT ? p.text : '').join(''),
+          content: m.parts
+            .filter((p): p is { type: 'text'; text: string } => p.type === MessagePartTypes.TEXT)
+            .map(p => p.text)
+            .join(''),
           roundNumber: m.roundNumber,
           participantId: m.participantId,
         })),
@@ -1073,7 +1104,10 @@ async function toolAddParticipant(
   const model = getAllModels().find(m => m.id === input.modelId);
   if (!model)
     throw createError.badRequest(`Model not found: ${input.modelId}`, ErrorContextBuilders.resourceNotFound('model', input.modelId));
-  if (!isFreeUserWithFreeRound && !canAccessModelByPricing(userTier, model)) {
+  const modelForPricing = getModelForPricing(input.modelId);
+  if (!modelForPricing)
+    throw createError.badRequest(`Model pricing not found: ${input.modelId}`, ErrorContextBuilders.resourceNotFound('model', input.modelId));
+  if (!isFreeUserWithFreeRound && !canAccessModelByPricing(userTier, modelForPricing)) {
     throw createError.unauthorized(`Model requires higher tier: ${input.modelId}`, ErrorContextBuilders.authorization('model', input.modelId, user.id));
   }
 
@@ -1154,13 +1188,16 @@ async function toolListModels(
   }
 
   return mcpResult({
-    models: models.map(m => ({
-      id: m.id,
-      name: m.name,
-      provider: m.provider,
-      contextLength: m.context_length,
-      accessible: canAccessModelByPricing(userTier, m),
-    })),
+    models: models.map((m) => {
+      const modelForPricing = getModelForPricing(m.id);
+      return {
+        id: m.id,
+        name: m.name,
+        provider: m.provider,
+        contextLength: m.context_length,
+        accessible: modelForPricing ? canAccessModelByPricing(userTier, modelForPricing) : false,
+      };
+    }),
     count: models.length,
     userTier,
   });

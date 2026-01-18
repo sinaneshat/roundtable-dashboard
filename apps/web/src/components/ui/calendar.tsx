@@ -1,4 +1,7 @@
+'use client';
+
 import type { ComponentProps } from 'react';
+
 import { DayPicker } from 'react-day-picker';
 
 import { Icons } from '@/components/icons';

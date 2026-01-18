@@ -38,5 +38,5 @@ export const EXAMPLE_PARTICIPANT_COUNTS = {
 } as const satisfies Record<SubscriptionTier, number>;
 
 export function getExampleParticipantCount(tier: SubscriptionTier): number {
-  return EXAMPLE_PARTICIPANT_COUNTS[tier];
+  return EXAMPLE_PARTICIPANT_COUNTS[tier] as number;
 }

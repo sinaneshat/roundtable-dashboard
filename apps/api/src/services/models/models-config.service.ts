@@ -81,12 +81,7 @@ export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
  * - reasoning: Enhanced reasoning/thinking capability
  * - pdf: Supports PDF/document processing
  */
-function deriveModelTags(model: {
-  pricing: { prompt: string };
-  supports_vision: boolean;
-  is_reasoning_model: boolean;
-  supports_file: boolean;
-}): ModelCapabilityTag[] {
+function deriveModelTags(model: BaseModelData): ModelCapabilityTag[] {
   const tags: ModelCapabilityTag[] = [];
 
   // Fast: input price < $0.50/M
@@ -780,13 +775,13 @@ const BASE_MODELS: readonly BaseModelData[] = [
     supports_temperature: true,
     supports_reasoning_stream: true,
   },
-] as const;
+];
 
 // Derive HARDCODED_MODELS with computed tags from BASE_MODELS
-export const HARDCODED_MODELS: readonly HardcodedModel[] = BASE_MODELS.map(model => ({
-  ...model,
-  tags: deriveModelTags(model),
-})) as HardcodedModel[];
+export const HARDCODED_MODELS: readonly HardcodedModel[] = BASE_MODELS.map((model) => {
+  const tags = deriveModelTags(model);
+  return { ...model, tags } as HardcodedModel;
+});
 
 // ============================================================================
 // USER-FACING MODELS - Curated list for UI selection (Dec 2025)
@@ -823,8 +818,35 @@ export function getAllModels() {
   return HARDCODED_MODELS;
 }
 
-export function getModelById(modelId: string) {
-  return HARDCODED_MODELS.find(model => model.id === modelId);
+export function getModelById(modelId: string): HardcodedModel | undefined {
+  const found = HARDCODED_MODELS.find(model => model.id === modelId);
+  if (!found)
+    return undefined;
+
+  // Explicitly return as HardcodedModel to strip index signatures from Zod .openapi()
+  return {
+    id: found.id,
+    name: found.name,
+    description: found.description,
+    context_length: found.context_length,
+    created: found.created,
+    pricing: found.pricing,
+    top_provider: found.top_provider,
+    per_request_limits: found.per_request_limits,
+    architecture: found.architecture,
+    provider: found.provider,
+    category: found.category,
+    capabilities: found.capabilities,
+    pricing_display: found.pricing_display,
+    is_free: found.is_free,
+    supports_vision: found.supports_vision,
+    supports_file: found.supports_file,
+    is_reasoning_model: found.is_reasoning_model,
+    supports_temperature: found.supports_temperature,
+    supports_reasoning_stream: found.supports_reasoning_stream,
+    streaming_behavior: found.streaming_behavior,
+    tags: found.tags,
+  } satisfies HardcodedModel;
 }
 
 export function extractModeratorModelName(modelId: string) {

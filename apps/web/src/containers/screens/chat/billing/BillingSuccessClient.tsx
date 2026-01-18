@@ -8,8 +8,9 @@ import { useCountdownRedirect } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { useTranslations } from '@/lib/i18n';
 import { createStorageHelper } from '@/lib/utils/safe-storage';
-import type { Subscription, SyncAfterCheckoutResponse } from '@/services/api';
+import type { SyncAfterCheckoutResponse } from '@/services/api';
 import { syncAfterCheckoutService } from '@/services/api';
+import type { Subscription } from '@/types/billing';
 
 type ApiResponse<T> = { success: boolean; data?: T };
 
@@ -52,10 +53,13 @@ export function BillingSuccessClient() {
   const syncResult = storedResult;
   const syncedTier = syncResult?.data?.tierChange?.newTier;
 
-  const displaySubscription = useMemo((): Subscription | null => {
+  const displaySubscription: Subscription | null = useMemo(() => {
+    const items = subscriptionData?.data?.items as Subscription[] | undefined;
+    if (!items || items.length === 0)
+      return null;
     return (
-      subscriptionData?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
-      ?? subscriptionData?.data?.items?.[0]
+      items.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
+      ?? items[0]
       ?? null
     );
   }, [subscriptionData]);
@@ -67,10 +71,14 @@ export function BillingSuccessClient() {
   useEffect(() => {
     if (!hasInitiatedSync.current && !syncComplete) {
       hasInitiatedSync.current = true;
-      setIsLoading(true);
+
+      let isMounted = true;
 
       syncAfterCheckoutService()
         .then((data) => {
+          if (!isMounted)
+            return;
+
           const result = data as SyncAfterCheckoutResponse;
           syncResultStorage.set(result);
           setStoredResult(result);
@@ -82,12 +90,20 @@ export function BillingSuccessClient() {
           queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
         })
         .catch((error) => {
+          if (!isMounted)
+            return;
+
           console.error('[BillingSuccessClient] Sync failed:', error);
           syncResultStorage.clear();
           setSyncError(true);
           setIsLoading(false);
         });
+
+      return () => {
+        isMounted = false;
+      };
     }
+    return undefined;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

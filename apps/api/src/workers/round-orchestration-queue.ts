@@ -30,6 +30,12 @@ import type {
   TriggerParticipantQueueMessage,
   TriggerPreSearchQueueMessage,
 } from '@/types/queues';
+import {
+  CheckRoundCompletionQueueMessageSchema,
+  TriggerModeratorQueueMessageSchema,
+  TriggerParticipantQueueMessageSchema,
+  TriggerPreSearchQueueMessageSchema,
+} from '@/types/queues';
 
 // ============================================================================
 // CONFIGURATION
@@ -290,23 +296,39 @@ async function processQueueMessage(
 ): Promise<void> {
   try {
     const { body } = msg;
+    const messageType = body.type;
 
-    switch (body.type) {
-      case RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT:
-        await triggerParticipantStream(body, env);
-        break;
-      case RoundOrchestrationMessageTypes.TRIGGER_MODERATOR:
-        await triggerModeratorStream(body, env);
-        break;
-      case RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION:
-        await checkRoundCompletion(body, env);
-        break;
-      case RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH:
-        await triggerPreSearch(body, env);
-        break;
-      default:
-        // TypeScript exhaustiveness check - unreachable if all message types handled
-        body satisfies never;
+    // Validate and narrow types using Zod schemas for proper TypeScript inference
+    if (messageType === 'trigger-participant') {
+      const parsed = TriggerParticipantQueueMessageSchema.safeParse(body);
+      if (parsed.success) {
+        await triggerParticipantStream(parsed.data, env);
+      } else {
+        throw new Error(`Invalid trigger-participant message: ${parsed.error.message}`);
+      }
+    } else if (messageType === 'trigger-moderator') {
+      const parsed = TriggerModeratorQueueMessageSchema.safeParse(body);
+      if (parsed.success) {
+        await triggerModeratorStream(parsed.data, env);
+      } else {
+        throw new Error(`Invalid trigger-moderator message: ${parsed.error.message}`);
+      }
+    } else if (messageType === 'check-round-completion') {
+      const parsed = CheckRoundCompletionQueueMessageSchema.safeParse(body);
+      if (parsed.success) {
+        await checkRoundCompletion(parsed.data, env);
+      } else {
+        throw new Error(`Invalid check-round-completion message: ${parsed.error.message}`);
+      }
+    } else if (messageType === 'trigger-pre-search') {
+      const parsed = TriggerPreSearchQueueMessageSchema.safeParse(body);
+      if (parsed.success) {
+        await triggerPreSearch(parsed.data, env);
+      } else {
+        throw new Error(`Invalid trigger-pre-search message: ${parsed.error.message}`);
+      }
+    } else {
+      throw new Error(`Unhandled message type: ${messageType}`);
     }
 
     msg.ack();

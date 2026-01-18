@@ -5,14 +5,14 @@ import { Icons } from '@/components/icons';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
-import { getTranslations } from '@/lib/i18n';
+import { useTranslations } from '@/lib/i18n';
 
 type PublicChatLayoutProps = {
   children: React.ReactNode;
 };
 
-export default async function PublicChatLayout({ children }: PublicChatLayoutProps) {
-  const t = await getTranslations('chat.public');
+export function PublicChatLayout({ children }: PublicChatLayoutProps) {
+  const t = useTranslations();
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -38,7 +38,7 @@ export default async function PublicChatLayout({ children }: PublicChatLayoutPro
               to="/auth/sign-up?utm_source=public_chat&utm_medium=header&utm_campaign=try_free"
               className="flex items-center gap-1.5"
             >
-              <span>{t('tryFree')}</span>
+              <span>{t('chat.public.tryFree')}</span>
               <Icons.arrowRight className="size-3.5" />
             </Link>
           </Button>
@@ -51,3 +51,5 @@ export default async function PublicChatLayout({ children }: PublicChatLayoutPro
     </div>
   );
 }
+
+export default PublicChatLayout;
