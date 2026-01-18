@@ -75,7 +75,7 @@ function ChatItem({
       {isEditing
         ? (
             <ChatRenameForm
-              initialTitle={chat.title}
+              initialTitle={chat.title ?? ''}
               onSubmit={handleRenameFormSubmit}
               onCancel={onRenameCancel}
               isPending={isRenaming}
@@ -168,7 +168,7 @@ export function ChatList({
     toggleFavoriteMutation.mutate({
       threadId: chat.id,
       isFavorite: !chat.isFavorite,
-      slug: chat.slug,
+      slug: chat.slug ?? undefined,
     });
   }, [toggleFavoriteMutation]);
 
@@ -278,7 +278,7 @@ export function ChatList({
         isOpen={!!chatToDelete}
         onOpenChange={handleDeleteDialogClose}
         threadId={chatToDelete?.id ?? ''}
-        threadSlug={chatToDelete?.slug}
+        threadSlug={chatToDelete?.slug ?? undefined}
         redirectIfCurrent={true}
       />
     </>

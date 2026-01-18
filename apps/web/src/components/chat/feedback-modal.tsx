@@ -46,7 +46,7 @@ const FeedbackFormSchema = z.object({
 
 type FeedbackFormValues = z.infer<typeof FeedbackFormSchema>;
 
-type FeedbackModalProps = {
+export type FeedbackModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };

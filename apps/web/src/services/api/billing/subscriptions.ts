@@ -5,21 +5,22 @@
  * All types automatically inferred from backend Hono routes
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-export type GetSubscriptionsRequest = any;
+type ListSubscriptionsEndpoint = ApiClientType['billing']['subscriptions']['$get'];
+export type ListSubscriptionsResponse = InferResponseType<ListSubscriptionsEndpoint>;
 
-export type GetSubscriptionsResponse = any;
-
-export type GetSubscriptionRequest = any;
-
-export type GetSubscriptionResponse = any;
+type GetSubscriptionEndpoint = ApiClientType['billing']['subscriptions'][':id']['$get'];
+export type GetSubscriptionRequest = InferRequestType<GetSubscriptionEndpoint>;
+export type GetSubscriptionResponse = InferResponseType<GetSubscriptionEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -37,11 +38,11 @@ export async function getSubscriptionsService(options?: {
   bypassCache?: boolean;
   cookieHeader?: string;
 }) {
-  const client = await createApiClient({
+  const client = createApiClient({
     bypassCache: options?.bypassCache,
     cookieHeader: options?.cookieHeader,
   });
-  return parseResponse(client.billing.subscriptions.$get({}));
+  return parseResponse(client.billing.subscriptions.$get());
 }
 
 /**
@@ -49,9 +50,6 @@ export async function getSubscriptionsService(options?: {
  * Protected endpoint - requires authentication and ownership
  */
 export async function getSubscriptionService(data: GetSubscriptionRequest) {
-  const client = await createApiClient();
-  const params: GetSubscriptionRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.billing.subscriptions[':id'].$get(params));
+  const client = createApiClient();
+  return parseResponse(client.billing.subscriptions[':id'].$get(data));
 }

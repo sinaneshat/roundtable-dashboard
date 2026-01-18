@@ -1,12 +1,12 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getRequestHeaders } from '@tanstack/react-start/server';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8787/api/v1';
+import { getSubscriptionsService } from '@/services/api';
 
 /**
- * Get user subscriptions from the API.
- * This should be called during SSR to prefetch subscription data.
- * Forwards cookies from the original request to authenticate with the API.
+ * Fetch user subscriptions for SSR.
+ * Protected endpoint - forwards cookies for authentication.
+ * Returns FULL API response to match client queryFn (prevents hydration refetch).
  */
 export const getSubscriptions = createServerFn({ method: 'GET' }).handler(
   async () => {
@@ -14,18 +14,9 @@ export const getSubscriptions = createServerFn({ method: 'GET' }).handler(
       const headers = getRequestHeaders();
       const cookie = headers.cookie || headers.Cookie;
 
-      const response = await fetch(`${API_URL}/billing/subscriptions`, {
-        headers: cookie ? { Cookie: cookie } : {},
-      });
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const data = await response.json();
-      return data.success ? data.data : null;
+      return await getSubscriptionsService({ cookieHeader: cookie });
     } catch {
-      return null;
+      return { success: false, data: null };
     }
   },
 );

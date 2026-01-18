@@ -33,12 +33,22 @@ import type { UIMessage } from 'ai';
 import type { ErrorMetadata } from '@/lib/schemas/error-schemas';
 import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
 import type { ParticipantContext } from '@/lib/schemas/participant-schemas';
+import type { ApiMessage } from '@/services/api';
 import type { ChatMessage, DbAssistantMessageMetadata, DbMessageMetadata, DbPreSearchMessageMetadata } from '@/types/api';
 import {
   DbAssistantMessageMetadataSchema,
   DbPreSearchMessageMetadataSchema,
   UsageSchema,
 } from '@/types/api';
+
+/**
+ * Message input type union - accepts both:
+ * - ApiMessage: Inferred from backend Hono response (SINGLE SOURCE OF TRUTH)
+ * - ChatMessage: Legacy frontend type stub (TODO: migrate to ApiMessage)
+ *
+ * This allows gradual migration while maintaining type safety.
+ */
+export type MessageInputType = ApiMessage | ChatMessage;
 
 import {
   buildAssistantMetadata,
@@ -133,11 +143,13 @@ function normalizeMessagePartStates<T extends unknown[]>(parts: T): T {
  *
  * Transforms database message format into AI SDK's UIMessage structure.
  * Handles date serialization and metadata enrichment.
+ *
+ * Accepts MessageInputType which is a union of:
+ * - ApiMessage: Inferred from backend Hono response (SINGLE SOURCE OF TRUTH)
+ * - ChatMessage: Legacy frontend type stub
  */
 export function chatMessageToUIMessage(
-  message:
-    | ChatMessage
-    | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }),
+  message: MessageInputType,
 ): UIMessage {
   if (!isUIMessageRole(message.role)) {
     throw new Error(
@@ -145,10 +157,9 @@ export function chatMessageToUIMessage(
     );
   }
 
-  const createdAt
-    = message.createdAt instanceof Date
-      ? message.createdAt.toISOString()
-      : message.createdAt;
+  // API responses always return createdAt as strings (JSON serialization)
+  // No Date object handling needed - JSON.stringify converts Date to ISO string
+  const createdAt = message.createdAt;
 
   const isPreSearchMsg = isPreSearch(message.metadata);
 
@@ -182,15 +193,16 @@ export function chatMessageToUIMessage(
  * Batch conversion with participant enrichment. Ensures all messages have
  * roundNumber in metadata to prevent display issues.
  *
- * @param messages - Array of backend ChatMessages
+ * Accepts MessageInputType[] which is a union of:
+ * - ApiMessage[]: Inferred from backend Hono response (SINGLE SOURCE OF TRUTH)
+ * - ChatMessage[]: Legacy frontend type stub
+ *
+ * @param messages - Array of MessageInputType objects
  * @param participants - Optional participants for enrichment
  * @returns Array of UIMessages with complete metadata
  */
 export function chatMessagesToUIMessages(
-  messages: (
-    | ChatMessage
-    | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date })
-  )[],
+  messages: MessageInputType[],
   participants?: ParticipantContext[],
 ): UIMessage[] {
   // Filter out tool messages and convert
@@ -245,7 +257,7 @@ export function chatMessagesToUIMessages(
                 {
                   id: participant.id,
                   modelId: participant.modelId,
-                  role: participant.role,
+                  role: participant.role ?? null,
                   index: 0,
                 },
               ),

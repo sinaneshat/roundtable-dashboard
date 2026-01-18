@@ -144,7 +144,7 @@ export function withDbTimingContext<T>(
  * @deprecated Use withDbTimingContext with context instead
  */
 export function withDbTiming<T>(
-  queryName: string,
+  _queryName: string,
   fn: () => Promise<T>,
 ): Promise<T> {
   // Without context, just run the function (no tracking)

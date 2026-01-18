@@ -14,8 +14,7 @@ import {
   ThreadStatuses,
 } from '@roundtable/shared';
 
-import type { ChatMessage, ChatParticipant, ChatThread } from '@/types/api';
-import type { StoredPreSearch } from '@/types/api';
+import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
 
 // Response types for API mocks
 export type ThreadDetailResponse = {

@@ -5,17 +5,19 @@
  * All types automatically inferred from backend Hono routes
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-export type CreateCustomerPortalSessionRequest = any;
-
-export type CreateCustomerPortalSessionResponse = any;
+type CreatePortalEndpoint = ApiClientType['billing']['portal']['$post'];
+export type CreateCustomerPortalSessionRequest = InferRequestType<CreatePortalEndpoint>;
+export type CreateCustomerPortalSessionResponse = InferResponseType<CreatePortalEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -29,9 +31,6 @@ export type CreateCustomerPortalSessionResponse = any;
  * where they can manage payment methods and download invoices
  */
 export async function createCustomerPortalSessionService(data: CreateCustomerPortalSessionRequest) {
-  const client = await createApiClient();
-  const params: CreateCustomerPortalSessionRequest = {
-    json: data.json ?? {},
-  };
-  return parseResponse(client.billing.portal.$post(params));
+  const client = createApiClient();
+  return parseResponse(client.billing.portal.$post(data));
 }

@@ -7,6 +7,8 @@ import { ChatLayoutProviders, PreferencesStoreProvider } from '@/components/prov
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/auth/client';
+import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getModels } from '@/server/models';
 import { getSidebarThreads } from '@/server/sidebar-threads';
 import { getSubscriptions } from '@/server/subscriptions';
@@ -15,13 +17,31 @@ import { getSubscriptions } from '@/server/subscriptions';
 const SESSION_CHECK_TIMEOUT_MS = 5000;
 
 export const Route = createFileRoute('/_protected')({
-  loader: async () => {
-    const [models, subscriptions, sidebarThreads] = await Promise.all([
-      getModels(),
-      getSubscriptions(),
-      getSidebarThreads(),
+  loader: async ({ context }) => {
+    const { queryClient } = context;
+
+    // Prefetch data into TanStack Query cache for SSR hydration
+    // Client components will use useQuery hooks with the same keys to access this data
+    await Promise.all([
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.models.list(),
+        queryFn: () => getModels(),
+        staleTime: STALE_TIMES.models,
+      }),
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.subscriptions.current(),
+        queryFn: () => getSubscriptions(),
+        staleTime: STALE_TIMES.subscriptions,
+      }),
+      queryClient.prefetchInfiniteQuery({
+        queryKey: queryKeys.threads.sidebar(),
+        queryFn: () => getSidebarThreads(),
+        initialPageParam: undefined,
+        staleTime: STALE_TIMES.threadsSidebar,
+      }),
     ]);
-    return { models, subscriptions, sidebarThreads };
+
+    return {};
   },
   component: ProtectedLayout,
 });
@@ -36,13 +56,13 @@ export const Route = createFileRoute('/_protected')({
  */
 function ProtectedLayout() {
   const navigate = useNavigate();
-  const loaderData = Route.useLoaderData();
   const { data: session, isPending, error } = useSession();
   const [timedOut, setTimedOut] = useState(false);
 
   // Timeout fallback - if session check hangs, assume auth failed
   useEffect(() => {
-    if (!isPending) return;
+    if (!isPending)
+      return;
     const timer = setTimeout(() => setTimedOut(true), SESSION_CHECK_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [isPending]);
@@ -84,7 +104,7 @@ function ProtectedLayout() {
   return (
     <PreferencesStoreProvider>
       <ChatLayoutProviders>
-        <ChatLayoutShell session={session} initialThreads={loaderData.sidebarThreads}>
+        <ChatLayoutShell session={session}>
           <Outlet />
         </ChatLayoutShell>
       </ChatLayoutProviders>

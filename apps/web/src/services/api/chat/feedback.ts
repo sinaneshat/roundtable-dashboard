@@ -5,21 +5,23 @@
  * All types automatically inferred from backend Hono routes
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
-// Type Inference - Automatically derived from backend routes
+// Type Inference
 // ============================================================================
 
-export type SetRoundFeedbackRequest = any;
+type SetRoundFeedbackEndpoint = ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['feedback']['$put'];
+export type SetRoundFeedbackRequest = InferRequestType<SetRoundFeedbackEndpoint>;
+export type SetRoundFeedbackResponse = InferResponseType<SetRoundFeedbackEndpoint>;
 
-export type SetRoundFeedbackResponse = any;
-
-export type GetThreadFeedbackRequest = any;
-
-export type GetThreadFeedbackResponse = any;
+type GetThreadFeedbackEndpoint = ApiClientType['chat']['threads'][':id']['feedback']['$get'];
+export type GetThreadFeedbackRequest = InferRequestType<GetThreadFeedbackEndpoint>;
+export type GetThreadFeedbackResponse = InferResponseType<GetThreadFeedbackEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -30,29 +32,18 @@ export type GetThreadFeedbackResponse = any;
  * Protected endpoint - requires authentication (ownership check)
  */
 export async function setRoundFeedbackService(data: SetRoundFeedbackRequest) {
-  const client = await createApiClient();
-  const params: SetRoundFeedbackRequest = {
-    param: data.param ?? { threadId: '', roundNumber: '' },
-    json: data.json ?? { feedbackType: null },
-  };
-  return parseResponse(client.chat.threads[':threadId'].rounds[':roundNumber'].feedback.$put(params));
+  const client = createApiClient();
+  return parseResponse(client.chat.threads[':threadId'].rounds[':roundNumber'].feedback.$put(data));
 }
 
 /**
  * Get Thread Feedback
  * Protected endpoint - requires authentication (ownership check)
- *
- * @param data - Request arguments with thread id
- * @param options - Service options
- * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
 export async function getThreadFeedbackService(
   data: GetThreadFeedbackRequest,
   options?: { cookieHeader?: string },
 ) {
-  const client = await createApiClient({ cookieHeader: options?.cookieHeader });
-  const params: GetThreadFeedbackRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.chat.threads[':id'].feedback.$get(params));
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
+  return parseResponse(client.chat.threads[':id'].feedback.$get(data));
 }

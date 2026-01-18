@@ -546,7 +546,7 @@ function SourcesFooter({ sources, className }: SourcesFooterProps) {
   }
 
   // Log when SourcesFooter renders with sources
-  rlog.msg('citation-footer', `render count=${sources.length} ids=[${sources.map(s => s.id.slice(0, 8)).join(',')}]`);
+  rlog.msg('citation-footer', `render count=${sources.length} ids=[${sources.map(s => (s.id ?? '?').slice(0, 8)).join(',')}]`);
 
   // Get unique hostnames for display
   const searchSources = sources.filter(s => s.sourceType === CitationSourceTypes.SEARCH && s.url);
@@ -598,8 +598,8 @@ function SourcesFooter({ sources, className }: SourcesFooterProps) {
                   {sources.map(source => (
                     <InlineCitationCarouselItem key={source.id}>
                       <InlineCitationSource
-                        title={source.title || source.filename || source.id}
-                        sourceType={source.sourceType as any}
+                        title={source.title || source.filename || source.id || 'Unknown'}
+                        sourceType={source.sourceType as CitationSourceType}
                         url={source.url}
                         downloadUrl={source.downloadUrl}
                         filename={source.filename}

@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { useTranslations } from '@/lib/compat';
 import { formatDate } from '@/lib/format';
 
-type CancelSubscriptionDialogProps = {
+export type CancelSubscriptionDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;

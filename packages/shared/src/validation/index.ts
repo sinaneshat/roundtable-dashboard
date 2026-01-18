@@ -63,8 +63,8 @@ export const DateRangeSchema = z.object({
 /**
  * Standard API success response wrapper
  */
-export const ApiSuccessResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
-  z.object({
+export function ApiSuccessResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
+  return z.object({
     success: z.literal(true),
     data: dataSchema,
     meta: z.object({
@@ -72,6 +72,7 @@ export const ApiSuccessResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) 
       timestamp: z.string().optional(),
     }).optional(),
   });
+}
 
 /**
  * Standard API error response wrapper

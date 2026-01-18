@@ -19,7 +19,7 @@ import { listSidebarThreadsService } from '@/services/api';
  *
  * @param search - Optional search query to filter threads by title
  */
-export function useSidebarThreadsQuery(search?: string): ReturnType<typeof useInfiniteQuery<{ success: boolean; data?: { items: unknown[]; pagination?: { nextCursor?: string } } }>> {
+export function useSidebarThreadsQuery(search?: string) {
   const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({

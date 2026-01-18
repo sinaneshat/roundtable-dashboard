@@ -43,7 +43,7 @@ const VALUE_PROPS = [
 
 export function PricingCard({
   name,
-  description,
+  description: _description,
   price,
   isCurrentPlan = false,
   isMostPopular = false,

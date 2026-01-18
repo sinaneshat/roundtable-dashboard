@@ -15,7 +15,14 @@ import {
   WebSearchDepths,
 } from '@roundtable/shared';
 
-import type { ChatThread, PartialPreSearchData, PreSearchDataPayload, StoredPreSearch } from '@/types/api';
+import type {
+  ChatThread,
+  PartialPreSearchData,
+  PreSearchDataPayload,
+  PreSearchQuery,
+  PreSearchResult,
+  StoredPreSearch,
+} from '@/types/api';
 import { PreSearchDataPayloadSchema } from '@/types/api';
 
 import type { ChatStoreApi } from '../store';
@@ -84,8 +91,8 @@ export async function readPreSearchStreamData(
   let searchData: PreSearchDataPayload | null = null;
 
   // ✅ PROGRESSIVE UI: Accumulate partial data using Maps to avoid sparse arrays
-  const queriesMap = new Map<number, PartialPreSearchData['queries'][number]>();
-  const resultsMap = new Map<number, PartialPreSearchData['results'][number]>();
+  const queriesMap = new Map<number, PreSearchQuery>();
+  const resultsMap = new Map<number, PreSearchResult>();
   let analysisRationale: string | undefined;
 
   // Helper to build and emit partial update

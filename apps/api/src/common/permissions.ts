@@ -156,7 +156,7 @@ export async function verifyParticipantOwnership(
  */
 export async function verifyCustomRoleOwnership(
   customRoleId: string,
-  userId: string,
+  _userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<ChatCustomRole> {
   const customRole = await db.query.chatCustomRole.findFirst({

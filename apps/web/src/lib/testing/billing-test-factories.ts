@@ -9,7 +9,7 @@
 
 import { UIBillingIntervals } from '@roundtable/shared';
 
-import type { GetProductResponse, GetProductsResponse } from '@/services/api';
+import type { GetProductResponse, ListProductsResponse } from '@/services/api';
 import type { Price, Product } from '@/types/billing';
 
 /**
@@ -148,7 +148,7 @@ export function createMockProductCatalog(): Product[] {
 /**
  * Creates a successful products list API response
  */
-export function createProductsListResponse(products: Product[]): GetProductsResponse {
+export function createProductsListResponse(products: Product[]): ListProductsResponse {
   return {
     success: true,
     data: {
@@ -173,7 +173,7 @@ export function createProductDetailResponse(product: Product): GetProductRespons
 /**
  * Creates an empty products list API response
  */
-export function createEmptyProductsListResponse(): GetProductsResponse {
+export function createEmptyProductsListResponse(): ListProductsResponse {
   return {
     success: true,
     data: {
@@ -199,7 +199,7 @@ export function createProductErrorResponse(message = 'Product not found'): GetPr
 /**
  * Creates a products list error API response
  */
-export function createProductsListErrorResponse(message = 'Failed to fetch products'): GetProductsResponse {
+export function createProductsListErrorResponse(message = 'Failed to fetch products'): ListProductsResponse {
   return {
     success: false,
     error: {

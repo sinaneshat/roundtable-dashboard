@@ -1,0 +1,15 @@
+{
+  "name": "@roundtable/typescript-config",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    "./base.json": "./base.json",
+    "./react.json": "./react.json",
+    "./cloudflare-worker.json": "./cloudflare-worker.json"
+  },
+  "files": [
+    "base.json",
+    "cloudflare-worker.json",
+    "react.json"
+  ]
+}

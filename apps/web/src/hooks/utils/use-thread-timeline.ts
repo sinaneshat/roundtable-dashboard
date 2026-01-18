@@ -3,15 +3,15 @@ import type { UIMessage } from 'ai';
 import { useMemo } from 'react';
 
 import { getParticipantIndex, getRoundNumberFromMetadata, isModeratorMessage } from '@/lib/utils';
-import type { ChatThreadChangelog, StoredPreSearch } from '@/types/api';
+import type { ApiChangelog } from '@/services/api';
+import type { StoredPreSearch } from '@/types/api';
 
 /**
- * Changelog type that accepts both Date (from DB) and string (from API JSON)
- * This matches the reality of data flow: API returns JSON with string dates
+ * Changelog item type - derived from API response (SINGLE SOURCE OF TRUTH)
+ * ApiChangelog is inferred from backend Hono response via InferResponseType.
+ * Re-exported for consumers that need the timeline's changelog type.
  */
-type ChangelogItem = Omit<ChatThreadChangelog, 'createdAt'> & {
-  createdAt: Date | string;
-};
+export type ChangelogItem = ApiChangelog;
 
 /**
  * Timeline Item Types

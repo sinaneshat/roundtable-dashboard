@@ -10,7 +10,6 @@ import { use, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
-import type { ChatParticipant } from '@/types/api';
 import {
   getAssistantMetadata,
   getCurrentRoundNumber,
@@ -22,6 +21,7 @@ import {
   hasError as checkHasError, // eslint-disable-line perfectionist/sort-named-imports -- simple-import-sort conflicts with perfectionist on aliased imports
 } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
+import type { ChatParticipant } from '@/types/api';
 
 import {
   getMessageStreamingStatus,

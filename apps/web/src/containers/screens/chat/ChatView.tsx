@@ -6,7 +6,10 @@ import { useShallow } from 'zustand/react/shallow';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputContainer } from '@/components/chat/chat-input-container';
 import { ChatInputHeader } from '@/components/chat/chat-input-header';
+import type { ChatInputToolbarMenuProps } from '@/components/chat/chat-input-toolbar-lazy';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
+import type { ConversationModeModalProps } from '@/components/chat/conversation-mode-modal';
+import type { ModelSelectionModalProps } from '@/components/chat/model-selection-modal';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { useChatStore, useChatStoreApi } from '@/components/providers';
@@ -42,17 +45,18 @@ import {
   useFlowLoading,
   useThreadActions,
 } from '@/stores/chat';
-import type { ChatThreadChangelog, CustomRole, EnhancedModel } from '@/types/api';
+import type { ChangelogItem } from '@/services/api';
+import type { CustomRole, EnhancedModel } from '@/types/api';
 
-const ModelSelectionModal = dynamic(
+const ModelSelectionModal = dynamic<ModelSelectionModalProps>(
   () => import('@/components/chat/model-selection-modal').then(m => ({ default: m.ModelSelectionModal })),
   { ssr: false },
 );
-const ConversationModeModal = dynamic(
+const ConversationModeModal = dynamic<ConversationModeModalProps>(
   () => import('@/components/chat/conversation-mode-modal').then(m => ({ default: m.ConversationModeModal })),
   { ssr: false },
 );
-const ChatInputToolbarMenu = dynamic(
+const ChatInputToolbarMenu = dynamic<ChatInputToolbarMenuProps>(
   () => import('@/components/chat/chat-input-toolbar-lazy').then(m => ({ default: m.ChatInputToolbarMenu })),
   { ssr: false },
 );
@@ -178,7 +182,7 @@ export function ChatView({
     if (!modelsData?.data || typeof modelsData.data !== 'object' || !('items' in modelsData.data)) {
       return [];
     }
-    return (modelsData.data.items as EnhancedModel[] | undefined) || [];
+    return (modelsData.data.items as unknown as EnhancedModel[] | undefined) ?? [];
   }, [modelsData?.data]);
 
   const customRoles = useMemo(() => {
@@ -200,19 +204,18 @@ export function ChatView({
     return modelsData.data.user_tier_config as { tier_name: string; max_models: number; tier: string; can_upgrade: boolean } | undefined;
   }, [modelsData?.data]);
 
-  const changelog = useMemo(() => {
-    if (!changelogResponse?.success || !changelogResponse.data || typeof changelogResponse.data !== 'object' || !('items' in changelogResponse.data)) {
+  const changelog: ChangelogItem[] = useMemo(() => {
+    if (!changelogResponse?.success || !changelogResponse.data) {
       return [];
     }
-    const items = (changelogResponse.data.items as ChatThreadChangelog[] | undefined) || [];
+    const items = changelogResponse.data.items;
     const seen = new Set<string>();
-    const filtered = items.filter((item) => {
+    return items.filter((item) => {
       if (seen.has(item.id))
         return false;
       seen.add(item.id);
       return true;
     });
-    return filtered;
   }, [changelogResponse]);
 
   const completedRoundNumbers = useMemo(() => {

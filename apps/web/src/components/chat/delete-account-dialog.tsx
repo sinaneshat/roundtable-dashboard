@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useTranslations } from '@/lib/compat';
 
-type DeleteAccountDialogProps = {
+export type DeleteAccountDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;

@@ -204,7 +204,7 @@ export default function ChatOverviewScreen() {
     if (!modelsData?.data || typeof modelsData.data !== 'object' || !('items' in modelsData.data)) {
       return [];
     }
-    return (modelsData.data.items as EnhancedModel[] | undefined) || [];
+    return (modelsData.data.items as unknown as EnhancedModel[] | undefined) ?? [];
   }, [modelsData?.data]);
 
   const customRoles = useMemo(() => {

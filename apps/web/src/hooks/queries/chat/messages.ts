@@ -23,7 +23,7 @@ import { getThreadMessagesService } from '@/services/api';
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
-export function useThreadMessagesQuery(threadId: string, enabled?: boolean): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+export function useThreadMessagesQuery(threadId: string, enabled?: boolean) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({

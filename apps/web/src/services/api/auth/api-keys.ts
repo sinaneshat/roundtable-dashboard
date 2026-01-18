@@ -2,36 +2,38 @@
  * API Keys Service - API Key Management
  *
  * 100% type-safe RPC service for API key operations
- * All types automatically inferred from backend Hono routes
+ * All types automatically inferred from backend Hono routes via InferResponseType
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-export type ListApiKeysRequest = any;
+type ListApiKeysEndpoint = ApiClientType['auth']['api-keys']['$get'];
+export type ListApiKeysResponse = InferResponseType<ListApiKeysEndpoint>;
+export type ListApiKeysRequest = InferRequestType<ListApiKeysEndpoint>;
 
-export type ListApiKeysResponse = any;
+type GetApiKeyEndpoint = ApiClientType['auth']['api-keys'][':keyId']['$get'];
+export type GetApiKeyResponse = InferResponseType<GetApiKeyEndpoint>;
+export type GetApiKeyRequest = InferRequestType<GetApiKeyEndpoint>;
 
-export type GetApiKeyRequest = any;
+type CreateApiKeyEndpoint = ApiClientType['auth']['api-keys']['$post'];
+export type CreateApiKeyResponse = InferResponseType<CreateApiKeyEndpoint>;
+export type CreateApiKeyRequest = InferRequestType<CreateApiKeyEndpoint>;
 
-export type GetApiKeyResponse = any;
+type UpdateApiKeyEndpoint = ApiClientType['auth']['api-keys'][':keyId']['$patch'];
+export type UpdateApiKeyResponse = InferResponseType<UpdateApiKeyEndpoint>;
+export type UpdateApiKeyRequest = InferRequestType<UpdateApiKeyEndpoint>;
 
-export type CreateApiKeyRequest = any;
-
-export type CreateApiKeyResponse = any;
-
-export type UpdateApiKeyRequest = any;
-
-export type UpdateApiKeyResponse = any;
-
-export type DeleteApiKeyRequest = any;
-
-export type DeleteApiKeyResponse = any;
+type DeleteApiKeyEndpoint = ApiClientType['auth']['api-keys'][':keyId']['$delete'];
+export type DeleteApiKeyResponse = InferResponseType<DeleteApiKeyEndpoint>;
+export type DeleteApiKeyRequest = InferRequestType<DeleteApiKeyEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -42,7 +44,7 @@ export type DeleteApiKeyResponse = any;
  * Protected endpoint - requires authentication
  */
 export async function listApiKeysService(args?: ListApiKeysRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   return parseResponse(client.auth['api-keys'].$get(args ?? {}));
 }
 
@@ -51,7 +53,7 @@ export async function listApiKeysService(args?: ListApiKeysRequest) {
  * Protected endpoint - requires authentication (ownership check)
  */
 export async function getApiKeyService(data: GetApiKeyRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: GetApiKeyRequest = {
     param: data.param ?? { keyId: '' },
   };
@@ -63,7 +65,7 @@ export async function getApiKeyService(data: GetApiKeyRequest) {
  * Protected endpoint - requires authentication
  */
 export async function createApiKeyService(data: CreateApiKeyRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: CreateApiKeyRequest = {
     json: data.json ?? {},
   };
@@ -75,7 +77,7 @@ export async function createApiKeyService(data: CreateApiKeyRequest) {
  * Protected endpoint - requires authentication
  */
 export async function updateApiKeyService(data: UpdateApiKeyRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: UpdateApiKeyRequest = {
     param: data.param ?? { keyId: '' },
     json: data.json ?? {},
@@ -88,7 +90,7 @@ export async function updateApiKeyService(data: UpdateApiKeyRequest) {
  * Protected endpoint - requires authentication
  */
 export async function deleteApiKeyService(data: DeleteApiKeyRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: DeleteApiKeyRequest = {
     param: data.param ?? { keyId: '' },
   };

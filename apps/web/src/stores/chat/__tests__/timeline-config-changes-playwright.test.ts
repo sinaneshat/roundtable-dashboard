@@ -20,10 +20,9 @@ import {
 } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
-import type { ChatParticipant, ChatThread } from '@/types/api';
 import { useThreadTimeline } from '@/hooks/utils';
 import { createMockStoredPreSearch, createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
-import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/types/api';
+import type { ChatParticipant, ChatThread, DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/types/api';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';

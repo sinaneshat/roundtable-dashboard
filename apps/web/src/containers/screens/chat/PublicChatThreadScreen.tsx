@@ -11,10 +11,8 @@ import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
 import { Link, useTranslations } from '@/lib/compat';
 import { chatMessagesToUIMessages, transformChatParticipants, transformPreSearches } from '@/lib/utils';
-import type { GetPublicThreadResponse } from '@/services/api';
+import type { PublicThreadData } from '@/services/api';
 import type { StoredPreSearch } from '@/types/api';
-
-type PublicThreadData = Extract<GetPublicThreadResponse, { success: true }>['data'];
 
 type PublicChatThreadScreenProps = {
   slug: string;

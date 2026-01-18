@@ -2,20 +2,21 @@
  * Usage Service - Chat Usage and Quota API
  *
  * 100% type-safe RPC service for usage tracking operations
- * All types automatically inferred from backend Hono routes
+ * All types automatically inferred from backend Hono routes via InferResponseType
  */
 
+import type { InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-export type GetUsageStatsRequest = any;
-
-export type GetUsageStatsResponse = any;
+type GetUsageStatsEndpoint = ApiClientType['usage']['stats']['$get'];
+export type GetUsageStatsResponse = InferResponseType<GetUsageStatsEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -32,16 +33,12 @@ export type GetUsageStatsResponse = any;
  * - customRoles: { used, limit, remaining, percentage, status }
  * - period: { start, end, daysRemaining }
  * - subscription: { tier, isAnnual }
- *
- * @param options - Service options
- * @param options.bypassCache - If true, bypasses HTTP cache to get fresh data
- * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
 export async function getUserUsageStatsService(options?: {
   bypassCache?: boolean;
   cookieHeader?: string;
 }) {
-  const client = await createApiClient({
+  const client = createApiClient({
     bypassCache: options?.bypassCache,
     cookieHeader: options?.cookieHeader,
   });

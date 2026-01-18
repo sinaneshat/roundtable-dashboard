@@ -1,6 +1,9 @@
 import { StripeSubscriptionStatuses, SubscriptionTiers } from '@roundtable/shared';
 import { useEffect, useMemo, useState } from 'react';
 
+import type { CancelSubscriptionDialogProps } from '@/components/chat/cancel-subscription-dialog';
+import type { DeleteAccountDialogProps } from '@/components/chat/delete-account-dialog';
+import type { FeedbackModalProps } from '@/components/chat/feedback-modal';
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -24,17 +27,17 @@ import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls
 import { showApiErrorToast } from '@/lib/toast';
 import type { Subscription } from '@/types/billing';
 
-const CancelSubscriptionDialog = dynamic(
+const CancelSubscriptionDialog = dynamic<CancelSubscriptionDialogProps>(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => ({ default: m.CancelSubscriptionDialog })),
   { ssr: false },
 );
 
-const DeleteAccountDialog = dynamic(
+const DeleteAccountDialog = dynamic<DeleteAccountDialogProps>(
   () => import('@/components/chat/delete-account-dialog').then(m => ({ default: m.DeleteAccountDialog })),
   { ssr: false },
 );
 
-const FeedbackModal = dynamic(
+const FeedbackModal = dynamic<FeedbackModalProps>(
   () => import('@/components/chat/feedback-modal').then(m => ({ default: m.FeedbackModal })),
   { ssr: false },
 );
@@ -42,11 +45,9 @@ const FeedbackModal = dynamic(
 type NavUserProps = {
   /** Server-side session for hydration - prevents mismatch */
   initialSession?: { session: Session; user: User } | null;
-  /** Server-side subscriptions data from loader */
-  initialSubscriptions?: any;
 };
 
-export function NavUser({ initialSession, initialSubscriptions }: NavUserProps) {
+export function NavUser({ initialSession }: NavUserProps) {
   const { data: clientSession } = useSession();
   const navigate = useNavigate();
   const t = useTranslations();
@@ -77,10 +78,9 @@ export function NavUser({ initialSession, initialSubscriptions }: NavUserProps) 
   const displayName = user?.name || t('user.defaultName');
   const displayEmail = user?.email || '';
   const subscriptions: Subscription[] = (() => {
-    const dataToUse = subscriptionsData || initialSubscriptions;
-    if (!dataToUse)
+    if (!subscriptionsData)
       return [];
-    const result = dataToUse as any;
+    const result = subscriptionsData as any;
     if (!result.success)
       return [];
     const data = result.data;

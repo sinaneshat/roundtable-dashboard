@@ -41,7 +41,7 @@ function ScrollArea({ ref, className, children, orientation = 'vertical', ...pro
 }
 ScrollArea.displayName = 'ScrollArea';
 
-function ScrollBar({ className, orientation = 'vertical' }: { className?: string; orientation?: 'vertical' | 'horizontal' }) {
+function ScrollBar(_props: { className?: string; orientation?: 'vertical' | 'horizontal' }) {
   // No-op - scrollbar styling is handled via CSS in ScrollArea
   return null;
 }

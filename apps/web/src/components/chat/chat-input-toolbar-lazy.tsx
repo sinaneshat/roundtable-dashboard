@@ -7,7 +7,7 @@ import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 import type { EnhancedModelResponse } from '@/types/api';
 
-type ChatInputToolbarMenuProps = {
+export type ChatInputToolbarMenuProps = {
   selectedParticipants: ParticipantConfig[];
   allModels: EnhancedModelResponse[];
   onOpenModelModal: () => void;

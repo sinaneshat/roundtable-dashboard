@@ -2,24 +2,134 @@
  * Uploads Service - File Attachment API
  *
  * 100% type-safe RPC service for file upload operations
- * All types automatically inferred from backend Hono routes
+ * All types automatically inferred from backend Hono routes via InferResponseType
  *
  * Supports:
  * - Single-request uploads (files < 100MB)
  * - Multipart uploads (large files > 100MB)
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { authenticatedFetch, createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { authenticatedFetch, createApiClient } from '@/lib/api/client';
 
 // ============================================================================
-// Type-Safe JSON Response Parsing
+// Type Inference - Attachment Operations
 // ============================================================================
 
-export type UploadWithTicketResponse = any;
+type ListAttachmentsEndpoint = ApiClientType['uploads']['$get'];
+export type ListAttachmentsResponse = InferResponseType<ListAttachmentsEndpoint>;
+export type ListAttachmentsRequest = InferRequestType<ListAttachmentsEndpoint>;
 
-export type UploadPartResponse = any;
+type GetDownloadUrlEndpoint = ApiClientType['uploads'][':id']['download-url']['$get'];
+export type GetDownloadUrlResponse = InferResponseType<GetDownloadUrlEndpoint>;
+export type GetDownloadUrlRequest = InferRequestType<GetDownloadUrlEndpoint>;
+
+type GetAttachmentEndpoint = ApiClientType['uploads'][':id']['$get'];
+export type GetAttachmentResponse = InferResponseType<GetAttachmentEndpoint>;
+export type GetAttachmentRequest = InferRequestType<GetAttachmentEndpoint>;
+
+type UpdateAttachmentEndpoint = ApiClientType['uploads'][':id']['$patch'];
+export type UpdateAttachmentResponse = InferResponseType<UpdateAttachmentEndpoint>;
+export type UpdateAttachmentRequest = InferRequestType<UpdateAttachmentEndpoint>;
+
+type DeleteAttachmentEndpoint = ApiClientType['uploads'][':id']['$delete'];
+export type DeleteAttachmentResponse = InferResponseType<DeleteAttachmentEndpoint>;
+export type DeleteAttachmentRequest = InferRequestType<DeleteAttachmentEndpoint>;
+
+// ============================================================================
+// Type Inference - Multipart Upload Operations
+// ============================================================================
+
+type CreateMultipartUploadEndpoint = ApiClientType['uploads']['multipart']['$post'];
+export type CreateMultipartUploadResponse = InferResponseType<CreateMultipartUploadEndpoint>;
+export type CreateMultipartUploadRequest = InferRequestType<CreateMultipartUploadEndpoint>;
+
+type CompleteMultipartUploadEndpoint = ApiClientType['uploads']['multipart'][':id']['complete']['$post'];
+export type CompleteMultipartUploadResponse = InferResponseType<CompleteMultipartUploadEndpoint>;
+export type CompleteMultipartUploadRequest = InferRequestType<CompleteMultipartUploadEndpoint>;
+
+type AbortMultipartUploadEndpoint = ApiClientType['uploads']['multipart'][':id']['$delete'];
+export type AbortMultipartUploadResponse = InferResponseType<AbortMultipartUploadEndpoint>;
+export type AbortMultipartUploadRequest = InferRequestType<AbortMultipartUploadEndpoint>;
+
+// ============================================================================
+// Type Inference - Ticket-Based Upload Operations
+// ============================================================================
+
+type RequestUploadTicketEndpoint = ApiClientType['uploads']['ticket']['$post'];
+type RequestUploadTicketRequestInferred = InferRequestType<RequestUploadTicketEndpoint>;
+
+/**
+ * Upload ticket response - manual type definition since authenticatedFetch is used
+ */
+export type RequestUploadTicketResponse = {
+  success: true;
+  data: {
+    token: string;
+    expiresAt: string;
+  };
+} | {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+  };
+};
+
+export type RequestUploadTicketRequest = RequestUploadTicketRequestInferred;
+
+/**
+ * Upload with ticket response type (inferred from authenticatedFetch)
+ */
+export type UploadWithTicketResponse = {
+  success: true;
+  data: {
+    id: string;
+    filename: string;
+    mimeType: string;
+    fileSize: number;
+    uploadedAt: string;
+  };
+} | {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+  };
+};
+
+/**
+ * Upload part response type (inferred from authenticatedFetch)
+ */
+export type UploadPartResponse = {
+  success: true;
+  data: {
+    partNumber: number;
+    etag: string;
+  };
+} | {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+  };
+};
+
+/**
+ * Upload part service input type
+ */
+export type UploadPartServiceInput = {
+  param: { id: string };
+  query: { uploadId: string; partNumber: string };
+  body: Blob;
+};
+
+// ============================================================================
+// Type Guards
+// ============================================================================
 
 /**
  * Type guard for API success response structure
@@ -76,71 +186,6 @@ function isUploadPartSuccessResponse(
 }
 
 // ============================================================================
-// Type Inference - Attachment Operations
-// ============================================================================
-
-export type ListAttachmentsRequest = any;
-
-export type ListAttachmentsResponse = any;
-
-export type GetDownloadUrlRequest = any;
-
-export type GetDownloadUrlResponse = any;
-
-export type GetAttachmentRequest = any;
-
-export type GetAttachmentResponse = any;
-
-export type UpdateAttachmentRequest = any;
-
-export type UpdateAttachmentResponse = any;
-
-export type DeleteAttachmentRequest = any;
-
-export type DeleteAttachmentResponse = any;
-
-// ============================================================================
-// Type Inference - Multipart Upload Operations
-// ============================================================================
-
-export type CreateMultipartUploadRequest = any;
-
-export type CreateMultipartUploadResponse = any;
-
-export type UploadPartRequest = any;
-
-// Note: UploadPartResponse is used in type guards above, so it's moved to the top
-
-export type CompleteMultipartUploadRequest = any;
-
-export type CompleteMultipartUploadResponse = any;
-
-export type AbortMultipartUploadRequest = any;
-
-export type AbortMultipartUploadResponse = any;
-
-// ============================================================================
-// Type Inference - Ticket-Based Upload Operations
-// ============================================================================
-
-export type RequestUploadTicketRequest = any;
-
-export type RequestUploadTicketResponse = any;
-
-export type UploadWithTicketRequest = any;
-
-// Note: UploadWithTicketResponse is used in type guards above, so it's moved to the top
-
-/**
- * Upload part service input type
- */
-export type UploadPartServiceInput = {
-  param: { id: string };
-  query: { uploadId: string; partNumber: string };
-  body: Blob;
-};
-
-// ============================================================================
 // Service Functions - Attachment Operations
 // ============================================================================
 
@@ -149,7 +194,7 @@ export type UploadPartServiceInput = {
  * Protected endpoint - requires authentication
  */
 export async function listAttachmentsService(args?: ListAttachmentsRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: ListAttachmentsRequest = {
     query: args?.query ?? {},
   };
@@ -161,7 +206,7 @@ export async function listAttachmentsService(args?: ListAttachmentsRequest) {
  * Protected endpoint - requires authentication
  */
 export async function getAttachmentService(data: GetAttachmentRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: GetAttachmentRequest = {
     param: data.param ?? { id: '' },
   };
@@ -173,7 +218,7 @@ export async function getAttachmentService(data: GetAttachmentRequest) {
  * Protected endpoint - requires authentication
  */
 export async function updateAttachmentService(data: UpdateAttachmentRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: UpdateAttachmentRequest = {
     param: data.param ?? { id: '' },
     json: data.json ?? {},
@@ -186,7 +231,7 @@ export async function updateAttachmentService(data: UpdateAttachmentRequest) {
  * Protected endpoint - requires authentication
  */
 export async function deleteAttachmentService(data: DeleteAttachmentRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: DeleteAttachmentRequest = {
     param: data.param ?? { id: '' },
   };
@@ -198,7 +243,7 @@ export async function deleteAttachmentService(data: DeleteAttachmentRequest) {
  * Protected endpoint - requires authentication
  */
 export async function getDownloadUrlService(data: GetDownloadUrlRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: GetDownloadUrlRequest = {
     param: data.param ?? { id: '' },
   };
@@ -212,13 +257,11 @@ export async function getDownloadUrlService(data: GetDownloadUrlRequest) {
 /**
  * Request an upload ticket (Step 1 of secure upload)
  * Protected endpoint - requires authentication
- * @param data - Request payload with filename, mimeType, fileSize
- * @param signal - Optional AbortSignal to cancel the request
  */
 export async function requestUploadTicketService(
   data: RequestUploadTicketRequest,
   signal?: AbortSignal,
-): Promise<RequestUploadTicketResponse> {
+) {
   const response = await authenticatedFetch('/uploads/ticket', {
     method: 'POST',
     headers: {
@@ -230,7 +273,6 @@ export async function requestUploadTicketService(
 
   const json: unknown = await response.json();
 
-  // Type guard for ticket response
   if (
     typeof json === 'object'
     && json !== null
@@ -257,7 +299,7 @@ export async function requestUploadTicketService(
 export async function uploadWithTicketService(
   data: { query: { token: string }; form: { file: File } },
   signal?: AbortSignal,
-): Promise<UploadWithTicketResponse> {
+) {
   const formData = new FormData();
   formData.append('file', data.form.file);
 
@@ -278,16 +320,13 @@ export async function uploadWithTicketService(
 /**
  * Secure upload service (combines ticket request + upload)
  * Convenience function that handles the full secure upload flow
- * @param file - File to upload
- * @param signal - Optional AbortSignal to cancel the upload
  */
 export async function secureUploadService(file: File, signal?: AbortSignal) {
-  // Check if already aborted before starting
   if (signal?.aborted) {
     throw new DOMException('Upload cancelled', 'AbortError');
   }
 
-  const ticketResponse = await requestUploadTicketService({
+  const ticketResponse: RequestUploadTicketResponse = await requestUploadTicketService({
     json: {
       filename: file.name,
       mimeType: file.type || 'application/octet-stream',
@@ -299,7 +338,6 @@ export async function secureUploadService(file: File, signal?: AbortSignal) {
     throw new Error('Failed to request upload ticket');
   }
 
-  // Check if aborted after ticket request
   if (signal?.aborted) {
     throw new DOMException('Upload cancelled', 'AbortError');
   }
@@ -319,7 +357,7 @@ export async function secureUploadService(file: File, signal?: AbortSignal) {
  * Protected endpoint - requires authentication
  */
 export async function createMultipartUploadService(data: CreateMultipartUploadRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: CreateMultipartUploadRequest = {
     json: data.json ?? {
       filename: '',
@@ -335,13 +373,11 @@ export async function createMultipartUploadService(data: CreateMultipartUploadRe
  * Protected endpoint - requires authentication
  *
  * NOTE: Uses authenticatedFetch instead of Hono RPC for binary uploads
- * @param data - Upload part parameters
- * @param signal - Optional AbortSignal to cancel the upload
  */
 export async function uploadPartService(
   data: UploadPartServiceInput,
   signal?: AbortSignal,
-): Promise<UploadPartResponse> {
+) {
   const response = await authenticatedFetch(`/uploads/multipart/${data.param.id}/parts`, {
     method: 'PUT',
     headers: {
@@ -368,7 +404,7 @@ export async function uploadPartService(
  * Protected endpoint - requires authentication
  */
 export async function completeMultipartUploadService(data: CompleteMultipartUploadRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: CompleteMultipartUploadRequest = {
     param: data.param ?? { id: '' },
     json: data.json ?? { parts: [] },
@@ -381,6 +417,6 @@ export async function completeMultipartUploadService(data: CompleteMultipartUplo
  * Protected endpoint - requires authentication
  */
 export async function abortMultipartUploadService(data: AbortMultipartUploadRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   return parseResponse(client.uploads.multipart[':id'].$delete(data));
 }

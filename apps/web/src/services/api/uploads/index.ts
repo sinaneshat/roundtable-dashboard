@@ -38,11 +38,9 @@ export {
   type UpdateAttachmentRequest,
   type UpdateAttachmentResponse,
   updateAttachmentService,
-  type UploadPartRequest,
   type UploadPartResponse,
   uploadPartService,
   type UploadPartServiceInput,
-  type UploadWithTicketRequest,
   type UploadWithTicketResponse,
   uploadWithTicketService,
 } from './uploads';

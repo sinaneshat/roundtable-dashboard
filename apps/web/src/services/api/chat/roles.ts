@@ -5,33 +5,35 @@
  * All types automatically inferred from backend Hono routes
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
-// Type Inference - Automatically derived from backend routes
+// Type Inference
 // ============================================================================
 
-export type ListCustomRolesRequest = any;
+type ListCustomRolesEndpoint = ApiClientType['chat']['custom-roles']['$get'];
+export type ListCustomRolesRequest = InferRequestType<ListCustomRolesEndpoint>;
+export type ListCustomRolesResponse = InferResponseType<ListCustomRolesEndpoint>;
 
-export type ListCustomRolesResponse = any;
+type CreateCustomRoleEndpoint = ApiClientType['chat']['custom-roles']['$post'];
+export type CreateCustomRoleRequest = InferRequestType<CreateCustomRoleEndpoint>;
+export type CreateCustomRoleResponse = InferResponseType<CreateCustomRoleEndpoint>;
 
-export type CreateCustomRoleRequest = any;
+type GetCustomRoleEndpoint = ApiClientType['chat']['custom-roles'][':id']['$get'];
+export type GetCustomRoleRequest = InferRequestType<GetCustomRoleEndpoint>;
+export type GetCustomRoleResponse = InferResponseType<GetCustomRoleEndpoint>;
 
-export type CreateCustomRoleResponse = any;
+type UpdateCustomRoleEndpoint = ApiClientType['chat']['custom-roles'][':id']['$patch'];
+export type UpdateCustomRoleRequest = InferRequestType<UpdateCustomRoleEndpoint>;
+export type UpdateCustomRoleResponse = InferResponseType<UpdateCustomRoleEndpoint>;
 
-export type GetCustomRoleRequest = any;
-
-export type GetCustomRoleResponse = any;
-
-export type UpdateCustomRoleRequest = any;
-
-export type UpdateCustomRoleResponse = any;
-
-export type DeleteCustomRoleRequest = any;
-
-export type DeleteCustomRoleResponse = any;
+type DeleteCustomRoleEndpoint = ApiClientType['chat']['custom-roles'][':id']['$delete'];
+export type DeleteCustomRoleRequest = InferRequestType<DeleteCustomRoleEndpoint>;
+export type DeleteCustomRoleResponse = InferResponseType<DeleteCustomRoleEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -42,7 +44,7 @@ export type DeleteCustomRoleResponse = any;
  * Protected endpoint - requires authentication
  */
 export async function listCustomRolesService(args?: ListCustomRolesRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   return parseResponse(client.chat['custom-roles'].$get(args ?? { query: {} }));
 }
 
@@ -51,7 +53,7 @@ export async function listCustomRolesService(args?: ListCustomRolesRequest) {
  * Protected endpoint - requires authentication
  */
 export async function createCustomRoleService(data: CreateCustomRoleRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   return parseResponse(client.chat['custom-roles'].$post(data));
 }
 
@@ -60,7 +62,7 @@ export async function createCustomRoleService(data: CreateCustomRoleRequest) {
  * Protected endpoint - requires authentication
  */
 export async function getCustomRoleService(data: GetCustomRoleRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   return parseResponse(client.chat['custom-roles'][':id'].$get(data));
 }
 
@@ -69,7 +71,7 @@ export async function getCustomRoleService(data: GetCustomRoleRequest) {
  * Protected endpoint - requires authentication
  */
 export async function updateCustomRoleService(data: UpdateCustomRoleRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   return parseResponse(client.chat['custom-roles'][':id'].$patch(data));
 }
 
@@ -78,6 +80,6 @@ export async function updateCustomRoleService(data: UpdateCustomRoleRequest) {
  * Protected endpoint - requires authentication
  */
 export async function deleteCustomRoleService(data: DeleteCustomRoleRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   return parseResponse(client.chat['custom-roles'][':id'].$delete(data));
 }

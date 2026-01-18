@@ -7,7 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useThreadRoundChangelogQuery } from '@/hooks/queries';
 import { queryKeys } from '@/lib/data/query-keys';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChangelogListCache, ChatStoreApi } from '@/stores/chat';
+import type { ChangelogItemCache, ChangelogListCache, ChatStoreApi } from '@/stores/chat';
 import { validateChangelogListCache } from '@/stores/chat';
 
 type UseChangelogSyncParams = {
@@ -71,7 +71,11 @@ export function useChangelogSync({
       return;
     }
 
-    const newItems = (roundChangelogData.data as any)?.items || [];
+    // Type the response data - roundChangelogData.data has { items: ChangelogItemCache[] } structure
+    // Cast through unknown since API types are more specific than cache types (e.g. literal union vs string)
+    // The data is validated by Zod in the cache merge function anyway
+    const responseData = roundChangelogData.data as unknown as { items: ChangelogItemCache[] } | undefined;
+    const newItems: ChangelogItemCache[] = responseData?.items ?? [];
     rlog.changelog('items-received', `r${configChangeRoundNumber} count=${newItems.length} ids=[${newItems.map(i => i.id).join(',')}] rounds=[${newItems.map(i => i.roundNumber).join(',')}]`);
 
     const allItemsForCorrectRound = newItems.length > 0 && newItems.every(item => item.roundNumber === configChangeRoundNumber);

@@ -32,8 +32,8 @@ const PRECACHE_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then((cache) => cache.addAll(PRECACHE_ASSETS))
-      .then(() => self.skipWaiting()) // Activate immediately
+      .then(cache => cache.addAll(PRECACHE_ASSETS))
+      .then(() => self.skipWaiting()), // Activate immediately
   );
 });
 
@@ -44,10 +44,10 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name.startsWith('roundtable-') && !currentCaches.includes(name))
-          .map((name) => caches.delete(name))
+          .filter(name => name.startsWith('roundtable-') && !currentCaches.includes(name))
+          .map(name => caches.delete(name)),
       );
-    }).then(() => self.clients.claim()) // Take control of all pages immediately
+    }).then(() => self.clients.claim()), // Take control of all pages immediately
   );
 });
 
@@ -59,13 +59,13 @@ function isImmutableAsset(url) {
   const path = url.pathname;
   return (
     // Next.js static bundles - includes build hash, immutable
-    path.startsWith('/_next/static/') ||
+    path.startsWith('/_next/static/')
     // Build chunks
-    path.startsWith('/_next/chunks/') ||
+    || path.startsWith('/_next/chunks/')
     // Font files
-    path.match(/\.(woff2?)$/) ||
+    || path.match(/\.(woff2?)$/)
     // Static directory
-    path.startsWith('/static/')
+    || path.startsWith('/static/')
   );
 }
 
@@ -75,8 +75,8 @@ function isImmutableAsset(url) {
 function isCacheableMedia(url) {
   const path = url.pathname;
   return (
-    path.startsWith('/icons/') ||
-    path.match(/\.(png|jpg|jpeg|svg|gif|webp|ico|avif)$/)
+    path.startsWith('/icons/')
+    || path.match(/\.(png|jpg|jpeg|svg|gif|webp|ico|avif)$/)
   );
 }
 
@@ -88,23 +88,28 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Skip non-GET requests
-  if (request.method !== 'GET') return;
+  if (request.method !== 'GET')
+    return;
 
   // Skip cross-origin requests
-  if (url.origin !== self.location.origin) return;
+  if (url.origin !== self.location.origin)
+    return;
 
   // Skip API requests - always fetch fresh
-  if (url.pathname.startsWith('/api/')) return;
+  if (url.pathname.startsWith('/api/'))
+    return;
 
   // Skip auth routes - security sensitive
-  if (url.pathname.startsWith('/auth/')) return;
+  if (url.pathname.startsWith('/auth/'))
+    return;
 
   // Strategy 1: IMMUTABLE ASSETS - Cache-first, never revalidate
   // These have content hashes in filenames, so they're immutable
   if (isImmutableAsset(url)) {
     event.respondWith(
       caches.match(request).then((cached) => {
-        if (cached) return cached;
+        if (cached)
+          return cached;
 
         return fetch(request).then((response) => {
           if (response.ok) {
@@ -115,7 +120,7 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         });
-      })
+      }),
     );
     return;
   }
@@ -124,7 +129,8 @@ self.addEventListener('fetch', (event) => {
   if (isCacheableMedia(url)) {
     event.respondWith(
       caches.match(request).then((cached) => {
-        if (cached) return cached;
+        if (cached)
+          return cached;
 
         return fetch(request).then((response) => {
           if (response.ok) {
@@ -135,7 +141,7 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         });
-      })
+      }),
     );
     return;
   }
@@ -159,7 +165,7 @@ self.addEventListener('fetch', (event) => {
           // Return cached immediately if available, otherwise wait for network
           return cached || fetchPromise;
         });
-      })
+      }),
     );
     return;
   }
@@ -177,13 +183,14 @@ self.addEventListener('fetch', (event) => {
       return response;
     }).catch(() => {
       return caches.match(request);
-    })
+    }),
   );
 });
 
 // Handle push notifications
 self.addEventListener('push', (event) => {
-  if (!event.data) return;
+  if (!event.data)
+    return;
 
   try {
     const data = event.data.json();
@@ -202,13 +209,13 @@ self.addEventListener('push', (event) => {
     };
 
     event.waitUntil(
-      self.registration.showNotification(data.title || 'Roundtable', options)
+      self.registration.showNotification(data.title || 'Roundtable', options),
     );
   } catch {
     // Handle non-JSON push data
     const text = event.data.text();
     event.waitUntil(
-      self.registration.showNotification('Roundtable', { body: text })
+      self.registration.showNotification('Roundtable', { body: text }),
     );
   }
 });
@@ -233,7 +240,7 @@ self.addEventListener('notificationclick', (event) => {
         if (self.clients.openWindow) {
           return self.clients.openWindow(urlToOpen);
         }
-      })
+      }),
   );
 });
 

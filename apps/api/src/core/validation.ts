@@ -123,7 +123,7 @@ export const FilterValueSchema = z.union([
 export type FilterValue = z.infer<typeof FilterValueSchema>;
 
 export function createSearchSchema<T extends z.ZodRawShape>(
-  schema: z.ZodObject<T>,
+  _schema: z.ZodObject<T>,
   searchableFields: Array<keyof T>,
 ) {
   return z.object({

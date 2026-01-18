@@ -50,7 +50,7 @@ import {
  *   const canSendMessage = messages.remaining > 0;
  * }
  */
-export function useUsageStatsQuery(options?: { forceEnabled?: boolean }): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
   const { isAuthenticated, handleAuthError } = useAuthCheck();
 
   const query = useQuery({

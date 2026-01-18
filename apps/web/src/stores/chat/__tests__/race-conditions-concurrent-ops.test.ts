@@ -23,13 +23,12 @@
 import { FinishReasons, MessageRoles, MessageStatuses, ScreenModes, StreamStatuses } from '@roundtable/shared';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ChatThread } from '@/types/api';
 import {
   createMockStoredPreSearch,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { DbAssistantMessageMetadata } from '@/types/api';
+import type { ChatThread, DbAssistantMessageMetadata } from '@/types/api';
 
 import { createChatStore } from '../store';
 

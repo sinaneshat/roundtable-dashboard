@@ -8,8 +8,7 @@
  * SSR should be fast - return what we have, let client sync if needed.
  */
 
-import type { ChatMessage } from '@/types/api';
-import type { ThreadStreamResumptionState } from '@/types/api';
+import type { ChatMessage, ThreadStreamResumptionState } from '@/types/api';
 
 import { transformChatMessage } from './date-transforms';
 import type { ApiMessage } from './ssr-message-verification-schemas';

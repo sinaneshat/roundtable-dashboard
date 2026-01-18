@@ -33,3 +33,4 @@ export {
   useRouter,
   useSearchParams,
 } from './navigation';
+export { useNavigate } from '@tanstack/react-router';

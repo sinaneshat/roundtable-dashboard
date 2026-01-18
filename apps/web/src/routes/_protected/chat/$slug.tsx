@@ -5,10 +5,7 @@ import { ChatThreadSkeleton } from '@/components/loading';
 import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { useThreadBySlugQuery } from '@/hooks/queries';
 import { useSession } from '@/lib/auth/client';
-import { getThreadBySlugService, type GetThreadBySlugResponse } from '@/services/api';
-
-// Extract success data type from discriminated union
-type ThreadData = Extract<GetThreadBySlugResponse, { success: true }>['data'];
+import { getThreadBySlugService } from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
   // Loader fetches thread data for dynamic title
@@ -43,10 +40,9 @@ function ChatThreadRoute() {
   const { threadData: loaderThreadData } = Route.useLoaderData();
   const { data: session } = useSession();
 
-  // Use loader data first, fallback to React Query for updates
-  const { data: queryData, isLoading, isError, error } = useThreadBySlugQuery(
+  const { data: queryData, isError, error } = useThreadBySlugQuery(
     slug,
-    !loaderThreadData, // Only fetch if no loader data
+    !loaderThreadData,
   );
 
   const threadData = loaderThreadData || (queryData?.success ? queryData.data : null);
@@ -55,11 +51,6 @@ function ChatThreadRoute() {
     name: session?.user?.name || 'You',
     image: session?.user?.image || null,
   }), [session?.user?.name, session?.user?.image]);
-
-  // Only show loading if no data at all
-  if (isLoading && !threadData) {
-    return <ChatThreadSkeleton />;
-  }
 
   if (isError || !threadData) {
     return (

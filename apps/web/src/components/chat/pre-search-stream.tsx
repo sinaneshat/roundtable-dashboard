@@ -556,7 +556,7 @@ function PreSearchStreamComponent({
             queries={validQueries.filter(q => q?.query).map(q => ({
               query: q.query,
               rationale: q.rationale,
-              searchDepth: q.searchDepth,
+              searchDepth: q.searchDepth ?? WebSearchDepths.BASIC,
               index: q.index,
             }))}
             results={validResults.flatMap(r => r.results || [])}

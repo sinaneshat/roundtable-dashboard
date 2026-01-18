@@ -7,7 +7,7 @@
  * - On-demand revalidation via query invalidation
  */
 
-import type { GetProductsResponse } from '@/services/api';
+import type { ListProductsResponse } from '@/services/api';
 import { getProductService, getProductsService } from '@/services/api';
 
 // ============================================================================
@@ -31,7 +31,7 @@ export const PRODUCT_CACHE_TAGS = {
  *
  * @returns Products response
  */
-export async function getCachedProducts(): Promise<GetProductsResponse> {
+export async function getCachedProducts(): Promise<ListProductsResponse> {
   return getProductsService();
 }
 

@@ -62,7 +62,7 @@ export function useSyncAfterCheckoutMutation() {
       // ⚠️ CRITICAL: Must bypass HTTP cache to get fresh subscription data
       try {
         const freshSubscriptionsData = await getSubscriptionsService({ bypassCache: true });
-        queryClient.setQueryData(queryKeys.subscriptions.list(), freshSubscriptionsData);
+        queryClient.setQueryData(queryKeys.subscriptions.current(), freshSubscriptionsData);
       } catch (error) {
         console.error('[Checkout] Failed to refresh subscriptions after checkout:', error);
         // Fallback: invalidate and let normal refetch handle it

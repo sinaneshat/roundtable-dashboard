@@ -16,7 +16,6 @@ const AppSidebar = dynamic(
 type ChatLayoutShellProps = {
   children: React.ReactNode;
   session?: SessionData | null;
-  initialThreads?: any;
 };
 
 /**
@@ -24,11 +23,11 @@ type ChatLayoutShellProps = {
  * Provides sidebar navigation and header structure.
  * Auth and data fetching handled by route groups.
  */
-export function ChatLayoutShell({ children, session = null, initialThreads }: ChatLayoutShellProps) {
+export function ChatLayoutShell({ children, session = null }: ChatLayoutShellProps) {
   return (
     <ThreadHeaderProvider>
       <SidebarProvider>
-        <AppSidebar initialSession={session} initialThreads={initialThreads} />
+        <AppSidebar initialSession={session} />
 
         <SidebarInset id="main-scroll-container" className="flex flex-col relative">
           <ChatHeaderSwitch />

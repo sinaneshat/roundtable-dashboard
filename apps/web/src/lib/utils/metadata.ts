@@ -20,14 +20,7 @@ import { MessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
-import type { ChatMessage } from '@/types/api';
-import type {
-  DbAssistantMessageMetadata,
-  DbMessageMetadata,
-  DbModeratorMessageMetadata,
-  DbPreSearchMessageMetadata,
-  DbUserMessageMetadata,
-} from '@/types/api';
+import type { ChatMessage, DbAssistantMessageMetadata, DbMessageMetadata, DbModeratorMessageMetadata, DbPreSearchMessageMetadata, DbUserMessageMetadata } from '@/types/api';
 import {
   DbAssistantMessageMetadataSchema,
   DbMessageMetadataSchema,

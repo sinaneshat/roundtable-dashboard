@@ -5,15 +5,18 @@
  * All types automatically inferred from backend Hono routes
  */
 
-import { createApiClient } from '@/api/client';
+import type { InferRequestType, InferResponseType } from 'hono/client';
+
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
-// Type Inference - Automatically derived from backend routes
+// Type Inference
 // ============================================================================
 
-export type StreamChatRequest = any;
-
-export type StreamChatResponse = any;
+type StreamChatEndpoint = ApiClientType['chat']['$post'];
+export type StreamChatRequest = InferRequestType<StreamChatEndpoint>;
+export type StreamChatResponse = InferResponseType<StreamChatEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -27,6 +30,6 @@ export type StreamChatResponse = any;
  * must return raw Response object (not parsed JSON) for SSE to work.
  */
 export async function streamChatService(data: StreamChatRequest) {
-  const client = await createApiClient();
-  return await client.chat.$post(data);
+  const client = createApiClient();
+  return client.chat.$post(data);
 }

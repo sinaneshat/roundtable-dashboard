@@ -5,21 +5,23 @@
  * Handles Server-Sent Events for real-time search progress
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
-// Type Inference - Automatically derived from backend routes
+// Type Inference
 // ============================================================================
 
-export type PreSearchRequest = any;
+type PreSearchEndpoint = ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['$post'];
+export type PreSearchRequest = InferRequestType<PreSearchEndpoint>;
+export type PreSearchResponse = InferResponseType<PreSearchEndpoint>;
 
-export type PreSearchResponse = any;
-
-export type GetThreadPreSearchesRequest = any;
-
-export type GetThreadPreSearchesResponse = any;
+type GetThreadPreSearchesEndpoint = ApiClientType['chat']['threads'][':id']['pre-searches']['$get'];
+export type GetThreadPreSearchesRequest = InferRequestType<GetThreadPreSearchesEndpoint>;
+export type GetThreadPreSearchesResponse = InferResponseType<GetThreadPreSearchesEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -28,20 +30,13 @@ export type GetThreadPreSearchesResponse = any;
 /**
  * Get all pre-search results for a thread
  * Protected endpoint - requires authentication
- *
- * @param data - Request arguments with thread id
- * @param options - Service options
- * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
 export async function getThreadPreSearchesService(
   data: GetThreadPreSearchesRequest,
   options?: { cookieHeader?: string },
 ) {
-  const client = await createApiClient({ cookieHeader: options?.cookieHeader });
-  const params: GetThreadPreSearchesRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.chat.threads[':id']['pre-searches'].$get(params));
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
+  return parseResponse(client.chat.threads[':id']['pre-searches'].$get(data));
 }
 
 /**
@@ -52,6 +47,6 @@ export async function getThreadPreSearchesService(
  * object for EventSource/ReadableStream processing.
  */
 export async function executePreSearchStreamService(data: PreSearchRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   return client.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].$post(data);
 }

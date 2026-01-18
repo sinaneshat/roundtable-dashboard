@@ -6,7 +6,6 @@
  */
 
 export {
-  type GetUsageStatsRequest,
   type GetUsageStatsResponse,
   getUserUsageStatsService,
 } from './usage';

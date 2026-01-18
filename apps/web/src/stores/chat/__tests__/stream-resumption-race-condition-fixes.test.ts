@@ -2,8 +2,8 @@ import { ChatModes, ThreadStatuses } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChatParticipant, ChatThread } from '@/types/api';
 import { act, createTestAssistantMessage, createTestUserMessage, renderHook, waitFor, waitForAsync } from '@/lib/testing';
+import type { ChatParticipant, ChatThread } from '@/types/api';
 
 import { useIncompleteRoundResumption } from '../actions/incomplete-round-resumption';
 import type { ChatStore } from '../store-schemas';

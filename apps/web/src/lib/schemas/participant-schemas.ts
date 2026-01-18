@@ -12,8 +12,8 @@
 
 import { z } from 'zod';
 
-import { chatParticipantSelectSchema } from '@/types/api';
 import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';
+import { chatParticipantSelectSchema } from '@/types/api';
 
 // ============================================================================
 // PARTICIPANT INDEX CONSTANTS - SINGLE SOURCE OF TRUTH
@@ -244,7 +244,7 @@ export function isChatParticipantArray(
 export const ParticipantContextSchema = z.object({
   id: z.string(),
   modelId: z.string(),
-  role: z.string().nullable(),
+  role: z.string().nullable().optional(),
 });
 
 export type ParticipantContext = z.infer<typeof ParticipantContextSchema>;

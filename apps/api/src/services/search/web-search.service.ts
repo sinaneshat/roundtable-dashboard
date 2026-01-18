@@ -117,7 +117,7 @@ export function streamSearchQuery(
   userMessage: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
-) {
+): ReturnType<typeof streamText> {
   try {
     validateModelForOperation(AIModels.WEB_SEARCH, 'web-search-query-generation', {
       structuredOutput: true,
@@ -1293,7 +1293,7 @@ export function streamAnswerSummary(
   mode: WebSearchActiveAnswerMode,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
-) {
+): ReturnType<typeof streamText> {
   if (results.length === 0) {
     throw createError.badRequest(
       'No search results available for answer generation',

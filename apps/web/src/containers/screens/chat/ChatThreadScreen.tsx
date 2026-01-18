@@ -141,7 +141,7 @@ export default function ChatThreadScreen({
     if (!modelsData?.data || typeof modelsData.data !== 'object' || !('items' in modelsData.data)) {
       return [];
     }
-    return (modelsData.data.items as EnhancedModel[] | undefined) || [];
+    return (modelsData.data.items as unknown as EnhancedModel[] | undefined) ?? [];
   }, [modelsData?.data]);
 
   // ✅ GRANULAR: Track vision (image) and file (document) incompatibilities separately

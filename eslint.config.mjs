@@ -108,6 +108,14 @@ export default antfu(
       }],
       'ts/no-explicit-any': 'error',
       'ts/explicit-function-return-type': 'off',
+      'ts/no-non-null-assertion': 'error',
+      'ts/ban-ts-comment': ['error', {
+        'ts-expect-error': 'allow-with-description',
+        'ts-ignore': true,
+        'ts-nocheck': true,
+        'minimumDescriptionLength': 10,
+      }],
+      'ts/prefer-ts-expect-error': 'error',
       'no-console': ['error', { allow: ['error'] }],
 
       // // Prevent re-exports and enforce better export patterns
@@ -117,41 +125,6 @@ export default antfu(
       // 'import/no-duplicates': 'error', // Prevents importing the same module in multiple places
       // 'import/prefer-default-export': 'off', // Don't force default exports
       // 'import/no-default-export': 'off', // Allow default exports where needed
-    },
-  },
-  // Migration: Relax no-explicit-any for files with migration-related type inference issues
-  // These files use `any` types due to Hono client inference and TanStack Start migration
-  // TODO: Remove this override when proper type inference is restored
-  {
-    files: [
-      'apps/web/src/services/api/**/*.ts',
-      'apps/web/src/lib/api/client.ts',
-      'apps/web/src/types/stubs/**/*.ts',
-      'apps/web/src/hooks/**/*.ts',
-      'apps/web/src/db/**/*.ts',
-      'apps/web/src/lib/compat/**/*.tsx',
-      'apps/web/src/lib/utils/**/*.ts',
-      'apps/web/src/components/**/*.tsx',
-      'apps/web/src/components/**/*.ts',
-      'apps/web/src/stores/**/*.ts',
-      'apps/web/src/containers/**/*.tsx',
-      'apps/web/src/router.tsx',
-    ],
-    rules: {
-      'ts/no-explicit-any': 'off',
-    },
-  },
-  // Migration: Allow @ts-expect-error for cross-package imports in auth/email
-  // These files import from API package at runtime, requiring type suppression
-  {
-    files: [
-      'apps/web/src/lib/auth/**/*.ts',
-      'apps/web/src/lib/email/**/*.ts',
-      'apps/web/src/db/**/*.ts',
-    ],
-    rules: {
-      'ts/no-explicit-any': 'off',
-      'ts/ban-ts-comment': 'off',
     },
   },
   {

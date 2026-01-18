@@ -1,26 +1,10 @@
 {
+  "extends": "@roundtable/typescript-config/react.json",
   "compilerOptions": {
-    "incremental": true,
-    "target": "ES2022",
-    "jsx": "react-jsx",
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "baseUrl": ".",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
     "paths": {
-      "@/*": ["./src/*"],
-      "@roundtable/shared": ["../../packages/shared/src"],
-      "@roundtable/shared/*": ["../../packages/shared/src/*"]
-    },
-    "resolveJsonModule": true,
-    "strict": false,
-    "noImplicitAny": false,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
-    "skipDefaultLibCheck": true,
-    "skipLibCheck": true
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src/**/*", "src/types/**/*.d.ts", "*.d.ts", "vite.config.ts"],
   "exclude": [
@@ -28,7 +12,6 @@
     ".output",
     "**/__tests__/**",
     "**/*.test.ts",
-    "**/*.test.tsx",
-    "../api/**/*"
+    "**/*.test.tsx"
   ]
 }

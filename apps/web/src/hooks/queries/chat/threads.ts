@@ -32,7 +32,7 @@ import {
  *
  * @param search - Optional search query to filter threads by title
  */
-export function useThreadsQuery(search?: string): ReturnType<typeof useInfiniteQuery<{ success: boolean; data?: { items: unknown[]; pagination?: { nextCursor?: string } } }>> {
+export function useThreadsQuery(search?: string) {
   const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
@@ -70,7 +70,7 @@ export function useThreadsQuery(search?: string): ReturnType<typeof useInfiniteQ
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
-export function useThreadQuery(threadId: string, enabled?: boolean): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+export function useThreadQuery(threadId: string, enabled?: boolean) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
@@ -91,7 +91,7 @@ export function useThreadQuery(threadId: string, enabled?: boolean): ReturnType<
  * @param slug - Thread slug
  * @param enabled - Optional control over whether to fetch (default: based on slug)
  */
-export function usePublicThreadQuery(slug: string, enabled?: boolean): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+export function usePublicThreadQuery(slug: string, enabled?: boolean) {
   return useQuery({
     queryKey: queryKeys.threads.public(slug),
     queryFn: () => getPublicThreadService({ param: { slug } }),
@@ -111,7 +111,7 @@ export function usePublicThreadQuery(slug: string, enabled?: boolean): ReturnTyp
  *
  * @param enabled - Optional control over whether to fetch (default: true)
  */
-export function usePublicThreadSlugsQuery(enabled?: boolean): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+export function usePublicThreadSlugsQuery(enabled?: boolean) {
   return useQuery({
     queryKey: queryKeys.threads.publicSlugs(),
     queryFn: () => listPublicThreadSlugsService(),
@@ -129,7 +129,7 @@ export function usePublicThreadSlugsQuery(enabled?: boolean): ReturnType<typeof 
  * @param slug - Thread slug
  * @param enabled - Optional control over whether to fetch (default: based on slug and auth)
  */
-export function useThreadBySlugQuery(slug: string, enabled?: boolean): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+export function useThreadBySlugQuery(slug: string, enabled?: boolean) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
@@ -155,7 +155,7 @@ export function useThreadBySlugQuery(slug: string, enabled?: boolean): ReturnTyp
 export function useThreadSlugStatusQuery(
   threadId: string | null,
   enabled: boolean = true,
-): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({

@@ -14,14 +14,13 @@ import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
-import type { ChatParticipant, ChatThread } from '@/types/api';
 import type { FilePreview, UploadItem } from '@/hooks/utils';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { StoredPreSearch } from '@/types/api';
+import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
 
 import type { SendMessage, StartRound } from './store-action-types';
 import { isUpsertOptions } from './store-action-types';
@@ -214,9 +213,10 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
       if (idx !== -1) {
         const ps = draft.preSearches[idx]!;
         const existingSummary = ps.searchData?.summary ?? '';
+        const results = partialData.results ?? [];
         ps.searchData = {
           queries: partialData.queries,
-          results: partialData.results.map(r => ({
+          results: results.map(r => ({
             query: r.query,
             answer: r.answer,
             results: r.results.map(item => ({
@@ -230,9 +230,9 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
             index: r.index,
           })),
           summary: partialData.summary ?? existingSummary,
-          successCount: partialData.results.length,
+          successCount: results.length,
           failureCount: 0,
-          totalResults: partialData.totalResults ?? partialData.results.length,
+          totalResults: partialData.totalResults ?? results.length,
           totalTime: partialData.totalTime ?? 0,
         };
       }

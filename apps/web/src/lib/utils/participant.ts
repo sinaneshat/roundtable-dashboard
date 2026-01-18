@@ -16,8 +16,8 @@
 import type { ParticipantComparisonMode } from '@roundtable/shared';
 import { ParticipantComparisonModes } from '@roundtable/shared';
 
-import type { ChatParticipant } from '@/types/api';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ChatParticipant } from '@/types/api';
 
 // ============================================================================
 // Priority Sorting (SINGLE SOURCE OF TRUTH)

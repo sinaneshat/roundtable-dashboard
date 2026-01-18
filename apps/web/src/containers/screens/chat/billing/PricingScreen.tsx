@@ -24,7 +24,7 @@ export default function PricingScreen() {
   const [cancelingSubscriptionId, setCancelingSubscriptionId] = useState<string | null>(null);
   const [isManagingBilling, setIsManagingBilling] = useState(false);
 
-  const { data: productsData, isLoading: isLoadingProducts, error: productsError } = useProductsQuery();
+  const { data: productsData, error: productsError } = useProductsQuery();
   const { data: subscriptionsData } = useSubscriptionsQuery();
 
   const createCheckoutMutation = useCreateCheckoutSessionMutation();
@@ -32,7 +32,6 @@ export default function PricingScreen() {
   const switchMutation = useSwitchSubscriptionMutation();
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
 
-  // Type narrowing for API responses
   type ApiResponse<T> = { success: boolean; data?: T };
   type ProductsResponse = { items?: Product[] };
   type SubscriptionsResponse = { items?: Subscription[] };
@@ -43,9 +42,7 @@ export default function PricingScreen() {
   const products = typedProductsData?.success ? typedProductsData.data?.items ?? [] : [];
   const subscriptions: Subscription[] = typedSubscriptionsData?.success ? typedSubscriptionsData.data?.items ?? [] : [];
 
-  const hasValidProductData = typedProductsData?.success && !!typedProductsData.data?.items;
   const shouldShowError = productsError || (typedProductsData && !typedProductsData.success);
-  const shouldShowLoading = isLoadingProducts || (!hasValidProductData && !shouldShowError);
 
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
@@ -152,7 +149,6 @@ export default function PricingScreen() {
       <PricingContent
         products={products}
         subscriptions={subscriptions}
-        isLoading={shouldShowLoading}
         error={shouldShowError ? productsError : null}
         processingPriceId={processingPriceId}
         cancelingSubscriptionId={cancelingSubscriptionId}

@@ -3,8 +3,14 @@
  *
  * This client provides type-safe access to the backend API using Hono's RPC functionality.
  * It connects to the separate @roundtable/api worker.
+ *
+ * Type Safety:
+ * - AppType is imported from @roundtable/api (dev dependency for types only)
+ * - hc<AppType>() provides full end-to-end type safety
+ * - Service functions use InferRequestType/InferResponseType from hono/client
  */
 
+import type { AppType } from '@roundtable/api';
 import { hc } from 'hono/client';
 
 // ============================================================================
@@ -12,17 +18,12 @@ import { hc } from 'hono/client';
 // ============================================================================
 
 /**
- * API client type - uses 'any' to allow dynamic route access
+ * API client type - Fully typed Hono RPC client
  *
- * The actual AppType lives in @roundtable/api but we don't import it to avoid
- * cross-package type dependencies. At runtime, hc() builds URLs dynamically
- * based on the route path, so this works correctly.
- *
- * Service functions should use explicit return types from @/types/api instead
- * of relying on Hono's InferResponseType.
+ * The AppType is imported from @roundtable/api which exports it from its index.ts.
+ * This provides full type safety for all RPC calls.
  */
-
-export type ApiClientType = any;
+export type ApiClientType = ReturnType<typeof hc<AppType>>;
 
 // ============================================================================
 // URL Helpers
@@ -51,7 +52,7 @@ function getApiBaseUrl(): string {
  * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
  */
 
-export function createApiClient(options?: { bypassCache?: boolean; cookieHeader?: string }): any {
+export function createApiClient(options?: { bypassCache?: boolean; cookieHeader?: string }): ApiClientType {
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };
@@ -74,7 +75,7 @@ export function createApiClient(options?: { bypassCache?: boolean; cookieHeader?
     });
   };
 
-  return hc(getApiBaseUrl(), {
+  return hc<AppType>(getApiBaseUrl(), {
     headers,
     fetch: fetchWithCredentials,
   });
@@ -86,8 +87,8 @@ export function createApiClient(options?: { bypassCache?: boolean; cookieHeader?
  * For public endpoints that don't require authentication.
  */
 
-export function createPublicApiClient(): any {
-  return hc(getApiBaseUrl(), {
+export function createPublicApiClient(): ApiClientType {
+  return hc<AppType>(getApiBaseUrl(), {
     headers: {
       Accept: 'application/json',
     },

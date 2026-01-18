@@ -5,28 +5,28 @@
   "private": true,
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "import": "./src/index.ts"
     },
     "./enums": {
-      "types": "./src/enums/index.ts",
+      "types": "./dist/enums/index.d.ts",
       "import": "./src/enums/index.ts"
     },
     "./types": {
-      "types": "./src/types/index.ts",
+      "types": "./dist/types/index.d.ts",
       "import": "./src/types/index.ts"
     },
     "./validation": {
-      "types": "./src/validation/index.ts",
+      "types": "./dist/validation/index.d.ts",
       "import": "./src/validation/index.ts"
     },
     "./constants": {
-      "types": "./src/constants/index.ts",
+      "types": "./dist/constants/index.d.ts",
       "import": "./src/constants/index.ts"
     }
   },
   "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
@@ -36,6 +36,7 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@roundtable/typescript-config": "workspace:*",
     "typescript": "5.9.3"
   }
 }

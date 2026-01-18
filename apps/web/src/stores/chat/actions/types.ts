@@ -5,8 +5,7 @@
 import { UsageStatusSchema } from '@roundtable/shared';
 import { z } from 'zod';
 
-import { chatThreadChangelogSelectSchema } from '@/types/api';
-import { ChatThreadCacheSchema } from '@/types/api';
+import { ChatThreadCacheSchema, chatThreadChangelogSelectSchema } from '@/types/api';
 
 export const ApiResponseSchema = z.object({
   success: z.boolean(),

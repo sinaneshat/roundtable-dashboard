@@ -31,17 +31,12 @@ import {
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import type { ChatThread } from '@/types/api';
 import {
   createMockStoredPreSearch,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type {
-  DbAssistantMessageMetadata,
-  DbModeratorMessageMetadata,
-  DbUserMessageMetadata,
-} from '@/types/api';
+import type { ChatThread, DbAssistantMessageMetadata, DbModeratorMessageMetadata, DbUserMessageMetadata } from '@/types/api';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';

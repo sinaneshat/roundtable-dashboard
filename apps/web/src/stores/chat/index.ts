@@ -23,6 +23,7 @@ export { useSyncHydrateStore } from './actions/sync-hydrate-store';
 export type { UseThreadActionsOptions } from './actions/thread-actions';
 export { useThreadActions } from './actions/thread-actions';
 export type {
+  ChangelogItemCache,
   ChangelogListCache,
   InfiniteQueryCache,
   ThreadDetailCacheData,

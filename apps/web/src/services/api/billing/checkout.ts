@@ -5,21 +5,23 @@
  * All types automatically inferred from backend Hono routes
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-export type CreateCheckoutSessionRequest = any;
+type CreateCheckoutEndpoint = ApiClientType['billing']['checkout']['$post'];
+export type CreateCheckoutSessionRequest = InferRequestType<CreateCheckoutEndpoint>;
+export type CreateCheckoutSessionResponse = InferResponseType<CreateCheckoutEndpoint>;
 
-export type CreateCheckoutSessionResponse = any;
-
-export type SyncAfterCheckoutRequest = any;
-
-export type SyncAfterCheckoutResponse = any;
+type SyncAfterCheckoutEndpoint = ApiClientType['billing']['sync-after-checkout']['$post'];
+export type SyncAfterCheckoutRequest = InferRequestType<SyncAfterCheckoutEndpoint>;
+export type SyncAfterCheckoutResponse = InferResponseType<SyncAfterCheckoutEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -30,11 +32,8 @@ export type SyncAfterCheckoutResponse = any;
  * Protected endpoint - requires authentication
  */
 export async function createCheckoutSessionService(data: CreateCheckoutSessionRequest) {
-  const client = await createApiClient();
-  const params: CreateCheckoutSessionRequest = {
-    json: data.json ?? {},
-  };
-  return parseResponse(client.billing.checkout.$post(params));
+  const client = createApiClient();
+  return parseResponse(client.billing.checkout.$post(data));
 }
 
 /**
@@ -46,6 +45,6 @@ export async function createCheckoutSessionService(data: CreateCheckoutSessionRe
  * to prevent race conditions with webhooks
  */
 export async function syncAfterCheckoutService(data?: SyncAfterCheckoutRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   return parseResponse(client.billing['sync-after-checkout'].$post(data ?? {}));
 }

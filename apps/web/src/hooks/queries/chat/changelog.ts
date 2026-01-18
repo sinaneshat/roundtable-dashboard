@@ -26,7 +26,7 @@ import { getThreadChangelogService, getThreadRoundChangelogService } from '@/ser
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
-export function useThreadChangelogQuery(threadId: string, enabled?: boolean): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
@@ -63,7 +63,7 @@ export function useThreadRoundChangelogQuery(
   threadId: string,
   roundNumber: number,
   enabled?: boolean,
-): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({

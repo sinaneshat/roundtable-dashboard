@@ -24,7 +24,7 @@ type UseModelsQueryOptions = {
  * ✅ SMART REFETCHING: Refetches when invalidated (e.g., after plan upgrade) but not on focus
  * ✅ TYPE SAFETY: Fully typed response inferred from Zod schemas
  */
-export function useModelsQuery(options?: UseModelsQueryOptions): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+export function useModelsQuery(options?: UseModelsQueryOptions) {
   return useQuery({
     queryKey: queryKeys.models.list(),
     queryFn: () => listModelsService(),

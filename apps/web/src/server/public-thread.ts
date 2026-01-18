@@ -1,20 +1,14 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8787/api/v1';
+import { getPublicThreadService } from '@/services/api';
 
 /**
- * Fetch public thread data for SSR
- * This enables initial data hydration for public chat pages
- * Called directly during SSR loader execution
+ * Fetch public thread data for SSR.
+ * Public endpoint - no authentication required.
+ * Called directly during SSR loader execution.
  */
 export async function getPublicThread(slug: string) {
   try {
-    const response = await fetch(`${API_URL}/chat/public/${slug}`);
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    return data.success ? data.data : null;
+    const result = await getPublicThreadService({ param: { slug } });
+    return result.success ? result.data : null;
   } catch {
     return null;
   }

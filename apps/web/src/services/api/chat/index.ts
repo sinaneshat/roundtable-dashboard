@@ -107,9 +107,15 @@ export {
   type ListThreadsRequest,
   type ListThreadsResponse,
   listThreadsService,
-  type SummarizeRoundRequest,
-  type SummarizeRoundResponse,
   type UpdateThreadRequest,
   type UpdateThreadResponse,
   updateThreadService,
+  // Type extractions derived from API response (SINGLE SOURCE OF TRUTH)
+  type ApiChangelog,
+  type ApiMessage,
+  type ApiParticipant,
+  type ChangelogItem,
+  type ChangelogListData,
+  type PublicThreadData,
+  type ThreadDetailData,
 } from './threads';

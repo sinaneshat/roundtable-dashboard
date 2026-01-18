@@ -23,8 +23,8 @@ import { ChatModes, FinishReasons, MessagePartTypes, MessageRoles, MessageStatus
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import type { ChatParticipant, ChatThread } from '@/types/api';
 import { createTestUserMessage } from '@/lib/testing';
+import type { ChatParticipant, ChatThread } from '@/types/api';
 
 import { createChatStore } from '../store';
 

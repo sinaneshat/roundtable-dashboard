@@ -8,21 +8,22 @@
  * Uses createPublicApiClient() to avoid cookie access for SSG/ISR compatibility.
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createPublicApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createPublicApiClient } from '@/lib/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-export type GetProductsRequest = any;
+type ListProductsEndpoint = ApiClientType['billing']['products']['$get'];
+export type ListProductsResponse = InferResponseType<ListProductsEndpoint>;
 
-export type GetProductsResponse = any;
-
-export type GetProductRequest = any;
-
-export type GetProductResponse = any;
+type GetProductEndpoint = ApiClientType['billing']['products'][':id']['$get'];
+export type GetProductRequest = InferRequestType<GetProductEndpoint>;
+export type GetProductResponse = InferResponseType<GetProductEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -34,10 +35,9 @@ export type GetProductResponse = any;
  *
  * Uses createPublicApiClient() for SSG/ISR compatibility (no cookie access).
  */
-export async function getProductsService(args?: GetProductsRequest) {
-  const client = await createPublicApiClient();
-  const response = await client.billing.products.$get(args ?? {});
-  return parseResponse(response);
+export async function getProductsService() {
+  const client = createPublicApiClient();
+  return parseResponse(client.billing.products.$get());
 }
 
 /**
@@ -47,9 +47,6 @@ export async function getProductsService(args?: GetProductsRequest) {
  * Uses createPublicApiClient() for SSG/ISR compatibility (no cookie access).
  */
 export async function getProductService(data: GetProductRequest) {
-  const client = await createPublicApiClient();
-  const params: GetProductRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.billing.products[':id'].$get(params));
+  const client = createPublicApiClient();
+  return parseResponse(client.billing.products[':id'].$get(data));
 }

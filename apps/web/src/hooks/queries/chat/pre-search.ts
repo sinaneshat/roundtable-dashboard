@@ -9,7 +9,7 @@ import { getThreadPreSearchesService } from '@/services/api';
 export function useThreadPreSearchesQuery(
   threadId: string,
   enabled?: boolean,
-): ReturnType<typeof useQuery<{ success: boolean; data?: unknown }>> {
+) {
   const { isAuthenticated } = useAuthCheck();
 
   const query = useQuery({
@@ -22,8 +22,9 @@ export function useThreadPreSearchesQuery(
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchInterval: (query) => {
-      const hasPendingPreSearch = (query.state as any)?.data?.data?.items?.some(
-        ps => ps.status === MessageStatuses.PENDING,
+      const items = query.state.data?.data?.items;
+      const hasPendingPreSearch = items?.some(
+        (ps: { status: string }) => ps.status === MessageStatuses.PENDING,
       );
       return hasPendingPreSearch ? POLLING_INTERVALS.preSearchPending : false;
     },

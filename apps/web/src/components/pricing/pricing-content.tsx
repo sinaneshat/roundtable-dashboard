@@ -2,7 +2,6 @@ import { UIBillingIntervals } from '@roundtable/shared';
 import { motion } from 'motion/react';
 
 import { Icons } from '@/components/icons';
-import { PricingContentSkeleton } from '@/components/pricing/pricing-content-skeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PricingCard } from '@/components/ui/pricing-card';
@@ -14,7 +13,6 @@ import type { Price, Product, Subscription } from '@/types/billing';
 type PricingContentProps = {
   products: Product[];
   subscriptions: Subscription[];
-  isLoading?: boolean;
   error?: Error | null;
   processingPriceId: string | null;
   cancelingSubscriptionId?: string | null;
@@ -42,7 +40,6 @@ type ProductGridProps = {
 export function PricingContent({
   products,
   subscriptions,
-  isLoading = false,
   error = null,
   processingPriceId,
   cancelingSubscriptionId = null,
@@ -89,10 +86,6 @@ export function PricingContent({
       });
       return { ...product, prices: filteredPrices };
     });
-
-  if (isLoading) {
-    return <PricingContentSkeleton />;
-  }
 
   if (error) {
     return (

@@ -12,7 +12,7 @@ import { StripeSubscriptionStatuses } from '@roundtable/shared';
 
 import type {
   GetSubscriptionResponse,
-  GetSubscriptionsResponse,
+  ListSubscriptionsResponse,
 } from '@/services/api';
 import type { Subscription } from '@/types/billing';
 
@@ -131,7 +131,7 @@ export function createCancelingSubscription(overrides?: MockSubscriptionData | s
 
 export function createSubscriptionListResponse(
   subscriptions: Subscription[],
-): GetSubscriptionsResponse {
+): ListSubscriptionsResponse {
   return {
     success: true,
     data: {
@@ -152,7 +152,7 @@ export function createSubscriptionDetailResponse(
   };
 }
 
-export function createEmptySubscriptionListResponse(): GetSubscriptionsResponse {
+export function createEmptySubscriptionListResponse(): ListSubscriptionsResponse {
   return {
     success: true,
     data: {
@@ -176,7 +176,7 @@ export function createSubscriptionErrorResponse(message = 'Subscription not foun
   };
 }
 
-export function createSubscriptionListErrorResponse(message = 'Failed to fetch subscriptions'): GetSubscriptionsResponse {
+export function createSubscriptionListErrorResponse(message = 'Failed to fetch subscriptions'): ListSubscriptionsResponse {
   return {
     success: false,
     error: {

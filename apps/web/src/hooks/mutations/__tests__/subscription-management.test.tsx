@@ -27,7 +27,7 @@ import {
   renderHook,
   waitFor,
 } from '@/lib/testing';
-import type { GetSubscriptionsResponse } from '@/services/api';
+import type { ListSubscriptionsResponse } from '@/services/api';
 import * as apiServices from '@/services/api';
 
 import {
@@ -122,7 +122,7 @@ describe('useSwitchSubscriptionMutation', () => {
       };
 
       // Pre-populate cache with old subscription
-      queryClient.setQueryData<GetSubscriptionsResponse>(queryKeys.subscriptions.list(), {
+      queryClient.setQueryData<ListSubscriptionsResponse>(queryKeys.subscriptions.list(), {
         success: true,
         data: {
           items: [oldSubscription],
@@ -411,7 +411,7 @@ describe('useSwitchSubscriptionMutation', () => {
       };
 
       // Pre-populate cache with multiple subscriptions
-      queryClient.setQueryData<GetSubscriptionsResponse>(queryKeys.subscriptions.list(), {
+      queryClient.setQueryData<ListSubscriptionsResponse>(queryKeys.subscriptions.list(), {
         success: true,
         data: {
           items: [subscription1, subscription2, subscription3],
@@ -583,7 +583,7 @@ describe('useCancelSubscriptionMutation', () => {
       };
 
       // Pre-populate cache
-      queryClient.setQueryData<GetSubscriptionsResponse>(queryKeys.subscriptions.list(), {
+      queryClient.setQueryData<ListSubscriptionsResponse>(queryKeys.subscriptions.list(), {
         success: true,
         data: {
           items: [activeSubscription],

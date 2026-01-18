@@ -7,7 +7,6 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
-import type { ChatParticipant } from '@/types/api';
 import {
   useCreateThreadMutation,
   useUpdateThreadMutation,
@@ -18,6 +17,7 @@ import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
+import type { ChatParticipant } from '@/types/api';
 
 import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';

@@ -80,6 +80,9 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.0.0",
+    "@roundtable/api": "workspace:*",
+    "@roundtable/typescript-config": "workspace:*",
+    "@roundtable/vitest-config": "workspace:*",
     "@tailwindcss/postcss": "^4.1.18",
     "@tailwindcss/vite": "^4.1.18",
     "@testing-library/dom": "^10.4.1",

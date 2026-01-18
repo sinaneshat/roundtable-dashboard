@@ -5,25 +5,27 @@
  * All types automatically inferred from backend Hono routes
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
-// Type Inference - Automatically derived from backend routes
+// Type Inference
 // ============================================================================
 
-export type AddParticipantRequest = any;
+type AddParticipantEndpoint = ApiClientType['chat']['threads'][':id']['participants']['$post'];
+export type AddParticipantRequest = InferRequestType<AddParticipantEndpoint>;
+export type AddParticipantResponse = InferResponseType<AddParticipantEndpoint>;
 
-export type AddParticipantResponse = any;
+type UpdateParticipantEndpoint = ApiClientType['chat']['participants'][':id']['$patch'];
+export type UpdateParticipantRequest = InferRequestType<UpdateParticipantEndpoint>;
+export type UpdateParticipantResponse = InferResponseType<UpdateParticipantEndpoint>;
 
-export type UpdateParticipantRequest = any;
-
-export type UpdateParticipantResponse = any;
-
-export type DeleteParticipantRequest = any;
-
-export type DeleteParticipantResponse = any;
+type DeleteParticipantEndpoint = ApiClientType['chat']['participants'][':id']['$delete'];
+export type DeleteParticipantRequest = InferRequestType<DeleteParticipantEndpoint>;
+export type DeleteParticipantResponse = InferResponseType<DeleteParticipantEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -34,12 +36,8 @@ export type DeleteParticipantResponse = any;
  * Protected endpoint - requires authentication
  */
 export async function addParticipantService(data: AddParticipantRequest) {
-  const client = await createApiClient();
-  const params: AddParticipantRequest = {
-    param: data.param ?? { id: '' },
-    json: data.json ?? {},
-  };
-  return parseResponse(client.chat.threads[':id'].participants.$post(params));
+  const client = createApiClient();
+  return parseResponse(client.chat.threads[':id'].participants.$post(data));
 }
 
 /**
@@ -47,12 +45,8 @@ export async function addParticipantService(data: AddParticipantRequest) {
  * Protected endpoint - requires authentication
  */
 export async function updateParticipantService(data: UpdateParticipantRequest) {
-  const client = await createApiClient();
-  const params: UpdateParticipantRequest = {
-    param: data.param ?? { id: '' },
-    json: data.json ?? {},
-  };
-  return parseResponse(client.chat.participants[':id'].$patch(params));
+  const client = createApiClient();
+  return parseResponse(client.chat.participants[':id'].$patch(data));
 }
 
 /**
@@ -60,9 +54,6 @@ export async function updateParticipantService(data: UpdateParticipantRequest) {
  * Protected endpoint - requires authentication
  */
 export async function deleteParticipantService(data: DeleteParticipantRequest) {
-  const client = await createApiClient();
-  const params: DeleteParticipantRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.chat.participants[':id'].$delete(params));
+  const client = createApiClient();
+  return parseResponse(client.chat.participants[':id'].$delete(data));
 }

@@ -28,9 +28,9 @@ const EMPTY_PARTICIPANTS: ChatParticipantWithSettings[] = [];
 const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];
 
 type ParticipantInfo = {
-  participantIndex: number;
+  participantIndex: number | undefined;
   modelId: string | undefined;
-  role: string | null;
+  role: string | null | undefined;
   isStreaming: boolean;
 };
 
@@ -129,7 +129,7 @@ const ParticipantMessageWrapper = memo(({
           avatarName={avatarName}
           displayName={displayName}
           role={participant?.role}
-          requiredTierName={model?.required_tier_name}
+          requiredTierName={model?.required_tier_name ?? undefined}
           isAccessible={isAccessible}
           isStreaming={isStreaming}
           hasError={!!hasError}
@@ -196,7 +196,7 @@ function AssistantGroupCard({
       const availableSourcesFromMsg = getAvailableSources(message.metadata);
       if (availableSourcesFromMsg) {
         for (const source of availableSourcesFromMsg) {
-          if (!allSources.has(source.id)) {
+          if (source.id && !allSources.has(source.id)) {
             allSources.set(source.id, source as AvailableSource);
           }
         }
@@ -260,7 +260,7 @@ function AssistantGroupCard({
                   messageId={message.id}
                   model={model}
                   role={participantInfo.role || ''}
-                  participantIndex={participantInfo.participantIndex}
+                  participantIndex={participantInfo.participantIndex ?? 0}
                   status={messageStatus}
                   parts={filteredParts}
                   avatarSrc={group.headerInfo.avatarSrc}
@@ -812,7 +812,7 @@ export const ChatMessageList = memo(
           avatarName = avatarProps.name;
           const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
           displayName = model?.name || assistantMetadata?.model || 'AI Assistant';
-          requiredTierName = model?.required_tier_name;
+          requiredTierName = model?.required_tier_name ?? undefined;
         }
 
         const participantKey = `${participantInfo.participantIndex}-${participantInfo.modelId || 'unknown'}`;
@@ -841,7 +841,7 @@ export const ChatMessageList = memo(
               avatarSrc,
               avatarName,
               displayName,
-              role: participantInfo.role,
+              role: participantInfo.role ?? null,
               requiredTierName,
               isAccessible,
             },
@@ -1070,8 +1070,9 @@ export const ChatMessageList = memo(
 
                       if (availableSourcesFromMsg) {
                         for (const source of availableSourcesFromMsg) {
-                          if (!allSources.has(source.id)) {
-                            allSources.set(source.id, source as AvailableSource);
+                          const sourceId = source.id;
+                          if (sourceId && !allSources.has(sourceId)) {
+                            allSources.set(sourceId, source as AvailableSource);
                           }
                         }
                       }
@@ -1277,8 +1278,9 @@ export const ChatMessageList = memo(
                       const availableSourcesFromMsg = getAvailableSources(msg.metadata);
                       if (availableSourcesFromMsg) {
                         for (const source of availableSourcesFromMsg) {
-                          if (!allSources.has(source.id)) {
-                            allSources.set(source.id, source as AvailableSource);
+                          const sourceId = source.id;
+                          if (sourceId && !allSources.has(sourceId)) {
+                            allSources.set(sourceId, source as AvailableSource);
                           }
                         }
                       }
@@ -1407,8 +1409,9 @@ export const ChatMessageList = memo(
               const assistantMeta = meta && isAssistantMessageMetadata(meta) ? meta : null;
               if (assistantMeta?.availableSources) {
                 for (const source of assistantMeta.availableSources) {
-                  if (!roundSourcesMap.has(source.id)) {
-                    roundSourcesMap.set(source.id, source as AvailableSource);
+                  const sourceId = source.id;
+                  if (sourceId && !roundSourcesMap.has(sourceId)) {
+                    roundSourcesMap.set(sourceId, source as AvailableSource);
                   }
                 }
               }

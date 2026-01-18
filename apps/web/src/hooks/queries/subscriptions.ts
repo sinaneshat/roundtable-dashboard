@@ -27,7 +27,7 @@ export function useSubscriptionsQuery() {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.subscriptions.list(),
+    queryKey: queryKeys.subscriptions.current(),
     queryFn: () => getSubscriptionsService(),
     staleTime: STALE_TIMES.subscriptions, // ⚠️ NO CACHE (0) - always fresh
     gcTime: 5 * 60 * 1000, // 5 minutes - keep in memory for instant UI

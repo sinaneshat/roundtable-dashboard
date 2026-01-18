@@ -1,9 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { ChatPage } from '@/components/chat/chat-states';
 import { ChatPageHeader } from '@/components/chat/chat-header';
+import { ChatPage } from '@/components/chat/chat-states';
 import { PricingContentSkeleton } from '@/components/pricing/pricing-content-skeleton';
 import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
+import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
+import { getProducts } from '@/server/products';
 
 const siteUrl = 'https://roundtable.now';
 const pageTitle = 'Pricing & Plans - Roundtable';
@@ -22,6 +25,20 @@ function PricingLoadingSkeleton() {
 }
 
 export const Route = createFileRoute('/_protected/chat/pricing')({
+  // SSG: Prefetch products at build time for static generation
+  loader: async ({ context }) => {
+    const { queryClient } = context;
+
+    // Prefetch products into TanStack Query cache
+    // This runs at build time for SSG and at request time for SSR
+    await queryClient.prefetchQuery({
+      queryKey: queryKeys.products.list(),
+      queryFn: () => getProducts(),
+      staleTime: STALE_TIMES.products,
+    });
+
+    return {};
+  },
   component: PricingScreen,
   pendingComponent: PricingLoadingSkeleton,
   headers: () => ({

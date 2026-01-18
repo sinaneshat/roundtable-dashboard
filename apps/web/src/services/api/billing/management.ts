@@ -6,21 +6,23 @@
  * All types automatically inferred from backend Hono routes
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-export type SwitchSubscriptionRequest = any;
+type SwitchSubscriptionEndpoint = ApiClientType['billing']['subscriptions'][':id']['switch']['$post'];
+export type SwitchSubscriptionRequest = InferRequestType<SwitchSubscriptionEndpoint>;
+export type SwitchSubscriptionResponse = InferResponseType<SwitchSubscriptionEndpoint>;
 
-export type SwitchSubscriptionResponse = any;
-
-export type CancelSubscriptionRequest = any;
-
-export type CancelSubscriptionResponse = any;
+type CancelSubscriptionEndpoint = ApiClientType['billing']['subscriptions'][':id']['cancel']['$post'];
+export type CancelSubscriptionRequest = InferRequestType<CancelSubscriptionEndpoint>;
+export type CancelSubscriptionResponse = InferResponseType<CancelSubscriptionEndpoint>;
 
 // ============================================================================
 // Service Functions
@@ -37,12 +39,8 @@ export type CancelSubscriptionResponse = any;
  * - Syncs fresh data from Stripe API
  */
 export async function switchSubscriptionService(data: SwitchSubscriptionRequest) {
-  const client = await createApiClient();
-  const params: SwitchSubscriptionRequest = {
-    param: data.param ?? { id: '' },
-    json: data.json ?? {},
-  };
-  return parseResponse(client.billing.subscriptions[':id'].switch.$post(params));
+  const client = createApiClient();
+  return parseResponse(client.billing.subscriptions[':id'].switch.$post(data));
 }
 
 /**
@@ -53,10 +51,6 @@ export async function switchSubscriptionService(data: SwitchSubscriptionRequest)
  * - Optional: Cancel immediately (user loses access now)
  */
 export async function cancelSubscriptionService(data: CancelSubscriptionRequest) {
-  const client = await createApiClient();
-  const params: CancelSubscriptionRequest = {
-    param: data.param ?? { id: '' },
-    json: data.json ?? {},
-  };
-  return parseResponse(client.billing.subscriptions[':id'].cancel.$post(params));
+  const client = createApiClient();
+  return parseResponse(client.billing.subscriptions[':id'].cancel.$post(data));
 }

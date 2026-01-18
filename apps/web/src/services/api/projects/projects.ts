@@ -2,92 +2,94 @@
  * Projects Service - Project Management API
  *
  * 100% type-safe RPC service for project operations
- * All types automatically inferred from backend Hono routes
+ * All types automatically inferred from backend Hono routes via InferResponseType
  */
 
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
-import { createApiClient } from '@/api/client';
+import type { ApiClientType } from '@/lib/api/client';
+import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
 // Type Inference - Project Operations
 // ============================================================================
 
-export type ListProjectsRequest = any;
+type ListProjectsEndpoint = ApiClientType['projects']['$get'];
+export type ListProjectsResponse = InferResponseType<ListProjectsEndpoint>;
+export type ListProjectsRequest = InferRequestType<ListProjectsEndpoint>;
 
-export type ListProjectsResponse = any;
+type CreateProjectEndpoint = ApiClientType['projects']['$post'];
+export type CreateProjectResponse = InferResponseType<CreateProjectEndpoint>;
+export type CreateProjectRequest = InferRequestType<CreateProjectEndpoint>;
 
-export type CreateProjectRequest = any;
+type GetProjectEndpoint = ApiClientType['projects'][':id']['$get'];
+export type GetProjectResponse = InferResponseType<GetProjectEndpoint>;
+export type GetProjectRequest = InferRequestType<GetProjectEndpoint>;
 
-export type CreateProjectResponse = any;
+type UpdateProjectEndpoint = ApiClientType['projects'][':id']['$patch'];
+export type UpdateProjectResponse = InferResponseType<UpdateProjectEndpoint>;
+export type UpdateProjectRequest = InferRequestType<UpdateProjectEndpoint>;
 
-export type GetProjectRequest = any;
-
-export type GetProjectResponse = any;
-
-export type UpdateProjectRequest = any;
-
-export type UpdateProjectResponse = any;
-
-export type DeleteProjectRequest = any;
-
-export type DeleteProjectResponse = any;
+type DeleteProjectEndpoint = ApiClientType['projects'][':id']['$delete'];
+export type DeleteProjectResponse = InferResponseType<DeleteProjectEndpoint>;
+export type DeleteProjectRequest = InferRequestType<DeleteProjectEndpoint>;
 
 // ============================================================================
 // Type Inference - Project Attachments
 // ============================================================================
 
-export type ListProjectAttachmentsRequest = any;
+type ListProjectAttachmentsEndpoint = ApiClientType['projects'][':id']['attachments']['$get'];
+export type ListProjectAttachmentsResponse = InferResponseType<ListProjectAttachmentsEndpoint>;
+export type ListProjectAttachmentsRequest = InferRequestType<ListProjectAttachmentsEndpoint>;
 
-export type ListProjectAttachmentsResponse = any;
+type AddUploadToProjectEndpoint = ApiClientType['projects'][':id']['attachments']['$post'];
+export type AddUploadToProjectResponse = InferResponseType<AddUploadToProjectEndpoint>;
+export type AddUploadToProjectRequest = InferRequestType<AddUploadToProjectEndpoint>;
 
-export type AddUploadToProjectRequest = any;
+type GetProjectAttachmentEndpoint = ApiClientType['projects'][':id']['attachments'][':attachmentId']['$get'];
+export type GetProjectAttachmentResponse = InferResponseType<GetProjectAttachmentEndpoint>;
+export type GetProjectAttachmentRequest = InferRequestType<GetProjectAttachmentEndpoint>;
 
-export type AddUploadToProjectResponse = any;
+type UpdateProjectAttachmentEndpoint = ApiClientType['projects'][':id']['attachments'][':attachmentId']['$patch'];
+export type UpdateProjectAttachmentResponse = InferResponseType<UpdateProjectAttachmentEndpoint>;
+export type UpdateProjectAttachmentRequest = InferRequestType<UpdateProjectAttachmentEndpoint>;
 
-export type GetProjectAttachmentRequest = any;
-
-export type GetProjectAttachmentResponse = any;
-
-export type UpdateProjectAttachmentRequest = any;
-
-export type UpdateProjectAttachmentResponse = any;
-
-export type RemoveAttachmentFromProjectRequest = any;
-
-export type RemoveAttachmentFromProjectResponse = any;
+type RemoveAttachmentFromProjectEndpoint = ApiClientType['projects'][':id']['attachments'][':attachmentId']['$delete'];
+export type RemoveAttachmentFromProjectResponse = InferResponseType<RemoveAttachmentFromProjectEndpoint>;
+export type RemoveAttachmentFromProjectRequest = InferRequestType<RemoveAttachmentFromProjectEndpoint>;
 
 // ============================================================================
 // Type Inference - Project Memories
 // ============================================================================
 
-export type ListProjectMemoriesRequest = any;
+type ListProjectMemoriesEndpoint = ApiClientType['projects'][':id']['memories']['$get'];
+export type ListProjectMemoriesResponse = InferResponseType<ListProjectMemoriesEndpoint>;
+export type ListProjectMemoriesRequest = InferRequestType<ListProjectMemoriesEndpoint>;
 
-export type ListProjectMemoriesResponse = any;
+type CreateProjectMemoryEndpoint = ApiClientType['projects'][':id']['memories']['$post'];
+export type CreateProjectMemoryResponse = InferResponseType<CreateProjectMemoryEndpoint>;
+export type CreateProjectMemoryRequest = InferRequestType<CreateProjectMemoryEndpoint>;
 
-export type CreateProjectMemoryRequest = any;
+type GetProjectMemoryEndpoint = ApiClientType['projects'][':id']['memories'][':memoryId']['$get'];
+export type GetProjectMemoryResponse = InferResponseType<GetProjectMemoryEndpoint>;
+export type GetProjectMemoryRequest = InferRequestType<GetProjectMemoryEndpoint>;
 
-export type CreateProjectMemoryResponse = any;
+type UpdateProjectMemoryEndpoint = ApiClientType['projects'][':id']['memories'][':memoryId']['$patch'];
+export type UpdateProjectMemoryResponse = InferResponseType<UpdateProjectMemoryEndpoint>;
+export type UpdateProjectMemoryRequest = InferRequestType<UpdateProjectMemoryEndpoint>;
 
-export type GetProjectMemoryRequest = any;
-
-export type GetProjectMemoryResponse = any;
-
-export type UpdateProjectMemoryRequest = any;
-
-export type UpdateProjectMemoryResponse = any;
-
-export type DeleteProjectMemoryRequest = any;
-
-export type DeleteProjectMemoryResponse = any;
+type DeleteProjectMemoryEndpoint = ApiClientType['projects'][':id']['memories'][':memoryId']['$delete'];
+export type DeleteProjectMemoryResponse = InferResponseType<DeleteProjectMemoryEndpoint>;
+export type DeleteProjectMemoryRequest = InferRequestType<DeleteProjectMemoryEndpoint>;
 
 // ============================================================================
 // Type Inference - Project Context
 // ============================================================================
 
-export type GetProjectContextRequest = any;
-
-export type GetProjectContextResponse = any;
+type GetProjectContextEndpoint = ApiClientType['projects'][':id']['context']['$get'];
+export type GetProjectContextResponse = InferResponseType<GetProjectContextEndpoint>;
+export type GetProjectContextRequest = InferRequestType<GetProjectContextEndpoint>;
 
 // ============================================================================
 // Service Functions - Project CRUD
@@ -98,7 +100,7 @@ export type GetProjectContextResponse = any;
  * Protected endpoint - requires authentication
  */
 export async function listProjectsService(args?: ListProjectsRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: ListProjectsRequest = {
     query: args?.query ?? {},
   };
@@ -110,11 +112,8 @@ export async function listProjectsService(args?: ListProjectsRequest) {
  * Protected endpoint - requires authentication
  */
 export async function createProjectService(data: CreateProjectRequest) {
-  const client = await createApiClient();
-  const params: CreateProjectRequest = {
-    json: data.json ?? {},
-  };
-  return parseResponse(client.projects.$post(params));
+  const client = createApiClient();
+  return parseResponse(client.projects.$post(data));
 }
 
 /**
@@ -122,7 +121,7 @@ export async function createProjectService(data: CreateProjectRequest) {
  * Protected endpoint - requires authentication (ownership check)
  */
 export async function getProjectService(data: GetProjectRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: GetProjectRequest = {
     param: data.param ?? { id: '' },
   };
@@ -134,7 +133,7 @@ export async function getProjectService(data: GetProjectRequest) {
  * Protected endpoint - requires authentication
  */
 export async function updateProjectService(data: UpdateProjectRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: UpdateProjectRequest = {
     param: data.param ?? { id: '' },
     json: data.json ?? {},
@@ -147,7 +146,7 @@ export async function updateProjectService(data: UpdateProjectRequest) {
  * Protected endpoint - requires authentication
  */
 export async function deleteProjectService(data: DeleteProjectRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: DeleteProjectRequest = {
     param: data.param ?? { id: '' },
   };
@@ -163,7 +162,7 @@ export async function deleteProjectService(data: DeleteProjectRequest) {
  * Protected endpoint - requires authentication
  */
 export async function listProjectAttachmentsService(data: ListProjectAttachmentsRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: ListProjectAttachmentsRequest = {
     param: data.param ?? { id: '' },
     query: data.query ?? {},
@@ -176,7 +175,7 @@ export async function listProjectAttachmentsService(data: ListProjectAttachments
  * Protected endpoint - requires authentication
  */
 export async function addUploadToProjectService(data: AddUploadToProjectRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: AddUploadToProjectRequest = {
     param: data.param ?? { id: '' },
     json: data.json ?? { uploadId: '' },
@@ -189,7 +188,7 @@ export async function addUploadToProjectService(data: AddUploadToProjectRequest)
  * Protected endpoint - requires authentication
  */
 export async function getProjectAttachmentService(data: GetProjectAttachmentRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: GetProjectAttachmentRequest = {
     param: data.param ?? { id: '', attachmentId: '' },
   };
@@ -201,7 +200,7 @@ export async function getProjectAttachmentService(data: GetProjectAttachmentRequ
  * Protected endpoint - requires authentication
  */
 export async function updateProjectAttachmentService(data: UpdateProjectAttachmentRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: UpdateProjectAttachmentRequest = {
     param: data.param ?? { id: '', attachmentId: '' },
     json: data.json ?? {},
@@ -214,7 +213,7 @@ export async function updateProjectAttachmentService(data: UpdateProjectAttachme
  * Protected endpoint - requires authentication
  */
 export async function removeAttachmentFromProjectService(data: RemoveAttachmentFromProjectRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: RemoveAttachmentFromProjectRequest = {
     param: data.param ?? { id: '', attachmentId: '' },
   };
@@ -230,7 +229,7 @@ export async function removeAttachmentFromProjectService(data: RemoveAttachmentF
  * Protected endpoint - requires authentication
  */
 export async function listProjectMemoriesService(data: ListProjectMemoriesRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: ListProjectMemoriesRequest = {
     param: data.param ?? { id: '' },
     query: data.query ?? {},
@@ -243,7 +242,7 @@ export async function listProjectMemoriesService(data: ListProjectMemoriesReques
  * Protected endpoint - requires authentication
  */
 export async function createProjectMemoryService(data: CreateProjectMemoryRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: CreateProjectMemoryRequest = {
     param: data.param ?? { id: '' },
     json: data.json ?? { content: '' },
@@ -256,7 +255,7 @@ export async function createProjectMemoryService(data: CreateProjectMemoryReques
  * Protected endpoint - requires authentication
  */
 export async function getProjectMemoryService(data: GetProjectMemoryRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: GetProjectMemoryRequest = {
     param: data.param ?? { id: '', memoryId: '' },
   };
@@ -268,7 +267,7 @@ export async function getProjectMemoryService(data: GetProjectMemoryRequest) {
  * Protected endpoint - requires authentication
  */
 export async function updateProjectMemoryService(data: UpdateProjectMemoryRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: UpdateProjectMemoryRequest = {
     param: data.param ?? { id: '', memoryId: '' },
     json: data.json ?? {},
@@ -281,7 +280,7 @@ export async function updateProjectMemoryService(data: UpdateProjectMemoryReques
  * Protected endpoint - requires authentication
  */
 export async function deleteProjectMemoryService(data: DeleteProjectMemoryRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: DeleteProjectMemoryRequest = {
     param: data.param ?? { id: '', memoryId: '' },
   };
@@ -297,7 +296,7 @@ export async function deleteProjectMemoryService(data: DeleteProjectMemoryReques
  * Protected endpoint - requires authentication
  */
 export async function getProjectContextService(data: GetProjectContextRequest) {
-  const client = await createApiClient();
+  const client = createApiClient();
   const params: GetProjectContextRequest = {
     param: data.param ?? { id: '' },
   };

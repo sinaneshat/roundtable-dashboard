@@ -85,7 +85,7 @@ export function WebSearchResultItem({
             </a>
             <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground mt-0.5">
               <span>{cleanDomain}</span>
-              {result.score >= 0.01 && (
+              {result.score != null && result.score >= 0.01 && (
                 <Badge variant="outline" className="h-4 px-1 text-[10px] font-normal">
                   {Math.round(result.score * 100)}
                   %

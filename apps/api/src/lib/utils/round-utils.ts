@@ -79,8 +79,9 @@ export function getCurrentRoundNumber(messages: readonly UIMessage[]): number {
   // Find last user message (iterate backwards)
   let lastUserMessage: UIMessage | undefined;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === MessageRoles.USER) {
-      lastUserMessage = messages[i];
+    const message = messages[i];
+    if (message && message.role === MessageRoles.USER) {
+      lastUserMessage = message;
       break;
     }
   }

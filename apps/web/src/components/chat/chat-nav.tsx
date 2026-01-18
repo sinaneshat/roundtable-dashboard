@@ -156,7 +156,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     if (!chatToShare || threadIsPublic || togglePublicMutation.isPending) {
       return;
     }
-    togglePublicMutation.mutate({ threadId: chatToShare.id, isPublic: true, slug: chatToShare.slug });
+    togglePublicMutation.mutate({ threadId: chatToShare.id, isPublic: true, slug: chatToShare.slug ?? undefined });
   }, [chatToShare, threadIsPublic, togglePublicMutation]);
 
   const handleMakePrivate = useCallback(() => {
@@ -165,7 +165,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
       return;
     }
     setIsShareDialogOpen(false);
-    togglePublicMutation.mutate({ threadId: chatToShare.id, isPublic: false, slug: chatToShare.slug });
+    togglePublicMutation.mutate({ threadId: chatToShare.id, isPublic: false, slug: chatToShare.slug ?? undefined });
   }, [chatToShare, threadIsPublic, togglePublicMutation]);
 
   return (
@@ -386,7 +386,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
         onOpenChange={handleShareDialogOpenChange}
         slug={chatToShare?.slug ?? ''}
         threadTitle={chatToShare?.title ?? ''}
-        isPublic={displayIsPublic}
+        isPublic={displayIsPublic ?? false}
         isLoading={togglePublicMutation.isPending}
         onMakePublic={handleMakePublic}
         onMakePrivate={handleMakePrivate}
