@@ -1,19 +1,12 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useEffect } from 'react';
-
-import { AuthCallbackSkeleton } from '@/components/loading';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/auth/callback')({
-  component: AuthCallback,
-  pendingComponent: AuthCallbackSkeleton,
+  beforeLoad: async () => {
+    throw redirect({ to: '/chat' });
+  },
+  component: () => (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="animate-pulse text-muted-foreground">Redirecting...</div>
+    </div>
+  ),
 });
-
-function AuthCallback() {
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    navigate({ to: '/chat' });
-  }, [navigate]);
-
-  return <AuthCallbackSkeleton />;
-}

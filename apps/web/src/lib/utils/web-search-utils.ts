@@ -10,7 +10,7 @@
 import type { WebSearchDepth } from '@roundtable/shared';
 import { WebSearchDepths } from '@roundtable/shared';
 
-import type { StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 // ============================================================================
 // DYNAMIC TIMEOUT CALCULATION
@@ -187,10 +187,7 @@ export function isPreSearchTimedOut(preSearch: StoredPreSearch | null | undefine
     return false;
   }
 
-  const createdTime = (preSearch.createdAt as any) instanceof Date
-    ? (preSearch.createdAt as unknown as Date).getTime()
-    : new Date(preSearch.createdAt as unknown as string).getTime();
-
+  const createdTime = new Date(preSearch.createdAt).getTime();
   const timeout = getPreSearchTimeout(preSearch);
   return now - createdTime > timeout;
 }

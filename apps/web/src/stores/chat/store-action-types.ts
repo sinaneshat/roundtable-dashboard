@@ -34,13 +34,21 @@
  *   store.setInputValue('text') // ✅ Type-safe
  */
 
-import type { ChatMode, FeedbackType, MessageStatus, ParticipantStreamStatus, RoundPhase, ScreenMode } from '@roundtable/shared';
+import type { ChatMode, FeedbackType, MessageStatus, ScreenMode } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 
 import type { FilePreview, PendingAttachment, UploadItem } from '@/hooks/utils';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import type { ChatParticipant, ChatThread, PartialPreSearchData, PreSearchDataPayload, RoundFeedbackData, StoredPreSearch } from '@/types/api';
+import type {
+  ChatParticipant,
+  ChatThread,
+  PartialPreSearchData,
+  PreSearchDataPayload,
+  RoundFeedbackData,
+  StoredPreSearch,
+  ThreadStreamResumptionState,
+} from '@/services/api';
 
 import type { ResetFormPreferences } from './store-defaults';
 import type { StreamResumptionState } from './store-schemas';
@@ -86,8 +94,13 @@ export type ResetUI = () => void;
 
 export type SetPreSearches = (preSearches: StoredPreSearch[]) => void;
 export type AddPreSearch = (preSearch: StoredPreSearch) => void;
+/**
+ * Update pre-search data after streaming completes
+ */
 export type UpdatePreSearchData = (roundNumber: number, data: PreSearchDataPayload) => void;
-/** ✅ PROGRESSIVE UI: Update searchData WITHOUT changing status (for streaming updates) */
+/**
+ * ✅ PROGRESSIVE UI: Update searchData WITHOUT changing status (for streaming updates)
+ */
 export type UpdatePartialPreSearchData = (roundNumber: number, partialData: PartialPreSearchData) => void;
 export type UpdatePreSearchStatus = (roundNumber: number, status: MessageStatus) => void;
 export type RemovePreSearch = (roundNumber: number) => void;
@@ -400,43 +413,11 @@ export type ClearStreamResumption = () => void;
 
 /**
  * Pre-fill stream resumption state from server-side KV check
- * Called during SSR to set up state BEFORE AI SDK resume runs
- * ✅ RESUMABLE STREAMS: Enables proper coordination between AI SDK and incomplete-round-resumption
- * ✅ UNIFIED PHASES: Supports pre-search, participants, and moderator resumption
+ * Uses RPC-inferred ThreadStreamResumptionState (single source of truth)
  */
 export type PrefillStreamResumptionState = (
   threadId: string,
-  serverState: {
-    // Round identification
-    roundNumber: number | null;
-    // Current phase for resumption logic (idle, pre_search, participants, moderator, complete)
-    currentPhase: RoundPhase;
-    // Pre-search phase status (null if web search not enabled)
-    preSearch: {
-      enabled: boolean;
-      status: MessageStatus | null;
-      streamId: string | null;
-      preSearchId: string | null;
-    } | null;
-    // Participant streaming phase status
-    participants: {
-      hasActiveStream: boolean;
-      streamId: string | null;
-      totalParticipants: number | null;
-      currentParticipantIndex: number | null;
-      participantStatuses: Record<string, ParticipantStreamStatus> | null;
-      nextParticipantToTrigger: number | null;
-      allComplete: boolean;
-    };
-    // Moderator/round moderator phase status
-    moderator: {
-      status: MessageStatus | null;
-      streamId: string | null;
-      moderatorMessageId: string | null;
-    } | null;
-    // Overall round completion status
-    roundComplete: boolean;
-  },
+  serverState: ThreadStreamResumptionState,
 ) => void;
 
 // ============================================================================

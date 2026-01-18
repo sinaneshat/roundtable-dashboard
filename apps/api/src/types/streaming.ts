@@ -337,29 +337,29 @@ export function parseStreamId(streamId: string): {
   participantIndex?: number;
 } | null {
   const presearchMatch = streamId.match(/^(.+)_r(\d+)_presearch$/);
-  if (presearchMatch) {
+  if (presearchMatch?.[1] && presearchMatch[2]) {
     return {
-      threadId: presearchMatch[1]!,
-      roundNumber: Number.parseInt(presearchMatch[2]!, 10),
+      threadId: presearchMatch[1],
+      roundNumber: Number.parseInt(presearchMatch[2], 10),
       phase: StreamPhases.PRESEARCH,
     };
   }
 
   const participantMatch = streamId.match(/^(.+)_r(\d+)_participant_(\d+)$/);
-  if (participantMatch) {
+  if (participantMatch?.[1] && participantMatch[2] && participantMatch[3]) {
     return {
-      threadId: participantMatch[1]!,
-      roundNumber: Number.parseInt(participantMatch[2]!, 10),
+      threadId: participantMatch[1],
+      roundNumber: Number.parseInt(participantMatch[2], 10),
       phase: StreamPhases.PARTICIPANT,
-      participantIndex: Number.parseInt(participantMatch[3]!, 10),
+      participantIndex: Number.parseInt(participantMatch[3], 10),
     };
   }
 
   const moderatorMatch = streamId.match(/^(.+)_r(\d+)_moderator$/);
-  if (moderatorMatch) {
+  if (moderatorMatch?.[1] && moderatorMatch[2]) {
     return {
-      threadId: moderatorMatch[1]!,
-      roundNumber: Number.parseInt(moderatorMatch[2]!, 10),
+      threadId: moderatorMatch[1],
+      roundNumber: Number.parseInt(moderatorMatch[2], 10),
       phase: StreamPhases.MODERATOR,
     };
   }

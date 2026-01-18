@@ -36,7 +36,7 @@ type StructuredDataProps = {
 /**
  * StructuredData component that injects JSON-LD structured data into the page
  *
- * This component follows Next.js official recommendations for JSON-LD injection:
+ * This component follows React best practices for JSON-LD injection:
  * - Uses dangerouslySetInnerHTML with proper XSS protection
  * - Sanitizes content by replacing '<' characters with Unicode equivalents
  * - Generates structured data based on Schema.org specifications

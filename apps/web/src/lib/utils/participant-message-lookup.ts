@@ -18,7 +18,7 @@
 import { MessagePartTypes, MessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 import {
   getMessageMetadata,

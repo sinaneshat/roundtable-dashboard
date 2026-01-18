@@ -11,7 +11,7 @@ import { CITATION_PREFIXES, CitationSourceTypes } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
 import { hasCitations, parseCitations, toDbCitations } from '@/lib/utils';
-import type { CitableSource, CitationSourceMap } from '@/types/api';
+import type { CitableSource, CitationSourceMap } from '@/lib/utils/citation-parser';
 
 describe('citation Parser', () => {
   describe('parseCitations', () => {

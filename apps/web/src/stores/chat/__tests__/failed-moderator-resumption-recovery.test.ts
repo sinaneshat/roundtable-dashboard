@@ -245,7 +245,7 @@ describe('recovery Logic Validation', () => {
       // Check if it has a valid finishReason (the fix logic)
       // Note: The actual fix uses getAssistantMetadata which works on moderator messages
       // because it doesn't require isModerator field - it just extracts finishReason
-      const metadata = getModeratorMetadata(moderatorMessage!.metadata);
+      const metadata = moderatorMessage ? getModeratorMetadata(moderatorMessage.metadata) : undefined;
       const hasValidFinishReason = metadata?.finishReason
         && metadata.finishReason !== FinishReasons.UNKNOWN;
 
@@ -287,7 +287,7 @@ describe('recovery Logic Validation', () => {
       expect(moderatorMessage).toBeDefined();
 
       // Check if it has a valid finishReason
-      const metadata = getModeratorMetadata(moderatorMessage!.metadata);
+      const metadata = moderatorMessage ? getModeratorMetadata(moderatorMessage.metadata) : undefined;
       const hasValidFinishReason = metadata?.finishReason
         && metadata.finishReason !== FinishReasons.UNKNOWN;
 
@@ -434,7 +434,7 @@ describe('regression: Bug Scenario Reproduction', () => {
 
     expect(moderatorMessage).toBeDefined();
 
-    const metadata = getModeratorMetadata(moderatorMessage!.metadata);
+    const metadata = moderatorMessage ? getModeratorMetadata(moderatorMessage.metadata) : undefined;
     const hasValidFinishReason = metadata?.finishReason
       && metadata.finishReason !== FinishReasons.UNKNOWN;
 

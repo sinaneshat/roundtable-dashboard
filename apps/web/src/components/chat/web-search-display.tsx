@@ -17,10 +17,22 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AccordionEntrance } from '@/components/ui/motion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBoolean } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { safeExtractDomain } from '@/lib/utils';
-import type { WebSearchDisplayExtendedProps } from '@/types/api';
+import type { WebSearchResultItem } from '@/services/api';
+
+export type WebSearchDisplayExtendedProps = {
+  results: WebSearchResultItem[];
+  className?: string;
+  meta?: Record<string, unknown>;
+  answer?: string | null;
+  isStreaming?: boolean;
+  requestId?: string;
+  query?: string;
+  autoParameters?: Record<string, unknown>;
+  isLoading?: boolean;
+};
 
 function getStreamingStage(query: string | undefined, answer: string | null | undefined): WebSearchStreamingStage {
   if (!query)

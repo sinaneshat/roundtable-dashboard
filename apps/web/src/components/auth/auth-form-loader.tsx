@@ -1,5 +1,5 @@
 import { AuthFormSkeleton } from '@/components/ui/skeleton';
-import { dynamic } from '@/lib/compat';
+import dynamic from '@/lib/utils/dynamic';
 
 // Heavy dependencies: react-hook-form, zod, motion/react - 3 major libraries
 // Client-only, deferred loading - auth form is interactive and user-initiated

@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import type { FormOptions } from '@/lib/schemas';
 
 // PostHog survey configuration

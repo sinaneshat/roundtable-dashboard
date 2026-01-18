@@ -74,8 +74,12 @@ function trackActionCall(tracker: UpdateTracker, actionName: string): void {
 function getUpdatesPerSecond(tracker: UpdateTracker): number {
   if (tracker.timestamps.length < 2)
     return 0;
-  const first = tracker.timestamps[0]!;
-  const last = tracker.timestamps[tracker.timestamps.length - 1]!;
+  const first = tracker.timestamps[0];
+  if (!first)
+    throw new Error('expected first timestamp');
+  const last = tracker.timestamps[tracker.timestamps.length - 1];
+  if (!last)
+    throw new Error('expected last timestamp');
   const durationSeconds = (last - first) / 1000;
   if (durationSeconds === 0)
     return tracker.count;
@@ -764,8 +768,12 @@ describe('moderator Placeholder Timing', () => {
     let increases = 0;
     let decreases = 0;
     for (let i = 1; i < messageCountChanges.length; i++) {
-      const prev = messageCountChanges[i - 1]!;
-      const curr = messageCountChanges[i]!;
+      const prev = messageCountChanges[i - 1];
+      if (prev === undefined)
+        throw new Error('expected prev message count');
+      const curr = messageCountChanges[i];
+      if (curr === undefined)
+        throw new Error('expected curr message count');
       if (curr > prev)
         increases++;
       if (curr < prev)

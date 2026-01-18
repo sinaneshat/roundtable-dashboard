@@ -1,5 +1,6 @@
 import type { SubscriptionChangeType, SubscriptionTier } from '@roundtable/shared';
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers, SubscriptionTierSchema } from '@roundtable/shared';
+import { Link, useSearch } from '@tanstack/react-router';
 import { Suspense, useMemo } from 'react';
 
 import { Icons } from '@/components/icons';
@@ -9,11 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
-import { Link, useSearchParams, useTranslations } from '@/lib/compat';
 import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId } from '@/lib/utils/product-logic';
-import type { Subscription } from '@/types/billing';
+import type { Subscription } from '@/services/api';
 
 // Glass button styles for billing pages (consistent with chat toolbar)
 const glassButtonPrimary = 'h-11 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors';
@@ -52,7 +53,7 @@ function ChangeBadge(props: ChangeBadgeProps) {
 }
 
 function SubscriptionChangedContent() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearch({ strict: false });
   const t = useTranslations();
 
   const changeTypeRaw = searchParams.get('changeType');
@@ -63,16 +64,18 @@ function SubscriptionChangedContent() {
   const { data: subscriptionData, isFetching: isSubscriptionsFetching } = useSubscriptionsQuery();
   const { data: usageStats, isFetching: isUsageStatsFetching } = useUsageStatsQuery();
 
+  type SubscriptionsApiResponse = { success: boolean; data?: { items?: Subscription[] } };
+
   const displaySubscription: Subscription | null = useMemo(() => {
     if (!subscriptionData) {
       return null;
     }
-    const data = subscriptionData as { data?: { items?: Subscription[] } };
-    if (!data.data || !data.data.items || data.data.items.length === 0) {
+    const data = subscriptionData as SubscriptionsApiResponse;
+    if (!data.data?.items || data.data.items.length === 0) {
       return null;
     }
     const items = data.data.items;
-    return items.find((sub: Subscription) => sub.status === StripeSubscriptionStatuses.ACTIVE) ?? items[0] ?? null;
+    return items.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE) ?? items[0] ?? null;
   }, [subscriptionData]);
 
   const isLoadingData = isSubscriptionsFetching || isUsageStatsFetching;
@@ -122,7 +125,7 @@ function SubscriptionChangedContent() {
               size="lg"
               className={cn('min-w-[200px]', glassButtonPrimary)}
             >
-              <Link href="/chat/pricing">
+              <Link to="/chat/pricing">
                 {t('billing.subscriptionChanged.viewPricing')}
               </Link>
             </Button>
@@ -411,7 +414,7 @@ function SubscriptionChangedContent() {
             size="lg"
             className={cn('min-w-[200px]', glassButtonPrimary)}
           >
-            <Link href="/chat">
+            <Link to="/chat">
               {t('billing.success.startChat')}
             </Link>
           </Button>
@@ -421,7 +424,7 @@ function SubscriptionChangedContent() {
             size="lg"
             className={cn('min-w-[200px]', glassButtonSecondary)}
           >
-            <Link href="/chat/pricing">
+            <Link to="/chat/pricing">
               {t('billing.success.viewPricing')}
             </Link>
           </Button>

@@ -602,8 +602,8 @@ export async function computeRoundStatus(
   for (const msg of participantMessages) {
     // Extract participant index from message ID (format: {threadId}_r{round}_p{index})
     const match = msg.id.match(/_p(\d+)$/);
-    if (match) {
-      const idx = Number.parseInt(match[1]!, 10);
+    if (match?.[1]) {
+      const idx = Number.parseInt(match[1], 10);
       participantStatuses[idx] = ParticipantStreamStatuses.COMPLETED;
     }
   }
@@ -719,8 +719,8 @@ export async function getIncompleteParticipants(
     if (msg.participantId) {
       // Extract participant index from message ID (format: {threadId}_r{round}_p{index})
       const match = msg.id.match(/_p(\d+)$/);
-      if (match) {
-        completedIndices.add(Number.parseInt(match[1]!, 10));
+      if (match?.[1]) {
+        completedIndices.add(Number.parseInt(match[1], 10));
       }
     }
   }

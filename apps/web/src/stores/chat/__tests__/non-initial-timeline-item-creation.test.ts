@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { TimelineItem } from '@/hooks/utils';
 import { getRoundNumberFromMetadata } from '@/lib/utils';
-import type { ChatThreadChangelog, StoredPreSearch } from '@/types/api';
+import type { ChatThreadChangelog, StoredPreSearch } from '@/services/api';
 
 // Simulate useThreadTimeline logic without React hooks
 function simulateUseThreadTimeline(
@@ -28,7 +28,11 @@ function simulateUseThreadTimeline(
     if (!messagesByRound.has(roundNumber)) {
       messagesByRound.set(roundNumber, []);
     }
-    messagesByRound.get(roundNumber)!.push(message);
+    const roundMessages = messagesByRound.get(roundNumber);
+    if (!roundMessages)
+      throw new Error('expected round messages array');
+
+    roundMessages.push(message);
   });
 
   // Sort messages within each round
@@ -49,7 +53,11 @@ function simulateUseThreadTimeline(
     if (!changelogByRound.has(roundNumber)) {
       changelogByRound.set(roundNumber, []);
     }
-    changelogByRound.get(roundNumber)!.push(change);
+    const roundChangelog = changelogByRound.get(roundNumber);
+    if (!roundChangelog)
+      throw new Error('expected round changelog array');
+
+    roundChangelog.push(change);
   });
 
   // Index pre-searches by round
@@ -192,13 +200,13 @@ describe('non-Initial Round Timeline Item Creation', () => {
       // Find the round 1 timeline item
       const round1Item = timeline.find(item => item.roundNumber === 1);
       expect(round1Item).toBeDefined();
-      expect(round1Item!.type).toBe('messages');
+      expect(round1Item?.type).toBe('messages');
 
       // Check the user message is there
-      const round1Messages = round1Item!.data as UIMessage[];
+      const round1Messages = (round1Item?.type === 'messages' ? round1Item.data : []) as UIMessage[];
       const userMessage = round1Messages.find(m => m.role === MessageRoles.USER);
       expect(userMessage).toBeDefined();
-      expect(userMessage!.parts[0]).toEqual({ type: 'text', text: 'Second question' });
+      expect(userMessage?.parts[0]).toEqual({ type: 'text', text: 'Second question' });
     });
 
     it('should order timeline items by round number', () => {
@@ -315,11 +323,11 @@ describe('non-Initial Round Timeline Item Creation', () => {
       const round1Item = timeline.find(item => item.roundNumber === 1);
 
       expect(round1Item).toBeDefined();
-      const round1Messages = round1Item!.data as UIMessage[];
+      const round1Messages = (round1Item?.type === 'messages' ? round1Item.data : []) as UIMessage[];
 
       // Only user message, no assistant responses yet
       expect(round1Messages).toHaveLength(1);
-      expect(round1Messages[0].role).toBe(MessageRoles.USER);
+      expect(round1Messages[0]?.role).toBe(MessageRoles.USER);
     });
   });
 

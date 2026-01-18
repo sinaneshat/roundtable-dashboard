@@ -16,7 +16,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { queryKeys } from '@/lib/data/query-keys';
+import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 
 // ============================================================================
 // TEST HELPERS - Pure function tests for navigation reset logic
@@ -35,16 +35,13 @@ function shouldResetOnNavigation(
 
 /**
  * Determines which query keys should be invalidated
+ * Uses invalidationPatterns.leaveThread for consistency
  */
 function getQueryKeysToInvalidate(threadId: string | null) {
   if (!threadId)
     return [];
 
-  return [
-    queryKeys.threads.messages(threadId),
-    queryKeys.threads.preSearches(threadId),
-    queryKeys.threads.feedback(threadId),
-  ];
+  return invalidationPatterns.leaveThread(threadId);
 }
 
 // ============================================================================
@@ -274,7 +271,7 @@ describe('edge Cases', () => {
 
   describe('query String Handling', () => {
     it('pathname comparison ignores query strings', () => {
-      // Next.js usePathname returns pathname without query string
+      // TanStack Router's useLocation().pathname returns pathname without query string
       // These tests verify our logic works with clean pathnames
       expect(shouldResetOnNavigation('/chat', '/chat/thread')).toBe(true);
     });

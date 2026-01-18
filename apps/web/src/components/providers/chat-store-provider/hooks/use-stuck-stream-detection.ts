@@ -1,8 +1,8 @@
+import { useNavigate } from '@tanstack/react-router';
 import type { RefObject } from 'react';
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
 
-import { useRouter } from '@/lib/compat';
 import { showApiErrorToast } from '@/lib/toast';
 import { getCurrentRoundNumber, getPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
@@ -16,7 +16,7 @@ export function useStuckStreamDetection({
   store,
   lastStreamActivityRef,
 }: UseStuckStreamDetectionParams) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const chatIsStreaming = useStore(store, s => s.isStreaming);
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export function useStuckStreamDetection({
         latestState.setIsCreatingThread(false);
         latestState.checkStuckStreams();
         latestState.resetToOverview();
-        router.push('/chat');
+        navigate({ to: '/chat' });
 
         showApiErrorToast('Stream timed out', new Error('The connection timed out. Please try again.'));
 
@@ -60,5 +60,5 @@ export function useStuckStreamDetection({
     }, 5000);
 
     return () => clearInterval(checkInterval);
-  }, [chatIsStreaming, store, router, lastStreamActivityRef]);
+  }, [chatIsStreaming, store, navigate, lastStreamActivityRef]);
 }

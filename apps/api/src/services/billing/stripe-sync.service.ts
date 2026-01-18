@@ -35,6 +35,12 @@ import {
 import { syncUserQuotaFromSubscription } from '@/services/usage';
 
 import { stripeService } from './stripe.service';
+import {
+  cacheCustomerId,
+  cacheSubscriptionData,
+  getCachedCustomerId,
+  invalidateSubscriptionCache,
+} from './stripe-kv-cache';
 import type { SyncedSubscriptionState } from './stripe-sync-schemas';
 
 function calculatePeriodEnd(
@@ -397,7 +403,7 @@ export async function syncStripeDataFromStripe(
     });
   }
 
-  return {
+  const syncedState: SyncedSubscriptionState = {
     status: subscription.status,
     subscriptionId: subscription.id,
     priceId: price.id,
@@ -410,16 +416,38 @@ export async function syncStripeDataFromStripe(
     trialEnd: subscription.trial_end ?? null,
     paymentMethod,
   };
+
+  // KV cache: invalidate old, cache new (Theo pattern)
+  await invalidateSubscriptionCache(customerId);
+  await cacheSubscriptionData(customerId, syncedState);
+
+  // Also cache userId → customerId mapping
+  await cacheCustomerId(customer.userId, customerId);
+
+  return syncedState;
 }
 
 export async function getCustomerIdByUserId(userId: string): Promise<string | null> {
+  // KV cache first (Theo pattern: stripe:user:${userId})
+  const cachedCustomerId = await getCachedCustomerId(userId);
+  if (cachedCustomerId) {
+    return cachedCustomerId;
+  }
+
+  // Fall back to database
   const db = await getDbAsync();
-  // NO CACHE: Customer data must always be fresh
   const customerResults = await db
     .select()
     .from(tables.stripeCustomer)
     .where(eq(tables.stripeCustomer.userId, userId))
     .limit(1);
 
-  return customerResults[0]?.id ?? null;
+  const customerId = customerResults[0]?.id ?? null;
+
+  // Cache for next time if found
+  if (customerId) {
+    await cacheCustomerId(userId, customerId);
+  }
+
+  return customerId;
 }

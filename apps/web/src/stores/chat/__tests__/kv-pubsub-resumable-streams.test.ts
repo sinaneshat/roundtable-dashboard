@@ -415,7 +415,9 @@ describe('thread Active Stream Tracking', () => {
 
       const active = await getThreadActiveStream(kv, 'thread-123');
       expect(active?.createdAt).toBeDefined();
-      expect(new Date(active!.createdAt).getTime()).toBeGreaterThanOrEqual(new Date(before).getTime());
+      if (!active)
+        throw new Error('expected active stream');
+      expect(new Date(active.createdAt).getTime()).toBeGreaterThanOrEqual(new Date(before).getTime());
     });
   });
 
@@ -1186,8 +1188,8 @@ describe('stream ID Format', () => {
     const match = streamId.match(/^(.+)_r(\d+)_p(\d+)$/);
 
     expect(match).not.toBeNull();
-    expect(match![1]).toBe('thread-123');
-    expect(Number.parseInt(match![2]!, 10)).toBe(2);
-    expect(Number.parseInt(match![3]!, 10)).toBe(1);
+    expect(match?.[1]).toBe('thread-123');
+    expect(match?.[2] ? Number.parseInt(match[2], 10) : undefined).toBe(2);
+    expect(match?.[3] ? Number.parseInt(match[3], 10) : undefined).toBe(1);
   });
 });

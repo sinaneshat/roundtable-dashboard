@@ -6,20 +6,22 @@ import { useShallow } from 'zustand/react/shallow';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { Icons } from '@/components/icons';
-import { ChatStoreContext, useChatStore } from '@/components/providers';
+import { ChatStoreContext, useChatStoreOptional } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
 import { PreSearchQuerySkeleton, PreSearchResultsSkeleton, PreSearchSkeleton } from '@/components/ui/skeleton';
 import { useBoolean, useExecutePreSearchStream, useGetThreadPreSearchesForPolling } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
-import type { StoredPreSearch } from '@/types/api';
-import { PreSearchResponseSchema } from '@/types/api';
+import type { PreSearchDataPayload, StoredPreSearch } from '@/services/api';
 
 import { WebSearchResultItem } from './web-search-result-item';
 
-type PreSearchDataPayload = NonNullable<StoredPreSearch['searchData']>;
+// Stable no-op function for read-only contexts without ChatStoreProvider
+const NOOP = () => false;
+
+// PreSearchDataPayload is now imported from @/services/api (RPC-derived type)
 
 type PreSearchStreamProps = {
   threadId: string;
@@ -47,13 +49,8 @@ function PreSearchStreamComponent({
 
   const store = use(ChatStoreContext);
 
-  const {
-    tryMarkPreSearchTriggered,
-    markPreSearchTriggered,
-    clearPreSearchTracking,
-    isWaitingForChangelog,
-    configChangeRoundNumber,
-  } = useChatStore(
+  // Use optional store hook - returns undefined on public pages without ChatStoreProvider
+  const storeData = useChatStoreOptional(
     useShallow(s => ({
       tryMarkPreSearchTriggered: s.tryMarkPreSearchTriggered,
       markPreSearchTriggered: s.markPreSearchTriggered,
@@ -62,6 +59,13 @@ function PreSearchStreamComponent({
       configChangeRoundNumber: s.configChangeRoundNumber,
     })),
   );
+
+  // Fallback values for read-only pages (public threads) without ChatStoreProvider
+  const tryMarkPreSearchTriggered = storeData?.tryMarkPreSearchTriggered ?? NOOP;
+  const markPreSearchTriggered = storeData?.markPreSearchTriggered ?? NOOP;
+  const clearPreSearchTracking = storeData?.clearPreSearchTracking ?? NOOP;
+  const isWaitingForChangelog = storeData?.isWaitingForChangelog ?? false;
+  const configChangeRoundNumber = storeData?.configChangeRoundNumber ?? null;
 
   const [partialSearchData, setPartialSearchData] = useState<Partial<PreSearchDataPayload> | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -207,9 +211,9 @@ function PreSearchStreamComponent({
 
         const contentType = response.headers.get('Content-Type') || '';
         if (contentType.includes('application/json')) {
-          const rawJson = await response.json();
-          const parseResult = PreSearchResponseSchema.safeParse(rawJson);
-          const searchData = parseResult.success ? parseResult.data.data?.searchData : undefined;
+          const rawJson = await response.json() as { data?: { searchData?: PreSearchDataPayload } };
+          // Use RPC-inferred type - backend validates, frontend trusts
+          const searchData = rawJson?.data?.searchData;
           if (searchData) {
             // eslint-disable-next-line react-dom/no-flush-sync -- Required for React concurrent mode: immediate UI update for JSON response
             flushSync(() => {
@@ -396,14 +400,14 @@ function PreSearchStreamComponent({
       try {
         const result = await getThreadPreSearchesForPolling(threadId);
 
-        if (!(result as any)?.data?.items) {
+        if (!result?.success || !result.data?.items) {
           if (isMounted) {
             timeoutId = setTimeout(poll, 2000);
           }
           return;
         }
 
-        const preSearchList = (result as any).data.items;
+        const preSearchList = result.data.items;
         const current = preSearchList.find((ps: StoredPreSearch) => ps.id === preSearch.id);
 
         if (current) {

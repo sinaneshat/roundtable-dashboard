@@ -9,7 +9,6 @@
 type ImportMetaEnv = {
   // Application
   readonly VITE_WEBAPP_ENV: 'local' | 'preview' | 'prod';
-  readonly VITE_API_URL: string;
   readonly VITE_APP_NAME: string;
   readonly VITE_APP_VERSION: string;
   readonly VITE_APP_URL: string;

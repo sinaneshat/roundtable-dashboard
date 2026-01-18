@@ -13,10 +13,7 @@ import { FinishReasons, MessageRoles } from '@roundtable/shared';
 import type { LanguageModelUsage } from 'ai';
 
 import type { RoundNumber } from '@/lib/schemas/round-schemas';
-import type {
-  DbAssistantMessageMetadata,
-  DbCitation,
-} from '@/types/api';
+import type { DbAssistantMessageMetadata, DbCitation } from '@/services/api';
 
 // ============================================================================
 // Type-Safe Builder Parameters
@@ -172,7 +169,7 @@ export function updateParticipantMetadata(
   return createParticipantMetadata({
     ...existing,
     ...updates,
-  } as any);
+  } as ParticipantMetadataParams);
 }
 
 // ============================================================================
@@ -250,42 +247,4 @@ export function createStreamErrorMetadata(
     statusCode: error.statusCode,
     responseBody: error.responseBody,
   });
-}
-
-// ============================================================================
-// Type Guards for Runtime Validation
-// ============================================================================
-
-/**
- * Type guard to check if metadata has all required participant fields
- */
-export function hasRequiredParticipantFields(
-  metadata: unknown,
-): metadata is DbAssistantMessageMetadata {
-  if (!metadata || typeof metadata !== 'object')
-    return false;
-
-  return (
-    'roundNumber' in metadata
-    && typeof metadata.roundNumber === 'number'
-    && 'participantId' in metadata
-    && typeof metadata.participantId === 'string'
-    && 'participantIndex' in metadata
-    && typeof metadata.participantIndex === 'number'
-    && 'participantRole' in metadata
-    && (metadata.participantRole === null
-      || typeof metadata.participantRole === 'string')
-    && 'model' in metadata
-    && typeof metadata.model === 'string'
-    && 'finishReason' in metadata
-    && typeof metadata.finishReason === 'string'
-    && 'usage' in metadata
-    && typeof metadata.usage === 'object'
-    && 'hasError' in metadata
-    && typeof metadata.hasError === 'boolean'
-    && 'isTransient' in metadata
-    && typeof metadata.isTransient === 'boolean'
-    && 'isPartialResponse' in metadata
-    && typeof metadata.isPartialResponse === 'boolean'
-  );
 }

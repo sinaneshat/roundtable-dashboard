@@ -1,4 +1,5 @@
 import { getShortRoleName } from '@roundtable/shared';
+import { Link } from '@tanstack/react-router';
 import { Reorder, useDragControls } from 'motion/react';
 import { useState } from 'react';
 
@@ -6,7 +7,7 @@ import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Link, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon, getRoleBadgeStyle } from '@/lib/utils';
@@ -192,7 +193,7 @@ export function ModelItem({
       {isDisabledDueToTier
         ? (
             <Link
-              href="/chat/pricing"
+              to="/chat/pricing"
               className="shrink-0 p-1 sm:p-1.5 rounded-full touch-manipulation"
               onClick={e => e.stopPropagation()}
               aria-label={t('chat.models.upgradeToUnlock')}

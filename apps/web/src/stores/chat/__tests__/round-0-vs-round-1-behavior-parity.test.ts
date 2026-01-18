@@ -22,7 +22,7 @@ import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getRoundNumber } from '@/lib/utils';
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 import { createChatStore } from '../store';
 import type { ChatStore } from '../store-schemas';

@@ -2,22 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { shouldRetryMutation } from '@/hooks/utils';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
-import type {
-  AbortMultipartUploadRequest,
-  AbortMultipartUploadResponse,
-  CompleteMultipartUploadRequest,
-  CompleteMultipartUploadResponse,
-  CreateMultipartUploadRequest,
-  CreateMultipartUploadResponse,
-  DeleteAttachmentRequest,
-  DeleteAttachmentResponse,
-  ListAttachmentsResponse,
-  UpdateAttachmentRequest,
-  UpdateAttachmentResponse,
-  UploadPartResponse,
-  UploadPartServiceInput,
-  UploadWithTicketResponse,
-} from '@/services/api';
+import type { ListAttachmentsResponse } from '@/services/api';
 import {
   abortMultipartUploadService,
   completeMultipartUploadService,
@@ -28,16 +13,36 @@ import {
   uploadPartService,
 } from '@/services/api';
 
-/** Input for secure upload mutation with optional abort signal */
-export type SecureUploadInput = {
+// Derive response types from service functions (avoids InferResponseType resolution issues)
+type SecureUploadResult = Awaited<ReturnType<typeof secureUploadService>>;
+type UpdateAttachmentResult = Awaited<ReturnType<typeof updateAttachmentService>>;
+type DeleteAttachmentResult = Awaited<ReturnType<typeof deleteAttachmentService>>;
+type CreateMultipartUploadResult = Awaited<ReturnType<typeof createMultipartUploadService>>;
+type UploadPartResult = Awaited<ReturnType<typeof uploadPartService>>;
+type CompleteMultipartUploadResult = Awaited<ReturnType<typeof completeMultipartUploadService>>;
+type AbortMultipartUploadResult = Awaited<ReturnType<typeof abortMultipartUploadService>>;
+
+/**
+ * Input type for secure upload mutation
+ * Matches secureUploadService parameters as object for mutation compatibility
+ */
+type SecureUploadInput = {
   file: File;
+  signal?: AbortSignal;
+};
+
+/**
+ * Input type for upload part mutation
+ * Augmented with signal for abort support
+ */
+type UploadPartInput = Parameters<typeof uploadPartService>[0] & {
   signal?: AbortSignal;
 };
 
 export function useSecureUploadMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<UploadWithTicketResponse, Error, SecureUploadInput>({
+  return useMutation<SecureUploadResult, Error, SecureUploadInput>({
     mutationFn: ({ file, signal }) => secureUploadService(file, signal),
     onSuccess: () => {
       invalidationPatterns.afterUpload().forEach((key) => {
@@ -52,7 +57,7 @@ export function useSecureUploadMutation() {
 export function useUpdateAttachmentMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<UpdateAttachmentResponse, Error, UpdateAttachmentRequest>({
+  return useMutation<UpdateAttachmentResult, Error, Parameters<typeof updateAttachmentService>[0]>({
     mutationFn: updateAttachmentService,
     onSuccess: (response, variables) => {
       if (response.success && response.data) {
@@ -90,7 +95,7 @@ export function useUpdateAttachmentMutation() {
 export function useDeleteAttachmentMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<DeleteAttachmentResponse, Error, DeleteAttachmentRequest, { previousAttachments?: ListAttachmentsResponse }>({
+  return useMutation<DeleteAttachmentResult, Error, Parameters<typeof deleteAttachmentService>[0], { previousAttachments?: ListAttachmentsResponse }>({
     mutationFn: deleteAttachmentService,
     onMutate: async (data) => {
       const attachmentId = data.param?.id;
@@ -140,20 +145,15 @@ export function useDeleteAttachmentMutation() {
 }
 
 export function useCreateMultipartUploadMutation() {
-  return useMutation<CreateMultipartUploadResponse, Error, CreateMultipartUploadRequest>({
+  return useMutation<CreateMultipartUploadResult, Error, Parameters<typeof createMultipartUploadService>[0]>({
     mutationFn: createMultipartUploadService,
     retry: false,
     throwOnError: false,
   });
 }
 
-/** Input for upload part mutation with optional abort signal */
-export type UploadPartInput = UploadPartServiceInput & {
-  signal?: AbortSignal;
-};
-
 export function useUploadPartMutation() {
-  return useMutation<UploadPartResponse, Error, UploadPartInput>({
+  return useMutation<UploadPartResult, Error, UploadPartInput>({
     mutationFn: ({ signal, ...data }) => uploadPartService(data, signal),
     retry: (failureCount, error) => {
       // Don't retry if aborted
@@ -169,7 +169,7 @@ export function useUploadPartMutation() {
 export function useCompleteMultipartUploadMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<CompleteMultipartUploadResponse, Error, CompleteMultipartUploadRequest>({
+  return useMutation<CompleteMultipartUploadResult, Error, Parameters<typeof completeMultipartUploadService>[0]>({
     mutationFn: completeMultipartUploadService,
     onSuccess: () => {
       void queryClient.invalidateQueries({
@@ -184,7 +184,7 @@ export function useCompleteMultipartUploadMutation() {
 export function useAbortMultipartUploadMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<AbortMultipartUploadResponse, Error, AbortMultipartUploadRequest>({
+  return useMutation<AbortMultipartUploadResult, Error, Parameters<typeof abortMultipartUploadService>[0]>({
     mutationFn: abortMultipartUploadService,
     onSuccess: () => {
       void queryClient.invalidateQueries({

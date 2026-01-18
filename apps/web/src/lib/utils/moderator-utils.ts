@@ -17,8 +17,9 @@
 import { MessageStatuses } from '@roundtable/shared';
 import type { DeepPartial } from 'ai';
 
+import type { ModeratorPayload } from '@/services/api';
 import { getStatusPriority } from '@/stores/chat';
-import type { ModeratorPayload, StoredModeratorData } from '@/types/api';
+import type { StoredModeratorData } from '@/stores/chat/store-schemas';
 
 import { isObject } from './type-guards';
 
@@ -194,9 +195,8 @@ export function deduplicateModerators(
     }
 
     if ((item.status === MessageStatuses.STREAMING || item.status === MessageStatuses.PENDING) && item.createdAt) {
-      const createdTime = item.createdAt instanceof Date
-        ? item.createdAt.getTime()
-        : new Date(item.createdAt).getTime();
+      // createdAt is always a string (ISO format from JSON serialization)
+      const createdTime = new Date(item.createdAt).getTime();
       const elapsed = now - createdTime;
 
       if (elapsed > MODERATOR_TIMEOUT_MS) {
@@ -230,12 +230,9 @@ export function deduplicateModerators(
     }
 
     if (itemPriority === existingPriority) {
-      const itemTime = item.createdAt instanceof Date
-        ? item.createdAt.getTime()
-        : new Date(item.createdAt).getTime();
-      const existingTime = existing.createdAt instanceof Date
-        ? existing.createdAt.getTime()
-        : new Date(existing.createdAt).getTime();
+      // createdAt is always a string (ISO format from JSON serialization)
+      const itemTime = new Date(item.createdAt).getTime();
+      const existingTime = new Date(existing.createdAt).getTime();
       if (itemTime > existingTime) {
         acc.set(item.roundNumber, item);
       }

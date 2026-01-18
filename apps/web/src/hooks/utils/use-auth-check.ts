@@ -7,10 +7,10 @@
  * Location: /src/hooks/utils/use-auth-check.ts
  */
 
+import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 
 import { getSession, signOut, useSession } from '@/lib/auth/client';
-import { useNavigate } from '@/lib/compat';
 
 export type UseAuthCheckReturn = {
   /** Whether the user is authenticated */

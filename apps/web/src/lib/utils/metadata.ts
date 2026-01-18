@@ -13,38 +13,40 @@
  * 1. Use Zod validation for runtime type safety
  * 2. Return properly typed values, never `unknown`
  * 3. Provide both nullable and throwing variants
- * 4. Support both frontend (UIMessage) and backend (ChatMessage) types
+ * 4. Support both frontend (UIMessage) and backend (ApiMessage) types
  */
 
-import { MessageRoles } from '@roundtable/shared';
+import { DbMessageMetadataSchema, MessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
-import type { ChatMessage, DbAssistantMessageMetadata, DbMessageMetadata, DbModeratorMessageMetadata, DbPreSearchMessageMetadata, DbUserMessageMetadata } from '@/types/api';
+import type {
+  ApiMessage,
+  DbAssistantMessageMetadata,
+  DbMessageMetadata,
+  DbModeratorMessageMetadata,
+  DbPreSearchMessageMetadata,
+  DbUserMessageMetadata,
+} from '@/services/api';
 import {
-  DbAssistantMessageMetadataSchema,
-  DbMessageMetadataSchema,
-  DbModeratorMessageMetadataSchema,
-  DbPreSearchMessageMetadataSchema,
-  DbUserMessageMetadataSchema,
+  isAssistantMessageMetadata,
   isModeratorMessageMetadata,
   isParticipantMessageMetadata,
-} from '@/types/api';
-
-import { isObject } from './type-guards';
+  isPreSearchMessageMetadata,
+  isUserMessageMetadata,
+} from '@/services/api';
 
 // ============================================================================
 // Type Guards with Zod Validation
 // ============================================================================
 
 /**
- * Safely extract and parse message metadata
+ * Safely extract and parse message metadata using Zod validation
  *
- * Validates metadata against MessageMetadataSchema and returns typed metadata.
- * Provides robust error handling for malformed metadata.
+ * Uses DbMessageMetadataSchema from @roundtable/shared for type-safe parsing
  *
  * @param metadata - Raw metadata object from message
- * @returns Parsed MessageMetadata or undefined if no metadata
+ * @returns Parsed MessageMetadata or undefined if validation fails
  *
  * @example
  * ```typescript
@@ -55,89 +57,78 @@ import { isObject } from './type-guards';
  * ```
  */
 export function getMessageMetadata(metadata: unknown): DbMessageMetadata | undefined {
-  if (!metadata)
-    return undefined;
-
   const result = DbMessageMetadataSchema.safeParse(metadata);
   return result.success ? result.data : undefined;
 }
 
 /**
  * Type-safe user metadata extraction
- * Returns validated UserMessageMetadata or null
+ * Returns user metadata or null
  */
 export function getUserMetadata(
   metadata: unknown,
 ): DbUserMessageMetadata | null {
-  const result = DbUserMessageMetadataSchema.safeParse(metadata);
-  return result.success ? result.data : null;
+  const parsed = getMessageMetadata(metadata);
+  return parsed && isUserMessageMetadata(parsed) ? parsed : null;
 }
 
 /**
  * Type-safe assistant metadata extraction
- * Returns validated AssistantMessageMetadata or null
+ * Returns assistant metadata or null
  */
 export function getAssistantMetadata(
   metadata: unknown,
 ): DbAssistantMessageMetadata | null {
-  const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
-  return result.success ? result.data : null;
+  const parsed = getMessageMetadata(metadata);
+  return parsed && isAssistantMessageMetadata(parsed) ? parsed : null;
 }
 
 /**
  * Type-safe participant metadata extraction
- * Returns validated ParticipantMessageMetadata or null
+ * Returns participant metadata or null
  */
 export function getParticipantMetadata(
   metadata: unknown,
 ): DbAssistantMessageMetadata | null {
-  // Participant metadata is assistant metadata with participantId
-  const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
-  if (!result.success) {
-    return null;
-  }
-  // Verify it has participantId using type guard from db schemas
-  const hasParticipantId = isParticipantMessageMetadata(result.data);
-  return hasParticipantId ? result.data : null;
+  const parsed = getMessageMetadata(metadata);
+  return parsed && isParticipantMessageMetadata(parsed) ? parsed : null;
 }
 
 /**
  * Type-safe pre-search metadata extraction
- * Returns validated PreSearchMessageMetadata or null
+ * Returns pre-search metadata or null
  */
 export function getPreSearchMetadata(
   metadata: unknown,
 ): DbPreSearchMessageMetadata | null {
-  const result = DbPreSearchMessageMetadataSchema.safeParse(metadata);
-  return result.success ? result.data : null;
+  const parsed = getMessageMetadata(metadata);
+  return parsed && isPreSearchMessageMetadata(parsed) ? parsed : null;
 }
 
 /**
  * Type-safe moderator metadata extraction
- * Returns validated ModeratorMessageMetadata or null
+ * Returns moderator metadata or null
  * ✅ TEXT STREAMING: Used to identify moderator messages in the messages array
  */
 export function getModeratorMetadata(
   metadata: unknown,
 ): DbModeratorMessageMetadata | null {
-  const result = DbModeratorMessageMetadataSchema.safeParse(metadata);
-  return result.success ? result.data : null;
+  const parsed = getMessageMetadata(metadata);
+  return parsed && isModeratorMessageMetadata(parsed) ? parsed : null;
 }
 
 /**
  * Check if a message is from the moderator
  * ✅ TEXT STREAMING: Moderator messages are now in the messages array
- * @param message - UIMessage or ChatMessage to check
+ * ✅ ZOD-FIRST PATTERN: Uses safeParse for validation instead of manual type checks
+ * @param message - UIMessage or ApiMessage to check
  * @returns true if the message is from the moderator
  */
 export function isModeratorMessage(
-  message: UIMessage | ChatMessage,
+  message: UIMessage | ApiMessage,
 ): boolean {
-  if (!message.metadata) {
-    return false;
-  }
-  const meta = getMessageMetadata(message.metadata);
-  return meta !== undefined && isModeratorMessageMetadata(meta);
+  const metadata = getMessageMetadata(message.metadata);
+  return metadata ? isModeratorMessageMetadata(metadata) : false;
 }
 
 // ============================================================================
@@ -150,7 +141,7 @@ export function isModeratorMessage(
  * ✅ TEXT STREAMING: Now includes moderator message metadata
  */
 export function extractMessageMetadata(
-  message: UIMessage | ChatMessage,
+  message: UIMessage | ApiMessage,
 ): DbUserMessageMetadata | DbAssistantMessageMetadata | DbPreSearchMessageMetadata | DbModeratorMessageMetadata | null {
   if (!message.metadata) {
     return null;
@@ -188,35 +179,37 @@ export function extractMessageMetadata(
  *
  * **REPLACES**: `(m as { createdAt?: Date | string }).createdAt`
  *
- * ✅ TYPE-SAFE: No force casting, handles both UIMessage and extended types
+ * ✅ ZOD-FIRST PATTERN: Uses safeParse for type-safe extraction
  * Handles Date objects, ISO strings, and metadata.createdAt field
  *
- * @param message - Message object (UIMessage, ChatMessage, or extended type)
+ * @param message - Message object (UIMessage, ApiMessage, or extended type)
  * @returns ISO date string or null
  */
 export function getCreatedAt(message: unknown): string | null {
-  // ✅ TYPE-SAFE: Use type guard instead of force cast
-  if (!isObject(message)) {
+  // Minimal schema for createdAt field extraction
+  const MessageCreatedAtSchema = z.object({
+    createdAt: z.union([z.string().datetime(), z.date()]).optional(),
+    metadata: z.object({
+      createdAt: z.string().datetime().optional(),
+    }).optional(),
+  });
+
+  const result = MessageCreatedAtSchema.safeParse(message);
+  if (!result.success) {
     return null;
   }
 
-  // 1. Check direct createdAt property (ChatMessage or extended UIMessage)
-  if ('createdAt' in message && message.createdAt !== undefined) {
-    if (message.createdAt instanceof Date) {
-      return message.createdAt.toISOString();
+  // 1. Check direct createdAt property (ApiMessage or extended UIMessage)
+  if (result.data.createdAt !== undefined) {
+    if (result.data.createdAt instanceof Date) {
+      return result.data.createdAt.toISOString();
     }
-    if (typeof message.createdAt === 'string') {
-      return message.createdAt;
-    }
+    return result.data.createdAt;
   }
 
   // 2. Check metadata.createdAt (our custom metadata field)
-  if ('metadata' in message && isObject(message.metadata)) {
-    if ('createdAt' in message.metadata && message.metadata.createdAt !== undefined) {
-      if (typeof message.metadata.createdAt === 'string') {
-        return message.metadata.createdAt;
-      }
-    }
+  if (result.data.metadata?.createdAt) {
+    return result.data.metadata.createdAt;
   }
 
   return null;
@@ -228,28 +221,14 @@ export function getCreatedAt(message: unknown): string | null {
  *
  * **REPLACES**: `(metadata as Record<string, unknown>)?.roundNumber`
  *
- * ✅ ZOD-FIRST PATTERN: Validates using Zod schemas without type casting
+ * ✅ ZOD-FIRST PATTERN: Validates using Zod safeParse without type casting
  * Handles 0-based indexing where roundNumber: 0 is valid
  */
 export function getRoundNumber(metadata: unknown): number | null {
-  if (!metadata) {
-    return null;
-  }
-
-  // Try each message type schema (user, assistant, pre-search)
-  const userResult = DbUserMessageMetadataSchema.safeParse(metadata);
-  if (userResult.success) {
-    return userResult.data.roundNumber;
-  }
-
-  const assistantResult = DbAssistantMessageMetadataSchema.safeParse(metadata);
-  if (assistantResult.success) {
-    return assistantResult.data.roundNumber;
-  }
-
-  const preSearchResult = DbPreSearchMessageMetadataSchema.safeParse(metadata);
-  if (preSearchResult.success) {
-    return preSearchResult.data.roundNumber;
+  // Try full schema validation first
+  const parsed = getMessageMetadata(metadata);
+  if (parsed?.roundNumber !== undefined) {
+    return parsed.roundNumber;
   }
 
   // ✅ FALLBACK: Minimal schema for roundNumber extraction only
@@ -258,12 +237,8 @@ export function getRoundNumber(metadata: unknown): number | null {
     roundNumber: z.number().int().nonnegative(),
   });
 
-  const partialResult = PartialRoundNumberSchema.partial().safeParse(metadata);
-  if (partialResult.success && partialResult.data.roundNumber !== undefined) {
-    return partialResult.data.roundNumber;
-  }
-
-  return null;
+  const partialResult = PartialRoundNumberSchema.safeParse(metadata);
+  return partialResult.success ? partialResult.data.roundNumber : null;
 }
 
 /**
@@ -272,6 +247,7 @@ export function getRoundNumber(metadata: unknown): number | null {
  *
  * **REPLACES**: `(metadata as Record<string, unknown>)?.participantId`
  *
+ * ✅ ZOD-FIRST PATTERN: Uses safeParse for streaming-safe extraction
  * **FALLBACK**: If full schema validation fails but participantId exists,
  * returns the value anyway. This handles race conditions where metadata
  * is partially populated during streaming.
@@ -283,21 +259,16 @@ export function getParticipantId(metadata: unknown): string | null {
     return validated.participantId;
   }
 
-  // Fallback: Extract participantId even when full schema validation fails
-  if (!metadata || typeof metadata !== 'object') {
-    return null;
-  }
-
+  // ✅ FALLBACK: Minimal schema for participantId extraction only
+  // Handles streaming race conditions where full schema validation fails
   const PartialParticipantIdSchema = z.object({
     participantId: z.string().min(1),
   });
 
-  const partialResult = PartialParticipantIdSchema.partial().safeParse(metadata);
-  if (partialResult.success && partialResult.data.participantId) {
-    return partialResult.data.participantId;
-  }
-
-  return null;
+  const partialResult = PartialParticipantIdSchema.safeParse(metadata);
+  return partialResult.success && partialResult.data.participantId
+    ? partialResult.data.participantId
+    : null;
 }
 
 /**
@@ -306,6 +277,7 @@ export function getParticipantId(metadata: unknown): string | null {
  *
  * **REPLACES**: `(metadata as Record<string, unknown>)?.participantIndex`
  *
+ * ✅ ZOD-FIRST PATTERN: Uses safeParse for streaming-safe extraction
  * **FALLBACK**: If full schema validation fails but participantIndex exists,
  * returns the value anyway. This handles race conditions where metadata
  * is partially populated during streaming.
@@ -317,22 +289,16 @@ export function getParticipantIndex(metadata: unknown): number | null {
     return validated.participantIndex;
   }
 
-  // Fallback: Extract participantIndex even when full schema validation fails
-  // This handles race conditions where metadata is partially populated
-  if (!metadata || typeof metadata !== 'object') {
-    return null;
-  }
-
+  // ✅ FALLBACK: Minimal schema for participantIndex extraction only
+  // Handles streaming race conditions where full schema validation fails
   const PartialParticipantIndexSchema = z.object({
     participantIndex: z.number().int().nonnegative(),
   });
 
-  const partialResult = PartialParticipantIndexSchema.partial().safeParse(metadata);
-  if (partialResult.success && typeof partialResult.data.participantIndex === 'number') {
-    return partialResult.data.participantIndex;
-  }
-
-  return null;
+  const partialResult = PartialParticipantIndexSchema.safeParse(metadata);
+  return partialResult.success && typeof partialResult.data.participantIndex === 'number'
+    ? partialResult.data.participantIndex
+    : null;
 }
 
 /**
@@ -401,11 +367,13 @@ export function getAvailableSources(
   }
 
   if ('availableSources' in metadata && Array.isArray(metadata.availableSources)) {
-    // Validate the availableSources array structure minimally
     const sources = metadata.availableSources;
-    if (sources.length > 0 && sources.every((s: unknown) =>
-      s && typeof s === 'object' && 'id' in s && 'sourceType' in s && 'title' in s,
-    )) {
+    // Type guard: validate each source has required fields
+    const isValidSource = (s: unknown): s is { id: string; sourceType: string; title: string } =>
+      s !== null && typeof s === 'object' && 'id' in s && 'sourceType' in s && 'title' in s;
+
+    if (sources.length > 0 && sources.every(isValidSource)) {
+      // Type narrowing confirmed through type guard
       return sources as DbAssistantMessageMetadata['availableSources'];
     }
   }
@@ -542,14 +510,11 @@ export function normalizeOpenRouterError(
 export function requireParticipantMetadata(
   metadata: unknown,
 ): DbAssistantMessageMetadata {
-  const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
-  if (!result.success) {
-    throw new Error(`Invalid participant metadata: ${result.error.message}`);
+  const result = getParticipantMetadata(metadata);
+  if (!result) {
+    throw new Error('Invalid participant metadata');
   }
-  if (!isParticipantMessageMetadata(result.data)) {
-    throw new Error('Invalid participant metadata: missing participantId');
-  }
-  return result.data;
+  return result;
 }
 
 /**
@@ -559,11 +524,11 @@ export function requireParticipantMetadata(
 export function requireAssistantMetadata(
   metadata: unknown,
 ): DbAssistantMessageMetadata {
-  const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
-  if (!result.success) {
-    throw new Error(`Invalid assistant metadata: ${result.error.message}`);
+  const result = getAssistantMetadata(metadata);
+  if (!result) {
+    throw new Error('Invalid assistant metadata');
   }
-  return result.data;
+  return result;
 }
 
 /**
@@ -573,11 +538,11 @@ export function requireAssistantMetadata(
 export function requireUserMetadata(
   metadata: unknown,
 ): DbUserMessageMetadata {
-  const result = DbUserMessageMetadataSchema.safeParse(metadata);
-  if (!result.success) {
-    throw new Error(`Invalid user metadata: ${result.error.message}`);
+  const result = getUserMetadata(metadata);
+  if (!result) {
+    throw new Error('Invalid user metadata');
   }
-  return result.data;
+  return result;
 }
 
 /**
@@ -587,11 +552,11 @@ export function requireUserMetadata(
 export function requirePreSearchMetadata(
   metadata: unknown,
 ): DbPreSearchMessageMetadata {
-  const result = DbPreSearchMessageMetadataSchema.safeParse(metadata);
-  if (!result.success) {
-    throw new Error(`Invalid pre-search metadata: ${result.error.message}`);
+  const result = getPreSearchMetadata(metadata);
+  if (!result) {
+    throw new Error('Invalid pre-search metadata');
   }
-  return result.data;
+  return result;
 }
 
 // ============================================================================

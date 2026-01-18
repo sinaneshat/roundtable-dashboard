@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { AuthStep } from '@roundtable/shared';
 import { AuthSteps, DEFAULT_AUTH_STEP, ErrorSeverities } from '@roundtable/shared';
+import { useSearch } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { Suspense, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -12,8 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { useBoolean } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
-import { useSearchParams, useTranslations } from '@/lib/compat';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
+import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast, showApiInfoToast } from '@/lib/toast';
 import { getApiErrorDetails } from '@/lib/utils';
 
@@ -27,15 +28,15 @@ type MagicLinkFormData = z.infer<typeof magicLinkSchema>;
 
 function AuthFormContent() {
   const t = useTranslations();
-  const searchParams = useSearchParams();
+  const search = useSearch({ strict: false }) as Record<string, string | undefined>;
   const isLoading = useBoolean(false);
   const [step, setStep] = useState<AuthStep>(DEFAULT_AUTH_STEP);
   const [sentEmail, setSentEmail] = useState('');
 
   // Handle toast messages from URL params
   useEffect(() => {
-    const toastType = searchParams.get('toast');
-    const message = searchParams.get('message');
+    const toastType = search?.toast;
+    const message = search?.message;
 
     if (toastType && message) {
       if (toastType === ErrorSeverities.FAILED) {
@@ -56,7 +57,7 @@ function AuthFormContent() {
         window.history.replaceState({}, '', url.toString());
       }
     }
-  }, [searchParams, t]);
+  }, [search, t]);
 
   const form = useForm<MagicLinkFormData>({
     resolver: zodResolver(magicLinkSchema),

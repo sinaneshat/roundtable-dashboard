@@ -240,7 +240,7 @@ describe('user Message Deduplication', () => {
         );
 
         expect(userMsgForRound).toBeDefined();
-        expect(userMsgForRound!.parts[0]).toEqual({ type: 'text', text: `Round ${roundNum}` });
+        expect(userMsgForRound?.parts[0]).toEqual({ type: 'text', text: `Round ${roundNum}` });
       }
     });
 
@@ -323,7 +323,7 @@ describe('user Message Deduplication', () => {
         );
 
         expect(round1User).toBeDefined();
-        expect(round1User!.parts[0]).toEqual({ type: 'text', text: 'Q1' });
+        expect(round1User?.parts[0]).toEqual({ type: 'text', text: 'Q1' });
       });
     });
 

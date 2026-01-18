@@ -22,7 +22,7 @@ import { MessageRoles, MessageStatuses } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { ChatParticipant, StoredPreSearch } from '@/types/api';
+import type { ChatParticipant, StoredPreSearch } from '@/services/api';
 
 import { AnimationIndices } from '../store-constants';
 import { getParticipantCompletionStatus } from '../utils/participant-completion-gate';

@@ -23,7 +23,6 @@ Object.defineProperty(globalThis, 'TextEncoder', {
 
 // Environment variables
 process.env.VITE_APP_URL = 'http://localhost:3000';
-process.env.VITE_API_URL = 'http://localhost:8787/api/v1';
 process.env.VITE_WEBAPP_ENV = 'local';
 
 // Mock matchMedia

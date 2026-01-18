@@ -177,7 +177,7 @@ export function useChatAttachments(): UseChatAttachmentsReturn {
   const getUploadIds = useCallback((): string[] => {
     return items
       .filter(item => item.status === UploadStatuses.COMPLETED && item.uploadId)
-      .map(item => item.uploadId!);
+      .map(item => item.uploadId ?? '');
   }, [items]);
 
   const addFiles = useCallback((files: File[]) => {

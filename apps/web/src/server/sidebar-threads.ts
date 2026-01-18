@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start';
-import { getRequestHeaders } from '@tanstack/react-start/server';
+import { getRequest } from '@tanstack/react-start/server';
 
 import { LIMITS } from '@/constants';
 import { listSidebarThreadsService } from '@/services/api';
@@ -12,8 +12,8 @@ import { listSidebarThreadsService } from '@/services/api';
 export const getSidebarThreads = createServerFn({ method: 'GET' }).handler(
   async () => {
     try {
-      const headers = getRequestHeaders();
-      const cookie = headers.cookie || headers.Cookie;
+      const request = getRequest();
+      const cookie = request.headers.get('cookie') || '';
 
       const result = await listSidebarThreadsService(
         { query: { limit: LIMITS.INITIAL_PAGE } },

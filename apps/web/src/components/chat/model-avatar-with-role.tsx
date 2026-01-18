@@ -6,10 +6,10 @@ import { useMemo } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon, getRoleColors } from '@/lib/utils';
-import type { EnhancedModelResponse } from '@/types/api';
+import type { Model } from '@/services/api';
 
 type ModelAvatarWithRoleProps = {
-  model: EnhancedModelResponse;
+  model: Model;
   role?: string | null;
   size?: AvatarSize;
 };

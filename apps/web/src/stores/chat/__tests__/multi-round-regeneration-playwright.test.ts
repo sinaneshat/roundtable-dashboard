@@ -30,7 +30,7 @@ import {
   createTestModeratorMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 // ============================================================================
 // TYPES

@@ -26,9 +26,9 @@ import {
   createMockStoredPreSearch,
   createParticipantConfig,
 } from '@/lib/testing';
+import type { StoredPreSearch } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore, shouldWaitForPreSearch } from '@/stores/chat';
-import type { StoredPreSearch } from '@/types/api';
 
 // ============================================================================
 // TEST SETUP HELPERS
@@ -53,6 +53,12 @@ function setupStoreWithInitialRound(store: ChatStoreApi, participantCount = 2) {
   store.getState().completeStreaming();
 
   return participants;
+}
+
+function assertParticipantExists<T>(participant: T | undefined, index: number): asserts participant is T {
+  if (!participant) {
+    throw new Error(`Expected participant at index ${index} to exist`);
+  }
 }
 
 // ============================================================================
@@ -339,17 +345,24 @@ describe('participant Role Changes Between Rounds', () => {
     it('should update participant role when changed', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 2);
 
+      const participant0 = initialParticipants[0];
+      const participant1 = initialParticipants[1];
+
+      if (!participant0 || !participant1) {
+        throw new Error('Expected 2 participants');
+      }
+
       const newParticipants = [
         createParticipantConfig(0, {
-          id: initialParticipants[0]!.id,
-          modelId: initialParticipants[0]!.modelId,
+          id: participant0.id,
+          modelId: participant0.modelId,
           role: 'Updated Role',
           priority: 0,
         }),
         createParticipantConfig(1, {
-          id: initialParticipants[1]!.id,
-          modelId: initialParticipants[1]!.modelId,
-          role: initialParticipants[1]!.role,
+          id: participant1.id,
+          modelId: participant1.modelId,
+          role: participant1.role,
           priority: 1,
         }),
       ];
@@ -357,22 +370,26 @@ describe('participant Role Changes Between Rounds', () => {
       store.getState().setSelectedParticipants(newParticipants);
 
       expect(store.getState().selectedParticipants[0]?.role).toBe('Updated Role');
-      expect(store.getState().selectedParticipants[1]?.role).toBe(initialParticipants[1]!.role);
+      expect(store.getState().selectedParticipants[1]?.role).toBe(participant1.role);
     });
 
     it('should preserve participant count when only role changes', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 2);
+      const participant0 = initialParticipants[0];
+      const participant1 = initialParticipants[1];
+      assertParticipantExists(participant0, 0);
+      assertParticipantExists(participant1, 1);
 
       const newParticipants = [
         createParticipantConfig(0, {
-          id: initialParticipants[0]!.id,
-          modelId: initialParticipants[0]!.modelId,
+          id: participant0.id,
+          modelId: participant0.modelId,
           role: 'Analyst',
           priority: 0,
         }),
         createParticipantConfig(1, {
-          id: initialParticipants[1]!.id,
-          modelId: initialParticipants[1]!.modelId,
+          id: participant1.id,
+          modelId: participant1.modelId,
           role: 'Critic',
           priority: 1,
         }),
@@ -381,7 +398,7 @@ describe('participant Role Changes Between Rounds', () => {
       store.getState().setSelectedParticipants(newParticipants);
       store
         .getState()
-        .setExpectedParticipantIds([initialParticipants[0]!.modelId, initialParticipants[1]!.modelId]);
+        .setExpectedParticipantIds([participant0.modelId, participant1.modelId]);
 
       expect(store.getState().expectedParticipantIds).toHaveLength(2);
       expect(store.getState().selectedParticipants).toHaveLength(2);
@@ -391,23 +408,29 @@ describe('participant Role Changes Between Rounds', () => {
   describe('multiple Role Changes', () => {
     it('should update all roles when multiple changed', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 3);
+      const participant0 = initialParticipants[0];
+      const participant1 = initialParticipants[1];
+      const participant2 = initialParticipants[2];
+      assertParticipantExists(participant0, 0);
+      assertParticipantExists(participant1, 1);
+      assertParticipantExists(participant2, 2);
 
       const newParticipants = [
         createParticipantConfig(0, {
-          id: initialParticipants[0]!.id,
-          modelId: initialParticipants[0]!.modelId,
+          id: participant0.id,
+          modelId: participant0.modelId,
           role: 'Strategist',
           priority: 0,
         }),
         createParticipantConfig(1, {
-          id: initialParticipants[1]!.id,
-          modelId: initialParticipants[1]!.modelId,
+          id: participant1.id,
+          modelId: participant1.modelId,
           role: 'Implementer',
           priority: 1,
         }),
         createParticipantConfig(2, {
-          id: initialParticipants[2]!.id,
-          modelId: initialParticipants[2]!.modelId,
+          id: participant2.id,
+          modelId: participant2.modelId,
           role: 'Validator',
           priority: 2,
         }),
@@ -447,11 +470,13 @@ describe('participant Role Changes Between Rounds', () => {
 
     it('should handle role removed', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 2);
+      const participant0 = initialParticipants[0];
+      assertParticipantExists(participant0, 0);
 
       const newParticipants = [
         createParticipantConfig(0, {
-          id: initialParticipants[0]!.id,
-          modelId: initialParticipants[0]!.modelId,
+          id: participant0.id,
+          modelId: participant0.modelId,
           role: null,
           priority: 0,
         }),
@@ -479,10 +504,14 @@ describe('multiple Participant Changes in Same Submission', () => {
     it('should handle adding, removing, and modifying participants simultaneously', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 3);
 
+      const firstParticipant = initialParticipants[0];
+      if (!firstParticipant)
+        throw new Error('Expected first participant');
+
       const newParticipants = [
         createParticipantConfig(0, {
-          id: initialParticipants[0]!.id,
-          modelId: initialParticipants[0]!.modelId,
+          id: firstParticipant.id,
+          modelId: firstParticipant.modelId,
           role: 'Updated Role',
           priority: 0,
         }),
@@ -594,20 +623,26 @@ describe('stream Order Updates With Participant Changes', () => {
     it('should update priority when participants reordered', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 3);
 
+      const p0 = initialParticipants[0];
+      const p1 = initialParticipants[1];
+      const p2 = initialParticipants[2];
+      if (!p0 || !p1 || !p2)
+        throw new Error('Expected 3 participants');
+
       const newParticipants = [
         createParticipantConfig(0, {
-          id: initialParticipants[2]!.id,
-          modelId: initialParticipants[2]!.modelId,
+          id: p2.id,
+          modelId: p2.modelId,
           priority: 0,
         }),
         createParticipantConfig(1, {
-          id: initialParticipants[0]!.id,
-          modelId: initialParticipants[0]!.modelId,
+          id: p0.id,
+          modelId: p0.modelId,
           priority: 1,
         }),
         createParticipantConfig(2, {
-          id: initialParticipants[1]!.id,
-          modelId: initialParticipants[1]!.modelId,
+          id: p1.id,
+          modelId: p1.modelId,
           priority: 2,
         }),
       ];
@@ -618,28 +653,34 @@ describe('stream Order Updates With Participant Changes', () => {
       expect(store.getState().selectedParticipants[1]?.priority).toBe(1);
       expect(store.getState().selectedParticipants[2]?.priority).toBe(2);
 
-      expect(store.getState().selectedParticipants[0]?.id).toBe(initialParticipants[2]!.id);
-      expect(store.getState().selectedParticipants[1]?.id).toBe(initialParticipants[0]!.id);
-      expect(store.getState().selectedParticipants[2]?.id).toBe(initialParticipants[1]!.id);
+      expect(store.getState().selectedParticipants[0]?.id).toBe(p2.id);
+      expect(store.getState().selectedParticipants[1]?.id).toBe(p0.id);
+      expect(store.getState().selectedParticipants[2]?.id).toBe(p1.id);
     });
 
     it('should handle sequential streaming with new order', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 3);
 
+      const p0 = initialParticipants[0];
+      const p1 = initialParticipants[1];
+      const p2 = initialParticipants[2];
+      if (!p0 || !p1 || !p2)
+        throw new Error('Expected 3 participants');
+
       const newParticipants = [
         createParticipantConfig(0, {
-          id: initialParticipants[2]!.id,
-          modelId: initialParticipants[2]!.modelId,
+          id: p2.id,
+          modelId: p2.modelId,
           priority: 0,
         }),
         createParticipantConfig(1, {
-          id: initialParticipants[0]!.id,
-          modelId: initialParticipants[0]!.modelId,
+          id: p0.id,
+          modelId: p0.modelId,
           priority: 1,
         }),
         createParticipantConfig(2, {
-          id: initialParticipants[1]!.id,
-          modelId: initialParticipants[1]!.modelId,
+          id: p1.id,
+          modelId: p1.modelId,
           priority: 2,
         }),
       ];
@@ -648,9 +689,9 @@ describe('stream Order Updates With Participant Changes', () => {
       store
         .getState()
         .setExpectedParticipantIds([
-          initialParticipants[2]!.modelId,
-          initialParticipants[0]!.modelId,
-          initialParticipants[1]!.modelId,
+          p2.modelId,
+          p0.modelId,
+          p1.modelId,
         ]);
       store.getState().prepareForNewMessage('Second message', []);
       store.getState().setStreamingRoundNumber(1);
@@ -669,10 +710,15 @@ describe('stream Order Updates With Participant Changes', () => {
     it('should recalculate priorities when participants added', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 2);
 
+      const p0 = initialParticipants[0];
+      const p1 = initialParticipants[1];
+      if (!p0 || !p1)
+        throw new Error('Expected 2 participants');
+
       const newParticipants = [
         createParticipantConfig(0, {
-          id: initialParticipants[0]!.id,
-          modelId: initialParticipants[0]!.modelId,
+          id: p0.id,
+          modelId: p0.modelId,
           priority: 0,
         }),
         createParticipantConfig(1, {
@@ -681,8 +727,8 @@ describe('stream Order Updates With Participant Changes', () => {
           priority: 1,
         }),
         createParticipantConfig(2, {
-          id: initialParticipants[1]!.id,
-          modelId: initialParticipants[1]!.modelId,
+          id: p1.id,
+          modelId: p1.modelId,
           priority: 2,
         }),
       ];
@@ -713,20 +759,26 @@ describe('stream Order Updates With Participant Changes', () => {
     it('should maintain order consistency between selectedParticipants and expectedParticipantIds', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 3);
 
+      const p0 = initialParticipants[0];
+      const p1 = initialParticipants[1];
+      const p2 = initialParticipants[2];
+      if (!p0 || !p1 || !p2)
+        throw new Error('Expected 3 participants');
+
       const newParticipants = [
         createParticipantConfig(0, {
-          id: initialParticipants[1]!.id,
-          modelId: initialParticipants[1]!.modelId,
+          id: p1.id,
+          modelId: p1.modelId,
           priority: 0,
         }),
         createParticipantConfig(1, {
-          id: initialParticipants[0]!.id,
-          modelId: initialParticipants[0]!.modelId,
+          id: p0.id,
+          modelId: p0.modelId,
           priority: 1,
         }),
         createParticipantConfig(2, {
-          id: initialParticipants[2]!.id,
-          modelId: initialParticipants[2]!.modelId,
+          id: p2.id,
+          modelId: p2.modelId,
           priority: 2,
         }),
       ];
@@ -735,15 +787,15 @@ describe('stream Order Updates With Participant Changes', () => {
       store
         .getState()
         .setExpectedParticipantIds([
-          initialParticipants[1]!.modelId,
-          initialParticipants[0]!.modelId,
-          initialParticipants[2]!.modelId,
+          p1.modelId,
+          p0.modelId,
+          p2.modelId,
         ]);
 
       const expectedOrder = [
-        initialParticipants[1]!.modelId,
-        initialParticipants[0]!.modelId,
-        initialParticipants[2]!.modelId,
+        p1.modelId,
+        p0.modelId,
+        p2.modelId,
       ];
 
       expect(store.getState().expectedParticipantIds).toEqual(expectedOrder);
@@ -752,15 +804,20 @@ describe('stream Order Updates With Participant Changes', () => {
     it('should stream participants in correct order after reordering', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 2);
 
+      const p0 = initialParticipants[0];
+      const p1 = initialParticipants[1];
+      if (!p0 || !p1)
+        throw new Error('Expected 2 participants');
+
       const newParticipants = [
         createParticipantConfig(0, {
-          id: initialParticipants[1]!.id,
-          modelId: initialParticipants[1]!.modelId,
+          id: p1.id,
+          modelId: p1.modelId,
           priority: 0,
         }),
         createParticipantConfig(1, {
-          id: initialParticipants[0]!.id,
-          modelId: initialParticipants[0]!.modelId,
+          id: p0.id,
+          modelId: p0.modelId,
           priority: 1,
         }),
       ];
@@ -768,12 +825,12 @@ describe('stream Order Updates With Participant Changes', () => {
       store.getState().setSelectedParticipants(newParticipants);
       store
         .getState()
-        .setExpectedParticipantIds([initialParticipants[1]!.modelId, initialParticipants[0]!.modelId]);
+        .setExpectedParticipantIds([p1.modelId, p0.modelId]);
       store.getState().prepareForNewMessage('Second message', []);
       store.getState().setStreamingRoundNumber(1);
 
-      expect(store.getState().expectedParticipantIds[0]).toBe(initialParticipants[1]!.modelId);
-      expect(store.getState().expectedParticipantIds[1]).toBe(initialParticipants[0]!.modelId);
+      expect(store.getState().expectedParticipantIds[0]).toBe(p1.modelId);
+      expect(store.getState().expectedParticipantIds[1]).toBe(p0.modelId);
     });
   });
 });

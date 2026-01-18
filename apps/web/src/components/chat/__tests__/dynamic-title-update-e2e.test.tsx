@@ -4,26 +4,16 @@ import React, { useEffect, useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import testMessages from '@/i18n/locales/en/common.json';
-import { NextIntlClientProvider } from '@/lib/compat';
+import { I18nProvider } from '@/lib/i18n';
 import { act, render, screen, userEvent } from '@/lib/testing';
-import type { ChatSidebarItem } from '@/types/api';
+import type { ChatSidebarItem } from '@/services/api';
 
 const mockPush = vi.fn();
 const mockPrefetch = vi.fn();
-const mockReplace = vi.fn();
+const _mockReplace = vi.fn();
 
-vi.mock('@/lib/compat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/compat')>();
-  return {
-    ...actual,
-    useRouter: () => ({
-      push: mockPush,
-      prefetch: mockPrefetch,
-      replace: mockReplace,
-    }),
-    usePathname: () => '/chat',
-  };
-});
+// Note: mockPush/mockPrefetch/mockReplace are used directly in test components
+// No router mock needed - test components use these mocks directly for navigation simulation
 
 vi.mock('@/hooks/mutations', () => ({
   useToggleFavoriteMutation: () => ({
@@ -95,9 +85,9 @@ function TestWrapper({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <NextIntlClientProvider locale="en" messages={testMessages} timeZone="UTC">
+      <I18nProvider locale="en" messages={testMessages} timeZone="UTC">
         {children}
-      </NextIntlClientProvider>
+      </I18nProvider>
     </QueryClientProvider>
   );
 }
@@ -423,7 +413,7 @@ describe('dynamic Title Update E2E - Source Code Verification', () => {
       const content = readFileSync(filePath, 'utf-8');
 
       if (file.name === 'ChatList') {
-        if (!/Link\s+href=/.test(content)) {
+        if (!/Link\s+to=/.test(content)) {
           findings.push(`${file.name}: Should use Link component for navigation`);
         }
         if (!/SidebarMenuAction/.test(content)) {

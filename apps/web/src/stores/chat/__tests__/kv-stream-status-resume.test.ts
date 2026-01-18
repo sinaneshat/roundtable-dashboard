@@ -125,7 +125,9 @@ function simulateStreamLifecycle(
   ));
 
   // Step 2: Update to final status
-  const entry = kvStore.get(streamId)!;
+  const entry = kvStore.get(streamId);
+  if (!entry)
+    throw new Error('expected stream entry');
 
   if (outcome === 'complete') {
     entry.status = StreamStatuses.COMPLETED;
@@ -174,9 +176,9 @@ describe('stream ID Format', () => {
       const match = streamId.match(/^(.+)_r(\d+)_p(\d+)$/);
 
       expect(match).not.toBeNull();
-      expect(match![1]).toBe('thread-123');
-      expect(match![2]).toBe('2');
-      expect(match![3]).toBe('1');
+      expect(match?.[1]).toBe('thread-123');
+      expect(match?.[2]).toBe('2');
+      expect(match?.[3]).toBe('1');
     });
   });
 });
@@ -325,7 +327,9 @@ describe('gET Stream Status Endpoint', () => {
       const streamId = generateStreamId('thread-123', 0, 0);
       const response = mockGetStreamStatus(kvStore, streamId);
 
-      const body = response.body!;
+      const body = response.body;
+      if (!body)
+        throw new Error('expected response body');
       expect(body.streamId).toBe(streamId);
       expect(body.threadId).toBe('thread-123');
       expect(body.roundNumber).toBe(0);
@@ -604,7 +608,9 @@ describe('stop Button Compatibility', () => {
 
     // User clicks stop - abort signal sent
     // Stream status updated to FAILED or just removed
-    const entry = kvStore.get(streamId)!;
+    const entry = kvStore.get(streamId);
+    if (!entry)
+      throw new Error('expected stream entry');
     entry.status = StreamStatuses.FAILED;
     entry.errorMessage = 'Aborted by user';
     kvStore.set(streamId, entry);
@@ -728,7 +734,9 @@ describe('edge Cases', () => {
       kvStore.set(streamId, createStreamKVEntry('thread-123', 0, 0, StreamStatuses.ACTIVE));
 
       // Immediately complete
-      const entry = kvStore.get(streamId)!;
+      const entry = kvStore.get(streamId);
+      if (!entry)
+        throw new Error('expected stream entry');
       entry.status = StreamStatuses.COMPLETED;
       entry.messageId = streamId;
       entry.completedAt = new Date().toISOString();

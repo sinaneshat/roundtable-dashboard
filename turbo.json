@@ -1,9 +1,15 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["packages/shared/src/**"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["src/**", "*.config.*", "*.json", "*.d.ts", "wrangler.jsonc"],
       "outputs": [".output/**", "dist/**"]
+    },
+    "cf-typegen": {
+      "inputs": ["wrangler.jsonc"],
+      "outputs": ["cloudflare-env.d.ts", "worker-configuration.d.ts"]
     },
     "dev": {
       "cache": false,
@@ -13,17 +19,25 @@
       "dependsOn": ["build"]
     },
     "deploy:preview": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "inputs": ["src/**", "wrangler.jsonc"]
     },
     "deploy:production": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "inputs": ["src/**", "wrangler.jsonc"]
     },
     "check-types": {
-      "dependsOn": ["^build"]
+      "inputs": ["src/**", "*.config.*", "*.json", "*.d.ts"]
     },
-    "lint": {},
-    "lint:fix": {},
-    "test": {},
+    "lint": {
+      "inputs": ["src/**", "*.config.*"]
+    },
+    "lint:fix": {
+      "inputs": ["src/**", "*.config.*"]
+    },
+    "test": {
+      "inputs": ["src/**", "*.config.*"]
+    },
     "test:watch": {
       "cache": false,
       "persistent": true

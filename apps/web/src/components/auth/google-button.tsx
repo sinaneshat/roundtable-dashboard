@@ -2,8 +2,8 @@ import type { ButtonProps } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { useBoolean } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
-import { useTranslations } from '@/lib/compat';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
+import { useTranslations } from '@/lib/i18n';
 
 type GoogleButtonProps = {
   callbackURL?: string;

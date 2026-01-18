@@ -1,11 +1,12 @@
 import type { BillingErrorType } from '@roundtable/shared';
 import { BillingErrorTypes } from '@roundtable/shared';
+import { Link } from '@tanstack/react-router';
 
 import { Icons } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
-import { Link, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 // Glass button styles for billing pages (consistent with chat toolbar)
@@ -153,7 +154,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
             size="lg"
             className={cn('w-full sm:w-auto sm:min-w-[200px]', glassButtonPrimary)}
           >
-            <Link href="/chat/pricing">
+            <Link to="/chat/pricing">
               {t('billing.failure.tryAgain')}
             </Link>
           </Button>
@@ -164,7 +165,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
             size="lg"
             className={cn('w-full sm:w-auto sm:min-w-[200px]', glassButtonSecondary)}
           >
-            <Link href="/chat">
+            <Link to="/chat">
               {t('billing.failure.returnHome')}
             </Link>
           </Button>

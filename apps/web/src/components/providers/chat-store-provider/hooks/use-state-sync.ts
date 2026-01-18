@@ -19,7 +19,6 @@ import type { ChatHook } from '../types';
 type UseStateSyncParams = {
   store: ChatStoreApi;
   chat: ChatHook;
-  storeRef: RefObject<ChatStoreApi | null>;
   queryClientRef: RefObject<QueryClient>;
   sendMessageRef: RefObject<ChatHook['sendMessage']>;
   startRoundRef: RefObject<ChatHook['startRound']>;
@@ -32,7 +31,6 @@ type UseStateSyncParams = {
 export function useStateSync({
   store,
   chat,
-  storeRef,
   queryClientRef,
   sendMessageRef,
   startRoundRef,
@@ -79,12 +77,12 @@ export function useStateSync({
   const sendMessageWithQuotaInvalidation = useCallback(async (content: string) => {
     queryClientRef.current.invalidateQueries({ queryKey: queryKeys.usage.stats() });
 
-    const currentThread = storeRef.current?.getState().thread ?? null;
-    const threadId = currentThread?.id || storeRef.current?.getState().createdThreadId;
+    const currentThread = store.getState().thread ?? null;
+    const threadId = currentThread?.id || store.getState().createdThreadId;
     // Thread state is source of truth; form state only for new chats
     const webSearchEnabled = getEffectiveWebSearchEnabled(
       currentThread,
-      storeRef.current?.getState().enableWebSearch ?? false,
+      store.getState().enableWebSearch ?? false,
     );
 
     if (webSearchEnabled && threadId) {
@@ -94,17 +92,17 @@ export function useStateSync({
     }
 
     return sendMessageRef.current(content);
-  }, [queryClientRef, storeRef, sendMessageRef]);
+  }, [queryClientRef, store, sendMessageRef]);
 
   const startRoundWithQuotaInvalidation = useCallback(async () => {
     queryClientRef.current.invalidateQueries({ queryKey: queryKeys.usage.stats() });
 
-    const currentThread = storeRef.current?.getState().thread ?? null;
-    const threadId = currentThread?.id || storeRef.current?.getState().createdThreadId;
+    const currentThread = store.getState().thread ?? null;
+    const threadId = currentThread?.id || store.getState().createdThreadId;
     // Thread state is source of truth; form state only for new chats
     const webSearchEnabled = getEffectiveWebSearchEnabled(
       currentThread,
-      storeRef.current?.getState().enableWebSearch ?? false,
+      store.getState().enableWebSearch ?? false,
     );
 
     if (webSearchEnabled && threadId) {
@@ -114,14 +112,14 @@ export function useStateSync({
     }
 
     return startRoundRef.current();
-  }, [queryClientRef, storeRef, startRoundRef]) as () => Promise<void>;
+  }, [queryClientRef, store, startRoundRef]) as () => Promise<void>;
 
   // Sync callbacks to store - updates when callbacks change
   useEffect(() => {
-    storeRef.current?.setState({
+    store.setState({
       sendMessage: sendMessageWithQuotaInvalidation,
       startRound: startRoundWithQuotaInvalidation,
       chatSetMessages: setMessagesRef.current,
     });
-  }, [sendMessageWithQuotaInvalidation, startRoundWithQuotaInvalidation, setMessagesRef, storeRef]);
+  }, [sendMessageWithQuotaInvalidation, startRoundWithQuotaInvalidation, setMessagesRef, store]);
 }

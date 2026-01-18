@@ -25,13 +25,10 @@ import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
 import { PendingAttachmentSchema } from '@/hooks/utils';
-// ✅ Use ExtendedFilePartSchema to include uploadId for backend fallback loading
 import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 import { ChatParticipantSchema, ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
-import {
-  ChatThreadCacheSchema as ChatThreadSchema,
-  StoredPreSearchSchema,
-} from '@/types/api';
+import type { ChatThread, StoredPreSearch } from '@/services/api';
+import { ModeratorPayloadSchema } from '@/services/api';
 
 import type {
   AddAttachments,
@@ -166,6 +163,9 @@ export const FormStateSchema = z.object({
   enableWebSearch: z.boolean(),
   modelOrder: z.array(z.string()),
   autoMode: z.boolean(),
+  animationStartIndex: z.number(),
+  shouldSkipAnimation: z.boolean(),
+  animatedMessageIds: z.set(z.string()),
 });
 
 export const FormActionsSchema = z.object({
@@ -233,7 +233,7 @@ export const UISliceSchema = z.intersection(UIStateSchema, UIActionsSchema);
 // ============================================================================
 
 export const PreSearchStateSchema = z.object({
-  preSearches: z.array(StoredPreSearchSchema),
+  preSearches: z.custom<Array<StoredPreSearch>>(),
   preSearchActivityTimes: z.custom<Map<number, number>>(),
 });
 
@@ -254,11 +254,46 @@ export const PreSearchActionsSchema = z.object({
 export const PreSearchSliceSchema = z.intersection(PreSearchStateSchema, PreSearchActionsSchema);
 
 // ============================================================================
+// MODERATOR DATA SCHEMAS (UI-specific types for store)
+// ============================================================================
+
+/**
+ * StoredModeratorDataSchema - UI representation of moderator state in store
+ * Used for tracking moderator execution across rounds
+ */
+export const StoredModeratorDataSchema = z.object({
+  id: z.string(),
+  threadId: z.string().optional(),
+  roundNumber: z.number(),
+  mode: z.string().optional(),
+  userQuestion: z.string().optional(),
+  status: MessageStatusSchema,
+  moderatorData: ModeratorPayloadSchema.nullable(),
+  participantMessageIds: z.array(z.string()).optional(),
+  // Date fields use string (JSON serialization converts Date to string)
+  createdAt: z.string(),
+  completedAt: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+});
+
+export type StoredModeratorData = z.infer<typeof StoredModeratorDataSchema>;
+
+/**
+ * StoredModeratorSummarySchema - Summary data from moderator
+ */
+export const StoredModeratorSummarySchema = z.object({
+  content: z.string(),
+  generatedAt: z.string(),
+});
+
+export type StoredModeratorSummary = z.infer<typeof StoredModeratorSummarySchema>;
+
+// ============================================================================
 // THREAD SLICE SCHEMAS
 // ============================================================================
 
 export const ThreadStateSchema = z.object({
-  thread: ChatThreadSchema.nullable(),
+  thread: z.custom<ChatThread | null>(),
   participants: z.array(ChatParticipantSchema),
   messages: z.array(z.custom<UIMessage>()),
   isStreaming: z.boolean(),
@@ -418,8 +453,9 @@ export const StreamResumptionStateEntitySchema = z.object({
   roundNumber: z.number().int().nonnegative(),
   participantIndex: z.number().int().nonnegative(),
   state: StreamStatusSchema,
-  createdAt: z.union([z.date(), z.string()]),
-  updatedAt: z.union([z.date(), z.string()]).optional(),
+  // Date fields use string (JSON serialization converts Date to string)
+  createdAt: z.string(),
+  updatedAt: z.string().optional(),
 });
 
 /**

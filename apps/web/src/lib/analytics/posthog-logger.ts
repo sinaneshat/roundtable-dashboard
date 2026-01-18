@@ -21,7 +21,15 @@ import { POSTHOG_LOG_LEVEL_VALUES, PosthogLogLevels } from '@roundtable/shared';
 
 import { getDistinctIdFromCookie, getPostHogClient } from './posthog-server';
 
-type LogAttributes = Record<string, unknown>;
+type LogAttributes = {
+  userId?: string;
+  threadId?: string;
+  endpoint?: string;
+  duration?: number;
+  errorCode?: string;
+  statusCode?: number;
+  [key: string]: unknown;
+};
 
 type LogContext = {
   distinctId?: string;
@@ -30,7 +38,7 @@ type LogContext = {
   service?: string;
 };
 
-const MIN_LOG_LEVEL: PosthogLogLevel = process.env.NODE_ENV === 'production' ? PosthogLogLevels.INFO : PosthogLogLevels.DEBUG;
+const MIN_LOG_LEVEL: PosthogLogLevel = import.meta.env.MODE === 'production' ? PosthogLogLevels.INFO : PosthogLogLevels.DEBUG;
 
 function shouldLog(level: PosthogLogLevel): boolean {
   return POSTHOG_LOG_LEVEL_VALUES[level] >= POSTHOG_LOG_LEVEL_VALUES[MIN_LOG_LEVEL];

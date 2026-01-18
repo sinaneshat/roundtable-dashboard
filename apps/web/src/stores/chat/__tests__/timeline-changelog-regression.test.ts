@@ -11,12 +11,13 @@
  */
 
 import { MessagePartTypes, MessageRoles, MessageStatuses, ModelIds, TimelineItemTypes } from '@roundtable/shared';
+import { renderHook } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
-import { createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
-import type { ChatThreadChangelog, DbModeratorMessageMetadata, StoredPreSearch } from '@/types/api';
+import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
+import type { ChatThreadChangelog, DbModeratorMessageMetadata, StoredPreSearch } from '@/services/api';
 
 // ============================================================================
 // TEST HELPERS - Mimic production state structure

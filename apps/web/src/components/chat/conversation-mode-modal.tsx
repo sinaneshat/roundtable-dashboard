@@ -10,8 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useTranslations } from '@/lib/compat';
 import { CHAT_MODE_CONFIGS } from '@/lib/config/chat-modes';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 export type ConversationModeModalProps = {

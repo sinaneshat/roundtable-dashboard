@@ -17,11 +17,16 @@ import { createApiClient } from '@/lib/api/client';
 
 type SetRoundFeedbackEndpoint = ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['feedback']['$put'];
 export type SetRoundFeedbackRequest = InferRequestType<SetRoundFeedbackEndpoint>;
-export type SetRoundFeedbackResponse = InferResponseType<SetRoundFeedbackEndpoint>;
+export type SetRoundFeedbackResponse = InferResponseType<SetRoundFeedbackEndpoint, 200>;
 
 type GetThreadFeedbackEndpoint = ApiClientType['chat']['threads'][':id']['feedback']['$get'];
 export type GetThreadFeedbackRequest = InferRequestType<GetThreadFeedbackEndpoint>;
-export type GetThreadFeedbackResponse = InferResponseType<GetThreadFeedbackEndpoint>;
+export type GetThreadFeedbackResponse = InferResponseType<GetThreadFeedbackEndpoint, 200>;
+
+// Derive RoundFeedbackData from the API response (array item type)
+type FeedbackSuccessResponse = Extract<GetThreadFeedbackResponse, { success: true }>;
+type FeedbackData = FeedbackSuccessResponse extends { data: infer D } ? D : never;
+export type RoundFeedbackData = FeedbackData extends Array<infer Item> ? Item : never;
 
 // ============================================================================
 // Service Functions

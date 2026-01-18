@@ -353,9 +353,12 @@ describe('participant Streaming API Optimization', () => {
 
     // Simulate sequential participant streaming
     for (let i = 0; i < participants.length; i++) {
+      const participant = participants[i];
+      if (!participant)
+        throw new Error('expected participant');
       trackApiCall(apiTracker, '/api/v1/chat', 'POST', {
         participantIndex: i,
-        participantId: participants[i]!.id,
+        participantId: participant.id,
       });
     }
 

@@ -13,6 +13,7 @@ import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthSignInRouteImport } from './routes/auth/sign-in'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ProtectedChatRouteImport } from './routes/_protected/chat'
 import { Route as ProtectedChatIndexRouteImport } from './routes/_protected/chat/index'
 import { Route as PublicChatSlugRouteImport } from './routes/public/chat/$slug'
@@ -39,6 +40,11 @@ const AuthSignInRoute = AuthSignInRouteImport.update({
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSplatRoute = ApiSplatRouteImport.update({
+  id: '/api/$',
+  path: '/api/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProtectedChatRoute = ProtectedChatRouteImport.update({
@@ -88,6 +94,7 @@ const ProtectedChatBillingFailureRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/chat': typeof ProtectedChatRouteWithChildren
+  '/api/$': typeof ApiSplatRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/chat/$slug': typeof ProtectedChatSlugRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/$': typeof ApiSplatRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/chat/$slug': typeof ProtectedChatSlugRoute
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_protected': typeof ProtectedRouteWithChildren
   '/_protected/chat': typeof ProtectedChatRouteWithChildren
+  '/api/$': typeof ApiSplatRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/_protected/chat/$slug': typeof ProtectedChatSlugRoute
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/chat'
+    | '/api/$'
     | '/auth/callback'
     | '/auth/sign-in'
     | '/chat/$slug'
@@ -142,6 +152,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/api/$'
     | '/auth/callback'
     | '/auth/sign-in'
     | '/chat/$slug'
@@ -156,6 +167,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_protected'
     | '/_protected/chat'
+    | '/api/$'
     | '/auth/callback'
     | '/auth/sign-in'
     | '/_protected/chat/$slug'
@@ -170,6 +182,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ProtectedRoute: typeof ProtectedRouteWithChildren
+  ApiSplatRoute: typeof ApiSplatRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthSignInRoute: typeof AuthSignInRoute
   PublicChatSlugRoute: typeof PublicChatSlugRoute
@@ -203,6 +216,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/callback'
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$': {
+      id: '/api/$'
+      path: '/api/$'
+      fullPath: '/api/$'
+      preLoaderRoute: typeof ApiSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_protected/chat': {
@@ -303,6 +323,7 @@ const ProtectedRouteWithChildren = ProtectedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ProtectedRoute: ProtectedRouteWithChildren,
+  ApiSplatRoute: ApiSplatRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthSignInRoute: AuthSignInRoute,
   PublicChatSlugRoute: PublicChatSlugRoute,

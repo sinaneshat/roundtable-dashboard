@@ -338,14 +338,18 @@ describe('participants Must Start After Pre-Search Completes', () => {
 
       // Verify pre-search exists
       expect(currentPreSearch).toBeDefined();
+      if (!currentPreSearch)
+        throw new Error('expected currentPreSearch');
 
       // Pre-search is complete, verify timing is reasonable
-      const completedAt = currentPreSearch!.completedAt;
+      const completedAt = currentPreSearch.completedAt;
       expect(completedAt).toBeDefined();
+      if (!completedAt)
+        throw new Error('expected completedAt');
 
       const timestamp = completedAt instanceof Date
         ? completedAt.getTime()
-        : new Date(completedAt!).getTime();
+        : new Date(completedAt).getTime();
       const timeSinceComplete = Date.now() - timestamp;
 
       // Within 100ms of completion, should wait

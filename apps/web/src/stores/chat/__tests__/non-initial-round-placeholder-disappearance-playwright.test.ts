@@ -25,7 +25,7 @@
 import { MessageRoles, MessageStatuses, ScreenModes } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
-import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
+import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 

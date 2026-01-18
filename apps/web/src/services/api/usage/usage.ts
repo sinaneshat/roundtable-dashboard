@@ -16,7 +16,7 @@ import { createApiClient } from '@/lib/api/client';
 // ============================================================================
 
 type GetUsageStatsEndpoint = ApiClientType['usage']['stats']['$get'];
-export type GetUsageStatsResponse = InferResponseType<GetUsageStatsEndpoint>;
+export type GetUsageStatsResponse = InferResponseType<GetUsageStatsEndpoint, 200>;
 
 // ============================================================================
 // Service Functions

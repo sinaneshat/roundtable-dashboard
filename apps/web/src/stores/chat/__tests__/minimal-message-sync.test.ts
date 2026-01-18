@@ -123,11 +123,11 @@ describe('minimal-message-sync', () => {
       expect(assistantInMerged).toBeDefined();
 
       // VERIFY: Original user message has no isParticipantTrigger flag
-      const originalUserMeta = getUserMetadata(originalUserInMerged!.metadata);
+      const originalUserMeta = originalUserInMerged ? getUserMetadata(originalUserInMerged.metadata) : undefined;
       expect(originalUserMeta?.isParticipantTrigger).toBeUndefined();
 
       // VERIFY: Trigger message has isParticipantTrigger flag
-      const triggerMeta = getUserMetadata(triggerInMerged!.metadata);
+      const triggerMeta = triggerInMerged ? getUserMetadata(triggerInMerged.metadata) : undefined;
       expect(triggerMeta?.isParticipantTrigger).toBe(true);
     });
 
@@ -509,7 +509,7 @@ describe('minimal-message-sync', () => {
       // VERIFY: Assistant message is included from AI SDK
       const assistantInMerged = mergedMessages.find(m => m.id === assistantMessage.id);
       expect(assistantInMerged).toBeDefined();
-      expect(assistantInMerged!.role).toBe(UIMessageRoles.ASSISTANT);
+      expect(assistantInMerged?.role).toBe(UIMessageRoles.ASSISTANT);
 
       // VERIFY: Original user message is preserved
       const userInMerged = mergedMessages.find(m => m.id === userMessage.id);
@@ -553,7 +553,7 @@ describe('minimal-message-sync', () => {
       // VERIFY: Message content updated
       const updatedMessage = getState().messages.find(m => m.id === assistantMessageId);
       expect(updatedMessage).toBeDefined();
-      expect(updatedMessage!.parts[0]).toMatchObject({ type: 'text', text: 'Streaming... more content' });
+      expect(updatedMessage?.parts[0]).toMatchObject({ type: 'text', text: 'Streaming... more content' });
     });
   });
 

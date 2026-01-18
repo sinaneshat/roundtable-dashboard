@@ -60,8 +60,10 @@ function trackUpdate(tracker: UpdateTracker, state: ReturnType<typeof createChat
 function _getUpdatesPerSecond(tracker: UpdateTracker): number {
   if (tracker.timestamps.length < 2)
     return 0;
-  const first = tracker.timestamps[0]!;
-  const last = tracker.timestamps[tracker.timestamps.length - 1]!;
+  const first = tracker.timestamps[0];
+  const last = tracker.timestamps[tracker.timestamps.length - 1];
+  if (first === undefined || last === undefined)
+    throw new Error('expected timestamps');
   const durationSeconds = (last - first) / 1000;
   if (durationSeconds === 0)
     return tracker.count;
@@ -729,7 +731,11 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // Check intervals between transitions (should be ~200ms)
       for (let i = 1; i < transitionTimestamps.length; i++) {
-        const interval = transitionTimestamps[i]! - transitionTimestamps[i - 1]!;
+        const curr = transitionTimestamps[i];
+        const prev = transitionTimestamps[i - 1];
+        if (curr === undefined || prev === undefined)
+          throw new Error('expected timestamps');
+        const interval = curr - prev;
         expect(interval).toBeGreaterThanOrEqual(190);
         expect(interval).toBeLessThanOrEqual(210);
       }
@@ -1306,7 +1312,10 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // Message count should never drop (no flicker)
       for (let i = 1; i < messageCountSnapshots.length; i++) {
-        expect(messageCountSnapshots[i]).toBeGreaterThanOrEqual(messageCountSnapshots[i - 1]!);
+        const prev = messageCountSnapshots[i - 1];
+        if (prev === undefined)
+          throw new Error('expected previous snapshot');
+        expect(messageCountSnapshots[i]).toBeGreaterThanOrEqual(prev);
       }
     });
 
@@ -1349,8 +1358,10 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // No message should disappear from snapshots
       for (let i = 1; i < messageOrderSnapshots.length; i++) {
-        const prev = messageOrderSnapshots[i - 1]!;
-        const current = messageOrderSnapshots[i]!;
+        const prev = messageOrderSnapshots[i - 1];
+        const current = messageOrderSnapshots[i];
+        if (!prev || !current)
+          throw new Error('expected snapshots');
 
         // Every message from prev should exist in current
         for (const msgId of prev) {
@@ -1435,7 +1446,10 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // Verify progressive increase in content length
       for (let i = 1; i < messageLengthProgression.length; i++) {
-        expect(messageLengthProgression[i]).toBeGreaterThan(messageLengthProgression[i - 1]!);
+        const prev = messageLengthProgression[i - 1];
+        if (prev === undefined)
+          throw new Error('expected previous length');
+        expect(messageLengthProgression[i]).toBeGreaterThan(prev);
       }
     });
 
@@ -1514,8 +1528,10 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // No backwards transitions (e.g., 2 → 1) - verify forward progress only
       for (let i = 1; i < participantIndexTimeline.length; i++) {
-        const curr = participantIndexTimeline[i]!;
-        const prev = participantIndexTimeline[i - 1]!;
+        const curr = participantIndexTimeline[i];
+        const prev = participantIndexTimeline[i - 1];
+        if (curr === undefined || prev === undefined)
+          throw new Error('expected timeline entries');
         expect(curr >= prev).toBe(true);
       }
     });

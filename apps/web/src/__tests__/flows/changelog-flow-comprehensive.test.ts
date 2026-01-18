@@ -26,9 +26,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { queryKeys } from '@/lib/data/query-keys';
 import { createMockStoredPreSearch } from '@/lib/testing';
+import type { ChatThreadChangelog } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
-import type { ChatThreadChangelog } from '@/types/api';
 
 // ============================================================================
 // TEST HELPERS
@@ -749,9 +749,11 @@ describe('accordion Visibility and Content Accuracy', () => {
 
       expect(mockQueryClient.setQueryData).toHaveBeenCalled();
       expect(capturedResult).not.toBeNull();
-      expect(capturedResult!.data.items).toHaveLength(2);
-      expect(capturedResult!.data.items[0]?.roundNumber).toBe(2); // Newest first
-      expect(capturedResult!.data.items[1]?.roundNumber).toBe(1);
+      if (!capturedResult)
+        throw new Error('expected capturedResult');
+      expect(capturedResult.data.items).toHaveLength(2);
+      expect(capturedResult.data.items[0]?.roundNumber).toBe(2); // Newest first
+      expect(capturedResult.data.items[1]?.roundNumber).toBe(1);
     });
 
     it('prevents duplicate changelog entries', () => {
@@ -1517,12 +1519,14 @@ describe('stale Data Race Condition Prevention', () => {
       );
 
       expect(capturedResult).not.toBeNull();
-      expect(capturedResult!.data.items).toHaveLength(2);
+      if (!capturedResult)
+        throw new Error('expected capturedResult');
+      expect(capturedResult.data.items).toHaveLength(2);
 
       // Round 2 should be first (newest)
-      expect(capturedResult!.data.items[0]?.roundNumber).toBe(2);
+      expect(capturedResult.data.items[0]?.roundNumber).toBe(2);
       // Round 1 should be preserved
-      expect(capturedResult!.data.items[1]?.roundNumber).toBe(1);
+      expect(capturedResult.data.items[1]?.roundNumber).toBe(1);
     });
 
     it('should NOT merge if new data is for wrong round', () => {
@@ -1572,7 +1576,10 @@ describe('stale Data Race Condition Prevention', () => {
         if (!changelogByRound.has(round)) {
           changelogByRound.set(round, []);
         }
-        changelogByRound.get(round)!.push(changelog);
+        const roundArray = changelogByRound.get(round);
+        if (!roundArray)
+          throw new Error('expected roundArray');
+        roundArray.push(changelog);
       });
 
       expect(changelogByRound.get(1)).toHaveLength(1);

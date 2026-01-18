@@ -1,6 +1,5 @@
+import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useState } from 'react';
-
-import { useRouter } from '@/lib/compat';
 
 export type UseCountdownRedirectOptions = {
   /** Whether to start the countdown (e.g., !isLoading, isReady) */
@@ -40,14 +39,14 @@ export function useCountdownRedirect({
   redirectPath = '/chat',
   onComplete,
 }: UseCountdownRedirectOptions): UseCountdownRedirectReturn {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [countdown, setCountdown] = useState(initialCount);
 
   // ✅ REACT 19: useEffectEvent automatically captures latest onComplete and redirectPath
   // without causing the timer effect to re-run when these values change
   const handleRedirect = useEffectEvent(() => {
     onComplete?.();
-    router.replace(redirectPath);
+    navigate({ to: redirectPath, replace: true });
   });
 
   // ✅ REACT 19: Timer effect only depends on `enabled`

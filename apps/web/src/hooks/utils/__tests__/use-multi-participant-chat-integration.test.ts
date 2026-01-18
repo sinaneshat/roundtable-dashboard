@@ -211,7 +211,9 @@ describe('useMultiParticipantChat Integration', () => {
       // CRITICAL ASSERTION: Original user message must be preserved
       const originalUserMsg = merged.find(m => m.id === 'thread-1_r1_user');
       expect(originalUserMsg).toBeDefined();
-      expect(getUserMetadata(originalUserMsg!.metadata)?.isParticipantTrigger).toBeFalsy();
+      if (!originalUserMsg)
+        throw new Error('Expected originalUserMsg to be defined');
+      expect(getUserMetadata(originalUserMsg.metadata)?.isParticipantTrigger).toBeFalsy();
 
       // STEP 4: Deduplication filters out participant trigger
       const deduplicated = simulateDeduplication(merged);
@@ -549,9 +551,11 @@ describe('useMultiParticipantChat Integration', () => {
       );
 
       expect(round1User).toBeDefined();
-      expect(round1User!.id).toBe('thread-1_r1_user');
-      expect(getUserMetadata(round1User!.metadata)?.isParticipantTrigger).toBeFalsy();
-      expect(round1User!.parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
+      if (!round1User)
+        throw new Error('Expected round1User to be defined');
+      expect(round1User.id).toBe('thread-1_r1_user');
+      expect(getUserMetadata(round1User.metadata)?.isParticipantTrigger).toBeFalsy();
+      expect(round1User.parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
     });
   });
 });

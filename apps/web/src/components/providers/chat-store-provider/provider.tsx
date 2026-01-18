@@ -2,7 +2,7 @@ import { MessageRoles, MessageStatuses, TextPartStates } from '@roundtable/share
 import type { QueryClient } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
-import { useCallback, useLayoutEffect, useRef } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -10,7 +10,6 @@ import { useMultiParticipantChat } from '@/hooks/utils';
 import { showApiErrorToast } from '@/lib/toast';
 import { getCurrentRoundNumber, getMessageMetadata, getRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 
 import { ChatStoreContext } from './context';
@@ -32,18 +31,36 @@ import type { ChatStoreProviderProps } from './types';
 
 type TriggerModeratorFn = (roundNumber: number, participantMessageIds: string[]) => Promise<void>;
 
+/**
+ * Chat Store Provider - Zustand v5 SSR Pattern for TanStack Start
+ *
+ * ✅ ZUSTAND V5 BEST PRACTICES:
+ * 1. Factory Pattern: createChatStore() returns vanilla store (NOT global create())
+ * 2. useState Lazy Init: Store created once per provider instance (SSR isolation)
+ * 3. Context Distribution: ChatStoreContext provides store to useChatStore hook
+ * 4. Middleware: devtools + immer at combined level (not in individual slices)
+ * 5. Action Names: All set() calls include 'slice/action' third parameter
+ * 6. useShallow Batching: Object selectors use useShallow to prevent unnecessary re-renders
+ *
+ * ⚠️ CRITICAL SSR PATTERNS:
+ * - NO global module-level stores (each request gets fresh store)
+ * - Store created via useState lazy initializer (once per component instance)
+ * - Multiple ChatStoreProvider instances = multiple isolated stores (correct for SSR)
+ * - React Server Components CANNOT read/write store (client components only)
+ *
+ * Note: useState with lazy initializer is preferred over useRef for store creation
+ * because it ensures the store is created during the initial render phase.
+ *
+ * Reference: Official Zustand docs - "Persisting store data" SSR section
+ */
 export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const queryClient = useQueryClient();
-  const storeRef = useRef<ChatStoreApi | null>(null);
+  // ✅ ZUSTAND V5 SSR: Create store via useState lazy initializer for per-request isolation
+  // Factory pattern ensures each provider instance gets its own store
+  const [store] = useState(() => createChatStore());
   const prevPathnameRef = useRef<string | null>(null);
   const queryClientRef = useRef<QueryClient>(queryClient);
   const triggerModeratorRef = useRef<TriggerModeratorFn | null>(null);
-
-  if (storeRef.current === null) {
-    storeRef.current = createChatStore();
-  }
-
-  const store = storeRef.current;
 
   const {
     thread,
@@ -302,7 +319,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   useStateSync({
     store,
     chat,
-    storeRef,
     queryClientRef,
     sendMessageRef,
     startRoundRef,

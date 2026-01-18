@@ -24,7 +24,7 @@ import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes, U
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage } from '@/lib/testing';
-import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
+import type { ApiMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -72,7 +72,7 @@ function createParticipant(index: number): ChatParticipant {
   } as ChatParticipant;
 }
 
-function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ChatMessage {
+function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ApiMessage {
   return createTestUserMessage({
     id: `${THREAD_ID}_r${roundNumber}_user`,
     content,
@@ -85,7 +85,7 @@ function createAssistantMsg(
   participantIndex: number,
   content = `Response R${roundNumber}P${participantIndex}`,
   finishReason = FinishReasons.STOP,
-): ChatMessage {
+): ApiMessage {
   return createTestAssistantMessage({
     id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     content,
@@ -96,7 +96,7 @@ function createAssistantMsg(
   });
 }
 
-function createModeratorMsg(roundNumber: number, content = `Summary R${roundNumber}`): ChatMessage {
+function createModeratorMsg(roundNumber: number, content = `Summary R${roundNumber}`): ApiMessage {
   return createTestModeratorMessage({
     id: `${THREAD_ID}_r${roundNumber}_moderator`,
     content,
@@ -435,7 +435,10 @@ describe('behavior 5: Council moderator generates after last participant', () =>
     });
 
     expect(moderators).toHaveLength(1);
-    expect(moderators[0]!.metadata.roundNumber).toBe(0);
+    const firstModerator = moderators[0];
+    if (!firstModerator)
+      throw new Error('expected moderator message');
+    expect(firstModerator.metadata.roundNumber).toBe(0);
   });
 
   it('should NOT add moderator before all participants complete', () => {

@@ -13,6 +13,7 @@
  * - Header logic doesn't properly check for known static routes
  */
 
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useCurrentPathname } from '@/hooks/utils';
@@ -21,12 +22,42 @@ import { render, screen } from '@/lib/testing';
 import { NavigationHeader } from '../chat-header';
 import { ChatHeaderSwitch } from '../chat-header-switch';
 
-// Mock useCurrentPathname hook (used instead of next/navigation's usePathname for history API support)
+// Mock TanStack Router components and hooks
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children, to, className, ...props }: { children: ReactNode; to: string; className?: string }) => (
+    <a href={to} className={className} {...props}>
+      {children}
+    </a>
+  ),
+  useRouter: vi.fn(() => ({
+    navigate: vi.fn(),
+    state: {
+      location: {
+        pathname: '/chat',
+      },
+    },
+  })),
+}));
+
+// Mock useCurrentPathname hook (used for history API support alongside TanStack Router)
 vi.mock('@/hooks/utils', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/hooks/utils')>();
   return {
     ...original,
     useCurrentPathname: vi.fn(() => '/chat'),
+  };
+});
+
+// Mock useThreadQuery hook
+vi.mock('@/hooks/queries', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/hooks/queries')>();
+  return {
+    ...original,
+    useThreadQuery: vi.fn(() => ({
+      data: null,
+      isLoading: false,
+      isError: false,
+    })),
   };
 });
 

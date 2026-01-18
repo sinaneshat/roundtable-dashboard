@@ -1,4 +1,4 @@
-import type { Formats } from '@/lib/compat';
+import type { Formats } from '@/lib/i18n';
 
 export const formats = {
   dateTime: {

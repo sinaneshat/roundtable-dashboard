@@ -15,11 +15,12 @@ import {
   MessageRoles,
   MessageStatuses,
 } from '@roundtable/shared';
+import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
-import { createMockStoredPreSearch, createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
-import type { DbAssistantMessageMetadata, StoredPreSearch } from '@/types/api';
+import { createMockStoredPreSearch, createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
+import type { DbAssistantMessageMetadata, StoredPreSearch } from '@/services/api';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';

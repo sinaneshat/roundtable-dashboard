@@ -23,6 +23,8 @@ import { useMemo } from 'react';
 
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import type { CreditEstimationStatus } from '@/lib/enums/billing-ui';
+import { CreditEstimationStatuses } from '@/lib/enums/billing-ui';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 import { useModelLookup } from './use-model-lookup';
@@ -30,8 +32,6 @@ import { useModelLookup } from './use-model-lookup';
 // ============================================================================
 // TYPES
 // ============================================================================
-
-type CreditEstimationStatus = 'sufficient' | 'low' | 'insufficient';
 
 export type CreditEstimationResult = {
   /** Estimated credits needed for this round */
@@ -114,7 +114,7 @@ export function useCreditEstimation(options: UseCreditEstimationOptions): Credit
   const { findModel, isLoading: isLoadingModels } = useModelLookup();
 
   const isLoading = isLoadingStats || isLoadingModels;
-  const availableCredits = (statsData as any)?.data?.credits?.available ?? 0;
+  const availableCredits = (statsData?.success && statsData.data.credits?.available) ? statsData.data.credits.available : 0;
 
   const estimatedCredits = useMemo(() => {
     const {
@@ -157,13 +157,13 @@ export function useCreditEstimation(options: UseCreditEstimationOptions): Credit
   // Status: insufficient if can't afford, low if <20% remaining, else sufficient
   const status: CreditEstimationStatus = useMemo(() => {
     if (!canAfford) {
-      return 'insufficient';
+      return CreditEstimationStatuses.INSUFFICIENT;
     }
     // Low if remaining credits after submit is less than 20% of current
     if (creditsAfterSubmit < availableCredits * 0.2) {
-      return 'low';
+      return CreditEstimationStatuses.LOW;
     }
-    return 'sufficient';
+    return CreditEstimationStatuses.SUFFICIENT;
   }, [canAfford, creditsAfterSubmit, availableCredits]);
 
   return {

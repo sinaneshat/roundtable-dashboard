@@ -28,7 +28,7 @@ import {
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { DbAssistantMessageMetadata } from '@/types/api';
+import type { DbAssistantMessageMetadata } from '@/services/api';
 
 // ============================================================================
 // TYPE GUARDS

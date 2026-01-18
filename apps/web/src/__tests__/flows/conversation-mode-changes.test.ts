@@ -457,7 +457,9 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
     expect(modeChange).not.toBeNull();
     expect(participantAdded).toBe(true);
 
-    const roundState = createRoundState(1, newMode, true, [modeChange!]);
+    if (!modeChange)
+      throw new Error('expected modeChange');
+    const roundState = createRoundState(1, newMode, true, [modeChange]);
     expect(roundState.hasChangelog).toBe(true);
   });
 
@@ -466,7 +468,13 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
     const participants = [createMockParticipant(0), createMockParticipant(1), createMockParticipant(2)];
 
     // Round 1: Remove participant + change mode
-    const newParticipants = [participants[0]!, participants[1]!];
+    const p0 = participants[0];
+    const p1 = participants[1];
+    if (!p0)
+      throw new Error('expected p0');
+    if (!p1)
+      throw new Error('expected p1');
+    const newParticipants = [p0, p1];
     const newMode = ChatModes.PROBLEM_SOLVING;
 
     const modeChange = detectModeChange(thread.mode, newMode, 1);
@@ -507,15 +515,27 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
     ];
 
     // Round 1: Reorder + change mode
+    const p0 = participants[0];
+    const p1 = participants[1];
+    const p2 = participants[2];
+    if (!p0)
+      throw new Error('expected p0');
+    if (!p1)
+      throw new Error('expected p1');
+    if (!p2)
+      throw new Error('expected p2');
     const reorderedParticipants = [
-      { ...participants[2]!, priority: 0 },
-      { ...participants[0]!, priority: 1 },
-      { ...participants[1]!, priority: 2 },
+      { ...p2, priority: 0 },
+      { ...p0, priority: 1 },
+      { ...p1, priority: 2 },
     ];
     const newMode = ChatModes.DEBATING;
 
     const modeChange = detectModeChange(thread.mode, newMode, 1);
-    const orderChanged = participants[0]!.id !== reorderedParticipants[0]!.id;
+    const reorderedFirst = reorderedParticipants[0];
+    if (!reorderedFirst)
+      throw new Error('expected reorderedFirst');
+    const orderChanged = p0.id !== reorderedFirst.id;
 
     expect(modeChange).not.toBeNull();
     expect(orderChanged).toBe(true);
@@ -542,7 +562,9 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
     expect(webSearchChange).toBe(true);
 
     // Changelog should be created
-    const roundState = createRoundState(1, newMode, true, [modeChange!]);
+    if (!modeChange)
+      throw new Error('expected modeChange');
+    const roundState = createRoundState(1, newMode, true, [modeChange]);
     expect(roundState.hasChangelog).toBe(true);
   });
 });
@@ -601,17 +623,30 @@ describe('conversation Mode Changes - Edge Cases', () => {
     // Verify rounds array is populated before iterating
     expect(rounds).toHaveLength(4);
 
+    const round0 = rounds[0];
+    const round1 = rounds[1];
+    const round2 = rounds[2];
+    const round3 = rounds[3];
+    if (!round0)
+      throw new Error('expected round0');
+    if (!round1)
+      throw new Error('expected round1');
+    if (!round2)
+      throw new Error('expected round2');
+    if (!round3)
+      throw new Error('expected round3');
+
     // First round: no changelog
-    expect(rounds[0]!.hasChangelog).toBe(false);
-    expect(rounds[0]!.changelogEntries).toHaveLength(0);
+    expect(round0.hasChangelog).toBe(false);
+    expect(round0.changelogEntries).toHaveLength(0);
 
     // Subsequent rounds: have changelog with 1 entry each
-    expect(rounds[1]!.hasChangelog).toBe(true);
-    expect(rounds[1]!.changelogEntries).toHaveLength(1);
-    expect(rounds[2]!.hasChangelog).toBe(true);
-    expect(rounds[2]!.changelogEntries).toHaveLength(1);
-    expect(rounds[3]!.hasChangelog).toBe(true);
-    expect(rounds[3]!.changelogEntries).toHaveLength(1);
+    expect(round1.hasChangelog).toBe(true);
+    expect(round1.changelogEntries).toHaveLength(1);
+    expect(round2.hasChangelog).toBe(true);
+    expect(round2.changelogEntries).toHaveLength(1);
+    expect(round3.hasChangelog).toBe(true);
+    expect(round3.changelogEntries).toHaveLength(1);
   });
 
   it('should handle mode change then reverting back', () => {

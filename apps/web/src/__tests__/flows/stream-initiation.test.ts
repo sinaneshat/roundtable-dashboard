@@ -33,7 +33,7 @@
 import { MessageRoles, MessageStatuses, ScreenModes } from '@roundtable/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 import type { ChatStore } from '../../stores/chat/store';
 import { createChatStore } from '../../stores/chat/store';
@@ -501,10 +501,13 @@ describe('stream Initiation - Participant Order', () => {
   });
 
   it('handles custom priority order (user reordered)', () => {
+    const baseParticipant = createMockParticipants(1)[0];
+    if (!baseParticipant)
+      throw new Error('Expected base participant');
     const participants = [
-      { ...createMockParticipants(1)[0]!, priority: 2, modelId: 'model-c' },
-      { ...createMockParticipants(1)[0]!, priority: 0, modelId: 'model-a' },
-      { ...createMockParticipants(1)[0]!, priority: 1, modelId: 'model-b' },
+      { ...baseParticipant, priority: 2, modelId: 'model-c' },
+      { ...baseParticipant, priority: 0, modelId: 'model-a' },
+      { ...baseParticipant, priority: 1, modelId: 'model-b' },
     ];
 
     store.getState().setParticipants(participants);
@@ -815,7 +818,10 @@ describe('stream Initiation - Participant Configurations', () => {
 
   it('respects participant enabled/disabled state', () => {
     const participants = createMockParticipants(3);
-    participants[1]!.isEnabled = false; // Disable middle participant
+    const middleParticipant = participants[1];
+    if (!middleParticipant)
+      throw new Error('Expected middle participant');
+    middleParticipant.isEnabled = false; // Disable middle participant
 
     store.getState().setParticipants(participants);
 

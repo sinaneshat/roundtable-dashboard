@@ -1,4 +1,5 @@
 import { StripeSubscriptionStatuses, SubscriptionTiers, UIBillingIntervals } from '@roundtable/shared';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useState, useSyncExternalStore } from 'react';
 
 import { ChatPage } from '@/components/chat/chat-states';
@@ -14,10 +15,11 @@ import {
   useSubscriptionsQuery,
 } from '@/hooks';
 import { useAuthCheck } from '@/hooks/utils/use-auth-check';
-import { dynamic, Link, useRouter, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
-import type { Product, Subscription } from '@/types/billing';
+import dynamic from '@/lib/utils/dynamic';
+import type { Product, Subscription } from '@/services/api';
 
 const CancelSubscriptionDialog = dynamic(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => ({ default: m.CancelSubscriptionDialog })),
@@ -25,7 +27,7 @@ const CancelSubscriptionDialog = dynamic(
 );
 
 export function PublicPricingScreen() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const t = useTranslations();
   const { isAuthenticated } = useAuthCheck();
   const [processingPriceId, setProcessingPriceId] = useState<string | null>(null);
@@ -61,13 +63,15 @@ export function PublicPricingScreen() {
   const shouldShowLoading = !hasMounted || isLoadingProducts || (!hasValidProductData && !shouldShowError);
 
   const monthlyProducts = products
-    .filter(product =>
-      product.prices?.some(
+    .filter((product): product is typeof product & { prices: NonNullable<typeof product.prices> } =>
+      product.prices !== undefined
+      && product.prices !== null
+      && product.prices.some(
         price => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
       ))
     .map(product => ({
       ...product,
-      prices: product.prices!.filter(
+      prices: product.prices.filter(
         price => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
       ),
     }))
@@ -93,7 +97,7 @@ export function PublicPricingScreen() {
       }
     } else {
       const returnUrl = `/chat/pricing?priceId=${priceId}`;
-      router.push(`/auth/sign-up?redirect=${encodeURIComponent(returnUrl)}`);
+      navigate({ to: `/auth/sign-up?redirect=${encodeURIComponent(returnUrl)}` });
     }
   };
 
@@ -172,7 +176,7 @@ export function PublicPricingScreen() {
             <h2 className="text-xl font-semibold mb-2">{t('pricing.error.title')}</h2>
             <p className="text-muted-foreground mb-6">{t('pricing.error.description')}</p>
             <Button asChild>
-              <Link href="/">{t('common.backToHome')}</Link>
+              <Link to="/">{t('common.backToHome')}</Link>
             </Button>
           </div>
         </div>

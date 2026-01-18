@@ -17,15 +17,15 @@ import { createApiClient } from '@/lib/api/client';
 
 type AddParticipantEndpoint = ApiClientType['chat']['threads'][':id']['participants']['$post'];
 export type AddParticipantRequest = InferRequestType<AddParticipantEndpoint>;
-export type AddParticipantResponse = InferResponseType<AddParticipantEndpoint>;
+export type AddParticipantResponse = InferResponseType<AddParticipantEndpoint, 200>;
 
 type UpdateParticipantEndpoint = ApiClientType['chat']['participants'][':id']['$patch'];
 export type UpdateParticipantRequest = InferRequestType<UpdateParticipantEndpoint>;
-export type UpdateParticipantResponse = InferResponseType<UpdateParticipantEndpoint>;
+export type UpdateParticipantResponse = InferResponseType<UpdateParticipantEndpoint, 200>;
 
 type DeleteParticipantEndpoint = ApiClientType['chat']['participants'][':id']['$delete'];
 export type DeleteParticipantRequest = InferRequestType<DeleteParticipantEndpoint>;
-export type DeleteParticipantResponse = InferResponseType<DeleteParticipantEndpoint>;
+export type DeleteParticipantResponse = InferResponseType<DeleteParticipantEndpoint, 200>;
 
 // ============================================================================
 // Service Functions

@@ -4,9 +4,9 @@ import { memo, useCallback, useMemo } from 'react';
 
 import { CopyActionButton } from '@/components/chat/copy-actions/copy-action-button';
 import { useCopyToClipboard } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { formatRoundAsMarkdown } from '@/lib/utils';
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 type RoundCopyActionProps = {
   messages: UIMessage[];

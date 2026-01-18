@@ -210,14 +210,14 @@ describe('onRequestError Hook Patterns', () => {
       expect(shouldSkip).toBe(true);
     });
 
-    it('should skip in edge runtime', () => {
+    it('should skip in Cloudflare Pages runtime', () => {
       const runtime = 'edge';
       const shouldSkip = runtime === 'edge';
 
       expect(shouldSkip).toBe(true);
     });
 
-    it('should NOT skip in nodejs runtime in preview', () => {
+    it('should NOT skip in Node.js runtime in preview', () => {
       const runtime = 'nodejs';
       const env = 'preview';
       const shouldSkip = runtime === 'edge' || env === 'local';

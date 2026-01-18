@@ -109,7 +109,7 @@ export function showApiErrorToast(
   }
 
   // Add error code to description if available (for debugging)
-  if (errorDetails.code && process.env.NODE_ENV === 'development') {
+  if (errorDetails.code && import.meta.env.MODE === 'development') {
     description = `${description}\n\n(Error Code: ${errorDetails.code})`;
   }
 

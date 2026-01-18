@@ -4,7 +4,7 @@ import { cva } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
 
 import { Icons } from '@/components/icons';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 function Sheet(props: ComponentProps<typeof SheetPrimitive.Root>) {

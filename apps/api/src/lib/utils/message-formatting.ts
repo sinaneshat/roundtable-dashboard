@@ -119,10 +119,12 @@ export function formatThreadAsMarkdown(
   const messagesByRound = new Map<number, UIMessage[]>();
   for (const message of messages) {
     const roundNumber = getRoundNumber(message.metadata) ?? 0;
-    if (!messagesByRound.has(roundNumber)) {
-      messagesByRound.set(roundNumber, []);
+    const existing = messagesByRound.get(roundNumber);
+    if (existing) {
+      existing.push(message);
+    } else {
+      messagesByRound.set(roundNumber, [message]);
     }
-    messagesByRound.get(roundNumber)!.push(message);
   }
 
   // Sort rounds and format each

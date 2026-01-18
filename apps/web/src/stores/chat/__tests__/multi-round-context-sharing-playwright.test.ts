@@ -25,7 +25,7 @@ import {
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 // ============================================================================
 // TYPES
@@ -580,8 +580,11 @@ describe('multi-Round Message Context Sharing E2E', () => {
 
       // Round 0: Regenerated (simulated by removing and re-adding)
       // In real implementation, messages would be deleted and recreated
-      history.rounds[0]!.messages = history.rounds[0]!.messages.filter(m => m.role === UIMessageRoles.USER);
-      history.rounds[0]!.messages.push(
+      const round0 = history.rounds[0];
+      if (!round0)
+        throw new Error('expected round 0');
+      round0.messages = round0.messages.filter(m => m.role === UIMessageRoles.USER);
+      round0.messages.push(
         createTestAssistantMessage({
           id: 'thread-123_r0_p0_retry',
           content: 'Regenerated R0P0',

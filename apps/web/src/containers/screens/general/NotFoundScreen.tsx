@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router';
+
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,7 +10,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { Link, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 
 export default function NotFoundScreen() {
   const t = useTranslations();
@@ -28,7 +30,7 @@ export default function NotFoundScreen() {
         </EmptyHeader>
         <EmptyContent>
           <Button asChild size="lg">
-            <Link href="/">{t('pages.notFound.goHome')}</Link>
+            <Link to="/">{t('pages.notFound.goHome')}</Link>
           </Button>
         </EmptyContent>
       </Empty>

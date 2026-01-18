@@ -641,7 +641,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         // Index 2 >= participant count 2 → out of bounds
         expect(triggeredIndex).toBe(2);
         expect(participantCount).toBe(2);
-        expect(triggeredIndex! >= participantCount).toBe(true); // Would fail bounds check
+        if (triggeredIndex === undefined)
+          throw new Error('expected triggeredIndex to be defined');
+        expect(triggeredIndex >= participantCount).toBe(true); // Would fail bounds check
       });
     });
 
@@ -686,7 +688,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         const triggerIndex = state.nextParticipantToTrigger?.index;
         expect(triggerIndex).toBe(-1);
         expect(triggerIndex).toBeDefined();
-        expect(triggerIndex! < 0).toBe(true); // Would fail bounds check
+        if (triggerIndex === undefined)
+          throw new Error('expected triggerIndex to be defined');
+        expect(triggerIndex < 0).toBe(true); // Would fail bounds check
       });
 
       it('should handle empty participants array', () => {
@@ -698,7 +702,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         // Index 0 is out of bounds when participants is empty
         const triggerIndex = state.nextParticipantToTrigger?.index;
         expect(triggerIndex).toBeDefined();
-        expect(triggerIndex! >= state.selectedParticipants.length).toBe(true);
+        if (triggerIndex === undefined)
+          throw new Error('expected triggerIndex to be defined');
+        expect(triggerIndex >= state.selectedParticipants.length).toBe(true);
       });
 
       it('should handle missing participantId (null check)', () => {

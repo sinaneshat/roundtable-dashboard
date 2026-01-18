@@ -2,26 +2,22 @@
  * Pre-search orchestrator hook
  */
 
-import type { UseQueryResult } from '@tanstack/react-query';
-
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import { useThreadPreSearchesQuery } from '@/hooks/queries';
 import { transformPreSearches } from '@/lib/utils';
-import type { StoredPreSearch } from '@/types/api';
+import type { GetThreadPreSearchesResponse, StoredPreSearch } from '@/services/api';
 
 import { getStatusPriority, PRE_SEARCH_COMPARE_KEYS } from '../store-constants';
 import type { OrchestratorOptions, OrchestratorReturn } from './orchestrator-factory';
 import { createOrchestrator } from './orchestrator-factory';
 
-type PreSearchApiResponse = { success: boolean; data?: { items: StoredPreSearch[] } };
-
 const preSearchOrchestrator = createOrchestrator<
   StoredPreSearch,
   StoredPreSearch,
   number,
-  PreSearchApiResponse
+  GetThreadPreSearchesResponse
 >({
-  queryHook: useThreadPreSearchesQuery as unknown as (threadId: string, enabled: boolean) => UseQueryResult<PreSearchApiResponse>,
+  queryHook: useThreadPreSearchesQuery,
   useStoreHook: useChatStore,
   storeSelector: s => s.preSearches,
   storeSetter: s => s.setPreSearches,

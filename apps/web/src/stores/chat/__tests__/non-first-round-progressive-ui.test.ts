@@ -24,7 +24,7 @@
 import { MessageStatuses } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
-import type { PartialPreSearchData, StoredPreSearch } from '@/types/api';
+import type { PartialPreSearchData, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 

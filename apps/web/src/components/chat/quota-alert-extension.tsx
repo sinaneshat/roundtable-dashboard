@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 
 import { ChatAlertBanner } from '@/components/chat/chat-alert-banner';
 import { useUsageStatsQuery } from '@/hooks/queries';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 
 type QuotaAlertExtensionProps = {
   /** Minimum credits threshold - show alert when available credits fall below this */
@@ -27,7 +27,7 @@ export function QuotaAlertExtension({ minCreditsThreshold = 0 }: QuotaAlertExten
     if (!statsData?.success || !statsData.data) {
       return false;
     }
-    const { credits, plan } = statsData.data as any;
+    const { credits, plan } = statsData.data;
     // Only show for paid users - free users get FreeTrialAlert
     if (plan?.type !== PlanTypes.PAID) {
       return false;

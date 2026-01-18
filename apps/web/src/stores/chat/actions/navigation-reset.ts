@@ -18,15 +18,14 @@
  * Location: /src/stores/chat/actions/navigation-reset.ts
  * Used by: ChatNav component
  */
-
 import { useQueryClient } from '@tanstack/react-query';
+import { useLocation } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import { useModelPreferencesStore } from '@/components/providers/preferences-store-provider/context';
-import { usePathname } from '@/lib/compat';
-import { queryKeys } from '@/lib/data/query-keys';
+import { invalidationPatterns } from '@/lib/data/query-keys';
 
 /**
  * Hook that provides a callback to reset store when navigating to new chat
@@ -49,7 +48,7 @@ export function useNavigationReset() {
     thread: s.thread,
     createdThreadId: s.createdThreadId,
   })));
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const previousPathnameRef = useRef(pathname);
   const queryClient = useQueryClient();
 
@@ -62,14 +61,12 @@ export function useNavigationReset() {
   })));
 
   // Shared reset logic - invalidate queries and reset store
-  // ✅ TEXT STREAMING: Summaries are now moderator messages in chatMessage
-  // No separate summaries query to invalidate
   const doReset = useCallback(() => {
     const effectiveThreadId = thread?.id || createdThreadId;
     if (effectiveThreadId) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.messages(effectiveThreadId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.preSearches(effectiveThreadId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.feedback(effectiveThreadId) });
+      invalidationPatterns.leaveThread(effectiveThreadId).forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
     }
     resetToNewChat(preferences);
   }, [thread, createdThreadId, queryClient, resetToNewChat, preferences]);

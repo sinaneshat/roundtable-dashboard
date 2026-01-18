@@ -419,13 +419,22 @@ describe('navigation Reset - Correct Invalidation', () => {
     ];
 
     // Navigate to /chat triggers invalidation (navigation-reset.ts)
-    expect(invalidationScenarios[0]!.shouldInvalidate).toBe(true);
+    const scenario0 = invalidationScenarios[0];
+    if (!scenario0)
+      throw new Error('Expected scenario 0');
+    expect(scenario0.shouldInvalidate).toBe(true);
 
     // Round submission does NOT trigger invalidation
-    expect(invalidationScenarios[1]!.shouldInvalidate).toBe(false);
+    const scenario1 = invalidationScenarios[1];
+    if (!scenario1)
+      throw new Error('Expected scenario 1');
+    expect(scenario1.shouldInvalidate).toBe(false);
 
     // Feedback mutation triggers invalidation (chat-mutations.ts)
-    expect(invalidationScenarios[2]!.shouldInvalidate).toBe(true);
+    const scenario2 = invalidationScenarios[2];
+    if (!scenario2)
+      throw new Error('Expected scenario 2');
+    expect(scenario2.shouldInvalidate).toBe(true);
   });
 });
 
@@ -457,7 +466,7 @@ describe('sidebar Chat List - No Prefetching', () => {
 
     // User hovers - enable prefetch
     shouldPrefetch = true;
-    expect(shouldPrefetch ? null : false).toBe(null); // null = use Next.js default
+    expect(shouldPrefetch ? null : false).toBe(null); // null = use default prefetch behavior
   });
 
   it('should NOT prefetch thread details for all sidebar items on load', () => {

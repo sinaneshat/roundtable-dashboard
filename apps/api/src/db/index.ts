@@ -92,8 +92,7 @@ function initLocalDb() {
  */
 function getD1Binding(): D1Database | null {
   try {
-    const cfEnv = workersEnv as unknown as Record<string, unknown>;
-    return (cfEnv.DB as D1Database) || null;
+    return workersEnv.DB || null;
   } catch {
     return null;
   }
@@ -104,8 +103,7 @@ function getD1Binding(): D1Database | null {
  */
 function getKVBinding(): KVNamespace | null {
   try {
-    const cfEnv = workersEnv as unknown as Record<string, unknown>;
-    return (cfEnv.KV as KVNamespace) || null;
+    return workersEnv.KV || null;
   } catch {
     return null;
   }
@@ -276,6 +274,9 @@ export type DbType = typeof db;
 
 // Export schema for Better Auth CLI compatibility
 export { schema };
+
+// Export KV binding getter for services that need direct KV access
+export { getKVBinding };
 
 // Export batch-related types for TypeScript enforcement
 export type { BatchableOperation, BatchResults, D1BatchDatabase } from './d1-types';

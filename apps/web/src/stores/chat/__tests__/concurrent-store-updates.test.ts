@@ -608,8 +608,13 @@ describe('concurrent Store Updates', () => {
       state.setMessages(messages);
 
       // Race: Multiple concurrent updates with different orderings
-      const update1 = [messages[2]!, messages[1]!, messages[0]!]; // Reversed
-      const update2 = [messages[1]!, messages[0]!, messages[2]!]; // Mixed
+      const msg0 = messages[0];
+      const msg1 = messages[1];
+      const msg2 = messages[2];
+      if (!msg0 || !msg1 || !msg2)
+        throw new Error('expected messages');
+      const update1 = [msg2, msg1, msg0]; // Reversed
+      const update2 = [msg1, msg0, msg2]; // Mixed
       const update3 = messages; // Correct order
 
       state.setMessages(update1);
@@ -726,8 +731,10 @@ describe('concurrent Store Updates', () => {
 
       // All messages should be properly ordered by round and participant
       for (let i = 1; i < finalMessages.length; i++) {
-        const prev = finalMessages[i - 1]!;
-        const curr = finalMessages[i]!;
+        const prev = finalMessages[i - 1];
+        const curr = finalMessages[i];
+        if (!prev || !curr)
+          throw new Error('expected messages at index');
 
         const prevRound = prev.metadata?.roundNumber ?? -1;
         const currRound = curr.metadata?.roundNumber ?? -1;

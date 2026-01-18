@@ -7,10 +7,10 @@
  * NOTE: For subscription mocks, use the factories from subscription-mocks.ts
  */
 
+import type { ApiErrorResponse } from '@roundtable/shared';
 import { UIBillingIntervals } from '@roundtable/shared';
 
-import type { GetProductResponse, ListProductsResponse } from '@/services/api';
-import type { Price, Product } from '@/types/billing';
+import type { GetProductResponse, ListProductsResponse, Price, Product } from '@/services/api';
 
 /**
  * Creates a mock price for testing
@@ -186,7 +186,7 @@ export function createEmptyProductsListResponse(): ListProductsResponse {
 /**
  * Creates a product error API response
  */
-export function createProductErrorResponse(message = 'Product not found'): GetProductResponse {
+export function createProductErrorResponse(message = 'Product not found'): ApiErrorResponse {
   return {
     success: false,
     error: {
@@ -199,7 +199,7 @@ export function createProductErrorResponse(message = 'Product not found'): GetPr
 /**
  * Creates a products list error API response
  */
-export function createProductsListErrorResponse(message = 'Failed to fetch products'): ListProductsResponse {
+export function createProductsListErrorResponse(message = 'Failed to fetch products'): ApiErrorResponse {
   return {
     success: false,
     error: {

@@ -1,8 +1,28 @@
+import type { ChatMode } from '@roundtable/shared';
 import { ChatModeSchema } from '@roundtable/shared';
 import { z } from 'zod';
 
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
-import { MessageContentSchema } from '@/types/api';
+
+const MessageContentSchema = z.string();
+
+type CreateParticipantPayload = {
+  modelId: string;
+  role?: string | null;
+  customRoleId?: string | null;
+  temperature?: number;
+  maxTokens?: number;
+  systemPrompt?: string;
+};
+
+type CreateThreadPayload = {
+  title?: string;
+  mode?: ChatMode;
+  enableWebSearch?: boolean;
+  participants: CreateParticipantPayload[];
+  firstMessage: string;
+  attachmentIds?: string[];
+};
 
 // ============================================================================
 // FORM SCHEMAS
@@ -22,13 +42,11 @@ export type ThreadInputFormData = z.infer<typeof ThreadInputFormSchema>;
 export function toCreateThreadRequest(
   data: ChatInputFormData,
   attachmentIds?: string[],
-): any {
+): CreateThreadPayload {
   return {
     title: 'New Chat',
     mode: data.mode,
     enableWebSearch: data.enableWebSearch ?? false,
-    // ✅ FIX: CreateParticipantSchema omits id, priority, isEnabled
-    // Priority is determined by array order on backend
     participants: data.participants.map(p => ({
       modelId: p.modelId,
       role: p.role || undefined,

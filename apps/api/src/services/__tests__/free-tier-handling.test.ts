@@ -274,7 +274,9 @@ describe('free Tier Identification', () => {
     const userId = 'free_user_2';
     createFreeUser(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.planType).toBe(PlanTypes.FREE);
   });
 
@@ -289,7 +291,9 @@ describe('free Tier Identification', () => {
     const userId = 'free_user_3';
     createFreeUser(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.monthlyCredits).toBe(0);
   });
 
@@ -297,7 +301,9 @@ describe('free Tier Identification', () => {
     const userId = 'free_user_4';
     createFreeUser(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.lastRefillAt).toBeNull();
     expect(balance.nextRefillAt).toBeNull();
   });
@@ -306,7 +312,9 @@ describe('free Tier Identification', () => {
     const userId = 'free_user_5';
     createFreeUser(userId);
 
-    const usage = mockState.userChatUsages.get(userId)!;
+    const usage = mockState.userChatUsages.get(userId);
+    if (!usage)
+      throw new Error('Usage not found');
     const config = TIER_CONFIG[usage.subscriptionTier];
 
     expect(config.quotas.threadsPerMonth).toBe(1);
@@ -334,7 +342,9 @@ describe('free Tier Permissions', () => {
       const userId = 'pro_user_1';
       createProUser(userId);
 
-      const usage = mockState.userChatUsages.get(userId)!;
+      const usage = mockState.userChatUsages.get(userId);
+      if (!usage)
+        throw new Error('Usage not found');
       usage.threadsCreated = 100;
 
       expect(checkThreadQuota(userId)).toBe(true);
@@ -377,7 +387,9 @@ describe('free Tier Permissions', () => {
       const userId = 'pro_user_3';
       createProUser(userId);
 
-      const usage = mockState.userChatUsages.get(userId)!;
+      const usage = mockState.userChatUsages.get(userId);
+      if (!usage)
+        throw new Error('Usage not found');
       usage.customRolesCreated = 5;
 
       expect(checkCustomRoleQuota(userId)).toBe(true);
@@ -514,7 +526,9 @@ describe('upgrade Eligibility Checks', () => {
       const userId = 'pro_user_1';
       createProUser(userId);
 
-      const balance = mockState.userCreditBalances.get(userId)!;
+      const balance = mockState.userCreditBalances.get(userId);
+      if (!balance)
+        throw new Error('Balance not found');
       expect(balance.planType).toBe(PlanTypes.PAID);
     });
   });
@@ -563,8 +577,12 @@ describe('tier Transition Logic', () => {
       const userId = 'upgrade_user_1';
       createFreeUser(userId, { balance: 2000 });
 
-      const balanceBefore = mockState.userCreditBalances.get(userId)!;
-      const usageBefore = mockState.userChatUsages.get(userId)!;
+      const balanceBefore = mockState.userCreditBalances.get(userId);
+      if (!balanceBefore)
+        throw new Error('Balance not found');
+      const usageBefore = mockState.userChatUsages.get(userId);
+      if (!usageBefore)
+        throw new Error('Usage not found');
 
       expect(balanceBefore.planType).toBe(PlanTypes.FREE);
       expect(usageBefore.subscriptionTier).toBe(SubscriptionTiers.FREE);
@@ -583,8 +601,12 @@ describe('tier Transition Logic', () => {
         subscriptionTier: SubscriptionTiers.PRO,
       });
 
-      const balanceAfter = mockState.userCreditBalances.get(userId)!;
-      const usageAfter = mockState.userChatUsages.get(userId)!;
+      const balanceAfter = mockState.userCreditBalances.get(userId);
+      if (!balanceAfter)
+        throw new Error('Balance not found');
+      const usageAfter = mockState.userChatUsages.get(userId);
+      if (!usageAfter)
+        throw new Error('Usage not found');
 
       expect(balanceAfter.planType).toBe(PlanTypes.PAID);
       expect(usageAfter.subscriptionTier).toBe(SubscriptionTiers.PRO);
@@ -595,20 +617,29 @@ describe('tier Transition Logic', () => {
       const userId = 'upgrade_user_2';
       createFreeUser(userId, { balance: 1500 });
 
-      const _balanceBefore = mockState.userCreditBalances.get(userId)!.balance;
+      const balanceBefore = mockState.userCreditBalances.get(userId);
+      if (!balanceBefore)
+        throw new Error('Balance not found');
 
-      const updated = mockState.userCreditBalances.get(userId)!;
+      const updated = mockState.userCreditBalances.get(userId);
+      if (!updated)
+        throw new Error('Balance not found');
       updated.balance += CREDIT_CONFIG.PLANS.paid.monthlyCredits;
       updated.monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
-      expect(mockState.userCreditBalances.get(userId)!.balance).toBe(2_001_500);
+      const balanceAfter = mockState.userCreditBalances.get(userId);
+      if (!balanceAfter)
+        throw new Error('Balance not found');
+      expect(balanceAfter.balance).toBe(2_001_500);
     });
 
     it('should grant monthly credits on upgrade', () => {
       const userId = 'upgrade_user_3';
       createFreeUser(userId);
 
-      const updated = mockState.userCreditBalances.get(userId)!;
+      const updated = mockState.userCreditBalances.get(userId);
+      if (!updated)
+        throw new Error('Balance not found');
       updated.monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       expect(updated.monthlyCredits).toBe(2_000_000);
@@ -618,7 +649,9 @@ describe('tier Transition Logic', () => {
       const userId = 'upgrade_user_4';
       createFreeUser(userId);
 
-      const updated = mockState.userCreditBalances.get(userId)!;
+      const updated = mockState.userCreditBalances.get(userId);
+      if (!updated)
+        throw new Error('Balance not found');
       const now = new Date();
       updated.lastRefillAt = now;
       updated.nextRefillAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -631,7 +664,9 @@ describe('tier Transition Logic', () => {
       const userId = 'upgrade_user_5';
       createFreeUser(userId, { threadsCreated: 1 });
 
-      const usageBefore = mockState.userChatUsages.get(userId)!;
+      const usageBefore = mockState.userChatUsages.get(userId);
+      if (!usageBefore)
+        throw new Error('Usage not found');
       expect(checkThreadQuota(userId)).toBe(false);
 
       usageBefore.subscriptionTier = SubscriptionTiers.PRO;
@@ -644,7 +679,9 @@ describe('tier Transition Logic', () => {
       const userId = 'downgrade_user_1';
       createProUser(userId);
 
-      const usage = mockState.userChatUsages.get(userId)!;
+      const usage = mockState.userChatUsages.get(userId);
+      if (!usage)
+        throw new Error('Usage not found');
       usage.pendingTierChange = SubscriptionTiers.FREE;
 
       expect(hasPendingDowngrade(userId)).toBe(true);
@@ -654,20 +691,26 @@ describe('tier Transition Logic', () => {
       const userId = 'downgrade_user_2';
       createProUser(userId, { balance: 50_000 });
 
-      const balanceBefore = mockState.userCreditBalances.get(userId)!.balance;
+      const balanceBefore = mockState.userCreditBalances.get(userId);
+      if (!balanceBefore)
+        throw new Error('Balance not found');
 
-      const updated = mockState.userCreditBalances.get(userId)!;
+      const updated = mockState.userCreditBalances.get(userId);
+      if (!updated)
+        throw new Error('Balance not found');
       updated.planType = PlanTypes.FREE;
       updated.monthlyCredits = 0;
 
-      expect(updated.balance).toBe(balanceBefore);
+      expect(updated.balance).toBe(balanceBefore.balance);
     });
 
     it('should stop monthly refills on downgrade', () => {
       const userId = 'downgrade_user_3';
       createProUser(userId);
 
-      const updated = mockState.userCreditBalances.get(userId)!;
+      const updated = mockState.userCreditBalances.get(userId);
+      if (!updated)
+        throw new Error('Balance not found');
       updated.planType = PlanTypes.FREE;
       updated.monthlyCredits = 0;
 
@@ -678,7 +721,9 @@ describe('tier Transition Logic', () => {
       const userId = 'downgrade_user_4';
       createProUser(userId);
 
-      const usage = mockState.userChatUsages.get(userId)!;
+      const usage = mockState.userChatUsages.get(userId);
+      if (!usage)
+        throw new Error('Usage not found');
       usage.pendingTierChange = SubscriptionTiers.FREE;
 
       expect(usage.subscriptionTier).toBe(SubscriptionTiers.PRO);
@@ -689,7 +734,9 @@ describe('tier Transition Logic', () => {
       const userId = 'downgrade_user_5';
       createProUser(userId, { balance: 75_000 });
 
-      const updated = mockState.userCreditBalances.get(userId)!;
+      const updated = mockState.userCreditBalances.get(userId);
+      if (!updated)
+        throw new Error('Balance not found');
       updated.planType = PlanTypes.FREE;
       updated.monthlyCredits = 0;
 
@@ -702,7 +749,9 @@ describe('tier Transition Logic', () => {
       const userId = 'grace_user_1';
       createProUser(userId);
 
-      const usage = mockState.userChatUsages.get(userId)!;
+      const usage = mockState.userChatUsages.get(userId);
+      if (!usage)
+        throw new Error('Usage not found');
       usage.pendingTierChange = SubscriptionTiers.FREE;
 
       expect(usage.subscriptionTier).toBe(SubscriptionTiers.PRO);
@@ -713,7 +762,9 @@ describe('tier Transition Logic', () => {
       const userId = 'grace_user_2';
       createProUser(userId);
 
-      const usage = mockState.userChatUsages.get(userId)!;
+      const usage = mockState.userChatUsages.get(userId);
+      if (!usage)
+        throw new Error('Usage not found');
       usage.pendingTierChange = SubscriptionTiers.FREE;
 
       usage.subscriptionTier = SubscriptionTiers.FREE;
@@ -727,7 +778,9 @@ describe('tier Transition Logic', () => {
       const userId = 'grace_user_3';
       createProUser(userId);
 
-      const usage = mockState.userChatUsages.get(userId)!;
+      const usage = mockState.userChatUsages.get(userId);
+      if (!usage)
+        throw new Error('Usage not found');
       usage.pendingTierChange = SubscriptionTiers.FREE;
 
       expect(usage.subscriptionTier).toBe(SubscriptionTiers.PRO);
@@ -744,7 +797,9 @@ describe('tier Transition Logic', () => {
         analysisGenerated: 10,
       });
 
-      const usage = mockState.userChatUsages.get(userId)!;
+      const usage = mockState.userChatUsages.get(userId);
+      if (!usage)
+        throw new Error('Usage not found');
       usage.threadsCreated = 0;
       usage.messagesCreated = 0;
       usage.analysisGenerated = 0;
@@ -758,7 +813,9 @@ describe('tier Transition Logic', () => {
       const userId = 'reset_user_2';
       createProUser(userId);
 
-      const usage = mockState.userChatUsages.get(userId)!;
+      const usage = mockState.userChatUsages.get(userId);
+      if (!usage)
+        throw new Error('Usage not found');
       usage.pendingTierChange = SubscriptionTiers.FREE;
 
       usage.subscriptionTier = usage.pendingTierChange;
@@ -818,7 +875,9 @@ describe('edge Cases and Boundary Conditions', () => {
 
     expect(checkMessageQuota(userId)).toBe(true);
 
-    const usage = mockState.userChatUsages.get(userId)!;
+    const usage = mockState.userChatUsages.get(userId);
+    if (!usage)
+      throw new Error('Usage not found');
     usage.messagesCreated = 100;
 
     expect(checkMessageQuota(userId)).toBe(false);
@@ -836,7 +895,9 @@ describe('edge Cases and Boundary Conditions', () => {
     const userId = 'edge_user_3';
     createFreeUser(userId, { balance: 0 });
 
-    const updated = mockState.userCreditBalances.get(userId)!;
+    const updated = mockState.userCreditBalances.get(userId);
+    if (!updated)
+      throw new Error('Balance not found');
     updated.balance += CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
     expect(updated.balance).toBe(2_000_000);
@@ -846,7 +907,9 @@ describe('edge Cases and Boundary Conditions', () => {
     const userId = 'edge_user_4';
     createFreeUser(userId, { balance: 5000, reservedCredits: 2000 });
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     const available = balance.balance - balance.reservedCredits;
 
     expect(available).toBe(3000);

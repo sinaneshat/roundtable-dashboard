@@ -28,8 +28,8 @@
 import { ChatModes, MessageStatuses, ThreadStatuses } from '@roundtable/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 import { createChatStore } from '@/stores/chat';
-import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
 
 // ============================================================================
 // TEST SETUP

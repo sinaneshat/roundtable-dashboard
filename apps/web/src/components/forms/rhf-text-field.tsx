@@ -47,7 +47,9 @@ export function RHFTextField<TFieldValues extends FieldValues = FieldValues>({
           {title && <FormLabel>{title}</FormLabel>}
           <FormControl>
             <Input
-              {...field as any}
+              ref={field.ref}
+              name={field.name}
+              onBlur={field.onBlur}
               required={required}
               disabled={disabled}
               data-testid={field.name}

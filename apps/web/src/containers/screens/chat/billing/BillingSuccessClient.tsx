@@ -1,37 +1,46 @@
 import { PlanTypes, PurchaseTypes, StatusVariants, StripeSubscriptionStatuses, SubscriptionTiers } from '@roundtable/shared';
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { StatusPage, StatusPageActions } from '@/components/billing';
-import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
-import { useRouter, useTranslations } from '@/lib/compat';
-import type { Subscription } from '@/types/billing';
+import { queryKeys } from '@/lib/data/query-keys';
+import { useTranslations } from '@/lib/i18n';
+import { createStorageHelper } from '@/lib/utils/safe-storage';
+import type { Subscription, SyncAfterCheckoutResponse } from '@/services/api';
+import { syncAfterCheckoutService } from '@/services/api';
+
+type ApiResponse<T> = { success: boolean; data?: T };
+
+const syncResultStorage = createStorageHelper<SyncAfterCheckoutResponse>('billing_sync_result', 'session');
 
 export function BillingSuccessClient() {
-  const router = useRouter();
   const t = useTranslations();
-  const [isReady, setIsReady] = useState(false);
-
-  const { countdown } = useCountdownRedirect({
-    enabled: isReady,
-    redirectPath: '/chat',
-  });
-
-  const syncMutation = useSyncAfterCheckoutMutation();
+  const queryClient = useQueryClient();
 
   const subscriptionsQuery = useSubscriptionsQuery();
   const usageStatsQuery = useUsageStatsQuery();
 
   const hasInitiatedSync = useRef(false);
-  const readyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  type ApiResponse<T> = { success: boolean; data?: T };
+  // State to track sync completion - survives remounts via sessionStorage
+  const [syncComplete, setSyncComplete] = useState(() => {
+    return syncResultStorage.get() !== null;
+  });
+  const [storedResult, setStoredResult] = useState<SyncAfterCheckoutResponse | null>(() => {
+    return syncResultStorage.get();
+  });
+  const [isLoading, setIsLoading] = useState(!syncResultStorage.get());
+
+  // Enable countdown only when sync is complete (from mutation or storage)
+  const { countdown } = useCountdownRedirect({
+    enabled: syncComplete,
+    redirectPath: '/chat',
+    onComplete: syncResultStorage.clear,
+  });
+
   type SubscriptionsResponse = { items?: Subscription[] };
-  type SyncResponse = {
-    purchaseType?: string;
-    tierChange?: { newTier?: string };
-  };
   type UsageStatsResponse = {
     plan?: { type?: string };
   };
@@ -39,7 +48,8 @@ export function BillingSuccessClient() {
   const subscriptionData = subscriptionsQuery.data as ApiResponse<SubscriptionsResponse> | undefined;
   const usageStats = usageStatsQuery.data as ApiResponse<UsageStatsResponse> | undefined;
 
-  const syncResult = syncMutation.data as ApiResponse<SyncResponse> | undefined;
+  // Use stored result
+  const syncResult = storedResult;
   const syncedTier = syncResult?.data?.tierChange?.newTier;
 
   const displaySubscription = useMemo((): Subscription | null => {
@@ -50,53 +60,39 @@ export function BillingSuccessClient() {
     );
   }, [subscriptionData]);
 
+  // Track sync errors
+  const [syncError, setSyncError] = useState(false);
+
+  // Initiate sync on mount - call service directly to avoid mutation hook's async onSuccess issues
   useEffect(() => {
-    if (!hasInitiatedSync.current) {
-      syncMutation.mutate(undefined);
+    if (!hasInitiatedSync.current && !syncComplete) {
       hasInitiatedSync.current = true;
-      router.prefetch('/chat');
+      setIsLoading(true);
+
+      syncAfterCheckoutService()
+        .then((data) => {
+          const result = data as SyncAfterCheckoutResponse;
+          syncResultStorage.set(result);
+          setStoredResult(result);
+          setSyncComplete(true);
+          setIsLoading(false);
+
+          queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
+        })
+        .catch((error) => {
+          console.error('[BillingSuccessClient] Sync failed:', error);
+          syncResultStorage.clear();
+          setSyncError(true);
+          setIsLoading(false);
+        });
     }
-  }, [syncMutation, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => {
-    if (isReady || !syncMutation.isSuccess) {
-      return;
-    }
-
-    const queriesFetched
-      = subscriptionsQuery.isFetched && !subscriptionsQuery.isFetching
-        && usageStatsQuery.isFetched && !usageStatsQuery.isFetching;
-
-    if (queriesFetched) {
-      startTransition(() => setIsReady(true));
-      return;
-    }
-
-    if (readyTimeoutRef.current) {
-      clearTimeout(readyTimeoutRef.current);
-    }
-
-    readyTimeoutRef.current = setTimeout(() => {
-      setIsReady(true);
-      readyTimeoutRef.current = null;
-    }, 2000);
-
-    return () => {
-      if (readyTimeoutRef.current) {
-        clearTimeout(readyTimeoutRef.current);
-        readyTimeoutRef.current = null;
-      }
-    };
-  }, [
-    syncMutation.isSuccess,
-    subscriptionsQuery.isFetched,
-    subscriptionsQuery.isFetching,
-    usageStatsQuery.isFetched,
-    usageStatsQuery.isFetching,
-    isReady,
-  ]);
-
-  const isLoadingData = syncMutation.isPending || (!isReady && !syncMutation.isError);
+  // Check if we have a completed sync (from mutation or storage)
+  const isLoadingData = isLoading && !syncComplete;
 
   if (isLoadingData) {
     return (
@@ -108,7 +104,7 @@ export function BillingSuccessClient() {
     );
   }
 
-  if (syncMutation.isError) {
+  if (syncError) {
     return (
       <StatusPage
         variant={StatusVariants.ERROR}
@@ -176,7 +172,7 @@ export function BillingSuccessClient() {
             <>
               <span className="text-muted-foreground/50">•</span>
               <span>
-                Active until
+                {t('billing.success.planLimits.activeUntilLabel')}
                 {' '}
                 {activeUntilDate}
               </span>

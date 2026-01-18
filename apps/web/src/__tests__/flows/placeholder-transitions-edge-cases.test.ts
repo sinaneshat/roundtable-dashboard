@@ -301,7 +301,10 @@ describe('configuration Changes Impact on Placeholders', () => {
 
     const state = store.getState();
     expect(state.participants).toHaveLength(3);
-    expect(state.participants[0]!.priority).toBe(0);
+    const firstParticipant = state.participants[0];
+    if (!firstParticipant)
+      throw new Error('Expected first participant');
+    expect(firstParticipant.priority).toBe(0);
 
     // UI shows placeholders in new order
   });
@@ -331,7 +334,10 @@ describe('pre-Search Placeholder Integration', () => {
     const state = store.getState();
     expect(state.thread?.enableWebSearch).toBe(true);
     expect(state.preSearches).toHaveLength(1);
-    expect(state.preSearches[0]!.status).toBe(MessageStatuses.PENDING);
+    const statePreSearch = state.preSearches[0];
+    if (!statePreSearch)
+      throw new Error('Expected pre-search');
+    expect(statePreSearch.status).toBe(MessageStatuses.PENDING);
 
     // UI Flow:
     // 1. Pre-search placeholder (top of round)
@@ -352,21 +358,30 @@ describe('pre-Search Placeholder Integration', () => {
     store.getState().setStreamingRoundNumber(0);
 
     let state = store.getState();
-    expect(state.preSearches[0]!.status).toBe(MessageStatuses.PENDING);
+    let currentPreSearch = state.preSearches[0];
+    if (!currentPreSearch)
+      throw new Error('Expected pre-search');
+    expect(currentPreSearch.status).toBe(MessageStatuses.PENDING);
 
     // Streaming state
     const streamingPreSearch = createPreSearch(0, MessageStatuses.STREAMING);
     store.getState().setPreSearches([streamingPreSearch]);
 
     state = store.getState();
-    expect(state.preSearches[0]!.status).toBe(MessageStatuses.STREAMING);
+    currentPreSearch = state.preSearches[0];
+    if (!currentPreSearch)
+      throw new Error('Expected pre-search');
+    expect(currentPreSearch.status).toBe(MessageStatuses.STREAMING);
 
     // Complete state
     const completePreSearch = createPreSearch(0, MessageStatuses.COMPLETE);
     store.getState().setPreSearches([completePreSearch]);
 
     state = store.getState();
-    expect(state.preSearches[0]!.status).toBe(MessageStatuses.COMPLETE);
+    currentPreSearch = state.preSearches[0];
+    if (!currentPreSearch)
+      throw new Error('Expected pre-search');
+    expect(currentPreSearch.status).toBe(MessageStatuses.COMPLETE);
 
     // Placeholder remains visible throughout, updating its visual state
   });
@@ -388,7 +403,10 @@ describe('pre-Search Placeholder Integration', () => {
 
     const state = store.getState();
     expect(state.streamingRoundNumber).toBe(0);
-    expect(state.preSearches[0]!.status).toBe(MessageStatuses.STREAMING);
+    const preSearchItem = state.preSearches[0];
+    if (!preSearchItem)
+      throw new Error('Expected pre-search');
+    expect(preSearchItem.status).toBe(MessageStatuses.STREAMING);
     expect(state.participants).toHaveLength(2);
 
     // Both pre-search AND participant placeholders visible
@@ -411,7 +429,10 @@ describe('pre-Search Placeholder Integration', () => {
     store.getState().setStreamingRoundNumber(0);
 
     const state = store.getState();
-    expect(state.preSearches[0]!.status).toBe(MessageStatuses.FAILED);
+    const failedSearch = state.preSearches[0];
+    if (!failedSearch)
+      throw new Error('Expected pre-search');
+    expect(failedSearch.status).toBe(MessageStatuses.FAILED);
     expect(state.streamingRoundNumber).toBe(0);
 
     // Pre-search shows error state

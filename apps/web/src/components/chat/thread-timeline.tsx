@@ -5,10 +5,9 @@ import { ScrollFadeEntrance, ScrollFromTop } from '@/components/ui/motion';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
 import { getModeratorMetadata, isModeratorMessage } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { StoredPreSearch } from '@/types/api';
+import type { ApiParticipant, StoredPreSearch } from '@/services/api';
 
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
@@ -25,13 +24,13 @@ type ThreadTimelineProps = {
     name: string;
     image: string | null;
   };
-  participants: ChatParticipantWithSettings[];
+  participants: ApiParticipant[];
   threadId: string;
   threadTitle?: string;
 
   isStreaming?: boolean;
   currentParticipantIndex?: number;
-  currentStreamingParticipant?: ChatParticipantWithSettings | null;
+  currentStreamingParticipant?: ApiParticipant | null;
   streamingRoundNumber?: number | null;
   onRetry?: () => void;
   isReadOnly?: boolean;
@@ -141,8 +140,8 @@ export function ThreadTimeline({
             <UnifiedErrorBoundary context="configuration">
               <ConfigurationChangesGroup
                 group={{
-                  timestamp: typeof item.data[0]!.createdAt === 'string' ? item.data[0]!.createdAt : new Date(item.data[0]!.createdAt).toISOString(),
-                  changes: item.data as any,
+                  timestamp: item.data[0] && typeof item.data[0].createdAt === 'string' ? item.data[0].createdAt : (item.data[0] ? new Date(item.data[0].createdAt).toISOString() : new Date().toISOString()),
+                  changes: item.data,
                 }}
                 isReadOnly={isReadOnly}
               />
@@ -224,7 +223,7 @@ export function ThreadTimeline({
                   <ThreadSummaryCopyAction
                     key={`copy-thread-${threadId}`}
                     messages={allMessages}
-                    participants={participants as any}
+                    participants={participants}
                     threadTitle={threadTitle}
                   />
                 </Actions>

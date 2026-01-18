@@ -12,7 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
+import { GC_TIMES, STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadMessagesService } from '@/services/api';
 
 /**
@@ -30,7 +30,7 @@ export function useThreadMessagesQuery(threadId: string, enabled?: boolean) {
     queryKey: queryKeys.threads.messages(threadId),
     queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadMessages,
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
     throwOnError: false,

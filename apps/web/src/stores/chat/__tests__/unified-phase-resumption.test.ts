@@ -587,7 +587,10 @@ describe('unified Phase Resumption', () => {
       const newContent = { type: 'text' as const, text: 'Updated content', state: 'done' as const };
 
       if (existingIndex >= 0) {
-        messages[existingIndex]!.parts = [newContent];
+        const message = messages[existingIndex];
+        if (message) {
+          message.parts = [newContent];
+        }
       }
 
       // Should still have 2 messages, not 3

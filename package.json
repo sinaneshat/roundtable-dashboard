@@ -52,11 +52,12 @@
     "lint:fix": "eslint . --fix",
     "lint:modified": "git diff --name-only --diff-filter=ACM | grep -E '\\.(ts|tsx|js|jsx)$' | xargs -I {} sh -c 'echo \"Checking {}...\" && eslint {} --max-warnings 10'",
     "check-types": "turbo run check-types",
+    "cf-typegen": "cd apps/api && pnpm cf-typegen && cd ../web && pnpm cf-typegen",
+    "cf-typegen:check": "cd apps/api && pnpm cf-typegen && git diff --exit-code cloudflare-env.d.ts || (echo '⚠️  cloudflare-env.d.ts is out of date. Run pnpm cf-typegen and commit.' && exit 1)",
     "generate:icons": "npx @svgr/cli --memo --ref --typescript --jsx-runtime automatic --prettier-config .prettierrc --out-dir apps/web/src/icons/component --icon --replace-attr-values -- apps/web/src/icons/svg --ignore-existing",
     "preview": "turbo run preview",
     "deploy:preview": "turbo run deploy:preview",
     "deploy:production": "turbo run deploy:production",
-    "deploy:prod": "turbo run deploy:production",
     "db:generate": "cd apps/api && pnpm exec drizzle-kit generate",
     "db:migrate:local": "cd apps/api && pnpm exec wrangler d1 migrations apply DB --local",
     "db:migrate:preview": "cd apps/api && pnpm exec wrangler d1 migrations apply DB --remote --env=preview",
@@ -156,6 +157,7 @@
     "react-hook-form": "^7.70.0",
     "react-markdown": "^10.1.0",
     "recharts": "3.6.0",
+    "satori": "^0.19.1",
     "shiki": "^3.20.0",
     "simplex-noise": "^4.0.3",
     "stoker": "^2.0.1",
@@ -232,7 +234,7 @@
     "typescript": "5.9.3",
     "vite-tsconfig-paths": "^6.0.3",
     "vitest": "^4.0.16",
-    "wrangler": "^4.54.0"
+    "wrangler": "^4.59.2"
   },
   "config": {
     "commitizen": {

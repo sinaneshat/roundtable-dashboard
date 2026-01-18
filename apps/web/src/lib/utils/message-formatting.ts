@@ -2,7 +2,7 @@ import { MessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 
 import { getAssistantMetadata, getRoundNumber, isModeratorMessage, isTextPart } from '@/lib/utils';
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 export function getParticipantFromMessage(
   message: UIMessage,
@@ -119,10 +119,12 @@ export function formatThreadAsMarkdown(
   const messagesByRound = new Map<number, UIMessage[]>();
   for (const message of messages) {
     const roundNumber = getRoundNumber(message.metadata) ?? 0;
-    if (!messagesByRound.has(roundNumber)) {
-      messagesByRound.set(roundNumber, []);
+    const roundMessages = messagesByRound.get(roundNumber);
+    if (roundMessages) {
+      roundMessages.push(message);
+    } else {
+      messagesByRound.set(roundNumber, [message]);
     }
-    messagesByRound.get(roundNumber)!.push(message);
   }
 
   // Sort rounds and format each

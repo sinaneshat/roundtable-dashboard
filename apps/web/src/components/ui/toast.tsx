@@ -128,7 +128,7 @@ function ToastDescription({
   );
 }
 
-type ToastActionElement = ReactElement<typeof ToastAction>;
+type ToastActionElement = ReactElement<ComponentProps<typeof ToastAction>, typeof ToastAction>;
 
 export {
   Toast,

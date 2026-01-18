@@ -9,19 +9,19 @@
  */
 
 import { ChatModes, MessageRoles, MessageStatuses } from '@roundtable/shared';
+import { renderHook } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
-import { renderHook } from '@/lib/testing';
 import { getRoundNumber } from '@/lib/utils';
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 import { createChatStore } from '../store';
 
-// Mock i18n - use compat layer
-vi.mock('@/lib/compat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/compat')>();
+// Mock i18n
+vi.mock('@/lib/i18n/provider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/i18n/provider')>();
   return {
     ...actual,
     useTranslations: () => (key: string) => key,
@@ -138,7 +138,7 @@ describe('non-Initial Round Visibility - Integration', () => {
       const initialMessages = store.getState().messages;
       expect(initialMessages).toHaveLength(3);
 
-      // Use renderHook to test useThreadTimeline
+      // Use renderHook to test useThreadTimeline (no wrapper needed - pure hook)
       const { result, rerender } = renderHook(
         ({ messages }) => useThreadTimeline({
           messages,
@@ -150,7 +150,7 @@ describe('non-Initial Round Visibility - Integration', () => {
 
       // Should have 1 timeline item for round 0
       expect(result.current).toHaveLength(1);
-      expect(result.current[0].roundNumber).toBe(0);
+      expect(result.current[0]?.roundNumber).toBe(0);
 
       // Add optimistic message for round 1
       const optimisticMessage: UIMessage = {
@@ -163,6 +163,7 @@ describe('non-Initial Round Visibility - Integration', () => {
           isOptimistic: true,
         },
       };
+
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
 
       // Get updated messages
@@ -174,13 +175,13 @@ describe('non-Initial Round Visibility - Integration', () => {
 
       // Should now have 2 timeline items
       expect(result.current).toHaveLength(2);
-      expect(result.current[1].roundNumber).toBe(1);
-      expect(result.current[1].type).toBe('messages');
+      expect(result.current[1]?.roundNumber).toBe(1);
+      expect(result.current[1]?.type).toBe('messages');
 
       // Round 1 should have the user message
-      const round1Data = result.current[1].data as UIMessage[];
+      const round1Data = result.current[1]?.data as UIMessage[];
       expect(round1Data).toHaveLength(1);
-      expect(round1Data[0].role).toBe(MessageRoles.USER);
+      expect(round1Data[0]?.role).toBe(MessageRoles.USER);
     });
 
     it('should include pre-search in timeline when added', () => {
@@ -211,8 +212,8 @@ describe('non-Initial Round Visibility - Integration', () => {
 
       // Should have 2 timeline items: round 0 messages + round 1 pre-search
       expect(result.current).toHaveLength(2);
-      expect(result.current[1].type).toBe('pre-search');
-      expect(result.current[1].roundNumber).toBe(1);
+      expect(result.current[1]?.type).toBe('pre-search');
+      expect(result.current[1]?.roundNumber).toBe(1);
     });
 
     it('should include user message in round when pre-search exists', () => {
@@ -223,6 +224,7 @@ describe('non-Initial Round Visibility - Integration', () => {
         parts: [{ type: 'text', text: 'Question with search' }],
         metadata: { role: MessageRoles.USER, roundNumber: 1 },
       };
+
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
 
       // Add pre-search
@@ -252,11 +254,11 @@ describe('non-Initial Round Visibility - Integration', () => {
       // Should have 2 timeline items: round 0 messages, round 1 messages
       // (pre-search is NOT a separate item when messages exist - rendered by ChatMessageList)
       expect(result.current).toHaveLength(2);
-      expect(result.current[1].type).toBe('messages');
+      expect(result.current[1]?.type).toBe('messages');
 
-      const round1Data = result.current[1].data as UIMessage[];
+      const round1Data = result.current[1]?.data as UIMessage[];
       expect(round1Data).toHaveLength(1);
-      expect(round1Data[0].role).toBe(MessageRoles.USER);
+      expect(round1Data[0]?.role).toBe(MessageRoles.USER);
     });
   });
 
@@ -321,7 +323,10 @@ describe('non-Initial Round Visibility - Integration', () => {
       store.getState().setConfigChangeRoundNumber(nextRound);
 
       // Call initializeThread (simulating what useScreenInitialization might do)
-      const thread = store.getState().thread!;
+      const thread = store.getState().thread;
+      if (!thread)
+        throw new Error('expected thread to be set');
+
       const participants = store.getState().participants;
 
       store.getState().initializeThread(thread, participants, [
@@ -374,7 +379,7 @@ describe('non-Initial Round Visibility - Integration', () => {
       // Find round 1 in timeline
       const round1Item = result.current.find(item => item.roundNumber === 1);
       expect(round1Item).toBeDefined();
-      expect(round1Item!.type).toBe('messages');
+      expect(round1Item?.type).toBe('messages');
     });
 
     it('isDataReady calculation should be true after submission', () => {

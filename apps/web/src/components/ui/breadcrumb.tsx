@@ -2,7 +2,7 @@ import { Slot } from '@radix-ui/react-slot';
 import type { ComponentProps } from 'react';
 
 import { Icons } from '@/components/icons';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 function Breadcrumb(props: ComponentProps<'nav'>) {

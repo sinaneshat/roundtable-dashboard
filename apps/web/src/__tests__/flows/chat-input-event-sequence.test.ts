@@ -241,22 +241,38 @@ describe('chat Input Event Sequence - Follow-up Round (Round 2+)', () => {
     // Round 2 has one less checkpoint (no thread creation)
     // But the sequence after that should be IDENTICAL
 
-    const r1Submit = round1Checkpoints.find(c => c.name.includes('Submit clicked'))!;
-    const r2Submit = round2Checkpoints.find(c => c.name.includes('Submit clicked'))!;
+    const r1Submit = round1Checkpoints.find(c => c.name.includes('Submit clicked'));
+    const r2Submit = round2Checkpoints.find(c => c.name.includes('Submit clicked'));
+    if (!r1Submit)
+      throw new Error('expected r1Submit');
+    if (!r2Submit)
+      throw new Error('expected r2Submit');
     expect(r1Submit.isInputBlocked).toBe(r2Submit.isInputBlocked);
     expect(r1Submit.showLoadingSpinner).toBe(r2Submit.showLoadingSpinner);
 
-    const r1FirstParticipant = round1Checkpoints.find(c => c.name.includes('First participant'))!;
-    const r2FirstParticipant = round2Checkpoints.find(c => c.name.includes('First participant'))!;
+    const r1FirstParticipant = round1Checkpoints.find(c => c.name.includes('First participant'));
+    const r2FirstParticipant = round2Checkpoints.find(c => c.name.includes('First participant'));
+    if (!r1FirstParticipant)
+      throw new Error('expected r1FirstParticipant');
+    if (!r2FirstParticipant)
+      throw new Error('expected r2FirstParticipant');
     expect(r1FirstParticipant.isInputBlocked).toBe(r2FirstParticipant.isInputBlocked);
     expect(r1FirstParticipant.showLoadingSpinner).toBe(r2FirstParticipant.showLoadingSpinner);
 
-    const r1Moderator = round1Checkpoints.find(c => c.name.includes('Moderator streaming'))!;
-    const r2Moderator = round2Checkpoints.find(c => c.name.includes('Moderator streaming'))!;
+    const r1Moderator = round1Checkpoints.find(c => c.name.includes('Moderator streaming'));
+    const r2Moderator = round2Checkpoints.find(c => c.name.includes('Moderator streaming'));
+    if (!r1Moderator)
+      throw new Error('expected r1Moderator');
+    if (!r2Moderator)
+      throw new Error('expected r2Moderator');
     expect(r1Moderator.isInputBlocked).toBe(r2Moderator.isInputBlocked);
 
-    const r1Complete = round1Checkpoints.find(c => c.name.includes('Round complete'))!;
-    const r2Complete = round2Checkpoints.find(c => c.name.includes('Round complete'))!;
+    const r1Complete = round1Checkpoints.find(c => c.name.includes('Round complete'));
+    const r2Complete = round2Checkpoints.find(c => c.name.includes('Round complete'));
+    if (!r1Complete)
+      throw new Error('expected r1Complete');
+    if (!r2Complete)
+      throw new Error('expected r2Complete');
     expect(r1Complete.isInputBlocked).toBe(r2Complete.isInputBlocked);
   });
 
@@ -267,20 +283,36 @@ describe('chat Input Event Sequence - Follow-up Round (Round 2+)', () => {
     const round1Checkpoints = simulateRoundSequence(round1Store, 1, { webSearchEnabled: true });
     const round2Checkpoints = simulateRoundSequence(round2Store, 2, { webSearchEnabled: true });
 
-    const r1PreSearch = round1Checkpoints.find(c => c.name.includes('Pre-search streaming'))!;
-    const r2PreSearch = round2Checkpoints.find(c => c.name.includes('Pre-search streaming'))!;
+    const r1PreSearch = round1Checkpoints.find(c => c.name.includes('Pre-search streaming'));
+    const r2PreSearch = round2Checkpoints.find(c => c.name.includes('Pre-search streaming'));
+    if (!r1PreSearch)
+      throw new Error('expected r1PreSearch');
+    if (!r2PreSearch)
+      throw new Error('expected r2PreSearch');
     expect(r1PreSearch.isInputBlocked).toBe(r2PreSearch.isInputBlocked);
 
-    const r1PreSearchComplete = round1Checkpoints.find(c => c.name.includes('Pre-search complete'))!;
-    const r2PreSearchComplete = round2Checkpoints.find(c => c.name.includes('Pre-search complete'))!;
+    const r1PreSearchComplete = round1Checkpoints.find(c => c.name.includes('Pre-search complete'));
+    const r2PreSearchComplete = round2Checkpoints.find(c => c.name.includes('Pre-search complete'));
+    if (!r1PreSearchComplete)
+      throw new Error('expected r1PreSearchComplete');
+    if (!r2PreSearchComplete)
+      throw new Error('expected r2PreSearchComplete');
     expect(r1PreSearchComplete.isInputBlocked).toBe(r2PreSearchComplete.isInputBlocked);
 
-    const r1FirstParticipant = round1Checkpoints.find(c => c.name.includes('First participant'))!;
-    const r2FirstParticipant = round2Checkpoints.find(c => c.name.includes('First participant'))!;
+    const r1FirstParticipant = round1Checkpoints.find(c => c.name.includes('First participant'));
+    const r2FirstParticipant = round2Checkpoints.find(c => c.name.includes('First participant'));
+    if (!r1FirstParticipant)
+      throw new Error('expected r1FirstParticipant');
+    if (!r2FirstParticipant)
+      throw new Error('expected r2FirstParticipant');
     expect(r1FirstParticipant.showLoadingSpinner).toBe(r2FirstParticipant.showLoadingSpinner);
 
-    const r1Complete = round1Checkpoints.find(c => c.name.includes('Round complete'))!;
-    const r2Complete = round2Checkpoints.find(c => c.name.includes('Round complete'))!;
+    const r1Complete = round1Checkpoints.find(c => c.name.includes('Round complete'));
+    const r2Complete = round2Checkpoints.find(c => c.name.includes('Round complete'));
+    if (!r1Complete)
+      throw new Error('expected r1Complete');
+    if (!r2Complete)
+      throw new Error('expected r2Complete');
     expect(r1Complete.isInputBlocked).toBe(r2Complete.isInputBlocked);
   });
 

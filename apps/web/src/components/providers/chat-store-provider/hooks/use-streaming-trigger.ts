@@ -1,11 +1,11 @@
 import { MessageRoles, MessageStatuses, ScreenModes } from '@roundtable/shared';
 import type { QueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import type { RefObject } from 'react';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
-import { useRouter } from '@/lib/compat';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
@@ -29,7 +29,7 @@ export function useStreamingTrigger({
   effectiveThreadId,
   queryClientRef,
 }: UseStreamingTriggerParams) {
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const {
     waitingToStart,
@@ -320,11 +320,10 @@ export function useStreamingTrigger({
               return;
             } else {
               const PARTICIPANT_START_GRACE_PERIOD_MS = 15_000;
-              const completedTime = preSearchForRound.completedAt instanceof Date
-                ? preSearchForRound.completedAt.getTime()
-                : preSearchForRound.completedAt
-                  ? new Date(preSearchForRound.completedAt).getTime()
-                  : now;
+              // completedAt is always a string or null (ISO format from JSON serialization)
+              const completedTime = preSearchForRound.completedAt
+                ? new Date(preSearchForRound.completedAt).getTime()
+                : now;
               const timeSinceComplete = now - completedTime;
 
               if (timeSinceComplete < PARTICIPANT_START_GRACE_PERIOD_MS) {
@@ -344,13 +343,13 @@ export function useStreamingTrigger({
       latestState.setIsStreaming(false);
       latestState.setIsCreatingThread(false);
       latestState.resetToOverview();
-      router.push('/chat');
+      navigate({ to: '/chat' });
       showApiErrorToast('Failed to start conversation', new Error('Streaming failed to start. Please try again.'));
       clearInterval(checkInterval);
     }, 5000);
 
     return () => clearInterval(checkInterval);
-  }, [waitingToStart, store, router]);
+  }, [waitingToStart, store, navigate]);
 
   useEffect(() => {
     const checkStuckPreSearches = () => {

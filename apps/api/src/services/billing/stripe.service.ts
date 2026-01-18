@@ -181,10 +181,16 @@ class StripeService {
       : await stripe.subscriptions.cancel(subscriptionId);
   }
 
+  /**
+   * Create Stripe Checkout Session
+   *
+   * THEO'S PATTERN: customerId is REQUIRED - customer must exist BEFORE checkout.
+   * Never use customerEmail fallback (ephemeral customers cause split-brain state).
+   * @see https://github.com/t3dotgg/stripe-recommendations
+   */
   async createCheckoutSession(params: {
     priceId: string;
-    customerId?: string;
-    customerEmail?: string;
+    customerId: string;
     successUrl: string;
     cancelUrl: string;
     trialPeriodDays?: number;
@@ -201,30 +207,18 @@ class StripeService {
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: checkoutMode,
+      customer: params.customerId,
       line_items: [{ price: params.priceId, quantity: 1 }],
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
       metadata: params.metadata || {},
     };
 
-    if (params.customerId) {
-      sessionParams.customer = params.customerId;
-    } else if (params.customerEmail) {
-      sessionParams.customer_email = params.customerEmail;
-    }
-
     if (params.trialPeriodDays && checkoutMode === 'subscription') {
       sessionParams.subscription_data = { trial_period_days: params.trialPeriodDays };
     }
 
     return await stripe.checkout.sessions.create(sessionParams);
-  }
-
-  async getCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session> {
-    const stripe = this.getClient();
-    return await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['customer', 'subscription'],
-    });
   }
 
   constructWebhookEvent(payload: string, signature: string): Stripe.Event {

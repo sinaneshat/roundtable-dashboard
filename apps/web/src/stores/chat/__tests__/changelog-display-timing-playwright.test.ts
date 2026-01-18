@@ -26,9 +26,9 @@ import type { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { queryKeys } from '@/lib/data/query-keys';
+import type { ChatThreadChangelog } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
-import type { ChatThreadChangelog } from '@/types/api';
 
 // ============================================================================
 // TEST HELPERS
@@ -365,9 +365,11 @@ describe('changelog Fetch Timing', () => {
 
       expect(mockQueryClient.setQueryData).toHaveBeenCalled();
       expect(capturedResult).not.toBeNull();
-      expect(capturedResult!.data.items).toHaveLength(2);
-      expect(capturedResult!.data.items[0]?.roundNumber).toBe(2); // Newest first
-      expect(capturedResult!.data.items[1]?.roundNumber).toBe(1);
+      if (!capturedResult)
+        throw new Error('expected capturedResult');
+      expect(capturedResult.data.items).toHaveLength(2);
+      expect(capturedResult.data.items[0]?.roundNumber).toBe(2); // Newest first
+      expect(capturedResult.data.items[1]?.roundNumber).toBe(1);
     });
 
     it('clears waiting flags after successful merge', () => {
@@ -1434,8 +1436,10 @@ describe('complete Changelog Flow E2E', () => {
 
     // 5. Pre-search completes
     state.removePreSearch('presearch-r2');
+    if (!preSearch)
+      throw new Error('expected preSearch');
     state.addPreSearch({
-      ...updatedState.preSearches[0]!,
+      ...preSearch,
       status: MessageStatuses.COMPLETE,
       searchData: {
         queries: [],

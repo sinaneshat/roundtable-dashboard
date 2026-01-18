@@ -150,7 +150,10 @@ describe('thread Creation Journey', () => {
 
     // Participants array unchanged
     expect(getStoreState(store).participants).toHaveLength(3);
-    expect(getStoreState(store).participants[0]!.id).toBe('participant-0');
+    const firstParticipant = getStoreState(store).participants[0];
+    if (!firstParticipant)
+      throw new Error('expected participant');
+    expect(firstParticipant.id).toBe('participant-0');
   });
 });
 
@@ -196,10 +199,22 @@ describe('message Accumulation', () => {
     state.setMessages(messages);
 
     expect(getStoreState(store).messages).toHaveLength(4);
-    expect(getStoreState(store).messages[0]!.role).toBe(MessageRoles.USER);
-    expect(getStoreState(store).messages[1]!.role).toBe(MessageRoles.ASSISTANT);
-    expect(getStoreState(store).messages[2]!.role).toBe(MessageRoles.ASSISTANT);
-    expect(getStoreState(store).messages[3]!.role).toBe(MessageRoles.ASSISTANT);
+    const msg0 = getStoreState(store).messages[0];
+    const msg1 = getStoreState(store).messages[1];
+    const msg2 = getStoreState(store).messages[2];
+    const msg3 = getStoreState(store).messages[3];
+    if (!msg0)
+      throw new Error('expected message 0');
+    if (!msg1)
+      throw new Error('expected message 1');
+    if (!msg2)
+      throw new Error('expected message 2');
+    if (!msg3)
+      throw new Error('expected message 3');
+    expect(msg0.role).toBe(MessageRoles.USER);
+    expect(msg1.role).toBe(MessageRoles.ASSISTANT);
+    expect(msg2.role).toBe(MessageRoles.ASSISTANT);
+    expect(msg3.role).toBe(MessageRoles.ASSISTANT);
   });
 
   it('preserves message metadata through updates', () => {

@@ -693,7 +693,7 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
       // Verify config change detection
       const state = store.getState();
-      const webSearchChanged = state.thread!.enableWebSearch !== state.enableWebSearch;
+      const webSearchChanged = state.thread?.enableWebSearch !== state.enableWebSearch;
       const modeChanged = false; // Same mode
       const participantsChanged = false; // Same participants
 
@@ -1013,7 +1013,15 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       });
 
       const partialData = {
-        queries: ['partial query'],
+        queries: [
+          {
+            query: 'partial query',
+            rationale: 'test rationale',
+            searchDepth: 'basic' as const,
+            index: 0,
+            total: 1,
+          },
+        ],
         results: [],
         summary: '',
         successCount: 0,

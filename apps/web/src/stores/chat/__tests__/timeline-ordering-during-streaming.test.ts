@@ -16,8 +16,8 @@
 import { ChatModes, MessagePartTypes, MessageRoles, MessageStatuses } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
-import type { ChatMessage, ChatParticipant, DbAssistantMessageMetadata, DbModeratorMessageMetadata, DbUserMessageMetadata, StoredPreSearch } from '@/types/api';
-import { isAssistantMessageMetadata } from '@/types/api';
+import type { ApiMessage, ChatParticipant, DbAssistantMessageMetadata, DbModeratorMessageMetadata, DbUserMessageMetadata, StoredPreSearch } from '@/services/api';
+import { isAssistantMessageMetadata } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -79,7 +79,7 @@ function createMockParticipants(threadId: string, count: number): ChatParticipan
   }));
 }
 
-function createUserMessage(threadId: string, roundNumber: number, text: string): ChatMessage {
+function createUserMessage(threadId: string, roundNumber: number, text: string): ApiMessage {
   const metadata: DbUserMessageMetadata = {
     role: MessageRoles.USER,
     roundNumber,
@@ -98,7 +98,7 @@ function createAssistantMessage(
   participantIndex: number,
   participantId: string,
   text: string,
-): ChatMessage {
+): ApiMessage {
   const metadata: DbAssistantMessageMetadata = {
     role: MessageRoles.ASSISTANT,
     roundNumber,
@@ -124,7 +124,7 @@ function createModeratorMessage(
   threadId: string,
   roundNumber: number,
   text: string,
-): ChatMessage {
+): ApiMessage {
   const metadata: DbModeratorMessageMetadata = {
     role: MessageRoles.ASSISTANT,
     isModerator: true,
@@ -200,7 +200,7 @@ function verifyTimelineOrder(
 
   const actualItems: MockTimelineItem[] = [];
 
-  const messagesByRound = new Map<number, ChatMessage[]>();
+  const messagesByRound = new Map<number, ApiMessage[]>();
   for (const msg of messages) {
     if (!msg.metadata)
       continue;
@@ -209,10 +209,12 @@ function verifyTimelineOrder(
       continue;
 
     const roundNum = msg.metadata.roundNumber;
-    if (!messagesByRound.has(roundNum)) {
-      messagesByRound.set(roundNum, []);
+    const existing = messagesByRound.get(roundNum);
+    if (existing) {
+      existing.push(msg);
+    } else {
+      messagesByRound.set(roundNum, [msg]);
     }
-    messagesByRound.get(roundNum)!.push(msg);
   }
 
   const preSearchByRound = new Map<number, StoredPreSearch>();
@@ -403,19 +405,30 @@ describe('timeline ordering during streaming', () => {
         [],
       );
 
+      const p0 = round0Participants[0];
+      const p1 = round0Participants[1];
+      if (!p0 || !p1) {
+        throw new Error('Test setup error: participants not created');
+      }
+
       store.getState().setMessages([
         createUserMessage(threadId, 0, 'round 0'),
-        createAssistantMessage(threadId, 0, 0, round0Participants[0]!.id, 'R0 P0'),
-        createAssistantMessage(threadId, 0, 1, round0Participants[1]!.id, 'R0 P1'),
+        createAssistantMessage(threadId, 0, 0, p0.id, 'R0 P0'),
+        createAssistantMessage(threadId, 0, 1, p1.id, 'R0 P1'),
       ]);
 
+      const newParticipantBase = createMockParticipants(threadId, 1)[0];
+      if (!newParticipantBase) {
+        throw new Error('Test setup error: new participant not created');
+      }
       const round1Participants: ChatParticipant[] = [
-        { ...createMockParticipants(threadId, 1)[0]!, id: 'new-participant-0', modelId: 'new-provider/new-model-0' },
+        { ...newParticipantBase, id: 'new-participant-0', modelId: 'new-provider/new-model-0' },
       ];
       store.getState().updateParticipants(round1Participants);
 
       expect(store.getState().participants).toHaveLength(1);
-      expect(store.getState().participants[0]!.id).toBe('new-participant-0');
+      const updatedParticipant = store.getState().participants[0];
+      expect(updatedParticipant?.id).toBe('new-participant-0');
 
       const round0Messages = store.getState().messages.filter(m =>
         m.metadata?.roundNumber === 0,
@@ -425,20 +438,26 @@ describe('timeline ordering during streaming', () => {
       const r0AssistantMsgs = round0Messages.filter(m => m.role === MessageRoles.ASSISTANT);
       expect(r0AssistantMsgs).toHaveLength(2);
 
-      const firstMsg = r0AssistantMsgs[0]!;
-      const secondMsg = r0AssistantMsgs[1]!;
+      const firstMsg = r0AssistantMsgs[0];
+      const secondMsg = r0AssistantMsgs[1];
+      if (!firstMsg || !secondMsg) {
+        throw new Error('Test assertion failed: expected 2 assistant messages');
+      }
 
       expect(firstMsg.metadata).toBeDefined();
       expect(secondMsg.metadata).toBeDefined();
 
-      const firstMetadata = firstMsg.metadata!;
-      const secondMetadata = secondMsg.metadata!;
+      const firstMetadata = firstMsg.metadata;
+      const secondMetadata = secondMsg.metadata;
+      if (!firstMetadata || !secondMetadata) {
+        throw new Error('Test assertion failed: expected metadata on messages');
+      }
 
       expect(isAssistantMessageMetadata(firstMetadata)).toBe(true);
       expect(isAssistantMessageMetadata(secondMetadata)).toBe(true);
 
-      expect(isAssistantMessageMetadata(firstMetadata) && firstMetadata.participantId).toBe(round0Participants[0]!.id);
-      expect(isAssistantMessageMetadata(secondMetadata) && secondMetadata.participantId).toBe(round0Participants[1]!.id);
+      expect(isAssistantMessageMetadata(firstMetadata) && firstMetadata.participantId).toBe(p0.id);
+      expect(isAssistantMessageMetadata(secondMetadata) && secondMetadata.participantId).toBe(p1.id);
     });
   });
 

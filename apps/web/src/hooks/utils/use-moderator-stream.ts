@@ -7,7 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useChatStore } from '@/components/providers';
 import { queryKeys } from '@/lib/data/query-keys';
 import { chatMessagesToUIMessages } from '@/lib/utils';
-import { getThreadMessagesService } from '@/services/api';
+import { getThreadMessagesService, streamModeratorService } from '@/services/api';
 
 /** Throttle interval for UI updates (matches AI SDK batching behavior) */
 const UPDATE_THROTTLE_MS = 50;
@@ -130,16 +130,16 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
     });
 
     try {
-      const response = await fetch(
-        `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
+      // Use RPC service for type-safe moderator streaming
+      const response = await streamModeratorService(
         {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+          param: {
+            threadId,
+            roundNumber: String(roundNumber),
           },
-          body: JSON.stringify({ participantMessageIds }),
-          signal: controller.signal,
+          json: { participantMessageIds },
         },
+        { signal: controller.signal },
       );
 
       if (!response.ok) {
@@ -211,15 +211,9 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
         staleTime: 0,
       });
 
-      if (result && typeof result === 'object' && 'success' in result) {
-        const response = result as { success: boolean; data?: unknown };
-        if (response.success && response.data && typeof response.data === 'object') {
-          const data = response.data as { items?: unknown };
-          if (Array.isArray(data.items)) {
-            const uiMessages = chatMessagesToUIMessages(data.items, participants);
-            setMessages(uiMessages);
-          }
-        }
+      if (result.success && result.data.items) {
+        const uiMessages = chatMessagesToUIMessages(result.data.items, participants);
+        setMessages(uiMessages);
       }
 
       // ✅ INVALIDATE USAGE STATS: After moderator completes, free users have freeRoundUsed=true

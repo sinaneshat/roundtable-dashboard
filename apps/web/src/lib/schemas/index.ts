@@ -107,18 +107,17 @@ export {
   StreamingToolCallSchema,
   StreamingUsageSchema,
 } from './message-schemas';
-
-// Model schemas
-export type { OrderedModel } from './model-schemas';
+export type {
+  OrderedModel,
+} from './model-schemas';
 export {
   isOrderedModel,
   isOrderedModelArray,
+  ModelSchema,
   OrderedModelSchema,
 } from './model-schemas';
-
 // Participant schemas
 export type {
-  ChatParticipantWithSettings,
   MinimalParticipant,
   ModelReference,
   ParticipantConfig,
@@ -156,7 +155,6 @@ export {
   ParticipantsArraySchema,
   ParticipantUpdatePayloadSchema,
 } from './participant-schemas';
-
 // Round schemas
 export type { RoundNumber, RoundNumberWithSentinel } from './round-schemas';
 export {
@@ -174,3 +172,7 @@ export {
   RoundNumberWithSentinelSchema,
   safeParseRoundNumber,
 } from './round-schemas';
+// Model schemas
+// Note: Model type is imported from @/services/api in model-schemas.ts
+// Re-export it here for convenience (RPC-derived type)
+export type { Model } from '@/services/api';

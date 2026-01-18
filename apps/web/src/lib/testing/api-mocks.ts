@@ -9,12 +9,11 @@ import {
   FinishReasons,
   MessagePartTypes,
   MessageRoles,
-  MessageStatuses,
   PreSearchStatuses,
   ThreadStatuses,
 } from '@roundtable/shared';
 
-import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
+import type { ApiMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 // Response types for API mocks
 export type ThreadDetailResponse = {
@@ -22,7 +21,7 @@ export type ThreadDetailResponse = {
   data: {
     thread: ChatThread;
     participants: ChatParticipant[];
-    messages: ChatMessage[];
+    messages: ApiMessage[];
     changelog: unknown[];
     user: {
       id: string;
@@ -35,7 +34,7 @@ export type ThreadDetailResponse = {
 export type MessagesListResponse = {
   success: boolean;
   data: {
-    items: ChatMessage[];
+    items: ApiMessage[];
     count: number;
   };
 };
@@ -91,7 +90,7 @@ export function createBaseMockParticipant(overrides?: Partial<ChatParticipant>):
   };
 }
 
-export function createMockMessage(overrides?: Partial<ChatMessage>): ChatMessage {
+export function createMockMessage(overrides?: Partial<ApiMessage>): ApiMessage {
   const now = new Date().toISOString();
 
   return {
@@ -99,16 +98,14 @@ export function createMockMessage(overrides?: Partial<ChatMessage>): ChatMessage
     threadId: '01KA1K2GD2PP0BJH2VZ9J6QRBA',
     participantId: null,
     role: MessageRoles.USER,
-    content: 'Test message',
     parts: [{ type: MessagePartTypes.TEXT, text: 'Test message' }],
-    status: MessageStatuses.COMPLETE,
     roundNumber: 0,
+    toolCalls: null,
     metadata: {
       role: MessageRoles.USER,
       roundNumber: 0,
     },
     createdAt: now,
-    updatedAt: now,
     ...overrides,
   };
 }
@@ -117,8 +114,8 @@ export function createMockAssistantMessage(
   threadId: string,
   roundNumber: number,
   participantIndex: number,
-  overrides?: Partial<ChatMessage>,
-): ChatMessage {
+  overrides?: Partial<ApiMessage>,
+): ApiMessage {
   const now = new Date().toISOString();
   const participantId = `participant_${participantIndex}`;
 
@@ -127,10 +124,9 @@ export function createMockAssistantMessage(
     threadId,
     participantId,
     role: MessageRoles.ASSISTANT,
-    content: `Response from participant ${participantIndex}`,
     parts: [{ type: MessagePartTypes.TEXT, text: `Response from participant ${participantIndex}` }],
-    status: MessageStatuses.COMPLETE,
     roundNumber,
+    toolCalls: null,
     metadata: {
       role: MessageRoles.ASSISTANT,
       roundNumber,
@@ -149,7 +145,6 @@ export function createMockAssistantMessage(
       isPartialResponse: false,
     },
     createdAt: now,
-    updatedAt: now,
     ...overrides,
   };
 }
@@ -184,7 +179,7 @@ export function createMockMessagesListResponse(
   roundNumber: number = 0,
   participantCount: number = 1,
 ): MessagesListResponse {
-  const messages: ChatMessage[] = [];
+  const messages: ApiMessage[] = [];
 
   messages.push(
     createMockMessage({
@@ -239,8 +234,8 @@ export function createMockPreSearch(overrides?: Partial<StoredPreSearch>): Store
             {
               title: 'Test Result',
               url: 'https://example.com',
-              snippet: 'Test content',
               content: 'Test content',
+              score: 0.95,
             },
           ],
           responseTime: 100,
@@ -250,6 +245,8 @@ export function createMockPreSearch(overrides?: Partial<StoredPreSearch>): Store
       summary: 'Test summary',
       totalResults: 1,
       totalTime: 100,
+      successCount: 1,
+      failureCount: 0,
     },
     errorMessage: null,
     createdAt: now,
@@ -297,8 +294,8 @@ export function createMockPreSearchesListResponse(
                   {
                     title: 'Test Result',
                     url: 'https://example.com',
-                    snippet: 'Test content',
                     content: 'Test content',
+                    score: 0.95,
                     excerpt: 'Test content',
                     fullContent: includeFullContent ? 'Full article content with comprehensive information...' : undefined,
                     publishedDate: undefined,
@@ -322,6 +319,8 @@ export function createMockPreSearchesListResponse(
             summary: 'Test summary',
             totalResults: 1,
             totalTime: 100,
+            successCount: 1,
+            failureCount: 0,
           },
           errorMessage: null,
           createdAt: new Date().toISOString(),

@@ -200,7 +200,7 @@ describe('non-Initial Round User Message Sync', () => {
       // Original user message MUST be in the result
       const originalInMerged = merged.find(m => m.id === '01KE5WMBVDFY');
       expect(originalInMerged).toBeDefined();
-      expect(getUserMetadata(originalInMerged!.metadata)?.isParticipantTrigger).toBeFalsy();
+      expect(originalInMerged ? getUserMetadata(originalInMerged.metadata)?.isParticipantTrigger : undefined).toBeFalsy();
 
       // After deduplication (which happens in chat-message-list.tsx):
       // - Participant trigger gets filtered out

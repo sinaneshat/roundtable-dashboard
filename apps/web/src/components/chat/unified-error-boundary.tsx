@@ -6,8 +6,8 @@ import React, { Component } from 'react';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { useTranslations } from '@/lib/compat';
 import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { useTranslations } from '@/lib/i18n';
 
 type UnifiedErrorBoundaryProps = {
   children: ReactNode;
@@ -157,7 +157,7 @@ export class UnifiedErrorBoundary extends Component<
       errorInfo,
     });
 
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.MODE === 'production') {
       this.trackError(error, errorInfo);
     }
   }

@@ -19,17 +19,17 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useIsMounted, useMediaQuery } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
 import { getChatModeById } from '@/lib/config/chat-modes';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
+import { useTranslations } from '@/lib/i18n';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
-import type { EnhancedModelResponse } from '@/types/api';
+import type { Model } from '@/services/api';
 
 type ChatInputToolbarMenuProps = {
   // Model selection
   selectedParticipants: ParticipantConfig[];
-  allModels: EnhancedModelResponse[];
+  allModels: Model[];
   onOpenModelModal: () => void;
 
   // Mode selection

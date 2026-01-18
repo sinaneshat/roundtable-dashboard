@@ -360,7 +360,13 @@ describe('streaming Telemetry E2E', () => {
       const streamCalls = fetchCalls.filter(call => call.url.includes('/stream'));
       expect(streamCalls).toHaveLength(1);
 
-      const body = JSON.parse(streamCalls[0].body!);
+      const streamCall = streamCalls[0];
+      if (!streamCall)
+        throw new Error('expected streamCall');
+      const streamCallBody = streamCall.body;
+      if (!streamCallBody)
+        throw new Error('expected streamCall.body');
+      const body = JSON.parse(streamCallBody);
       expect(body.regenerateRound).toBe(roundNumber);
     });
   });
@@ -478,9 +484,13 @@ describe('streaming Telemetry E2E', () => {
       });
 
       const streamCall = fetchCalls.find(c => c.url.includes('/stream'));
-      expect(streamCall).toBeDefined();
+      if (!streamCall)
+        throw new Error('expected streamCall');
+      const streamCallBody = streamCall.body;
+      if (!streamCallBody)
+        throw new Error('expected streamCall.body');
 
-      const body = JSON.parse(streamCall!.body!);
+      const body = JSON.parse(streamCallBody);
       expect(body.id).toBe(threadId);
       expect(body.participantIndex).toBe(0);
       expect(body.message).toBeDefined();
@@ -507,9 +517,13 @@ describe('streaming Telemetry E2E', () => {
       });
 
       const moderatorCall = fetchCalls.find(c => c.url.includes('/moderator'));
-      expect(moderatorCall).toBeDefined();
+      if (!moderatorCall)
+        throw new Error('expected moderatorCall');
+      const moderatorCallBody = moderatorCall.body;
+      if (!moderatorCallBody)
+        throw new Error('expected moderatorCall.body');
 
-      const body = JSON.parse(moderatorCall!.body!);
+      const body = JSON.parse(moderatorCallBody);
       expect(body.participantMessageIds).toEqual(participantMessageIds);
     });
   });

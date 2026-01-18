@@ -1,7 +1,7 @@
 import { Logo } from '@/components/logo';
 import { Card } from '@/components/ui/card';
 import { RadialGlow } from '@/components/ui/radial-glow';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 
 import { LiveChatDemo } from './live-chat-demo';
 

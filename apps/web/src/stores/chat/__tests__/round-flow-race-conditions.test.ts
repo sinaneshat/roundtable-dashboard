@@ -111,7 +111,7 @@ describe('round Flow Race Conditions', () => {
 
       expect(trigger?.index).toBe(2);
       expect(participantCount).toBe(2);
-      expect(trigger!.index >= participantCount).toBe(true);
+      expect(trigger && trigger.index >= participantCount).toBe(true);
     });
   });
 

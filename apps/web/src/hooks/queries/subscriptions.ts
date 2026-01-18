@@ -3,34 +3,31 @@
  *
  * TanStack Query hooks for Stripe subscriptions
  *
- * IMPORTANT: staleTime values MUST match server-side prefetch values
- * See: docs/react-query-ssr-patterns.md
+ * CRITICAL: Uses shared queryOptions from query-options.ts
+ * This ensures SSR hydration works correctly - same config in loader and hook
  */
 
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
-import {
-  getSubscriptionService,
-  getSubscriptionsService,
-} from '@/services/api';
+import { subscriptionsQueryOptions } from '@/lib/data/query-options';
+import { GC_TIMES, STALE_TIMES } from '@/lib/data/stale-times';
+import { getSubscriptionService } from '@/services/api';
 
 /**
  * Hook to fetch all user subscriptions
  * Protected endpoint - requires authentication (handled by backend)
  *
- * ⚠️ NO CACHE - subscription data must always be fresh after plan changes
+ * ✅ SSR HYDRATION: Uses shared queryOptions for seamless server-client data transfer
+ * Note: staleTime is set in queryOptions to prevent immediate refetch on hydration
  */
 export function useSubscriptionsQuery() {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.subscriptions.current(),
-    queryFn: () => getSubscriptionsService(),
-    staleTime: STALE_TIMES.subscriptions, // ⚠️ NO CACHE (0) - always fresh
-    gcTime: 5 * 60 * 1000, // 5 minutes - keep in memory for instant UI
+    ...subscriptionsQueryOptions,
+    gcTime: GC_TIMES.STANDARD, // 5 minutes - keep in memory for instant UI
     enabled: isAuthenticated,
     retry: false,
     throwOnError: false,
@@ -52,7 +49,7 @@ export function useSubscriptionQuery(subscriptionId: string) {
     queryKey: queryKeys.subscriptions.detail(subscriptionId),
     queryFn: () => getSubscriptionService({ param: { id: subscriptionId } }),
     staleTime: STALE_TIMES.subscriptions, // ⚠️ NO CACHE (0) - always fresh
-    gcTime: 5 * 60 * 1000, // 5 minutes - keep in memory for instant UI
+    gcTime: GC_TIMES.STANDARD, // 5 minutes - keep in memory for instant UI
     enabled: isAuthenticated && !!subscriptionId,
     retry: false,
     throwOnError: false,

@@ -18,11 +18,11 @@ import {
 } from '@roundtable/shared';
 import { z } from 'zod';
 
-import type { DbMessageMetadata as MessageMetadata } from '@/types/api';
+import type { DbMessageMetadata as MessageMetadata } from '@/services/api';
 import {
   isAssistantMessageMetadata as isAssistantMetadata,
   UsageSchema,
-} from '@/types/api';
+} from '@/services/api';
 
 // ============================================================================
 // Pre-search query metadata
@@ -106,14 +106,15 @@ export type PreSearchQueryState = z.infer<typeof PreSearchQueryStateSchema>;
 // ============================================================================
 
 export function messageHasError(
-  metadata:
-    | MessageMetadata
-    // Cross-package type import: Works at runtime with Vite but fails TS type checking
-    // @ts-expect-error - Runtime type import from API package; works with Vite but not TS type checking
-    | import('../../../api/src/db/schemas/chat-metadata').DbMessageMetadata,
+  metadata: unknown,
 ): boolean {
-  if (isAssistantMetadata(metadata)) {
-    return metadata.hasError === true;
+  // First narrow unknown to DbMessageMetadata, then check if assistant
+  if (!metadata || typeof metadata !== 'object' || !('role' in metadata)) {
+    return false;
+  }
+  const parsed = metadata as MessageMetadata;
+  if (isAssistantMetadata(parsed)) {
+    return parsed.hasError === true;
   }
   return false;
 }

@@ -21,4 +21,5 @@ export {
   type UpdateUserPresetRequest,
   type UpdateUserPresetResponse,
   updateUserPresetService,
+  type UserPreset,
 } from './user-presets';

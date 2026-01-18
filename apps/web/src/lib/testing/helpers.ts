@@ -8,9 +8,9 @@ import type { UIMessageRole } from '@roundtable/shared';
 import { FinishReasons, MessagePartTypes, MessageRoles, ModelIds, UIMessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 
-import type { AbstractIntlMessages } from '@/lib/compat';
+import type { AbstractIntlMessages } from '@/lib/i18n';
 import { getRoundNumber } from '@/lib/utils';
-import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/types/api';
+import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/services/api';
 
 // Type aliases for test messages - these are UIMessage with specific metadata shapes
 export type TestUserMessage = UIMessage;

@@ -82,21 +82,30 @@ describe('requestAnimationFrame Patterns', () => {
       expect(rafCallbacks).toHaveLength(1);
 
       // Execute first RAF
-      rafCallbacks[0]!(0);
+      const firstCallback = rafCallbacks[0];
+      if (firstCallback) {
+        firstCallback(0);
+      }
       expect(executionLog).toEqual(['RAF-1']);
 
       // Second RAF scheduled
       expect(rafCallbacks).toHaveLength(2);
 
       // Execute second RAF
-      rafCallbacks[1]!(0);
+      const secondCallback = rafCallbacks[1];
+      if (secondCallback) {
+        secondCallback(0);
+      }
       expect(executionLog).toEqual(['RAF-1', 'RAF-2']);
 
       // Third RAF scheduled
       expect(rafCallbacks).toHaveLength(3);
 
       // Execute third RAF
-      rafCallbacks[2]!(0);
+      const thirdCallback = rafCallbacks[2];
+      if (thirdCallback) {
+        thirdCallback(0);
+      }
       expect(executionLog).toEqual(['RAF-1', 'RAF-2', 'RAF-3']);
     });
 
@@ -117,7 +126,10 @@ describe('requestAnimationFrame Patterns', () => {
       });
 
       // Execute first RAF
-      rafCallbacks[0]!(0);
+      const firstCallback = rafCallbacks[0];
+      if (firstCallback) {
+        firstCallback(0);
+      }
       expect(executionLog).toEqual(['RAF-1']);
 
       // Cancel before second RAF executes
@@ -127,7 +139,9 @@ describe('requestAnimationFrame Patterns', () => {
       expect(rafCallbacks.length).toBeGreaterThan(0);
 
       // But we can cancel the second one
-      cancelAnimationFrame(rafId2!);
+      if (rafId2 !== undefined) {
+        cancelAnimationFrame(rafId2);
+      }
 
       // Third RAF never scheduled because second was canceled
       expect(rafId3).toBeNull();
@@ -199,9 +213,11 @@ describe('requestAnimationFrame Patterns', () => {
       // Only last RAF should be active
       expect(currentRafId).toBe(thirdId);
 
-      // Previous RAFs should have been canceled
-      expect(vi.mocked(cancelAnimationFrame)).toHaveBeenCalledWith(firstId!);
-      expect(vi.mocked(cancelAnimationFrame)).toHaveBeenCalledWith(secondId!);
+      // Previous RAFs should have been canceled - assert IDs exist first
+      expect(firstId).not.toBeNull();
+      expect(secondId).not.toBeNull();
+      expect(vi.mocked(cancelAnimationFrame)).toHaveBeenCalledWith(firstId);
+      expect(vi.mocked(cancelAnimationFrame)).toHaveBeenCalledWith(secondId);
     });
 
     it('should verify triple RAF provides 3 frame delay for DOM updates', () => {
@@ -221,10 +237,22 @@ describe('requestAnimationFrame Patterns', () => {
         });
       });
 
-      // Execute all RAF callbacks
-      rafCallbacks[0]!(0);
-      rafCallbacks[1]!(0);
-      rafCallbacks[2]!(0);
+      // Execute all RAF callbacks sequentially as they're added (nested RAFs)
+      // First RAF execution schedules second RAF
+      const callback0 = rafCallbacks[0];
+      if (callback0) {
+        callback0(0);
+        // Now callback1 is scheduled
+        const callback1 = rafCallbacks[1];
+        if (callback1) {
+          callback1(0);
+          // Now callback2 is scheduled
+          const callback2 = rafCallbacks[2];
+          if (callback2) {
+            callback2(0);
+          }
+        }
+      }
 
       expect(domUpdateLog).toEqual([
         'STATE_CHANGE',

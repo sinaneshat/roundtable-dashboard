@@ -16,7 +16,7 @@
 import { useMemo } from 'react';
 
 import { useModelsQuery } from '@/hooks/queries';
-import type { EnhancedModelResponse } from '@/types/api';
+import type { Model } from '@/services/api';
 
 type UseModelLookupOptions = {
   /** Whether to enable the models query (default: true). Set false for read-only/public pages. */
@@ -28,9 +28,9 @@ type UseModelLookupOptions = {
  */
 export type UseModelLookupReturn = {
   /** All available models (100 top models from OpenRouter) */
-  allModels: EnhancedModelResponse[];
+  allModels: Model[];
   /** Memoized function to find model by ID (O(1) after first lookup) */
-  findModel: (modelId: string | undefined) => EnhancedModelResponse | undefined;
+  findModel: (modelId: string | undefined) => Model | undefined;
   /** Default model ID from server configuration */
   defaultModelId: string | undefined;
   /** Whether models are currently loading */
@@ -67,14 +67,14 @@ export function useModelLookup(options?: UseModelLookupOptions): UseModelLookupR
   const { data: modelsData, isLoading } = useModelsQuery({ enabled: options?.enabled ?? true });
 
   const allModels = useMemo(() => {
-    const data = modelsData?.data as { items?: EnhancedModelResponse[] } | undefined;
+    const data = modelsData?.data as { items?: Model[] } | undefined;
     return data?.items || [];
   }, [modelsData?.data]);
 
   const defaultModelId = (modelsData?.data as { default_model_id?: string } | undefined)?.default_model_id;
 
   const findModel = useMemo(() => {
-    return (modelId: string | undefined): EnhancedModelResponse | undefined => {
+    return (modelId: string | undefined): Model | undefined => {
       if (!modelId) {
         return undefined;
       }

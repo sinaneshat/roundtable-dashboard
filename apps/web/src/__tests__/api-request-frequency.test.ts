@@ -186,7 +186,12 @@ describe('aPI Request Frequency', () => {
       expect(moderatorCall).toBeDefined();
       expect(moderatorCall?.body).toBeDefined();
 
-      const body = JSON.parse(moderatorCall!.body!);
+      if (!moderatorCall)
+        throw new Error('expected moderatorCall');
+      if (!moderatorCall.body)
+        throw new Error('expected moderatorCall.body');
+
+      const body = JSON.parse(moderatorCall.body);
       expect(body.participantMessageIds).toEqual(participantMessageIds);
     });
   });

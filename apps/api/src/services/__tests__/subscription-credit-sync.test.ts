@@ -152,7 +152,9 @@ function simulateEnforceCredits(userId: string, requiredCredits: number): void {
     if (hasActiveSubscription && balance.planType !== SubscriptionTiers.PRO) {
       simulateProvisionPaidUserCredits(userId);
 
-      const updatedBalance = mockState.userCreditBalances.get(userId)!;
+      const updatedBalance = mockState.userCreditBalances.get(userId);
+      if (!updatedBalance)
+        throw new Error('User credit balance not found after provision');
       const updatedAvailable = updatedBalance.balance - updatedBalance.reservedCredits;
 
       if (updatedAvailable >= requiredCredits) {
@@ -226,7 +228,9 @@ describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
     simulateUpgradeToPaidPlan(userId);
 
     // Assertions
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
     expect(balance.balance).toBe(2_000_500); // 500 existing + 100K new
     expect(balance.monthlyCredits).toBe(2_000_000);
@@ -237,16 +241,20 @@ describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
     const now = new Date();
     const expectedNextRefill = new Date(now);
     expectedNextRefill.setMonth(expectedNextRefill.getMonth() + 1);
-    expect(balance.nextRefillAt!.getMonth()).toBe(expectedNextRefill.getMonth());
+    if (!balance.nextRefillAt)
+      throw new Error('Next refill date not set');
+    expect(balance.nextRefillAt.getMonth()).toBe(expectedNextRefill.getMonth());
 
     // Check transaction was recorded
     const tx = mockState.creditTransactions.find(
       t => t.userId === userId && t.type === CreditTransactionTypes.CREDIT_GRANT,
     );
     expect(tx).toBeTruthy();
-    expect(tx!.amount).toBe(2_000_000);
-    expect(tx!.balanceAfter).toBe(2_000_500);
-    expect(tx!.description).toContain('Upgraded to Pro plan');
+    if (!tx)
+      throw new Error('Transaction not found');
+    expect(tx.amount).toBe(2_000_000);
+    expect(tx.balanceAfter).toBe(2_000_500);
+    expect(tx.description).toContain('Upgraded to Pro plan');
   });
 
   it('preserves existing free credits when upgrading to pro', () => {
@@ -271,7 +279,9 @@ describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
     simulateUpgradeToPaidPlan(userId);
 
     // Assertions
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.balance).toBe(2_002_500); // 2,500 existing + 100K new
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
   });
@@ -295,7 +305,9 @@ describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
 
     simulateUpgradeToPaidPlan(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
     expect(balance.monthlyCredits).toBe(2_000_000);
   });
@@ -320,12 +332,18 @@ describe('subscription-Credit Sync: Plan Upgrade (Free → Pro)', () => {
     const beforeUpgrade = new Date();
     simulateUpgradeToPaidPlan(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.lastRefillAt).toBeTruthy();
-    expect(balance.lastRefillAt!.getTime()).toBeGreaterThanOrEqual(beforeUpgrade.getTime());
+    if (!balance.lastRefillAt)
+      throw new Error('Last refill date not set');
+    expect(balance.lastRefillAt.getTime()).toBeGreaterThanOrEqual(beforeUpgrade.getTime());
 
     expect(balance.nextRefillAt).toBeTruthy();
-    expect(balance.nextRefillAt!.getTime()).toBeGreaterThan(balance.lastRefillAt!.getTime());
+    if (!balance.nextRefillAt)
+      throw new Error('Next refill date not set');
+    expect(balance.nextRefillAt.getTime()).toBeGreaterThan(balance.lastRefillAt.getTime());
   });
 });
 
@@ -349,7 +367,9 @@ describe('subscription-Credit Sync: Plan Downgrade (Pro → Free)', () => {
     });
 
     // Simulate downgrade (update planType, monthlyCredits, but keep balance)
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     balance.planType = SubscriptionTiers.FREE;
     balance.monthlyCredits = 0;
 
@@ -376,7 +396,9 @@ describe('subscription-Credit Sync: Plan Downgrade (Pro → Free)', () => {
       updatedAt: new Date(),
     });
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     balance.planType = SubscriptionTiers.FREE;
     balance.monthlyCredits = 0;
 
@@ -400,14 +422,18 @@ describe('subscription-Credit Sync: Plan Downgrade (Pro → Free)', () => {
       updatedAt: new Date(),
     });
 
-    const balanceBefore = mockState.userCreditBalances.get(userId)!.balance;
+    const balanceBefore = mockState.userCreditBalances.get(userId);
+    if (!balanceBefore)
+      throw new Error('Balance not found');
 
     // Simulate downgrade
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     balance.planType = SubscriptionTiers.FREE;
     balance.monthlyCredits = 0;
 
-    expect(balance.balance).toBe(balanceBefore); // No change
+    expect(balance.balance).toBe(balanceBefore.balance); // No change
   });
 });
 
@@ -451,7 +477,9 @@ describe('subscription-Credit Sync: Plan Cancellation', () => {
     });
 
     // Assertions
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.planType).toBe(SubscriptionTiers.PRO); // Still paid until period end
     expect(balance.balance).toBe(750_000); // Credits preserved
     expect(balance.monthlyCredits).toBe(2_000_000); // Still has monthly credits
@@ -480,7 +508,9 @@ describe('subscription-Credit Sync: Plan Cancellation', () => {
 
     // Simulate monthly refill (should not process because subscription is not active)
     // First, mark subscription as canceled
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     balance.planType = SubscriptionTiers.FREE; // Downgraded
 
     simulateProcessMonthlyRefill(userId);
@@ -510,7 +540,9 @@ describe('subscription-Credit Sync: Plan Cancellation', () => {
     expect(() => simulateEnforceCredits(userId, 50_000)).not.toThrow();
 
     // Verify balance is sufficient
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.balance - balance.reservedCredits).toBeGreaterThanOrEqual(50_000);
   });
 });
@@ -539,7 +571,9 @@ describe('subscription-Credit Sync: Monthly Refill', () => {
 
     simulateProcessMonthlyRefill(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.balance).toBe(2_050_000); // 50K + 100K refill
   });
 
@@ -566,7 +600,9 @@ describe('subscription-Credit Sync: Monthly Refill', () => {
 
     simulateProcessMonthlyRefill(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.balance).toBe(2_080_000); // 80K + 100K = 180K (rollover)
   });
 
@@ -593,12 +629,18 @@ describe('subscription-Credit Sync: Monthly Refill', () => {
     const beforeRefill = new Date();
     simulateProcessMonthlyRefill(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
-    expect(balance.lastRefillAt!.getTime()).toBeGreaterThanOrEqual(beforeRefill.getTime());
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
+    if (!balance.lastRefillAt)
+      throw new Error('Last refill date not set');
+    expect(balance.lastRefillAt.getTime()).toBeGreaterThanOrEqual(beforeRefill.getTime());
 
-    const expectedNextRefill = new Date(balance.lastRefillAt!);
+    const expectedNextRefill = new Date(balance.lastRefillAt);
     expectedNextRefill.setMonth(expectedNextRefill.getMonth() + 1);
-    expect(balance.nextRefillAt!.getMonth()).toBe(expectedNextRefill.getMonth());
+    if (!balance.nextRefillAt)
+      throw new Error('Next refill date not set');
+    expect(balance.nextRefillAt.getMonth()).toBe(expectedNextRefill.getMonth());
   });
 });
 
@@ -642,7 +684,9 @@ describe('subscription-Credit Sync: Sync Recovery', () => {
     // Simulate provisioning
     simulateProvisionPaidUserCredits(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
     expect(balance.balance).toBe(2_000_000);
     expect(balance.monthlyCredits).toBe(2_000_000);
@@ -652,7 +696,9 @@ describe('subscription-Credit Sync: Sync Recovery', () => {
       t => t.userId === userId && t.type === CreditTransactionTypes.MONTHLY_REFILL,
     );
     expect(tx).toBeTruthy();
-    expect(tx!.description).toContain('subscription sync recovery');
+    if (!tx)
+      throw new Error('Transaction not found');
+    expect(tx.description).toContain('subscription sync recovery');
   });
 
   it('enforceCredits auto-provisions for subscribed users with 0 credits', () => {
@@ -695,7 +741,9 @@ describe('subscription-Credit Sync: Sync Recovery', () => {
     expect(() => simulateEnforceCredits(userId, 100)).not.toThrow();
 
     // Verify credits were provisioned
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
     expect(balance.balance).toBe(2_000_000);
   });
@@ -821,7 +869,9 @@ describe('subscription-Credit Sync: Credit Enforcement', () => {
     expect(() => simulateEnforceCredits(userId, 100)).not.toThrow();
 
     // Verify credits were auto-provisioned
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.balance).toBe(2_000_000);
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
   });
@@ -870,7 +920,9 @@ describe('subscription-Credit Sync: Edge Cases', () => {
     // Provision should fix the desync
     simulateProvisionPaidUserCredits(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
     expect(balance.balance).toBe(2_000_000);
     expect(balance.monthlyCredits).toBe(2_000_000);
@@ -897,7 +949,9 @@ describe('subscription-Credit Sync: Edge Cases', () => {
     // Simulate resubscription (upgrade to paid)
     simulateUpgradeToPaidPlan(userId);
 
-    const balance = mockState.userCreditBalances.get(userId)!;
+    const balance = mockState.userCreditBalances.get(userId);
+    if (!balance)
+      throw new Error('Balance not found');
     expect(balance.planType).toBe(SubscriptionTiers.PRO);
     expect(balance.balance).toBe(2_005_000); // 5K old + 100K new
     expect(balance.monthlyCredits).toBe(2_000_000);
@@ -928,7 +982,9 @@ describe('subscription-Credit Sync: Edge Cases', () => {
     expect(simulateCheckHasActiveSubscription(userId)).toBe(true);
 
     // Change to past_due (payment failed)
-    const subscription = mockState.stripeSubscriptions.get('sub_26')!;
+    const subscription = mockState.stripeSubscriptions.get('sub_26');
+    if (!subscription)
+      throw new Error('Subscription not found');
     subscription.status = StripeSubscriptionStatuses.PAST_DUE;
 
     expect(simulateCheckHasActiveSubscription(userId)).toBe(false);

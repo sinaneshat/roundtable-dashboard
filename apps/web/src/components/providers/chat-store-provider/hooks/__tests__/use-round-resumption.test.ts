@@ -4,7 +4,7 @@ import type { StoreApi } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 
 import { act } from '@/lib/testing';
-import type { StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 type MockChatStoreState = {
   waitingToStartStreaming: boolean;
@@ -393,14 +393,14 @@ describe('useRoundResumption', () => {
 
       const resumptionKey = `${threadId}-r${roundNumber}-p${participantIndex}`;
 
-      if (!resumptionKeys.has(resumptionKey)) {
+      if (!resumptionKeys.has(resumptionKey) && participantIndex !== null) {
         resumptionKeys.add(resumptionKey);
-        chat.continueFromParticipant(participantIndex!, store.getState().participants);
+        chat.continueFromParticipant(participantIndex, store.getState().participants);
       }
 
-      if (!resumptionKeys.has(resumptionKey)) {
+      if (!resumptionKeys.has(resumptionKey) && participantIndex !== null) {
         resumptionKeys.add(resumptionKey);
-        chat.continueFromParticipant(participantIndex!, store.getState().participants);
+        chat.continueFromParticipant(participantIndex, store.getState().participants);
       }
 
       expect(continueFromParticipant).toHaveBeenCalledTimes(1);

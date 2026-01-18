@@ -12,7 +12,8 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const usesSidebarMenuAction = /SidebarMenuAction/.test(content);
       expect(usesSidebarMenuAction).toBe(true);
 
-      expect(content).toMatch(/Link\s+href=/);
+      // TanStack Router uses 'to' instead of 'href'
+      expect(content).toMatch(/Link\s+to=/);
     });
 
     it('should not use asChild on DropdownMenuTrigger in NavUser', () => {
@@ -78,16 +79,17 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      expect(content).toMatch(/Link\s+href=/);
-      expect(content).toMatch(/href=\{chatUrl\}/);
+      // TanStack Router uses 'to' instead of 'href'
+      expect(content).toMatch(/Link\s+to=/);
+      expect(content).toMatch(/to=\{chatUrl\}/);
     });
 
     it('should disable prefetch to prevent server overload', () => {
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // Prefetch disabled entirely to prevent server overload from sidebar items
-      expect(content).toMatch(/prefetch=\{false\}/);
+      // TanStack Router uses 'preload' instead of 'prefetch' - disabled to prevent server overload
+      expect(content).toMatch(/preload=\{false\}/);
       // Should NOT have hover-based prefetch logic (caused production server overload)
       expect(content).not.toMatch(/shouldPrefetch/);
       expect(content).not.toMatch(/setShouldPrefetch/);

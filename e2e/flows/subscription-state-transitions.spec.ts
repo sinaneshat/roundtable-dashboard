@@ -143,18 +143,21 @@ test.describe('Plan Upgrade (Free → Paid)', () => {
     if (syncData.data?.synced && syncData.data.purchaseType === 'subscription') {
       // Get new credit balance
       const newBalance = await getUserCreditBalance(page);
-      expect(newBalance.success).toBe(true);
+      expect(newBalance?.success).toBe(true);
 
       // Pro users should have monthly credits (2M)
-      expect(newBalance.data?.planType).toBe('paid');
-      expect(newBalance.data?.monthlyCredits).toBe(2_000_000);
+      expect(newBalance?.data?.planType).toBe('paid');
+      expect(newBalance?.data?.monthlyCredits).toBe(2_000_000);
 
       // Balance should be initial credits + 2M monthly credits
-      expect(newBalance.data?.balance).toBeGreaterThanOrEqual(initialCredits);
+      const newBalanceAmount = newBalance?.data?.balance;
+      if (newBalanceAmount !== undefined) {
+        expect(newBalanceAmount).toBeGreaterThanOrEqual(initialCredits);
+      }
 
       // Should have refill schedule
-      expect(newBalance.data?.nextRefillAt).toBeDefined();
-      expect(newBalance.data?.lastRefillAt).toBeDefined();
+      expect(newBalance?.data?.nextRefillAt).toBeDefined();
+      expect(newBalance?.data?.lastRefillAt).toBeDefined();
     }
   });
 
@@ -162,15 +165,15 @@ test.describe('Plan Upgrade (Free → Paid)', () => {
     // Sync to ensure latest state
     const syncData = await syncAfterCheckout(page);
 
-    if (syncData.data?.synced && syncData.data.purchaseType === 'subscription') {
+    if (syncData?.data?.synced && syncData.data.purchaseType === 'subscription') {
       // Check tier change
-      expect(syncData.data.tierChange).toBeDefined();
-      expect(syncData.data.tierChange?.newTier).toBe('pro');
+      expect(syncData?.data?.tierChange).toBeDefined();
+      expect(syncData?.data?.tierChange?.newTier).toBe('pro');
 
       // Verify usage tracking reflects pro tier
       const usage = await getUserChatUsage(page);
-      if (usage.success) {
-        expect(usage.data?.subscriptionTier).toBe('pro');
+      if (usage?.success) {
+        expect(usage?.data?.subscriptionTier).toBe('pro');
       }
     }
   });
@@ -178,15 +181,15 @@ test.describe('Plan Upgrade (Free → Paid)', () => {
   test('upgrade unlocks pro tier capabilities', async ({ authenticatedPage: page }) => {
     const usage = await getUserChatUsage(page);
 
-    if (usage.success && usage.data?.subscriptionTier === 'pro') {
+    if (usage?.success && usage?.data?.subscriptionTier === 'pro') {
       // Pro tier should have higher limits
       // Free tier: 1 thread, 1 round, 100 messages
       // Pro tier: 500 threads, unlimited rounds, 10K messages
 
       // Verify pro tier quotas are applied (these are limits, not current usage)
       const balance = await getUserCreditBalance(page);
-      expect(balance.success).toBe(true);
-      expect(balance.data?.planType).toBe('paid');
+      expect(balance?.success).toBe(true);
+      expect(balance?.data?.planType).toBe('paid');
     }
   });
 
@@ -194,18 +197,21 @@ test.describe('Plan Upgrade (Free → Paid)', () => {
     // Get initial balance
     const initialBalance = await getUserCreditBalance(page);
 
-    if (initialBalance.data?.planType === 'free') {
+    if (initialBalance?.data?.planType === 'free') {
       const freeCreditsRemaining = initialBalance.data.balance;
 
       // Simulate upgrade (via sync after checkout)
       const syncData = await syncAfterCheckout(page);
 
-      if (syncData.data?.synced && syncData.data.purchaseType === 'subscription') {
+      if (syncData?.data?.synced && syncData.data.purchaseType === 'subscription') {
         const newBalance = await getUserCreditBalance(page);
 
         // New balance should include both remaining free credits + monthly pro credits
         // (Free credits + 100K)
-        expect(newBalance.data?.balance).toBeGreaterThanOrEqual(freeCreditsRemaining);
+        const newBalanceAmount = newBalance?.data?.balance;
+        if (newBalanceAmount !== undefined) {
+          expect(newBalanceAmount).toBeGreaterThanOrEqual(freeCreditsRemaining);
+        }
       }
     }
   });
@@ -229,16 +235,16 @@ test.describe('Plan Downgrade (Paid → Free)', () => {
 
     if (cancelResponse.ok()) {
       const cancelData = await cancelResponse.json();
-      expect(cancelData.success).toBe(true);
+      expect(cancelData?.success).toBe(true);
 
       // Subscription should be marked for cancellation
-      expect(cancelData.data?.subscription.cancelAtPeriodEnd).toBe(true);
-      expect(cancelData.data?.subscription.status).toBe('active');
+      expect(cancelData?.data?.subscription?.cancelAtPeriodEnd).toBe(true);
+      expect(cancelData?.data?.subscription?.status).toBe('active');
 
       // User should still have pro access
       const balance = await getUserCreditBalance(page);
-      if (balance.success) {
-        expect(balance.data?.planType).toBe('paid');
+      if (balance?.success) {
+        expect(balance?.data?.planType).toBe('paid');
       }
     }
   });
@@ -247,12 +253,12 @@ test.describe('Plan Downgrade (Paid → Free)', () => {
     // Get current credits before cancellation
     const initialBalance = await getUserCreditBalance(page);
 
-    if (initialBalance.data?.planType === 'paid') {
+    if (initialBalance?.data?.planType === 'paid') {
       const creditsBeforeCancel = initialBalance.data.balance;
 
       // Cancel subscription
       const subsData = await getUserSubscriptions(page);
-      const activeSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+      const activeSubscription = (subsData?.data?.items as Subscription[] | undefined)?.find(
         sub => sub.status === 'active' && !sub.cancelAtPeriodEnd,
       );
 
@@ -261,14 +267,14 @@ test.describe('Plan Downgrade (Paid → Free)', () => {
 
         // Credits should remain the same during grace period
         const newBalance = await getUserCreditBalance(page);
-        expect(newBalance.data?.balance).toBe(creditsBeforeCancel);
+        expect(newBalance?.data?.balance).toBe(creditsBeforeCancel);
       }
     }
   });
 
   test('downgrade stops monthly refills', async ({ authenticatedPage: page }) => {
     const subsData = await getUserSubscriptions(page);
-    const canceledSubscription = (subsData.data?.items as Subscription[] | undefined)?.find(
+    const canceledSubscription = (subsData?.data?.items as Subscription[] | undefined)?.find(
       sub => sub.cancelAtPeriodEnd === true,
     );
 
@@ -276,9 +282,9 @@ test.describe('Plan Downgrade (Paid → Free)', () => {
       const balance = await getUserCreditBalance(page);
 
       // During grace period, still shows as paid but will stop refills after period ends
-      expect(balance.success).toBe(true);
+      expect(balance?.success).toBe(true);
       // monthlyCredits field indicates refill amount (may still show 100K during grace period)
-      expect(balance.data?.monthlyCredits).toBeDefined();
+      expect(balance?.data?.monthlyCredits).toBeDefined();
     }
   });
 
@@ -288,11 +294,11 @@ test.describe('Plan Downgrade (Paid → Free)', () => {
 
     const usage = await getUserChatUsage(page);
 
-    if (usage.success && usage.data?.subscriptionTier === 'free') {
+    if (usage?.success && usage?.data?.subscriptionTier === 'free') {
       // User should now have free tier limits
       const balance = await getUserCreditBalance(page);
-      expect(balance.data?.planType).toBe('free');
-      expect(balance.data?.monthlyCredits).toBe(0);
+      expect(balance?.data?.planType).toBe('free');
+      expect(balance?.data?.monthlyCredits).toBe(0);
     }
   });
 });
@@ -314,15 +320,15 @@ test.describe('Subscription Cancellation Flow', () => {
     if (cancelResponse.ok()) {
       const cancelData = await cancelResponse.json();
 
-      expect(cancelData.data?.subscription.cancelAtPeriodEnd).toBe(true);
-      expect(cancelData.data?.subscription.status).toBe('active');
+      expect(cancelData?.data?.subscription?.cancelAtPeriodEnd).toBe(true);
+      expect(cancelData?.data?.subscription?.status).toBe('active');
 
       // Message should indicate access until period end
-      expect(cancelData.data?.message).toMatch(/end of the current billing period/i);
+      expect(cancelData?.data?.message).toMatch(/end of the current billing period/i);
 
       // Credits should still be available
       const balance = await getUserCreditBalance(page);
-      expect(balance.data?.planType).toBe('paid');
+      expect(balance?.data?.planType).toBe('paid');
     }
   });
 
@@ -343,16 +349,16 @@ test.describe('Subscription Cancellation Flow', () => {
       const cancelData = await cancelResponse.json();
 
       // Subscription should be canceled immediately
-      expect(cancelData.data?.subscription.status).toBe('canceled');
+      expect(cancelData?.data?.subscription?.status).toBe('canceled');
 
       // Message should indicate immediate cancellation
-      expect(cancelData.data?.message).toMatch(/canceled immediately/i);
+      expect(cancelData?.data?.message).toMatch(/canceled immediately/i);
 
       // Tier should downgrade to free
       const balance = await getUserCreditBalance(page);
-      if (balance.success) {
-        expect(balance.data?.planType).toBe('free');
-        expect(balance.data?.monthlyCredits).toBe(0);
+      if (balance?.success) {
+        expect(balance?.data?.planType).toBe('free');
+        expect(balance?.data?.monthlyCredits).toBe(0);
       }
     }
   });
@@ -372,8 +378,8 @@ test.describe('Subscription Cancellation Flow', () => {
 
     expect(cancelResponse.status()).toBe(400);
     const errorData = await cancelResponse.json();
-    expect(errorData.success).toBe(false);
-    expect(errorData.error?.message).toMatch(/already canceled/i);
+    expect(errorData?.success).toBe(false);
+    expect(errorData?.error?.message).toMatch(/already canceled/i);
   });
 
   test('cancellation UI shows correct messaging', async ({ authenticatedPage: page }) => {
@@ -387,7 +393,7 @@ test.describe('Subscription Cancellation Flow', () => {
     if (hasButton) {
       // UI should provide cancellation options
       const subsData = await getUserSubscriptions(page);
-      const hasActiveSubscription = (subsData.data?.items as Subscription[] | undefined)?.some(
+      const hasActiveSubscription = (subsData?.data?.items as Subscription[] | undefined)?.some(
         sub => sub.status === 'active',
       );
 
@@ -430,13 +436,13 @@ test.describe('Subscription Plan Switching', () => {
     if (switchResponse.ok()) {
       const switchData = await switchResponse.json();
 
-      expect(switchData.success).toBe(true);
-      expect(switchData.data?.changeDetails.isUpgrade).toBe(true);
-      expect(switchData.data?.changeDetails.isDowngrade).toBe(false);
+      expect(switchData?.success).toBe(true);
+      expect(switchData?.data?.changeDetails?.isUpgrade).toBe(true);
+      expect(switchData?.data?.changeDetails?.isDowngrade).toBe(false);
 
       // Credits should be adjusted for upgrade
       const balance = await getUserCreditBalance(page);
-      expect(balance.success).toBe(true);
+      expect(balance?.success).toBe(true);
     }
   });
 
@@ -473,9 +479,9 @@ test.describe('Subscription Plan Switching', () => {
     if (switchResponse.ok()) {
       const switchData = await switchResponse.json();
 
-      expect(switchData.success).toBe(true);
-      expect(switchData.data?.changeDetails.isDowngrade).toBe(true);
-      expect(switchData.data?.changeDetails.isUpgrade).toBe(false);
+      expect(switchData?.success).toBe(true);
+      expect(switchData?.data?.changeDetails?.isDowngrade).toBe(true);
+      expect(switchData?.data?.changeDetails?.isUpgrade).toBe(false);
     }
   });
 
@@ -497,9 +503,9 @@ test.describe('Subscription Plan Switching', () => {
     // Should succeed but indicate no meaningful change
     if (switchResponse.ok()) {
       const switchData = await switchResponse.json();
-      expect(switchData.success).toBe(true);
-      expect(switchData.data?.changeDetails.isUpgrade).toBe(false);
-      expect(switchData.data?.changeDetails.isDowngrade).toBe(false);
+      expect(switchData?.success).toBe(true);
+      expect(switchData?.data?.changeDetails?.isUpgrade).toBe(false);
+      expect(switchData?.data?.changeDetails?.isDowngrade).toBe(false);
     }
   });
 
@@ -533,9 +539,9 @@ test.describe('Subscription Plan Switching', () => {
       const switchData = await switchResponse.json();
 
       // Verify change details include proration information
-      expect(switchData.data?.changeDetails).toBeDefined();
-      expect(switchData.data?.changeDetails.oldPrice).toBeDefined();
-      expect(switchData.data?.changeDetails.newPrice).toBeDefined();
+      expect(switchData?.data?.changeDetails).toBeDefined();
+      expect(switchData?.data?.changeDetails?.oldPrice).toBeDefined();
+      expect(switchData?.data?.changeDetails?.newPrice).toBeDefined();
     }
   });
 });
@@ -556,10 +562,14 @@ test.describe('Trial Period Behavior', () => {
     expect(trialingSubscription.trialStart).toBeDefined();
     expect(trialingSubscription.trialEnd).toBeDefined();
 
-    const trialStart = new Date(trialingSubscription.trialStart);
-    const trialEnd = new Date(trialingSubscription.trialEnd);
+    const trialStart = trialingSubscription.trialStart;
+    const trialEnd = trialingSubscription.trialEnd;
 
-    expect(trialEnd.getTime()).toBeGreaterThan(trialStart.getTime());
+    if (trialStart && trialEnd) {
+      const trialStartDate = new Date(trialStart);
+      const trialEndDate = new Date(trialEnd);
+      expect(trialEndDate.getTime()).toBeGreaterThan(trialStartDate.getTime());
+    }
   });
 
   test('trial period grants pro tier access', async ({ authenticatedPage: page }) => {
@@ -575,9 +585,9 @@ test.describe('Trial Period Behavior', () => {
 
     // User should have pro tier access during trial
     const balance = await getUserCreditBalance(page);
-    if (balance.success) {
-      expect(balance.data?.planType).toBe('paid');
-      expect(balance.data?.monthlyCredits).toBeGreaterThan(0);
+    if (balance?.success) {
+      expect(balance?.data?.planType).toBe('paid');
+      expect(balance?.data?.monthlyCredits).toBeGreaterThan(0);
     }
   });
 
@@ -596,10 +606,12 @@ test.describe('Trial Period Behavior', () => {
     }
 
     // Subscription was previously trialing and is now active
-    const trialEnd = new Date(activeSubscription.trialEnd);
-    const now = new Date();
-
-    expect(now.getTime()).toBeGreaterThan(trialEnd.getTime());
+    const trialEnd = activeSubscription.trialEnd;
+    if (trialEnd) {
+      const trialEndDate = new Date(trialEnd);
+      const now = new Date();
+      expect(now.getTime()).toBeGreaterThan(trialEndDate.getTime());
+    }
   });
 });
 
@@ -644,8 +656,8 @@ test.describe('Failed Payment Handling', () => {
 
     // Incomplete subscriptions should not grant pro access
     const balance = await getUserCreditBalance(page);
-    if (balance.success) {
-      expect(balance.data?.planType).toBe('free');
+    if (balance?.success) {
+      expect(balance?.data?.planType).toBe('free');
     }
   });
 
@@ -669,9 +681,9 @@ test.describe('Failed Payment Handling', () => {
 
     if (response.ok()) {
       const portalData = await response.json();
-      expect(portalData.success).toBe(true);
-      expect(portalData.data?.url).toBeDefined();
-      expect(portalData.data?.url).toContain('stripe.com');
+      expect(portalData?.success).toBe(true);
+      expect(portalData?.data?.url).toBeDefined();
+      expect(portalData?.data?.url).toContain('stripe.com');
     }
   });
 });
@@ -690,8 +702,9 @@ test.describe('Subscription Renewal and Credit Refill', () => {
 
     const balance = await getUserCreditBalance(page);
 
-    if (balance.success && balance.data?.nextRefillAt) {
-      const refillDate = new Date(balance.data.nextRefillAt);
+    const nextRefillAt = balance?.data?.nextRefillAt;
+    if (balance?.success && nextRefillAt) {
+      const refillDate = new Date(nextRefillAt);
       const periodEnd = new Date(activeSubscription.currentPeriodEnd);
 
       // Refill should be around subscription period end
@@ -705,13 +718,13 @@ test.describe('Subscription Renewal and Credit Refill', () => {
   test('monthly refill adds credits to existing balance', async ({ authenticatedPage: page }) => {
     const balance = await getUserCreditBalance(page);
 
-    if (balance.success && balance.data?.planType === 'paid') {
+    if (balance?.success && balance?.data?.planType === 'paid') {
       // Pro users get 2M monthly credits
-      expect(balance.data.monthlyCredits).toBe(2_000_000);
+      expect(balance?.data?.monthlyCredits).toBe(2_000_000);
 
       // Credits should accumulate (not reset)
       // If user has remaining credits, next refill should add 2M to get the total
-      expect(balance.data.balance).toBeGreaterThanOrEqual(0);
+      expect(balance?.data?.balance).toBeGreaterThanOrEqual(0);
     }
   });
 
@@ -738,26 +751,31 @@ test.describe('Subscription Renewal and Credit Refill', () => {
 
     // User should have pro access
     const balance = await getUserCreditBalance(page);
-    expect(balance.data?.planType).toBe('paid');
+    expect(balance?.data?.planType).toBe('paid');
   });
 
   test('refill schedule updates after successful renewal', async ({ authenticatedPage: page }) => {
     const balance = await getUserCreditBalance(page);
 
-    if (balance.success && balance.data?.planType === 'paid') {
-      expect(balance.data.lastRefillAt).toBeDefined();
-      expect(balance.data.nextRefillAt).toBeDefined();
+    if (balance?.success && balance?.data?.planType === 'paid') {
+      expect(balance?.data?.lastRefillAt).toBeDefined();
+      expect(balance?.data?.nextRefillAt).toBeDefined();
 
-      const lastRefill = new Date(balance.data.lastRefillAt!);
-      const nextRefill = new Date(balance.data.nextRefillAt!);
+      const lastRefillAt = balance.data.lastRefillAt;
+      const nextRefillAt = balance.data.nextRefillAt;
 
-      // Next refill should be after last refill
-      expect(nextRefill.getTime()).toBeGreaterThan(lastRefill.getTime());
+      if (lastRefillAt && nextRefillAt) {
+        const lastRefill = new Date(lastRefillAt);
+        const nextRefill = new Date(nextRefillAt);
 
-      // Should be approximately 1 month apart
-      const daysDifference = (nextRefill.getTime() - lastRefill.getTime()) / (1000 * 60 * 60 * 24);
-      expect(daysDifference).toBeGreaterThan(28);
-      expect(daysDifference).toBeLessThan(32);
+        // Next refill should be after last refill
+        expect(nextRefill.getTime()).toBeGreaterThan(lastRefill.getTime());
+
+        // Should be approximately 1 month apart
+        const daysDifference = (nextRefill.getTime() - lastRefill.getTime()) / (1000 * 60 * 60 * 24);
+        expect(daysDifference).toBeGreaterThan(28);
+        expect(daysDifference).toBeLessThan(32);
+      }
     }
   });
 });
@@ -772,14 +790,14 @@ test.describe('Subscription State Consistency', () => {
     const balance = await getUserCreditBalance(page);
     const usage = await getUserChatUsage(page);
 
-    if (activeSubscription && balance.success && usage.success) {
+    if (activeSubscription && balance?.success && usage?.success) {
       // Pro subscription should have paid plan type and pro tier
-      expect(balance.data?.planType).toBe('paid');
-      expect(usage.data?.subscriptionTier).toBe('pro');
-    } else if (!activeSubscription && balance.success && usage.success) {
+      expect(balance?.data?.planType).toBe('paid');
+      expect(usage?.data?.subscriptionTier).toBe('pro');
+    } else if (!activeSubscription && balance?.success && usage?.success) {
       // No subscription should have free plan type and free tier
-      expect(balance.data?.planType).toBe('free');
-      expect(usage.data?.subscriptionTier).toBe('free');
+      expect(balance?.data?.planType).toBe('free');
+      expect(usage?.data?.subscriptionTier).toBe('free');
     }
   });
 
@@ -798,8 +816,8 @@ test.describe('Subscription State Consistency', () => {
     const balance = await getUserCreditBalance(page);
     const usage = await getUserChatUsage(page);
 
-    expect(balance.data?.planType).toBe('paid');
-    expect(usage.data?.subscriptionTier).toBe('pro');
+    expect(balance?.data?.planType).toBe('paid');
+    expect(usage?.data?.subscriptionTier).toBe('pro');
 
     // Period end should be in the future
     const periodEnd = new Date(canceledButActive.currentPeriodEnd);
@@ -811,17 +829,17 @@ test.describe('Subscription State Consistency', () => {
     const subsData = await getUserSubscriptions(page);
     const balance = await getUserCreditBalance(page);
 
-    if (subsData.success && balance.success) {
-      const hasActiveSubscription = (subsData.data?.items as Subscription[] | undefined)?.some(
+    if (subsData?.success && balance?.success) {
+      const hasActiveSubscription = (subsData?.data?.items as Subscription[] | undefined)?.some(
         sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
       );
 
       if (hasActiveSubscription) {
-        expect(balance.data?.planType).toBe('paid');
-        expect(balance.data?.monthlyCredits).toBeGreaterThan(0);
+        expect(balance?.data?.planType).toBe('paid');
+        expect(balance?.data?.monthlyCredits).toBeGreaterThan(0);
       } else {
-        expect(balance.data?.planType).toBe('free');
-        expect(balance.data?.monthlyCredits).toBe(0);
+        expect(balance?.data?.planType).toBe('free');
+        expect(balance?.data?.monthlyCredits).toBe(0);
       }
     }
   });
@@ -830,19 +848,20 @@ test.describe('Subscription State Consistency', () => {
     // Sync after checkout to ensure all tables are updated
     const syncData = await syncAfterCheckout(page);
 
-    if (syncData.data?.synced && syncData.data.tierChange) {
-      const { newTier } = syncData.data.tierChange;
+    const tierChange = syncData?.data?.tierChange;
+    if (syncData?.data?.synced && tierChange) {
+      const { newTier } = tierChange;
 
       // Verify all data sources reflect the same tier
       const balance = await getUserCreditBalance(page);
       const usage = await getUserChatUsage(page);
 
       if (newTier === 'pro') {
-        expect(balance.data?.planType).toBe('paid');
-        expect(usage.data?.subscriptionTier).toBe('pro');
+        expect(balance?.data?.planType).toBe('paid');
+        expect(usage?.data?.subscriptionTier).toBe('pro');
       } else {
-        expect(balance.data?.planType).toBe('free');
-        expect(usage.data?.subscriptionTier).toBe('free');
+        expect(balance?.data?.planType).toBe('free');
+        expect(usage?.data?.subscriptionTier).toBe('free');
       }
     }
   });
@@ -876,8 +895,8 @@ test.describe('Edge Cases and Error Handling', () => {
 
     expect(response.status()).toBe(400);
     const errorData = await response.json();
-    expect(errorData.success).toBe(false);
-    expect(errorData.error?.message).toMatch(/already have an active subscription/i);
+    expect(errorData?.success).toBe(false);
+    expect(errorData?.error?.message).toMatch(/already have an active subscription/i);
   });
 
   test('handle non-existent subscription operations', async ({ authenticatedPage: page }) => {
@@ -887,8 +906,8 @@ test.describe('Edge Cases and Error Handling', () => {
 
     expect(cancelResponse.status()).toBe(404);
     const errorData = await cancelResponse.json();
-    expect(errorData.success).toBe(false);
-    expect(errorData.error?.message).toMatch(/not found/i);
+    expect(errorData?.success).toBe(false);
+    expect(errorData?.error?.message).toMatch(/not found/i);
   });
 
   test('handle invalid price when switching plans', async ({ authenticatedPage: page }) => {
@@ -908,19 +927,19 @@ test.describe('Edge Cases and Error Handling', () => {
 
     expect(switchResponse.status()).toBe(400);
     const errorData = await switchResponse.json();
-    expect(errorData.success).toBe(false);
-    expect(errorData.error?.message).toMatch(/not found/i);
+    expect(errorData?.success).toBe(false);
+    expect(errorData?.error?.message).toMatch(/not found/i);
   });
 
   test('graceful handling of sync failures', async ({ authenticatedPage: page }) => {
     // Sync should return graceful response even on errors
     const syncData = await syncAfterCheckout(page);
 
-    expect(syncData.success).toBe(true);
-    expect(syncData.data).toBeDefined();
+    expect(syncData?.success).toBe(true);
+    expect(syncData?.data).toBeDefined();
 
     // Even if sync failed, should return structure
-    expect(syncData.data?.synced).toBeDefined();
-    expect(syncData.data?.purchaseType).toBeDefined();
+    expect(syncData?.data?.synced).toBeDefined();
+    expect(syncData?.data?.purchaseType).toBeDefined();
   });
 });

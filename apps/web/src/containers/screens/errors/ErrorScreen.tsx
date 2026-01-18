@@ -9,8 +9,8 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import messages from '@/i18n/locales/en/common.json';
-import { NextIntlClientProvider, useTranslations } from '@/lib/compat';
 import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { I18nProvider, useTranslations } from '@/lib/i18n';
 
 type ErrorDetails = {
   message?: string;
@@ -91,8 +91,8 @@ function ErrorScreenContent({ reset, error }: ErrorScreenProps) {
 
 export default function ErrorScreen({ reset, error }: ErrorScreenProps) {
   return (
-    <NextIntlClientProvider messages={messages} locale="en" timeZone="UTC">
+    <I18nProvider messages={messages} locale="en" timeZone="UTC">
       <ErrorScreenContent reset={reset} error={error} />
-    </NextIntlClientProvider>
+    </I18nProvider>
   );
 }

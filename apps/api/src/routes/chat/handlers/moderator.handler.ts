@@ -586,9 +586,14 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
 
     // Build participant responses with schema-typed structure
     // ✅ LENIENT: Use getParticipantIndex instead of requireParticipantMetadata to avoid strict Zod validation
-    const participantResponses: ParticipantResponse[] = participantMessages
+    // Filter to messages with valid participant data, then map
+    const messagesWithParticipants = participantMessages.filter(
+      (msg): msg is typeof msg & { participant: NonNullable<typeof msg.participant> } =>
+        msg.participant !== null && msg.participant !== undefined,
+    );
+    const participantResponses: ParticipantResponse[] = messagesWithParticipants
       .map((msg, idx): ParticipantResponse => {
-        const participant = msg.participant!;
+        const { participant } = msg;
         const modelName = extractModeratorModelName(participant.modelId);
         // Lenient extraction - fallback to array index if metadata extraction fails
         const participantIndex = getParticipantIndex(msg.metadata) ?? idx;

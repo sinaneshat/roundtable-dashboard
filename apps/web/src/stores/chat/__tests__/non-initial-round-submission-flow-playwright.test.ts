@@ -28,7 +28,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage } from '@/lib/testing';
 import { getCurrentRoundNumber } from '@/lib/utils';
-import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
+import type { ApiMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -77,7 +77,7 @@ function createParticipant(index: number, overrides?: Partial<ChatParticipant>):
   } as ChatParticipant;
 }
 
-function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ChatMessage {
+function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ApiMessage {
   return createTestUserMessage({
     id: `${THREAD_ID}_r${roundNumber}_user`,
     content,
@@ -90,7 +90,7 @@ function createAssistantMsg(
   participantIndex: number,
   content = `Response R${roundNumber}P${participantIndex}`,
   finishReason = FinishReasons.STOP,
-): ChatMessage {
+): ApiMessage {
   return createTestAssistantMessage({
     id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     content,
@@ -101,7 +101,7 @@ function createAssistantMsg(
   });
 }
 
-function createModeratorMsg(roundNumber: number, content = `Summary R${roundNumber}`): ChatMessage {
+function createModeratorMsg(roundNumber: number, content = `Summary R${roundNumber}`): ApiMessage {
   return createTestModeratorMessage({
     id: `${THREAD_ID}_r${roundNumber}_moderator`,
     content,
@@ -1070,7 +1070,10 @@ describe('placeholder visibility: Immediate appearance after submission (Round 1
     setupCompletedRound(store, 0, 1);
 
     // Submit
-    store.getState().prepareForNewMessage('Question 2', [participants[0]!.modelId]);
+    const participant0 = participants[0];
+    if (!participant0)
+      throw new Error('expected participant0');
+    store.getState().prepareForNewMessage('Question 2', [participant0.modelId]);
 
     // DURING PATCH
     store.getState().setIsCreatingThread(true);
@@ -1120,7 +1123,10 @@ describe('placeholder visibility: Pre-search placeholder', () => {
     setupCompletedRound(store, 0, 1);
 
     // Submit Round 1
-    store.getState().prepareForNewMessage('Question with search', [store.getState().participants[0]!.modelId]);
+    const participant0 = store.getState().participants[0];
+    if (!participant0)
+      throw new Error('expected participant0');
+    store.getState().prepareForNewMessage('Question with search', [participant0.modelId]);
 
     // Pre-search created
     store.getState().addPreSearch(createPreSearch(1, 'pending'));
@@ -1144,7 +1150,10 @@ describe('placeholder visibility: Pre-search placeholder', () => {
     setupCompletedRound(store, 0, 1);
 
     // Submit
-    store.getState().prepareForNewMessage('Question', [store.getState().participants[0]!.modelId]);
+    const participant0 = store.getState().participants[0];
+    if (!participant0)
+      throw new Error('expected participant0');
+    store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     store.getState().addPreSearch(createPreSearch(1, 'pending'));
 
     // DURING PATCH
@@ -1172,7 +1181,10 @@ describe('placeholder visibility: Pre-search placeholder', () => {
     setupCompletedRound(store, 0, 1);
 
     // Submit with pre-search
-    store.getState().prepareForNewMessage('Question', [store.getState().participants[0]!.modelId]);
+    const participant0 = store.getState().participants[0];
+    if (!participant0)
+      throw new Error('expected participant0');
+    store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     store.getState().addPreSearch(createPreSearch(1, 'pending'));
 
     // Pre-search transitions to streaming
@@ -1269,7 +1281,10 @@ describe('placeholder visibility: Participant placeholders', () => {
     setupCompletedRound(store, 0, 1);
 
     // Submit
-    store.getState().prepareForNewMessage('Question', [participants[0]!.modelId]);
+    const participant0 = participants[0];
+    if (!participant0)
+      throw new Error('expected participant0');
+    store.getState().prepareForNewMessage('Question', [participant0.modelId]);
 
     // Participant streams and completes
     store.getState().setIsStreaming(true);
@@ -1299,7 +1314,10 @@ describe('placeholder visibility: Moderator placeholder', () => {
     setupCompletedRound(store, 0, 1);
 
     // Submit and complete participants
-    store.getState().prepareForNewMessage('Question', [participants[0]!.modelId]);
+    const participant0 = participants[0];
+    if (!participant0)
+      throw new Error('expected participant0');
+    store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     store.getState().setIsStreaming(true);
     store.getState().setMessages([
       ...store.getState().messages,
@@ -1323,7 +1341,10 @@ describe('placeholder visibility: Moderator placeholder', () => {
     setupCompletedRound(store, 0, 1);
 
     // Complete participants
-    store.getState().prepareForNewMessage('Question', [store.getState().participants[0]!.modelId]);
+    const participant0 = store.getState().participants[0];
+    if (!participant0)
+      throw new Error('expected participant0');
+    store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     store.getState().setMessages([
       ...store.getState().messages,
       createUserMsg(1),
@@ -1354,7 +1375,10 @@ describe('placeholder visibility: Moderator placeholder', () => {
     setupCompletedRound(store, 0, 1);
 
     // Complete full round
-    store.getState().prepareForNewMessage('Question', [store.getState().participants[0]!.modelId]);
+    const participant0 = store.getState().participants[0];
+    if (!participant0)
+      throw new Error('expected participant0');
+    store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     store.getState().setMessages([
       ...store.getState().messages,
       createUserMsg(1),
@@ -1471,7 +1495,10 @@ describe('placeholder visibility: Timeline - no disappearing placeholders', () =
     setupCompletedRound(store, 0, 1);
 
     // Submit
-    store.getState().prepareForNewMessage('Question', [participants[0]!.modelId]);
+    const participant0 = participants[0];
+    if (!participant0)
+      throw new Error('expected participant0');
+    store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     const roundNumber = store.getState().streamingRoundNumber;
     expect(roundNumber).toBe(1);
 
@@ -1689,7 +1716,7 @@ describe('cRITICAL: User message visibility during non-initial round submission'
     expect(round1Messages).toHaveLength(2); // User + assistant
     const userMsg = round1Messages.find(m => m.role === UIMessageRoles.USER);
     expect(userMsg).toBeDefined();
-    expect(userMsg!.parts[0]).toEqual({ type: MessagePartTypes.TEXT, text: 'Follow-up' });
+    expect(userMsg?.parts[0]).toEqual({ type: MessagePartTypes.TEXT, text: 'Follow-up' });
   });
 
   it('should preserve user message when configChangeRoundNumber blocks streaming', () => {

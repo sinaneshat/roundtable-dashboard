@@ -110,7 +110,7 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
         // Update chat store
         chatStoreActions.setSelectedParticipants(newParticipants);
         chatStoreActions.setModelOrder(modelIds);
-        chatStoreActions.setSelectedMode(recommendedMode as any);
+        chatStoreActions.setSelectedMode(recommendedMode);
         chatStoreActions.setEnableWebSearch(recommendedWebSearch);
 
         // Sync to preferences for persistence

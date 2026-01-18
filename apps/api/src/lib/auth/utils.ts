@@ -83,11 +83,9 @@ export const EMAIL_DOMAIN_CONFIG = {
 
 export function isRestrictedEnvironment(): boolean {
   try {
-    const cfEnv = workersEnv as unknown as Record<string, string | undefined>;
-    const webappEnv = cfEnv?.WEBAPP_ENV;
-    if (typeof webappEnv === 'string' && isWebappEnv(webappEnv)) {
+    if (workersEnv.WEBAPP_ENV && isWebappEnv(workersEnv.WEBAPP_ENV)) {
       // Only restrict PREVIEW - LOCAL/localhost should allow any email
-      return webappEnv === WEBAPP_ENVS.PREVIEW;
+      return workersEnv.WEBAPP_ENV === WEBAPP_ENVS.PREVIEW;
     }
   } catch {
     // Workers env not available

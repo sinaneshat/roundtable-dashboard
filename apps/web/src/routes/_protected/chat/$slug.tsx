@@ -5,26 +5,34 @@ import { ChatThreadSkeleton } from '@/components/loading';
 import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { useThreadBySlugQuery } from '@/hooks/queries';
 import { useSession } from '@/lib/auth/client';
-import { getThreadBySlugService } from '@/services/api';
+import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
+import { getThreadBySlug } from '@/server/thread';
+import type { GetThreadBySlugResponse } from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
-  // Loader fetches thread data for dynamic title
-  loader: async ({ params }) => {
-    try {
-      const response = await getThreadBySlugService({ param: { slug: params.slug } });
-      if (response.success) {
-        return { threadData: response.data };
-      }
-      return { threadData: null };
-    } catch {
-      return { threadData: null };
-    }
+  // Prefetch thread data into QueryClient cache for SSR hydration
+  loader: async ({ params, context }) => {
+    const { queryClient } = context;
+
+    // Prefetch into TanStack Query cache - component will use same queryKey
+    // Server function handles cookie forwarding via getRequest()
+    await queryClient.prefetchQuery({
+      queryKey: queryKeys.threads.bySlug(params.slug),
+      queryFn: () => getThreadBySlug({ data: params.slug }),
+      staleTime: STALE_TIMES.threadDetail,
+    });
+
+    // Return minimal loader data for head() - actual data comes from QueryClient
+    const cachedData = queryClient.getQueryData<GetThreadBySlugResponse>(queryKeys.threads.bySlug(params.slug));
+    return { threadTitle: cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null };
   },
   pendingComponent: ChatThreadSkeleton,
   // Dynamic title from loader data
   head: ({ loaderData }) => {
-    const title = loaderData?.threadData?.thread?.title;
-    const displayTitle = title ? `${title} - Roundtable` : 'Chat - Roundtable';
+    const displayTitle = loaderData?.threadTitle
+      ? `${loaderData.threadTitle} - Roundtable`
+      : 'Chat - Roundtable';
     return {
       meta: [
         { title: displayTitle },
@@ -37,20 +45,18 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
 
 function ChatThreadRoute() {
   const { slug } = Route.useParams();
-  const { threadData: loaderThreadData } = Route.useLoaderData();
   const { data: session } = useSession();
 
-  const { data: queryData, isError, error } = useThreadBySlugQuery(
-    slug,
-    !loaderThreadData,
-  );
+  // Use query hook - data is already in cache from loader prefetch
+  const { data: queryData, isError, error } = useThreadBySlugQuery(slug);
 
-  const threadData = loaderThreadData || (queryData?.success ? queryData.data : null);
+  const threadData = queryData?.success ? queryData.data : null;
 
   const user = useMemo(() => ({
+    id: session?.user?.id ?? '',
     name: session?.user?.name || 'You',
     image: session?.user?.image || null,
-  }), [session?.user?.name, session?.user?.image]);
+  }), [session?.user?.id, session?.user?.name, session?.user?.image]);
 
   if (isError || !threadData) {
     return (

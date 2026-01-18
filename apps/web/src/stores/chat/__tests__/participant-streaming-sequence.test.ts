@@ -408,7 +408,11 @@ describe('participant Streaming Sequence', () => {
       const endTime = state.endTime;
 
       expect(endTime).toBeDefined();
-      expect(endTime!).toBeGreaterThanOrEqual(startTime!);
+      if (!endTime)
+        throw new Error('expected endTime');
+      if (!startTime)
+        throw new Error('expected startTime');
+      expect(endTime).toBeGreaterThanOrEqual(startTime);
     });
 
     it('should capture finish reason', () => {

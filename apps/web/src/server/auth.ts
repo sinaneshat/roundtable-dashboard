@@ -1,41 +1,46 @@
+/**
+ * Server-side Auth Functions for TanStack Start
+ *
+ * Uses getRequest() to access the full Request object with headers/cookies.
+ * This is the correct approach for TanStack Start server functions.
+ *
+ * For client-side auth, use useSession/getSession from @/lib/auth/client
+ *
+ * @see https://www.better-auth.com/docs/integrations/tanstack
+ */
+
 import { createServerFn } from '@tanstack/react-start';
-import { getRequestHeaders } from '@tanstack/react-start/server';
+import { getRequest } from '@tanstack/react-start/server';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8787/api/v1';
-
-// Better Auth base URL (API origin, not /api/v1)
-function getAuthBaseUrl(): string {
-  try {
-    const url = new URL(API_URL);
-    return url.origin;
-  } catch {
-    return API_URL.replace(/\/api\/v1$/, '');
-  }
-}
+import { getSession as clientGetSession, signOut as clientSignOut } from '@/lib/auth/client';
+import type { SessionData } from '@/lib/auth/types';
 
 /**
- * Get the current session from the API.
- * This should be called during SSR to check auth status.
- * Forwards cookies from the original request to authenticate with the API.
+ * Get the current session from Better Auth.
+ * Server-side function for SSR auth checks.
+ * Uses getRequest() to access the full Request object with cookies.
  */
 export const getSession = createServerFn({ method: 'GET' }).handler(
-  async () => {
+  async (): Promise<SessionData | null> => {
     try {
-      // Get headers from the incoming request to forward cookies
-      const headers = getRequestHeaders();
-      const cookie = headers.cookie || headers.Cookie;
+      const request = getRequest();
+      const cookieHeader = request.headers.get('cookie') || '';
 
-      const response = await fetch(`${API_URL}/auth/me`, {
-        headers: cookie ? { Cookie: cookie } : {},
+      // Better Auth pattern: pass headers through fetchOptions
+      // @see https://www.better-auth.com/docs/integrations/tanstack
+      const result = await clientGetSession({
+        fetchOptions: {
+          headers: {
+            cookie: cookieHeader,
+          },
+        },
       });
 
-      if (!response.ok) {
-        return null;
+      return result.data ?? null;
+    } catch (error) {
+      if (import.meta.env.MODE === 'development') {
+        console.error('[Auth] getSession error:', error);
       }
-
-      const data = await response.json();
-      return data.success ? data.data : null;
-    } catch {
       return null;
     }
   },
@@ -43,22 +48,22 @@ export const getSession = createServerFn({ method: 'GET' }).handler(
 
 /**
  * Sign out the current user.
- * Calls Better Auth's sign-out endpoint (at /api/auth, not /api/v1).
+ * Uses getRequest() to access cookies for signout.
  */
 export const signOut = createServerFn({ method: 'POST' }).handler(async () => {
   try {
-    // Get headers from the incoming request to forward cookies
-    const headers = getRequestHeaders();
-    const cookie = headers.cookie || headers.Cookie;
+    const request = getRequest();
+    const cookieHeader = request.headers.get('cookie') || '';
 
-    // Better Auth sign-out is at /api/auth/sign-out, not /api/v1/auth/sign-out
-    const authBaseUrl = getAuthBaseUrl();
-    const response = await fetch(`${authBaseUrl}/api/auth/sign-out`, {
-      method: 'POST',
-      headers: cookie ? { Cookie: cookie } : {},
+    await clientSignOut({
+      fetchOptions: {
+        headers: {
+          cookie: cookieHeader,
+        },
+      },
     });
 
-    return response.ok;
+    return true;
   } catch {
     return false;
   }

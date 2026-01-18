@@ -1,25 +1,47 @@
-import { useEffect } from 'react';
+import { createContext, use, useCallback, useEffect, useState } from 'react';
+
+type SwContextValue = {
+  updateAvailable: boolean;
+  applyUpdate: () => void;
+};
+
+const DEFAULT_SW_CONTEXT: SwContextValue = {
+  updateAvailable: false,
+  applyUpdate: () => {},
+};
+
+const SwContext = createContext<SwContextValue>(DEFAULT_SW_CONTEXT);
+
+export function useServiceWorker() {
+  return use(SwContext);
+}
 
 /**
  * Service Worker Registration Provider
  *
  * Registers the service worker for PWA caching of static assets.
- * This enables client-side caching of:
- * - Next.js static bundles (/_next/static/*)
- * - Framework chunks (React, etc.)
- * - Icons and images
- * - Navigation responses (for offline support)
+ * Uses "prompt for update" pattern - notifies user when update is available
+ * and lets them control when to apply it (prevents unexpected refreshes).
  *
  * Cache Invalidation Strategy:
  * - SW is regenerated with new cache version on each build
- * - On SW update, old caches are automatically deleted
- * - New SW activates immediately (skipWaiting + clients.claim)
- * - Page reloads automatically to ensure fresh assets
+ * - On SW update, user is notified via updateAvailable state
+ * - User triggers applyUpdate() to reload with new SW
+ * - Old caches are automatically deleted on SW activate
  *
  * The service worker is only registered in production to avoid
  * caching stale assets during development.
  */
 export function ServiceWorkerProvider({ children }: { children: React.ReactNode }) {
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
+
+  const applyUpdate = useCallback(() => {
+    if (waitingWorker) {
+      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
+  }, [waitingWorker]);
+
   useEffect(() => {
     // Only register in production (not local dev)
     if (
@@ -27,22 +49,18 @@ export function ServiceWorkerProvider({ children }: { children: React.ReactNode 
       || !('serviceWorker' in navigator)
       || import.meta.env.VITE_WEBAPP_ENV === 'local'
     ) {
-      return;
+      return undefined;
     }
 
-    let intervalId: NodeJS.Timeout | null = null;
     let refreshing = false;
-
-    const handleVisibilityChange = (registration: ServiceWorkerRegistration) => {
-      if (document.visibilityState === 'visible') {
-        registration.update().catch(() => {});
-      }
-    };
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let visibilityHandler: (() => void) | null = null;
+    let registrationRef: ServiceWorkerRegistration | null = null;
+    let updateFoundHandler: (() => void) | null = null;
 
     const handleControllerChange = () => {
-      if (refreshing) {
+      if (refreshing)
         return;
-      }
       refreshing = true;
       window.location.reload();
     };
@@ -54,30 +72,57 @@ export function ServiceWorkerProvider({ children }: { children: React.ReactNode 
           updateViaCache: 'none',
         });
 
-        // Check for updates on page visibility change (user returns to tab)
-        const visibilityHandler = () => handleVisibilityChange(registration);
-        document.addEventListener('visibilitychange', visibilityHandler);
+        registrationRef = registration;
 
-        // Also check periodically (every 2 minutes)
+        // Check if there's already a waiting worker (page reload during update)
+        if (registration.waiting) {
+          setWaitingWorker(registration.waiting);
+          setUpdateAvailable(true);
+        }
+
+        // Handle new update found
+        // Note: statechange listener on newWorker cannot be cleaned up
+        // because the ServiceWorker object is created by the browser
+        // and we lose reference to it after this callback completes
+        const handleUpdateFound = () => {
+          const newWorker = registration.installing;
+          if (!newWorker)
+            return;
+
+          const handleStateChange = () => {
+            // Worker is installed and waiting - notify user
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              setWaitingWorker(newWorker);
+              setUpdateAvailable(true);
+              // DO NOT send SKIP_WAITING automatically - let user control update
+            }
+          };
+
+          // eslint-disable-next-line react-web-api/no-leaked-event-listener
+          newWorker.addEventListener('statechange', handleStateChange);
+        };
+        updateFoundHandler = handleUpdateFound;
+        // eslint-disable-next-line react-web-api/no-leaked-event-listener
+        registration.addEventListener('updatefound', handleUpdateFound);
+
+        // Check for updates on visibility change (user returns to tab)
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible') {
+            registration.update().catch(() => {});
+          }
+        };
+        visibilityHandler = handleVisibilityChange;
+        // Cleanup is handled in useEffect return function
+        // eslint-disable-next-line react-web-api/no-leaked-event-listener
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Check for updates periodically (every 10 minutes instead of 2)
+        // Less aggressive to reduce unnecessary network requests
         intervalId = setInterval(() => {
           registration.update().catch(() => {});
-        }, 2 * 60 * 1000);
+        }, 10 * 60 * 1000);
 
-        // Handle updates - auto-reload to get new version
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (!newWorker) {
-            return;
-          }
-
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
-            }
-          });
-        });
-
-        // When new SW takes control, reload to get fresh assets
+        // When new SW takes control (after user triggers update), reload
         navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
       } catch {
         // SW registration failed - not critical, app works without it
@@ -85,20 +130,34 @@ export function ServiceWorkerProvider({ children }: { children: React.ReactNode 
     };
 
     // Register after page load to not block initial render
+    const onLoad = () => {
+      void registerServiceWorker();
+    };
+
     if (document.readyState === 'complete') {
-      registerServiceWorker();
+      void registerServiceWorker();
     } else {
-      window.addEventListener('load', registerServiceWorker);
+      window.addEventListener('load', onLoad);
     }
 
     return () => {
-      window.removeEventListener('load', registerServiceWorker);
+      window.removeEventListener('load', onLoad);
+      if (visibilityHandler) {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+      }
       if (intervalId) {
         clearInterval(intervalId);
+      }
+      if (registrationRef && updateFoundHandler) {
+        registrationRef.removeEventListener('updatefound', updateFoundHandler);
       }
       navigator.serviceWorker?.removeEventListener('controllerchange', handleControllerChange);
     };
   }, []);
 
-  return <>{children}</>;
+  return (
+    <SwContext value={{ updateAvailable, applyUpdate }}>
+      {children}
+    </SwContext>
+  );
 }

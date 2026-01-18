@@ -97,7 +97,7 @@ describe('useSubscriptionsQuery', () => {
     const mockSubscriptions = createMultipleSubscriptions();
     const mockResponse = createSubscriptionListResponse(mockSubscriptions);
 
-    queryClient.setQueryData(['subscriptions', 'list'], mockResponse);
+    queryClient.setQueryData(['subscriptions', 'current'], mockResponse);
 
     const { result } = renderHook(() => useSubscriptionsQuery(), {
       wrapper: createWrapper(queryClient),
@@ -114,7 +114,7 @@ describe('useSubscriptionsQuery', () => {
   it('should return empty list from cache', async () => {
     const mockResponse = createEmptySubscriptionListResponse();
 
-    queryClient.setQueryData(['subscriptions', 'list'], mockResponse);
+    queryClient.setQueryData(['subscriptions', 'current'], mockResponse);
 
     const { result } = renderHook(() => useSubscriptionsQuery(), {
       wrapper: createWrapper(queryClient),
@@ -147,7 +147,7 @@ describe('useSubscriptionsQuery', () => {
   it('should return error response from cache', async () => {
     const mockErrorResponse = createSubscriptionListErrorResponse('Failed to fetch subscriptions');
 
-    queryClient.setQueryData(['subscriptions', 'list'], mockErrorResponse);
+    queryClient.setQueryData(['subscriptions', 'current'], mockErrorResponse);
 
     const { result } = renderHook(() => useSubscriptionsQuery(), {
       wrapper: createWrapper(queryClient),

@@ -11,16 +11,16 @@
  * Location: /src/components/providers/pageview-tracker.tsx
  */
 
+import { useLocation, useSearch } from '@tanstack/react-router';
 import { usePostHog } from 'posthog-js/react';
 import { useEffect, useRef } from 'react';
 
 import { useSession } from '@/lib/auth/client';
-import { usePathname, useSearchParams } from '@/lib/compat';
 
 /**
  * Extracts context from pathname for PostHog events
  */
-function extractPageContext(pathname: string, searchParams: URLSearchParams | null) {
+function extractPageContext(pathname: string, searchParams: Record<string, unknown> | null) {
   const segments = pathname.split('/').filter(Boolean);
   const context: Record<string, string | boolean> = {
     pathname,
@@ -60,15 +60,15 @@ function extractPageContext(pathname: string, searchParams: URLSearchParams | nu
   }
 
   // Add search params if present
-  if (searchParams) {
-    const params = Object.fromEntries(searchParams.entries());
+  if (searchParams && typeof searchParams === 'object') {
+    const params = searchParams as Record<string, string | undefined>;
     if (Object.keys(params).length > 0) {
       context.hasQueryParams = true;
       // Add specific query params that are safe to track
       if (params.model)
-        context.selectedModel = params.model;
+        context.selectedModel = String(params.model);
       if (params.view)
-        context.viewMode = params.view;
+        context.viewMode = String(params.view);
     }
   }
 
@@ -82,8 +82,8 @@ function extractPageContext(pathname: string, searchParams: URLSearchParams | nu
  */
 export function PageViewTracker() {
   const posthog = usePostHog();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const { pathname } = useLocation();
+  const searchParams = useSearch({ strict: false }) as Record<string, unknown> | null;
   const { data: session } = useSession();
   const lastTrackedPath = useRef<string>('');
 
@@ -91,7 +91,7 @@ export function PageViewTracker() {
     if (!posthog)
       return;
 
-    const currentPath = `${pathname}${searchParams ? `?${searchParams.toString()}` : ''}`;
+    const currentPath = `${pathname}${searchParams ? `?${new URLSearchParams(searchParams as Record<string, string>).toString()}` : ''}`;
 
     // Avoid duplicate tracking of the same path
     if (lastTrackedPath.current === currentPath)
@@ -100,7 +100,7 @@ export function PageViewTracker() {
     lastTrackedPath.current = currentPath;
 
     // Extract page context
-    const context = extractPageContext(pathname, searchParams as any);
+    const context = extractPageContext(pathname, searchParams);
 
     // Add user context if authenticated
     if (session?.user) {

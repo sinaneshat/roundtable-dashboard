@@ -1,10 +1,11 @@
+import { Link } from '@tanstack/react-router';
 import type React from 'react';
 
 import { Icons } from '@/components/icons';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
-import { getTranslations, Link } from '@/lib/compat';
+import { getTranslations } from '@/lib/i18n';
 
 type PublicChatLayoutProps = {
   children: React.ReactNode;
@@ -18,7 +19,7 @@ export default async function PublicChatLayout({ children }: PublicChatLayoutPro
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/20">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4 px-5 md:px-6 py-3">
           <Link
-            href="/"
+            to="/"
             className="flex items-center gap-3 hover:opacity-80 transition-opacity min-w-0"
           >
             <Logo size="sm" variant="icon" className="shrink-0" />
@@ -34,7 +35,7 @@ export default async function PublicChatLayout({ children }: PublicChatLayoutPro
 
           <Button asChild size="sm" className="shrink-0">
             <Link
-              href="/auth/sign-up?utm_source=public_chat&utm_medium=header&utm_campaign=try_free"
+              to="/auth/sign-up?utm_source=public_chat&utm_medium=header&utm_campaign=try_free"
               className="flex items-center gap-1.5"
             >
               <span>{t('tryFree')}</span>

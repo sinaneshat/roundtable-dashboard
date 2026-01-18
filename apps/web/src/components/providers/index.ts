@@ -7,6 +7,7 @@ export {
   type ChatStoreProviderProps,
   useChatStore,
   useChatStoreApi,
+  useChatStoreOptional,
 } from './chat-store-provider';
 export { PageViewTracker } from './pageview-tracker';
 export { PostHogIdentifyUser } from './posthog-identify-user';
@@ -16,3 +17,7 @@ export {
   useModelPreferencesHydrated,
   useModelPreferencesStore,
 } from './preferences-store-provider';
+export {
+  ServiceWorkerProvider,
+  useServiceWorker,
+} from './service-worker-provider';

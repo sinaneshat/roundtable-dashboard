@@ -1,8 +1,9 @@
 import type { LogoSize, LogoVariant } from '@roundtable/shared';
 import { LogoSizeMetadata, LogoSizes, LogoVariants } from '@roundtable/shared';
 
+import Image from '@/components/ui/image';
 import { BRAND } from '@/constants';
-import { Image, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type Props = {

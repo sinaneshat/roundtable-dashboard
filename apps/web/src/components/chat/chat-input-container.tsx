@@ -1,5 +1,6 @@
 import type { BorderVariant } from '@roundtable/shared';
 import { BorderVariants, ComponentSizes, ComponentVariants, PlanTypes } from '@roundtable/shared';
+import { Link } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { memo, useMemo } from 'react';
@@ -8,8 +9,8 @@ import { Button } from '@/components/ui/button';
 import { STRING_LIMITS } from '@/constants';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { useFreeTrialState } from '@/hooks/utils';
-import { Link, useTranslations } from '@/lib/compat';
 import { MAX_PARTICIPANTS_LIMIT, MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
+import { useTranslations } from '@/lib/i18n';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
@@ -222,7 +223,7 @@ export const ChatInputContainer = memo(({
                   size={ComponentSizes.SM}
                   className={cn('h-7 px-4 text-[11px] font-semibold shrink-0 rounded-full', styles?.button)}
                 >
-                  <Link href={alert.actionHref}>{alert.actionLabel}</Link>
+                  <Link to={alert.actionHref}>{alert.actionLabel}</Link>
                 </Button>
               )}
             </div>

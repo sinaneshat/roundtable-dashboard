@@ -16,172 +16,140 @@ import { createApiClient, createPublicApiClient } from '@/lib/api/client';
 // ============================================================================
 
 type ListThreadsEndpoint = ApiClientType['chat']['threads']['$get'];
-export type ListThreadsRequest = InferRequestType<ListThreadsEndpoint>;
-export type ListThreadsResponse = InferResponseType<ListThreadsEndpoint>;
-
 type CreateThreadEndpoint = ApiClientType['chat']['threads']['$post'];
-export type CreateThreadRequest = InferRequestType<CreateThreadEndpoint>;
-export type CreateThreadResponse = InferResponseType<CreateThreadEndpoint>;
-
 type GetThreadEndpoint = ApiClientType['chat']['threads'][':id']['$get'];
-export type GetThreadRequest = InferRequestType<GetThreadEndpoint>;
-export type GetThreadResponse = InferResponseType<GetThreadEndpoint>;
-
 type UpdateThreadEndpoint = ApiClientType['chat']['threads'][':id']['$patch'];
-export type UpdateThreadRequest = InferRequestType<UpdateThreadEndpoint>;
-export type UpdateThreadResponse = InferResponseType<UpdateThreadEndpoint>;
-
 type DeleteThreadEndpoint = ApiClientType['chat']['threads'][':id']['$delete'];
+
+export type ListThreadsRequest = InferRequestType<ListThreadsEndpoint>;
+export type ListThreadsResponse = InferResponseType<ListThreadsEndpoint, 200>;
+export type CreateThreadRequest = InferRequestType<CreateThreadEndpoint>;
+export type CreateThreadResponse = InferResponseType<CreateThreadEndpoint, 200>;
+export type GetThreadRequest = InferRequestType<GetThreadEndpoint>;
+export type GetThreadResponse = InferResponseType<GetThreadEndpoint, 200>;
+export type UpdateThreadRequest = InferRequestType<UpdateThreadEndpoint>;
+export type UpdateThreadResponse = InferResponseType<UpdateThreadEndpoint, 200>;
 export type DeleteThreadRequest = InferRequestType<DeleteThreadEndpoint>;
-export type DeleteThreadResponse = InferResponseType<DeleteThreadEndpoint>;
+export type DeleteThreadResponse = InferResponseType<DeleteThreadEndpoint, 200>;
 
 // ============================================================================
 // Type Inference - Public Thread Operations
 // ============================================================================
 
 type GetPublicThreadEndpoint = ApiClientType['chat']['public'][':slug']['$get'];
-export type GetPublicThreadRequest = InferRequestType<GetPublicThreadEndpoint>;
-export type GetPublicThreadResponse = InferResponseType<GetPublicThreadEndpoint>;
-
 type ListPublicThreadSlugsEndpoint = ApiClientType['chat']['public']['slugs']['$get'];
-export type ListPublicThreadSlugsResponse = InferResponseType<ListPublicThreadSlugsEndpoint>;
-
 type GetThreadBySlugEndpoint = ApiClientType['chat']['threads']['slug'][':slug']['$get'];
-export type GetThreadBySlugRequest = InferRequestType<GetThreadBySlugEndpoint>;
-export type GetThreadBySlugResponse = InferResponseType<GetThreadBySlugEndpoint>;
-
 type GetThreadSlugStatusEndpoint = ApiClientType['chat']['threads'][':id']['slug-status']['$get'];
+
+export type GetPublicThreadRequest = InferRequestType<GetPublicThreadEndpoint>;
+export type GetPublicThreadResponse = InferResponseType<GetPublicThreadEndpoint, 200>;
+export type ListPublicThreadSlugsResponse = InferResponseType<ListPublicThreadSlugsEndpoint, 200>;
+export type GetThreadBySlugRequest = InferRequestType<GetThreadBySlugEndpoint>;
+export type GetThreadBySlugResponse = InferResponseType<GetThreadBySlugEndpoint, 200>;
 export type GetThreadSlugStatusRequest = InferRequestType<GetThreadSlugStatusEndpoint>;
-export type GetThreadSlugStatusResponse = InferResponseType<GetThreadSlugStatusEndpoint>;
+export type GetThreadSlugStatusResponse = InferResponseType<GetThreadSlugStatusEndpoint, 200>;
 
 // ============================================================================
-// Type Inference - Messages and Changelog
+// Type Inference - Sidebar, Messages, Changelog
 // ============================================================================
 
+type ListSidebarThreadsEndpoint = ApiClientType['chat']['threads']['sidebar']['$get'];
 type GetThreadMessagesEndpoint = ApiClientType['chat']['threads'][':id']['messages']['$get'];
-export type GetThreadMessagesRequest = InferRequestType<GetThreadMessagesEndpoint>;
-export type GetThreadMessagesResponse = InferResponseType<GetThreadMessagesEndpoint>;
-
 type GetThreadChangelogEndpoint = ApiClientType['chat']['threads'][':id']['changelog']['$get'];
-export type GetThreadChangelogRequest = InferRequestType<GetThreadChangelogEndpoint>;
-export type GetThreadChangelogResponse = InferResponseType<GetThreadChangelogEndpoint>;
-
 type GetThreadRoundChangelogEndpoint = ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['changelog']['$get'];
+
+export type ListSidebarThreadsRequest = InferRequestType<ListSidebarThreadsEndpoint>;
+export type ListSidebarThreadsResponse = InferResponseType<ListSidebarThreadsEndpoint, 200>;
+export type GetThreadMessagesRequest = InferRequestType<GetThreadMessagesEndpoint>;
+export type GetThreadMessagesResponse = InferResponseType<GetThreadMessagesEndpoint, 200>;
+export type GetThreadChangelogRequest = InferRequestType<GetThreadChangelogEndpoint>;
+export type GetThreadChangelogResponse = InferResponseType<GetThreadChangelogEndpoint, 200>;
 export type GetThreadRoundChangelogRequest = InferRequestType<GetThreadRoundChangelogEndpoint>;
-export type GetThreadRoundChangelogResponse = InferResponseType<GetThreadRoundChangelogEndpoint>;
+export type GetThreadRoundChangelogResponse = InferResponseType<GetThreadRoundChangelogEndpoint, 200>;
 
 // ============================================================================
-// Type Inference - Stream Resumption
+// Type Inference - Stream Resumption & Auto Mode
 // ============================================================================
 
 type GetThreadStreamResumptionStateEndpoint = ApiClientType['chat']['threads'][':threadId']['stream-status']['$get'];
+type AnalyzePromptEndpoint = ApiClientType['chat']['analyze']['$post'];
+
 export type GetThreadStreamResumptionStateRequest = InferRequestType<GetThreadStreamResumptionStateEndpoint>;
-export type GetThreadStreamResumptionStateResponse = InferResponseType<GetThreadStreamResumptionStateEndpoint>;
+export type GetThreadStreamResumptionStateResponse = InferResponseType<GetThreadStreamResumptionStateEndpoint, 200>;
+export type AnalyzePromptRequest = InferRequestType<AnalyzePromptEndpoint>;
+export type AnalyzePromptResponse = InferResponseType<AnalyzePromptEndpoint, 200>;
 
 // ============================================================================
 // Service Functions - Thread CRUD
 // ============================================================================
 
-/**
- * List chat threads with cursor pagination
- * Protected endpoint - requires authentication
- */
-export async function listThreadsService(args?: ListThreadsRequest, options?: { cookieHeader?: string }) {
-  const client = createApiClient({ cookieHeader: options?.cookieHeader });
-  return parseResponse(client.chat.threads.$get(args ?? { query: {} }));
+export async function listThreadsService(data?: ListThreadsRequest) {
+  const client = createApiClient();
+  return parseResponse(client.chat.threads.$get(data ?? { query: {} }));
 }
 
-// ============================================================================
-// Type Inference - Sidebar Thread Operations
-// ============================================================================
-
-type ListSidebarThreadsEndpoint = ApiClientType['chat']['threads']['sidebar']['$get'];
-export type ListSidebarThreadsRequest = InferRequestType<ListSidebarThreadsEndpoint>;
-export type ListSidebarThreadsResponse = InferResponseType<ListSidebarThreadsEndpoint>;
-
-/**
- * List sidebar threads with lightweight payload (essential fields only)
- * Protected endpoint - requires authentication
- */
-export async function listSidebarThreadsService(
-  args?: ListSidebarThreadsRequest,
-  options?: { cookieHeader?: string },
-) {
-  const client = createApiClient({ cookieHeader: options?.cookieHeader });
-  return parseResponse(client.chat.threads.sidebar.$get(args ?? { query: {} }));
-}
-
-/**
- * Create a new chat thread with participants and optional first message
- * Protected endpoint - requires authentication
- */
 export async function createThreadService(data: CreateThreadRequest) {
   const client = createApiClient();
   return parseResponse(client.chat.threads.$post(data));
 }
 
-/**
- * Get a specific thread by ID with participants and messages
- * Protected endpoint - requires authentication (ownership check)
- */
 export async function getThreadService(data: GetThreadRequest) {
   const client = createApiClient();
   return parseResponse(client.chat.threads[':id'].$get(data));
 }
 
-/**
- * Update thread details (title, favorite, public status, etc.)
- * Protected endpoint - requires authentication
- */
 export async function updateThreadService(data: UpdateThreadRequest) {
   const client = createApiClient();
   return parseResponse(client.chat.threads[':id'].$patch(data));
 }
 
-/**
- * Delete a chat thread
- * Protected endpoint - requires authentication
- */
 export async function deleteThreadService(data: DeleteThreadRequest) {
   const client = createApiClient();
   return parseResponse(client.chat.threads[':id'].$delete(data));
 }
 
 // ============================================================================
-// Service Functions - Public Thread Operations
+// Service Options
 // ============================================================================
 
 /**
- * Get a public thread by slug (no authentication required)
- * Public endpoint - uses createPublicApiClient() for ISR/SSG compatibility
+ * Service options for SSR cookie forwarding
  */
+type ServiceOptions = {
+  cookieHeader?: string;
+};
+
+// ============================================================================
+// Service Functions - Sidebar Threads
+// ============================================================================
+
+export async function listSidebarThreadsService(data?: ListSidebarThreadsRequest, options?: ServiceOptions) {
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
+  return parseResponse(client.chat.threads.sidebar.$get(data ?? { query: {} }));
+}
+
+// ============================================================================
+// Service Functions - Public Thread Operations
+// ============================================================================
+
 export async function getPublicThreadService(data: GetPublicThreadRequest) {
   const client = createPublicApiClient();
   return parseResponse(client.chat.public[':slug'].$get(data));
 }
 
-/**
- * List all public thread slugs for SSG/ISR page generation
- * Public endpoint - uses createPublicApiClient() for ISR/SSG compatibility
- */
 export async function listPublicThreadSlugsService() {
   const client = createPublicApiClient();
   return parseResponse(client.chat.public.slugs.$get());
 }
 
-/**
- * Get a thread by slug for the authenticated user
- * Protected endpoint - requires authentication (ownership check)
- */
-export async function getThreadBySlugService(data: GetThreadBySlugRequest) {
-  const client = createApiClient();
+export async function getThreadBySlugService(
+  data: GetThreadBySlugRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
   return parseResponse(client.chat.threads.slug[':slug'].$get(data));
 }
 
-/**
- * Get thread slug status (for polling during AI title generation)
- * Protected endpoint - requires authentication (ownership check)
- */
 export async function getThreadSlugStatusService(data: GetThreadSlugStatusRequest) {
   const client = createApiClient();
   return parseResponse(client.chat.threads[':id']['slug-status'].$get(data));
@@ -191,31 +159,16 @@ export async function getThreadSlugStatusService(data: GetThreadSlugStatusReques
 // Service Functions - Messages and Changelog
 // ============================================================================
 
-/**
- * Get messages for a thread
- * Protected endpoint - requires authentication (ownership check)
- */
 export async function getThreadMessagesService(data: GetThreadMessagesRequest) {
   const client = createApiClient();
   return parseResponse(client.chat.threads[':id'].messages.$get(data));
 }
 
-/**
- * Get configuration changelog for a thread
- * Protected endpoint - requires authentication (ownership check)
- */
-export async function getThreadChangelogService(
-  data: GetThreadChangelogRequest,
-  options?: { cookieHeader?: string },
-) {
-  const client = createApiClient({ cookieHeader: options?.cookieHeader });
+export async function getThreadChangelogService(data: GetThreadChangelogRequest) {
+  const client = createApiClient();
   return parseResponse(client.chat.threads[':id'].changelog.$get(data));
 }
 
-/**
- * Get configuration changelog for a specific round
- * Protected endpoint - requires authentication (ownership check)
- */
 export async function getThreadRoundChangelogService(data: GetThreadRoundChangelogRequest) {
   const client = createApiClient();
   return parseResponse(client.chat.threads[':threadId'].rounds[':roundNumber'].changelog.$get(data));
@@ -225,25 +178,13 @@ export async function getThreadRoundChangelogService(data: GetThreadRoundChangel
 // Service Functions - Stream Resumption
 // ============================================================================
 
-/**
- * Get stream resumption state for server-side prefetching
- * Protected endpoint - requires authentication (ownership check)
- */
 export async function getThreadStreamResumptionStateService(data: GetThreadStreamResumptionStateRequest) {
   const client = createApiClient();
   return parseResponse(client.chat.threads[':threadId']['stream-status'].$get(data));
 }
 
 // ============================================================================
-// Type Inference - Auto Mode Prompt Analysis
-// ============================================================================
-
-type AnalyzePromptEndpoint = ApiClientType['chat']['analyze']['$post'];
-export type AnalyzePromptRequest = InferRequestType<AnalyzePromptEndpoint>;
-export type AnalyzePromptResponse = InferResponseType<AnalyzePromptEndpoint>;
-
-// ============================================================================
-// Service Functions - Auto Mode
+// Service Functions - Auto Mode (Streaming - NO parseResponse)
 // ============================================================================
 
 /**
@@ -254,8 +195,11 @@ export type AnalyzePromptResponse = InferResponseType<AnalyzePromptEndpoint>;
  * EXCEPTION: Does NOT parse response because SSE streams must return raw Response
  * object for EventSource/ReadableStream processing.
  */
-export async function analyzePromptStreamService(data: AnalyzePromptRequest) {
-  const client = createApiClient();
+export async function analyzePromptStreamService(
+  data: AnalyzePromptRequest,
+  options?: { signal?: AbortSignal },
+) {
+  const client = createApiClient({ signal: options?.signal });
   return client.chat.analyze.$post(data);
 }
 
@@ -266,8 +210,6 @@ export async function analyzePromptStreamService(data: AnalyzePromptRequest) {
 /**
  * Thread detail payload data extracted from GetThreadResponse
  * Contains: thread, participants, messages, changelog, feedback, preSearches, user
- *
- * Uses Extract to get the { success: true } variant and then access 'data'.
  */
 export type ThreadDetailData = Extract<GetThreadResponse, { success: true }> extends { data: infer D } ? D : never;
 
@@ -279,13 +221,11 @@ export type PublicThreadData = Extract<GetPublicThreadResponse, { success: true 
 
 /**
  * Message type from API response - derived from ThreadDetailData
- * Use this for any function that processes API messages
  */
 export type ApiMessage = ThreadDetailData['messages'][number];
 
 /**
  * Changelog type from API response - derived from ThreadDetailData
- * Use this for any function that processes API changelog items
  */
 export type ApiChangelog = ThreadDetailData['changelog'][number];
 
@@ -296,12 +236,167 @@ export type ApiParticipant = ThreadDetailData['participants'][number];
 
 /**
  * Changelog list payload data extracted from GetThreadChangelogResponse
- * SINGLE SOURCE OF TRUTH for changelog list operations
  */
 export type ChangelogListData = Extract<GetThreadChangelogResponse, { success: true }> extends { data: infer D } ? D : never;
 
 /**
  * Individual changelog item from changelog list endpoint
- * This should be identical to ApiChangelog from thread detail
  */
 export type ChangelogItem = ChangelogListData['items'][number];
+
+// ============================================================================
+// Derived Types - Convenience aliases for consumer code
+// ============================================================================
+
+/**
+ * ChatThread - Thread entity derived from API response
+ */
+export type ChatThread = ThreadDetailData['thread'];
+
+/**
+ * ChatThreadFlexible - Partial thread with required id
+ */
+export type ChatThreadFlexible = {
+  id: string;
+} & Partial<ChatThread>;
+
+/**
+ * ChatParticipant - Participant entity alias
+ */
+export type ChatParticipant = ApiParticipant;
+
+/**
+ * ChatThreadChangelog - Changelog entity alias
+ */
+export type ChatThreadChangelog = ApiChangelog;
+
+/**
+ * ChatThreadChangelogFlexible - Partial changelog with required fields
+ */
+export type ChatThreadChangelogFlexible = {
+  id: string;
+  changeType: string;
+  changeData: Record<string, unknown>;
+} & Partial<ChatThreadChangelog>;
+
+/**
+ * ChatSidebarItem - Sidebar thread item derived from API response
+ */
+export type ChatSidebarItem = Extract<
+  ListSidebarThreadsResponse,
+  { success: true }
+> extends { data: { items: Array<infer T> } }
+  ? T
+  : never;
+
+/**
+ * StoredThread - Thread with participants for store storage
+ */
+export type StoredThread = {
+  participants: ChatParticipant[];
+} & ChatThread;
+
+/**
+ * ThreadStreamResumptionState - Stream resumption state from API
+ */
+export type ThreadStreamResumptionState = Extract<
+  GetThreadStreamResumptionStateResponse,
+  { success: true }
+> extends { data: infer D }
+  ? D
+  : never;
+
+// ============================================================================
+// Message Metadata Types - Derived from RPC Response (SINGLE SOURCE OF TRUTH)
+// ============================================================================
+
+/**
+ * Message metadata type derived from API response
+ * Discriminated union of all metadata types
+ */
+export type DbMessageMetadata = NonNullable<ApiMessage['metadata']>;
+
+/**
+ * User message metadata type (discriminated union member)
+ */
+export type DbUserMessageMetadata = Extract<DbMessageMetadata, { role: 'user' }>;
+
+/**
+ * Assistant message metadata type (discriminated union member)
+ * Excludes moderator messages
+ */
+export type DbAssistantMessageMetadata = Extract<DbMessageMetadata, { role: 'assistant'; participantId: string }> & { isModerator?: never };
+
+/**
+ * Pre-search message metadata type (discriminated union member)
+ */
+export type DbPreSearchMessageMetadata = Extract<DbMessageMetadata, { role: 'system'; isPreSearch: true }>;
+
+/**
+ * Moderator message metadata type (discriminated union member)
+ */
+export type DbModeratorMessageMetadata = Extract<DbMessageMetadata, { role: 'assistant'; isModerator: true }>;
+
+/**
+ * Citation type derived from assistant message metadata
+ */
+export type DbCitation = NonNullable<DbAssistantMessageMetadata['citations']>[number];
+
+/**
+ * Available source type derived from assistant message metadata
+ */
+export type AvailableSource = NonNullable<DbAssistantMessageMetadata['availableSources']>[number];
+
+// ============================================================================
+// Type Guards - Import from type-guards.ts (Pure TypeScript)
+// ============================================================================
+
+export {
+  isAssistantMessageMetadata,
+  isModeChange,
+  isModeratorMessageMetadata,
+  isParticipantChange,
+  isParticipantMessageMetadata,
+  isParticipantReorder,
+  isParticipantRoleChange,
+  isPreSearchMessageMetadata,
+  isUserMessageMetadata,
+  isWebSearchChange,
+} from './type-guards';
+
+/**
+ * Participant message metadata - explicitly NOT including moderator messages.
+ * Use this type when you need to access participant-specific fields.
+ */
+export type ParticipantMessageMetadata = DbAssistantMessageMetadata;
+
+// ============================================================================
+// Safe Parse Helper for Changelog (Compatibility)
+// ============================================================================
+// Removed: safeParseChangelogData() and ChangelogDataValidated type
+// Use DbChangelogData directly - API already validates changelog data
+
+/**
+ * ApiMessageMetadata - RPC-inferred metadata type from API response
+ * Kept for backwards compatibility with components using API-derived types
+ */
+export type ApiMessageMetadata = NonNullable<ApiMessage['metadata']>;
+
+/**
+ * ApiMessageParts - Parts array type derived from ApiMessage
+ */
+export type ApiMessageParts = ApiMessage['parts'];
+
+/**
+ * ApiMessagePart - Single part type from message parts array
+ */
+export type ApiMessagePart = ApiMessageParts[number];
+
+// ============================================================================
+// Changelog Data Types - Derived from ApiChangelog
+// ============================================================================
+
+/**
+ * DbChangelogData - Changelog data type derived from ApiChangelog
+ */
+export type DbChangelogData = ApiChangelog['changeData'];

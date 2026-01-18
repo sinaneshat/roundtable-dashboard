@@ -246,8 +246,11 @@ describe('pre-Search Errors', () => {
     state.addPreSearch(failedPreSearch);
 
     expect(getStoreState(store).preSearches).toHaveLength(1);
-    expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.FAILED);
-    expect(getStoreState(store).preSearches[0]!.errorMessage).toBe('Search timed out');
+    const preSearch = getStoreState(store).preSearches[0];
+    if (!preSearch)
+      throw new Error('expected preSearch at index 0');
+    expect(preSearch.status).toBe(MessageStatuses.FAILED);
+    expect(preSearch.errorMessage).toBe('Search timed out');
   });
 
   it('pre-search failure does not block participant streaming', () => {
@@ -273,7 +276,10 @@ describe('pre-Search Errors', () => {
     state.setStreamingRoundNumber(0);
 
     expect(getStoreState(store).isStreaming).toBe(true);
-    expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.FAILED);
+    const preSearchAfter = getStoreState(store).preSearches[0];
+    if (!preSearchAfter)
+      throw new Error('expected preSearch at index 0');
+    expect(preSearchAfter.status).toBe(MessageStatuses.FAILED);
   });
 });
 
@@ -319,7 +325,10 @@ describe('partial Response Handling', () => {
 
     // Partial content preserved
     expect(getStoreState(store).messages).toHaveLength(2);
-    expect(getStoreState(store).messages[1]!.parts?.[0]).toEqual({
+    const partialMsg = getStoreState(store).messages[1];
+    if (!partialMsg)
+      throw new Error('expected message at index 1');
+    expect(partialMsg.parts?.[0]).toEqual({
       type: 'text',
       text: 'I was saying something important when-',
     });
@@ -357,8 +366,11 @@ describe('partial Response Handling', () => {
     state.setMessages([userMessage, emptyMessage]);
 
     expect(getStoreState(store).messages).toHaveLength(2);
-    expect(getStoreState(store).messages[1]!.parts).toEqual([]);
-    expect((getStoreState(store).messages[1]!.metadata as { isPartialResponse: boolean }).isPartialResponse).toBe(true);
+    const emptyMsg = getStoreState(store).messages[1];
+    if (!emptyMsg)
+      throw new Error('expected message at index 1');
+    expect(emptyMsg.parts).toEqual([]);
+    expect((emptyMsg.metadata as { isPartialResponse: boolean }).isPartialResponse).toBe(true);
   });
 });
 

@@ -13,8 +13,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { SmartImage } from '@/components/ui/smart-image';
-import { useTranslations } from '@/lib/compat';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type ShareDialogProps = {
@@ -65,10 +65,10 @@ export function ShareDialog({
 
   const baseUrl = getAppBaseUrl();
   const shareUrl = `${baseUrl}/public/chat/${slug}`;
-  // Derive cache key from revision - only non-zero revisions add cache bust param
+  // OG image from API endpoint - revision param for cache busting
   const ogImageUrl = useMemo(() => {
-    const basePath = `${baseUrl}/public/chat/${slug}/opengraph-image`;
-    return ogRevision > 0 ? `${basePath}?v=${ogRevision}-${Date.now()}` : basePath;
+    const basePath = `${baseUrl}/api/v1/og/chat?slug=${slug}`;
+    return ogRevision > 0 ? `${basePath}&v=${ogRevision}-${Date.now()}` : basePath;
   }, [baseUrl, slug, ogRevision]);
 
   useEffect(() => {

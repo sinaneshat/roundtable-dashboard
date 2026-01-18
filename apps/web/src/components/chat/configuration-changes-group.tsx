@@ -9,22 +9,25 @@ import {
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useModelLookup } from '@/hooks/utils/use-model-lookup';
-import { useTranslations } from '@/lib/compat';
 import { formatRelativeTime } from '@/lib/format';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils';
-import type {
-  ChatThreadChangelogFlexible,
-  ConfigurationChangesGroupProps,
-  DbChangelogData,
-} from '@/types/api';
+import type { ChatThreadChangelogFlexible, DbChangelogData } from '@/services/api';
 import {
   isModeChange,
   isParticipantChange,
   isParticipantRoleChange,
   isWebSearchChange,
-  safeParseChangelogData,
-} from '@/types/api';
+} from '@/services/api';
+
+export type ConfigurationChangesGroupProps = {
+  group: {
+    changes: ChatThreadChangelogFlexible[];
+    timestamp: string;
+  };
+  className?: string;
+};
 
 function getChangeAction(changeType: ChatThreadChangelogFlexible['changeType']): ChangelogType {
   return changeType;
@@ -146,9 +149,10 @@ function ChangeItem({ change, isReadOnly }: ChangeItemProps) {
   const t = useTranslations();
   const { findModel } = useModelLookup({ enabled: !isReadOnly });
 
-  const changeData: DbChangelogData | undefined = safeParseChangelogData(change.changeData);
+  // API already validates changelog data - trust the type
+  const changeData = change.changeData as DbChangelogData;
 
-  if (!changeData) {
+  if (!changeData || typeof changeData !== 'object' || !('type' in changeData)) {
     return null;
   }
 

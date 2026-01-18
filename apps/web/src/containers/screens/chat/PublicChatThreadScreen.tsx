@@ -1,4 +1,5 @@
 import { ComponentVariants, ErrorBoundaryContexts } from '@roundtable/shared';
+import { Link } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
@@ -9,14 +10,12 @@ import { GlowingEffect } from '@/components/ui/glowing-effect';
 import { usePublicThreadQuery } from '@/hooks/queries';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
-import { Link, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { chatMessagesToUIMessages, transformChatParticipants, transformPreSearches } from '@/lib/utils';
-import type { PublicThreadData } from '@/services/api';
-import type { StoredPreSearch } from '@/types/api';
+import type { PublicThreadData, StoredPreSearch } from '@/services/api';
 
 type PublicChatThreadScreenProps = {
   slug: string;
-  /** SSR data passed directly - ensures immediate render without hydration flash */
   initialData?: PublicThreadData | null;
 };
 
@@ -118,7 +117,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
             </p>
           </div>
           <Button asChild variant={ComponentVariants.DEFAULT}>
-            <Link href="/">{t('actions.goHome')}</Link>
+            <Link to="/">{t('actions.goHome')}</Link>
           </Button>
         </div>
       </div>
@@ -139,7 +138,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
             </p>
           </div>
           <Button asChild variant={ComponentVariants.DEFAULT}>
-            <Link href="/">{t('chat.public.goHome')}</Link>
+            <Link to="/">{t('chat.public.goHome')}</Link>
           </Button>
         </div>
       </div>
@@ -205,7 +204,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
                         </p>
                         <Button asChild>
                           <Link
-                            href="/auth/sign-up?utm_source=public_chat&utm_medium=bottom_cta&utm_campaign=try_free"
+                            to="/auth/sign-up?utm_source=public_chat&utm_medium=bottom_cta&utm_campaign=try_free"
                             className="flex items-center gap-2"
                           >
                             <span>{t('chat.public.getStartedFree')}</span>

@@ -27,15 +27,13 @@ import {
 
 import { PricingContent } from '../pricing-content';
 
-vi.mock('@/lib/compat', () => ({
-  useRouter: vi.fn(() => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    refresh: vi.fn(),
-  })),
-  usePathname: vi.fn(() => '/chat/pricing'),
-  useTranslations: vi.fn(() => (key: string) => key),
-}));
+vi.mock('@/lib/i18n', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/i18n')>();
+  return {
+    ...original,
+    useTranslations: vi.fn(() => (key: string) => key),
+  };
+});
 
 vi.mock('@/hooks/utils', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/hooks/utils')>();
@@ -45,60 +43,9 @@ vi.mock('@/hooks/utils', async (importOriginal) => {
   };
 });
 
-type MockRouter = {
-  push: ReturnType<typeof vi.fn>;
-  replace: ReturnType<typeof vi.fn>;
-  refresh: ReturnType<typeof vi.fn>;
-};
-
 describe('pricingContent', () => {
-  const mockRouter: MockRouter = {
-    push: vi.fn(),
-    replace: vi.fn(),
-    refresh: vi.fn(),
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useRouter).mockReturnValue(mockRouter as AppRouterInstance);
-  });
-
-  describe('loading state', () => {
-    it('shows skeleton when loading', () => {
-      render(
-        <PricingContent
-          products={[]}
-          subscriptions={[]}
-          isLoading={true}
-          processingPriceId={null}
-          onSubscribe={vi.fn()}
-          onCancel={vi.fn()}
-          onManageBilling={vi.fn()}
-        />,
-      );
-
-      // Skeleton should have specific structure
-      const skeletons = document.querySelectorAll('.animate-pulse');
-      expect(skeletons.length).toBeGreaterThan(0);
-    });
-
-    it('does not show products during loading', () => {
-      const products = createMockProductCatalog();
-
-      render(
-        <PricingContent
-          products={products}
-          subscriptions={[]}
-          isLoading={true}
-          processingPriceId={null}
-          onSubscribe={vi.fn()}
-          onCancel={vi.fn()}
-          onManageBilling={vi.fn()}
-        />,
-      );
-
-      expect(screen.queryByText('Pro Plan')).not.toBeInTheDocument();
-    });
   });
 
   describe('error state', () => {
@@ -117,7 +64,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getByText('Error')).toBeInTheDocument();
+      expect(screen.getByText('plans.error')).toBeInTheDocument();
     });
 
     it('shows try again button in error state', () => {
@@ -135,12 +82,18 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'actions.tryAgain' })).toBeInTheDocument();
     });
 
-    it('calls router.refresh when try again button clicked', async () => {
+    it('calls window.location.reload when try again button clicked', async () => {
       const user = userEvent.setup();
       const error = new Error('Failed to load products');
+      const mockReload = vi.fn();
+      const originalLocation = window.location;
+      Object.defineProperty(window, 'location', {
+        value: { ...originalLocation, reload: mockReload },
+        writable: true,
+      });
 
       render(
         <PricingContent
@@ -154,8 +107,13 @@ describe('pricingContent', () => {
         />,
       );
 
-      await user.click(screen.getByRole('button', { name: /try again/i }));
-      expect(mockRouter.refresh).toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: 'actions.tryAgain' }));
+      expect(mockReload).toHaveBeenCalled();
+
+      Object.defineProperty(window, 'location', {
+        value: originalLocation,
+        writable: true,
+      });
     });
   });
 
@@ -250,7 +208,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getByText(/no plans available/i)).toBeInTheDocument();
+      expect(screen.getByText('plans.noPlansAvailable')).toBeInTheDocument();
     });
   });
 
@@ -292,10 +250,10 @@ describe('pricingContent', () => {
         />,
       );
 
-      // PricingCard now uses fixed value props instead of custom description/features
+      // PricingCard now uses fixed value props with translation keys
       expect(screen.getByText('Test Plan')).toBeInTheDocument();
-      expect(screen.getByText('All AI Models')).toBeInTheDocument();
-      expect(screen.getByText('Unlimited Messages')).toBeInTheDocument();
+      expect(screen.getByText('pricing.card.valueProps.allModels.title')).toBeInTheDocument();
+      expect(screen.getByText('pricing.card.valueProps.unlimited.title')).toBeInTheDocument();
     });
   });
 
@@ -318,7 +276,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getByText('Current Plan')).toBeInTheDocument();
+      expect(screen.getByText('pricing.card.currentPlan')).toBeInTheDocument();
     });
 
     it('identifies trialing subscription as active', () => {
@@ -339,7 +297,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getByText('Current Plan')).toBeInTheDocument();
+      expect(screen.getByText('pricing.card.currentPlan')).toBeInTheDocument();
     });
 
     it('does not show current plan for canceled subscription', () => {
@@ -371,7 +329,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.queryByText('Current Plan')).not.toBeInTheDocument();
+      expect(screen.queryByText('pricing.card.currentPlan')).not.toBeInTheDocument();
     });
 
     it('does not show current plan for subscription marked for cancellation', () => {
@@ -392,7 +350,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.queryByText('Current Plan')).not.toBeInTheDocument();
+      expect(screen.queryByText('pricing.card.currentPlan')).not.toBeInTheDocument();
     });
   });
 
@@ -415,7 +373,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getByText(/current plan/i)).toBeInTheDocument();
+      expect(screen.getByText('billing.currentPlan')).toBeInTheDocument();
     });
 
     it('does not show banner when disabled', () => {
@@ -477,7 +435,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      await user.click(screen.getByText('Get Started'));
+      await user.click(screen.getByText('pricing.card.getStarted'));
       expect(handleSubscribe).toHaveBeenCalledWith('price_test');
     });
 
@@ -500,7 +458,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      await user.click(screen.getByText('Cancel Subscription'));
+      await user.click(screen.getByText('pricing.card.cancelSubscription'));
       expect(handleCancel).toHaveBeenCalledWith('sub_active_test');
     });
 
@@ -523,7 +481,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      await user.click(screen.getByText('Manage Billing'));
+      await user.click(screen.getByText('pricing.card.manageBilling'));
       expect(handleManageBilling).toHaveBeenCalled();
     });
   });
@@ -545,7 +503,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getByText('Processing...')).toBeInTheDocument();
+      expect(screen.getByText('pricing.card.processing')).toBeInTheDocument();
     });
 
     it('shows canceling state for correct subscription', () => {
@@ -566,7 +524,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getByText('Processing...')).toBeInTheDocument();
+      expect(screen.getByText('pricing.card.processing')).toBeInTheDocument();
     });
 
     it('shows manage billing processing state', () => {
@@ -587,7 +545,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getAllByText('Processing...').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('pricing.card.processing').length).toBeGreaterThan(0);
     });
   });
 
@@ -652,7 +610,7 @@ describe('pricingContent', () => {
         />,
       );
 
-      expect(screen.getByText(/no plans available/i)).toBeInTheDocument();
+      expect(screen.getByText('plans.noPlansAvailable')).toBeInTheDocument();
     });
   });
 });

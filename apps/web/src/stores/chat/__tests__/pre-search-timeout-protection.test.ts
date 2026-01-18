@@ -22,7 +22,7 @@
 import { MessageStatuses, ScreenModes } from '@roundtable/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
@@ -257,7 +257,9 @@ describe('timeout on Different Screens', () => {
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
       expect(preSearch).toBeDefined();
-      expect(isPreSearchStale(preSearch!, 10)).toBe(true);
+      if (!preSearch)
+        throw new Error('expected preSearch');
+      expect(isPreSearchStale(preSearch, 10)).toBe(true);
       expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
     });
 
@@ -268,12 +270,14 @@ describe('timeout on Different Screens', () => {
       store.getState().addPreSearch(stalePreSearch);
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
+      if (!preSearch)
+        throw new Error('expected preSearch');
 
       // Without timeout: would block
       expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
 
       // With timeout: should NOT block
-      const isStale = isPreSearchStale(preSearch!, 10);
+      const isStale = isPreSearchStale(preSearch, 10);
       const shouldBlockWithTimeout = shouldWaitForPreSearch(true, preSearch) && !isStale;
       expect(shouldBlockWithTimeout).toBe(false);
     });
@@ -288,7 +292,9 @@ describe('timeout on Different Screens', () => {
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
       expect(preSearch).toBeDefined();
-      expect(isPreSearchStale(preSearch!, 10)).toBe(true);
+      if (!preSearch)
+        throw new Error('expected preSearch');
+      expect(isPreSearchStale(preSearch, 10)).toBe(true);
       expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     });
 
@@ -299,8 +305,10 @@ describe('timeout on Different Screens', () => {
       store.getState().addPreSearch(stalePreSearch);
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      if (!preSearch)
+        throw new Error('expected preSearch');
 
-      const isStale = isPreSearchStale(preSearch!, 10);
+      const isStale = isPreSearchStale(preSearch, 10);
       const shouldBlockWithTimeout = shouldWaitForPreSearch(true, preSearch) && !isStale;
       expect(shouldBlockWithTimeout).toBe(false);
     });
@@ -314,17 +322,21 @@ describe('timeout on Different Screens', () => {
       store.getState().setScreenMode(ScreenModes.OVERVIEW);
       store.getState().addPreSearch(stalePreSearch);
       const preSearchOverview = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      expect(isPreSearchStale(preSearchOverview!, 10)).toBe(true);
+      if (!preSearchOverview)
+        throw new Error('expected preSearchOverview');
+      expect(isPreSearchStale(preSearchOverview, 10)).toBe(true);
 
       // Clear and test on THREAD
       store.getState().setPreSearches([]);
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().addPreSearch(stalePreSearch);
       const preSearchThread = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      expect(isPreSearchStale(preSearchThread!, 10)).toBe(true);
+      if (!preSearchThread)
+        throw new Error('expected preSearchThread');
+      expect(isPreSearchStale(preSearchThread, 10)).toBe(true);
 
       // Same staleness detection regardless of screen
-      expect(isPreSearchStale(preSearchOverview!, 10)).toBe(isPreSearchStale(preSearchThread!, 10));
+      expect(isPreSearchStale(preSearchOverview, 10)).toBe(isPreSearchStale(preSearchThread, 10));
     });
   });
 });
@@ -353,7 +365,9 @@ describe('timeout Reset Behavior', () => {
 
       // Not stale yet
       let current = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      expect(isPreSearchStale(current!, 10)).toBe(false);
+      if (!current)
+        throw new Error('expected current');
+      expect(isPreSearchStale(current, 10)).toBe(false);
 
       // Advance 3 seconds (total 11s) - would be stale
       vi.advanceTimersByTime(3000);
@@ -460,15 +474,21 @@ describe('multi-Round Timeout Isolation', () => {
       const r0 = store.getState().preSearches.find(ps => ps.roundNumber === 0);
       const r1 = store.getState().preSearches.find(ps => ps.roundNumber === 1);
       const r2 = store.getState().preSearches.find(ps => ps.roundNumber === 2);
+      if (!r0)
+        throw new Error('expected r0');
+      if (!r1)
+        throw new Error('expected r1');
+      if (!r2)
+        throw new Error('expected r2');
 
       // Round 0: Not stale
-      expect(isPreSearchStale(r0!, 10)).toBe(false);
+      expect(isPreSearchStale(r0, 10)).toBe(false);
 
       // Round 1: Stale (timed out)
-      expect(isPreSearchStale(r1!, 10)).toBe(true);
+      expect(isPreSearchStale(r1, 10)).toBe(true);
 
       // Round 2: Not stale
-      expect(isPreSearchStale(r2!, 10)).toBe(false);
+      expect(isPreSearchStale(r2, 10)).toBe(false);
     });
 
     it('should handle concurrent timeouts on different rounds', () => {
@@ -481,10 +501,14 @@ describe('multi-Round Timeout Isolation', () => {
 
       const r0 = store.getState().preSearches.find(ps => ps.roundNumber === 0);
       const r1 = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      if (!r0)
+        throw new Error('expected r0');
+      if (!r1)
+        throw new Error('expected r1');
 
       // Both should timeout independently
-      expect(isPreSearchStale(r0!, 10)).toBe(true);
-      expect(isPreSearchStale(r1!, 10)).toBe(true);
+      expect(isPreSearchStale(r0, 10)).toBe(true);
+      expect(isPreSearchStale(r1, 10)).toBe(true);
     });
 
     it('should not affect other rounds when one round times out', () => {
@@ -496,12 +520,16 @@ describe('multi-Round Timeout Isolation', () => {
 
       const r0 = store.getState().preSearches.find(ps => ps.roundNumber === 0);
       const r1 = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      if (!r0)
+        throw new Error('expected r0');
+      if (!r1)
+        throw new Error('expected r1');
 
       // Round 0 timed out
-      expect(isPreSearchStale(r0!, 10)).toBe(true);
+      expect(isPreSearchStale(r0, 10)).toBe(true);
 
       // Round 1 still fresh (independent timeout)
-      expect(isPreSearchStale(r1!, 10)).toBe(false);
+      expect(isPreSearchStale(r1, 10)).toBe(false);
     });
   });
 
@@ -564,11 +592,13 @@ describe('timeout and User Actions', () => {
       store.getState().addPreSearch(stalePreSearch);
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      if (!preSearch)
+        throw new Error('expected preSearch');
 
       // Timeout should prevent permanent blocking
-      expect(isPreSearchStale(preSearch!, 10)).toBe(true);
+      expect(isPreSearchStale(preSearch, 10)).toBe(true);
 
-      const shouldBlock = shouldWaitForPreSearch(true, preSearch) && !isPreSearchStale(preSearch!, 10);
+      const shouldBlock = shouldWaitForPreSearch(true, preSearch) && !isPreSearchStale(preSearch, 10);
       expect(shouldBlock).toBe(false);
     });
 
@@ -581,9 +611,11 @@ describe('timeout and User Actions', () => {
       store.getState().addPreSearch(stalePreSearch);
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
+      if (!preSearch)
+        throw new Error('expected preSearch');
 
       // Even with web search enabled, timeout overrides blocking
-      const isStale = isPreSearchStale(preSearch!, 10);
+      const isStale = isPreSearchStale(preSearch, 10);
       expect(isStale).toBe(true);
 
       const shouldBlock = shouldWaitForPreSearch(true, preSearch) && !isStale;
@@ -600,12 +632,14 @@ describe('timeout and User Actions', () => {
       store.getState().setIsStreaming(false);
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
+      if (!preSearch)
+        throw new Error('expected preSearch');
 
       // Pre-search should still timeout
-      expect(isPreSearchStale(preSearch!, 10)).toBe(true);
+      expect(isPreSearchStale(preSearch, 10)).toBe(true);
 
       // Participants should be allowed to proceed after timeout
-      const shouldBlock = shouldWaitForPreSearch(true, preSearch) && !isPreSearchStale(preSearch!, 10);
+      const shouldBlock = shouldWaitForPreSearch(true, preSearch) && !isPreSearchStale(preSearch, 10);
       expect(shouldBlock).toBe(false);
     });
 

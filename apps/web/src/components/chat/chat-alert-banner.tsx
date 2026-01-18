@@ -1,13 +1,13 @@
 import { ComponentSizes, ComponentVariants } from '@roundtable/shared';
+import { Link } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Link } from '@/lib/compat';
+import type { ChatAlertVariant } from '@/lib/enums/chat-ui';
+import { ChatAlertVariants, DEFAULT_CHAT_ALERT_VARIANT } from '@/lib/enums/chat-ui';
 import { cn } from '@/lib/ui/cn';
-
-export type ChatAlertVariant = 'success' | 'warning' | 'error';
 
 type ChatAlertBannerProps = {
   message: string;
@@ -28,19 +28,19 @@ const variantStyles: Record<ChatAlertVariant, {
   text: string;
   button: string;
 }> = {
-  success: {
+  [ChatAlertVariants.SUCCESS]: {
     container: 'border-green-500/30',
     inlineContainer: 'border-green-500/20 bg-green-500/10',
     text: 'text-green-600 dark:text-green-400',
     button: 'border-green-500/40 bg-green-500/20 text-green-600 dark:text-green-400 hover:bg-green-500/30',
   },
-  warning: {
+  [ChatAlertVariants.WARNING]: {
     container: 'border-amber-500/30',
     inlineContainer: 'border-amber-500/20 bg-amber-500/10',
     text: 'text-amber-600 dark:text-amber-400',
     button: 'border-amber-500/40 bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30',
   },
-  error: {
+  [ChatAlertVariants.ERROR]: {
     container: 'border-destructive/30',
     inlineContainer: 'border-destructive/20 bg-destructive/10',
     text: 'text-destructive',
@@ -50,7 +50,7 @@ const variantStyles: Record<ChatAlertVariant, {
 
 export const ChatAlertBanner = memo(({
   message,
-  variant = 'warning',
+  variant = DEFAULT_CHAT_ALERT_VARIANT,
   actionLabel,
   actionHref,
   onAction,
@@ -99,7 +99,7 @@ export const ChatAlertBanner = memo(({
                 styles.button,
               )}
             >
-              <Link href={actionHref}>
+              <Link to={actionHref}>
                 {actionLabel}
               </Link>
             </Button>

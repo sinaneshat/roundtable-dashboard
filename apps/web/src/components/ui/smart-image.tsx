@@ -3,9 +3,10 @@ import { DEFAULT_IMAGE_STATE, ImageStates } from '@roundtable/shared';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
-import type { ImageProps } from '@/lib/compat';
-import { Image } from '@/lib/compat';
 import { cn } from '@/lib/ui/cn';
+
+import type { ImageProps } from './image';
+import Image from './image';
 
 import { Skeleton } from './skeleton';
 
@@ -103,7 +104,8 @@ export function SmartImage({
   );
 }
 
-type BorderRadiusClass = 'rounded-xl' | 'rounded-2xl' | 'rounded-lg' | 'rounded-md';
+import type { BorderRadiusClass } from '@/lib/enums/ui-styles';
+import { BORDER_RADIUS_PIXEL_MAP, DEFAULT_BORDER_RADIUS_CLASS } from '@/lib/enums/ui-styles';
 
 type GradientImageProps = {
   gradient?: string;
@@ -111,22 +113,15 @@ type GradientImageProps = {
   rounded?: BorderRadiusClass;
 } & SmartImageProps;
 
-const RADIUS_MAP: Record<BorderRadiusClass, number> = {
-  'rounded-xl': 12,
-  'rounded-2xl': 16,
-  'rounded-lg': 8,
-  'rounded-md': 6,
-};
-
 export function GradientImage({
   gradient = 'from-[#00ccb1] via-[#7b61ff] to-[#ffc414]',
   borderWidth = 3,
-  rounded = 'rounded-xl',
+  rounded = DEFAULT_BORDER_RADIUS_CLASS,
   containerClassName,
   className,
   ...imageProps
 }: GradientImageProps) {
-  const outerRadius = RADIUS_MAP[rounded];
+  const outerRadius = BORDER_RADIUS_PIXEL_MAP[rounded];
   const innerRadius = Math.max(0, outerRadius - borderWidth);
   const innerRounded = `rounded-[${innerRadius}px]`;
 

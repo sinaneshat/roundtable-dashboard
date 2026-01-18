@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PricingCard } from '@/components/ui/pricing-card';
 import { useIsMounted } from '@/hooks/utils';
-import { useRouter, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { isSubscriptionActive } from '@/lib/utils';
-import type { Price, Product, Subscription } from '@/types/billing';
+import type { Price, Product, Subscription } from '@/services/api';
 
 type PricingContentProps = {
   products: Product[];
@@ -50,7 +50,6 @@ export function PricingContent({
   showSubscriptionBanner = false,
 }: PricingContentProps) {
   const t = useTranslations();
-  const router = useRouter();
   const isMounted = useIsMounted();
 
   const activeSubscription = subscriptions.find(isSubscriptionActive);
@@ -79,7 +78,8 @@ export function PricingContent({
       });
     })
     .map((product) => {
-      const filteredPrices = product.prices!.filter((price: Price) => {
+      const prices = product.prices ?? [];
+      const filteredPrices = prices.filter((price: Price) => {
         return price.interval === 'month'
           && price.unitAmount !== null
           && price.unitAmount !== undefined;
@@ -93,7 +93,7 @@ export function PricingContent({
         <div className="text-center space-y-3">
           <p className="text-sm font-medium text-destructive">{t('plans.error')}</p>
           <p className="text-xs text-muted-foreground">{t('plans.errorDescription')}</p>
-          <Button variant="outline" size="sm" onClick={() => router.refresh()}>
+          <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
             {t('actions.tryAgain')}
           </Button>
         </div>

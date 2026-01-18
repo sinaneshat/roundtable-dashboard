@@ -35,7 +35,7 @@ import {
   createTestModeratorMessage,
 } from '@/lib/testing';
 import { hasModeratorData } from '@/lib/utils';
-import type { ModeratorPayload } from '@/types/api';
+import type { ModeratorPayload } from '@/services/api';
 
 // ============================================================================
 // TEST HELPERS - Simulate progressive streaming states

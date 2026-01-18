@@ -17,7 +17,7 @@ import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';
@@ -136,15 +136,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         throw new Error('No response from server');
       }
 
-      // TypeScript narrowing workaround - cast to any to bypass discriminated union narrowing issue
-
-      const response = apiResponse as any;
-
-      if (!response.success || !response.data) {
+      if (!('success' in apiResponse) || !apiResponse.success || !('data' in apiResponse) || !apiResponse.data) {
         throw new Error('Invalid response from server');
       }
 
-      const { thread, participants, messages: initialMessages } = response.data;
+      const { thread, participants, messages: initialMessages } = apiResponse.data;
 
       const threadWithDates = transformChatThread(thread);
       const participantsWithDates = transformChatParticipants(participants);
@@ -363,19 +359,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         },
       });
 
-      if (!apiResponse) {
-        throw new Error('No response from server');
-      }
-
-      // TypeScript narrowing workaround - cast to any to bypass discriminated union narrowing issue
-
-      const response = apiResponse as any;
-
-      if (!response.success) {
+      if (!apiResponse.success) {
         throw new Error('Invalid response from server');
       }
 
-      const responseData = response.data;
+      const responseData = apiResponse.data;
 
       if (responseData?.message) {
         const persistedMessage = responseData.message;

@@ -91,21 +91,18 @@ export function HealthStatus() {
 ### Server Component with Better Auth
 ```typescript
 // DON'T use TanStack Query for auth data!
-import { auth } from '@/lib/auth/server';
-import { headers } from 'next/headers';
+// Use TanStack Start server functions instead
+import { createServerFn } from '@tanstack/react-start';
+import { getRequestHeaders } from '@tanstack/react-start/server';
 
-export default async function Page() {
-  // Direct Better Auth call - no TanStack Query needed
-  const session = await auth.api.getSession({
-    headers: await headers(),
+export const getSessionData = createServerFn({ method: 'GET' }).handler(async () => {
+  const headers = getRequestHeaders();
+  // Fetch session from API with forwarded cookies
+  const response = await fetch(`${API_URL}/auth/me`, {
+    headers: { Cookie: headers.cookie || '' },
   });
-  
-  const orgs = await auth.api.listOrganizations({
-    headers: await headers(),
-  });
-  
-  return <div>Welcome {session?.user.name}</div>;
-}
+  return response.json();
+});
 ```
 
 ### Client Component with Better Auth

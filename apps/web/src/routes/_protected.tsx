@@ -1,5 +1,4 @@
-import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
 import { SidebarLoadingFallback } from '@/components/loading';
@@ -7,96 +6,96 @@ import { ChatLayoutProviders, PreferencesStoreProvider } from '@/components/prov
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/auth/client';
-import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
-import { getModels } from '@/server/models';
-import { getSidebarThreads } from '@/server/sidebar-threads';
-import { getSubscriptions } from '@/server/subscriptions';
+import {
+  modelsQueryOptions,
+  sidebarThreadsQueryOptions,
+  subscriptionsQueryOptions,
+  usageQueryOptions,
+} from '@/lib/data/query-options';
+import { getSession } from '@/server/auth';
 
-// Timeout for session check - if it hangs, assume auth failed
-const SESSION_CHECK_TIMEOUT_MS = 5000;
+/**
+ * Protected Layout Skeleton
+ * Shown while beforeLoad auth check and loader prefetching runs
+ * Matches the actual ChatLayoutShell structure for smooth transition
+ */
+function ProtectedLayoutSkeleton() {
+  return (
+    <SidebarProvider>
+      <SidebarLoadingFallback count={10} showFavorites={false} />
+      <SidebarInset className="flex flex-col relative">
+        {/* Minimal header skeleton */}
+        <header className="sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2">
+          <div className="flex items-center gap-2 pt-4 px-5 md:px-6 lg:px-8 h-14 sm:h-16 w-full">
+            <Skeleton className="size-8 rounded-lg" />
+            <Skeleton className="h-5 w-28" />
+          </div>
+        </header>
+        {/* Content area placeholder */}
+        <div className="flex-1" />
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
 
 export const Route = createFileRoute('/_protected')({
+  // Server-side auth check - TanStack Start pattern
+  // beforeLoad runs on server before loader, perfect for auth guards
+  beforeLoad: async ({ location }) => {
+    const session = await getSession();
+
+    if (!session) {
+      throw redirect({
+        to: '/auth/sign-in',
+        search: { redirect: location.href },
+      });
+    }
+
+    // Pass session through context for child routes
+    return { session };
+  },
   loader: async ({ context }) => {
     const { queryClient } = context;
 
-    // Prefetch data into TanStack Query cache for SSR hydration
-    // Client components will use useQuery hooks with the same keys to access this data
+    // ensureQueryData ensures data is available before rendering
+    // Using shared queryOptions guarantees same config in loader and hooks
+    // This prevents the "content flash" where SSR content disappears into loading state
+    //
+    // Pattern from TanStack Start docs:
+    // - ensureQueryData returns cached data if available, otherwise fetches
+    // - Same queryOptions in hooks means useQuery uses cached data immediately
+    // - No stale check on hydration = no refetch = no flash
     await Promise.all([
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.models.list(),
-        queryFn: () => getModels(),
-        staleTime: STALE_TIMES.models,
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.subscriptions.current(),
-        queryFn: () => getSubscriptions(),
-        staleTime: STALE_TIMES.subscriptions,
-      }),
-      queryClient.prefetchInfiniteQuery({
-        queryKey: queryKeys.threads.sidebar(),
-        queryFn: () => getSidebarThreads(),
-        initialPageParam: undefined,
-        staleTime: STALE_TIMES.threadsSidebar,
-      }),
+      queryClient.ensureQueryData(modelsQueryOptions),
+      queryClient.ensureQueryData(subscriptionsQueryOptions),
+      queryClient.ensureQueryData(usageQueryOptions),
+      queryClient.ensureInfiniteQueryData(sidebarThreadsQueryOptions),
     ]);
 
     return {};
   },
   component: ProtectedLayout,
+  pendingComponent: ProtectedLayoutSkeleton,
 });
 
 /**
- * Protected Layout with Client-Side Auth Check
+ * Protected Layout - Session verified in beforeLoad
  *
- * ARCHITECTURE NOTE: We use client-side auth checking instead of SSR because:
- * - API runs on port 8787, web app on 5173 (cross-origin in dev)
- * - In local dev, Vite proxy makes it same-origin for cookies
- * - Client-side requests include cookies via `credentials: 'include'`
+ * Auth is now checked server-side in beforeLoad using the getSession server function.
+ * If no session, user is redirected to sign-in before this component renders.
+ * useSession is still used for accessing session data reactively in child components.
  */
 function ProtectedLayout() {
-  const navigate = useNavigate();
-  const { data: session, isPending, error } = useSession();
-  const [timedOut, setTimedOut] = useState(false);
+  // Session is guaranteed by beforeLoad, use client hook for reactive access
+  const { data: session } = useSession();
 
-  // Timeout fallback - if session check hangs, assume auth failed
-  useEffect(() => {
-    if (!isPending)
-      return;
-    const timer = setTimeout(() => setTimedOut(true), SESSION_CHECK_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [isPending]);
+  // beforeLoad guarantees we have a session, but on client navigation
+  // the hook may briefly return null while syncing. Use route context as fallback.
+  const routeContext = Route.useRouteContext();
+  const activeSession = session ?? routeContext.session;
 
-  useEffect(() => {
-    // Redirect to sign-in if not authenticated, errored, or timed out
-    if ((!isPending && (!session || error)) || timedOut) {
-      navigate({ to: '/auth/sign-in' });
-    }
-  }, [isPending, session, error, timedOut, navigate]);
-
-  // Show sidebar skeleton during auth check only (unless timed out)
-  // Content skeleton is handled by each page's pendingComponent
-  if (isPending && !timedOut) {
-    return (
-      <SidebarProvider>
-        <SidebarLoadingFallback count={10} showFavorites={false} />
-        <SidebarInset className="flex flex-col relative">
-          {/* Minimal header matching actual NavigationHeader structure */}
-          <header className="sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2">
-            <div className="flex items-center gap-2 pt-4 px-5 md:px-6 lg:px-8 h-14 sm:h-16 w-full">
-              <Skeleton className="size-8 rounded-lg" />
-              <Skeleton className="h-5 w-28" />
-            </div>
-          </header>
-          {/* Empty content area - page will show its own skeleton */}
-          <div className="flex-1" />
-        </SidebarInset>
-      </SidebarProvider>
-    );
-  }
-
-  // Show nothing while redirecting (prevents flash)
-  if (!session || error) {
+  if (!activeSession) {
+    // This shouldn't happen with beforeLoad guard, but handle gracefully
     return null;
   }
 
@@ -104,7 +103,7 @@ function ProtectedLayout() {
   return (
     <PreferencesStoreProvider>
       <ChatLayoutProviders>
-        <ChatLayoutShell session={session}>
+        <ChatLayoutShell session={activeSession}>
           <Outlet />
         </ChatLayoutShell>
       </ChatLayoutProviders>

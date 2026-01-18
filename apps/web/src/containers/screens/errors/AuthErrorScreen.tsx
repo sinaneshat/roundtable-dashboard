@@ -1,5 +1,6 @@
 import type { AuthErrorType } from '@roundtable/shared';
 import { AuthErrorTypes, DEFAULT_AUTH_ERROR_TYPE, isValidAuthErrorType } from '@roundtable/shared';
+import { Link, useSearch } from '@tanstack/react-router';
 import { Suspense } from 'react';
 
 import { Icons } from '@/components/icons';
@@ -13,7 +14,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { Link, useSearchParams, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 
 const AUTH_ERROR_I18N_KEYS = {
   [AuthErrorTypes.CONFIGURATION]: { title: 'auth.errors.configuration', desc: 'auth.errors.configurationDesc' },
@@ -32,8 +33,8 @@ const AUTH_ERROR_I18N_KEYS = {
 
 function AuthErrorContent() {
   const t = useTranslations();
-  const searchParams = useSearchParams();
-  const rawError = (searchParams?.get('error') || searchParams?.get('failed'))?.toLowerCase() ?? DEFAULT_AUTH_ERROR_TYPE;
+  const search = useSearch({ strict: false }) as Record<string, string | undefined>;
+  const rawError = (search?.error || search?.failed)?.toLowerCase() ?? DEFAULT_AUTH_ERROR_TYPE;
   const errorType = isValidAuthErrorType(rawError) ? rawError : DEFAULT_AUTH_ERROR_TYPE;
 
   const errorKeys = AUTH_ERROR_I18N_KEYS[errorType];
@@ -71,7 +72,7 @@ function AuthErrorContent() {
             startIcon={<Icons.refreshCw />}
             className="w-full"
           >
-            <Link href="/auth/sign-in">
+            <Link to="/auth/sign-in">
               {t('auth.errors.tryAgain')}
             </Link>
           </Button>
@@ -81,7 +82,7 @@ function AuthErrorContent() {
             startIcon={<Icons.arrowLeft />}
             className="w-full"
           >
-            <Link href="/auth/sign-in">
+            <Link to="/auth/sign-in">
               {t('auth.errors.backToSignIn')}
             </Link>
           </Button>

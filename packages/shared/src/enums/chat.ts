@@ -282,6 +282,19 @@ export const TimelineElementTypes = {
   USER_MESSAGE: 'user_message' as const,
 } as const;
 
+// 6. TYPE GUARD
+export function isTimelineElementType(value: unknown): value is TimelineElementType {
+  return TimelineElementTypeSchema.safeParse(value).success;
+}
+
+// 7. DISPLAY LABELS
+export const TIMELINE_ELEMENT_TYPE_LABELS: Record<TimelineElementType, string> = {
+  [TimelineElementTypes.PRE_SEARCH]: 'Pre-Search',
+  [TimelineElementTypes.MODERATOR]: 'Moderator',
+  [TimelineElementTypes.PARTICIPANT_MESSAGE]: 'Participant Message',
+  [TimelineElementTypes.USER_MESSAGE]: 'User Message',
+} as const;
+
 // ============================================================================
 // TIMELINE ITEM TYPE (for useThreadTimeline hook)
 // ============================================================================
@@ -310,6 +323,18 @@ export const TimelineItemTypes = {
   MESSAGES: 'messages' as const,
   CHANGELOG: 'changelog' as const,
   PRE_SEARCH: 'pre-search' as const,
+} as const;
+
+// 6. TYPE GUARD
+export function isTimelineItemType(value: unknown): value is TimelineItemType {
+  return TimelineItemTypeSchema.safeParse(value).success;
+}
+
+// 7. DISPLAY LABELS
+export const TIMELINE_ITEM_TYPE_LABELS: Record<TimelineItemType, string> = {
+  [TimelineItemTypes.MESSAGES]: 'Messages',
+  [TimelineItemTypes.CHANGELOG]: 'Changelog',
+  [TimelineItemTypes.PRE_SEARCH]: 'Pre-Search',
 } as const;
 
 // ============================================================================

@@ -769,7 +769,10 @@ describe('non-Initial Round First Participant Duplication', () => {
           const key = `r${round}_p${pIdx}`;
           if (seen.has(key)) {
             // Mark earlier one for removal (keep latest)
-            toRemove.add(seen.get(key)!);
+            const existingIdx = seen.get(key);
+            if (existingIdx === undefined)
+              throw new Error('expected existing index in seen map');
+            toRemove.add(existingIdx);
             seen.set(key, i);
           } else {
             seen.set(key, i);

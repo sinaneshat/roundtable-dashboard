@@ -2,10 +2,24 @@ import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 
 import { Icons } from '@/components/icons';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { safeExtractDomain } from '@/lib/utils';
-import type { WebSearchImageGalleryProps, WebSearchImageItem } from '@/types/api';
+import type { WebSearchResultItem } from '@/services/api';
+
+export type WebSearchImageItem = {
+  url: string;
+  alt?: string;
+  title: string;
+  sourceUrl: string;
+  domain?: string;
+  thumbnailUrl?: string;
+};
+
+export type WebSearchImageGalleryProps = {
+  results: WebSearchResultItem[];
+  className?: string;
+};
 
 export function WebSearchImageGallery({ results, className }: WebSearchImageGalleryProps) {
   const tImages = useTranslations('chat.tools.webSearch.images');

@@ -28,6 +28,7 @@
   "main": "./src/index.ts",
   "types": "./dist/index.d.ts",
   "scripts": {
+    "build": "tsc --declaration --emitDeclarationOnly --outDir dist",
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"

@@ -12,74 +12,73 @@ import type { ApiClientType } from '@/lib/api/client';
 import { createApiClient } from '@/lib/api/client';
 
 // ============================================================================
-// Type Inference - Automatically derived from backend routes
+// Type Inference - Endpoint definitions
 // ============================================================================
 
 type ListUserPresetsEndpoint = ApiClientType['chat']['user-presets']['$get'];
-export type ListUserPresetsResponse = InferResponseType<ListUserPresetsEndpoint>;
-export type ListUserPresetsRequest = InferRequestType<ListUserPresetsEndpoint>;
-
 type CreateUserPresetEndpoint = ApiClientType['chat']['user-presets']['$post'];
-export type CreateUserPresetResponse = InferResponseType<CreateUserPresetEndpoint>;
-export type CreateUserPresetRequest = InferRequestType<CreateUserPresetEndpoint>;
-
 type GetUserPresetEndpoint = ApiClientType['chat']['user-presets'][':id']['$get'];
-export type GetUserPresetResponse = InferResponseType<GetUserPresetEndpoint>;
-export type GetUserPresetRequest = InferRequestType<GetUserPresetEndpoint>;
-
 type UpdateUserPresetEndpoint = ApiClientType['chat']['user-presets'][':id']['$patch'];
-export type UpdateUserPresetResponse = InferResponseType<UpdateUserPresetEndpoint>;
-export type UpdateUserPresetRequest = InferRequestType<UpdateUserPresetEndpoint>;
-
 type DeleteUserPresetEndpoint = ApiClientType['chat']['user-presets'][':id']['$delete'];
-export type DeleteUserPresetResponse = InferResponseType<DeleteUserPresetEndpoint>;
+
+// ============================================================================
+// Type Exports - Request/Response types
+// ============================================================================
+
+export type ListUserPresetsRequest = InferRequestType<ListUserPresetsEndpoint>;
+export type ListUserPresetsResponse = InferResponseType<ListUserPresetsEndpoint, 200>;
+
+export type CreateUserPresetRequest = InferRequestType<CreateUserPresetEndpoint>;
+export type CreateUserPresetResponse = InferResponseType<CreateUserPresetEndpoint, 200>;
+
+export type GetUserPresetRequest = InferRequestType<GetUserPresetEndpoint>;
+export type GetUserPresetResponse = InferResponseType<GetUserPresetEndpoint, 200>;
+
+export type UpdateUserPresetRequest = InferRequestType<UpdateUserPresetEndpoint>;
+export type UpdateUserPresetResponse = InferResponseType<UpdateUserPresetEndpoint, 200>;
+
 export type DeleteUserPresetRequest = InferRequestType<DeleteUserPresetEndpoint>;
+export type DeleteUserPresetResponse = InferResponseType<DeleteUserPresetEndpoint, 200>;
 
 // ============================================================================
-// Service Functions
+// Service Functions - CRUD operations
 // ============================================================================
 
-/**
- * List user presets with cursor pagination
- * Protected endpoint - requires authentication
- */
-export async function listUserPresetsService(args?: ListUserPresetsRequest) {
+export async function listUserPresetsService(data?: ListUserPresetsRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['user-presets'].$get(args ?? { query: {} }));
+  return parseResponse(client.chat['user-presets'].$get(data ?? { query: {} }));
 }
 
-/**
- * Create a new user preset
- * Protected endpoint - requires authentication
- */
 export async function createUserPresetService(data: CreateUserPresetRequest) {
   const client = createApiClient();
   return parseResponse(client.chat['user-presets'].$post(data));
 }
 
-/**
- * Get a specific user preset by ID
- * Protected endpoint - requires authentication
- */
 export async function getUserPresetService(data: GetUserPresetRequest) {
   const client = createApiClient();
   return parseResponse(client.chat['user-presets'][':id'].$get(data));
 }
 
-/**
- * Update user preset details
- * Protected endpoint - requires authentication
- */
 export async function updateUserPresetService(data: UpdateUserPresetRequest) {
   const client = createApiClient();
   return parseResponse(client.chat['user-presets'][':id'].$patch(data));
 }
 
-/**
- * Delete a user preset
- * Protected endpoint - requires authentication
- */
 export async function deleteUserPresetService(data: DeleteUserPresetRequest) {
   const client = createApiClient();
   return parseResponse(client.chat['user-presets'][':id'].$delete(data));
 }
+
+// ============================================================================
+// Derived Types
+// ============================================================================
+
+/**
+ * UserPreset - User preset item derived from API response
+ */
+export type UserPreset = Extract<
+  ListUserPresetsResponse,
+  { success: true }
+> extends { data: { items: Array<infer R> } }
+  ? R
+  : never;

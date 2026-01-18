@@ -5,7 +5,7 @@ import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
 import { SidebarLoadingFallback } from '@/components/loading';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import type { SessionData } from '@/lib/auth';
-import { dynamic } from '@/lib/compat';
+import dynamic from '@/lib/utils/dynamic';
 
 // Dynamic import with ssr:false prevents hydration mismatch from React Query cache
 const AppSidebar = dynamic(

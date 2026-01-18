@@ -54,7 +54,11 @@ export function useThreadsQuery(search?: string) {
       return listThreadsService({ query: params });
     },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: lastPage => (lastPage as any)?.success ? (lastPage as any).data?.pagination?.nextCursor : undefined,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.success)
+        return undefined;
+      return lastPage.data.pagination.nextCursor;
+    },
     enabled: isAuthenticated,
     staleTime: STALE_TIMES.threads, // 30 seconds - match server-side prefetch
     retry: false,

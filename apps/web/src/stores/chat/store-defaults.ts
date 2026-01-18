@@ -77,6 +77,9 @@ export const FORM_DEFAULTS = {
   enableWebSearch: false, // ⚠️ NOTE: This is ONLY used for new chats - thread screen syncs from thread.enableWebSearch
   modelOrder: [], // Visual order of models for drag-and-drop
   autoMode: true, // ✅ Auto mode ON by default - AI selects models/roles/mode based on prompt
+  animationStartIndex: 0, // Starting index for message animations
+  shouldSkipAnimation: false, // Whether to skip entrance animations
+  animatedMessageIds: new Set<string>(), // Set of message IDs that have been animated
 } satisfies FormState;
 
 // ============================================================================
@@ -340,6 +343,9 @@ export const COMPLETE_RESET_STATE = {
   enableWebSearch: FORM_DEFAULTS.enableWebSearch,
   modelOrder: FORM_DEFAULTS.modelOrder,
   autoMode: FORM_DEFAULTS.autoMode,
+  animationStartIndex: FORM_DEFAULTS.animationStartIndex,
+  shouldSkipAnimation: FORM_DEFAULTS.shouldSkipAnimation,
+  animatedMessageIds: new Set<string>(),
   // Feedback state - create fresh Map instance to prevent state pollution
   feedbackByRound: new Map(),
   pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,

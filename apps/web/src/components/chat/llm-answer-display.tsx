@@ -5,7 +5,7 @@ import { Icons } from '@/components/icons';
 import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { StreamingCursor } from '@/components/ui/streaming-text';
 import { FadeInText } from '@/components/ui/typing-text';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type LLMAnswerDisplayProps = {

@@ -24,7 +24,7 @@ import {
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 // ============================================================================
 // EXTRACTED PURE FUNCTIONS - Mirror flow-state-machine.ts for unit testing

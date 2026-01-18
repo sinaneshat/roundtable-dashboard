@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
+import type { AddParticipantResponse, UpdateThreadResponse } from '@/services/api';
 import {
   addParticipantService,
   createCustomRoleService,
@@ -17,13 +18,49 @@ import {
   updateUserPresetService,
 } from '@/services/api';
 import {
+  ChatThreadCacheSchema,
   validateInfiniteQueryCache,
   validateThreadDetailCache,
   validateThreadDetailPayloadCache,
   validateThreadDetailResponseCache,
   validateThreadsListPages,
 } from '@/stores/chat';
-import { ChatThreadCacheSchema } from '@/types/api';
+
+/**
+ * Input type for toggle favorite mutation
+ * Convenience wrapper around updateThreadService
+ */
+type ToggleFavoriteInput = {
+  threadId: string;
+  isFavorite: boolean;
+  slug?: string;
+};
+
+/**
+ * Input type for toggle public mutation
+ * Convenience wrapper around updateThreadService
+ */
+type TogglePublicInput = {
+  threadId: string;
+  isPublic: boolean;
+  slug?: string;
+};
+
+/**
+ * Input type for update participant mutation
+ * Augmented with threadId for cache invalidation
+ */
+type UpdateParticipantInput = Parameters<typeof updateParticipantService>[0] & {
+  threadId?: string;
+};
+
+/**
+ * Input type for delete participant mutation
+ * Augmented with threadId for cache invalidation
+ */
+type DeleteParticipantInput = Parameters<typeof deleteParticipantService>[0] & {
+  threadId?: string;
+};
 
 export function useCreateThreadMutation() {
   const queryClient = useQueryClient();
@@ -50,12 +87,11 @@ export function useUpdateThreadMutation() {
 
   return useMutation({
     mutationFn: updateThreadService,
-    onSuccess: (data: unknown, variables) => {
+    onSuccess: (data: UpdateThreadResponse, variables) => {
       const threadId = variables.param.id;
-      if (!data || typeof data !== 'object' || !('success' in data))
+      if (!data.success)
         return;
-      const response = data as { success: boolean; data?: unknown };
-      const updatedThread = (response.success && response.data && typeof response.data === 'object') ? response.data : null;
+      const updatedThread = data.data;
 
       // Immediately update sidebar/list caches with the new title from the response
       // This prevents waiting for a refetch and shows the update instantly
@@ -230,7 +266,7 @@ export function useToggleFavoriteMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ threadId, isFavorite }: { threadId: string; isFavorite: boolean; slug?: string }) =>
+    mutationFn: ({ threadId, isFavorite }: ToggleFavoriteInput) =>
       updateThreadService({ param: { id: threadId }, json: { isFavorite } }),
     onMutate: async (variables) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
@@ -317,7 +353,7 @@ export function useTogglePublicMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ threadId, isPublic }: { threadId: string; isPublic: boolean; slug?: string }) =>
+    mutationFn: ({ threadId, isPublic }: TogglePublicInput) =>
       updateThreadService({ param: { id: threadId }, json: { isPublic } }),
     onMutate: async (variables) => {
       // Only cancel/update detail caches - NOT the threads list
@@ -446,7 +482,7 @@ export function useAddParticipantMutation() {
         queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousThread);
       }
     },
-    onSuccess: (data: unknown, variables) => {
+    onSuccess: (data: AddParticipantResponse, variables) => {
       const threadId = variables.param.id;
 
       queryClient.setQueryData(
@@ -456,12 +492,7 @@ export function useAddParticipantMutation() {
           if (!cache || !cache.data.participants)
             return old;
 
-          const participantData = (data && typeof data === 'object' && 'success' in data)
-            ? (data as { success: boolean; data?: unknown })
-            : null;
-          const newParticipant = (participantData?.success && participantData.data && typeof participantData.data === 'object')
-            ? participantData.data
-            : null;
+          const newParticipant = data.success ? data.data : null;
 
           return {
             ...cache,
@@ -484,7 +515,7 @@ export function useUpdateParticipantMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Parameters<typeof updateParticipantService>[0] & { threadId?: string }) =>
+    mutationFn: (data: UpdateParticipantInput) =>
       updateParticipantService(data),
     onMutate: async (variables) => {
       const threadId = variables.threadId;
@@ -539,7 +570,7 @@ export function useDeleteParticipantMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Parameters<typeof deleteParticipantService>[0] & { threadId?: string }) =>
+    mutationFn: (data: DeleteParticipantInput) =>
       deleteParticipantService(data),
     onMutate: async (variables) => {
       const threadId = variables.threadId;

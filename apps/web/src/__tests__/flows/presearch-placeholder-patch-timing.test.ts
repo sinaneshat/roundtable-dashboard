@@ -32,7 +32,7 @@ import {
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 import type { ChatStoreApi } from '../../stores/chat/store';
 import { createChatStore } from '../../stores/chat/store';

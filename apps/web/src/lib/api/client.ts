@@ -13,6 +13,8 @@
 import type { AppType } from '@roundtable/api';
 import { hc } from 'hono/client';
 
+import { getApiBaseUrl } from '@/lib/config/base-urls';
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -24,18 +26,6 @@ import { hc } from 'hono/client';
  * This provides full type safety for all RPC calls.
  */
 export type ApiClientType = ReturnType<typeof hc<AppType>>;
-
-// ============================================================================
-// URL Helpers
-// ============================================================================
-
-/**
- * Get API base URL from environment
- */
-function getApiBaseUrl(): string {
-  // In TanStack Start, environment variables are available via import.meta.env
-  return import.meta.env.VITE_API_URL || 'http://localhost:8787/api/v1';
-}
 
 // ============================================================================
 // Client Factory Functions
@@ -50,9 +40,13 @@ function getApiBaseUrl(): string {
  * @param options - Client options
  * @param options.bypassCache - If true, adds cache-busting headers
  * @param options.cookieHeader - Pre-captured cookie header for server-side fire-and-forget prefetches
+ * @param options.signal - AbortSignal for request cancellation (streaming endpoints)
  */
-
-export function createApiClient(options?: { bypassCache?: boolean; cookieHeader?: string }): ApiClientType {
+export function createApiClient(options?: {
+  bypassCache?: boolean;
+  cookieHeader?: string;
+  signal?: AbortSignal;
+}): ApiClientType {
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };
@@ -72,6 +66,7 @@ export function createApiClient(options?: { bypassCache?: boolean; cookieHeader?
       ...init,
       credentials: 'include',
       ...(options?.bypassCache && { cache: 'no-cache' as RequestCache }),
+      ...(options?.signal && { signal: options.signal }),
     });
   };
 

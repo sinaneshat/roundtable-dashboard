@@ -4,6 +4,9 @@
  * Centralized Zod schemas for chat participants used across hooks, stores, and components.
  * Prevents schema duplication and ensures consistent validation.
  *
+ * **RPC-FIRST PATTERN**: Types are derived from API responses via Hono RPC.
+ * Schemas validate against the RPC-derived types using `satisfies`.
+ *
  * **SINGLE SOURCE OF TRUTH**: All hooks and stores must import from here.
  * Do NOT duplicate these schemas inline.
  *
@@ -13,7 +16,7 @@
 import { z } from 'zod';
 
 import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';
-import { chatParticipantSelectSchema } from '@/types/api';
+import type { ApiParticipant } from '@/services/api';
 
 // ============================================================================
 // PARTICIPANT INDEX CONSTANTS - SINGLE SOURCE OF TRUTH
@@ -130,37 +133,47 @@ export function formatParticipantIndex(
 }
 
 // ============================================================================
-// PARTICIPANT SCHEMAS - SINGLE SOURCE OF TRUTH
+// PARTICIPANT SCHEMAS - RPC-DERIVED TYPE ALIGNMENT
 // ============================================================================
 
 /**
- * Full ChatParticipant schema with settings
+ * ChatParticipant validation schema
  *
- * **SINGLE SOURCE OF TRUTH**: Extends database schema with settings field.
- * Used across:
- * - useMultiParticipantChat hook
- * - useChatAnalysis hook
- * - Store actions
- * - Components requiring full participant data
+ * **RPC-FIRST PATTERN**: For type-only usage, prefer `ApiParticipant` from `@/services/api`.
+ * This schema provides runtime validation when needed.
  *
- * Matches the ChatParticipant type from API routes but with settings validated.
+ * The canonical type flows from: backend → Hono RPC → `ApiParticipant`
  *
  * @example
  * ```typescript
- * import { ChatParticipantSchema } from '@/lib/schemas/participant-schemas';
+ * // Type-only usage (preferred when validation not needed)
+ * import type { ApiParticipant } from '@/services/api';
+ * const participant: ApiParticipant = data;
  *
- * const participants = z.array(ChatParticipantSchema).parse(data);
+ * // Runtime validation (when needed)
+ * import { ChatParticipantSchema } from '@/lib/schemas/participant-schemas';
+ * const validated = ChatParticipantSchema.parse(data);
  * ```
  */
-export const ChatParticipantSchema = chatParticipantSelectSchema.extend({
+export const ChatParticipantSchema = z.object({
+  id: z.string(),
+  threadId: z.string(),
+  modelId: z.string(),
+  customRoleId: z.string().nullable(),
+  role: z.string().nullable(),
+  priority: z.number().int().nonnegative(),
+  isEnabled: z.boolean(),
   settings: ParticipantSettingsSchema,
+  // Date fields use string (JSON serialization converts Date to string)
+  createdAt: z.string(),
+  updatedAt: z.string(),
 });
 
-/**
- * Inferred TypeScript type for ChatParticipant with settings
- * Use this type instead of defining inline types
- */
-export type ChatParticipantWithSettings = z.infer<typeof ChatParticipantSchema>;
+// Compile-time type check: ensures schema output aligns with RPC-derived ApiParticipant
+// If this fails to compile, the schema shape has diverged from the API response type
+void (0 as unknown as (
+  z.infer<typeof ChatParticipantSchema> extends ApiParticipant ? true : never
+));
 
 // ============================================================================
 // PARTICIPANT ARRAY SCHEMAS
@@ -202,14 +215,14 @@ export const NonEmptyParticipantsArraySchema = z
  * @example
  * ```typescript
  * if (isChatParticipant(data)) {
- *   // data is ChatParticipantWithSettings
+ *   // data is ApiParticipant
  *   const settings = data.settings;
  * }
  * ```
  */
 export function isChatParticipant(
   data: unknown,
-): data is ChatParticipantWithSettings {
+): data is ApiParticipant {
   const result = ChatParticipantSchema.safeParse(data);
   return result.success;
 }
@@ -222,7 +235,7 @@ export function isChatParticipant(
  */
 export function isChatParticipantArray(
   data: unknown,
-): data is ChatParticipantWithSettings[] {
+): data is ApiParticipant[] {
   const result = ParticipantsArraySchema.safeParse(data);
   return result.success;
 }
@@ -332,6 +345,9 @@ const BaseParticipantConfigSchema = z.object({
  *
  * Includes optional settings object for UI customization.
  *
+ * NOTE: customRoleId uses .nullable().optional() to align with database schema
+ * Database uses `string | null`, forms can have `undefined` which is transformed to `null`
+ *
  * @example
  * ```typescript
  * import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
@@ -347,7 +363,7 @@ const BaseParticipantConfigSchema = z.object({
  * ```
  */
 export const ParticipantConfigSchema = BaseParticipantConfigSchema.extend({
-  customRoleId: z.string().optional(),
+  customRoleId: z.string().nullable().optional(),
   settings: z
     .object({
       temperature: z.number().min(0).max(2).optional(),

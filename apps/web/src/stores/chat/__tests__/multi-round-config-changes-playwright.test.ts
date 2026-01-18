@@ -23,7 +23,7 @@ import { ChatModes } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
 import { createMockParticipant } from '@/lib/testing';
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 // ============================================================================
 // TYPES
@@ -268,10 +268,13 @@ describe('multi-Round Configuration Changes E2E', () => {
       let state = createInitialConfig(round0Participants, ChatModes.BRAINSTORMING);
 
       // Remove participant-1
-      const round1Participants = [
-        round0Participants[0]!,
-        round0Participants[2]!,
-      ];
+      const p0 = round0Participants[0];
+      const p2 = round0Participants[2];
+      if (!p0)
+        throw new Error('expected participant 0');
+      if (!p2)
+        throw new Error('expected participant 2');
+      const round1Participants = [p0, p2];
       state = addRound(state, round1Participants, ChatModes.BRAINSTORMING);
 
       expect(state.rounds[1]?.participants).toHaveLength(2);
@@ -287,7 +290,10 @@ describe('multi-Round Configuration Changes E2E', () => {
       ];
       let state = createInitialConfig(round0Participants, ChatModes.BRAINSTORMING);
 
-      const round1Participants = [round0Participants[0]!];
+      const p0 = round0Participants[0];
+      if (!p0)
+        throw new Error('expected participant 0');
+      const round1Participants = [p0];
       state = addRound(state, round1Participants, ChatModes.BRAINSTORMING);
 
       const removedChange = state.rounds[1]?.changes?.[0];
@@ -314,7 +320,10 @@ describe('multi-Round Configuration Changes E2E', () => {
       ];
       let state = createInitialConfig(round0Participants, ChatModes.BRAINSTORMING);
 
-      const round1Participants = [round0Participants[0]!];
+      const p0 = round0Participants[0];
+      if (!p0)
+        throw new Error('expected participant 0');
+      const round1Participants = [p0];
       state = addRound(state, round1Participants, ChatModes.BRAINSTORMING);
 
       expect(state.rounds[1]?.participants).toHaveLength(1);
@@ -360,7 +369,10 @@ describe('multi-Round Configuration Changes E2E', () => {
       state = addRound(state, round1Participants, ChatModes.BRAINSTORMING);
 
       // Verify streaming would use new priority order
-      const sortedParticipants = [...state.rounds[1]!.participants].sort((a, b) => a.priority - b.priority);
+      const round1 = state.rounds[1];
+      if (!round1)
+        throw new Error('expected round 1');
+      const sortedParticipants = [...round1.participants].sort((a, b) => a.priority - b.priority);
       expect(sortedParticipants[0]?.id).toBe('participant-1');
       expect(sortedParticipants[1]?.id).toBe('participant-0');
     });

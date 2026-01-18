@@ -24,7 +24,7 @@ import {
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChatParticipant, ChatThread, DbAssistantMessageMetadata } from '@/types/api';
+import type { ChatParticipant, ChatThread, DbAssistantMessageMetadata } from '@/services/api';
 
 import { createChatStore } from '../store';
 

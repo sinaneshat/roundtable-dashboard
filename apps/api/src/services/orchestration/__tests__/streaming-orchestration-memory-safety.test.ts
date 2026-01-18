@@ -52,7 +52,11 @@ describe('streaming Orchestration Memory Safety', () => {
         maxAttachments: 5,
       };
 
-      const limited = safeSlice(attachmentIds, memoryLimits.maxAttachments!);
+      const maxAttachments = memoryLimits.maxAttachments;
+      if (!maxAttachments)
+        throw new Error('expected maxAttachments');
+
+      const limited = safeSlice(attachmentIds, maxAttachments);
 
       expect(limited).toHaveLength(5);
       expect(limited).toEqual(['attach-1', 'attach-2', 'attach-3', 'attach-4', 'attach-5']);
@@ -121,8 +125,8 @@ describe('streaming Orchestration Memory Safety', () => {
       const limited = safeSlice(sources, 15);
 
       expect(limited).toHaveLength(15);
-      expect(limited[0]!.id).toBe('source-0');
-      expect(limited[14]!.id).toBe('source-14');
+      expect(limited[0]?.id).toBe('source-0');
+      expect(limited[14]?.id).toBe('source-14');
     });
 
     it('should keep all sources when under limit', () => {

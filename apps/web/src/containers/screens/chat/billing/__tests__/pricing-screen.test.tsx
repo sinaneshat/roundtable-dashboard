@@ -11,27 +11,35 @@
 
 import { StripeSubscriptionStatuses } from '@roundtable/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from '@tanstack/react-router';
+import { render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import React, { useMemo, useRef } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import testMessages from '@/i18n/locales/en/common.json';
+import { I18nProvider } from '@/lib/i18n';
 import {
   createActiveSubscription,
   createMockProductCatalog,
-  render,
-  screen,
-  waitFor,
 } from '@/lib/testing';
 
 import PricingScreen from '../PricingScreen';
 
-vi.mock('@/lib/compat', () => ({
-  useRouter: vi.fn(() => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    refresh: vi.fn(),
-  })),
-  usePathname: vi.fn(() => '/chat/pricing'),
-  useTranslations: vi.fn(() => (key: string) => key),
-}));
+vi.mock('@/lib/i18n', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/i18n')>();
+  return {
+    ...original,
+    useTranslations: vi.fn(() => (key: string) => key),
+  };
+});
 
 vi.mock('@/lib/toast', () => ({
   toastManager: {
@@ -45,8 +53,17 @@ vi.mock('@/hooks/utils', async (importOriginal) => {
   return {
     ...original,
     useIsMounted: () => true,
+    useAuthCheck: () => ({ isAuthenticated: true, isLoading: false }),
   };
 });
+
+// Mock router with proper TanStack Router types
+const mockRouter = {
+  navigate: vi.fn(),
+  push: vi.fn(),
+  replace: vi.fn(),
+  refresh: vi.fn(),
+};
 
 function createMockQueryClient() {
   return new QueryClient({
@@ -62,42 +79,83 @@ function createMockQueryClient() {
   });
 }
 
-describe('pricingScreen', () => {
-  const mockRouter: Pick<AppRouterInstance, 'push' | 'replace' | 'refresh'> = {
-    push: vi.fn(),
-    replace: vi.fn(),
-    refresh: vi.fn(),
-  };
+// Create router with ref-based children injection for TanStack Router
+function createTestRouterWithChildren(
+  childrenRef: React.RefObject<ReactNode>,
+  queryClient: QueryClient,
+) {
+  const rootRoute = createRootRoute({
+    component: () => (
+      <I18nProvider locale="en" messages={testMessages} timeZone="UTC">
+        <QueryClientProvider client={queryClient}>
+          {childrenRef.current}
+          <Outlet />
+        </QueryClientProvider>
+      </I18nProvider>
+    ),
+  });
 
+  const pricingRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/chat/pricing',
+    component: () => null,
+  });
+
+  const routeTree = rootRoute.addChildren([pricingRoute]);
+
+  return createRouter({
+    routeTree,
+    history: createMemoryHistory({ initialEntries: ['/chat/pricing'] }),
+  });
+}
+
+// Test wrapper component that provides both router and query context
+function TestWrapper({ queryClient, children }: { queryClient: QueryClient; children: ReactNode }) {
+  const childrenRef = useRef<ReactNode>(children);
+  childrenRef.current = children;
+
+  const router = useMemo(
+    () => createTestRouterWithChildren(childrenRef, queryClient),
+    [queryClient],
+  );
+
+  return <RouterProvider router={router} />;
+}
+
+describe('pricingScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useRouter).mockReturnValue(mockRouter as AppRouterInstance);
+    // Reset mock router between tests
+    mockRouter.navigate.mockClear();
+    mockRouter.push.mockClear();
+    mockRouter.replace.mockClear();
+    mockRouter.refresh.mockClear();
   });
 
   describe('product loading', () => {
-    it('shows loading skeleton initially', async () => {
+    it('shows empty state or error when no products data', async () => {
       const queryClient = createMockQueryClient();
 
-      // Don't set products data - let it remain undefined to trigger loading state
-      // The hook will be in pending state without cached data
+      // Don't set products data - let it remain undefined
+      // Component will show error or empty state
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
-      // When no products data is cached and query is pending, should show loading
-      // Check for skeleton or empty state as the component handles both
+      // When no products data is cached, component shows error or empty state
+      // Check for either error state or empty state (translation keys)
       await waitFor(() => {
-        const hasSkeletons = document.querySelectorAll('.animate-pulse').length > 0;
-        const hasEmptyState = screen.queryByText(/no plans available/i);
-        expect(hasSkeletons || hasEmptyState).toBeTruthy();
+        const hasError = screen.queryByText('plans.error');
+        const hasEmpty = screen.queryByText('plans.noPlansAvailable');
+        expect(hasError || hasEmpty).toBeTruthy();
       });
     });
 
@@ -110,15 +168,15 @@ describe('pricingScreen', () => {
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
@@ -141,20 +199,20 @@ describe('pricingScreen', () => {
         },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
-      // Component shows "no plans available" when products data has error
+      // Component shows empty state when products data has error (no valid products)
       await waitFor(() => {
-        expect(screen.getByText(/no plans available/i)).toBeInTheDocument();
+        expect(screen.getByText('plans.noPlansAvailable')).toBeInTheDocument();
       });
     });
   });
@@ -164,26 +222,29 @@ describe('pricingScreen', () => {
       const queryClient = createMockQueryClient();
       const products = createMockProductCatalog();
       const proPlan = products.find(p => p.name === 'Pro Plan');
-      const subscription = createActiveSubscription(proPlan!.prices![0].id);
+      if (!proPlan?.prices?.[0]?.id) {
+        throw new Error('Pro Plan with prices not found in mock catalog');
+      }
+      const subscription = createActiveSubscription(proPlan.prices[0].id);
 
       queryClient.setQueryData(['products', 'list'], {
         success: true,
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [subscription], count: 1 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        expect(screen.getByText('Current Plan')).toBeInTheDocument();
+        expect(screen.getByText('pricing.card.currentPlan')).toBeInTheDocument();
       });
     });
 
@@ -196,19 +257,19 @@ describe('pricingScreen', () => {
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        expect(screen.queryByText('Current Plan')).not.toBeInTheDocument();
+        expect(screen.queryByText('pricing.card.currentPlan')).not.toBeInTheDocument();
       });
     });
   });
@@ -223,19 +284,19 @@ describe('pricingScreen', () => {
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        expect(screen.getAllByText('Get Started').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('pricing.card.getStarted').length).toBeGreaterThan(0);
       });
     });
 
@@ -243,26 +304,29 @@ describe('pricingScreen', () => {
       const queryClient = createMockQueryClient();
       const products = createMockProductCatalog();
       const proPlan = products.find(p => p.name === 'Pro Plan');
-      const subscription = createActiveSubscription(proPlan!.prices![0].id);
+      if (!proPlan?.prices?.[0]?.id) {
+        throw new Error('Pro Plan with prices not found in mock catalog');
+      }
+      const subscription = createActiveSubscription(proPlan.prices[0].id);
 
       queryClient.setQueryData(['products', 'list'], {
         success: true,
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [subscription], count: 1 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        expect(screen.getByText('Cancel Subscription')).toBeInTheDocument();
+        expect(screen.getByText('pricing.card.cancelSubscription')).toBeInTheDocument();
       });
     });
 
@@ -270,26 +334,29 @@ describe('pricingScreen', () => {
       const queryClient = createMockQueryClient();
       const products = createMockProductCatalog();
       const proPlan = products.find(p => p.name === 'Pro Plan');
-      const subscription = createActiveSubscription(proPlan!.prices![0].id);
+      if (!proPlan?.prices?.[0]?.id) {
+        throw new Error('Pro Plan with prices not found in mock catalog');
+      }
+      const subscription = createActiveSubscription(proPlan.prices[0].id);
 
       queryClient.setQueryData(['products', 'list'], {
         success: true,
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [subscription], count: 1 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        expect(screen.getByText('Manage Billing')).toBeInTheDocument();
+        expect(screen.getByText('pricing.card.manageBilling')).toBeInTheDocument();
       });
     });
   });
@@ -304,19 +371,19 @@ describe('pricingScreen', () => {
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        expect(screen.getByText('Pricing & Plans')).toBeInTheDocument();
+        expect(screen.getByText('pricing.page.title')).toBeInTheDocument();
       });
     });
 
@@ -329,19 +396,19 @@ describe('pricingScreen', () => {
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        expect(screen.getByText(/choose the perfect plan/i)).toBeInTheDocument();
+        expect(screen.getByText('pricing.page.description')).toBeInTheDocument();
       });
     });
   });
@@ -356,19 +423,19 @@ describe('pricingScreen', () => {
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        const heading = screen.getByText('Pricing & Plans');
+        const heading = screen.getByText('pricing.page.title');
         expect(heading).toBeInTheDocument();
       });
     });
@@ -382,15 +449,15 @@ describe('pricingScreen', () => {
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
@@ -411,19 +478,19 @@ describe('pricingScreen', () => {
         data: { items: [], count: 0 },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        expect(screen.getByText(/no plans available/i)).toBeInTheDocument();
+        expect(screen.getByText('plans.noPlansAvailable')).toBeInTheDocument();
       });
     });
 
@@ -436,12 +503,12 @@ describe('pricingScreen', () => {
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], undefined);
+      queryClient.setQueryData(['subscriptions', 'current'], undefined);
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
@@ -457,19 +524,19 @@ describe('pricingScreen', () => {
         data: { items: [], count: 0 },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [], count: 0 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        expect(screen.getByText(/no plans available/i)).toBeInTheDocument();
+        expect(screen.getByText('plans.noPlansAvailable')).toBeInTheDocument();
       });
     });
 
@@ -477,7 +544,10 @@ describe('pricingScreen', () => {
       const queryClient = createMockQueryClient();
       const products = createMockProductCatalog();
       const proPlan = products.find(p => p.name === 'Pro Plan');
-      const subscription1 = createActiveSubscription(proPlan!.prices![0].id);
+      if (!proPlan?.prices?.[0]?.id) {
+        throw new Error('Pro Plan with prices not found in mock catalog');
+      }
+      const subscription1 = createActiveSubscription(proPlan.prices[0].id);
       const subscription2 = {
         ...subscription1,
         id: 'sub_second',
@@ -489,19 +559,19 @@ describe('pricingScreen', () => {
         data: { items: products, count: products.length },
       });
 
-      queryClient.setQueryData(['subscriptions', 'list'], {
+      queryClient.setQueryData(['subscriptions', 'current'], {
         success: true,
         data: { items: [subscription1, subscription2], count: 2 },
       });
 
       render(
-        <QueryClientProvider client={queryClient}>
+        <TestWrapper queryClient={queryClient}>
           <PricingScreen />
-        </QueryClientProvider>,
+        </TestWrapper>,
       );
 
       await waitFor(() => {
-        expect(screen.getByText('Current Plan')).toBeInTheDocument();
+        expect(screen.getByText('pricing.card.currentPlan')).toBeInTheDocument();
       });
     });
   });

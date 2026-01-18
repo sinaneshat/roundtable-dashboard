@@ -24,7 +24,7 @@ import {
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 import {
   getParticipantCompletionStatus,
@@ -484,7 +484,10 @@ describe('round Utils - Single Pass Grouping', () => {
       if (!result.has(roundNumber)) {
         result.set(roundNumber, []);
       }
-      result.get(roundNumber)!.push(message);
+      const roundMessages = result.get(roundNumber);
+      if (!roundMessages)
+        throw new Error('expected round messages array');
+      roundMessages.push(message);
     }
 
     return result;

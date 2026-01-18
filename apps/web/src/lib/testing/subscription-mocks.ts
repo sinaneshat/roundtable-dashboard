@@ -7,14 +7,14 @@
  * NOTE: For product and price mocks, import from billing-test-factories.ts
  */
 
-import type { StripeSubscriptionStatus } from '@roundtable/shared';
+import type { ApiErrorResponse, StripeSubscriptionStatus } from '@roundtable/shared';
 import { StripeSubscriptionStatuses } from '@roundtable/shared';
 
 import type {
   GetSubscriptionResponse,
   ListSubscriptionsResponse,
+  Subscription,
 } from '@/services/api';
-import type { Subscription } from '@/types/billing';
 
 // ============================================================================
 // Subscription Factory
@@ -166,7 +166,7 @@ export function createEmptySubscriptionListResponse(): ListSubscriptionsResponse
 // Error Response Factories
 // ============================================================================
 
-export function createSubscriptionErrorResponse(message = 'Subscription not found'): GetSubscriptionResponse {
+export function createSubscriptionErrorResponse(message = 'Subscription not found'): ApiErrorResponse {
   return {
     success: false,
     error: {
@@ -176,7 +176,7 @@ export function createSubscriptionErrorResponse(message = 'Subscription not foun
   };
 }
 
-export function createSubscriptionListErrorResponse(message = 'Failed to fetch subscriptions'): ListSubscriptionsResponse {
+export function createSubscriptionListErrorResponse(message = 'Failed to fetch subscriptions'): ApiErrorResponse {
   return {
     success: false,
     error: {

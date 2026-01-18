@@ -23,6 +23,7 @@ import {
   createTestUserMessage,
   getStoreState,
 } from '@/lib/testing';
+import type { ChatParticipant } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -232,7 +233,10 @@ describe('participant Configuration Changes', () => {
 
       // Check all participants stored but isEnabled differs
       expect(getStoreState(store).participants).toHaveLength(3);
-      expect(getStoreState(store).participants[1]!.isEnabled).toBe(false);
+      const participant1 = getStoreState(store).participants[1];
+      if (!participant1)
+        throw new Error('expected participant 1');
+      expect(participant1.isEnabled).toBe(false);
 
       // Filter for enabled (simulating what the app does)
       const enabled = getStoreState(store).participants.filter(p => p.isEnabled);
@@ -273,14 +277,14 @@ describe('web Search Configuration Changes', () => {
     const state = getStoreState(store);
 
     // Thread has its own setting
-    expect(getStoreState(store).thread!.enableWebSearch).toBe(false);
+    expect(getStoreState(store).thread?.enableWebSearch).toBe(false);
 
     // Form state can differ
     state.setEnableWebSearch(true);
     expect(getStoreState(store).enableWebSearch).toBe(true);
 
     // Thread setting unchanged
-    expect(getStoreState(store).thread!.enableWebSearch).toBe(false);
+    expect(getStoreState(store).thread?.enableWebSearch).toBe(false);
   });
 
   it('enabling web search mid-conversation allows pre-search', () => {

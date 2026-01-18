@@ -19,9 +19,9 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 import { getCurrentRoundNumber, getParticipantIndex as getParticipantIndexFromMetadata, getRoundNumber, isModeratorMessage } from '@/lib/utils';
+import type { ChatParticipant } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { shouldWaitForPreSearch } from '@/stores/chat';
-import type { ChatParticipant } from '@/types/api';
 
 import type { ChatHook } from '../types';
 

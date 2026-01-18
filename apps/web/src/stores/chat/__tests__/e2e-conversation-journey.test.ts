@@ -29,7 +29,7 @@ import {
   createTestModeratorMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { ChatParticipant, StoredPreSearch } from '@/types/api';
+import type { ChatParticipant, StoredPreSearch } from '@/services/api';
 
 // ============================================================================
 // TYPE GUARDS
@@ -234,12 +234,15 @@ describe('complete Round 1 Journey', () => {
       expect(shouldWaitForPreSearch()).toBe(true);
 
       // Step 3: Pre-search starts streaming
-      state.preSearches[0]!.status = MessageStatuses.STREAMING;
+      const preSearch0 = state.preSearches[0];
+      if (!preSearch0)
+        throw new Error('expected pre-search at index 0');
+      preSearch0.status = MessageStatuses.STREAMING;
       expect(shouldWaitForPreSearch()).toBe(true);
 
       // Step 4: Pre-search completes
-      state.preSearches[0]!.status = MessageStatuses.COMPLETE;
-      state.preSearches[0]!.searchData = {
+      preSearch0.status = MessageStatuses.COMPLETE;
+      preSearch0.searchData = {
         queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
         results: [],
         moderatorSummary: 'Moderator',
@@ -529,8 +532,11 @@ describe('stop Button Journey', () => {
       state.preSearches.push(createMockStoredPreSearch(0, MessageStatuses.STREAMING));
 
       // User clicks stop during pre-search
-      state.preSearches[0]!.status = MessageStatuses.FAILED;
-      state.preSearches[0]!.errorMessage = 'Cancelled by user';
+      const preSearch0 = state.preSearches[0];
+      if (!preSearch0)
+        throw new Error('expected pre-search at index 0');
+      preSearch0.status = MessageStatuses.FAILED;
+      preSearch0.errorMessage = 'Cancelled by user';
 
       expect(state.preSearches[0]?.status).toBe(MessageStatuses.FAILED);
 

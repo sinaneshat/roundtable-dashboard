@@ -126,7 +126,10 @@ function groupByRound(messages: Array<TestUserMessage | TestAssistantMessage>) {
     if (!rounds.has(round)) {
       rounds.set(round, []);
     }
-    rounds.get(round)!.push(msg);
+    const roundMessages = rounds.get(round);
+    if (!roundMessages)
+      throw new Error(`expected round ${round} to have messages`);
+    roundMessages.push(msg);
   }
 
   return rounds;
@@ -516,10 +519,10 @@ describe('cross-Round Message Deduplication', () => {
       const round1Moderator = deduplicated.find(m => m.id === 'thread_r1_moderator');
 
       expect(round0Moderator).toBeDefined();
-      expect(getRoundNumber(round0Moderator!.metadata)).toBe(0);
+      expect(round0Moderator ? getRoundNumber(round0Moderator.metadata) : undefined).toBe(0);
 
       expect(round1Moderator).toBeDefined();
-      expect(getRoundNumber(round1Moderator!.metadata)).toBe(1);
+      expect(round1Moderator ? getRoundNumber(round1Moderator.metadata) : undefined).toBe(1);
     });
   });
 

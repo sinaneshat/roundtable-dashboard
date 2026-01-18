@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 
 type PlanStat = {
   label: string;

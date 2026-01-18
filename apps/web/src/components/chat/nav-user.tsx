@@ -1,4 +1,5 @@
 import { StripeSubscriptionStatuses, SubscriptionTiers } from '@roundtable/shared';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { CancelSubscriptionDialogProps } from '@/components/chat/cancel-subscription-dialog';
@@ -22,10 +23,11 @@ import {
 import { useBoolean } from '@/hooks/utils';
 import { deleteUser, signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
-import { dynamic, Link, useNavigate, useTranslations } from '@/lib/compat';
 import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
-import type { Subscription } from '@/types/billing';
+import dynamic from '@/lib/utils/dynamic';
+import type { Subscription } from '@/services/api';
 
 const CancelSubscriptionDialog = dynamic<CancelSubscriptionDialogProps>(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => ({ default: m.CancelSubscriptionDialog })),
@@ -78,15 +80,9 @@ export function NavUser({ initialSession }: NavUserProps) {
   const displayName = user?.name || t('user.defaultName');
   const displayEmail = user?.email || '';
   const subscriptions: Subscription[] = (() => {
-    if (!subscriptionsData)
+    if (!subscriptionsData?.success || !subscriptionsData.data?.items)
       return [];
-    const result = subscriptionsData as any;
-    if (!result.success)
-      return [];
-    const data = result.data;
-    if (!data || typeof data !== 'object' || !('items' in data) || !Array.isArray(data.items))
-      return [];
-    return data.items as Subscription[];
+    return subscriptionsData.data.items;
   })();
   const activeSubscription = subscriptions.find(
     (sub: Subscription) => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
@@ -108,11 +104,10 @@ export function NavUser({ initialSession }: NavUserProps) {
           returnUrl: window.location.href,
         },
       });
-      if (!result)
+      if (!result || !result.success)
         return;
-      const data = result as any;
-      if (data.success && data.data && typeof data.data === 'object' && 'url' in data.data && typeof data.data.url === 'string') {
-        window.open(data.data.url, '_blank', 'noopener,noreferrer');
+      if (result.data?.url) {
+        window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
       showApiErrorToast('Portal Error', error);
@@ -126,7 +121,7 @@ export function NavUser({ initialSession }: NavUserProps) {
         param: { id: activeSubscription.id },
         json: { immediately: false },
       });
-      if (result && (result as any).success) {
+      if (result?.success) {
         showCancelDialog.onFalse();
       }
     } catch (error) {
@@ -261,7 +256,7 @@ export function NavUser({ initialSession }: NavUserProps) {
                   )
                 : (
                     <DropdownMenuItem asChild className="text-emerald-400 focus:text-emerald-300 focus:bg-emerald-500/10">
-                      <Link href="/chat/pricing" prefetch={true} className="flex items-center gap-2.5">
+                      <Link to="/chat/pricing" preload="intent" className="flex items-center gap-2.5">
                         <Icons.sparkles className="size-4" />
                         <div className="flex-1">
                           <p className="text-xs font-semibold">{t('userMenu.upgradeToPro')}</p>

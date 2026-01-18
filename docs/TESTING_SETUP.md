@@ -440,7 +440,7 @@ export default [
 If you encounter errors with ESM modules:
 
 1. Check `vitest.config.ts` server.deps.inline configuration
-2. ESM packages like `next-intl` are configured to be inlined
+2. ESM packages are configured to be inlined as needed
 3. The test setup includes proper provider wrappers in `src/lib/testing/test-providers.tsx`
 
 ### Type Errors

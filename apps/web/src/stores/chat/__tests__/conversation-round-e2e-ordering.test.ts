@@ -17,6 +17,7 @@
  */
 
 import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, UIMessageRoles } from '@roundtable/shared';
+import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
@@ -24,10 +25,9 @@ import {
   createTestAssistantMessage,
   createTestModeratorMessage,
   createTestUserMessage,
-  renderHook,
 } from '@/lib/testing';
 import { getParticipantIndex, getRoundNumber } from '@/lib/utils';
-import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch } from '@/types/api';
+import type { ApiMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -136,7 +136,7 @@ function createMockChangelog(
 function createModeratorMsg(
   roundNumber: number,
   content = `Moderator for round ${roundNumber}`,
-): ChatMessage {
+): ApiMessage {
   return createTestModeratorMessage({
     id: `thread-123_r${roundNumber}_moderator`,
     content,
@@ -429,7 +429,7 @@ describe('participant Response Order', () => {
             isTransient: false,
             participantRole: null,
           },
-        } as ChatMessage,
+        } as ApiMessage,
       ]);
 
       // Only one assistant message (participant 0 streaming)

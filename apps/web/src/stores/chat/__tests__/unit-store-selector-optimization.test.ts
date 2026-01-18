@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest';
 import { shallow } from 'zustand/shallow';
 
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 import { createChatStore } from '../store';
 

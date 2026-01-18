@@ -15,6 +15,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { getRoundNumber, isObject } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
+import { streamModeratorService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { isRoundComplete } from '@/stores/chat';
 
@@ -138,14 +139,16 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     abortControllerRef.current = controller;
 
     try {
-      const response = await fetch(
-        `/api/v1/chat/threads/${freshThreadId}/rounds/${roundNumber}/moderator`,
+      // Use RPC service for type-safe moderator streaming
+      const response = await streamModeratorService(
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ participantMessageIds }),
-          signal: controller.signal,
+          param: {
+            threadId: freshThreadId,
+            roundNumber: String(roundNumber),
+          },
+          json: { participantMessageIds },
         },
+        { signal: controller.signal },
       );
 
       if (!response.ok) {

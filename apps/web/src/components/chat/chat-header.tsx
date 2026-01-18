@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -20,7 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants';
 import { useThreadQuery } from '@/hooks/queries';
 import { useCurrentPathname } from '@/hooks/utils';
-import { Link, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 import { ChatScrollButton } from './chat-scroll-button';
@@ -72,7 +73,7 @@ function NavigationHeaderComponent({
   const { data: cachedThreadData } = useThreadQuery(storeThreadId ?? '', !!storeThreadId && isOnThreadPage);
 
   const effectiveThreadTitle = cachedThreadData?.success
-    ? (cachedThreadData.data as any)?.thread?.title
+    ? cachedThreadData.data?.thread?.title
     : storeThreadTitle;
 
   const shouldUseStoreThreadTitle = hasActiveThread || (!isStaticRoute && pathname?.startsWith('/chat/') && pathname !== '/chat');
@@ -114,7 +115,7 @@ function NavigationHeaderComponent({
           )}
           {showLogo && !isOverviewPage && (
             <>
-              <Link href="/" className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 touch-manipulation">
+              <Link to="/" className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 touch-manipulation">
                 <Logo size="sm" variant="icon" />
                 <span className="text-sm sm:text-base font-semibold tracking-tight hidden xs:inline">
                   {BRAND.displayName}
@@ -129,7 +130,7 @@ function NavigationHeaderComponent({
                 <BreadcrumbItem className="shrink-0">
                   <BreadcrumbLink asChild>
                     <Link
-                      href="/chat"
+                      to="/chat"
                       className="text-muted-foreground hover:text-foreground transition-colors text-base"
                     >
                       {BRAND.displayName}

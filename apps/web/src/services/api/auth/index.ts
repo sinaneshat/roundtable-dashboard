@@ -3,6 +3,9 @@
  *
  * Single source of truth for all auth-related API services
  * Matches backend route structure: /api/v1/auth/*
+ *
+ * NOTE: Session management is handled by Better Auth hooks (useSession, getSession)
+ * from @/lib/auth/client - do NOT create custom session services
  */
 
 export {

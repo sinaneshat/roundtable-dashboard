@@ -48,8 +48,12 @@ function trackUpdate(tracker: StoreUpdateTracker, state: unknown): void {
 function getUpdatesPerSecond(tracker: StoreUpdateTracker): number {
   if (tracker.updateTimestamps.length < 2)
     return 0;
-  const first = tracker.updateTimestamps[0]!;
-  const last = tracker.updateTimestamps[tracker.updateTimestamps.length - 1]!;
+  const first = tracker.updateTimestamps[0];
+  const last = tracker.updateTimestamps[tracker.updateTimestamps.length - 1];
+  if (!first)
+    throw new Error('expected first timestamp');
+  if (!last)
+    throw new Error('expected last timestamp');
   const durationSeconds = (last - first) / 1000;
   if (durationSeconds === 0)
     return tracker.updateCount;

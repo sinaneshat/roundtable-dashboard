@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react';
+import type { ComponentProps, ReactNode, Ref } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
@@ -6,9 +6,10 @@ type InputProps = {
   startIcon?: ReactNode;
   endIcon?: ReactNode;
   endIconClickable?: boolean;
-} & ComponentProps<'input'>;
+  ref?: Ref<HTMLInputElement>;
+} & Omit<ComponentProps<'input'>, 'ref'>;
 
-function Input({ ref, className, type, startIcon, endIcon, endIconClickable = false, ...props }: InputProps & { ref?: React.RefObject<HTMLInputElement | null> }) {
+function Input({ ref, className, type, startIcon, endIcon, endIconClickable = false, ...props }: InputProps) {
   if (!startIcon && !endIcon) {
     return (
       <input

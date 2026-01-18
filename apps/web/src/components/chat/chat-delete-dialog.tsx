@@ -1,6 +1,8 @@
+import { useLocation, useNavigate } from '@tanstack/react-router';
+
 import { ConfirmationDialog } from '@/components/chat/confirmation-dialog';
 import { useDeleteThreadMutation } from '@/hooks/mutations';
-import { usePathname, useRouter, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 
 type ChatDeleteDialogProps = {
@@ -19,8 +21,8 @@ export function ChatDeleteDialog({
   redirectIfCurrent = false,
 }: ChatDeleteDialogProps) {
   const t = useTranslations();
-  const pathname = usePathname();
-  const router = useRouter();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
   const deleteThreadMutation = useDeleteThreadMutation();
 
   const handleDelete = () => {
@@ -32,7 +34,7 @@ export function ChatDeleteDialog({
         );
         if (redirectIfCurrent && threadSlug) {
           if (pathname.includes(`/chat/${threadSlug}`)) {
-            router.push('/chat');
+            navigate({ to: '/chat' });
           }
         }
         onOpenChange(false);

@@ -16,8 +16,8 @@
 import { MessageStatuses } from '@roundtable/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import type { StoredPreSearch } from '@/services/api';
 import { shouldWaitForPreSearch } from '@/stores/chat';
-import type { StoredPreSearch } from '@/types/api';
 
 import { createChatStore } from '../store';
 

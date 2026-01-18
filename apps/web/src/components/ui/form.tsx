@@ -1,7 +1,7 @@
 'use client';
 
 import type * as LabelPrimitive from '@radix-ui/react-label';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ComponentPropsWithoutRef } from 'react';
 import { createContext, use, useId } from 'react';
 import type { ControllerProps, FieldPath, FieldValues } from 'react-hook-form';
 import {
@@ -92,7 +92,7 @@ function FormItem({ className, ...props }: ComponentProps<'div'>) {
 function FormLabel({
   className,
   ...props
-}: ComponentProps<typeof LabelPrimitive.Root>) {
+}: ComponentPropsWithoutRef<typeof LabelPrimitive.Root>) {
   const { error, formItemId } = useFormField();
 
   return (
@@ -101,7 +101,7 @@ function FormLabel({
       data-error={!!error}
       className={cn('data-[error=true]:text-destructive', className)}
       htmlFor={formItemId}
-      {...props as any}
+      {...props}
     />
   );
 }

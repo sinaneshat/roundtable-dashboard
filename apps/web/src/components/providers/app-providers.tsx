@@ -3,8 +3,9 @@ import type { ReactNode } from 'react';
 
 import { GlobalErrorBoundary } from '@/components/errors/global-error-boundary';
 import { Toaster } from '@/components/ui/toaster';
-import type { AbstractIntlMessages } from '@/lib/compat';
-import { dynamic, NextIntlClientProvider, useTranslations } from '@/lib/compat';
+import type { AbstractIntlMessages } from '@/lib/i18n';
+import { I18nProvider, useTranslations } from '@/lib/i18n';
+import dynamic from '@/lib/utils/dynamic';
 import type { ModelPreferencesState } from '@/stores/preferences';
 
 import PostHogProvider from './posthog-provider';
@@ -60,7 +61,7 @@ export function AppProviders({
       >
         <PreferencesStoreProvider initialState={initialPreferences}>
           <NuqsAdapter>
-            <NextIntlClientProvider
+            <I18nProvider
               messages={messages}
               locale={locale}
               timeZone={timeZone}
@@ -71,7 +72,7 @@ export function AppProviders({
               </GlobalErrorBoundary>
               <VersionUpdateModal />
               <Toaster />
-            </NextIntlClientProvider>
+            </I18nProvider>
           </NuqsAdapter>
         </PreferencesStoreProvider>
       </PostHogProvider>

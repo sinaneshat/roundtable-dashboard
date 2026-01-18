@@ -17,8 +17,8 @@ import { MessageRoles } from '@roundtable/shared';
 import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderHook } from '@/lib/testing';
-import type { ChatParticipant } from '@/types/api';
+import { createMockParticipant, renderHook } from '@/lib/testing';
+import type { ChatParticipant } from '@/services/api';
 
 import { useMultiParticipantChat } from '../use-multi-participant-chat';
 
@@ -43,44 +43,29 @@ describe('useMultiParticipantChat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Create mock participants in priority order
+    // Create mock participants in priority order using factory
     mockParticipants = [
-      {
+      createMockParticipant(0, {
         id: 'p1',
         threadId: mockThreadId,
         modelId: 'model-1',
         isEnabled: true,
         priority: 0,
-        customRoleId: null,
-        role: null,
-        settings: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
+      }),
+      createMockParticipant(1, {
         id: 'p2',
         threadId: mockThreadId,
         modelId: 'model-2',
         isEnabled: true,
         priority: 1,
-        customRoleId: null,
-        role: null,
-        settings: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
+      }),
+      createMockParticipant(2, {
         id: 'p3',
         threadId: mockThreadId,
         modelId: 'model-3',
         isEnabled: true,
         priority: 2,
-        customRoleId: null,
-        role: null,
-        settings: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
+      }),
     ];
   });
 

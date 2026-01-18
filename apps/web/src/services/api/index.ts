@@ -51,6 +51,9 @@ export {
   getSubscriptionsService,
   type ListProductsResponse,
   type ListSubscriptionsResponse,
+  type Price,
+  type Product,
+  type Subscription,
   type SwitchSubscriptionRequest,
   type SwitchSubscriptionResponse,
   switchSubscriptionService,
@@ -70,18 +73,40 @@ export {
   type AnalyzePromptRequest,
   type AnalyzePromptResponse,
   analyzePromptStreamService,
-  // API-derived types (SINGLE SOURCE OF TRUTH)
+  // API-derived types (SINGLE SOURCE OF TRUTH - RPC INFERENCE)
   type ApiChangelog,
   type ApiMessage,
+  type ApiMessageMetadata,
+  type ApiMessagePart,
+  type ApiMessageParts,
   type ApiParticipant,
+  // Derived citation/source types
+  type AvailableSource,
   type ChangelogItem,
   type ChangelogListData,
+  // Derived convenience types
+  type ChatParticipant,
+  type ChatSidebarItem,
+  type ChatThread,
+  type ChatThreadChangelog,
+  type ChatThreadChangelogFlexible,
+  type ChatThreadFlexible,
   type CreateCustomRoleRequest,
   type CreateCustomRoleResponse,
   createCustomRoleService,
   type CreateThreadRequest,
   type CreateThreadResponse,
   createThreadService,
+  type CustomRole,
+  // Derived metadata types (discriminated union members)
+  type DbAssistantMessageMetadata,
+  // Derived changelog types
+  type DbChangelogData,
+  type DbCitation,
+  type DbMessageMetadata,
+  type DbModeratorMessageMetadata,
+  type DbPreSearchMessageMetadata,
+  type DbUserMessageMetadata,
   type DeleteCustomRoleRequest,
   type DeleteCustomRoleResponse,
   deleteCustomRoleService,
@@ -92,6 +117,8 @@ export {
   type DeleteThreadResponse,
   deleteThreadService,
   executePreSearchStreamService,
+  // Pre-search data types
+  type GeneratedSearchQuery,
   type GetCustomRoleRequest,
   type GetCustomRoleResponse,
   getCustomRoleService,
@@ -125,6 +152,16 @@ export {
   type GetThreadStreamResumptionStateRequest,
   type GetThreadStreamResumptionStateResponse,
   getThreadStreamResumptionStateService,
+  // Type guards (Pure TypeScript - no Zod)
+  isAssistantMessageMetadata,
+  isModeChange,
+  isModeratorMessageMetadata,
+  isParticipantChange,
+  isParticipantMessageMetadata,
+  isParticipantRoleChange,
+  isPreSearchMessageMetadata,
+  isUserMessageMetadata,
+  isWebSearchChange,
   type ListCustomRolesRequest,
   type ListCustomRolesResponse,
   listCustomRolesService,
@@ -136,16 +173,27 @@ export {
   type ListThreadsRequest,
   type ListThreadsResponse,
   listThreadsService,
+  type PartialPreSearchData,
+  type PreSearchDataPayload,
+  type PreSearchQuery,
   type PreSearchRequest,
   type PreSearchResponse,
+  type PreSearchResult,
   type PublicThreadData,
+  type RoundFeedbackData,
   type SetRoundFeedbackRequest,
   type SetRoundFeedbackResponse,
   setRoundFeedbackService,
+  type StoredPreSearch,
+  type StoredThread,
   type StreamChatRequest,
   type StreamChatResponse,
   streamChatService,
+  type StreamModeratorRequest,
+  type StreamModeratorResponse,
+  streamModeratorService,
   type ThreadDetailData,
+  type ThreadStreamResumptionState,
   type UpdateCustomRoleRequest,
   type UpdateCustomRoleResponse,
   updateCustomRoleService,
@@ -155,20 +203,32 @@ export {
   type UpdateThreadRequest,
   type UpdateThreadResponse,
   updateThreadService,
+  type WebSearchResultItem,
 } from './chat';
 
 // ============================================================================
 // Presets Domain Services
 // ============================================================================
 
+// Pre-search validation schema from chat service
+export {
+  StoredPreSearchSchema,
+  type StoredPreSearchValidated,
+} from './chat/pre-search';
+
+// ============================================================================
+// Projects Domain Services
+// ============================================================================
+
 export {
   listModelsPublicService,
   type ListModelsResponse,
   listModelsService,
+  type Model,
 } from './models';
 
 // ============================================================================
-// Projects Domain Services
+// User Presets Domain Services
 // ============================================================================
 
 export {
@@ -187,10 +247,11 @@ export {
   type UpdateUserPresetRequest,
   type UpdateUserPresetResponse,
   updateUserPresetService,
+  type UserPreset,
 } from './presets';
 
 // ============================================================================
-// Uploads Domain Services
+// Usage Domain Services
 // ============================================================================
 
 export {
@@ -221,9 +282,11 @@ export {
   type GetProjectRequest,
   type GetProjectResponse,
   getProjectService,
+  type ListProjectAttachmentsQuery,
   type ListProjectAttachmentsRequest,
   type ListProjectAttachmentsResponse,
   listProjectAttachmentsService,
+  type ListProjectMemoriesQuery,
   type ListProjectMemoriesRequest,
   type ListProjectMemoriesResponse,
   listProjectMemoriesService,
@@ -245,7 +308,7 @@ export {
 } from './projects';
 
 // ============================================================================
-// Usage Domain Services
+// Feedback Domain Services
 // ============================================================================
 
 export {
@@ -285,10 +348,35 @@ export {
 } from './uploads';
 
 // ============================================================================
-// Feedback Domain Services
+// Validation Schemas - Re-exported from single sources of truth
 // ============================================================================
 
 export {
   type GetUsageStatsResponse,
   getUserUsageStatsService,
 } from './usage';
+
+// Model schema from lib/schemas - uses z.custom<Model>() to trust RPC type
+export {
+  ModelSchema,
+} from '@/lib/schemas/model-schemas';
+
+// ============================================================================
+// Streaming Validation Schemas - Only for SSE Parsing
+// ============================================================================
+
+export {
+  type AnalyzePromptPayload,
+  AnalyzePromptPayloadSchema,
+  type ModeratorPayload,
+  ModeratorPayloadSchema,
+  PartialPreSearchDataSchema,
+  PreSearchDataPayloadSchema,
+  PreSearchQuerySchema,
+  PreSearchResultSchema,
+  type RecommendedParticipant,
+  RecommendedParticipantSchema,
+  type Usage,
+  UsageSchema,
+  WebSearchResultItemSchema,
+} from '@roundtable/shared/validation';

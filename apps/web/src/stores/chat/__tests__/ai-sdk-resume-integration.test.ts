@@ -158,9 +158,13 @@ function parseStreamId(streamId: string): {
   // Pre-search: {threadId}_r{roundNumber}_presearch
   const presearchMatch = streamId.match(/^(.+)_r(\d+)_presearch$/);
   if (presearchMatch) {
+    const threadId = presearchMatch[1];
+    const roundStr = presearchMatch[2];
+    if (!threadId || !roundStr)
+      return null;
     return {
-      threadId: presearchMatch[1]!,
-      roundNumber: Number.parseInt(presearchMatch[2]!, 10),
+      threadId,
+      roundNumber: Number.parseInt(roundStr, 10),
       phase: 'presearch',
     };
   }
@@ -168,31 +172,45 @@ function parseStreamId(streamId: string): {
   // Participant: {threadId}_r{roundNumber}_participant_{index}
   const participantMatch = streamId.match(/^(.+)_r(\d+)_participant_(\d+)$/);
   if (participantMatch) {
+    const threadId = participantMatch[1];
+    const roundStr = participantMatch[2];
+    const indexStr = participantMatch[3];
+    if (!threadId || !roundStr || !indexStr)
+      return null;
     return {
-      threadId: participantMatch[1]!,
-      roundNumber: Number.parseInt(participantMatch[2]!, 10),
+      threadId,
+      roundNumber: Number.parseInt(roundStr, 10),
       phase: 'participant',
-      participantIndex: Number.parseInt(participantMatch[3]!, 10),
+      participantIndex: Number.parseInt(indexStr, 10),
     };
   }
 
   // Compact participant format: {threadId}_r{roundNumber}_p{index}
   const compactMatch = streamId.match(/^(.+)_r(\d+)_p(\d+)$/);
   if (compactMatch) {
+    const threadId = compactMatch[1];
+    const roundStr = compactMatch[2];
+    const indexStr = compactMatch[3];
+    if (!threadId || !roundStr || !indexStr)
+      return null;
     return {
-      threadId: compactMatch[1]!,
-      roundNumber: Number.parseInt(compactMatch[2]!, 10),
+      threadId,
+      roundNumber: Number.parseInt(roundStr, 10),
       phase: 'participant',
-      participantIndex: Number.parseInt(compactMatch[3]!, 10),
+      participantIndex: Number.parseInt(indexStr, 10),
     };
   }
 
   // Summarizer: {threadId}_r{roundNumber}_summarizer
   const summarizerMatch = streamId.match(/^(.+)_r(\d+)_summarizer$/);
   if (summarizerMatch) {
+    const threadId = summarizerMatch[1];
+    const roundStr = summarizerMatch[2];
+    if (!threadId || !roundStr)
+      return null;
     return {
-      threadId: summarizerMatch[1]!,
-      roundNumber: Number.parseInt(summarizerMatch[2]!, 10),
+      threadId,
+      roundNumber: Number.parseInt(roundStr, 10),
       phase: 'summarizer',
     };
   }
@@ -337,7 +355,10 @@ function createMockSSEStream(chunks: StreamChunk[]): ReadableStream<Uint8Array> 
   return new ReadableStream({
     pull(controller) {
       if (index < chunks.length) {
-        controller.enqueue(encoder.encode(chunks[index]!.data));
+        const chunk = chunks[index];
+        if (!chunk)
+          throw new Error('expected chunk');
+        controller.enqueue(encoder.encode(chunk.data));
         index++;
       } else {
         controller.close();
@@ -756,7 +777,9 @@ describe('aI SDK Resume Integration', () => {
       } as ThreadActiveStream);
 
       const activeStream = await kv.get<ThreadActiveStream>(`thread:${threadId}:active`);
-      const nextParticipant = findNextParticipant(activeStream!);
+      if (!activeStream)
+        throw new Error('expected activeStream');
+      const nextParticipant = findNextParticipant(activeStream);
 
       expect(nextParticipant).toBeUndefined();
     });
@@ -876,7 +899,9 @@ describe('aI SDK Resume Integration', () => {
       expect(response.participantStatuses?.['1']).toBe('active');
 
       // === Phase 3: Read buffered chunks from resumed stream ===
-      const reader = response.stream!.getReader();
+      if (!response.stream)
+        throw new Error('expected stream');
+      const reader = response.stream.getReader();
       const chunks: string[] = [];
 
       let done = false;

@@ -14,7 +14,7 @@ import { useLayoutEffect, useRef } from 'react';
 
 import { useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/types/api';
+import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/services/api';
 
 export type SyncHydrateOptions = {
   mode: ScreenMode;
@@ -99,7 +99,7 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
         || state.pendingMessage !== null;
 
       if (!skipPrefillDueToFormSubmission) {
-        state.prefillStreamResumptionState(threadId, streamResumptionState as any);
+        state.prefillStreamResumptionState(threadId, streamResumptionState);
       }
     }
 

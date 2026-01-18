@@ -2,14 +2,14 @@ import type { ChatMode } from '@roundtable/shared';
 
 import { Icons } from '@/components/icons';
 import { Skeleton } from '@/components/ui/skeleton';
-import { dynamic } from '@/lib/compat';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
-import type { EnhancedModelResponse } from '@/types/api';
+import dynamic from '@/lib/utils/dynamic';
+import type { Model } from '@/services/api';
 
 export type ChatInputToolbarMenuProps = {
   selectedParticipants: ParticipantConfig[];
-  allModels: EnhancedModelResponse[];
+  allModels: Model[];
   onOpenModelModal: () => void;
   selectedMode: ChatMode;
   onOpenModeModal: () => void;

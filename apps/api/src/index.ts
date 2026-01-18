@@ -180,6 +180,12 @@ import {
 // Models routes (dynamic OpenRouter models)
 import { listModelsHandler } from './routes/models/handler';
 import { listModelsRoute } from './routes/models/route';
+// ============================================================================
+// Route and Handler Imports (organized to match registration order below)
+// ============================================================================
+// OG Image routes
+import { ogImageHandler } from './routes/og/handler';
+import { ogImageRoute } from './routes/og/route';
 // Project routes
 import {
   addAttachmentToProjectHandler,
@@ -217,9 +223,6 @@ import {
   updateProjectMemoryRoute,
   updateProjectRoute,
 } from './routes/project/route';
-// ============================================================================
-// Route and Handler Imports (organized to match registration order below)
-// ============================================================================
 // System/health routes
 import {
   benchmarkHandler,
@@ -599,6 +602,10 @@ app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), 
 // Register all routes directly on the app
 // Build route chain with conditional dev-only routes
 let routeChain = app
+  // ============================================================================
+  // OG Image Routes - Dynamic image generation for social sharing
+  // ============================================================================
+  .openapi(ogImageRoute, ogImageHandler) // Generate OG images for chat threads
   // ============================================================================
   // System Routes - Health monitoring and diagnostics
   // ============================================================================

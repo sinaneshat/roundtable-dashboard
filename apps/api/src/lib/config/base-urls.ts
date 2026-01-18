@@ -155,10 +155,8 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
   // 1. Try Cloudflare Workers runtime env
   try {
     const { env: workersEnv } = await import('cloudflare:workers');
-    const cfEnv = workersEnv as unknown as Record<string, string | undefined>;
-    const webappEnv = cfEnv.WEBAPP_ENV;
-    if (typeof webappEnv === 'string' && isWebappEnv(webappEnv)) {
-      return webappEnv;
+    if (workersEnv.WEBAPP_ENV && isWebappEnv(workersEnv.WEBAPP_ENV)) {
+      return workersEnv.WEBAPP_ENV;
     }
   } catch {
     // cloudflare:workers not available (local dev without wrangler)

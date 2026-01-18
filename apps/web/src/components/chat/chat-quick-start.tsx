@@ -9,7 +9,7 @@ import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { getChatModeLabel, getExampleParticipantCount } from '@/lib/config';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
-import type { EnhancedModelResponse } from '@/types/api';
+import type { Model } from '@/services/api';
 
 type PromptTemplate = {
   title: string;
@@ -221,14 +221,14 @@ export function ChatQuickStart({
   // Include null randomPrompts in loading check to avoid hydration mismatch
   const isLoading = isModelsLoading || isUsageLoading || randomPrompts === null;
 
-  const userTier: SubscriptionTier = (usageData as any)?.data?.plan?.type === PlanTypes.PAID
+  const userTier: SubscriptionTier = usageData?.success && usageData.data?.plan?.type === PlanTypes.PAID
     ? SubscriptionTiers.PRO
     : SubscriptionTiers.FREE;
 
-  const allModels: EnhancedModelResponse[] = useMemo(() => {
+  const allModels: Model[] = useMemo(() => {
     if (!modelsResponse?.success)
       return [];
-    return (modelsResponse.data as any).items;
+    return modelsResponse.data.items;
   }, [modelsResponse]);
 
   const accessibleModels = useMemo(() => {

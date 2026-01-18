@@ -242,9 +242,15 @@ describe('participant-message-isolation', () => {
       expect(message2).toBeDefined();
 
       // VERIFY: Each message has ONLY its own content (no cross-contamination)
-      const message0Text = extractTextFromParts(message0!.parts);
-      const message1Text = extractTextFromParts(message1!.parts);
-      const message2Text = extractTextFromParts(message2!.parts);
+      if (!message0)
+        throw new Error('expected message0');
+      if (!message1)
+        throw new Error('expected message1');
+      if (!message2)
+        throw new Error('expected message2');
+      const message0Text = extractTextFromParts(message0.parts);
+      const message1Text = extractTextFromParts(message1.parts);
+      const message2Text = extractTextFromParts(message2.parts);
 
       // ❌ FAILING TEST: Participant 1 contains participant 0's content
       expect(message0Text).toBe(participant0Content);
@@ -260,9 +266,9 @@ describe('participant-message-isolation', () => {
       expect(message2Text).not.toContain(participant1Content);
 
       // VERIFY: Each message has correct participantIndex in metadata
-      const participant0Index = getParticipantIndex(message0!.metadata);
-      const participant1Index = getParticipantIndex(message1!.metadata);
-      const participant2Index = getParticipantIndex(message2!.metadata);
+      const participant0Index = getParticipantIndex(message0.metadata);
+      const participant1Index = getParticipantIndex(message1.metadata);
+      const participant2Index = getParticipantIndex(message2.metadata);
 
       // ❌ FAILING TEST: participantIndex doesn't match expected value
       expect(participant0Index).toBe(0);
@@ -270,9 +276,9 @@ describe('participant-message-isolation', () => {
       expect(participant2Index).toBe(2); // ❌ THIS WILL FAIL if metadata merge is wrong
 
       // VERIFY: Each message has correct participantId in metadata
-      const participant0Id = getParticipantId(message0!.metadata);
-      const participant1Id = getParticipantId(message1!.metadata);
-      const participant2Id = getParticipantId(message2!.metadata);
+      const participant0Id = getParticipantId(message0.metadata);
+      const participant1Id = getParticipantId(message1.metadata);
+      const participant2Id = getParticipantId(message2.metadata);
 
       // ❌ FAILING TEST: participantId doesn't match expected participant
       expect(participant0Id).toBe(participants[0].id);
@@ -378,11 +384,15 @@ describe('participant-message-isolation', () => {
       const msg0 = state.messages.find(m => m.id === message0.id);
       const msg1 = state.messages.find(m => m.id === message1.id);
 
-      expect(extractTextFromParts(msg0!.parts)).toBe('Participant 0 response');
-      expect(extractTextFromParts(msg1!.parts)).toBe('Participant 1 response');
+      if (!msg0)
+        throw new Error('expected msg0');
+      if (!msg1)
+        throw new Error('expected msg1');
+      expect(extractTextFromParts(msg0.parts)).toBe('Participant 0 response');
+      expect(extractTextFromParts(msg1.parts)).toBe('Participant 1 response');
 
       // ❌ FAILING TEST: Message 0's content leaked into message 1
-      expect(extractTextFromParts(msg1!.parts)).not.toContain('Participant 0 response');
+      expect(extractTextFromParts(msg1.parts)).not.toContain('Participant 0 response');
     });
 
     it('should maintain correct participantIndex during metadata merge', () => {
@@ -438,14 +448,16 @@ describe('participant-message-isolation', () => {
 
       // VERIFY: Metadata has correct participantIndex
       const finalMessage = getState().messages.find(m => m.id === messageId);
-      const participantIndex = getParticipantIndex(finalMessage!.metadata);
+      if (!finalMessage)
+        throw new Error('expected finalMessage');
+      const participantIndex = getParticipantIndex(finalMessage.metadata);
 
       // ❌ FAILING TEST: participantIndex is 0 instead of 1
       expect(participantIndex).toBe(1);
       expect(participantIndex).not.toBe(0);
 
       // VERIFY: Metadata has correct participantId
-      const participantId = getParticipantId(finalMessage!.metadata);
+      const participantId = getParticipantId(finalMessage.metadata);
       expect(participantId).toBe('participant-1-id');
       expect(participantId).not.toBe('participant-0-id');
     });
@@ -520,14 +532,16 @@ describe('participant-message-isolation', () => {
 
       // VERIFY: Round 1 participant 0 has correct metadata
       const round1p0 = getState().messages.find(m => m.id === `${threadId}_r1_p0`);
-      const participantIndex = getParticipantIndex(round1p0!.metadata);
+      if (!round1p0)
+        throw new Error('expected round1p0');
+      const participantIndex = getParticipantIndex(round1p0.metadata);
 
       // ❌ FAILING TEST: participantIndex continues from round 0 (shows as 2 instead of 0)
       expect(participantIndex).toBe(0);
       expect(participantIndex).not.toBe(2);
 
       // VERIFY: No content leakage between rounds
-      const round1Text = extractTextFromParts(round1p0!.parts);
+      const round1Text = extractTextFromParts(round1p0.parts);
       expect(round1Text).toBe('Round 1, Participant 0');
       expect(round1Text).not.toContain('Round 0');
     });
@@ -616,13 +630,17 @@ describe('participant-message-isolation', () => {
       // Strategy 1 (by participantId) will succeed even though strategy 2 (by index) fails
       const resilientLookup = getParticipantMessageFromMaps(maps, participants[1], 1);
       expect(resilientLookup).toBeDefined(); // Falls back to participantId lookup
-      expect(extractTextFromParts(resilientLookup!.parts)).toBe('Claude-3 response (should be index 1)');
+      if (!resilientLookup)
+        throw new Error('expected resilientLookup');
+      expect(extractTextFromParts(resilientLookup.parts)).toBe('Claude-3 response (should be index 1)');
 
       // VERIFY: The metadata inconsistency is detectable
       const message = maps.byId.get('participant-1-id');
       expect(message).toBeDefined();
-      expect(getParticipantIndex(message!.metadata)).toBe(0); // Wrong index in metadata
-      expect(getParticipantId(message!.metadata)).toBe('participant-1-id'); // Correct ID
+      if (!message)
+        throw new Error('expected message');
+      expect(getParticipantIndex(message.metadata)).toBe(0); // Wrong index in metadata
+      expect(getParticipantId(message.metadata)).toBe('participant-1-id'); // Correct ID
 
       // ❌ CRITICAL: If code relies ONLY on participantIndex for lookup, it will fail
       // This demonstrates why the multi-strategy lookup is important

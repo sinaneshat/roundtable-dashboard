@@ -11,7 +11,7 @@
 
 import type { MessageStatus } from '@roundtable/shared';
 
-import type { StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 /**
  * Priority order for moderator/pre-search status resolution

@@ -1,0 +1,7 @@
+# Roundtable - Local Development
+# http://localhost:5173
+
+User-agent: *
+Disallow: /
+
+# Local development environment - no indexing

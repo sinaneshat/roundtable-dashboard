@@ -20,11 +20,38 @@
 import type { CitationPrefix, CitationSourceType } from '@roundtable/shared';
 import { CITATION_PREFIXES, CitationPrefixToSourceType, CitationSegmentTypes } from '@roundtable/shared';
 
-import type { DbCitation } from '@/types/api';
+import type { DbCitation } from '@/services/api';
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/**
+ * A citable source that can be referenced in AI responses
+ */
+export type CitableSource = {
+  type: string;
+  index: number;
+  title: string;
+  url?: string;
+  content?: string;
+};
+
+/**
+ * Map of citation source IDs to their citable source details
+ */
+export type CitationSourceMap = {
+  [key: string]: CitableSource;
+};
+
+/**
+ * Information about an attachment used in a citation
+ */
+export type AttachmentCitationInfo = {
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+};
 
 /**
  * Represents a parsed citation marker from AI response text
@@ -257,32 +284,28 @@ export function toDbCitations(
     threadId?: string;
     threadTitle?: string;
     roundNumber?: number;
-    // Attachment-specific fields
     downloadUrl?: string;
     filename?: string;
     mimeType?: string;
     fileSize?: number;
   } | undefined,
 ): DbCitation[] {
-  return parsedCitations.map((citation): any => {
+  return parsedCitations.map((citation): DbCitation => {
     const sourceData = sourceDataResolver?.(citation.sourceId);
 
     return {
       id: citation.sourceId,
       sourceType: citation.sourceType,
-      sourceId: citation.sourceId.split('_').slice(1).join('_'), // Original record ID
+      sourceId: citation.sourceId,
       displayNumber: citation.displayNumber,
       title: sourceData?.title,
-      excerpt: sourceData?.excerpt,
       url: sourceData?.url,
-      threadId: sourceData?.threadId,
-      threadTitle: sourceData?.threadTitle,
-      roundNumber: sourceData?.roundNumber,
-      // Attachment-specific fields
+      excerpt: sourceData?.excerpt,
       downloadUrl: sourceData?.downloadUrl,
       filename: sourceData?.filename,
       mimeType: sourceData?.mimeType,
       fileSize: sourceData?.fileSize,
+      threadTitle: sourceData?.threadTitle,
     };
   });
 }

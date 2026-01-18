@@ -1,8 +1,7 @@
+import { Link } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ComponentProps } from 'react';
 import { useCallback, useRef } from 'react';
-
-import { Link } from '@/lib/compat';
 
 type QueryPrefetchConfig = {
   queryKey: readonly unknown[];
@@ -26,11 +25,11 @@ type PrefetchLinkProps = ComponentProps<typeof Link> & {
 /**
  * Enhanced Link with intent-based prefetching
  *
- * Combines Next.js route prefetching with TanStack Query data prefetching
- * for near-instant navigation. Similar to TanStack Router's preload="intent".
+ * Combines TanStack Router route prefetching with TanStack Query data prefetching
+ * for near-instant navigation. Uses TanStack Router's preload="intent" behavior.
  *
  * How it works:
- * 1. Next.js prefetches the route JS bundle (default behavior)
+ * 1. TanStack Router prefetches the route (built-in behavior)
  * 2. On hover intent, TanStack Query prefetches the data
  * 3. When user clicks, both route and data are already cached
  *

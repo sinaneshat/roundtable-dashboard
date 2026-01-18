@@ -5,7 +5,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type ChatThreadMenuItemsProps = {

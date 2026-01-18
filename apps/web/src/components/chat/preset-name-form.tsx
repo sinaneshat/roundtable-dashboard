@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 
 type PresetNameFormProps = {

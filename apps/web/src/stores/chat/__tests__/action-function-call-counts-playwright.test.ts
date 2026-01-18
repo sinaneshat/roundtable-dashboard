@@ -19,7 +19,7 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createTestChatStore } from '@/lib/testing';
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 // ============================================================================
 // Test Helpers

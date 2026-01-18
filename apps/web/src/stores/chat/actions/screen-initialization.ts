@@ -10,7 +10,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/types/api';
+import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/services/api';
 
 import { useIncompleteRoundResumption } from './incomplete-round-resumption';
 import { getPreSearchOrchestrator } from './pre-search-orchestrator';
@@ -94,7 +94,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     // causing initializeThread to check streamResumptionPrefilled=false and wipe messages.
     // Now we prefill synchronously BEFORE initializeThread checks the flag.
     if (threadId && streamResumptionState && !alreadyInitialized && !skipPrefillDueToFormSubmission) {
-      actions.prefillStreamResumptionState(threadId, streamResumptionState as any);
+      actions.prefillStreamResumptionState(threadId, streamResumptionState);
     }
 
     // Re-read the flag after potential prefill (Zustand updates are sync)

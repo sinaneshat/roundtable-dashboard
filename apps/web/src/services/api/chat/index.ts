@@ -10,6 +10,7 @@ export {
   type GetThreadFeedbackRequest,
   type GetThreadFeedbackResponse,
   getThreadFeedbackService,
+  type RoundFeedbackData,
   type SetRoundFeedbackRequest,
   type SetRoundFeedbackResponse,
   setRoundFeedbackService,
@@ -21,6 +22,13 @@ export {
   type StreamChatResponse,
   streamChatService,
 } from './messages';
+
+// Moderator (Streaming)
+export {
+  type StreamModeratorRequest,
+  type StreamModeratorResponse,
+  streamModeratorService,
+} from './moderator';
 
 // Participants
 export {
@@ -38,11 +46,20 @@ export {
 // Pre-Search
 export {
   executePreSearchStreamService,
+  type GeneratedSearchQuery,
   type GetThreadPreSearchesRequest,
   type GetThreadPreSearchesResponse,
   getThreadPreSearchesService,
+  type PartialPreSearchData,
+  type PreSearchDataPayload,
+  type PreSearchQuery,
   type PreSearchRequest,
   type PreSearchResponse,
+  type PreSearchResult,
+  type StoredPreSearch,
+  StoredPreSearchSchema,
+  type StoredPreSearchValidated,
+  type WebSearchResultItem,
 } from './pre-search';
 
 // Custom Roles
@@ -50,6 +67,7 @@ export {
   type CreateCustomRoleRequest,
   type CreateCustomRoleResponse,
   createCustomRoleService,
+  type CustomRole,
   type DeleteCustomRoleRequest,
   type DeleteCustomRoleResponse,
   deleteCustomRoleService,
@@ -64,14 +82,55 @@ export {
   updateCustomRoleService,
 } from './roles';
 
+// Type Guards (Zod-based .safeParse() validation - from threads.ts)
+export {
+  isAssistantMessageMetadata,
+  isModeChange,
+  isModeratorMessageMetadata,
+  isParticipantChange,
+  isParticipantMessageMetadata,
+  isParticipantRoleChange,
+  isPreSearchMessageMetadata,
+  isUserMessageMetadata,
+  isWebSearchChange,
+  type ParticipantMessageMetadata,
+} from './threads';
+
 // Threads (including Auto Mode)
 export {
   type AnalyzePromptRequest,
   type AnalyzePromptResponse,
   analyzePromptStreamService,
+  // Type extractions derived from API response (SINGLE SOURCE OF TRUTH)
+  type ApiChangelog,
+  type ApiMessage,
+  type ApiMessageMetadata,
+  type ApiMessagePart,
+  type ApiMessageParts,
+  type ApiParticipant,
+  // Derived citation/source types from metadata
+  type AvailableSource,
+  type ChangelogItem,
+  type ChangelogListData,
+  // Derived convenience types
+  type ChatParticipant,
+  type ChatSidebarItem,
+  type ChatThread,
+  type ChatThreadChangelog,
+  type ChatThreadChangelogFlexible,
+  type ChatThreadFlexible,
   type CreateThreadRequest,
   type CreateThreadResponse,
   createThreadService,
+  // Derived metadata types (discriminated union members)
+  type DbAssistantMessageMetadata,
+  // Derived changelog types
+  type DbChangelogData,
+  type DbCitation,
+  type DbMessageMetadata,
+  type DbModeratorMessageMetadata,
+  type DbPreSearchMessageMetadata,
+  type DbUserMessageMetadata,
   type DeleteThreadRequest,
   type DeleteThreadResponse,
   deleteThreadService,
@@ -107,15 +166,11 @@ export {
   type ListThreadsRequest,
   type ListThreadsResponse,
   listThreadsService,
+  type PublicThreadData,
+  type StoredThread,
+  type ThreadDetailData,
+  type ThreadStreamResumptionState,
   type UpdateThreadRequest,
   type UpdateThreadResponse,
   updateThreadService,
-  // Type extractions derived from API response (SINGLE SOURCE OF TRUTH)
-  type ApiChangelog,
-  type ApiMessage,
-  type ApiParticipant,
-  type ChangelogItem,
-  type ChangelogListData,
-  type PublicThreadData,
-  type ThreadDetailData,
 } from './threads';

@@ -23,7 +23,7 @@
 import { ChatModes, ScreenModes } from '@roundtable/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 import { createChatStore } from '../store';
 

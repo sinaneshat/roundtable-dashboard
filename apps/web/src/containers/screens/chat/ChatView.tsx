@@ -23,10 +23,10 @@ import {
   useThreadTimeline,
   useVisualViewportPosition,
 } from '@/hooks/utils';
-import { dynamic, useTranslations } from '@/lib/compat';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
 import { filterPresetParticipants, ToastNamespaces } from '@/lib/config/model-presets';
+import { useTranslations } from '@/lib/i18n';
 import { isFilePart } from '@/lib/schemas/message-schemas';
 import { toastManager } from '@/lib/toast';
 import {
@@ -38,6 +38,8 @@ import {
   isModeratorMessage,
   isVisionRequiredMimeType,
 } from '@/lib/utils';
+import dynamic from '@/lib/utils/dynamic';
+import type { ApiChangelog } from '@/services/api';
 import {
   useAutoModeAnalysis,
   useChatFormActions,
@@ -45,8 +47,6 @@ import {
   useFlowLoading,
   useThreadActions,
 } from '@/stores/chat';
-import type { ChangelogItem } from '@/services/api';
-import type { CustomRole, EnhancedModel } from '@/types/api';
 
 const ModelSelectionModal = dynamic<ModelSelectionModalProps>(
   () => import('@/components/chat/model-selection-modal').then(m => ({ default: m.ModelSelectionModal })),
@@ -179,32 +179,31 @@ export function ChatView({
   );
 
   const allEnabledModels = useMemo(() => {
-    if (!modelsData?.data || typeof modelsData.data !== 'object' || !('items' in modelsData.data)) {
+    if (!modelsData?.success) {
       return [];
     }
-    return (modelsData.data.items as unknown as EnhancedModel[] | undefined) ?? [];
-  }, [modelsData?.data]);
+    return modelsData.data.items;
+  }, [modelsData]);
 
   const customRoles = useMemo(() => {
     if (!customRolesData?.pages) {
       return [];
     }
     return customRolesData.pages.flatMap((page) => {
-      if (!page)
+      if (!page?.success)
         return [];
-      const p = page as { success?: boolean; data?: { items?: unknown[] } };
-      return (p.success && p.data?.items) ? p.data.items as CustomRole[] : [];
+      return page.data.items;
     });
   }, [customRolesData?.pages]);
 
   const userTierConfig = useMemo(() => {
-    if (!modelsData?.data || typeof modelsData.data !== 'object' || !('user_tier_config' in modelsData.data)) {
+    if (!modelsData?.success) {
       return undefined;
     }
-    return modelsData.data.user_tier_config as { tier_name: string; max_models: number; tier: string; can_upgrade: boolean } | undefined;
-  }, [modelsData?.data]);
+    return modelsData.data.user_tier_config;
+  }, [modelsData]);
 
-  const changelog: ChangelogItem[] = useMemo(() => {
+  const changelog: ApiChangelog[] = useMemo(() => {
     if (!changelogResponse?.success || !changelogResponse.data) {
       return [];
     }
@@ -342,10 +341,8 @@ export function ChatView({
 
   const lastLoadedFeedbackRef = useRef<string>('');
   useEffect(() => {
-    if (feedbackSuccess && feedbackData) {
-      type FeedbackItem = { threadId: string; roundNumber: number; feedbackType: 'like' | 'dislike' | null };
-      const data = feedbackData as { success?: boolean; data?: FeedbackItem[] };
-      const feedbackArray = data.success && Array.isArray(data.data) ? data.data : [];
+    if (feedbackSuccess && feedbackData?.success && feedbackData.data) {
+      const feedbackArray = feedbackData.data;
       const feedbackKey = feedbackArray.map(f => `${f.roundNumber}:${f.feedbackType ?? 'none'}`).join(',');
       if (feedbackKey !== lastLoadedFeedbackRef.current) {
         lastLoadedFeedbackRef.current = feedbackKey;

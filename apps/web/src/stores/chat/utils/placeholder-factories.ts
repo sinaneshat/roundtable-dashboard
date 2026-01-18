@@ -19,7 +19,9 @@ import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
 import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
-import type { StoredModeratorData, StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
+
+import type { StoredModeratorData } from '../store-schemas';
 
 // ============================================================================
 // ZOD SCHEMAS - Single source of truth for type definitions
@@ -69,7 +71,7 @@ export function createPlaceholderModerator(
     status: MessageStatuses.PENDING,
     moderatorData: null,
     participantMessageIds: [],
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
     completedAt: null,
     errorMessage: null,
   };

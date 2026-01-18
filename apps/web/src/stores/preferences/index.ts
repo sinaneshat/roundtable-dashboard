@@ -4,9 +4,9 @@
  * Cookie-persisted user preferences for model selection.
  *
  * ============================================================================
- * OFFICIAL ZUSTAND V5 + NEXT.JS PATTERN (from Context7 docs)
+ * OFFICIAL ZUSTAND V5 + TANSTACK START PATTERN (from Context7 docs)
  * ============================================================================
- * Source: https://github.com/pmndrs/zustand/blob/main/docs/guides/nextjs.md
+ * Source: https://github.com/pmndrs/zustand/blob/main/docs/guides/ssr-and-hydration.md
  *
  * EXPORTS:
  * - Types: State, Actions, Store, StoreApi
@@ -21,6 +21,16 @@
 // TYPES (Official Pattern)
 // ============================================================================
 
+// ============================================================================
+// REUSABLE SELECTORS
+// ============================================================================
+// Centralized selector hooks for optimal performance
+export * from './hooks';
+
+// ============================================================================
+// STORE FACTORY + INIT (Official Pattern)
+// ============================================================================
+
 export type {
   ModelPreferencesActions,
   ModelPreferencesState,
@@ -29,7 +39,7 @@ export type {
 } from './store';
 
 // ============================================================================
-// STORE FACTORY + INIT (Official Pattern)
+// SSR HYDRATION UTILITIES
 // ============================================================================
 
 export {
@@ -39,15 +49,11 @@ export {
 } from './store';
 
 // ============================================================================
-// SSR HYDRATION UTILITIES
+// PROVIDER + HOOKS
 // ============================================================================
+// Import from @/components/providers directly - single source of truth
 
 export {
   parsePreferencesCookie,
   PREFERENCES_COOKIE_NAME,
 } from './store';
-
-// ============================================================================
-// PROVIDER + HOOKS
-// ============================================================================
-// Import from @/components/providers directly - single source of truth

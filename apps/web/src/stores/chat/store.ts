@@ -1,12 +1,21 @@
 /**
- * Unified Chat Store - Zustand v5
+ * Unified Chat Store - Zustand v5 for TanStack Start
  *
- * Vanilla store + factory pattern for SSR isolation.
- * Types inferred from Zod schemas in store-schemas.ts.
+ * Factory pattern (`createChatStore`) using vanilla store for SSR isolation.
+ * Context + useRef pattern in ChatStoreProvider ensures per-request store instances.
+ * Types inferred from Zod schemas in store-schemas.ts (single source of truth).
+ *
+ * Architecture:
+ * - store.ts: Slice implementations + vanilla factory (createStore from zustand/vanilla)
+ * - store-schemas.ts: Zod schemas + type inference
+ * - store-action-types.ts: Explicit action type definitions
+ * - store-defaults.ts: Default values + reset state groups
+ * - provider.tsx: Context provider with useRef store creation
+ * - context.ts: useChatStore hook with zustand useStore
  */
 
 import type { ChatMode, ScreenMode } from '@roundtable/shared';
-import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses, TextPartStates, UploadStatuses } from '@roundtable/shared';
+import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses, TextPartStates, UploadStatuses, WebSearchDepths } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { castDraft, enableMapSet } from 'immer';
 import type { StateCreator } from 'zustand';
@@ -20,7 +29,7 @@ import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
+import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import type { SendMessage, StartRound } from './store-action-types';
 import { isUpsertOptions } from './store-action-types';
@@ -76,6 +85,17 @@ function ensureMapSetEnabled() {
   }
 }
 
+/**
+ * Slice creator type with middleware chain for type inference
+ * Middleware applied at combined level: devtools(immer(...))
+ * All slices inherit this chain for proper type safety
+ *
+ * Pattern:
+ * - First param: Combined store type (ChatStore)
+ * - Second param: Middleware chain [['zustand/devtools', never], ['zustand/immer', never]]
+ * - Third param: Empty array [] (no additional middleware in slices)
+ * - Fourth param: Slice type (S)
+ */
 type SliceCreator<S> = StateCreator<
   ChatStore,
   [['zustand/devtools', never], ['zustand/immer', never]],
@@ -197,36 +217,40 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
     }, false, 'preSearch/addPreSearch'),
   updatePreSearchData: (roundNumber, data) =>
     set((draft) => {
-      // ✅ PERF FIX: Use findIndex + direct access instead of forEach scanning all items
-      const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
-      if (idx !== -1) {
-        draft.preSearches[idx]!.searchData = data;
-        draft.preSearches[idx]!.status = MessageStatuses.COMPLETE;
-        // ✅ FIX: Set completedAt for timing guards in streaming trigger
-        draft.preSearches[idx]!.completedAt = new Date();
+      const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
+      if (ps) {
+        // TYPE BOUNDARY: Zod streaming type → RPC store type (safe - defaults filled by backend)
+        ps.searchData = data as typeof ps.searchData;
+        ps.status = MessageStatuses.COMPLETE;
+        ps.completedAt = new Date().toISOString();
       }
     }, false, 'preSearch/updatePreSearchData'),
   updatePartialPreSearchData: (roundNumber, partialData) =>
     set((draft) => {
-      // ✅ PERF FIX: Use findIndex + direct access instead of forEach scanning all items
-      const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
-      if (idx !== -1) {
-        const ps = draft.preSearches[idx]!;
+      const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
+      if (ps) {
         const existingSummary = ps.searchData?.summary ?? '';
         const results = partialData.results ?? [];
+        // TYPE BOUNDARY: Build search data with defaults for optional fields
         ps.searchData = {
-          queries: partialData.queries,
+          queries: (partialData.queries ?? []).map(q => ({
+            query: q.query,
+            rationale: q.rationale ?? '',
+            searchDepth: q.searchDepth ?? WebSearchDepths.BASIC,
+            index: q.index,
+            total: q.total ?? 1,
+          })),
           results: results.map(r => ({
             query: r.query,
-            answer: r.answer,
+            answer: r.answer ?? null,
             results: r.results.map(item => ({
               title: item.title,
               url: item.url,
               content: item.content ?? '',
               excerpt: item.excerpt,
-              score: 0, // Default score for streaming - replaced on completion
+              score: 0,
             })),
-            responseTime: r.responseTime,
+            responseTime: r.responseTime ?? 0,
             index: r.index,
           })),
           summary: partialData.summary ?? existingSummary,
@@ -234,23 +258,17 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
           failureCount: 0,
           totalResults: partialData.totalResults ?? results.length,
           totalTime: partialData.totalTime ?? 0,
-        };
+        } as typeof ps.searchData;
       }
     }, false, 'preSearch/updatePartialPreSearchData'),
   updatePreSearchStatus: (roundNumber, status) =>
     set((draft) => {
-      // ✅ PERF FIX: Use findIndex + direct access instead of forEach scanning all items
-      const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
-      if (idx !== -1) {
-        draft.preSearches[idx]!.status = status;
-        // ✅ FIX: Set completedAt when status is COMPLETE for timing guards
+      const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
+      if (ps) {
+        ps.status = status;
         if (status === MessageStatuses.COMPLETE) {
-          draft.preSearches[idx]!.completedAt = new Date();
+          ps.completedAt = new Date().toISOString();
         }
-        // ✅ FIX: Removed clearing waitingToStartStreaming on pre-search STREAMING
-        // Pre-search streaming is NOT the same as participant streaming
-        // waitingToStartStreaming should only clear when actual AI participant streams start
-        // The streaming trigger handles this via separate effect watching isStreaming
       }
     }, false, 'preSearch/updatePreSearchStatus'),
   removePreSearch: roundNumber =>
@@ -695,9 +713,8 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       return false;
 
     const ONE_HOUR_MS = 60 * 60 * 1000;
-    const createdAtTime = resumptionState.createdAt instanceof Date
-      ? resumptionState.createdAt.getTime()
-      : new Date(resumptionState.createdAt).getTime();
+    // createdAt is always a string (ISO format from JSON serialization)
+    const createdAtTime = new Date(resumptionState.createdAt).getTime();
     const age = Date.now() - createdAtTime;
     return age > ONE_HOUR_MS;
   },
@@ -1413,6 +1430,22 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
 });
 
+/**
+ * Create a new vanilla chat store instance
+ *
+ * ✅ ZUSTAND V5 SSR PATTERN (TanStack Start):
+ * - Factory function returns new store per request
+ * - Uses createStore from zustand/vanilla (NOT create hook)
+ * - Called in ChatStoreProvider's useRef for per-request isolation
+ * - Middleware: devtools (dev only) + immer (direct mutations)
+ *
+ * ⚠️ CRITICAL: This is NOT a global store!
+ * - Each ChatStoreProvider creates its own instance
+ * - ChatStoreProvider uses useRef to create store once per component instance
+ * - Multiple providers = multiple isolated stores (correct for SSR)
+ *
+ * Reference: Official Zustand SSR docs for vanilla stores + Context
+ */
 export function createChatStore() {
   ensureMapSetEnabled();
   const baseStore = createStore<ChatStore>()(
@@ -1437,15 +1470,16 @@ export function createChatStore() {
       ),
       {
         name: 'ChatStore',
-        enabled: process.env.NODE_ENV !== 'production',
+        enabled: import.meta.env.MODE !== 'production',
         anonymousActionType: 'unknown-action',
       },
     ),
   );
 
-  // Wrap getState to return a proxy that provides live access to participants
-  // This enables tests to access state.participants after calling setParticipants
+  // ✅ TEST HELPER: Wrap getState to provide live access to participants
+  // Enables tests to access state.participants after calling setParticipants
   // without needing to call getState() again
+  // This is safe because the Proxy only adds convenience for testing
   const originalGetState = baseStore.getState.bind(baseStore);
   const store = {
     ...baseStore,

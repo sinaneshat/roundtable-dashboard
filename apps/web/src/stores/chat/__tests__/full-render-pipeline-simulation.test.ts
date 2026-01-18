@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { TimelineItem } from '@/hooks/utils';
 import { getRoundNumberFromMetadata } from '@/lib/utils';
-import type { StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 // =====================
 // Step 1: Store Simulation
@@ -102,7 +102,10 @@ function simulateUseThreadTimeline(
     if (!messagesByRound.has(roundNumber)) {
       messagesByRound.set(roundNumber, []);
     }
-    messagesByRound.get(roundNumber)!.push(message);
+    const roundMessages = messagesByRound.get(roundNumber);
+    if (!roundMessages)
+      throw new Error(`expected round messages for round ${roundNumber}`);
+    roundMessages.push(message);
   });
 
   // Sort messages within each round (user first, then by participantIndex)
@@ -294,9 +297,11 @@ describe('full Render Pipeline Simulation', () => {
       const round1Item = timeline.find(item => item.roundNumber === 1);
 
       expect(round1Item).toBeDefined();
-      expect(round1Item!.type).toBe('messages');
+      if (!round1Item)
+        throw new Error('expected round1Item to be defined');
+      expect(round1Item.type).toBe('messages');
 
-      const round1Messages = round1Item!.data as UIMessage[];
+      const round1Messages = round1Item.data as UIMessage[];
       expect(round1Messages).toHaveLength(1);
       expect(round1Messages[0].role).toBe(MessageRoles.USER);
     });
@@ -309,7 +314,9 @@ describe('full Render Pipeline Simulation', () => {
 
       const timeline = simulateUseThreadTimeline(afterSubmit.messages);
       const round1Item = timeline.find(item => item.roundNumber === 1);
-      const round1Messages = round1Item!.data as UIMessage[];
+      if (!round1Item)
+        throw new Error('expected round1Item to be defined');
+      const round1Messages = round1Item.data as UIMessage[];
 
       const deduplicated = simulateChatMessageListDeduplication(round1Messages);
 
@@ -326,7 +333,9 @@ describe('full Render Pipeline Simulation', () => {
 
       const timeline = simulateUseThreadTimeline(afterSubmit.messages);
       const round1Item = timeline.find(item => item.roundNumber === 1);
-      const round1Messages = round1Item!.data as UIMessage[];
+      if (!round1Item)
+        throw new Error('expected round1Item to be defined');
+      const round1Messages = round1Item.data as UIMessage[];
       const deduplicated = simulateChatMessageListDeduplication(round1Messages);
 
       // Not streaming yet (waiting for API)
@@ -343,7 +352,9 @@ describe('full Render Pipeline Simulation', () => {
 
       const timeline = simulateUseThreadTimeline(afterSubmit.messages);
       const round1Item = timeline.find(item => item.roundNumber === 1);
-      const round1Messages = round1Item!.data as UIMessage[];
+      if (!round1Item)
+        throw new Error('expected round1Item to be defined');
+      const round1Messages = round1Item.data as UIMessage[];
       const deduplicated = simulateChatMessageListDeduplication(round1Messages);
 
       // Streaming is now active
@@ -369,10 +380,12 @@ describe('full Render Pipeline Simulation', () => {
       // Verify: Round 1 timeline item exists
       const round1Item = timeline.find(item => item.roundNumber === 1);
       expect(round1Item).toBeDefined();
-      expect(round1Item!.type).toBe('messages');
+      if (!round1Item)
+        throw new Error('expected round1Item to be defined');
+      expect(round1Item.type).toBe('messages');
 
       // Step 4: Get messages for round 1 (what ChatMessageList receives)
-      const round1Messages = round1Item!.data as UIMessage[];
+      const round1Messages = round1Item.data as UIMessage[];
       expect(round1Messages).toHaveLength(1);
 
       // Step 5: Deduplicate (what ChatMessageList does internally)

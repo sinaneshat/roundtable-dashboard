@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Icons } from '@/components/icons';
+import { useServiceWorker } from '@/components/providers/service-worker-provider';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,20 +12,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { APP_VERSION } from '@/constants';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
+import { createStorageHelper } from '@/lib/utils/safe-storage';
 
-const VERSION_STORAGE_KEY = 'app-version';
+const versionStorage = createStorageHelper<string>('app-version', 'local');
 
 function checkVersionUpdate(): { shouldShow: boolean; version: string } {
-  if (typeof window === 'undefined')
-    return { shouldShow: false, version: '' };
-
-  const storedVersion = localStorage.getItem(VERSION_STORAGE_KEY);
+  const storedVersion = versionStorage.get();
   const currentVersion = APP_VERSION;
 
   // First visit - store version silently
   if (!storedVersion) {
-    localStorage.setItem(VERSION_STORAGE_KEY, currentVersion);
+    versionStorage.set(currentVersion);
     return { shouldShow: false, version: currentVersion };
   }
 
@@ -38,29 +37,35 @@ function checkVersionUpdate(): { shouldShow: boolean; version: string } {
 
 export function VersionUpdateModal() {
   const t = useTranslations();
+  const { updateAvailable, applyUpdate } = useServiceWorker();
   const [state] = useState(() => checkVersionUpdate());
-  const [open, setOpen] = useState(state.shouldShow);
+  const [open, setOpen] = useState(state.shouldShow || updateAvailable);
 
   const handleUpdate = async () => {
     // Store current version
-    localStorage.setItem(VERSION_STORAGE_KEY, APP_VERSION);
+    versionStorage.set(APP_VERSION);
 
-    // Clear all caches
+    // If SW update is available, apply it (will trigger reload via controllerchange)
+    if (updateAvailable) {
+      applyUpdate();
+      return;
+    }
+
+    // Otherwise clear caches manually and reload
     if ('caches' in window) {
       const cacheNames = await caches.keys();
-
       await Promise.all(cacheNames.map(name => caches.delete(name)));
     }
 
-    // Reload page
     window.location.reload();
   };
 
-  if (!open)
+  // Show if either app version changed OR SW update available
+  if (!open && !updateAvailable)
     return null;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open || updateAvailable} onOpenChange={setOpen}>
       <DialogContent glass={true} className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

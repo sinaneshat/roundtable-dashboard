@@ -13,7 +13,11 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { LIMITS } from '@/constants';
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
+import { GC_TIMES, STALE_TIMES } from '@/lib/data/stale-times';
+import type {
+  ListProjectAttachmentsQuery,
+  ListProjectMemoriesQuery,
+} from '@/services/api';
 import {
   getProjectContextService,
   getProjectService,
@@ -21,10 +25,6 @@ import {
   listProjectMemoriesService,
   listProjectsService,
 } from '@/services/api';
-import type {
-  ListProjectAttachmentsQuery,
-  ListProjectMemoriesQuery,
-} from '@/types/project';
 
 /**
  * Hook to fetch projects with cursor-based infinite scrolling
@@ -57,18 +57,14 @@ export function useProjectsQuery(search?: string) {
       return listProjectsService({ query: params });
     },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: unknown) => {
-      if (!lastPage || typeof lastPage !== 'object' || !('success' in lastPage))
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.success)
         return undefined;
-      const page = lastPage as { success: boolean; data?: unknown };
-      if (!page.success || !page.data || typeof page.data !== 'object')
-        return undefined;
-      const data = page.data as { pagination?: { nextCursor?: string } };
-      return data.pagination?.nextCursor;
+      return lastPage.data.pagination.nextCursor;
     },
     enabled: isAuthenticated,
     staleTime: STALE_TIMES.threads, // 30 seconds - match threads pattern
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     retry: false,
     throwOnError: false,
   });
@@ -128,18 +124,14 @@ export function useProjectAttachmentsQuery(
       });
     },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: unknown) => {
-      if (!lastPage || typeof lastPage !== 'object' || !('success' in lastPage))
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.success)
         return undefined;
-      const page = lastPage as { success: boolean; data?: unknown };
-      if (!page.success || !page.data || typeof page.data !== 'object')
-        return undefined;
-      const data = page.data as { pagination?: { nextCursor?: string } };
-      return data.pagination?.nextCursor;
+      return lastPage.data.pagination.nextCursor;
     },
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     retry: false,
     throwOnError: false,
   });
@@ -180,18 +172,14 @@ export function useProjectMemoriesQuery(
       });
     },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: unknown) => {
-      if (!lastPage || typeof lastPage !== 'object' || !('success' in lastPage))
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.success)
         return undefined;
-      const page = lastPage as { success: boolean; data?: unknown };
-      if (!page.success || !page.data || typeof page.data !== 'object')
-        return undefined;
-      const data = page.data as { pagination?: { nextCursor?: string } };
-      return data.pagination?.nextCursor;
+      return lastPage.data.pagination.nextCursor;
     },
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     retry: false,
     throwOnError: false,
   });

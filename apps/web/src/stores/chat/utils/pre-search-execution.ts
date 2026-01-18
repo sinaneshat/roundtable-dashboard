@@ -22,8 +22,8 @@ import type {
   PreSearchQuery,
   PreSearchResult,
   StoredPreSearch,
-} from '@/types/api';
-import { PreSearchDataPayloadSchema } from '@/types/api';
+} from '@/services/api';
+import { PreSearchDataPayloadSchema } from '@/services/api';
 
 import type { ChatStoreApi } from '../store';
 
@@ -101,7 +101,7 @@ export async function readPreSearchStreamData(
       return;
 
     const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
-    const results = Array.from(resultsMap.values()).sort((a, b) => a.index - b.index);
+    const results = Array.from(resultsMap.values()).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
     if (queries.length > 0 || results.length > 0) {
       onPartialUpdate({
@@ -151,7 +151,7 @@ export async function readPreSearchStreamData(
               const resultData = JSON.parse(currentData);
               resultsMap.set(resultData.index, {
                 query: resultData.query || '',
-                answer: resultData.answer || null,
+                answer: resultData.answer ?? null,
                 results: resultData.results || [],
                 responseTime: resultData.responseTime || 0,
                 index: resultData.index,
@@ -282,7 +282,7 @@ export async function executePreSearch(
     }
 
     if (!response.ok) {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         console.error('[executePreSearch] Pre-search execution failed:', response.status);
       }
       store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.FAILED);
@@ -318,7 +318,7 @@ export async function executePreSearch(
 
     return PreSearchExecutionResults.COMPLETE;
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.MODE === 'development') {
       console.error('[executePreSearch] Failed:', error);
     }
     store.getState().clearPreSearchActivity(roundNumber);

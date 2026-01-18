@@ -138,6 +138,40 @@ export function getStaleTime(
 export type StaleTimeKey = keyof typeof STALE_TIMES;
 
 // ============================================================================
+// GC (GARBAGE COLLECTION) TIMES
+// ============================================================================
+
+/**
+ * Centralized gcTime configuration
+ *
+ * gcTime controls how long inactive query data is kept in cache before garbage collection.
+ * Use these constants instead of hardcoded values for consistency.
+ *
+ * Pattern:
+ * ```typescript
+ * useQuery({
+ *   queryKey: queryKeys.products.list(),
+ *   queryFn: getProductsService,
+ *   staleTime: STALE_TIMES.products,
+ *   gcTime: GC_TIMES.STANDARD, // 5 minutes
+ * });
+ * ```
+ */
+export const GC_TIMES = {
+  /** Standard cache time - 5 minutes (most queries use this) */
+  STANDARD: 5 * 60 * 1000,
+
+  /** Keep in cache forever - for static data that never changes */
+  INFINITE: Infinity,
+
+  /** Short cache time - 1 minute (for frequently changing data) */
+  SHORT: 60 * 1000,
+
+  /** Long cache time - 10 minutes (for infrequently changing data) */
+  LONG: 10 * 60 * 1000,
+} as const;
+
+// ============================================================================
 // POLLING INTERVALS
 // ============================================================================
 

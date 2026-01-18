@@ -6,11 +6,11 @@ import { Icons } from '@/components/icons';
 import { canAccessPreset, SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
 import { cn } from '@/lib/ui/cn';
-import type { EnhancedModelResponse } from '@/types/api';
+import type { Model } from '@/services/api';
 
 type ModelPresetCardProps = {
   preset: ModelPreset;
-  allModels: EnhancedModelResponse[];
+  allModels: Model[];
   userTier: SubscriptionTier;
   onSelect: (result: PresetSelectionResult) => void;
   className?: string;

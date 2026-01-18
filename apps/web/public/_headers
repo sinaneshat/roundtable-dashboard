@@ -35,3 +35,10 @@
 # API responses - no cache by default (controlled by app)
 /api/*
   Cache-Control: no-store
+
+# robots.txt and sitemap - cached for 1 day
+/robots.txt
+  Cache-Control: public, max-age=86400
+
+/sitemap.xml
+  Cache-Control: public, max-age=86400

@@ -85,7 +85,7 @@ function extractErrorDetails(context: unknown): ClientErrorDetails | undefined {
       continue;
     }
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null) {
-      contextRecord[key] = value as any;
+      contextRecord[key] = value;
       hasContextValues = true;
     }
   }
@@ -103,7 +103,6 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   }
 
   if (typeof error === 'string') {
-    // Attempt to parse stringified JSON error objects
     try {
       const parsed = JSON.parse(error);
       if (typeof parsed === 'object' && parsed !== null) {
@@ -119,73 +118,77 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
     return { message: String(error) };
   }
 
+  // Try to parse as fully-formed API error first
+  const apiErrorParse = ApiErrorDetailsSchema.safeParse(error);
+  if (apiErrorParse.success) {
+    return apiErrorParse.data;
+  }
+
   const result: ApiErrorDetails = {
     message: UNKNOWN_ERROR_MESSAGE,
   };
 
+  // Extract status from top level or response object
   if ('status' in error && typeof error.status === 'number') {
     result.status = error.status;
+  } else if ('response' in error && isObject(error.response) && 'status' in error.response && typeof error.response.status === 'number') {
+    result.status = error.response.status;
   }
 
-  if ('response' in error && typeof error.response === 'object' && error.response !== null) {
-    if ('status' in error.response && typeof error.response.status === 'number' && !result.status) {
-      result.status = error.response.status;
-    }
-  }
-
-  if ('error' in error && typeof error.error === 'object' && error.error !== null) {
+  // Handle nested error object structure
+  if ('error' in error && isObject(error.error)) {
     const apiError = error.error;
 
-    if ('message' in apiError && typeof apiError.message === 'string' && apiError.message.length > 0) {
+    if ('message' in apiError && isNonEmptyString(apiError.message)) {
       result.message = apiError.message;
     }
 
-    if ('code' in apiError && typeof apiError.code === 'string' && apiError.code.length > 0) {
+    if ('code' in apiError && isNonEmptyString(apiError.code)) {
       result.code = apiError.code;
     }
 
+    // Validate validation errors array
     if ('validation' in apiError && Array.isArray(apiError.validation)) {
-      result.validationErrors = apiError.validation
-        .filter((v): v is { field?: unknown; message?: unknown; code?: unknown } => typeof v === 'object' && v !== null)
-        .map(v => ({
-          field: 'field' in v && typeof v.field === 'string' ? v.field : 'unknown',
-          message: 'message' in v && typeof v.message === 'string' ? v.message : 'Validation failed',
-          code: 'code' in v && typeof v.code === 'string' ? v.code : undefined,
-        }));
+      const validationParse = z.array(ValidationErrorSchema).safeParse(apiError.validation);
+      if (validationParse.success) {
+        result.validationErrors = validationParse.data;
+      }
     }
 
-    if ('details' in apiError && apiError.details !== undefined) {
-      result.details = extractErrorDetails(apiError.details);
-    }
-
-    if ('context' in apiError && isObject(apiError.context)) {
-      result.details = result.details ?? extractErrorDetails(apiError.context);
+    // Extract details or context
+    if ('details' in apiError) {
+      const detailsParse = ClientErrorDetailsSchema.safeParse(apiError.details);
+      result.details = detailsParse.success ? detailsParse.data : extractErrorDetails(apiError.details);
+    } else if ('context' in apiError && isObject(apiError.context)) {
+      result.details = extractErrorDetails(apiError.context);
     }
   }
 
-  if (result.message === UNKNOWN_ERROR_MESSAGE && 'message' in error && typeof error.message === 'string' && error.message.length > 0) {
+  // Fallback to top-level message if still unknown
+  if (result.message === UNKNOWN_ERROR_MESSAGE && 'message' in error && isNonEmptyString(error.message)) {
     if (!error.message.startsWith('HTTP error!')) {
       result.message = error.message;
     }
 
-    if ('code' in error && typeof error.code === 'string' && error.code.length > 0) {
+    if ('code' in error && isNonEmptyString(error.code)) {
       result.code = error.code;
     }
   }
 
-  if (result.message === UNKNOWN_ERROR_MESSAGE && 'statusText' in error && typeof error.statusText === 'string' && error.statusText.length > 0) {
+  // Fallback to statusText
+  if (result.message === UNKNOWN_ERROR_MESSAGE && 'statusText' in error && isNonEmptyString(error.statusText)) {
     result.message = error.statusText;
   }
 
-  if ('meta' in error && typeof error.meta === 'object' && error.meta !== null) {
-    const meta = error.meta;
-    result.meta = {
-      requestId: 'requestId' in meta && typeof meta.requestId === 'string' ? meta.requestId : undefined,
-      timestamp: 'timestamp' in meta && typeof meta.timestamp === 'string' ? meta.timestamp : undefined,
-      correlationId: 'correlationId' in meta && typeof meta.correlationId === 'string' ? meta.correlationId : undefined,
-    };
+  // Parse request metadata
+  if ('meta' in error && isObject(error.meta)) {
+    const metaParse = RequestMetaSchema.safeParse(error.meta);
+    if (metaParse.success) {
+      result.meta = metaParse.data;
+    }
   }
 
+  // Final fallback for status-only errors
   if (result.status && result.message === UNKNOWN_ERROR_MESSAGE) {
     result.message = `Request failed with status ${result.status}`;
   }

@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start';
-import { getRequestHeaders } from '@tanstack/react-start/server';
+import { getRequest } from '@tanstack/react-start/server';
 
 import { listModelsService } from '@/services/api';
 
@@ -11,8 +11,8 @@ import { listModelsService } from '@/services/api';
 export const getModels = createServerFn({ method: 'GET' }).handler(
   async () => {
     try {
-      const headers = getRequestHeaders();
-      const cookie = headers.cookie || headers.Cookie;
+      const request = getRequest();
+      const cookie = request.headers.get('cookie') || '';
 
       return await listModelsService({ cookieHeader: cookie });
     } catch {

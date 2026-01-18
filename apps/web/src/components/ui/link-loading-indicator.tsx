@@ -1,4 +1,3 @@
-import { useLinkStatus } from '@/lib/compat';
 import { cn } from '@/lib/ui/cn';
 
 type LinkLoadingIndicatorProps = {
@@ -10,16 +9,14 @@ type LinkLoadingIndicatorProps = {
 };
 
 /**
- * Loading indicator for Next.js Link transitions using useLinkStatus hook.
+ * Loading indicator for TanStack Router Link transitions.
  *
- * MUST be used as a child of a Next.js <Link> component.
- * Shows loading state when prefetch hasn't completed before navigation.
- *
- * Uses CSS animation-delay (100ms) to debounce - prevents flash on fast navigations.
+ * NOTE: This component is kept for UI consistency but currently never shows a loading state.
+ * Consider using TanStack Router's useRouterState() for navigation state if needed.
  *
  * @example
  * ```tsx
- * <Link href="/chat/123">
+ * <Link to="/chat/123">
  *   <span>Chat Title</span>
  *   <LinkLoadingIndicator variant="dot" size="xs" />
  * </Link>
@@ -30,7 +27,9 @@ export function LinkLoadingIndicator({
   variant = 'dot',
   size = 'xs',
 }: LinkLoadingIndicatorProps) {
-  const { pending } = useLinkStatus();
+  // Stub to always return false (no pending state)
+  // Use TanStack Router's useRouterState() if navigation state is needed
+  const pending = false;
 
   const sizeClasses = {
     xs: 'size-1.5',

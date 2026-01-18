@@ -16,7 +16,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { LIMITS } from '@/constants';
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
+import { GC_TIMES, STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getDownloadUrlService,
   listAttachmentsService,
@@ -47,18 +47,14 @@ export function useUploadsQuery(status?: ChatAttachmentStatus) {
       return listAttachmentsService({ query });
     },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: unknown) => {
-      if (!lastPage || typeof lastPage !== 'object' || !('success' in lastPage))
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.success)
         return undefined;
-      const page = lastPage as { success: boolean; data?: unknown };
-      if (!page.success || !page.data || typeof page.data !== 'object')
-        return undefined;
-      const data = page.data as { pagination?: { nextCursor?: string } };
-      return data.pagination?.nextCursor;
+      return lastPage.data.pagination.nextCursor;
     },
     enabled: isAuthenticated,
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     retry: false,
     throwOnError: false,
   });
@@ -87,8 +83,8 @@ export function useDownloadUrlQuery(uploadId: string, enabled: boolean) {
     // ✅ RATE LIMIT FIX: Cache for 2 minutes to prevent excessive refetches
     // Signed URLs are valid for 1 hour, so this is safe and prevents
     // rate limit issues when components re-render during streaming
-    staleTime: 2 * 60 * 1000, // 2 minutes - safe since URLs valid for 1 hour
-    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    staleTime: STALE_TIME_PRESETS.medium, // 2 minutes - safe since URLs valid for 1 hour
+    gcTime: GC_TIMES.STANDARD, // Keep in cache for 5 minutes
     enabled: enabled && isAuthenticated && !!uploadId,
     retry: 1, // Only retry once for URL fetch failures
     throwOnError: false,

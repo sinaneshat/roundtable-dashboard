@@ -89,7 +89,9 @@ describe('stream Buffer Service', () => {
       await mockEnv.STREAM_BUFFER_KV.put(bufferKey, JSON.stringify(bufferData));
 
       const stored = await mockEnv.STREAM_BUFFER_KV.get(bufferKey);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.messageId).toBe(messageId);
       expect(parsed.threadId).toBe(threadId);
@@ -116,7 +118,9 @@ describe('stream Buffer Service', () => {
       await mockEnv.STREAM_BUFFER_KV.put(bufferKey, JSON.stringify(bufferData));
 
       const stored = await mockEnv.STREAM_BUFFER_KV.get(bufferKey);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.participantIndex).toBe(MODERATOR_PARTICIPANT_INDEX);
     });
@@ -148,7 +152,9 @@ describe('stream Buffer Service', () => {
       await mockEnv.STREAM_BUFFER_KV.put(bufferKey, JSON.stringify(bufferData));
 
       const stored = await mockEnv.STREAM_BUFFER_KV.get(bufferKey);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.chunks).toHaveLength(2);
       expect(parsed.chunks[0]).toBe(chunk1);
@@ -177,7 +183,9 @@ describe('stream Buffer Service', () => {
       }
 
       const stored = await mockEnv.STREAM_BUFFER_KV.get(bufferKey);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.chunks).toHaveLength(10);
       expect(parsed.chunks[0]).toBe('0:"chunk0"\n');
@@ -204,7 +212,9 @@ describe('stream Buffer Service', () => {
       await mockEnv.STREAM_BUFFER_KV.put(bufferKey, JSON.stringify(bufferData));
 
       const stored = await mockEnv.STREAM_BUFFER_KV.get(bufferKey);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.status).toBe('completed');
     });
@@ -232,7 +242,9 @@ describe('stream Buffer Service', () => {
       await mockEnv.STREAM_BUFFER_KV.put(bufferKey, JSON.stringify(bufferData));
 
       const stored = await mockEnv.STREAM_BUFFER_KV.get(bufferKey);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.status).toBe('failed');
       expect(parsed.error).toBe(errorMessage);
@@ -271,7 +283,9 @@ describe('resumable Stream KV Service', () => {
       await mockEnv.ACTIVE_STREAMS_KV.put(key, JSON.stringify(data));
 
       const stored = await mockEnv.ACTIVE_STREAMS_KV.get(key);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.status).toBe('streaming');
       expect(parsed.startedAt).toBeDefined();
@@ -296,7 +310,9 @@ describe('resumable Stream KV Service', () => {
       await mockEnv.ACTIVE_STREAMS_KV.put(key, JSON.stringify(data));
 
       const stored = await mockEnv.ACTIVE_STREAMS_KV.get(key);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.status).toBe('completed');
       expect(parsed.messageId).toBe(messageId);
@@ -321,7 +337,9 @@ describe('resumable Stream KV Service', () => {
       await mockEnv.ACTIVE_STREAMS_KV.put(key, JSON.stringify(data));
 
       const stored = await mockEnv.ACTIVE_STREAMS_KV.get(key);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.status).toBe('failed');
       expect(parsed.error).toBe(errorMessage);
@@ -351,7 +369,9 @@ describe('resumable Stream KV Service', () => {
       await mockEnv.ACTIVE_STREAMS_KV.put(key, JSON.stringify(data));
 
       const stored = await mockEnv.ACTIVE_STREAMS_KV.get(key);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.roundNumber).toBe(roundNumber);
       expect(parsed.totalParticipants).toBe(totalParticipants);
@@ -385,7 +405,9 @@ describe('resumable Stream KV Service', () => {
       await mockEnv.ACTIVE_STREAMS_KV.put(key, JSON.stringify(data));
 
       const stored = await mockEnv.ACTIVE_STREAMS_KV.get(key);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.participants[0]).toBe(ParticipantStreamStatuses.COMPLETED);
       expect(parsed.participants[1]).toBe(ParticipantStreamStatuses.STREAMING);
@@ -409,7 +431,9 @@ describe('resumable Stream KV Service', () => {
       await mockEnv.ACTIVE_STREAMS_KV.put(key, JSON.stringify(data));
 
       const stored = await mockEnv.ACTIVE_STREAMS_KV.get(key);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       const allCompleted = Object.values(parsed.participants).every(
         (status: string) =>
@@ -475,14 +499,18 @@ describe('stream Resume Flow', () => {
       for (let i = 0; i < totalParticipants; i++) {
         await act(async () => {
           const stored = await mockEnv.ACTIVE_STREAMS_KV.get(threadKey);
-          const data = JSON.parse(stored!);
+          if (!stored)
+            throw new Error('expected stored');
+          const data = JSON.parse(stored);
           data.participants[i] = ParticipantStreamStatuses.COMPLETED;
           await mockEnv.ACTIVE_STREAMS_KV.put(threadKey, JSON.stringify(data));
         });
       }
 
       const finalStored = await mockEnv.ACTIVE_STREAMS_KV.get(threadKey);
-      const finalData = JSON.parse(finalStored!);
+      if (!finalStored)
+        throw new Error('expected finalStored');
+      const finalData = JSON.parse(finalStored);
 
       expect(Object.values(finalData.participants)).toEqual([
         ParticipantStreamStatuses.COMPLETED,
@@ -506,7 +534,9 @@ describe('stream Resume Flow', () => {
       await mockEnv.ACTIVE_STREAMS_KV.put(moderatorKey, JSON.stringify(moderatorData));
 
       const stored = await mockEnv.ACTIVE_STREAMS_KV.get(moderatorKey);
-      const parsed = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const parsed = JSON.parse(stored);
 
       expect(parsed.isModerator).toBe(true);
       expect(parsed.status).toBe('streaming');
@@ -530,7 +560,9 @@ describe('stream Resume Flow', () => {
       const moderatorStored = await mockEnv.ACTIVE_STREAMS_KV.get(moderatorKey);
 
       expect(threadStored).toBeNull();
-      expect(JSON.parse(moderatorStored!).status).toBe('completed');
+      if (!moderatorStored)
+        throw new Error('expected moderatorStored');
+      expect(JSON.parse(moderatorStored).status).toBe('completed');
     });
   });
 
@@ -553,7 +585,9 @@ describe('stream Resume Flow', () => {
 
       // Check for active streams (resume detection)
       const stored = await mockEnv.ACTIVE_STREAMS_KV.get(threadKey);
-      const data = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const data = JSON.parse(stored);
 
       const hasActiveStreams = Object.values(data.participants).includes(
         'streaming',
@@ -579,7 +613,9 @@ describe('stream Resume Flow', () => {
       await mockEnv.STREAM_BUFFER_KV.put(bufferKey, JSON.stringify(bufferData));
 
       const stored = await mockEnv.STREAM_BUFFER_KV.get(bufferKey);
-      const data = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const data = JSON.parse(stored);
 
       expect(data.chunks).toHaveLength(2);
       expect(data.status).toBe('active');
@@ -604,7 +640,9 @@ describe('stream Resume Flow', () => {
       await mockEnv.ACTIVE_STREAMS_KV.put(threadKey, JSON.stringify(threadData));
 
       const stored = await mockEnv.ACTIVE_STREAMS_KV.get(threadKey);
-      const data = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const data = JSON.parse(stored);
 
       const failedCount = Object.values(data.participants).filter(
         (status: string) => status === ParticipantStreamStatuses.FAILED,
@@ -641,7 +679,9 @@ describe('stream Resume Flow', () => {
       // On timeout, buffer should NOT be marked as failed
       // (preserves partial content for potential resumption)
       const stored = await mockEnv.STREAM_BUFFER_KV.get(bufferKey);
-      const data = JSON.parse(stored!);
+      if (!stored)
+        throw new Error('expected stored');
+      const data = JSON.parse(stored);
 
       expect(data.status).toBe('active');
       expect(data.chunks).toHaveLength(2);

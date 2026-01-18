@@ -10,6 +10,8 @@
  * Location: /src/stores/chat/hooks/
  */
 
+// Reusable selectors - centralized, optimized with useShallow
+export * from './use-chat-selectors';
 // Config change handlers - factory pattern for consistent config updates
 export type { UseConfigChangeHandlersOptions, UseConfigChangeHandlersReturn } from './use-config-change-handlers';
 export { useConfigChangeHandlers } from './use-config-change-handlers';

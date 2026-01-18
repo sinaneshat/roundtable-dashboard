@@ -13,11 +13,12 @@ import {
   FinishReasons,
   MessageRoles,
 } from '@roundtable/shared';
+import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
-import { createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
-import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/types/api';
+import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
+import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -243,7 +244,7 @@ describe('round Number Consistency', () => {
 
     // Extract round from ID
     const idMatch = msg.id.match(/_r(\d+)_/);
-    const idRound = idMatch ? Number.parseInt(idMatch[1]!, 10) : -1;
+    const idRound = idMatch && idMatch[1] ? Number.parseInt(idMatch[1], 10) : -1;
 
     // Should match metadata
     expect(idRound).toBe(metadata.roundNumber);
@@ -263,7 +264,7 @@ describe('round Number Consistency', () => {
 
     // Extract round from ID
     const idMatch = msg.id.match(/_r(\d+)_/);
-    const idRound = idMatch ? Number.parseInt(idMatch[1]!, 10) : -1;
+    const idRound = idMatch && idMatch[1] ? Number.parseInt(idMatch[1], 10) : -1;
 
     // Document the mismatch
     expect(idRound).not.toBe(metadata.roundNumber);
@@ -633,6 +634,7 @@ describe('edge Cases', () => {
 
   it('should handle negative round numbers gracefully', () => {
     // This shouldn't happen in practice, but test resilience
+    // Negative round numbers are rejected by Zod validation and default to 0
     const msg = createTestUserMessage({
       id: 'user-negative',
       content: 'Negative round',
@@ -643,13 +645,14 @@ describe('edge Cases', () => {
       useThreadTimeline({
         messages: [msg],
         changelog: [],
-        moderators: [],
+        preSearches: [],
       }),
     );
 
-    // Should still work
+    // Zod schema validates non-negative at parse time, rejecting negative values
+    // Invalid metadata causes getRoundNumber to return null, which defaults to 0
     expect(result.current).toHaveLength(1);
-    expect(result.current[0]?.roundNumber).toBe(-1);
+    expect(result.current[0]?.roundNumber).toBe(0);
   });
 
   it('should handle very long message IDs', () => {

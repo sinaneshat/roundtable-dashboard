@@ -25,7 +25,7 @@
 import { FinishReasons, MessageRoles, MessageStatuses, ModelIds, TextPartStates } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
-import type { DbMessageMetadata } from '@/types/api';
+import type { DbMessageMetadata } from '@/services/api';
 
 // Type definitions for the test
 type MessagePart = {

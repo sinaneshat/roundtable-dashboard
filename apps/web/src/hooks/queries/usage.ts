@@ -2,21 +2,17 @@
  * Usage Query Hooks
  *
  * TanStack Query hooks for chat usage tracking and quotas
- * Following patterns from subscriptions.ts
  *
- * IMPORTANT: staleTime values MUST match server-side prefetch values
- * See: docs/react-query-ssr-patterns.md
+ * CRITICAL: Uses shared queryOptions from query-options.ts
+ * This ensures SSR hydration works correctly - same config in loader and hook
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
 import { useAuthCheck } from '@/hooks/utils';
-import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
-import {
-  getUserUsageStatsService,
-} from '@/services/api';
+import { usageQueryOptions } from '@/lib/data/query-options';
+import { GC_TIMES } from '@/lib/data/stale-times';
 
 /**
  * ✅ SINGLE SOURCE OF TRUTH - Usage statistics and quota checks
@@ -37,7 +33,8 @@ import {
  *
  * Protected endpoint - requires authentication
  *
- * ⚠️ NO CACHE - usage data must always be fresh after plan changes and chat operations
+ * ✅ SSR HYDRATION: Uses shared queryOptions for seamless server-client data transfer
+ * Note: staleTime is set in queryOptions to prevent immediate refetch on hydration
  *
  * @param options - Optional query options
  * @param options.forceEnabled - Force enable query regardless of auth state
@@ -54,19 +51,13 @@ export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
   const { isAuthenticated, handleAuthError } = useAuthCheck();
 
   const query = useQuery({
-    queryKey: queryKeys.usage.stats(),
-    queryFn: () => getUserUsageStatsService(),
-    staleTime: STALE_TIMES.quota, // ⚠️ NO CACHE (0) - always fresh for accurate UI blocking
-    gcTime: 5 * 60 * 1000, // 5 minutes - keep in memory for instant UI
-    // ✅ PERFORMANCE: Polling pauses when tab hidden
-    refetchInterval: () => {
-      // Don't poll if tab is hidden
-      if (typeof document !== 'undefined' && document.hidden) {
-        return false;
-      }
-      // Poll every 60s when tab is visible
-      return 60 * 1000;
-    },
+    ...usageQueryOptions,
+    gcTime: GC_TIMES.STANDARD, // 5 minutes - keep in memory for instant UI
+    // NO POLLING - stats are prefetched server-side and invalidated after:
+    // - Chat operations (via afterChatOperation invalidation pattern)
+    // - Subscription changes (via subscriptions invalidation pattern)
+    // - Checkout completion (via afterCheckout invalidation pattern)
+    // This prevents unnecessary client-side requests
     retry: false,
     enabled: options?.forceEnabled ?? isAuthenticated,
     throwOnError: false,

@@ -29,8 +29,9 @@ export async function extractColorFromImage(
   }
 
   // Check cache first
-  if (colorCache.has(imageSrc)) {
-    return colorCache.get(imageSrc)!;
+  const cached = colorCache.get(imageSrc);
+  if (cached !== undefined) {
+    return cached;
   }
 
   try {

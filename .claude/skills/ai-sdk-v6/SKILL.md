@@ -91,15 +91,33 @@ const fullText = await result.text
 return result.toTextStreamResponse()
 ```
 
-### API Route with streamText (Next.js)
+### API Route with streamText (Hono)
 
 ```tsx
-// app/api/chat/route.ts
+// src/api/routes/chat/route.ts
 import { streamText, UIMessage, convertToModelMessages } from 'ai'
 import { openai } from '@ai-sdk/openai'
+import { createRoute } from '@hono/zod-openapi'
+import { z } from 'zod'
 
-export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json()
+const chatRoute = createRoute({
+  method: 'post',
+  path: '/chat',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            messages: z.array(z.custom<UIMessage>()),
+          }),
+        },
+      },
+    },
+  },
+})
+
+export const chatHandler = async (c) => {
+  const { messages } = await c.req.json()
 
   const result = streamText({
     model: openai('gpt-4o'),

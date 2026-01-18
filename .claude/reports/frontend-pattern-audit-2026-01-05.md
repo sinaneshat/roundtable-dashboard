@@ -30,7 +30,7 @@ This audit examined the frontend codebase for adherence to established patterns 
 
 ### 1. ✅ Translation (i18n) Patterns - EXCELLENT
 
-**Pattern**: All user-facing text must use `useTranslations()` from `next-intl`
+**Pattern**: All user-facing text must use `useTranslations()` from `@/lib/compat`
 
 **Status**: ✅ PASSING
 
@@ -273,25 +273,23 @@ Some useEffect hooks could be replaced with:
 
 ---
 
-### 7. ✅ Next.js App Router Patterns - EXCELLENT
+### 7. ✅ TanStack Start Router Patterns - EXCELLENT
 
-**Pattern**: Proper use of App Router features (layouts, loading, error boundaries)
+**Pattern**: Proper use of TanStack Router features (layouts, loaders, error boundaries)
 
 **Status**: ✅ PASSING
 
 **Evidence**:
 ```typescript
-// src/app/(app)/chat/pricing/page.tsx
-export async function generateMetadata(): Promise<Metadata> { ... }
-export const revalidate = 86400; // ISR configuration
+// src/routes/ - TanStack Router file-based routing
+// Route loaders for SSR data fetching
+// Proper HydrationBoundary usage with TanStack Query
 
-// Proper HydrationBoundary usage
 <HydrationBoundary state={dehydrate(queryClient)}>
   <PricingScreen />
 </HydrationBoundary>
 
-// src/app/(app)/chat/(protected)/[slug]/page.tsx
-// Dynamic routes with proper type safety
+// src/routes/ - Dynamic routes with proper type safety
 ```
 
 **Recommendations**: None - excellent implementation
@@ -423,11 +421,11 @@ The frontend codebase demonstrates **excellent pattern adherence** with a few mi
 - Auth screens
 - Legal screens
 
-**App Router Files**: 20+ files in `/src/app/`
-- Page components
+**Router Files**: 20+ files in `/src/routes/`
+- Route components
 - Layouts
 - Loading states
-- Metadata generation
+- Route loaders
 
 **Hook Files**: 30+ files in `/src/hooks/`
 - Query hooks

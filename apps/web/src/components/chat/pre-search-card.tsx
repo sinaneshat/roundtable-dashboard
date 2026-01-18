@@ -4,16 +4,19 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { Icons } from '@/components/icons';
-import { useChatStore } from '@/components/providers';
+import { useChatStoreOptional } from '@/components/providers';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FadeIn } from '@/components/ui/motion';
-import { useTranslations } from '@/lib/compat';
 import { queryKeys } from '@/lib/data/query-keys';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
+import type { PreSearchDataPayload, StoredPreSearch } from '@/services/api';
 import { AnimationIndices } from '@/stores/chat';
-import type { PreSearchDataPayload, StoredPreSearch } from '@/types/api';
 
 import { PreSearchStream } from './pre-search-stream';
+
+// Stable no-op functions for read-only contexts without ChatStoreProvider
+function NOOP() {}
 
 type PreSearchCardProps = {
   threadId: string;
@@ -35,7 +38,8 @@ export function PreSearchCard({
   const t = useTranslations();
   const queryClient = useQueryClient();
 
-  const { updatePreSearchStatus, updatePreSearchData, registerAnimation, completeAnimation } = useChatStore(
+  // Use optional store hook - returns undefined on public pages without ChatStoreProvider
+  const storeData = useChatStoreOptional(
     useShallow(s => ({
       updatePreSearchStatus: s.updatePreSearchStatus,
       updatePreSearchData: s.updatePreSearchData,
@@ -43,6 +47,12 @@ export function PreSearchCard({
       completeAnimation: s.completeAnimation,
     })),
   );
+
+  // Fallback values for read-only pages (public threads) without ChatStoreProvider
+  const updatePreSearchStatus = storeData?.updatePreSearchStatus ?? NOOP;
+  const updatePreSearchData = storeData?.updatePreSearchData ?? NOOP;
+  const registerAnimation = storeData?.registerAnimation ?? NOOP;
+  const completeAnimation = storeData?.completeAnimation ?? NOOP;
   const hasRegisteredRef = useRef(false);
   const prevStatusRef = useRef(preSearch.status);
 

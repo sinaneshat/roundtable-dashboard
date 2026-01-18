@@ -18,7 +18,7 @@ import { MessageRoles, TextPartStates } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 import {
   areAllParticipantsCompleteForRound,

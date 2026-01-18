@@ -1,16 +1,31 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useEffect } from 'react';
+import { createFileRoute, redirect } from '@tanstack/react-router';
+import { z } from 'zod';
 
 import { AuthForm } from '@/components/auth/auth-form';
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
 import { AuthLoadingSkeleton } from '@/components/loading';
-import { useSession } from '@/lib/auth/client';
+import { getSession } from '@/server/auth';
 
 const siteUrl = 'https://roundtable.now';
 const pageTitle = 'Sign In - Roundtable';
 const pageDescription = 'Sign in to Roundtable - the collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.';
 
+// Validate redirect search param
+const signInSearchSchema = z.object({
+  redirect: z.string().optional(),
+});
+
 export const Route = createFileRoute('/auth/sign-in')({
+  // Server-side auth check - redirect if already authenticated
+  beforeLoad: async () => {
+    const session = await getSession();
+
+    if (session) {
+      // Already authenticated, redirect to chat
+      throw redirect({ to: '/chat' });
+    }
+  },
+  validateSearch: signInSearchSchema,
   component: SignInPage,
   pendingComponent: AuthLoadingSkeleton,
   head: () => ({
@@ -39,21 +54,8 @@ export const Route = createFileRoute('/auth/sign-in')({
 });
 
 function SignInPage() {
-  const navigate = useNavigate();
-  const { data: session } = useSession();
-
-  useEffect(() => {
-    // If already authenticated, redirect to chat
-    if (session) {
-      navigate({ to: '/chat' });
-    }
-  }, [session, navigate]);
-
-  // Show nothing while redirecting (prevents flash)
-  if (session) {
-    return null;
-  }
-
+  // Session is guaranteed NOT to exist by beforeLoad
+  // If user logs in, they'll be redirected on next navigation
   return (
     <AuthShowcaseLayout>
       <AuthForm />

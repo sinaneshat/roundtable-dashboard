@@ -1,17 +1,19 @@
 import type { WebSearchDepth } from '@roundtable/shared';
 
 import { FadeInText, TypingText } from '@/components/ui/typing-text';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
-import type { GeneratedSearchQuery, WebSearchResultItem } from '@/types/api';
+import type { WebSearchResultItem } from '@/services/api';
 
 import { WebSearchImageGallery } from './web-search-image-gallery';
 
 /**
- * Display-specific query type derived from GeneratedSearchQuery schema
- * Adds `index` field from SSE events for tracking query position
+ * Display-specific query type for web search configuration
+ * Extends base query fields with optional streaming-only fields
  */
-type GeneratedQueryDisplay = Pick<GeneratedSearchQuery, 'query' | 'rationale' | 'complexity' | 'sourceCount'> & {
+type GeneratedQueryDisplay = {
+  query: string;
+  rationale?: string;
   searchDepth: WebSearchDepth;
   index?: number;
 };

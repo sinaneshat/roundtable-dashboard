@@ -2,7 +2,7 @@ import { memo } from 'react';
 
 import { ChatAlertBanner } from '@/components/chat/chat-alert-banner';
 import { useFreeTrialState } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 
 export const ChatInputUpgradeBanner = memo(() => {
   const t = useTranslations();

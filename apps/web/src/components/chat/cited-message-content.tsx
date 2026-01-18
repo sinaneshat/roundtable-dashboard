@@ -15,7 +15,7 @@ import { Streamdown } from 'streamdown';
 
 import { cn } from '@/lib/ui/cn';
 import { parseCitations } from '@/lib/utils';
-import type { AvailableSource, DbCitation } from '@/types/api';
+import type { AvailableSource, DbCitation } from '@/services/api';
 
 import type { SourceData } from '../ai-elements/inline-citation';
 import { SourcesFooter } from '../ai-elements/inline-citation';

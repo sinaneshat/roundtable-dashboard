@@ -20,7 +20,7 @@ import { ChatModes, MessagePartTypes, MessageRoles, MessageStatuses } from '@rou
 import { describe, expect, it } from 'vitest';
 
 import { getParticipantIndex, getRoundNumberFromMetadata, isModeratorMessage } from '@/lib/utils';
-import type { ChatMessage, ChatParticipant, DbAssistantMessageMetadata, DbModeratorMessageMetadata, DbUserMessageMetadata, StoredPreSearch } from '@/types/api';
+import type { ApiMessage, ChatParticipant, DbAssistantMessageMetadata, DbModeratorMessageMetadata, DbUserMessageMetadata, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -65,7 +65,7 @@ function createMockParticipants(threadId: string, count: number): ChatParticipan
   }));
 }
 
-function createUserMessage(threadId: string, roundNumber: number, text: string): ChatMessage {
+function createUserMessage(threadId: string, roundNumber: number, text: string): ApiMessage {
   const metadata: DbUserMessageMetadata = {
     role: MessageRoles.USER,
     roundNumber,
@@ -84,7 +84,7 @@ function createAssistantMessage(
   participantIndex: number,
   participantId: string,
   text: string,
-): ChatMessage {
+): ApiMessage {
   const metadata: DbAssistantMessageMetadata = {
     role: MessageRoles.ASSISTANT,
     roundNumber,
@@ -110,7 +110,7 @@ function createModeratorMessage(
   threadId: string,
   roundNumber: number,
   text: string,
-): ChatMessage {
+): ApiMessage {
   const metadata: DbModeratorMessageMetadata = {
     role: MessageRoles.ASSISTANT,
     isModerator: true,
@@ -170,18 +170,21 @@ type TimelinePosition = {
  * Reimplemented here to avoid using React hooks in tests
  */
 function extractTimelinePositions(
-  messages: ChatMessage[],
+  messages: ApiMessage[],
   preSearches: StoredPreSearch[],
 ): TimelinePosition[] {
   // STEP 1: Group messages by round number (same as useThreadTimeline)
-  const messagesByRound = new Map<number, ChatMessage[]>();
+  const messagesByRound = new Map<number, ApiMessage[]>();
   messages.forEach((message) => {
     const roundNumber = getRoundNumberFromMetadata(message.metadata, 0);
 
     if (!messagesByRound.has(roundNumber)) {
       messagesByRound.set(roundNumber, []);
     }
-    messagesByRound.get(roundNumber)!.push(message);
+    const roundMessages = messagesByRound.get(roundNumber);
+    if (roundMessages) {
+      roundMessages.push(message);
+    }
   });
 
   // STEP 2: Sort messages within each round (same as useThreadTimeline)
@@ -307,8 +310,10 @@ function expectRoundBoundaries(positions: TimelinePosition[]) {
   const sortedRounds = Array.from(rounds).sort((a, b) => a - b);
 
   for (let i = 0; i < sortedRounds.length - 1; i++) {
-    const currentRound = sortedRounds[i]!;
-    const nextRound = sortedRounds[i + 1]!;
+    const currentRound = sortedRounds[i];
+    const nextRound = sortedRounds[i + 1];
+    if (currentRound === undefined || nextRound === undefined)
+      continue;
 
     // Find indices of messages from each round
     const currentRoundIndices = positions

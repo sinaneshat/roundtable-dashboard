@@ -34,7 +34,7 @@ import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getRoundNumber, getUserMetadata } from '@/lib/utils';
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 import { createChatStore } from '../store';
 import type { ChatStore } from '../store-schemas';
@@ -345,8 +345,10 @@ describe('form Actions Message Persistence', () => {
 
       const replacedMsg = store.getState().messages.find(m => m.id === 'db-id-456');
       expect(replacedMsg).toBeDefined();
-      expect(replacedMsg!.parts[0]).toEqual({ type: 'text', text: userText });
-      expect(getRoundNumber(replacedMsg!.metadata)).toBe(1);
+      if (!replacedMsg)
+        throw new Error('expected replaced message');
+      expect(replacedMsg.parts[0]).toEqual({ type: 'text', text: userText });
+      expect(getRoundNumber(replacedMsg.metadata)).toBe(1);
     });
   });
 
@@ -396,9 +398,11 @@ describe('form Actions Message Persistence', () => {
       // CRITICAL: Original user message MUST be in merged result
       const originalUserMsg = mergedMessages.find(m => m.id === persistedId);
       expect(originalUserMsg).toBeDefined();
-      expect(originalUserMsg!.role).toBe(MessageRoles.USER);
-      expect(getRoundNumber(originalUserMsg!.metadata)).toBe(1);
-      expect(getUserMetadata(originalUserMsg!.metadata)?.isParticipantTrigger).toBeFalsy();
+      if (!originalUserMsg)
+        throw new Error('expected original user message');
+      expect(originalUserMsg.role).toBe(MessageRoles.USER);
+      expect(getRoundNumber(originalUserMsg.metadata)).toBe(1);
+      expect(getUserMetadata(originalUserMsg.metadata)?.isParticipantTrigger).toBeFalsy();
 
       // After deduplication (chat-message-list.tsx):
       // - Participant trigger gets filtered out
@@ -471,7 +475,9 @@ describe('form Actions Message Persistence', () => {
       // CRITICAL: User message MUST still be present after sync
       const originalMsg = mergedMessages.find(m => m.id === persistedId);
       expect(originalMsg).toBeDefined();
-      expect(originalMsg!.parts[0]).toEqual({ type: 'text', text: userText });
+      if (!originalMsg)
+        throw new Error('expected original message');
+      expect(originalMsg.parts[0]).toEqual({ type: 'text', text: userText });
 
       // ============ PHASE 4: Deduplication ============
       const finalMessages = mergedMessages.filter((m) => {
@@ -539,7 +545,9 @@ describe('form Actions Message Persistence', () => {
       );
 
       expect(userMsg).toBeDefined();
-      expect(getRoundNumber(userMsg!.metadata)).toBe(state.streamingRoundNumber);
+      if (!userMsg)
+        throw new Error('expected user message');
+      expect(getRoundNumber(userMsg.metadata)).toBe(state.streamingRoundNumber);
     });
   });
 

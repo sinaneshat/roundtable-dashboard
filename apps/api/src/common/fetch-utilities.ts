@@ -106,15 +106,18 @@ type CircuitBreakerStateData = z.infer<typeof CircuitBreakerStateDataSchema>;
 const circuitBreakers = new Map<string, CircuitBreakerStateData>();
 
 function getCircuitBreakerState(url: string): CircuitBreakerStateData {
-  if (!circuitBreakers.has(url)) {
-    circuitBreakers.set(url, {
-      failures: 0,
-      lastFailureTime: 0,
-      nextAttemptTime: 0,
-      state: CircuitBreakerStates.CLOSED,
-    });
+  const existing = circuitBreakers.get(url);
+  if (existing) {
+    return existing;
   }
-  return circuitBreakers.get(url)!;
+  const newState: CircuitBreakerStateData = {
+    failures: 0,
+    lastFailureTime: 0,
+    nextAttemptTime: 0,
+    state: CircuitBreakerStates.CLOSED,
+  };
+  circuitBreakers.set(url, newState);
+  return newState;
 }
 
 function updateCircuitBreakerState(

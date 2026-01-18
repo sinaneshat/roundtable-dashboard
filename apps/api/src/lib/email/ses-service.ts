@@ -20,13 +20,12 @@ async function getSesCredentials(): Promise<{
 }> {
   // Try Cloudflare Workers bindings first
   try {
-    const cfEnv = workersEnv as unknown as Record<string, string | undefined>;
     return {
-      accessKeyId: cfEnv.AWS_SES_ACCESS_KEY_ID || process.env.AWS_SES_ACCESS_KEY_ID || '',
-      secretAccessKey: cfEnv.AWS_SES_SECRET_ACCESS_KEY || process.env.AWS_SES_SECRET_ACCESS_KEY || '',
-      region: cfEnv.AWS_SES_REGION || process.env.AWS_SES_REGION || 'us-east-1',
-      fromEmail: cfEnv.FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@example.com',
-      replyToEmail: cfEnv.SES_REPLY_TO_EMAIL || process.env.SES_REPLY_TO_EMAIL || 'noreply@example.com',
+      accessKeyId: workersEnv.AWS_SES_ACCESS_KEY_ID || process.env.AWS_SES_ACCESS_KEY_ID || '',
+      secretAccessKey: workersEnv.AWS_SES_SECRET_ACCESS_KEY || process.env.AWS_SES_SECRET_ACCESS_KEY || '',
+      region: workersEnv.AWS_SES_REGION || process.env.AWS_SES_REGION || 'us-east-1',
+      fromEmail: workersEnv.FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@example.com',
+      replyToEmail: workersEnv.SES_REPLY_TO_EMAIL || process.env.SES_REPLY_TO_EMAIL || 'noreply@example.com',
     };
   } catch {
     // Fallback to process.env for local dev
@@ -44,11 +43,11 @@ async function getSesCredentials(): Promise<{
  * Email Service using aws4fetch for Cloudflare Workers compatibility
  *
  * This service uses aws4fetch instead of @aws-sdk/client-ses because:
- * - @aws-sdk/client-ses imports node:fs which is incompatible with Cloudflare Workers edge runtime
- * - aws4fetch uses native Fetch API and SubtleCrypto, which work in edge environments
+ * - @aws-sdk/client-ses imports node:fs which is incompatible with Cloudflare Workers
+ * - aws4fetch uses native Fetch API and SubtleCrypto, which work in Cloudflare Workers
  * - Reduces bundle size and improves cold start performance
  *
- * Uses cloudflare:workers env with process.env fallback.
+ * Uses cloudflare:workers env bindings with process.env fallback for local dev.
  * Credentials are resolved at method call time, not module load time.
  *
  * @see https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html
@@ -154,8 +153,8 @@ class EmailService {
 
   async sendMagicLink(to: string, magicLink: string, expirationMinutes = 15) {
     // Render React Email template to HTML
-    // Note: Using @react-email/components instead of @react-email/render
-    // to avoid edge runtime export resolution issues in Cloudflare Workers
+    // Note: Using @react-email/render directly (not barrel export from @react-email/components)
+    // to avoid importing shiki (9.8MB) and prettier (256KB) - see import comment at top
     const html = await render(MagicLink({
       loginUrl: magicLink,
       expirationTime: `${expirationMinutes} minutes`,

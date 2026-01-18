@@ -32,12 +32,35 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { createMockParticipant, createMockThread } from '@/lib/testing';
+import type { Participant } from '@/types/api';
 
 import { createChatStore } from '../store';
 
 // ============================================================================
 // Test Utilities
 // ============================================================================
+
+/**
+ * Safely get a participant from an array, throwing if not found
+ */
+function getParticipant(participants: Participant[], index: number): Participant {
+  const participant = participants[index];
+  if (!participant) {
+    throw new Error(`Expected participant at index ${index}`);
+  }
+  return participant;
+}
+
+/**
+ * Safely get a message from an array, throwing if not found
+ */
+function getMessage(messages: UIMessage[], index: number): UIMessage {
+  const message = messages[index];
+  if (!message) {
+    throw new Error(`Expected message at index ${index}`);
+  }
+  return message;
+}
 
 /**
  * Creates a user message for a specific round
@@ -132,9 +155,9 @@ describe('moderator Round Boundary Isolation', () => {
       // === ROUND 1: Complete with moderator ===
       const round1Messages: UIMessage[] = [
         createUserMessage(1),
-        createAssistantMessage(1, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(1, 1, participants[1]!.id, 'done'),
-        createAssistantMessage(1, 2, participants[2]!.id, 'done'),
+        createAssistantMessage(1, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(1, 1, getParticipant(participants, 1).id, 'done'),
+        createAssistantMessage(1, 2, getParticipant(participants, 2).id, 'done'),
         createModeratorMessage(1, 'done'), // Round 1 moderator complete
       ];
 
@@ -148,8 +171,8 @@ describe('moderator Round Boundary Isolation', () => {
       const round2Messages: UIMessage[] = [
         ...round1Messages, // Keep round 1 messages
         createUserMessage(2),
-        createAssistantMessage(2, 0, participants[0]!.id, 'streaming'), // p0 streaming
-        createAssistantMessage(2, 1, participants[1]!.id, 'streaming'), // p1 streaming
+        createAssistantMessage(2, 0, getParticipant(participants, 0).id, 'streaming'), // p0 streaming
+        createAssistantMessage(2, 1, getParticipant(participants, 1).id, 'streaming'), // p1 streaming
         // p2 hasn't started yet
       ];
 
@@ -237,9 +260,9 @@ describe('moderator Round Boundary Isolation', () => {
       // Round 1 complete
       const round1Messages: UIMessage[] = [
         createUserMessage(1),
-        createAssistantMessage(1, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(1, 1, participants[1]!.id, 'done'),
-        createAssistantMessage(1, 2, participants[2]!.id, 'done'),
+        createAssistantMessage(1, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(1, 1, getParticipant(participants, 1).id, 'done'),
+        createAssistantMessage(1, 2, getParticipant(participants, 2).id, 'done'),
         createModeratorMessage(1, 'done'),
       ];
 
@@ -249,9 +272,9 @@ describe('moderator Round Boundary Isolation', () => {
       const round2MessagesPartial: UIMessage[] = [
         ...round1Messages,
         createUserMessage(2),
-        createAssistantMessage(2, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(2, 1, participants[1]!.id, 'done'),
-        createAssistantMessage(2, 2, participants[2]!.id, 'streaming'), // STILL STREAMING
+        createAssistantMessage(2, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(2, 1, getParticipant(participants, 1).id, 'done'),
+        createAssistantMessage(2, 2, getParticipant(participants, 2).id, 'streaming'), // STILL STREAMING
       ];
 
       store.getState().setMessages(round2MessagesPartial);
@@ -282,9 +305,9 @@ describe('moderator Round Boundary Isolation', () => {
       const round2MessagesComplete: UIMessage[] = [
         ...round1Messages,
         createUserMessage(2),
-        createAssistantMessage(2, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(2, 1, participants[1]!.id, 'done'),
-        createAssistantMessage(2, 2, participants[2]!.id, 'done'), // NOW COMPLETE
+        createAssistantMessage(2, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(2, 1, getParticipant(participants, 1).id, 'done'),
+        createAssistantMessage(2, 2, getParticipant(participants, 2).id, 'done'), // NOW COMPLETE
       ];
 
       store.getState().setMessages(round2MessagesComplete);
@@ -317,8 +340,8 @@ describe('moderator Round Boundary Isolation', () => {
       // === STEP 1: Complete round 1 with moderator ===
       const round1Complete: UIMessage[] = [
         createUserMessage(1),
-        createAssistantMessage(1, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(1, 1, participants[1]!.id, 'done'),
+        createAssistantMessage(1, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(1, 1, getParticipant(participants, 1).id, 'done'),
         createModeratorMessage(1, 'done'),
       ];
 
@@ -366,7 +389,7 @@ describe('moderator Round Boundary Isolation', () => {
       const round2Streaming: UIMessage[] = [
         ...round1Complete,
         createUserMessage(2),
-        createAssistantMessage(2, 0, participants[0]!.id, 'streaming'),
+        createAssistantMessage(2, 0, getParticipant(participants, 0).id, 'streaming'),
       ];
 
       store.getState().setMessages(round2Streaming);
@@ -417,7 +440,7 @@ describe('moderator Round Boundary Isolation', () => {
       // Participant 0 completes
       store.getState().setMessages([
         ...messages,
-        createAssistantMessage(1, 0, participants[0]!.id, 'done'),
+        createAssistantMessage(1, 0, getParticipant(participants, 0).id, 'done'),
       ]);
 
       // Still no moderator (not all participants complete)
@@ -428,8 +451,8 @@ describe('moderator Round Boundary Isolation', () => {
       // Participant 1 completes
       store.getState().setMessages([
         createUserMessage(1),
-        createAssistantMessage(1, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(1, 1, participants[1]!.id, 'done'),
+        createAssistantMessage(1, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(1, 1, getParticipant(participants, 1).id, 'done'),
       ]);
 
       // Still no moderator (participant 2 hasn't completed)
@@ -440,9 +463,9 @@ describe('moderator Round Boundary Isolation', () => {
       // Participant 2 completes
       store.getState().setMessages([
         createUserMessage(1),
-        createAssistantMessage(1, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(1, 1, participants[1]!.id, 'done'),
-        createAssistantMessage(1, 2, participants[2]!.id, 'done'),
+        createAssistantMessage(1, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(1, 1, getParticipant(participants, 1).id, 'done'),
+        createAssistantMessage(1, 2, getParticipant(participants, 2).id, 'done'),
       ]);
       store.getState().setIsStreaming(false);
 
@@ -464,9 +487,9 @@ describe('moderator Round Boundary Isolation', () => {
       const moderatorPlaceholder = createModeratorMessage(1, 'pending');
       store.getState().setMessages([
         createUserMessage(1),
-        createAssistantMessage(1, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(1, 1, participants[1]!.id, 'done'),
-        createAssistantMessage(1, 2, participants[2]!.id, 'done'),
+        createAssistantMessage(1, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(1, 1, getParticipant(participants, 1).id, 'done'),
+        createAssistantMessage(1, 2, getParticipant(participants, 2).id, 'done'),
         moderatorPlaceholder,
       ]);
 
@@ -491,8 +514,8 @@ describe('moderator Round Boundary Isolation', () => {
       // Round 1: Participant 0 done, participant 1 streaming
       const messages: UIMessage[] = [
         createUserMessage(1),
-        createAssistantMessage(1, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(1, 1, participants[1]!.id, 'streaming'), // STREAMING
+        createAssistantMessage(1, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(1, 1, getParticipant(participants, 1).id, 'streaming'), // STREAMING
       ];
 
       store.getState().setMessages(messages);
@@ -540,14 +563,14 @@ describe('moderator Round Boundary Isolation', () => {
       const messages: UIMessage[] = [
         // Round 1
         createUserMessage(1),
-        createAssistantMessage(1, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(1, 1, participants[1]!.id, 'done'),
+        createAssistantMessage(1, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(1, 1, getParticipant(participants, 1).id, 'done'),
         createModeratorMessage(1, 'done'),
 
         // Round 2
         createUserMessage(2),
-        createAssistantMessage(2, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(2, 1, participants[1]!.id, 'done'),
+        createAssistantMessage(2, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(2, 1, getParticipant(participants, 1).id, 'done'),
         createModeratorMessage(2, 'done'),
       ];
 
@@ -558,20 +581,20 @@ describe('moderator Round Boundary Isolation', () => {
 
       // Verify round 1 order: user → participant 0 → participant 1 → moderator
       expect(round1Messages).toHaveLength(4);
-      expect(round1Messages[0]?.role).toBe(MessageRoles.USER);
-      expect(round1Messages[1]?.metadata?.participantIndex).toBe(0);
-      expect(round1Messages[2]?.metadata?.participantIndex).toBe(1);
-      expect(round1Messages[3]?.metadata?.isModerator).toBe(true);
+      expect(getMessage(round1Messages, 0).role).toBe(MessageRoles.USER);
+      expect(getMessage(round1Messages, 1).metadata?.participantIndex).toBe(0);
+      expect(getMessage(round1Messages, 2).metadata?.participantIndex).toBe(1);
+      expect(getMessage(round1Messages, 3).metadata?.isModerator).toBe(true);
 
       // Extract round 2 messages
       const round2Messages = store.getState().messages.filter(m => m.metadata?.roundNumber === 2);
 
       // Verify round 2 order: user → participant 0 → participant 1 → moderator
       expect(round2Messages).toHaveLength(4);
-      expect(round2Messages[0]?.role).toBe(MessageRoles.USER);
-      expect(round2Messages[1]?.metadata?.participantIndex).toBe(0);
-      expect(round2Messages[2]?.metadata?.participantIndex).toBe(1);
-      expect(round2Messages[3]?.metadata?.isModerator).toBe(true);
+      expect(getMessage(round2Messages, 0).role).toBe(MessageRoles.USER);
+      expect(getMessage(round2Messages, 1).metadata?.participantIndex).toBe(0);
+      expect(getMessage(round2Messages, 2).metadata?.participantIndex).toBe(1);
+      expect(getMessage(round2Messages, 3).metadata?.isModerator).toBe(true);
 
       // Verify rounds don't mix
       expect(round1Messages.every(m => m.metadata?.roundNumber === 1)).toBe(true);
@@ -589,8 +612,8 @@ describe('moderator Round Boundary Isolation', () => {
       // Complete round 1
       const round1Complete: UIMessage[] = [
         createUserMessage(1),
-        createAssistantMessage(1, 0, participants[0]!.id, 'done'),
-        createAssistantMessage(1, 1, participants[1]!.id, 'done'),
+        createAssistantMessage(1, 0, getParticipant(participants, 0).id, 'done'),
+        createAssistantMessage(1, 1, getParticipant(participants, 1).id, 'done'),
         createModeratorMessage(1, 'done'),
       ];
 
@@ -600,7 +623,7 @@ describe('moderator Round Boundary Isolation', () => {
       const round2Streaming: UIMessage[] = [
         ...round1Complete,
         createUserMessage(2),
-        createAssistantMessage(2, 0, participants[0]!.id, 'streaming'),
+        createAssistantMessage(2, 0, getParticipant(participants, 0).id, 'streaming'),
       ];
 
       store.getState().setMessages(round2Streaming);

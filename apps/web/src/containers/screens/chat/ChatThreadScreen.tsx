@@ -7,8 +7,7 @@ import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { useChatStore, useModelPreferencesStore } from '@/components/providers';
 import { useModelsQuery } from '@/hooks/queries';
 import { useBoolean, useChatAttachments } from '@/hooks/utils';
-import { dynamic, useTranslations } from '@/lib/compat';
-import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
+import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 import {
   chatMessagesToUIMessages,
@@ -19,6 +18,8 @@ import {
   threadHasDocumentFiles,
   threadHasImageFiles,
 } from '@/lib/utils';
+import dynamic from '@/lib/utils/dynamic';
+import type { ApiMessage, ApiParticipant, ChatThread, ThreadDetailData, ThreadStreamResumptionState } from '@/services/api';
 import {
   areAllParticipantsCompleteForRound,
   getModeratorMessageForRound,
@@ -26,7 +27,6 @@ import {
   useScreenInitialization,
   useSyncHydrateStore,
 } from '@/stores/chat';
-import type { ChatMessage, ChatThread, EnhancedModel, ThreadStreamResumptionState } from '@/types/api';
 
 import { ChatView } from './ChatView';
 
@@ -37,14 +37,10 @@ const ChatDeleteDialog = dynamic(
 
 type ChatThreadScreenProps = {
   thread: ChatThread;
-  participants: ChatParticipantWithSettings[];
-  initialMessages: ChatMessage[];
+  participants: ApiParticipant[];
+  initialMessages: ApiMessage[];
   slug: string;
-  user: {
-    name: string;
-    image: string | null;
-  };
-  /** Stream resumption state from server-side KV check (for Zustand pre-fill) */
+  user: ThreadDetailData['user'];
   streamResumptionState?: ThreadStreamResumptionState | null;
 };
 
@@ -138,11 +134,11 @@ export default function ChatThreadScreen({
 
   const { data: modelsData } = useModelsQuery();
   const allEnabledModels = useMemo(() => {
-    if (!modelsData?.data || typeof modelsData.data !== 'object' || !('items' in modelsData.data)) {
+    if (!modelsData?.success || !modelsData.data?.items) {
       return [];
     }
-    return (modelsData.data.items as unknown as EnhancedModel[] | undefined) ?? [];
-  }, [modelsData?.data]);
+    return modelsData.data.items;
+  }, [modelsData]);
 
   // ✅ GRANULAR: Track vision (image) and file (document) incompatibilities separately
   const { incompatibleModelIds, visionIncompatibleModelIds, fileIncompatibleModelIds } = useMemo(() => {
@@ -336,12 +332,17 @@ export default function ChatThreadScreen({
       const attachmentIds = chatAttachments.getUploadIds();
       const attachmentInfos = chatAttachments.attachments
         .filter(att => att.status === UploadStatuses.COMPLETED && att.uploadId)
-        .map(att => ({
-          uploadId: att.uploadId!,
-          filename: att.file.name,
-          mimeType: att.file.type,
-          previewUrl: att.preview?.url,
-        }));
+        .map((att) => {
+          if (!att.uploadId) {
+            throw new Error('Upload ID is required for completed attachments');
+          }
+          return {
+            uploadId: att.uploadId,
+            filename: att.file.name,
+            mimeType: att.file.type,
+            previewUrl: att.preview?.url,
+          };
+        });
       await formActions.handleUpdateThreadAndSend(thread.id, attachmentIds, attachmentInfos);
       chatAttachments.clearAttachments();
     },

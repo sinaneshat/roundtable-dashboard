@@ -12,7 +12,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
+import { GC_TIMES, STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getCustomRoleService,
   getThreadFeedbackService,
@@ -40,7 +40,7 @@ export function useThreadFeedbackQuery(threadId: string, enabled = true) {
     queryKey: queryKeys.threads.feedback(threadId),
     queryFn: () => getThreadFeedbackService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadFeedback, // Never stale - invalidated only on mutation
-    gcTime: Infinity, // Match staleTime: Infinity pattern
+    gcTime: GC_TIMES.INFINITE, // Match staleTime: Infinity pattern
     placeholderData: previousData => previousData,
     enabled: isAuthenticated && !!threadId && enabled,
     refetchOnMount: false,
@@ -94,19 +94,13 @@ export function useCustomRolesQuery(enabled = true) {
         query: { cursor: pageParam },
       }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: unknown) => {
-      // Return nextCursor from pagination metadata, or undefined if no more pages
-      // Defensive check: ensure success, data, and pagination all exist
-      if (!lastPage || typeof lastPage !== 'object' || !('success' in lastPage))
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.success)
         return undefined;
-      const page = lastPage as { success: boolean; data?: unknown };
-      if (!page.success || !page.data || typeof page.data !== 'object')
-        return undefined;
-      const data = page.data as { pagination?: { nextCursor?: string } };
-      return data.pagination?.nextCursor;
+      return lastPage.data.pagination.nextCursor;
     },
     staleTime: STALE_TIME_PRESETS.medium,
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     retry: false,
     enabled: isAuthenticated && enabled, // Only fetch when authenticated and explicitly enabled
     throwOnError: false,
@@ -130,7 +124,7 @@ export function useCustomRoleQuery(roleId: string, enabled = true) {
     queryKey: queryKeys.customRoles.detail(roleId),
     queryFn: () => getCustomRoleService({ param: { id: roleId } }),
     staleTime: STALE_TIME_PRESETS.long,
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     enabled: isAuthenticated && !!roleId && enabled, // Only fetch when authenticated and roleId exists
     retry: false,
     throwOnError: false,
@@ -163,17 +157,13 @@ export function useUserPresetsQuery(enabled = true) {
         query: { cursor: pageParam },
       }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: unknown) => {
-      if (!lastPage || typeof lastPage !== 'object' || !('success' in lastPage))
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.success)
         return undefined;
-      const page = lastPage as { success: boolean; data?: unknown };
-      if (!page.success || !page.data || typeof page.data !== 'object')
-        return undefined;
-      const data = page.data as { pagination?: { nextCursor?: string } };
-      return data.pagination?.nextCursor;
+      return lastPage.data.pagination.nextCursor;
     },
     staleTime: STALE_TIME_PRESETS.medium,
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     retry: false,
     enabled: isAuthenticated && enabled,
     throwOnError: false,
@@ -196,7 +186,7 @@ export function useUserPresetQuery(presetId: string, enabled = true) {
     queryKey: queryKeys.userPresets.detail(presetId),
     queryFn: () => getUserPresetService({ param: { id: presetId } }),
     staleTime: STALE_TIME_PRESETS.long,
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     enabled: isAuthenticated && !!presetId && enabled,
     retry: false,
     throwOnError: false,

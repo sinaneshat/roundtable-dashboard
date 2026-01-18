@@ -5,7 +5,7 @@
 import { UsageStatusSchema } from '@roundtable/shared';
 import { z } from 'zod';
 
-import { ChatThreadCacheSchema, chatThreadChangelogSelectSchema } from '@/types/api';
+import type { ChatThreadChangelog } from '@/services/api';
 
 export const ApiResponseSchema = z.object({
   success: z.boolean(),
@@ -63,7 +63,7 @@ const UserCacheSchema = z.object({
   image: z.string().nullable().optional(),
 });
 
-const ChatThreadCacheCompatSchema = z.object({
+export const ChatThreadCacheSchema = z.object({
   id: z.string(),
   userId: z.string().optional(),
   projectId: z.string().nullable().optional(),
@@ -106,10 +106,10 @@ const UIMessageCacheCompatSchema = z.object({
 });
 
 export const ThreadDetailPayloadCacheSchema = z.object({
-  thread: ChatThreadCacheCompatSchema,
+  thread: ChatThreadCacheSchema,
   participants: z.array(ChatParticipantCacheCompatSchema).optional(),
   messages: z.array(UIMessageCacheCompatSchema).optional(),
-  changelog: z.array(chatThreadChangelogSelectSchema).optional(),
+  changelog: z.array(z.custom<ChatThreadChangelog>()).optional(),
   user: UserCacheSchema.optional(),
 });
 
@@ -190,7 +190,7 @@ export function validateThreadDetailResponseCache(data: unknown): ThreadDetailRe
 export const ThreadsListCachePageSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    items: z.array(ChatThreadCacheCompatSchema),
+    items: z.array(ChatThreadCacheSchema),
   }).optional(),
 });
 
@@ -207,11 +207,20 @@ export function validateThreadsListPages(data: unknown): ThreadsListCachePage[] 
     return undefined;
   }
 
-  return validated.map(result => result.data!);
+  return validated
+    .filter((result): result is z.ZodSafeParseSuccess<ThreadsListCachePage> => result.success)
+    .map(result => result.data);
 }
 
-const ChangelogItemCacheSchema = chatThreadChangelogSelectSchema.extend({
+const ChangelogItemCacheSchema = z.object({
+  id: z.string(),
+  threadId: z.string(),
+  changeType: z.string(),
+  changeSummary: z.string(),
+  changeData: z.record(z.string(), z.unknown()),
+  roundNumber: z.number().optional(),
   createdAt: z.union([z.date(), z.string()]),
+  updatedAt: z.union([z.date(), z.string()]).optional(),
 });
 
 export const ChangelogListCacheSchema = z.object({

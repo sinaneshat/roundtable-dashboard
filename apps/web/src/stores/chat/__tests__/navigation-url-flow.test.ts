@@ -521,8 +521,8 @@ describe('flag Coordination Race Conditions', () => {
 
       // When showInitialUI=true, hasNavigated should reset to false
       const resetState = states[2];
-      expect(resetState!.showInitialUI).toBe(true);
-      expect(resetState!.hasNavigated).toBe(false);
+      expect(resetState?.showInitialUI).toBe(true);
+      expect(resetState?.hasNavigated).toBe(false);
     });
 
     it('checked AFTER hasUpdatedThread in navigation logic', () => {
@@ -559,8 +559,11 @@ describe('flag Coordination Race Conditions', () => {
 
       updateUrl({ slug: 'ai-slug', isAiGeneratedTitle: true });
 
-      expect(states[0]!.hasUpdatedThread).toBe(true);
-      expect(states[0]!.slugData?.isAiGeneratedTitle).toBe(true);
+      const state0 = states[0];
+      if (!state0)
+        throw new Error('expected state at index 0');
+      expect(state0.hasUpdatedThread).toBe(true);
+      expect(state0.slugData?.isAiGeneratedTitle).toBe(true);
     });
 
     it('navigation and hasNavigated update are atomic', () => {
@@ -581,8 +584,11 @@ describe('flag Coordination Race Conditions', () => {
 
       navigate('ai-slug');
 
-      expect(states[0]!.hasNavigated).toBe(true);
-      expect(states[0]!.navigatedTo).toBe('/chat/ai-slug');
+      const navState0 = states[0];
+      if (!navState0)
+        throw new Error('expected nav state at index 0');
+      expect(navState0.hasNavigated).toBe(true);
+      expect(navState0.navigatedTo).toBe('/chat/ai-slug');
     });
   });
 
@@ -599,9 +605,12 @@ describe('flag Coordination Race Conditions', () => {
       expect(updates[updates.length - 1]).toBe(true);
 
       // Duplicate should not trigger re-update
+      const lastUpdate = updates[updates.length - 1];
+      if (lastUpdate === undefined)
+        throw new Error('expected last update value');
       const shouldUpdate = shouldUpdateUrl(
         { slug: 'ai-slug', isAiGeneratedTitle: true },
-        updates[updates.length - 1]!,
+        lastUpdate,
       );
       expect(shouldUpdate).toBe(false);
     });

@@ -1,7 +1,7 @@
 import { memo } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn, useImageColor } from '@/lib/ui';
 import { getRoleBadgeStyle } from '@/lib/utils';
 

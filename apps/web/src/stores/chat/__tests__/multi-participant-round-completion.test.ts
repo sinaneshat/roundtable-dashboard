@@ -130,9 +130,9 @@ describe('multi-Participant Round Completion', () => {
       expect(trigger).toEqual({ index: 1, participantId: 'p2' });
 
       // Validate against actual participant at index
-      const actualParticipant = store.getState().participants[trigger!.index];
-      expect(actualParticipant.id).toBe('p2');
-      expect(trigger!.participantId).toBe(actualParticipant.id);
+      const actualParticipant = trigger ? store.getState().participants[trigger.index] : undefined;
+      expect(actualParticipant?.id).toBe('p2');
+      expect(trigger?.participantId).toBe(actualParticipant?.id);
     });
 
     it('should detect mismatch when participants reordered', () => {
@@ -150,11 +150,11 @@ describe('multi-Participant Round Completion', () => {
 
       // Validate mismatch - trigger still expects p1 at index 0
       const trigger = store.getState().nextParticipantToTrigger;
-      const actualParticipant = store.getState().participants[trigger!.index];
+      const actualParticipant = trigger ? store.getState().participants[trigger.index] : undefined;
 
-      expect(trigger!.participantId).toBe('p1');
-      expect(actualParticipant.id).toBe('p2'); // Mismatch!
-      expect(trigger!.participantId).not.toBe(actualParticipant.id);
+      expect(trigger?.participantId).toBe('p1');
+      expect(actualParticipant?.id).toBe('p2'); // Mismatch!
+      expect(trigger?.participantId).not.toBe(actualParticipant?.id);
     });
   });
 
@@ -267,11 +267,11 @@ describe('multi-Participant Round Completion', () => {
 
       // Validate trigger matches participants
       const trigger = store.getState().nextParticipantToTrigger;
-      const targetParticipant = store.getState().participants[trigger!.index];
+      const targetParticipant = trigger ? store.getState().participants[trigger.index] : undefined;
 
-      expect(trigger!.index).toBe(1);
-      expect(trigger!.participantId).toBe('p2');
-      expect(targetParticipant.id).toBe('p2');
+      expect(trigger?.index).toBe(1);
+      expect(trigger?.participantId).toBe('p2');
+      expect(targetParticipant?.id).toBe('p2');
     });
 
     it('should NOT resume if config changed since round started', () => {
@@ -289,10 +289,10 @@ describe('multi-Participant Round Completion', () => {
 
       // Trigger now invalid - p2 not in participants
       const trigger = store.getState().nextParticipantToTrigger;
-      const actualParticipant = store.getState().participants[trigger!.index];
+      const actualParticipant = trigger ? store.getState().participants[trigger.index] : undefined;
 
-      expect(trigger!.participantId).toBe('p2');
-      expect(actualParticipant.id).toBe('p3');
+      expect(trigger?.participantId).toBe('p2');
+      expect(actualParticipant?.id).toBe('p3');
       // This mismatch would be detected in use-multi-participant-chat.ts
     });
   });

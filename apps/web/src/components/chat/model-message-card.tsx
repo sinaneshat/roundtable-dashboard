@@ -16,17 +16,20 @@ import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
-import { useChatStore } from '@/components/providers';
+import { useChatStoreOptional } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { StreamingMessageContent } from '@/components/ui/motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getRoleBadgeStyle, hasCitations, hasProperty, isNonEmptyString } from '@/lib/utils';
-import type { AvailableSource, DbMessageMetadata, EnhancedModelResponse } from '@/types/api';
-import { isAssistantMessageMetadata } from '@/types/api';
+import type { AvailableSource, DbMessageMetadata, Model } from '@/services/api';
+import { isAssistantMessageMetadata } from '@/services/api';
+
+// Stable no-op function for read-only contexts without ChatStoreProvider
+function NOOP() {}
 
 function isNonRenderableReasoningPart(part: MessagePart): boolean {
   if (part.type !== MessagePartTypes.REASONING) {
@@ -40,7 +43,7 @@ function isNonRenderableReasoningPart(part: MessagePart): boolean {
 }
 
 type ModelMessageCardProps = {
-  model?: EnhancedModelResponse;
+  model?: Model;
   role?: string | null;
   participantIndex: number;
   status: MessageStatus;
@@ -93,13 +96,19 @@ export const ModelMessageCard = memo(({
   const t = useTranslations();
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
 
-  const { globalIsStreaming, registerAnimation, completeAnimation } = useChatStore(
+  // Use optional store hook - returns undefined on public pages without ChatStoreProvider
+  const storeData = useChatStoreOptional(
     useShallow(s => ({
       globalIsStreaming: s.isStreaming,
       registerAnimation: s.registerAnimation,
       completeAnimation: s.completeAnimation,
     })),
   );
+
+  // Fallback values for read-only pages (public threads) without ChatStoreProvider
+  const globalIsStreaming = storeData?.globalIsStreaming ?? false;
+  const registerAnimation = storeData?.registerAnimation ?? NOOP;
+  const completeAnimation = storeData?.completeAnimation ?? NOOP;
 
   const hasActualStreamingParts = globalIsStreaming && parts.some(
     p => 'state' in p && p.state === TextPartStates.STREAMING,

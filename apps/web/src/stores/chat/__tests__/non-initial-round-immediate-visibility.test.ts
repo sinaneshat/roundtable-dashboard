@@ -17,17 +17,21 @@ import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getRoundNumber } from '@/lib/utils';
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 import { createChatStore } from '../store';
 import type { ChatStore } from '../store-schemas';
 
 // Mock dependencies
-vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({
-    setQueriesData: vi.fn(),
-  }),
-}));
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-query')>();
+  return {
+    ...actual,
+    useQueryClient: () => ({
+      setQueriesData: vi.fn(),
+    }),
+  };
+});
 
 /**
  * Helper to create a test store with initial state
@@ -298,14 +302,17 @@ describe('non-Initial Round Immediate Visibility', () => {
         if (!messagesByRound.has(roundNum)) {
           messagesByRound.set(roundNum, []);
         }
-        messagesByRound.get(roundNum)!.push(msg);
+        const roundMessages = messagesByRound.get(roundNum);
+        if (!roundMessages)
+          throw new Error('expected round messages array');
+        roundMessages.push(msg);
       });
 
       // Round 1 should have the user message
       const round1Messages = messagesByRound.get(1);
       expect(round1Messages).toBeDefined();
-      expect(round1Messages!).toHaveLength(1);
-      expect(round1Messages![0].role).toBe(MessageRoles.USER);
+      expect(round1Messages).toHaveLength(1);
+      expect(round1Messages?.[0]?.role).toBe(MessageRoles.USER);
     });
 
     it('should include round in timeline even with only user message', () => {
@@ -432,7 +439,7 @@ describe('non-Initial Round Immediate Visibility', () => {
       const preSearch = state.preSearches.find(ps => ps.roundNumber === nextRound);
 
       expect(preSearch).toBeDefined();
-      expect(preSearch!.status).toBe(MessageStatuses.PENDING);
+      expect(preSearch?.status).toBe(MessageStatuses.PENDING);
     });
   });
 

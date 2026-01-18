@@ -36,7 +36,7 @@ import {
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { ChatThread, DbAssistantMessageMetadata, DbModeratorMessageMetadata, DbUserMessageMetadata } from '@/types/api';
+import type { ChatThread, DbAssistantMessageMetadata, DbModeratorMessageMetadata, DbUserMessageMetadata } from '@/services/api';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';

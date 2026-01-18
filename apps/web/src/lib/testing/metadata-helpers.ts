@@ -10,7 +10,7 @@ import { FinishReasonSchema, MessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 
 import { getParticipantIndex, getRoundNumber } from '@/lib/utils';
-import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/types/api';
+import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/services/api';
 
 /**
  * Type guard: check if message has user metadata

@@ -18,7 +18,7 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { getRoundNumberFromMetadata } from '@/lib/utils';
-import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
+import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -145,7 +145,10 @@ function simulateUseThreadTimeline(
     if (!messagesByRound.has(roundNumber)) {
       messagesByRound.set(roundNumber, []);
     }
-    messagesByRound.get(roundNumber)!.push(message);
+    const roundMessages = messagesByRound.get(roundNumber);
+    if (roundMessages) {
+      roundMessages.push(message);
+    }
   });
 
   const preSearchByRound = new Map<number, StoredPreSearch>();

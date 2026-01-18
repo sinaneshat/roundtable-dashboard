@@ -6,11 +6,18 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useBoolean } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
 import { formatRelativeTime } from '@/lib/format';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { buildGoogleFaviconUrl, handleImageError, safeExtractDomain } from '@/lib/utils';
-import type { WebSearchResultItemProps } from '@/types/api';
+import type { WebSearchResultItem as WebSearchResult } from '@/services/api';
+
+type WebSearchResultItemProps = {
+  result: WebSearchResult;
+  index?: number;
+  showDivider?: boolean;
+  className?: string;
+};
 
 export function WebSearchResultItem({
   result,

@@ -141,10 +141,12 @@ describe('submission Flow Sanity - State Transition Order', () => {
 
     expect(currentRound).toBe(0);
     expect(lastMessage).toBeDefined();
-    expect(lastMessage!.metadata).toBeDefined();
+    if (!lastMessage)
+      throw new Error('Expected last message');
+    expect(lastMessage.metadata).toBeDefined();
 
     // Type-safe metadata extraction
-    const messageRoundNumber = getRoundNumber(lastMessage!.metadata);
+    const messageRoundNumber = getRoundNumber(lastMessage.metadata);
     expect(messageRoundNumber).toBe(currentRound);
   });
 });
@@ -374,12 +376,20 @@ describe('submission Flow Sanity - Message Ordering', () => {
     const timestamps = storedMessages.map((msg) => {
       const metadata = msg.metadata as { createdAt?: string } | undefined;
       expect(metadata?.createdAt).toBeDefined();
-      return new Date(metadata!.createdAt!).getTime();
+      const createdAt = metadata?.createdAt;
+      if (!createdAt)
+        throw new Error('Expected createdAt');
+      return new Date(createdAt).getTime();
     });
 
     // Verify each timestamp is >= previous
-    expect(timestamps[0]).toBeLessThanOrEqual(timestamps[1]!);
-    expect(timestamps[1]).toBeLessThanOrEqual(timestamps[2]!);
+    const ts0 = timestamps[0];
+    const ts1 = timestamps[1];
+    const ts2 = timestamps[2];
+    if (ts0 === undefined || ts1 === undefined || ts2 === undefined)
+      throw new Error('Expected 3 timestamps');
+    expect(ts0).toBeLessThanOrEqual(ts1);
+    expect(ts1).toBeLessThanOrEqual(ts2);
   });
 
   it('should have user message before assistant messages in same round', () => {

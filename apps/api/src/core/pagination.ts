@@ -166,7 +166,8 @@ export function applyCursorPagination<T>(
 ) {
   const hasMore = items.length > limit;
   const paginatedItems = hasMore ? items.slice(0, limit) : items;
-  const nextCursor = hasMore && paginatedItems.length > 0 ? getCursor(paginatedItems[paginatedItems.length - 1]!) : null;
+  const lastItem = paginatedItems[paginatedItems.length - 1];
+  const nextCursor = hasMore && lastItem !== undefined ? getCursor(lastItem) : null;
 
   return {
     items: paginatedItems,

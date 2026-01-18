@@ -168,7 +168,10 @@ describe('pre-Search API Responses', () => {
       state.preSearches = [createMockStoredPreSearch(0, MessageStatuses.PENDING)];
 
       // Simulate streaming start SSE event
-      state.preSearches[0]!.status = MessageStatuses.STREAMING;
+      const preSearch = state.preSearches[0];
+      if (!preSearch)
+        throw new Error('expected preSearch');
+      preSearch.status = MessageStatuses.STREAMING;
 
       expect(state.preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
     });
@@ -188,9 +191,12 @@ describe('pre-Search API Responses', () => {
         totalTime: 5000,
       };
 
-      state.preSearches[0]!.status = MessageStatuses.COMPLETE;
-      state.preSearches[0]!.searchData = searchData;
-      state.preSearches[0]!.completedAt = new Date();
+      const preSearch = state.preSearches[0];
+      if (!preSearch)
+        throw new Error('expected preSearch');
+      preSearch.status = MessageStatuses.COMPLETE;
+      preSearch.searchData = searchData;
+      preSearch.completedAt = new Date();
 
       expect(state.preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
       expect(state.preSearches[0]?.searchData).toBeDefined();
@@ -202,8 +208,11 @@ describe('pre-Search API Responses', () => {
       state.preSearches = [createMockStoredPreSearch(0, MessageStatuses.STREAMING)];
 
       // Simulate error SSE event
-      state.preSearches[0]!.status = MessageStatuses.FAILED;
-      state.preSearches[0]!.errorMessage = 'Search failed: timeout';
+      const preSearch = state.preSearches[0];
+      if (!preSearch)
+        throw new Error('expected preSearch');
+      preSearch.status = MessageStatuses.FAILED;
+      preSearch.errorMessage = 'Search failed: timeout';
 
       expect(state.preSearches[0]?.status).toBe(MessageStatuses.FAILED);
       expect(state.preSearches[0]?.errorMessage).toBe('Search failed: timeout');

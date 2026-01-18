@@ -85,7 +85,16 @@ async function withOptimisticLockRetry<T>(
       return withOptimisticLockRetry(operation, onRetry, context, retryCount + 1);
     }
 
-    return result[0]!;
+    const firstResult = result[0];
+    if (firstResult === undefined) {
+      throw createError.internal('Optimistic lock update returned no result', {
+        errorType: ErrorContextTypes.DATABASE,
+        operation: DatabaseOperations.UPDATE,
+        table: 'user_credit_balance',
+        userId: context.userId,
+      });
+    }
+    return firstResult;
   } catch (error) {
     // Sanitize database errors - don't expose raw SQL to clients
     const errorMessage = error instanceof Error ? error.message : String(error);

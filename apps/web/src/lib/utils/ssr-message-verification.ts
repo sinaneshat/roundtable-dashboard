@@ -8,10 +8,9 @@
  * SSR should be fast - return what we have, let client sync if needed.
  */
 
-import type { ChatMessage, ThreadStreamResumptionState } from '@/types/api';
+import type { ApiMessage, ThreadStreamResumptionState } from '@/services/api';
 
 import { transformChatMessage } from './date-transforms';
-import type { ApiMessage } from './ssr-message-verification-schemas';
 
 type VerifyMessagesParams = {
   threadId: string;
@@ -20,16 +19,16 @@ type VerifyMessagesParams = {
 };
 
 type VerifyMessagesResult = {
-  messages: ChatMessage[];
+  messages: ApiMessage[];
   wasStale: boolean;
   retryCount: number;
 };
 
 /**
- * Transform API messages to ChatMessage with Date objects
+ * Transform API messages to ApiMessage with Date objects
  */
-function transformMessages(messages: ApiMessage[]): ChatMessage[] {
-  return messages.map(m => transformChatMessage(m as any));
+function transformMessages(messages: ApiMessage[]): ApiMessage[] {
+  return messages.map(m => transformChatMessage(m));
 }
 
 /**

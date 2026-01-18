@@ -27,9 +27,9 @@ import { FinishReasons, MessageRoles, ParticipantStreamStatuses, RoundPhases, Te
 import { describe, expect, it } from 'vitest';
 
 import { createMockParticipant, createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
+import type { DbAssistantMessageMetadata, DbMessageMetadata } from '@/services/api';
+import { isModeratorMessageMetadata } from '@/services/api';
 import { createChatStore } from '@/stores/chat';
-import type { DbAssistantMessageMetadata, DbMessageMetadata } from '@/types/api';
-import { isModeratorMessageMetadata } from '@/types/api';
 
 // ============================================================================
 // TEST TYPES
@@ -228,14 +228,19 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
         roundNumber: 0,
       }),
       // P0 COMPLETED with full response
-      createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
-        content: 'As the Innovation Lead, I recommend a hybrid approach combining AI tools with human creativity...',
-        roundNumber: 0,
-        participantId: participants[0]!.id,
-        participantIndex: 0,
-        finishReason: FinishReasons.STOP,
-      }),
+      (() => {
+        const p0 = participants[0];
+        if (!p0)
+          throw new Error('expected participant 0');
+        return createTestAssistantMessage({
+          id: 'thread-123_r0_p0',
+          content: 'As the Innovation Lead, I recommend a hybrid approach combining AI tools with human creativity...',
+          roundNumber: 0,
+          participantId: p0.id,
+          participantIndex: 0,
+          finishReason: FinishReasons.STOP,
+        });
+      })(),
       // P1 STREAMING with partial response
       {
         id: 'thread-123_r0_p1',
@@ -248,19 +253,24 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
             state: TextPartStates.STREAMING, // Still streaming!
           },
         ],
-        metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
-          participantId: participants[1]!.id,
-          participantIndex: 1,
-          participantRole: 'Industry Analyst',
-          model: 'x-ai/grok-4-fast',
-          finishReason: FinishReasons.UNKNOWN,
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          hasError: false,
-          isTransient: false,
-          isPartialResponse: false,
-        },
+        metadata: (() => {
+          const p1 = participants[1];
+          if (!p1)
+            throw new Error('expected participant 1');
+          return {
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+            participantId: p1.id,
+            participantIndex: 1,
+            participantRole: 'Industry Analyst',
+            model: 'x-ai/grok-4-fast',
+            finishReason: FinishReasons.UNKNOWN,
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            hasError: false,
+            isTransient: false,
+            isPartialResponse: false,
+          };
+        })(),
       },
     ];
 
@@ -272,14 +282,19 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
         content: 'We run a $10M content writing agency...',
         roundNumber: 0,
       }),
-      createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
-        content: 'As the Innovation Lead, I recommend a hybrid approach combining AI tools with human creativity...',
-        roundNumber: 0,
-        participantId: participants[0]!.id,
-        participantIndex: 0,
-        finishReason: FinishReasons.STOP,
-      }),
+      (() => {
+        const p0 = participants[0];
+        if (!p0)
+          throw new Error('expected participant 0');
+        return createTestAssistantMessage({
+          id: 'thread-123_r0_p0',
+          content: 'As the Innovation Lead, I recommend a hybrid approach combining AI tools with human creativity...',
+          roundNumber: 0,
+          participantId: p0.id,
+          participantIndex: 0,
+          finishReason: FinishReasons.STOP,
+        });
+      })(),
     ];
 
     // KV state: P0 completed, P1 active

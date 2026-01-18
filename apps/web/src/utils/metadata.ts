@@ -3,7 +3,7 @@ import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 /**
  * Metadata type for TanStack Start
- * Replaces Next.js Metadata type
+ * Standard SEO metadata structure for head tags
  */
 export type Metadata = {
   metadataBase?: URL;

@@ -2,11 +2,11 @@ import { useMemo } from 'react';
 
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import type { EnhancedModelResponse } from '@/types/api';
+import type { Model } from '@/services/api';
 
 export type UseOrderedModelsOptions = {
   selectedParticipants: ParticipantConfig[];
-  allEnabledModels: EnhancedModelResponse[];
+  allEnabledModels: Model[];
   modelOrder: string[];
 };
 

@@ -356,7 +356,7 @@ export { Button, buttonVariants }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { useTranslations } from 'next-intl'
+import { useTranslations } from '@/lib/compat'
 import { User } from '@/lib/types'
 
 interface UserCardProps {
@@ -416,9 +416,10 @@ export function UserCard({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { ThemeProvider } from 'next-themes'
 import { Toaster } from '@/components/ui/toaster'
 import { useState } from 'react'
+
+// Note: Application uses dark theme only (no theme switching)
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -431,12 +432,11 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   }))
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <QueryClientProvider client={queryClient}>
-        {children}
-        <ReactQueryDevtools initialIsOpen={false} />
-        <Toaster />
-      </QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <ReactQueryDevtools initialIsOpen={false} />
+      <Toaster />
+    </QueryClientProvider>
     </ThemeProvider>
   )
 }
@@ -1037,7 +1037,7 @@ export function useTranslations(namespace: string) {
 **Component Translation Patterns:**
 ```typescript
 // File: src/components/billing/payment-method-card.tsx
-import { useTranslations } from 'next-intl'
+import { useTranslations } from '@/lib/compat'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PaymentMethod } from '@/lib/types'
@@ -1105,7 +1105,7 @@ export function PaymentMethodCard({ paymentMethod }: PaymentMethodCardProps) {
 // File: src/containers/dashboard-container.tsx
 'use client'
 
-import { useTranslations } from 'next-intl'
+import { useTranslations } from '@/lib/compat'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardHeader } from '@/components/chat/dashboard-header'
 import { OverviewCards } from '@/components/chat/overview-cards'

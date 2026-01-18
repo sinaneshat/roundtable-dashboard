@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
+import { GC_TIMES, STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getApiKeyService,
   listApiKeysService,
@@ -26,7 +26,7 @@ export function useApiKeysQuery(enabled = true) {
     queryKey: queryKeys.apiKeys.list(),
     queryFn: () => listApiKeysService(),
     staleTime: STALE_TIMES.apiKeys, // 5 minutes - API keys don't change frequently
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     refetchOnMount: 'always', // Always refetch when modal opens to ensure fresh data
     refetchOnWindowFocus: false,
     enabled: isAuthenticated && enabled,
@@ -46,7 +46,7 @@ export function useApiKeyQuery(keyId: string) {
     queryFn: () => getApiKeyService({ param: { keyId } }),
     enabled: isAuthenticated && !!keyId,
     staleTime: STALE_TIMES.apiKeys, // 5 minutes
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     refetchOnWindowFocus: false,
     retry: false,
     throwOnError: false,

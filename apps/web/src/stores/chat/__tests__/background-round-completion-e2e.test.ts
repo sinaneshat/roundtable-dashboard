@@ -227,7 +227,10 @@ describe('background round completion E2E', () => {
         });
 
         // Staleness check
-        const isStale = Date.now() - new Date(state.lastActivityAt!).getTime() > 30_000;
+        const lastActivityAt = state.lastActivityAt;
+        if (!lastActivityAt)
+          throw new Error('expected lastActivityAt');
+        const isStale = Date.now() - new Date(lastActivityAt).getTime() > 30_000;
         expect(isStale).toBe(true);
       });
 
@@ -411,7 +414,11 @@ describe('background round completion E2E', () => {
         maxRecoveryAttempts: 3,
       });
 
-      const canRecover = state.recoveryAttempts! < state.maxRecoveryAttempts!;
+      const recoveryAttempts = state.recoveryAttempts;
+      const maxRecoveryAttempts = state.maxRecoveryAttempts;
+      if (recoveryAttempts === undefined || maxRecoveryAttempts === undefined)
+        throw new Error('expected recoveryAttempts and maxRecoveryAttempts');
+      const canRecover = recoveryAttempts < maxRecoveryAttempts;
       expect(canRecover).toBe(true);
     });
 
@@ -421,7 +428,11 @@ describe('background round completion E2E', () => {
         maxRecoveryAttempts: 3,
       });
 
-      const canRecover = state.recoveryAttempts! < state.maxRecoveryAttempts!;
+      const recoveryAttempts = state.recoveryAttempts;
+      const maxRecoveryAttempts = state.maxRecoveryAttempts;
+      if (recoveryAttempts === undefined || maxRecoveryAttempts === undefined)
+        throw new Error('expected recoveryAttempts and maxRecoveryAttempts');
+      const canRecover = recoveryAttempts < maxRecoveryAttempts;
       expect(canRecover).toBe(false);
     });
 
@@ -465,8 +476,17 @@ describe('background round completion E2E', () => {
         recoveryAttempts: 0, // Fresh
       });
 
-      const round1CanRecover = round1State.recoveryAttempts! < round1State.maxRecoveryAttempts!;
-      const round2CanRecover = round2State.recoveryAttempts! < round2State.maxRecoveryAttempts!;
+      const round1Recovery = round1State.recoveryAttempts;
+      const round1Max = round1State.maxRecoveryAttempts;
+      if (round1Recovery === undefined || round1Max === undefined)
+        throw new Error('expected round1 recoveryAttempts and maxRecoveryAttempts');
+      const round1CanRecover = round1Recovery < round1Max;
+
+      const round2Recovery = round2State.recoveryAttempts;
+      const round2Max = round2State.maxRecoveryAttempts;
+      if (round2Recovery === undefined || round2Max === undefined)
+        throw new Error('expected round2 recoveryAttempts and maxRecoveryAttempts');
+      const round2CanRecover = round2Recovery < round2Max;
 
       expect(round1CanRecover).toBe(false);
       expect(round2CanRecover).toBe(true);

@@ -432,7 +432,8 @@ describe('multi-Round Flow Debugging', () => {
       // Phantom call comes for r0_p1
       const phantomMessageId = `${threadId}_r0_p1`;
       const idMatch = phantomMessageId.match(/_r(\d+)_p(\d+)/);
-      const msgRoundNumber = idMatch ? Number.parseInt(idMatch[1]!) : currentRoundRef;
+      const roundStr = idMatch?.[1];
+      const msgRoundNumber = idMatch && roundStr ? Number.parseInt(roundStr) : currentRoundRef;
 
       console.error('[PHANTOM] Phantom call:', {
         messageId: phantomMessageId,
@@ -453,7 +454,8 @@ describe('multi-Round Flow Debugging', () => {
       // Valid round 1 message
       const validMessageId = 'thread_r1_p0';
       const idMatch = validMessageId.match(/_r(\d+)_p(\d+)/);
-      const msgRoundNumber = idMatch ? Number.parseInt(idMatch[1]!) : currentRoundRef;
+      const roundStr = idMatch?.[1];
+      const msgRoundNumber = idMatch && roundStr ? Number.parseInt(roundStr) : currentRoundRef;
 
       console.error('[PHANTOM] Valid round 1 message:', {
         messageId: validMessageId,

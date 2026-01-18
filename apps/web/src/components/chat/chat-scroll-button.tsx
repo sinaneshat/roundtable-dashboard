@@ -4,7 +4,7 @@ import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type ChatScrollButtonProps = {

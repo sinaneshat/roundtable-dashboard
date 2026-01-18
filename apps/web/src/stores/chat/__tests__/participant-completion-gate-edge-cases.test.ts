@@ -20,8 +20,8 @@ import { MessagePartTypes, MessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
+import type { ChatParticipant } from '@/services/api';
 import { getParticipantCompletionStatus, isMessageComplete } from '@/stores/chat';
-import type { ChatParticipant } from '@/types/api';
 
 // ============================================================================
 // Test Utilities

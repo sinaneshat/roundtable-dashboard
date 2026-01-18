@@ -1015,9 +1015,16 @@ describe('multi-Round Streaming Lifecycle', () => {
       const match = messageId.match(/^(.+)_r(\d+)_p(\d+)$/);
 
       expect(match).not.toBeNull();
-      expect(match![1]).toBe('thread-abc');
-      expect(Number.parseInt(match![2])).toBe(3);
-      expect(Number.parseInt(match![3])).toBe(1);
+      if (!match)
+        throw new Error('expected match');
+      const threadPart = match[1];
+      const roundPart = match[2];
+      const participantPart = match[3];
+      if (!threadPart || !roundPart || !participantPart)
+        throw new Error('expected match groups');
+      expect(threadPart).toBe('thread-abc');
+      expect(Number.parseInt(roundPart)).toBe(3);
+      expect(Number.parseInt(participantPart)).toBe(1);
     });
   });
 });

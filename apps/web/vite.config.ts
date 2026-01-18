@@ -57,15 +57,13 @@ export default defineConfig({
     }),
     viteReact(),
   ],
-  // Proxy API requests in development to avoid cross-origin cookie issues
-  // This makes web and API appear as same origin for cookie handling
+  // Proxy ALL /api/* requests to backend - frontend becomes the single origin
+  // This avoids CORS issues and makes cookies work seamlessly
   server: {
     proxy: {
-      // Proxy all /api/* requests to the API server
       '/api': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        // Required for Better Auth cookies to work
         cookieDomainRewrite: 'localhost',
       },
     },

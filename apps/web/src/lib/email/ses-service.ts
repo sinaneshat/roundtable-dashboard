@@ -2,12 +2,26 @@
 // The barrel export pulls in shiki (9.8MB) and prettier (256KB) which bloats the bundle
 import { render } from '@react-email/render';
 import { AwsClient } from 'aws4fetch';
+import type { ReactElement } from 'react';
 
 import { BRAND } from '@/constants';
 
 // Cross-package import: Web app imports email templates from API package for SSR email rendering
-// @ts-expect-error - Runtime import from API package; works with Vite but not TS type checking
-import { MagicLink } from '../../../api/src/emails/templates';
+// Type definition for email template props
+type MagicLinkProps = {
+  userName?: string;
+  loginUrl: string;
+  expirationTime?: string;
+};
+
+// Lazy-loaded email template - resolved at first use
+async function getMagicLinkTemplate(): Promise<(props: MagicLinkProps) => ReactElement> {
+  // Dynamic import works at runtime with Vite; TypeScript can't verify cross-package types
+  // This path exists at runtime but TypeScript can't resolve it during type checking
+  // @ts-expect-error - Cross-package import: works at runtime, TS can't verify path
+  const module = await import('../../../api/src/emails/templates');
+  return module.MagicLink as (props: MagicLinkProps) => ReactElement;
+}
 
 /**
  * Get SES credentials from environment variables.
@@ -33,15 +47,15 @@ function getSesCredentials(): {
 }
 
 /**
- * Email Service using aws4fetch for edge runtime compatibility
+ * Email Service using aws4fetch for Cloudflare Pages compatibility
  *
  * This service uses aws4fetch instead of @aws-sdk/client-ses because:
- * - @aws-sdk/client-ses imports node:fs which is incompatible with edge runtimes
- * - aws4fetch uses native Fetch API and SubtleCrypto, which work in edge environments
+ * - @aws-sdk/client-ses imports node:fs which is incompatible with Cloudflare Pages runtime
+ * - aws4fetch uses native Fetch API and SubtleCrypto, which work in Cloudflare Pages
  * - Reduces bundle size and improves cold start performance
  *
  * Credentials are resolved from environment variables at method call time, not module load time.
- * For TanStack Start: uses process.env which Vite injects from .env files.
+ * For TanStack Start on Cloudflare Pages: uses process.env which Vite injects from .env files.
  *
  * @see https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html
  */
@@ -145,10 +159,13 @@ class EmailService {
   }
 
   async sendMagicLink(to: string, magicLink: string, expirationMinutes = 15) {
+    // Lazy-load email template at first use
+    const MagicLinkComponent = await getMagicLinkTemplate();
+
     // Render React Email template to HTML
-    // Note: Using @react-email/components instead of @react-email/render
-    // to avoid edge runtime export resolution issues in Cloudflare Workers
-    const html = await render(MagicLink({
+    // Note: Using @react-email/render directly (not barrel export from @react-email/components)
+    // to avoid importing shiki (9.8MB) and prettier (256KB) - see import comment at top
+    const html = await render(MagicLinkComponent({
       loginUrl: magicLink,
       expirationTime: `${expirationMinutes} minutes`,
     }));

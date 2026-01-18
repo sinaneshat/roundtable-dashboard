@@ -33,6 +33,7 @@ export type {
   UsageStatsData,
 } from './actions/types';
 export {
+  ChatThreadCacheSchema,
   validateChangelogListCache,
   validateInfiniteQueryCache,
   validateThreadDetailCache,
@@ -48,7 +49,12 @@ export {
   getStatusPriority,
   ModeratorTimeouts,
 } from './store-constants';
-export type { ChatStore, NextParticipantToTrigger } from './store-schemas';
+export type {
+  ChatStore,
+  NextParticipantToTrigger,
+  StoredModeratorData,
+  StoredModeratorSummary,
+} from './store-schemas';
 export type { ParticipantCompletionStatus, ParticipantDebugInfo } from './utils/participant-completion-gate';
 export {
   areAllParticipantsCompleteForRound,

@@ -1,4 +1,4 @@
-import type { ChatMode, ModelCapabilityTag, ModelSelectionTab, SubscriptionTier } from '@roundtable/shared';
+import type { ModelCapabilityTag, ModelSelectionTab, SubscriptionTier } from '@roundtable/shared';
 import {
   ChatModes,
   DEFAULT_MODEL_SELECTION_TAB,
@@ -10,6 +10,7 @@ import {
   PREDEFINED_ROLE_TEMPLATES,
   SubscriptionTiers,
 } from '@roundtable/shared';
+import { Link } from '@tanstack/react-router';
 import { AnimatePresence, motion, Reorder } from 'motion/react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -37,28 +38,22 @@ import {
 } from '@/hooks/mutations';
 import { useUsageStatsQuery, useUserPresetsQuery } from '@/hooks/queries';
 import { useBoolean } from '@/hooks/utils';
-import { Link, useTranslations } from '@/lib/compat';
 import { canAccessPreset, createRoleSystemPrompt, MODEL_PRESETS } from '@/lib/config';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
+import { useTranslations } from '@/lib/i18n';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { toastManager } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils';
 import { modelHasTag } from '@/lib/utils/model-tags';
+import type { CustomRole } from '@/services/api';
 
 import { CustomRoleForm } from './custom-role-form';
 import { ModelItem } from './model-item';
 import { ModelPresetCard } from './model-preset-card';
 import { PresetNameForm } from './preset-name-form';
 import { RoleColorBadge } from './role-color-badge';
-
-type CustomRole = {
-  id: string;
-  name: string;
-  description?: string | null;
-  systemPrompt?: string | null;
-};
 
 export type ModelSelectionModalProps = {
   open: boolean;
@@ -137,8 +132,8 @@ export function ModelSelectionModal({
       return [];
     }
     return userPresetsData.pages.flatMap((page) => {
-      if ((page as any)?.success && (page as any).data?.items) {
-        return (page as any).data.items;
+      if (page?.success && page.data?.items) {
+        return page.data.items;
       }
       return [];
     });
@@ -156,9 +151,7 @@ export function ModelSelectionModal({
   const deletePresetMutation = useDeleteUserPresetMutation();
 
   const { data: usageData } = useUsageStatsQuery();
-  const isPaidUser = usageData?.success && typeof usageData.data === 'object' && usageData.data !== null && 'plan' in usageData.data
-    ? (usageData.data.plan as { type?: string })?.type === PlanTypes.PAID
-    : false;
+  const isPaidUser = usageData?.success === true && usageData.data.plan.type === PlanTypes.PAID;
   const canCreateCustomRoles = isPaidUser;
 
   const isSearching = searchQuery.trim().length > 0;
@@ -261,14 +254,8 @@ export function ModelSelectionModal({
         },
       });
 
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; data?: unknown };
-        if (typedResult.success && typedResult.data && typeof typedResult.data === 'object' && 'customRole' in typedResult.data) {
-          const customRole = (typedResult.data as { customRole?: { name: string; id: string } | null }).customRole;
-          if (customRole) {
-            handleRoleSelect(customRole.name, customRole.id);
-          }
-        }
+      if (result.success && result.data?.customRole) {
+        handleRoleSelect(result.data.customRole.name, result.data.customRole.id);
       }
     } catch (error) {
       const errorMessage = getApiErrorMessage(error, t('failedToCreateRole'));
@@ -365,16 +352,10 @@ export function ModelSelectionModal({
 
       isSavingPreset.onFalse();
 
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; data?: unknown };
-        if (typedResult.success && typedResult.data && typeof typedResult.data === 'object' && 'preset' in typedResult.data) {
-          const preset = (typedResult.data as { preset?: { id?: string } | null }).preset;
-          if (preset?.id) {
-            setNewlyCreatedPresetId(preset.id);
-            setActiveTab(ModelSelectionTabs.PRESETS);
-            setTimeout(() => setNewlyCreatedPresetId(null), 2000);
-          }
-        }
+      if (result.success && result.data?.preset?.id) {
+        setNewlyCreatedPresetId(result.data.preset.id);
+        setActiveTab(ModelSelectionTabs.PRESETS);
+        setTimeout(() => setNewlyCreatedPresetId(null), 2000);
       }
 
       toastManager.success(t('chat.models.presets.presetSaved'), t('chat.models.presets.presetSavedMessage', { name: trimmedName }));
@@ -399,15 +380,8 @@ export function ModelSelectionModal({
       role: om.participant?.role || null,
     }));
 
-    const existingPreset = userPresets.find((p) => {
-      if (typeof p === 'object' && p !== null && 'id' in p) {
-        return (p as { id: string }).id === editingPresetId;
-      }
-      return false;
-    });
-    const presetName = existingPreset && typeof existingPreset === 'object' && 'name' in existingPreset
-      ? (existingPreset as { name: string }).name
-      : 'Preset';
+    const existingPreset = userPresets.find(p => p.id === editingPresetId);
+    const presetName = existingPreset?.name ?? 'Preset';
 
     try {
       await updatePresetMutation.mutateAsync({
@@ -467,24 +441,18 @@ export function ModelSelectionModal({
     const systemPreset = MODEL_PRESETS.find(p => p.id === selectedPresetId);
     if (systemPreset)
       return systemPreset;
-    const userPreset = userPresets.find((p) => {
-      if (typeof p === 'object' && p !== null && 'id' in p) {
-        return (p as { id: string }).id === selectedPresetId;
-      }
-      return false;
-    });
-    if (userPreset && typeof userPreset === 'object' && 'id' in userPreset && 'name' in userPreset && 'modelRoles' in userPreset && 'mode' in userPreset) {
-      const preset = userPreset as { id: string; name: string; modelRoles: Array<{ modelId: string; role: string | null }>; mode: ChatMode };
+    const userPreset = userPresets.find(p => p.id === selectedPresetId);
+    if (userPreset) {
       return {
-        id: preset.id,
-        name: preset.name,
-        description: `${preset.modelRoles.length} models`,
+        id: userPreset.id,
+        name: userPreset.name,
+        description: `${userPreset.modelRoles.length} models`,
         icon: Icons.sparkles,
         requiredTier: SubscriptionTiers.FREE,
         order: 0,
-        mode: preset.mode,
+        mode: userPreset.mode,
         searchEnabled: false,
-        modelRoles: preset.modelRoles,
+        modelRoles: userPreset.modelRoles,
       };
     }
     return null;
@@ -631,8 +599,8 @@ export function ModelSelectionModal({
                               type="button"
                               key={role.name}
                               onClick={() => {
-                                if (isSelected) {
-                                  handleClearRoleInternal(selectedModelForRole!);
+                                if (isSelected && selectedModelForRole) {
+                                  handleClearRoleInternal(selectedModelForRole);
                                   handleBackToModelList();
                                 } else {
                                   handleRoleSelect(role.name);
@@ -654,8 +622,10 @@ export function ModelSelectionModal({
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleClearRoleInternal(selectedModelForRole!);
-                                      handleBackToModelList();
+                                      if (selectedModelForRole) {
+                                        handleClearRoleInternal(selectedModelForRole);
+                                        handleBackToModelList();
+                                      }
                                     }}
                                     className="shrink-0 p-1 rounded-full hover:bg-white/[0.07] transition-colors"
                                   >
@@ -677,8 +647,8 @@ export function ModelSelectionModal({
                               type="button"
                               key={role.id}
                               onClick={() => {
-                                if (isSelected) {
-                                  handleClearRoleInternal(selectedModelForRole!);
+                                if (isSelected && selectedModelForRole) {
+                                  handleClearRoleInternal(selectedModelForRole);
                                   handleBackToModelList();
                                 } else {
                                   handleRoleSelect(role.name, role.id);
@@ -711,8 +681,10 @@ export function ModelSelectionModal({
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleClearRoleInternal(selectedModelForRole!);
-                                      handleBackToModelList();
+                                      if (selectedModelForRole) {
+                                        handleClearRoleInternal(selectedModelForRole);
+                                        handleBackToModelList();
+                                      }
                                     }}
                                     className="shrink-0 p-1 rounded-full hover:bg-white/[0.07] transition-colors"
                                   >
@@ -744,7 +716,7 @@ export function ModelSelectionModal({
                                 className="h-6 rounded-full text-[10px] font-medium shrink-0"
                                 asChild
                               >
-                                <Link href="/chat/pricing">
+                                <Link to="/chat/pricing">
                                   {t('upgrade')}
                                 </Link>
                               </Button>
@@ -804,11 +776,7 @@ export function ModelSelectionModal({
                                 </h4>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <AnimatePresence initial={false}>
-                                    {userPresets.map((userPreset) => {
-                                      if (typeof userPreset !== 'object' || userPreset === null || !('id' in userPreset) || !('name' in userPreset) || !('modelRoles' in userPreset) || !('mode' in userPreset)) {
-                                        return null;
-                                      }
-                                      const preset = userPreset as { id: string; name: string; modelRoles: Array<{ modelId: string; role: string | null }>; mode: ChatMode };
+                                    {userPresets.map((preset) => {
                                       const presetForCard: ModelPreset = {
                                         id: preset.id,
                                         name: preset.name,
@@ -1115,7 +1083,7 @@ export function ModelSelectionModal({
                     size="sm"
                     className="text-xs sm:text-sm border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
                   >
-                    <Link href="/chat/pricing" className="flex items-center gap-1.5">
+                    <Link to="/chat/pricing" className="flex items-center gap-1.5">
                       <Icons.lockOpen className="size-3.5" />
                       {t('chat.models.unlockAllModels')}
                     </Link>

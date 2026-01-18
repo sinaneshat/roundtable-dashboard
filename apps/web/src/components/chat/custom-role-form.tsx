@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 
 const customRoleSchema = z.object({
   roleName: z.string().min(1).max(100),
@@ -57,7 +57,11 @@ export const CustomRoleForm = memo(({
             <FormItem className="flex-1 min-w-0">
               <FormControl>
                 <Input
-                  {...field as any}
+                  ref={field.ref}
+                  name={field.name}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
                   placeholder={t('chat.models.modal.customRolePlaceholder')}
                   disabled={isPending || disabled}
                   className="h-8 text-sm"

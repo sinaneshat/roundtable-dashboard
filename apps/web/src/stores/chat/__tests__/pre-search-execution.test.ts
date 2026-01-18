@@ -18,7 +18,7 @@ import { MessageStatuses } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
 import { createMockPreSearch as createMockPreSearchBase } from '@/lib/testing';
-import type { StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 import { shouldWaitForPreSearch } from '../utils/pre-search-execution';
 

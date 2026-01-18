@@ -1,4 +1,4 @@
-import { getRequestConfig } from '@/lib/compat';
+import { getRequestConfig } from '@/lib/i18n';
 
 import { formats } from './formats';
 

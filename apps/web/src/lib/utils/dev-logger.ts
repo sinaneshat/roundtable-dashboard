@@ -1,6 +1,8 @@
 import type { DebugData, DevLogLevel, RlogCategory, RlogStreamAction } from '@roundtable/shared';
 import { DevLogLevels, RLOG_CATEGORY_STYLES, RlogCategories } from '@roundtable/shared';
 
+import { safeStorageRemove, safeStorageSet } from './safe-storage';
+
 type LogEntry = {
   key: string;
   level: DevLogLevel;
@@ -22,7 +24,7 @@ const EXCESSIVE_UPDATE_THRESHOLD = 10;
 const logCache = new Map<string, LogEntry>();
 const updateCounts = new Map<string, UpdateTracker>();
 
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = import.meta.env.MODE === 'development';
 
 /* eslint-disable no-console */
 function getConsoleMethod(level: DevLogLevel): typeof console.debug {
@@ -161,17 +163,13 @@ function rlogNow(category: RlogCategory, message: string): void {
 export const rlog = {
   enable: (): void => {
     rlogEnabled = true;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('rlog', '1');
-    }
+    safeStorageSet('rlog', '1', 'local');
     // eslint-disable-next-line no-console
     console.log('%c[RLOG] Resumption debug logging enabled', 'color: #4CAF50; font-weight: bold');
   },
   disable: (): void => {
     rlogEnabled = false;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem('rlog');
-    }
+    safeStorageRemove('rlog', 'local');
   },
   isEnabled: (): boolean => rlogEnabled,
   phase: (phase: string, detail: string): void => rlogNow(RlogCategories.PHASE, `${phase}: ${detail}`),

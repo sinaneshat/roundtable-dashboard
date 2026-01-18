@@ -184,7 +184,9 @@ export function validateEnvironmentConfiguration(env: CloudflareEnv): {
   }
 
   // Validate boolean environment variables
-  if (env.MAINTENANCE !== undefined && typeof env.MAINTENANCE === 'string' && !['true', 'false'].includes(env.MAINTENANCE)) {
+  // MAINTENANCE is an optional runtime var that may be set via wrangler secret
+  const maintenance = (env as unknown as { MAINTENANCE?: string }).MAINTENANCE;
+  if (maintenance !== undefined && typeof maintenance === 'string' && !['true', 'false'].includes(maintenance)) {
     warnings.push(`MAINTENANCE should be 'true' or 'false'`);
   }
 
@@ -242,7 +244,8 @@ export function createEnvironmentValidationMiddleware() {
 
     // Skip validation in test environment
     // NODE_ENV is inlined at build time, so process.env is acceptable here
-    if (env.NODE_ENV === 'test' || process.env.NODE_ENV === 'test') {
+    // env.NODE_ENV is typed as 'development' | 'production' from wrangler vars
+    if (process.env.NODE_ENV === 'test') {
       return next();
     }
 

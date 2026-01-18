@@ -26,7 +26,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { UIMessage } from '@/lib/schemas/message-schemas';
 import { getParticipantModelIds } from '@/lib/utils';
-import type { StoredPreSearch } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 

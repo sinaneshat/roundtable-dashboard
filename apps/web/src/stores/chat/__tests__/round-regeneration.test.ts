@@ -783,7 +783,12 @@ describe('round Regeneration - Multi-Round Scenarios', () => {
 
     // Should be [0, 0, 1, 1, 2] in order
     const isSorted = roundNumbers.every((val, i, arr) => {
-      return i === 0 || val >= arr[i - 1]!;
+      if (i === 0)
+        return true;
+      const prev = arr[i - 1];
+      if (prev === undefined)
+        throw new Error('Expected previous value');
+      return val >= prev;
     });
 
     expect(isSorted).toBe(true);

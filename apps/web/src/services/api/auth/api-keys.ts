@@ -16,23 +16,23 @@ import { createApiClient } from '@/lib/api/client';
 // ============================================================================
 
 type ListApiKeysEndpoint = ApiClientType['auth']['api-keys']['$get'];
-export type ListApiKeysResponse = InferResponseType<ListApiKeysEndpoint>;
+export type ListApiKeysResponse = InferResponseType<ListApiKeysEndpoint, 200>;
 export type ListApiKeysRequest = InferRequestType<ListApiKeysEndpoint>;
 
 type GetApiKeyEndpoint = ApiClientType['auth']['api-keys'][':keyId']['$get'];
-export type GetApiKeyResponse = InferResponseType<GetApiKeyEndpoint>;
+export type GetApiKeyResponse = InferResponseType<GetApiKeyEndpoint, 200>;
 export type GetApiKeyRequest = InferRequestType<GetApiKeyEndpoint>;
 
 type CreateApiKeyEndpoint = ApiClientType['auth']['api-keys']['$post'];
-export type CreateApiKeyResponse = InferResponseType<CreateApiKeyEndpoint>;
+export type CreateApiKeyResponse = InferResponseType<CreateApiKeyEndpoint, 200>;
 export type CreateApiKeyRequest = InferRequestType<CreateApiKeyEndpoint>;
 
 type UpdateApiKeyEndpoint = ApiClientType['auth']['api-keys'][':keyId']['$patch'];
-export type UpdateApiKeyResponse = InferResponseType<UpdateApiKeyEndpoint>;
+export type UpdateApiKeyResponse = InferResponseType<UpdateApiKeyEndpoint, 200>;
 export type UpdateApiKeyRequest = InferRequestType<UpdateApiKeyEndpoint>;
 
 type DeleteApiKeyEndpoint = ApiClientType['auth']['api-keys'][':keyId']['$delete'];
-export type DeleteApiKeyResponse = InferResponseType<DeleteApiKeyEndpoint>;
+export type DeleteApiKeyResponse = InferResponseType<DeleteApiKeyEndpoint, 200>;
 export type DeleteApiKeyRequest = InferRequestType<DeleteApiKeyEndpoint>;
 
 // ============================================================================
@@ -43,9 +43,9 @@ export type DeleteApiKeyRequest = InferRequestType<DeleteApiKeyEndpoint>;
  * List all API keys for the authenticated user
  * Protected endpoint - requires authentication
  */
-export async function listApiKeysService(args?: ListApiKeysRequest) {
+export async function listApiKeysService(data?: ListApiKeysRequest) {
   const client = createApiClient();
-  return parseResponse(client.auth['api-keys'].$get(args ?? {}));
+  return parseResponse(client.auth['api-keys'].$get(data ?? {}));
 }
 
 /**
@@ -54,10 +54,7 @@ export async function listApiKeysService(args?: ListApiKeysRequest) {
  */
 export async function getApiKeyService(data: GetApiKeyRequest) {
   const client = createApiClient();
-  const params: GetApiKeyRequest = {
-    param: data.param ?? { keyId: '' },
-  };
-  return parseResponse(client.auth['api-keys'][':keyId'].$get(params));
+  return parseResponse(client.auth['api-keys'][':keyId'].$get(data));
 }
 
 /**
@@ -66,10 +63,7 @@ export async function getApiKeyService(data: GetApiKeyRequest) {
  */
 export async function createApiKeyService(data: CreateApiKeyRequest) {
   const client = createApiClient();
-  const params: CreateApiKeyRequest = {
-    json: data.json ?? {},
-  };
-  return parseResponse(client.auth['api-keys'].$post(params));
+  return parseResponse(client.auth['api-keys'].$post(data));
 }
 
 /**
@@ -78,11 +72,7 @@ export async function createApiKeyService(data: CreateApiKeyRequest) {
  */
 export async function updateApiKeyService(data: UpdateApiKeyRequest) {
   const client = createApiClient();
-  const params: UpdateApiKeyRequest = {
-    param: data.param ?? { keyId: '' },
-    json: data.json ?? {},
-  };
-  return parseResponse(client.auth['api-keys'][':keyId'].$patch(params));
+  return parseResponse(client.auth['api-keys'][':keyId'].$patch(data));
 }
 
 /**
@@ -91,8 +81,5 @@ export async function updateApiKeyService(data: UpdateApiKeyRequest) {
  */
 export async function deleteApiKeyService(data: DeleteApiKeyRequest) {
   const client = createApiClient();
-  const params: DeleteApiKeyRequest = {
-    param: data.param ?? { keyId: '' },
-  };
-  return parseResponse(client.auth['api-keys'][':keyId'].$delete(params));
+  return parseResponse(client.auth['api-keys'][':keyId'].$delete(data));
 }

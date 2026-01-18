@@ -537,10 +537,13 @@ describe('pre-Search Failure - Round 1+', () => {
 
     // === PRE-SEARCH STREAMING ERROR ===
     // Update pre-search to FAILED status directly
+    const preSearch1 = getStoreState(store).preSearches[1];
+    if (!preSearch1)
+      throw new Error('expected pre-search at index 1');
     state.setPreSearches([
       ...getStoreState(store).preSearches.slice(0, 1),
       {
-        ...getStoreState(store).preSearches[1]!,
+        ...preSearch1,
         status: MessageStatuses.FAILED,
         errorMessage: 'Search API timeout',
       },
@@ -587,9 +590,12 @@ describe('pre-Search Failure - Round 1+', () => {
 
     // Simulate 10s timeout check
     // After timeout, mark as FAILED and continue
+    const preSearch0 = getStoreState(store).preSearches[0];
+    if (!preSearch0)
+      throw new Error('expected pre-search at index 0');
     state.setPreSearches([
       {
-        ...getStoreState(store).preSearches[0]!,
+        ...preSearch0,
         status: MessageStatuses.FAILED,
         errorMessage: 'Pre-search timed out after 10s',
       },

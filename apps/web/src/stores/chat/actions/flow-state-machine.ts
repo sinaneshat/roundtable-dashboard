@@ -445,11 +445,8 @@ export function useFlowStateMachine(
           // Displayed inline via ChatMessageList, no separate cache to invalidate
 
           // =========================================================================
-          // ✅ CRITICAL FIX: NO SERVER NAVIGATION - Eliminates loading.tsx skeleton
+          // ✅ CRITICAL FIX: NO SERVER NAVIGATION - Client-side URL update only
           // =========================================================================
-          //
-          // WHY: Next.js App Router with `dynamic = 'force-dynamic'` ALWAYS shows
-          // loading.tsx during server render. Prefetching only works for static routes.
           //
           // SOLUTION: Don't trigger server navigation at all!
           // - URL is already `/chat/[slug]` from history.replaceState (flow-controller.ts)

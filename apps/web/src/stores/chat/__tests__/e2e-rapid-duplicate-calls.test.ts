@@ -877,7 +877,11 @@ describe('comprehensive Rapid Call Detection', () => {
 
     // All should be in same tick (within 100ms window)
     const allCalls = tracker.calls.filter(c => c.type === TestCallTypes.RAPID_CALL);
-    const timeRange = allCalls[allCalls.length - 1]!.timestamp - allCalls[0]!.timestamp;
+    const firstCall = allCalls[0];
+    const lastCall = allCalls[allCalls.length - 1];
+    if (!firstCall || !lastCall)
+      throw new Error('expected at least two calls');
+    const timeRange = lastCall.timestamp - firstCall.timestamp;
 
     expect(allCalls).toHaveLength(3);
     expect(timeRange).toBeLessThan(100);

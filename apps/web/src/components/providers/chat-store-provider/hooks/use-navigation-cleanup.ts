@@ -5,10 +5,10 @@
  * Stops streaming, clears pending operations, and resets state.
  */
 
+import { useLocation } from '@tanstack/react-router';
 import type { RefObject } from 'react';
 import { useEffect } from 'react';
 
-import { usePathname } from '@/lib/compat';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseNavigationCleanupParams = {
@@ -23,7 +23,7 @@ export function useNavigationCleanup({
   store,
   prevPathnameRef,
 }: UseNavigationCleanupParams) {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   useEffect(() => {
     const prevPath = prevPathnameRef.current;

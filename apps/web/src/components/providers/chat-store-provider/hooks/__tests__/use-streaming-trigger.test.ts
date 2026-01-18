@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 
 import { act } from '@/lib/testing';
-import type { PreSearchDataPayload, StoredPreSearch } from '@/types/api';
+import type { PreSearchDataPayload, StoredPreSearch } from '@/services/api';
 
 type MockParticipant = {
   id: string;

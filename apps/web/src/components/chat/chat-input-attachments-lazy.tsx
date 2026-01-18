@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PendingAttachment } from '@/hooks/utils';
-import { dynamic } from '@/lib/compat';
+import dynamic from '@/lib/utils/dynamic';
 
 type ChatInputAttachmentsProps = {
   attachments: PendingAttachment[];

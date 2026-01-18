@@ -147,7 +147,8 @@ export const getRoundStatusHandler: RouteHandler<typeof getRoundStatusRoute, Api
       c.env,
       db,
     );
-    const nextParticipantIndex = incompleteParticipants.length > 0 ? incompleteParticipants[0]! : null;
+    const firstIncomplete = incompleteParticipants[0];
+    const nextParticipantIndex = firstIncomplete !== undefined ? firstIncomplete : null;
 
     // Determine needsModerator
     // totalParticipants >= 2 && completedParticipants >= total && !hasModeratorMessage

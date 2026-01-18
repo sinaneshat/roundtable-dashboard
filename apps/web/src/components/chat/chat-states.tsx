@@ -30,7 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { FadeIn, PageTransition } from '@/components/ui/motion';
 import { Spinner } from '@/components/ui/spinner';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type LoadingStateProps = {

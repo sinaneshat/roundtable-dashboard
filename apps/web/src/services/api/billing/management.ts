@@ -7,10 +7,9 @@
  */
 
 import type { InferRequestType, InferResponseType } from 'hono/client';
-import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/lib/api/client';
-import { createApiClient } from '@/lib/api/client';
+import { createApiClient, ServiceFetchError } from '@/lib/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
@@ -18,11 +17,11 @@ import { createApiClient } from '@/lib/api/client';
 
 type SwitchSubscriptionEndpoint = ApiClientType['billing']['subscriptions'][':id']['switch']['$post'];
 export type SwitchSubscriptionRequest = InferRequestType<SwitchSubscriptionEndpoint>;
-export type SwitchSubscriptionResponse = InferResponseType<SwitchSubscriptionEndpoint>;
+export type SwitchSubscriptionResponse = InferResponseType<SwitchSubscriptionEndpoint, 200>;
 
 type CancelSubscriptionEndpoint = ApiClientType['billing']['subscriptions'][':id']['cancel']['$post'];
 export type CancelSubscriptionRequest = InferRequestType<CancelSubscriptionEndpoint>;
-export type CancelSubscriptionResponse = InferResponseType<CancelSubscriptionEndpoint>;
+export type CancelSubscriptionResponse = InferResponseType<CancelSubscriptionEndpoint, 200>;
 
 // ============================================================================
 // Service Functions
@@ -38,9 +37,13 @@ export type CancelSubscriptionResponse = InferResponseType<CancelSubscriptionEnd
  * - Equal prices: Throws validation error
  * - Syncs fresh data from Stripe API
  */
-export async function switchSubscriptionService(data: SwitchSubscriptionRequest) {
+export async function switchSubscriptionService(data: SwitchSubscriptionRequest): Promise<SwitchSubscriptionResponse> {
   const client = createApiClient();
-  return parseResponse(client.billing.subscriptions[':id'].switch.$post(data));
+  const res = await client.billing.subscriptions[':id'].switch.$post(data);
+  if (!res.ok) {
+    throw new ServiceFetchError(`Failed to switch subscription: ${res.statusText}`, res.status, res.statusText);
+  }
+  return res.json();
 }
 
 /**
@@ -50,7 +53,11 @@ export async function switchSubscriptionService(data: SwitchSubscriptionRequest)
  * - Default: Cancel at period end (user retains access)
  * - Optional: Cancel immediately (user loses access now)
  */
-export async function cancelSubscriptionService(data: CancelSubscriptionRequest) {
+export async function cancelSubscriptionService(data: CancelSubscriptionRequest): Promise<CancelSubscriptionResponse> {
   const client = createApiClient();
-  return parseResponse(client.billing.subscriptions[':id'].cancel.$post(data));
+  const res = await client.billing.subscriptions[':id'].cancel.$post(data);
+  if (!res.ok) {
+    throw new ServiceFetchError(`Failed to cancel subscription: ${res.statusText}`, res.status, res.statusText);
+  }
+  return res.json();
 }

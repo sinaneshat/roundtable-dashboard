@@ -1157,15 +1157,15 @@ export async function prepareValidatedMessages(
   // All files use URL-based delivery for efficiency (no memory-intensive base64 encoding)
   const [previousMessages, firstAttachmentLoad] = await Promise.all([
     chatMessagesToUIMessages(previousDbMessages),
-    limitedAttachmentIds && limitedAttachmentIds.length > 0 && db && canUseUrlLoading
+    limitedAttachmentIds && limitedAttachmentIds.length > 0 && db && canUseUrlLoading && baseUrl && userId && secret
       ? loadAttachmentContentUrl({
           attachmentIds: limitedAttachmentIds,
           r2Bucket,
           db,
           logger,
-          baseUrl: baseUrl!,
-          userId: userId!,
-          secret: secret!,
+          baseUrl,
+          userId,
+          secret,
           threadId,
         })
       : Promise.resolve(null),
@@ -1263,15 +1263,15 @@ export async function prepareValidatedMessages(
         try {
           // Use URL-based loading to avoid memory-intensive base64 encoding
           // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
-          const loadResult = canUseUrlLoading
+          const loadResult = canUseUrlLoading && baseUrl && userId && secret
             ? await loadAttachmentContentUrl({
                 attachmentIds: uploadIdsFromUrls,
                 r2Bucket,
                 db,
                 logger,
-                baseUrl: baseUrl!,
-                userId: userId!,
-                secret: secret!,
+                baseUrl,
+                userId,
+                secret,
                 threadId,
               })
             : await loadAttachmentContent({
@@ -1353,15 +1353,15 @@ export async function prepareValidatedMessages(
 
         try {
           // Use URL-based loading to avoid memory-intensive base64 encoding
-          const loadResult = canUseUrlLoading
+          const loadResult = canUseUrlLoading && baseUrl && userId && secret
             ? await loadAttachmentContentUrl({
                 attachmentIds: uploadIdsFromParts,
                 r2Bucket,
                 db,
                 logger,
-                baseUrl: baseUrl!,
-                userId: userId!,
-                secret: secret!,
+                baseUrl,
+                userId,
+                secret,
                 threadId,
               })
             : await loadAttachmentContent({
@@ -1460,15 +1460,15 @@ export async function prepareValidatedMessages(
       if (messageIdsToCheck.length > 0) {
         // Use URL-based loading to avoid memory-intensive base64 encoding
         // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
-        const loadResult = canUseUrlLoading
+        const loadResult = canUseUrlLoading && baseUrl && userId && secret
           ? await loadMessageAttachmentsUrl({
               messageIds: messageIdsToCheck,
               r2Bucket,
               db,
               logger,
-              baseUrl: baseUrl!,
-              userId: userId!,
-              secret: secret!,
+              baseUrl,
+              userId,
+              secret,
               threadId,
             })
           : await loadMessageAttachments({
@@ -1639,7 +1639,7 @@ export async function prepareValidatedMessages(
       try {
         // ✅ MEMORY SAFETY: Use URL-based loading to avoid memory exhaustion
         // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
-        if (canUseUrlLoading) {
+        if (canUseUrlLoading && baseUrl && userId && secret) {
           // URL-based loading - files parts will have URLs, not raw data
           // The AI provider will fetch the file directly, avoiding Worker memory limits
           const { fileParts: urlParts, extractedTextContent, stats } = await loadAttachmentContentUrl({
@@ -1647,9 +1647,9 @@ export async function prepareValidatedMessages(
             r2Bucket,
             db,
             logger,
-            baseUrl: baseUrl!,
-            userId: userId!,
-            secret: secret!,
+            baseUrl,
+            userId,
+            secret,
             threadId,
           });
 

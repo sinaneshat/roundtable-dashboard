@@ -33,7 +33,7 @@
 import { FinishReasons, MessageRoles, MessageStatuses } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
-import type { DbAssistantMessageMetadata } from '@/types/api';
+import type { DbAssistantMessageMetadata } from '@/services/api';
 
 // ============================================================================
 // TEST HELPERS
@@ -375,7 +375,10 @@ describe('pre-Search SSE Events', () => {
       };
 
       expect(resultData.results).toHaveLength(3);
-      expect(resultData.results[0]!.score).toBe(0.9);
+      const firstResult = resultData.results[0];
+      if (!firstResult)
+        throw new Error('Expected first result');
+      expect(firstResult.score).toBe(0.9);
     });
   });
 
@@ -836,7 +839,9 @@ describe('stream Timing', () => {
         }
       });
 
-      const duration = endTime! - startTime;
+      if (endTime === null)
+        throw new Error('Expected endTime to be set');
+      const duration = endTime - startTime;
       expect(duration).toBeGreaterThanOrEqual(0);
     });
   });

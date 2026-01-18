@@ -21,7 +21,7 @@ import {
   hasError as checkHasError, // eslint-disable-line perfectionist/sort-named-imports -- simple-import-sort conflicts with perfectionist on aliased imports
 } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 import {
   getMessageStreamingStatus,

@@ -1,5 +1,5 @@
 /* eslint-disable simple-import-sort/imports -- Circular fix conflict in ESLint config */
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 
 import { Icons } from '@/components/icons';
 import { z } from 'zod';
@@ -70,7 +70,7 @@ function AttachmentThumbnail({
     needsFetch,
   );
 
-  const resolvedUrl = downloadUrlResult ? (downloadUrlResult as any).data?.url ?? null : null;
+  const resolvedUrl = (downloadUrlResult?.success && downloadUrlResult.data.url) ? downloadUrlResult.data.url : null;
   const effectiveUrl = resolvedUrl ?? originalUrl;
   const hasValidUrl = isValidDisplayUrl(effectiveUrl);
   const canShowImage = isImage && hasValidUrl;

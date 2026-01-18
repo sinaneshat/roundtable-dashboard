@@ -10,8 +10,9 @@
  * @module lib/utils/date-transforms
  */
 
-import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
-import { StoredPreSearchSchema } from '@/types/api';
+import type { ApiMessage, ChatParticipant, ChatThread } from '@/services/api';
+import type { StoredPreSearchValidated } from '@/services/api/chat/pre-search';
+import { StoredPreSearchSchema } from '@/services/api/chat/pre-search';
 
 // ============================================================================
 // CORE DATE UTILITIES
@@ -156,7 +157,7 @@ export function transformChatParticipant(
 }
 
 /**
- * Transform ChatMessage API response with date fields
+ * Transform ApiMessage API response with date fields
  *
  * **SINGLE SOURCE OF TRUTH**: Use for all message data transformations.
  *
@@ -172,10 +173,10 @@ export function transformChatParticipant(
  * ```
  */
 export function transformChatMessage(
-  message: Omit<ChatMessage, 'createdAt'> & {
+  message: Omit<ApiMessage, 'createdAt'> & {
     createdAt: string | Date;
   },
-): ChatMessage {
+): ApiMessage {
   return {
     ...message,
     createdAt: toISOString(ensureDate(message.createdAt)),
@@ -239,23 +240,23 @@ export function transformChatParticipants(
  * ```
  */
 export function transformChatMessages(
-  messages: Array<Omit<ChatMessage, 'createdAt'> & {
+  messages: Array<Omit<ApiMessage, 'createdAt'> & {
     createdAt: string | Date;
   }>,
-): ChatMessage[] {
+): ApiMessage[] {
   return messages.map(transformChatMessage);
 }
 
 /**
  * Transform a single pre-search from API format to application format
- * Converts string dates to Date objects for type safety
+ * Validates against schema - dates remain as strings (JSON serialization format)
  *
  * @param preSearch - Raw pre-search from API (validated against StoredPreSearchSchema)
- * @returns Pre-search with Date objects, or null if validation fails
+ * @returns Validated pre-search, or null if validation fails
  */
 export function transformPreSearch(
   preSearch: unknown,
-): StoredPreSearch | null {
+): StoredPreSearchValidated | null {
   const result = StoredPreSearchSchema.safeParse(preSearch);
 
   if (!result.success) {
@@ -263,11 +264,8 @@ export function transformPreSearch(
     return null;
   }
 
-  return {
-    ...result.data,
-    createdAt: ensureDate(result.data.createdAt),
-    completedAt: result.data.completedAt ? ensureDate(result.data.completedAt) : null,
-  };
+  // Dates remain as strings (JSON serialization format from RPC)
+  return result.data;
 }
 
 /**
@@ -277,7 +275,7 @@ export function transformPreSearch(
  * ✅ FOLLOWS: transformModerators pattern exactly
  *
  * @param preSearches - Array of raw pre-searches from API (validated against schema)
- * @returns Array of pre-searches with Date objects (filters out validation failures)
+ * @returns Array of pre-searches with validated types (filters out validation failures)
  *
  * @example
  * ```typescript
@@ -286,10 +284,10 @@ export function transformPreSearch(
  */
 export function transformPreSearches(
   preSearches: unknown[],
-): StoredPreSearch[] {
+): StoredPreSearchValidated[] {
   return preSearches
     .map(transformPreSearch)
-    .filter((item): item is StoredPreSearch => item !== null);
+    .filter((item): item is StoredPreSearchValidated => item !== null);
 }
 
 // ============================================================================
@@ -310,7 +308,7 @@ export type ThreadDataBundle = {
     createdAt: string | Date;
     updatedAt: string | Date;
   }>;
-  messages?: Array<Omit<ChatMessage, 'createdAt'> & {
+  messages?: Array<Omit<ApiMessage, 'createdAt'> & {
     createdAt: string | Date;
   }>;
 };
@@ -321,7 +319,7 @@ export type ThreadDataBundle = {
 export type TransformedThreadDataBundle = {
   thread?: ChatThread;
   participants?: ChatParticipant[];
-  messages?: ChatMessage[];
+  messages?: ApiMessage[];
 };
 
 /**

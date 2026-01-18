@@ -18,6 +18,14 @@ function findLocalDbFile(): string {
   }
 }
 
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
 const isLocal = process.env.WEBAPP_ENV === 'local';
 const isPreview = process.env.WEBAPP_ENV === 'preview';
 
@@ -32,11 +40,11 @@ export default defineConfig({
     : {
         driver: 'd1-http',
         dbCredentials: {
-          accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
-          token: process.env.D1_TOKEN!,
+          accountId: requireEnv('CLOUDFLARE_ACCOUNT_ID'),
+          token: requireEnv('D1_TOKEN'),
           databaseId: isPreview
-            ? process.env.PREVIEW_DATABASE_ID!
-            : process.env.PROD_DATABASE_ID!,
+            ? requireEnv('PREVIEW_DATABASE_ID')
+            : requireEnv('PROD_DATABASE_ID'),
         },
       }),
 });

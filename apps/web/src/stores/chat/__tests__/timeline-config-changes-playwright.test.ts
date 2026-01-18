@@ -18,11 +18,12 @@ import {
   MessageRoles,
   MessageStatuses,
 } from '@roundtable/shared';
+import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
-import { createMockStoredPreSearch, createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
-import type { ChatParticipant, ChatThread, DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/types/api';
+import { createMockStoredPreSearch, createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
+import type { ChatParticipant, ChatThread, DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/services/api';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
@@ -356,8 +357,11 @@ describe('mode Change Timeline Tests', () => {
       const modes: ConversationMode[] = [ChatModes.BRAINSTORMING, ChatModes.ANALYZING, ChatModes.DEBATING, ChatModes.SOLVING];
 
       for (let i = 0; i < modes.length - 1; i++) {
-        const fromMode = modes[i]!;
-        const toMode = modes[i + 1]!;
+        const fromMode = modes[i];
+        const toMode = modes[i + 1];
+        if (!fromMode || !toMode) {
+          throw new Error(`Expected modes at indices ${i} and ${i + 1}`);
+        }
 
         const prevConfig: RoundConfiguration = {
           roundNumber: i,
@@ -422,9 +426,14 @@ describe('mode Change Timeline Tests', () => {
       const allChangelog: ChangelogEntry[] = [];
 
       for (let i = 1; i < configs.length; i++) {
-        const changes = detectConfigChanges(configs[i - 1]!, configs[i]!);
+        const prevConfig = configs[i - 1];
+        const currConfig = configs[i];
+        if (!prevConfig || !currConfig) {
+          throw new Error(`Expected configs at indices ${i - 1} and ${i}`);
+        }
+        const changes = detectConfigChanges(prevConfig, currConfig);
         if (changes.modeChanged) {
-          const entries = buildChangelogEntries(threadId, i, changes, configs[i - 1]!, configs[i]!);
+          const entries = buildChangelogEntries(threadId, i, changes, prevConfig, currConfig);
           allChangelog.push(...entries);
         }
       }
@@ -542,9 +551,14 @@ describe('web Search Toggle Timeline Tests', () => {
       const allChangelog: ChangelogEntry[] = [];
 
       for (let i = 1; i < configs.length; i++) {
-        const changes = detectConfigChanges(configs[i - 1]!, configs[i]!);
+        const prevConfig = configs[i - 1];
+        const currConfig = configs[i];
+        if (!prevConfig || !currConfig) {
+          throw new Error(`Expected configs at indices ${i - 1} and ${i}`);
+        }
+        const changes = detectConfigChanges(prevConfig, currConfig);
         if (changes.webSearchToggled) {
-          const entries = buildChangelogEntries('thread-123', i, changes, configs[i - 1]!, configs[i]!);
+          const entries = buildChangelogEntries('thread-123', i, changes, prevConfig, currConfig);
           allChangelog.push(...entries);
         }
       }
@@ -1326,7 +1340,8 @@ describe('round Number Consistency', () => {
 
     // Extract round from ID
     const idMatch = messageId.match(/_r(\d+)_p(\d+)/);
-    const roundFromId = idMatch ? Number.parseInt(idMatch[1]!, 10) : null;
+    const roundCapture = idMatch?.[1];
+    const roundFromId = roundCapture ? Number.parseInt(roundCapture, 10) : null;
     const roundFromMetadata = metadata.roundNumber;
 
     expect(roundFromId).toBe(2);

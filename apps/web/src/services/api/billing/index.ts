@@ -39,6 +39,8 @@ export {
   getProductService,
   getProductsService,
   type ListProductsResponse,
+  type Price,
+  type Product,
 } from './products';
 
 // Subscriptions
@@ -48,4 +50,5 @@ export {
   getSubscriptionService,
   getSubscriptionsService,
   type ListSubscriptionsResponse,
+  type Subscription,
 } from './subscriptions';

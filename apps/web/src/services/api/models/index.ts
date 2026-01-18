@@ -9,4 +9,5 @@ export {
   listModelsPublicService,
   type ListModelsResponse,
   listModelsService,
+  type Model,
 } from './models';

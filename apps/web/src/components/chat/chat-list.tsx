@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { motion } from 'motion/react';
 import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -20,8 +21,8 @@ import {
 } from '@/components/ui/sidebar';
 import { useToggleFavoriteMutation, useUpdateThreadMutation } from '@/hooks/mutations';
 import { useCurrentPathname } from '@/hooks/utils';
-import { Link, useTranslations } from '@/lib/compat';
-import type { ChatSidebarItem } from '@/types/api';
+import { useTranslations } from '@/lib/i18n';
+import type { ChatSidebarItem } from '@/services/api';
 
 function isChatActive(chat: ChatSidebarItem, pathname: string): boolean {
   const currentSlugUrl = `/chat/${chat.slug}`;
@@ -87,8 +88,8 @@ function ChatItem({
               isActive={isActive}
             >
               <Link
-                href={chatUrl}
-                prefetch={false}
+                to={chatUrl}
+                preload={false}
               >
                 <div
                   className="truncate overflow-hidden text-ellipsis whitespace-nowrap"

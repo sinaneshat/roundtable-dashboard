@@ -20,7 +20,7 @@ import { ChatModes, MessageRoles, MessageStatuses, ScreenModes } from '@roundtab
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';

@@ -10,8 +10,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { useTranslations } from '@/lib/compat';
 import { formatDate } from '@/lib/format';
+import { useTranslations } from '@/lib/i18n';
 
 export type CancelSubscriptionDialogProps = {
   open: boolean;

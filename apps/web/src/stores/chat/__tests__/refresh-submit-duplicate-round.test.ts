@@ -42,9 +42,12 @@ import {
   createTestUserMessage,
 } from '@/lib/testing';
 import { getCurrentRoundNumber, getRoundNumber } from '@/lib/utils';
-import type { PreSearchRecord } from '@/types/api';
+import type { StoredPreSearch } from '@/services/api';
 
 import type { ChatStore } from '../store-schemas';
+
+// Type alias for backwards compatibility with test helpers
+type PreSearchRecord = StoredPreSearch;
 
 // ============================================================================
 // MOCK SETUP

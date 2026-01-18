@@ -131,10 +131,12 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
     }
 
     // Group by round in same pass (eliminates second loop)
-    if (!result.has(roundNumber)) {
-      result.set(roundNumber, []);
+    const existing = result.get(roundNumber);
+    if (existing) {
+      existing.push(message);
+    } else {
+      result.set(roundNumber, [message]);
     }
-    result.get(roundNumber)!.push(message);
   }
 
   return result;

@@ -10,7 +10,7 @@ You are an i18n Translation Manager Agent specializing in managing translation k
 ## Important Context
 
 **Translation System Status:**
-- ✅ Translation keys maintained via `useTranslations()` from next-intl
+- ✅ Translation keys maintained via `useTranslations()` from `@/lib/compat`
 - ✅ English locale file: `/src/i18n/locales/en/common.json`
 - ✅ Components use `t('key.path')` pattern for all user-facing text
 - ❌ NO Persian/Farsi translations (removed)
@@ -52,7 +52,7 @@ Ensure components use translation keys, NOT hardcoded strings:
 
 ```tsx
 // ✅ CORRECT - Using translation keys
-import { useTranslations } from 'next-intl';
+import { useTranslations } from '@/lib/compat';
 
 export function PaymentMethodCard() {
   const t = useTranslations('paymentMethods');

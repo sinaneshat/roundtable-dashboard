@@ -139,7 +139,9 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
             if (idx === -1)
               return prev;
             const updated = [...prev];
-            const existing = updated[idx]!;
+            const existing = updated[idx];
+            if (!existing)
+              return prev;
             updated[idx] = {
               id: existing.id,
               file: existing.file,
@@ -187,7 +189,9 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
         if (idx === -1)
           return prev;
         const updated = [...prev];
-        const existing = updated[idx]!;
+        const existing = updated[idx];
+        if (!existing)
+          return prev;
         updated[idx] = {
           id: existing.id,
           file: existing.file,
@@ -210,7 +214,9 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
         if (idx === -1)
           return prev;
         const updated = [...prev];
-        const existing = updated[idx]!;
+        const existing = updated[idx];
+        if (!existing)
+          return prev;
         updated[idx] = {
           id: existing.id,
           file: existing.file,

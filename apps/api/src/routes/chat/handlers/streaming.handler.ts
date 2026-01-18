@@ -328,7 +328,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         const nextRoundNumber = currentRoundNumber + 1;
         const updateOperations: Promise<unknown>[] = [];
 
-        if (shouldUpdateMode) {
+        if (shouldUpdateMode && providedMode) {
           // Update thread mode
           updateOperations.push(
             db.update(tables.chatThread)
@@ -345,12 +345,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               threadId,
               nextRoundNumber,
               thread.mode,
-              providedMode!,
+              providedMode,
             ),
           );
         }
 
-        if (shouldUpdateWebSearch) {
+        if (shouldUpdateWebSearch && providedEnableWebSearch !== undefined) {
           // Update thread web search setting
           updateOperations.push(
             db.update(tables.chatThread)
@@ -366,7 +366,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             logWebSearchToggle(
               threadId,
               nextRoundNumber,
-              providedEnableWebSearch!,
+              providedEnableWebSearch,
             ),
           );
         }
@@ -375,11 +375,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         await Promise.all(updateOperations);
 
         // Update local thread object
-        if (shouldUpdateMode) {
-          thread.mode = providedMode!;
+        if (shouldUpdateMode && providedMode) {
+          thread.mode = providedMode;
         }
-        if (shouldUpdateWebSearch) {
-          thread.enableWebSearch = providedEnableWebSearch!;
+        if (shouldUpdateWebSearch && providedEnableWebSearch !== undefined) {
+          thread.enableWebSearch = providedEnableWebSearch;
         }
       }
 
@@ -445,12 +445,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Only check on first participant (P0) since this is the start of a round
       // Uses the same estimation logic that reserveCredits uses later
       // This prevents wasted computation when the user clearly can't afford it
-      if ((participantIndex ?? 0) === 0 && participants.length > 0) {
-        const firstParticipant = participants[0]!;
-        let highestMultiplierModel = firstParticipant;
-        let maxMultiplier = getModelCreditMultiplierById(firstParticipant.modelId, getModelById);
+      const earlyCheckFirstParticipant = participants[0];
+      if ((participantIndex ?? 0) === 0 && earlyCheckFirstParticipant !== undefined) {
+        let highestMultiplierModel = earlyCheckFirstParticipant;
+        let maxMultiplier = getModelCreditMultiplierById(earlyCheckFirstParticipant.modelId, getModelById);
         for (let i = 1; i < participants.length; i++) {
-          const p = participants[i]!;
+          const p = participants[i];
+          if (p === undefined) {
+            continue;
+          }
           const multiplier = getModelCreditMultiplierById(p.modelId, getModelById);
           if (multiplier > maxMultiplier) {
             maxMultiplier = multiplier;
@@ -898,7 +901,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       let highestMultiplierModel = firstParticipant;
       let maxMultiplier = getModelCreditMultiplierById(firstParticipant.modelId, getModelById);
       for (let i = 1; i < participants.length; i++) {
-        const p = participants[i]!;
+        const p = participants[i];
+        if (p === undefined) {
+          continue;
+        }
         const multiplier = getModelCreditMultiplierById(p.modelId, getModelById);
         if (multiplier > maxMultiplier) {
           maxMultiplier = multiplier;

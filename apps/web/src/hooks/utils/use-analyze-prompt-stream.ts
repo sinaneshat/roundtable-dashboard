@@ -18,9 +18,9 @@
 import { AnalyzePromptSseEvents } from '@roundtable/shared';
 import { useCallback, useRef, useState } from 'react';
 
+import type { AnalyzePromptPayload } from '@/services/api';
 import { analyzePromptStreamService } from '@/services/api';
 import { AUTO_MODE_FALLBACK_CONFIG } from '@/stores/chat/store-defaults';
-import type { AnalyzePromptPayload } from '@/types/api';
 
 type AnalyzePromptStreamState = {
   isStreaming: boolean;

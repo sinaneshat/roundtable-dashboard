@@ -26,7 +26,7 @@ import {
   participantConfigToOptimistic,
   prepareParticipantUpdate,
 } from '@/lib/utils';
-import type { ChatParticipant, StoredPreSearch } from '@/types/api';
+import type { ChatParticipant, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -155,8 +155,12 @@ describe('participant ID handling between rounds', () => {
         createMockParticipant(1, ModelIds.GOOGLE_GEMINI_2_5_FLASH),
       ];
 
+      const firstParticipant = currentParticipants[0];
+      if (!firstParticipant)
+        throw new Error('expected first participant');
+
       const selectedParticipants = [
-        createExistingParticipantConfig(currentParticipants[0]!),
+        createExistingParticipantConfig(firstParticipant),
         createNewParticipantConfig(1, ModelIds.OPENAI_GPT_4_1),
       ];
 
@@ -331,7 +335,7 @@ describe('store state during participant change', () => {
           metadata: {
             role: MessageRoles.ASSISTANT,
             roundNumber: 0,
-            participantId: initialParticipants[0]!.id,
+            participantId: initialParticipants[0].id,
             participantIndex: 0,
             model: ModelIds.X_AI_GROK_4_FAST,
           },
@@ -343,12 +347,21 @@ describe('store state during participant change', () => {
           metadata: {
             role: MessageRoles.ASSISTANT,
             roundNumber: 0,
-            participantId: initialParticipants[1]!.id,
+            participantId: initialParticipants[1].id,
             participantIndex: 1,
             model: ModelIds.GOOGLE_GEMINI_2_5_FLASH,
           },
         },
       ];
+
+      const participant0 = initialParticipants[0];
+      if (!participant0)
+        throw new Error('expected participant 0');
+
+      const participant1 = initialParticipants[1];
+      if (!participant1)
+        throw new Error('expected participant 1');
+
       store.getState().setMessages(messages);
 
       const storedMessages = store.getState().messages;
@@ -360,8 +373,8 @@ describe('store state during participant change', () => {
         return metadata.participantId;
       });
 
-      expect(participantIds).toContain(initialParticipants[0]!.id);
-      expect(participantIds).toContain(initialParticipants[1]!.id);
+      expect(participantIds).toContain(participant0.id);
+      expect(participantIds).toContain(participant1.id);
     });
 
     it('should detect when messages reference OLD participants after update', () => {
@@ -387,12 +400,17 @@ describe('store state during participant change', () => {
           metadata: {
             role: MessageRoles.ASSISTANT,
             roundNumber: 0,
-            participantId: round0Participants[0]!.id,
+            participantId: round0Participants[0].id,
             participantIndex: 0,
             model: ModelIds.X_AI_GROK_4_FAST,
           },
         },
       ];
+
+      const firstRound0Participant = round0Participants[0];
+      if (!firstRound0Participant)
+        throw new Error('expected first round 0 participant');
+
       store.getState().setMessages(messages);
 
       const newParticipants: ChatParticipant[] = [

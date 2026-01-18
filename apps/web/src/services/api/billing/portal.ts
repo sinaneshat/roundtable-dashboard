@@ -6,10 +6,9 @@
  */
 
 import type { InferRequestType, InferResponseType } from 'hono/client';
-import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/lib/api/client';
-import { createApiClient } from '@/lib/api/client';
+import { createApiClient, ServiceFetchError } from '@/lib/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
@@ -17,7 +16,7 @@ import { createApiClient } from '@/lib/api/client';
 
 type CreatePortalEndpoint = ApiClientType['billing']['portal']['$post'];
 export type CreateCustomerPortalSessionRequest = InferRequestType<CreatePortalEndpoint>;
-export type CreateCustomerPortalSessionResponse = InferResponseType<CreatePortalEndpoint>;
+export type CreateCustomerPortalSessionResponse = InferResponseType<CreatePortalEndpoint, 200>;
 
 // ============================================================================
 // Service Functions
@@ -30,7 +29,11 @@ export type CreateCustomerPortalSessionResponse = InferResponseType<CreatePortal
  * Returns a URL to redirect the user to Stripe's customer portal
  * where they can manage payment methods and download invoices
  */
-export async function createCustomerPortalSessionService(data: CreateCustomerPortalSessionRequest) {
+export async function createCustomerPortalSessionService(data: CreateCustomerPortalSessionRequest): Promise<CreateCustomerPortalSessionResponse> {
   const client = createApiClient();
-  return parseResponse(client.billing.portal.$post(data));
+  const res = await client.billing.portal.$post(data);
+  if (!res.ok) {
+    throw new ServiceFetchError(`Failed to create portal session: ${res.statusText}`, res.status, res.statusText);
+  }
+  return res.json();
 }

@@ -1,6 +1,6 @@
 import { ChatAlertBanner } from '@/components/chat/chat-alert-banner';
 import { useFreeTrialState } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 
 /**
  * Free Trial Alert - Shows upgrade prompt for free users

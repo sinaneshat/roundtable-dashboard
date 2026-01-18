@@ -23,7 +23,7 @@ import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getRoundNumber } from '@/lib/utils';
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -143,7 +143,10 @@ function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessage[]> {
     if (!messagesByRound.has(roundNum)) {
       messagesByRound.set(roundNum, []);
     }
-    messagesByRound.get(roundNum)!.push(message);
+    const roundMessages = messagesByRound.get(roundNum);
+    if (!roundMessages)
+      throw new Error(`Expected round ${roundNum} messages to exist`);
+    roundMessages.push(message);
   });
 
   return messagesByRound;
@@ -240,11 +243,11 @@ describe('message Visibility E2E', () => {
 
       expect(messagesByRound.has(0)).toBe(true);
 
-      const round0 = messagesByRound.get(0)!;
-      const userMessage = round0.find(m => m.role === MessageRoles.USER);
+      const round0 = messagesByRound.get(0);
+      const userMessage = round0 ? round0.find(m => m.role === MessageRoles.USER) : undefined;
 
       expect(userMessage).toBeDefined();
-      expect(userMessage!.parts[0]).toEqual({ type: 'text', text: 'Initial question' });
+      expect(userMessage?.parts[0]).toEqual({ type: 'text', text: 'Initial question' });
     });
 
     it('sTEP 3: User message survives deduplication', () => {
@@ -259,7 +262,9 @@ describe('message Visibility E2E', () => {
     it('sTEP 4: All messages visible in final render pipeline', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
-      const round0 = messagesByRound.get(0)!;
+      const round0 = messagesByRound.get(0);
+      if (!round0)
+        throw new Error('Expected round 0 messages to exist');
       const deduplicated = deduplicateMessages(round0);
 
       // Should have: 1 user + 2 participants + 1 moderator = 4 messages
@@ -300,7 +305,9 @@ describe('message Visibility E2E', () => {
 
       expect(messagesByRound.has(1)).toBe(true);
 
-      const round1 = messagesByRound.get(1)!;
+      const round1 = messagesByRound.get(1);
+      if (!round1)
+        throw new Error('Expected round 1 messages to exist');
       expect(round1).toHaveLength(1);
       expect(round1[0].role).toBe(MessageRoles.USER);
       expect(round1[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
@@ -312,7 +319,9 @@ describe('message Visibility E2E', () => {
 
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
-      const round1 = messagesByRound.get(1)!;
+      const round1 = messagesByRound.get(1);
+      if (!round1)
+        throw new Error('Expected round 1 messages to exist');
       const deduplicated = deduplicateMessages(round1);
 
       expect(deduplicated).toHaveLength(1);
@@ -331,7 +340,9 @@ describe('message Visibility E2E', () => {
 
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
-      const round1 = messagesByRound.get(1)!;
+      const round1 = messagesByRound.get(1);
+      if (!round1)
+        throw new Error('Expected round 1 messages to exist');
       const deduplicated = deduplicateMessages(round1);
 
       // Should have only DB message (optimistic replaced)
@@ -437,19 +448,25 @@ describe('message Visibility E2E', () => {
       const messagesByRound = groupMessagesByRound(messages);
 
       // Round 0
-      const round0 = messagesByRound.get(0)!;
+      const round0 = messagesByRound.get(0);
+      if (!round0)
+        throw new Error('Expected round 0 messages to exist');
       const round0Dedup = deduplicateMessages(round0);
       const round0User = round0Dedup.find(m => m.role === MessageRoles.USER);
       expect(round0User?.parts[0]).toEqual({ type: 'text', text: 'Initial question' });
 
       // Round 1
-      const round1 = messagesByRound.get(1)!;
+      const round1 = messagesByRound.get(1);
+      if (!round1)
+        throw new Error('Expected round 1 messages to exist');
       const round1Dedup = deduplicateMessages(round1);
       const round1User = round1Dedup.find(m => m.role === MessageRoles.USER);
       expect(round1User?.parts[0]).toEqual({ type: 'text', text: 'Follow-up 1' });
 
       // Round 2
-      const round2 = messagesByRound.get(2)!;
+      const round2 = messagesByRound.get(2);
+      if (!round2)
+        throw new Error('Expected round 2 messages to exist');
       const round2Dedup = deduplicateMessages(round2);
       const round2User = round2Dedup.find(m => m.role === MessageRoles.USER);
       expect(round2User?.parts[0]).toEqual({ type: 'text', text: 'Follow-up 2' });
@@ -591,12 +608,12 @@ describe('message Visibility E2E', () => {
     it('user message: round 0', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
-      const round0 = messagesByRound.get(0)!;
-      const deduplicated = deduplicateMessages(round0);
+      const round0 = messagesByRound.get(0);
+      const deduplicated = round0 ? deduplicateMessages(round0) : [];
 
       const userMsg = deduplicated.find(m => m.role === MessageRoles.USER);
       expect(userMsg).toBeDefined();
-      expect(userMsg!.parts[0]).toEqual({ type: 'text', text: 'Initial question' });
+      expect(userMsg?.parts[0]).toEqual({ type: 'text', text: 'Initial question' });
     });
 
     it('user message: round 1', () => {
@@ -605,12 +622,12 @@ describe('message Visibility E2E', () => {
 
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
-      const round1 = messagesByRound.get(1)!;
-      const deduplicated = deduplicateMessages(round1);
+      const round1 = messagesByRound.get(1);
+      const deduplicated = round1 ? deduplicateMessages(round1) : [];
 
       const userMsg = deduplicated.find(m => m.role === MessageRoles.USER);
       expect(userMsg).toBeDefined();
-      expect(userMsg!.parts[0]).toEqual({ type: 'text', text: 'Q1' });
+      expect(userMsg?.parts[0]).toEqual({ type: 'text', text: 'Q1' });
     });
 
     it('user message: round 2+', () => {
@@ -622,18 +639,20 @@ describe('message Visibility E2E', () => {
 
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
-      const round2 = messagesByRound.get(2)!;
-      const deduplicated = deduplicateMessages(round2);
+      const round2 = messagesByRound.get(2);
+      const deduplicated = round2 ? deduplicateMessages(round2) : [];
 
       const userMsg = deduplicated.find(m => m.role === MessageRoles.USER);
       expect(userMsg).toBeDefined();
-      expect(userMsg!.parts[0]).toEqual({ type: 'text', text: 'Q2' });
+      expect(userMsg?.parts[0]).toEqual({ type: 'text', text: 'Q2' });
     });
 
     it('participant message: round 0', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
-      const round0 = messagesByRound.get(0)!;
+      const round0 = messagesByRound.get(0);
+      if (!round0)
+        throw new Error('Expected round 0 messages to exist');
       const deduplicated = deduplicateMessages(round0);
 
       const participantMsgs = deduplicated.filter(
@@ -652,7 +671,9 @@ describe('message Visibility E2E', () => {
 
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
-      const round1 = messagesByRound.get(1)!;
+      const round1 = messagesByRound.get(1);
+      if (!round1)
+        throw new Error('Expected round 1 messages to exist');
       const deduplicated = deduplicateMessages(round1);
 
       const participantMsgs = deduplicated.filter(
@@ -664,12 +685,12 @@ describe('message Visibility E2E', () => {
     it('moderator message: round 0', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
-      const round0 = messagesByRound.get(0)!;
-      const deduplicated = deduplicateMessages(round0);
+      const round0 = messagesByRound.get(0);
+      const deduplicated = round0 ? deduplicateMessages(round0) : [];
 
       const moderatorMsg = deduplicated.find(m => m.metadata?.isModerator === true);
       expect(moderatorMsg).toBeDefined();
-      expect(moderatorMsg!.parts[0]).toEqual({ type: 'text', text: 'Summary' });
+      expect(moderatorMsg?.parts[0]).toEqual({ type: 'text', text: 'Summary' });
     });
 
     it('moderator message: round 1', () => {
@@ -683,12 +704,12 @@ describe('message Visibility E2E', () => {
 
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
-      const round1 = messagesByRound.get(1)!;
-      const deduplicated = deduplicateMessages(round1);
+      const round1 = messagesByRound.get(1);
+      const deduplicated = round1 ? deduplicateMessages(round1) : [];
 
       const moderatorMsg = deduplicated.find(m => m.metadata?.isModerator === true);
       expect(moderatorMsg).toBeDefined();
-      expect(moderatorMsg!.parts[0]).toEqual({ type: 'text', text: 'Summary 1' });
+      expect(moderatorMsg?.parts[0]).toEqual({ type: 'text', text: 'Summary 1' });
     });
   });
 });

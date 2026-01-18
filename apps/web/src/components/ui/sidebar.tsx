@@ -24,7 +24,7 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 import { Skeleton } from './skeleton';

@@ -30,7 +30,7 @@ import {
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/types/api';
+import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/services/api';
 
 // ============================================================================
 // TEST HELPERS
@@ -283,8 +283,13 @@ describe('timestamp Sequences', () => {
       const timeline = buildRoundTimeline(0, 3, new Date());
 
       for (let i = 1; i < timeline.length; i++) {
-        const prevTime = timeline[i - 1]!.timestamp.getTime();
-        const currTime = timeline[i]!.timestamp.getTime();
+        const prevElement = timeline[i - 1];
+        const currElement = timeline[i];
+        if (!prevElement || !currElement) {
+          throw new Error(`Expected timeline elements at indices ${i - 1} and ${i}`);
+        }
+        const prevTime = prevElement.timestamp.getTime();
+        const currTime = currElement.timestamp.getTime();
         expect(currTime).toBeGreaterThan(prevTime);
       }
     });
@@ -295,8 +300,13 @@ describe('timestamp Sequences', () => {
       const allElements = [...round0, ...round1];
 
       for (let i = 1; i < allElements.length; i++) {
-        const prevTime = allElements[i - 1]!.timestamp.getTime();
-        const currTime = allElements[i]!.timestamp.getTime();
+        const prevElement = allElements[i - 1];
+        const currElement = allElements[i];
+        if (!prevElement || !currElement) {
+          throw new Error(`Expected elements at indices ${i - 1} and ${i}`);
+        }
+        const prevTime = prevElement.timestamp.getTime();
+        const currTime = currElement.timestamp.getTime();
         expect(currTime).toBeGreaterThan(prevTime);
       }
     });

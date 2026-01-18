@@ -173,7 +173,11 @@ describe('moderator API Integration', () => {
       expect(moderatorCalls).toHaveLength(1);
       expect(moderatorCalls[0].url).toContain(`/threads/${threadId}/rounds/${roundNumber}/moderator`);
 
-      const body = JSON.parse(moderatorCalls[0].body!);
+      const firstCallBody = moderatorCalls[0].body;
+      if (!firstCallBody)
+        throw new Error('expected firstCallBody');
+
+      const body = JSON.parse(firstCallBody);
       expect(body.participantMessageIds).toEqual(participantMessageIds);
     });
 

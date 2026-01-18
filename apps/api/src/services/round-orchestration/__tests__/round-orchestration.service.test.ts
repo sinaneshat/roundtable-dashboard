@@ -247,7 +247,10 @@ describe('round orchestration service', () => {
         { expirationTtl: 3600 },
       );
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.participantStatuses).toEqual({ 0: ParticipantStreamStatuses.ACTIVE });
       expect(updatedState.triggeredParticipants).toEqual([0]);
     });
@@ -280,7 +283,10 @@ describe('round orchestration service', () => {
         env,
       );
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.triggeredParticipants).toEqual([0]);
     });
 
@@ -333,7 +339,10 @@ describe('round orchestration service', () => {
 
       expect(result.allParticipantsComplete).toBe(false);
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.participantStatuses).toEqual({
         0: ParticipantStreamStatuses.COMPLETED,
       });
@@ -383,7 +392,10 @@ describe('round orchestration service', () => {
 
       expect(result.allParticipantsComplete).toBe(true);
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.completedParticipants).toBe(2);
       expect(updatedState.phase).toBe(RoundExecutionPhases.MODERATOR);
     });
@@ -421,7 +433,10 @@ describe('round orchestration service', () => {
 
       expect(result.allParticipantsComplete).toBe(true);
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.completedParticipants).toBe(2);
       expect(updatedState.failedParticipants).toBe(1);
       expect(updatedState.phase).toBe(RoundExecutionPhases.MODERATOR);
@@ -478,7 +493,10 @@ describe('round orchestration service', () => {
 
       expect(result.allParticipantsComplete).toBe(false);
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.participantStatuses).toEqual({
         0: ParticipantStreamStatuses.FAILED,
       });
@@ -529,7 +547,10 @@ describe('round orchestration service', () => {
 
       expect(result.allParticipantsComplete).toBe(true);
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.phase).toBe(RoundExecutionPhases.MODERATOR);
     });
 
@@ -564,7 +585,10 @@ describe('round orchestration service', () => {
 
       expect(result.allParticipantsComplete).toBe(true);
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.failedParticipants).toBe(2);
       expect(updatedState.error).toBe('Complete failure');
     });
@@ -959,7 +983,10 @@ describe('round orchestration service', () => {
         logger,
       );
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.moderatorStatus).toBe(ParticipantStreamStatuses.COMPLETED);
       expect(updatedState.phase).toBe(RoundExecutionPhases.COMPLETE);
       expect(updatedState.status).toBe(RoundExecutionStatuses.COMPLETED);
@@ -1011,7 +1038,10 @@ describe('round orchestration service', () => {
         logger,
       );
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.moderatorStatus).toBe(ParticipantStreamStatuses.FAILED);
       expect(updatedState.phase).toBe(RoundExecutionPhases.COMPLETE);
       expect(updatedState.status).toBe(RoundExecutionStatuses.COMPLETED);
@@ -1062,7 +1092,10 @@ describe('round orchestration service', () => {
         logger,
       );
 
-      const updatedState = JSON.parse(mockKV.put.mock.calls[0]![1] as string);
+      const mockCall = mockKV.put.mock.calls[0];
+      if (!mockCall)
+        throw new Error('KV put not called');
+      const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.status).toBe(RoundExecutionStatuses.FAILED);
       expect(updatedState.error).toBe('Critical system error');
       expect(updatedState.completedAt).toBeDefined();

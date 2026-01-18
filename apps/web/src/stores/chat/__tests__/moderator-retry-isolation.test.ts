@@ -97,9 +97,18 @@ describe('moderator Retry Isolation', () => {
 
       // CRITICAL: Participant messages should still exist
       expect(getStoreState(store).messages).toHaveLength(4);
-      expect(getStoreState(store).messages[1]!.parts?.[0]).toEqual({ type: 'text', text: 'First response' });
-      expect(getStoreState(store).messages[2]!.parts?.[0]).toEqual({ type: 'text', text: 'Second response' });
-      expect(getStoreState(store).messages[3]!.parts?.[0]).toEqual({ type: 'text', text: 'Third response' });
+      const msg1 = getStoreState(store).messages[1];
+      if (!msg1)
+        throw new Error('expected message at index 1');
+      const msg2 = getStoreState(store).messages[2];
+      if (!msg2)
+        throw new Error('expected message at index 2');
+      const msg3 = getStoreState(store).messages[3];
+      if (!msg3)
+        throw new Error('expected message at index 3');
+      expect(msg1.parts?.[0]).toEqual({ type: 'text', text: 'First response' });
+      expect(msg2.parts?.[0]).toEqual({ type: 'text', text: 'Second response' });
+      expect(msg3.parts?.[0]).toEqual({ type: 'text', text: 'Third response' });
 
       // Retry moderator - can mark created again
       const canRetry = state.tryMarkModeratorCreated(0);
@@ -467,10 +476,16 @@ describe('moderator Retry Isolation', () => {
       state.setMessages([userMessage, p0Message, retriedModeratorMessage]);
 
       // Participant message unchanged
-      expect(getStoreState(store).messages[1]!.parts?.[0]).toEqual({ type: 'text', text: 'Participant response' });
+      const participantMsg = getStoreState(store).messages[1];
+      if (!participantMsg)
+        throw new Error('expected participant message at index 1');
+      expect(participantMsg.parts?.[0]).toEqual({ type: 'text', text: 'Participant response' });
       // Moderator message replaced with successful retry
-      expect(getStoreState(store).messages[2]!.parts?.[0]).toEqual({ type: 'text', text: 'Complete moderator analysis...' });
-      expect((getStoreState(store).messages[2]?.metadata as { hasError?: boolean }).hasError).toBeFalsy();
+      const moderatorMsg = getStoreState(store).messages[2];
+      if (!moderatorMsg)
+        throw new Error('expected moderator message at index 2');
+      expect(moderatorMsg.parts?.[0]).toEqual({ type: 'text', text: 'Complete moderator analysis...' });
+      expect((moderatorMsg.metadata as { hasError?: boolean }).hasError).toBeFalsy();
     });
   });
 
@@ -574,9 +589,18 @@ describe('moderator Retry Isolation', () => {
 
       expect(getStoreState(store).messages).toHaveLength(4);
       // Participant messages unchanged
-      expect(getStoreState(store).messages[1]!.parts?.[0]).toEqual({ type: 'text', text: 'Response 0' });
-      expect(getStoreState(store).messages[2]!.parts?.[0]).toEqual({ type: 'text', text: 'Response 1' });
-      expect(getStoreState(store).messages[3]!.parts?.[0]).toEqual({ type: 'text', text: 'Response 2' });
+      const resp0 = getStoreState(store).messages[1];
+      if (!resp0)
+        throw new Error('expected response 0 at index 1');
+      const resp1 = getStoreState(store).messages[2];
+      if (!resp1)
+        throw new Error('expected response 1 at index 2');
+      const resp2 = getStoreState(store).messages[3];
+      if (!resp2)
+        throw new Error('expected response 2 at index 3');
+      expect(resp0.parts?.[0]).toEqual({ type: 'text', text: 'Response 0' });
+      expect(resp1.parts?.[0]).toEqual({ type: 'text', text: 'Response 1' });
+      expect(resp2.parts?.[0]).toEqual({ type: 'text', text: 'Response 2' });
 
       // === MODERATOR ATTEMPT 2: Succeeds ===
       state.setIsModeratorStreaming(true);
@@ -601,7 +625,7 @@ describe('moderator Retry Isolation', () => {
       // Verify moderator message exists (message 5 is the moderator)
       const moderatorMessage = getStoreState(store).messages[4];
       expect(moderatorMessage).toBeDefined();
-      expect(moderatorMessage!.parts?.[0]).toEqual({ type: 'text', text: 'Complete moderator analysis' });
+      expect(moderatorMessage?.parts?.[0]).toEqual({ type: 'text', text: 'Complete moderator analysis' });
 
       // Metadata might not have isModerator flag set by test helper, but we can verify it's not a participant
       const moderatorMetadata = moderatorMessage?.metadata as { participantId?: string | null; hasError?: boolean };
@@ -609,9 +633,9 @@ describe('moderator Retry Isolation', () => {
       expect(moderatorMetadata.hasError).toBeFalsy(); // No error
 
       // Participant messages STILL unchanged
-      expect(getStoreState(store).messages[1]!.parts?.[0]).toEqual({ type: 'text', text: 'Response 0' });
-      expect(getStoreState(store).messages[2]!.parts?.[0]).toEqual({ type: 'text', text: 'Response 1' });
-      expect(getStoreState(store).messages[3]!.parts?.[0]).toEqual({ type: 'text', text: 'Response 2' });
+      expect(getStoreState(store).messages[1]?.parts?.[0]).toEqual({ type: 'text', text: 'Response 0' });
+      expect(getStoreState(store).messages[2]?.parts?.[0]).toEqual({ type: 'text', text: 'Response 1' });
+      expect(getStoreState(store).messages[3]?.parts?.[0]).toEqual({ type: 'text', text: 'Response 2' });
     });
   });
 });

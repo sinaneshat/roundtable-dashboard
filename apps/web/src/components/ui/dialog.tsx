@@ -2,7 +2,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import type { ComponentProps } from 'react';
 
 import { Icons } from '@/components/icons';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 function Dialog(props: ComponentProps<typeof DialogPrimitive.Root>) {

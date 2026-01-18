@@ -23,8 +23,8 @@ import {
 import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations';
 import { useThreadQuery } from '@/hooks/queries';
 import { useMediaQuery } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
-import type { ChatThread, ChatThreadFlexible } from '@/types/api';
+import { useTranslations } from '@/lib/i18n';
+import type { ChatThread, ChatThreadFlexible } from '@/services/api';
 
 type ChatThreadActionsProps = {
   thread: ChatThread | ChatThreadFlexible;
@@ -59,19 +59,19 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   })));
   const currentTitle = (storeThreadTitle && thread.id === storeThreadId)
     ? storeThreadTitle
-    : thread.title;
+    : (thread.title ?? '');
 
   const displayIsFavorite = (() => {
     if (toggleFavoriteMutation.isSuccess && toggleFavoriteMutation.data) {
-      const data = toggleFavoriteMutation.data as any;
-      if (data?.success && data?.data?.thread?.isFavorite !== undefined) {
+      const { data } = toggleFavoriteMutation;
+      if (data.success && data.data?.thread?.isFavorite !== undefined) {
         return data.data.thread.isFavorite;
       }
     }
     if (toggleFavoriteMutation.isPending && toggleFavoriteMutation.variables) {
       return toggleFavoriteMutation.variables.isFavorite;
     }
-    return thread.isFavorite;
+    return thread.isFavorite ?? false;
   })();
 
   // Derived value: use optimistic mutation value when pending, otherwise use cache

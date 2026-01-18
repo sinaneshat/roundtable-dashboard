@@ -320,7 +320,11 @@ describe('streaming Update Frequency', () => {
       expect(timestamps.length).toBeLessThanOrEqual(8);
 
       for (let i = 1; i < timestamps.length; i++) {
-        const interval = timestamps[i]! - timestamps[i - 1]!;
+        const current = timestamps[i];
+        const previous = timestamps[i - 1];
+        if (current === undefined || previous === undefined)
+          continue;
+        const interval = current - previous;
         expect(interval).toBeGreaterThanOrEqual(THROTTLE_MS - 10);
       }
     });

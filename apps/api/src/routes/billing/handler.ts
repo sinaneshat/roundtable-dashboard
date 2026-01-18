@@ -13,7 +13,7 @@ import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/
 import { revenueTracking } from '@/lib/analytics';
 import { BASE_URLS, getWebappEnvFromContext } from '@/lib/config/base-urls';
 import { isObject } from '@/lib/utils';
-import { getCustomerIdByUserId, getUserCreditBalance, hasSyncedSubscription, stripeService, syncStripeDataFromStripe } from '@/services/billing';
+import { cacheCustomerId, getCustomerIdByUserId, getUserCreditBalance, hasSyncedSubscription, stripeService, syncStripeDataFromStripe } from '@/services/billing';
 import type { ApiEnv } from '@/types';
 
 import type {
@@ -253,13 +253,12 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
         );
       }
 
-      const stripeCustomer = await batch.db.query.stripeCustomer.findFirst({
-        where: eq(tables.stripeCustomer.userId, user.id),
-      });
+      // Theo pattern: Check KV cache first, then DB
+      const cachedCustomerId = await getCustomerIdByUserId(user.id);
 
       let customerId: string;
 
-      if (!stripeCustomer) {
+      if (!cachedCustomerId) {
         const customer = await stripeService.createCustomer({
           email: user.email,
           name: user.name || undefined,
@@ -280,8 +279,11 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
         }
 
         customerId = insertedCustomer.id;
+
+        // KV cache userId → customerId (Theo pattern)
+        await cacheCustomerId(user.id, customerId);
       } else {
-        customerId = stripeCustomer.id;
+        customerId = cachedCustomerId;
       }
 
       const appUrl = BASE_URLS[getWebappEnvFromContext(c)].app;
@@ -473,13 +475,8 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
     try {
       const db = await getDbAsync();
 
-      const customerResults = await db
-        .select()
-        .from(tables.stripeCustomer)
-        .where(eq(tables.stripeCustomer.userId, user.id))
-        .limit(1);
-
-      const customerId = customerResults[0]?.id;
+      // Theo pattern: KV cache first, then DB fallback
+      const customerId = await getCustomerIdByUserId(user.id);
 
       if (!customerId) {
         const balance = await getUserCreditBalance(user.id);

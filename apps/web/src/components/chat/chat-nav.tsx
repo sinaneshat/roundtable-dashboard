@@ -1,4 +1,5 @@
 import { SidebarCollapsibles, SidebarVariants } from '@roundtable/shared';
+import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import { ChatList } from '@/components/chat/chat-list';
@@ -10,6 +11,7 @@ import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
 import { ShareDialog } from '@/components/chat/share-dialog';
 import { Icons } from '@/components/icons';
+import Image from '@/components/ui/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sidebar,
@@ -29,10 +31,10 @@ import { BRAND } from '@/constants/brand';
 import { useTogglePublicMutation } from '@/hooks/mutations';
 import { useSidebarThreadsQuery, useThreadQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';
-import { Image, Link, usePathname, useRouter, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
+import type { ChatSidebarItem } from '@/services/api';
 import { useNavigationReset } from '@/stores/chat';
-import type { ChatSidebarItem } from '@/types/api';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   /** Server-side session for hydration - prevents mismatch */
@@ -40,8 +42,8 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 };
 
 function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isFavoritesCollapsed, setIsFavoritesCollapsed] = useState(false);
@@ -73,16 +75,15 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     const threads = threadsData.pages.flatMap(page =>
       page.success && page.data?.items ? page.data.items : [],
     );
-    return threads.map((thread: any) => ({
-      id: thread.id as string,
-      title: thread.title as string | null,
-      slug: thread.slug as string | null,
-      previousSlug: (thread.previousSlug ?? null) as string | null,
-      mode: (thread.mode ?? 'chat') as string,
-      createdAt: typeof thread.createdAt === 'string' ? thread.createdAt : new Date(thread.createdAt as string).toISOString(),
-      updatedAt: typeof thread.updatedAt === 'string' ? thread.updatedAt : new Date(thread.updatedAt as string).toISOString(),
-      isFavorite: (thread.isFavorite ?? false) as boolean,
-      isPublic: (thread.isPublic ?? false) as boolean,
+    return threads.map(thread => ({
+      id: thread.id,
+      title: thread.title,
+      slug: thread.slug,
+      previousSlug: thread.previousSlug ?? null,
+      createdAt: typeof thread.createdAt === 'string' ? thread.createdAt : new Date(thread.createdAt).toISOString(),
+      updatedAt: typeof thread.updatedAt === 'string' ? thread.updatedAt : new Date(thread.updatedAt).toISOString(),
+      isFavorite: thread.isFavorite ?? false,
+      isPublic: thread.isPublic ?? false,
     }));
   }, [threadsData]);
 
@@ -103,12 +104,12 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const handleNavLinkClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     handleNavigationReset();
-    router.push('/chat');
+    navigate({ to: '/chat' });
 
     if (isMobile) {
       setOpenMobile(false);
     }
-  }, [handleNavigationReset, router, isMobile, setOpenMobile]);
+  }, [handleNavigationReset, navigate, isMobile, setOpenMobile]);
 
   const favorites = useMemo(() => chats.filter(chat => chat.isFavorite), [chats]);
   const nonFavoriteChats = useMemo(() => chats.filter(chat => !chat.isFavorite), [chats]);
@@ -175,8 +176,8 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
           <SidebarHeader>
             <div className="flex h-9 mb-2 items-center justify-between group-data-[collapsible=icon]:hidden">
               <Link
-                href="/chat"
-                prefetch={true}
+                to="/chat"
+                preload="intent"
                 onClick={handleNavLinkClick}
                 className="flex h-9 items-center rounded-md ps-3 pe-2 hover:opacity-80 transition-opacity"
               >
@@ -193,8 +194,8 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
 
             <div className="hidden h-10 mb-2 group-data-[collapsible=icon]:flex items-center justify-center relative">
               <Link
-                href="/chat"
-                prefetch={true}
+                to="/chat"
+                preload="intent"
                 onClick={handleNavLinkClick}
                 className="flex size-10 items-center justify-center group-hover:opacity-0 group-hover:pointer-events-none transition-opacity duration-150"
               >
@@ -215,7 +216,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
             <SidebarMenu className="gap-1">
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
                 <SidebarMenuButton asChild isActive={pathname === '/chat'}>
-                  <Link href="/chat" prefetch={true} onClick={handleNavLinkClick}>
+                  <Link to="/chat" preload="intent" onClick={handleNavLinkClick}>
                     <Icons.plus className="size-4 shrink-0" />
                     <span
                       className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
@@ -248,7 +249,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
 
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
                 <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
-                  <Link href="/chat" prefetch={true} onClick={handleNavLinkClick}>
+                  <Link to="/chat" preload="intent" onClick={handleNavLinkClick}>
                     <Icons.plus />
                   </Link>
                 </SidebarMenuButton>

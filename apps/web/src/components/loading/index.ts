@@ -8,10 +8,9 @@
  * - PageLoadingFallback: Full-page loading (auth, errors, redirects)
  * - SidebarLoadingFallback: Sidebar loading (navigation, chat sidebar)
  *
- * IMPORTANT - Next.js 15/16 Loading Pattern:
- * - Use loading.tsx files at route level for page loading states
- * - Use Suspense only for specific async components (useSearchParams, etc.)
- * - Do NOT wrap layout children in Suspense - causes double loading states
+ * TanStack Start Loading Pattern:
+ * - Use route loaders for data loading states
+ * - Use Suspense for lazy-loaded components
  *
  * Usage Pattern:
  * ```tsx

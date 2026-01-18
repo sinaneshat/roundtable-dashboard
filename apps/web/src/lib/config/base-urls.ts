@@ -4,7 +4,24 @@
  * Single source of truth for all URL configuration across the application.
  * Uses VITE_WEBAPP_ENV from environment to determine which environment URLs to use.
  *
- * Priority for environment detection:
+ * PROXY ARCHITECTURE (Unified Origin):
+ * ====================================
+ * All API requests go through the frontend to eliminate CORS and ensure cookies work.
+ *
+ * Client-side (browser):
+ *   - ALWAYS uses relative URL: '/api/v1'
+ *   - Requests appear same-origin to the browser
+ *   - No CORS issues, cookies work seamlessly
+ *
+ * Proxy routing:
+ *   - Development: Vite proxy (vite.config.ts) forwards /api/* to localhost:8787
+ *   - Production: TanStack Start route (/api/$) proxies to backend server
+ *
+ * Server-side (SSR/server functions):
+ *   - Uses full backend URL for direct API access
+ *   - Bypasses proxy for efficiency
+ *
+ * Environment detection priority:
  * 1. import.meta.env.VITE_WEBAPP_ENV (Vite build-time replacement)
  * 2. process.env.VITE_WEBAPP_ENV (SSR fallback)
  * 3. NODE_ENV fallback (development = local, production = prod)
@@ -12,7 +29,7 @@
  *
  * Usage:
  * - Server functions: Use getBaseUrls() or getAppBaseUrl()/getApiBaseUrl()
- * - Client components: Use getAppBaseUrl()/getApiBaseUrl() (auto-detects from hostname)
+ * - Client components: Use getApiBaseUrl() (returns '/api/v1' via proxy)
  */
 
 import { z } from 'zod';
@@ -97,7 +114,7 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
 
   // 3. Server-side: use NODE_ENV
   if (typeof window === 'undefined') {
-    return process.env.NODE_ENV === 'development'
+    return import.meta.env.MODE === 'development'
       ? WEBAPP_ENVS.LOCAL
       : WEBAPP_ENVS.PROD;
   }
@@ -130,7 +147,7 @@ export function getWebappEnv(): WebappEnv {
 
   // 2. Server-side: use NODE_ENV
   if (typeof window === 'undefined') {
-    return process.env.NODE_ENV === 'development'
+    return import.meta.env.MODE === 'development'
       ? WEBAPP_ENVS.LOCAL
       : WEBAPP_ENVS.PROD;
   }
@@ -157,20 +174,22 @@ export function getBaseUrls() {
 /**
  * Get API base URL for current environment
  *
- * In LOCAL development on client-side: returns '/api/v1' (relative URL through Vite proxy)
- * This ensures cookies work correctly by keeping requests same-origin.
+ * CLIENT-SIDE (all environments): Returns '/api/v1' (relative URL)
+ * - Requests go through TanStack Start proxy route (/api/$)
+ * - Proxy forwards to correct backend (local/preview/prod)
+ * - Eliminates CORS issues and ensures cookies work seamlessly
+ *
+ * SERVER-SIDE (SSR/server functions): Returns full backend URL
+ * - Direct backend access for server-side data fetching
  */
 export function getApiBaseUrl(): string {
-  // Check if running in local development (client-side)
-  // Use relative URL through Vite proxy to avoid cross-origin cookie issues
+  // Client-side: ALWAYS use relative URL through TanStack Start proxy
+  // The proxy route (/api/$) handles forwarding to correct backend
   if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      // Relative URL goes through Vite proxy to API server
-      return '/api/v1';
-    }
+    return '/api/v1';
   }
 
+  // Server-side: use full backend URL for direct access
   return getBaseUrls().api;
 }
 
@@ -190,7 +209,7 @@ export function getProductionApiUrl(): string {
   // This ensures static pages can be built with real data
   const currentEnv = getWebappEnv();
 
-  if (currentEnv === WEBAPP_ENVS.LOCAL && process.env.NODE_ENV === 'production') {
+  if (currentEnv === WEBAPP_ENVS.LOCAL && import.meta.env.MODE === 'production') {
     // Building for production but env is local - use preview API
     return BASE_URLS[WEBAPP_ENVS.PREVIEW].api;
   }
@@ -201,8 +220,17 @@ export function getProductionApiUrl(): string {
 /**
  * Async version: Get API URL with proper environment detection
  * Use this for server functions that need async environment resolution
+ *
+ * CLIENT-SIDE: Returns '/api/v1' (through proxy)
+ * SERVER-SIDE: Returns full backend URL
  */
 export async function getApiUrlAsync(): Promise<string> {
+  // Client-side: ALWAYS use relative URL through proxy
+  if (typeof window !== 'undefined') {
+    return '/api/v1';
+  }
+
+  // Server-side: use full backend URL
   const currentEnv = await getWebappEnvAsync();
   return BASE_URLS[currentEnv].api;
 }

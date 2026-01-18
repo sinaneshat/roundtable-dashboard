@@ -3,15 +3,7 @@ import type { UIMessage } from 'ai';
 import { useMemo } from 'react';
 
 import { getParticipantIndex, getRoundNumberFromMetadata, isModeratorMessage } from '@/lib/utils';
-import type { ApiChangelog } from '@/services/api';
-import type { StoredPreSearch } from '@/types/api';
-
-/**
- * Changelog item type - derived from API response (SINGLE SOURCE OF TRUTH)
- * ApiChangelog is inferred from backend Hono response via InferResponseType.
- * Re-exported for consumers that need the timeline's changelog type.
- */
-export type ChangelogItem = ApiChangelog;
+import type { ApiChangelog, StoredPreSearch } from '@/services/api';
 
 /**
  * Timeline Item Types
@@ -32,7 +24,7 @@ export type TimelineItem
   }
   | {
     type: 'changelog';
-    data: ChangelogItem[];
+    data: ApiChangelog[];
     key: string;
     roundNumber: number;
   }
@@ -55,7 +47,7 @@ export type UseThreadTimelineOptions = {
    * Changelog items to group by round
    * Accepts both Date and string for createdAt to match API JSON responses
    */
-  changelog: ChangelogItem[];
+  changelog: ApiChangelog[];
 
   /**
    * Pre-searches to include in timeline
@@ -118,7 +110,10 @@ export function useThreadTimeline({
       if (!messagesByRound.has(roundNumber)) {
         messagesByRound.set(roundNumber, []);
       }
-      messagesByRound.get(roundNumber)!.push(message);
+      const roundMessages = messagesByRound.get(roundNumber);
+      if (roundMessages) {
+        roundMessages.push(message);
+      }
     });
 
     // STEP 2: Sort messages within each round
@@ -155,7 +150,7 @@ export function useThreadTimeline({
     });
 
     // STEP 3: Group changelog by round number
-    const changelogByRound = new Map<number, ChangelogItem[]>();
+    const changelogByRound = new Map<number, ApiChangelog[]>();
     changelog.forEach((change) => {
       const roundNumber = change.roundNumber ?? 0;
 
@@ -164,10 +159,12 @@ export function useThreadTimeline({
       }
 
       // Deduplicate changelog items by ID
-      const roundChanges = changelogByRound.get(roundNumber)!;
-      const exists = roundChanges.some(existing => existing.id === change.id);
-      if (!exists) {
-        roundChanges.push(change);
+      const roundChanges = changelogByRound.get(roundNumber);
+      if (roundChanges) {
+        const exists = roundChanges.some(existing => existing.id === change.id);
+        if (!exists) {
+          roundChanges.push(change);
+        }
       }
     });
 

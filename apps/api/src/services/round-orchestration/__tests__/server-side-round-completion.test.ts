@@ -290,8 +290,12 @@ describe('server-side round completion', () => {
 
       const state = getState('thread-123', 0);
       expect(state).not.toBeNull();
-      expect(state?.lastActivityAt).toBeDefined();
-      expect(new Date(state!.lastActivityAt!).getTime()).toBeGreaterThanOrEqual(
+      if (!state)
+        throw new Error('State not found');
+      expect(state.lastActivityAt).toBeDefined();
+      if (!state.lastActivityAt)
+        throw new Error('Last activity timestamp not set');
+      expect(new Date(state.lastActivityAt).getTime()).toBeGreaterThanOrEqual(
         new Date(beforeInit).getTime(),
       );
     });
@@ -650,9 +654,15 @@ describe('server-side round completion', () => {
       await updateRoundActivity('thread-123', 0, mockEnv as never);
 
       const updatedState = getState('thread-123', 0);
-      expect(updatedState?.lastActivityAt).not.toBe(initialActivity);
-      expect(new Date(updatedState!.lastActivityAt!).getTime()).toBeGreaterThan(
-        new Date(initialActivity!).getTime(),
+      if (!updatedState)
+        throw new Error('Updated state not found');
+      expect(updatedState.lastActivityAt).not.toBe(initialActivity);
+      if (!updatedState.lastActivityAt)
+        throw new Error('Updated activity timestamp not set');
+      if (!initialActivity)
+        throw new Error('Initial activity timestamp not set');
+      expect(new Date(updatedState.lastActivityAt).getTime()).toBeGreaterThan(
+        new Date(initialActivity).getTime(),
       );
     });
   });

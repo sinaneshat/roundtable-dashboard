@@ -1,4 +1,5 @@
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@roundtable/shared';
+import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { ChatPageHeader } from '@/components/chat/chat-header';
@@ -12,13 +13,13 @@ import {
   useSubscriptionsQuery,
   useSwitchSubscriptionMutation,
 } from '@/hooks';
-import { useRouter, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
-import type { Product, Subscription } from '@/types/billing';
+import type { Product, Subscription } from '@/services/api';
 
 export default function PricingScreen() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const t = useTranslations();
   const [processingPriceId, setProcessingPriceId] = useState<string | null>(null);
   const [cancelingSubscriptionId, setCancelingSubscriptionId] = useState<string | null>(null);
@@ -33,11 +34,9 @@ export default function PricingScreen() {
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
 
   type ApiResponse<T> = { success: boolean; data?: T };
-  type ProductsResponse = { items?: Product[] };
-  type SubscriptionsResponse = { items?: Subscription[] };
 
-  const typedProductsData = productsData as ApiResponse<ProductsResponse> | undefined;
-  const typedSubscriptionsData = subscriptionsData as ApiResponse<SubscriptionsResponse> | undefined;
+  const typedProductsData = productsData as ApiResponse<{ items?: Product[] }> | undefined;
+  const typedSubscriptionsData = subscriptionsData as ApiResponse<{ items?: Subscription[] }> | undefined;
 
   const products = typedProductsData?.success ? typedProductsData.data?.items ?? [] : [];
   const subscriptions: Subscription[] = typedSubscriptionsData?.success ? typedSubscriptionsData.data?.items ?? [] : [];
@@ -52,18 +51,17 @@ export default function PricingScreen() {
     setProcessingPriceId(priceId);
     try {
       if (activeSubscription) {
-        type SwitchResponse = {
+        const result = await switchMutation.mutateAsync({
+          param: { id: activeSubscription.id },
+          json: { newPriceId: priceId },
+        }) as ApiResponse<{
           changeDetails?: {
             isUpgrade: boolean;
             isDowngrade: boolean;
             oldPrice: { productId: string };
             newPrice: { productId: string };
           };
-        };
-        const result = await switchMutation.mutateAsync({
-          param: { id: activeSubscription.id },
-          json: { newPriceId: priceId },
-        }) as ApiResponse<SwitchResponse> | undefined;
+        }> | undefined;
 
         if (result?.success) {
           const changeDetails = result.data?.changeDetails;
@@ -81,16 +79,15 @@ export default function PricingScreen() {
               newProductId: changeDetails.newPrice.productId,
             });
 
-            router.replace(`/chat/billing/subscription-changed?${params.toString()}`);
+            navigate({ to: `/chat/billing/subscription-changed?${params.toString()}`, replace: true });
           } else {
-            router.replace('/chat/billing/subscription-changed');
+            navigate({ to: '/chat/billing/subscription-changed', replace: true });
           }
         }
       } else {
-        type CheckoutResponse = { url?: string };
         const result = await createCheckoutMutation.mutateAsync({
           json: { priceId },
-        }) as ApiResponse<CheckoutResponse> | undefined;
+        }) as ApiResponse<{ url?: string }> | undefined;
 
         if (result?.success && result.data?.url) {
           // External redirect to Stripe checkout - window.location.href is appropriate here
@@ -121,13 +118,11 @@ export default function PricingScreen() {
   const handleManageBilling = async () => {
     setIsManagingBilling(true);
     try {
-      type PortalResponse = { url?: string };
       const result = await customerPortalMutation.mutateAsync({
         json: {
-          // Reading current URL (not navigating) - window.location.href is appropriate
           returnUrl: window.location.href,
         },
-      }) as ApiResponse<PortalResponse> | undefined;
+      }) as ApiResponse<{ url?: string }> | undefined;
 
       if (result?.success && result.data?.url) {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');

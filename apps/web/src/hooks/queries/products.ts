@@ -10,7 +10,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
+import { GC_TIMES, STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getProductService,
   getProductsService,
@@ -26,7 +26,7 @@ export function useProductsQuery() {
     queryKey: queryKeys.products.list(),
     queryFn: getProductsService,
     staleTime: STALE_TIMES.products, // Must match server prefetch for hydration
-    gcTime: Infinity,
+    gcTime: GC_TIMES.INFINITE,
     retry: false,
     throwOnError: false,
   });
@@ -43,7 +43,7 @@ export function useProductQuery(productId: string) {
     queryKey: queryKeys.products.detail(productId),
     queryFn: async () => getProductService({ param: { id: productId } }),
     staleTime: STALE_TIMES.products,
-    gcTime: Infinity, // Match useProductsQuery pattern
+    gcTime: GC_TIMES.INFINITE, // Match useProductsQuery pattern
     enabled: !!productId, // Only fetch when productId is available
     retry: false,
     throwOnError: false,

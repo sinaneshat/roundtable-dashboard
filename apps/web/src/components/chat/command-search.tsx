@@ -1,4 +1,5 @@
 import { KeyboardKeys } from '@roundtable/shared';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
@@ -9,7 +10,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { useSidebarThreadsQuery } from '@/hooks/queries';
 import { useDebouncedValue } from '@/hooks/utils';
-import { Link, useRouter, useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
 
@@ -43,8 +44,8 @@ function SearchResultItem({
   const href = `/chat/${thread.slug}`;
   return (
     <Link
-      href={href}
-      prefetch={false}
+      to={href}
+      preload={false}
       onClick={onClose}
       className={cn(
         'w-full p-3 transition-all text-left rounded-lg',
@@ -70,7 +71,7 @@ function SearchResultItem({
   );
 }
 export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const t = useTranslations();
   const { isMobile, setOpenMobile } = useSidebar();
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,11 +94,11 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     }
     return threadsData.pages.flatMap((page) => {
       if (page.success && page.data?.items) {
-        return (page.data.items as any[]).map((item: any) => ({
-          id: item.id as string,
-          slug: item.slug as string,
-          title: item.title as string,
-          updatedAt: item.updatedAt as string,
+        return page.data.items.map(item => ({
+          id: item.id,
+          slug: item.slug ?? '',
+          title: item.title ?? '',
+          updatedAt: item.updatedAt,
         }));
       }
       return [];
@@ -135,7 +136,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
       case KeyboardKeys.ENTER:
         e.preventDefault();
         if (threads[selectedIndex]) {
-          router.push(`/chat/${threads[selectedIndex].slug}`);
+          navigate({ to: `/chat/${threads[selectedIndex].slug}` });
           handleClose();
         }
         break;

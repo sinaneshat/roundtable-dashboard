@@ -41,7 +41,7 @@ import {
   createTestModeratorMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
+import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 

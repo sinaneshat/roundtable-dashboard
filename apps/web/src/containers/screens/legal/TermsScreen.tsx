@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router';
+
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -7,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { getTranslations, Link } from '@/lib/compat';
+import { getTranslations } from '@/lib/i18n';
 
 const TERMS_SECTIONS = [
   'acceptance',
@@ -28,7 +30,7 @@ export default async function TermsScreen() {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-8">
         <Button asChild variant="ghost" size="sm" startIcon={<Icons.arrowLeft />}>
-          <Link href="/auth/sign-in">
+          <Link to="/auth/sign-in">
             {tActions('back')}
           </Link>
         </Button>

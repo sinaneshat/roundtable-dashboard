@@ -49,7 +49,12 @@ describe('streaming Performance - Immediate Start Verification', () => {
     timestamps.push(Date.now());
 
     // All state transitions should happen synchronously (< 1ms in tests)
-    const totalTime = timestamps[timestamps.length - 1]! - timestamps[0]!;
+    const lastTimestamp = timestamps[timestamps.length - 1];
+    const firstTimestamp = timestamps[0];
+    if (lastTimestamp === undefined || firstTimestamp === undefined) {
+      throw new Error('Expected timestamps to be recorded');
+    }
+    const totalTime = lastTimestamp - firstTimestamp;
     expect(totalTime).toBeLessThan(10); // Should be nearly instant in tests
   });
 
@@ -81,7 +86,12 @@ describe('streaming Performance - Immediate Start Verification', () => {
 
     timestamps.push(Date.now());
 
-    const totalTime = timestamps[timestamps.length - 1]! - timestamps[0]!;
+    const lastTimestamp = timestamps[timestamps.length - 1];
+    const firstTimestamp = timestamps[0];
+    if (lastTimestamp === undefined || firstTimestamp === undefined) {
+      throw new Error('Expected timestamps to be recorded');
+    }
+    const totalTime = lastTimestamp - firstTimestamp;
     expect(totalTime).toBeLessThan(10); // No artificial delays
   });
 
@@ -99,7 +109,12 @@ describe('streaming Performance - Immediate Start Verification', () => {
 
     timestamps.push(Date.now());
 
-    const totalTime = timestamps[timestamps.length - 1]! - timestamps[0]!;
+    const lastTimestamp = timestamps[timestamps.length - 1];
+    const firstTimestamp = timestamps[0];
+    if (lastTimestamp === undefined || firstTimestamp === undefined) {
+      throw new Error('Expected timestamps to be recorded');
+    }
+    const totalTime = lastTimestamp - firstTimestamp;
     expect(totalTime).toBeLessThan(10);
   });
 
@@ -495,7 +510,12 @@ describe('streaming Performance - Edge Case Timing', () => {
 
     timestamps.push(Date.now());
 
-    const totalTime = timestamps[timestamps.length - 1]! - timestamps[0]!;
+    const lastTimestamp = timestamps[timestamps.length - 1];
+    const firstTimestamp = timestamps[0];
+    if (lastTimestamp === undefined || firstTimestamp === undefined) {
+      throw new Error('Expected timestamps to be recorded');
+    }
+    const totalTime = lastTimestamp - firstTimestamp;
     expect(totalTime).toBeLessThan(10);
   });
 
@@ -513,7 +533,12 @@ describe('streaming Performance - Edge Case Timing', () => {
 
     timestamps.push(Date.now());
 
-    const totalTime = timestamps[timestamps.length - 1]! - timestamps[0]!;
+    const lastTimestamp = timestamps[timestamps.length - 1];
+    const firstTimestamp = timestamps[0];
+    if (lastTimestamp === undefined || firstTimestamp === undefined) {
+      throw new Error('Expected timestamps to be recorded');
+    }
+    const totalTime = lastTimestamp - firstTimestamp;
     expect(totalTime).toBeLessThan(5);
   });
 

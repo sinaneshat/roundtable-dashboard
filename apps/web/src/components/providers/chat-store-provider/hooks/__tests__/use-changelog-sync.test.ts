@@ -21,7 +21,7 @@ import { ChangelogTypes } from '@roundtable/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 
-import type { ChatThreadChangelog } from '@/types/api';
+import type { ChatThreadChangelog } from '@/services/api';
 
 // ============================================================================
 // TEST HELPERS

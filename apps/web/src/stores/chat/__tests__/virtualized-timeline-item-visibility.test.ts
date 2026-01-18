@@ -27,14 +27,19 @@ function createTimelineItems(messages: UIMessage[]): TimelineItem[] {
     if (!messagesByRound.has(roundNumber)) {
       messagesByRound.set(roundNumber, []);
     }
-    messagesByRound.get(roundNumber)!.push(message);
+    const roundMessages = messagesByRound.get(roundNumber);
+    if (roundMessages) {
+      roundMessages.push(message);
+    }
   });
 
   const timeline: TimelineItem[] = [];
   const sortedRounds = Array.from(messagesByRound.keys()).sort((a, b) => a - b);
 
   sortedRounds.forEach((roundNumber) => {
-    const roundMessages = messagesByRound.get(roundNumber)!;
+    const roundMessages = messagesByRound.get(roundNumber);
+    if (!roundMessages)
+      return;
     timeline.push({
       type: 'messages',
       data: roundMessages,

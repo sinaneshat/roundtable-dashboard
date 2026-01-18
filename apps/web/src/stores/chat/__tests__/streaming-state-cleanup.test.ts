@@ -29,7 +29,7 @@ import { MessageRoles, MessageStatuses } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
 import { createTestModeratorMessage } from '@/lib/testing';
-import type { ChatMessage } from '@/types/api';
+import type { ApiMessage } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -44,7 +44,7 @@ function createParticipantMessage(
   participantIndex: number,
   roundNumber: number,
   content = 'Test response',
-): ChatMessage {
+): ApiMessage {
   return {
     id: `thread-1_r${roundNumber}_p${participantIndex}`,
     role: MessageRoles.ASSISTANT,
@@ -62,7 +62,7 @@ function createParticipantMessage(
 /**
  * Create a mock user message for testing
  */
-function createUserMessage(roundNumber: number, content = 'User query'): ChatMessage {
+function createUserMessage(roundNumber: number, content = 'User query'): ApiMessage {
   return {
     id: `user-r${roundNumber}`,
     role: MessageRoles.USER,
@@ -76,7 +76,7 @@ function createUserMessage(roundNumber: number, content = 'User query'): ChatMes
  * Simulate a complete round with 3 participants and moderator
  */
 function simulateCompleteRound(store: ReturnType<typeof createChatStore>, roundNumber: number) {
-  const messages: ChatMessage[] = [];
+  const messages: ApiMessage[] = [];
 
   // User message
   messages.push(createUserMessage(roundNumber));

@@ -16,7 +16,7 @@ import { createApiClient } from '@/lib/api/client';
 
 type StreamChatEndpoint = ApiClientType['chat']['$post'];
 export type StreamChatRequest = InferRequestType<StreamChatEndpoint>;
-export type StreamChatResponse = InferResponseType<StreamChatEndpoint>;
+export type StreamChatResponse = InferResponseType<StreamChatEndpoint, 200>;
 
 // ============================================================================
 // Service Functions
@@ -26,8 +26,8 @@ export type StreamChatResponse = InferResponseType<StreamChatEndpoint>;
  * Stream AI chat response using SSE
  * Protected endpoint - requires authentication
  *
- * EXCEPTION: Does NOT use parseResponse() because streaming responses
- * must return raw Response object (not parsed JSON) for SSE to work.
+ * EXCEPTION: Does NOT parse response because SSE streams must return raw Response
+ * object for EventSource/ReadableStream processing.
  */
 export async function streamChatService(data: StreamChatRequest) {
   const client = createApiClient();

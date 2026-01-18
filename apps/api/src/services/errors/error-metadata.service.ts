@@ -174,7 +174,11 @@ export function buildEmptyResponseError(
   // Handle both calling patterns
   const params = typeof inputTokensOrParams === 'object'
     ? inputTokensOrParams
-    : { inputTokens: inputTokensOrParams, outputTokens: outputTokens!, finishReason: finishReason! };
+    : {
+        inputTokens: inputTokensOrParams,
+        outputTokens: outputTokens ?? 0,
+        finishReason: finishReason ?? 'unknown',
+      };
 
   const { inputTokens, outputTokens: outTokens, finishReason: reason } = params;
   // Build base statistics for all error messages
@@ -290,8 +294,8 @@ export function extractErrorMetadata(
     ? providerMetadataOrParams
     : {
         providerMetadata: providerMetadataOrParams,
-        response: response!,
-        finishReason: finishReason!,
+        response: response ?? null,
+        finishReason: finishReason ?? 'unknown',
         usage,
         text,
         reasoning,

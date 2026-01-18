@@ -5,6 +5,7 @@ import {
   ScreenModes,
   UploadStatuses,
 } from '@roundtable/shared';
+import { useLocation } from '@tanstack/react-router';
 import type { ChatStatus } from 'ai';
 import { motion } from 'motion/react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
@@ -25,6 +26,7 @@ import {
   useChatStoreApi,
   useModelPreferencesStore,
 } from '@/components/providers';
+import Image from '@/components/ui/image';
 import { LogoGlow } from '@/components/ui/logo-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
@@ -37,7 +39,6 @@ import {
   useOrderedModels,
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
-import { dynamic, Image, usePathname, useTranslations } from '@/lib/compat';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
 import {
@@ -46,6 +47,7 @@ import {
   ToastNamespaces,
 } from '@/lib/config/model-presets';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
+import { useTranslations } from '@/lib/i18n';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { showApiErrorToast, toastManager } from '@/lib/toast';
 import {
@@ -56,13 +58,13 @@ import {
   threadHasDocumentFiles,
   threadHasImageFiles,
 } from '@/lib/utils';
+import dynamic from '@/lib/utils/dynamic';
 import {
   useAutoModeAnalysis,
   useChatFormActions,
   useOverviewActions,
   useScreenInitialization,
 } from '@/stores/chat';
-import type { CustomRole, EnhancedModel } from '@/types/api';
 
 import { ChatView } from './ChatView';
 
@@ -79,7 +81,7 @@ const ChatDeleteDialog = dynamic(
 
 export default function ChatOverviewScreen() {
   const t = useTranslations();
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const { data: session } = useSession();
   const sessionUser = session?.user;
   // Track initial mount to skip showing "models deselected" toast on page load
@@ -201,30 +203,29 @@ export default function ChatOverviewScreen() {
   const { borderVariant: _headerBorderVariant } = useFreeTrialState();
 
   const allEnabledModels = useMemo(() => {
-    if (!modelsData?.data || typeof modelsData.data !== 'object' || !('items' in modelsData.data)) {
+    if (!modelsData?.success) {
       return [];
     }
-    return (modelsData.data.items as unknown as EnhancedModel[] | undefined) ?? [];
-  }, [modelsData?.data]);
+    return modelsData.data.items;
+  }, [modelsData]);
 
   const customRoles = useMemo(() => {
     if (!customRolesData?.pages) {
       return [];
     }
     return customRolesData.pages.flatMap((page) => {
-      if (!page)
+      if (!page?.success)
         return [];
-      const p = page as { success?: boolean; data?: { items?: unknown[] } };
-      return (p.success && p.data?.items) ? p.data.items as CustomRole[] : [];
+      return page.data.items;
     });
   }, [customRolesData?.pages]);
 
   const userTierConfig = useMemo(() => {
-    if (!modelsData?.data || typeof modelsData.data !== 'object' || !('user_tier_config' in modelsData.data)) {
+    if (!modelsData?.success) {
       return undefined;
     }
-    return modelsData.data.user_tier_config as { tier_name: string; max_models: number; tier: string; can_upgrade: boolean } | undefined;
-  }, [modelsData?.data]);
+    return modelsData.data.user_tier_config;
+  }, [modelsData]);
 
   const { modelOrder, setModelOrder } = useChatStore(
     useShallow(s => ({
@@ -698,12 +699,17 @@ export default function ChatOverviewScreen() {
           const attachmentIds = chatAttachments.getUploadIds();
           const attachmentInfos = chatAttachments.attachments
             .filter(att => att.status === UploadStatuses.COMPLETED && att.uploadId)
-            .map(att => ({
-              uploadId: att.uploadId!,
-              filename: att.file.name,
-              mimeType: att.file.type,
-              previewUrl: att.preview?.url,
-            }));
+            .map((att) => {
+              if (!att.uploadId) {
+                throw new Error('Upload ID is required for completed attachments');
+              }
+              return {
+                uploadId: att.uploadId,
+                filename: att.file.name,
+                mimeType: att.file.type,
+                previewUrl: att.preview?.url,
+              };
+            });
           await formActions.handleUpdateThreadAndSend(existingThreadId, attachmentIds, attachmentInfos);
           chatAttachments.clearAttachments();
         } catch (error) {
@@ -750,12 +756,17 @@ export default function ChatOverviewScreen() {
           const attachmentIds = chatAttachments.getUploadIds();
           const attachmentInfos = chatAttachments.attachments
             .filter(att => att.status === UploadStatuses.COMPLETED && att.uploadId)
-            .map(att => ({
-              uploadId: att.uploadId!,
-              filename: att.file.name,
-              mimeType: att.file.type,
-              previewUrl: att.preview?.url,
-            }));
+            .map((att) => {
+              if (!att.uploadId) {
+                throw new Error('Upload ID is required for completed attachments');
+              }
+              return {
+                uploadId: att.uploadId,
+                filename: att.file.name,
+                mimeType: att.file.type,
+                previewUrl: att.preview?.url,
+              };
+            });
           await formActions.handleCreateThread(attachmentIds, attachmentInfos);
           hasSentInitialPromptRef.current = true;
           chatAttachments.clearAttachments();
@@ -814,9 +825,9 @@ export default function ChatOverviewScreen() {
     setModelOrder(newModelOrder);
 
     const reorderedParticipants = newOrder
-      .filter(om => om.participant !== null)
+      .filter((om): om is typeof om & { participant: NonNullable<typeof om.participant> } => om.participant !== null)
       .map((om, index) => ({
-        ...om.participant!,
+        ...om.participant,
         priority: index,
       }));
     setSelectedParticipants(reorderedParticipants);

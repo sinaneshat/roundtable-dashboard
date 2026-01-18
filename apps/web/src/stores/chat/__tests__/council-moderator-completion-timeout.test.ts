@@ -26,7 +26,7 @@
 import { MessageStatuses } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
-import type { StoredModeratorData } from '@/types/api';
+import type { StoredModeratorData } from '../store-schemas';
 
 // ============================================================================
 // TEST CONSTANTS

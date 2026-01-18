@@ -28,7 +28,7 @@ import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
 import { getAssistantMetadata, getModeratorMetadata, getParticipantId, getRoundNumber, isNonEmptyString, isObject } from '@/lib/utils';
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 // ============================================================================
 // Zod Schemas - Single Source of Truth

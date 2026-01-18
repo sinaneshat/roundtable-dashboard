@@ -20,8 +20,8 @@ import { FinishReasons, MessageRoles, ParticipantStreamStatuses } from '@roundta
 import { describe, expect, it } from 'vitest';
 
 import { createMockParticipant, createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
-import type { DbMessageMetadata } from '@/types/api';
-import { isModeratorMessageMetadata } from '@/types/api';
+import type { DbMessageMetadata } from '@/services/api';
+import { isModeratorMessageMetadata } from '@/services/api';
 
 // ============================================================================
 // TEST TYPES

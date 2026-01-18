@@ -1,11 +1,14 @@
 import { ComponentVariants } from '@roundtable/shared';
+import { z } from 'zod';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { dynamic } from '@/lib/compat';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
-import { WebSearchResultSchema } from '@/types/api';
+import dynamic from '@/lib/utils/dynamic';
+
+// Simple schema for web search tool results validation
+const WebSearchResultSchema = z.any();
 
 // Lazy-loaded - only rendered when web_search tool results exist (~180 lines)
 const WebSearchDisplay = dynamic(

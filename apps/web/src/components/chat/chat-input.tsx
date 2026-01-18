@@ -19,7 +19,7 @@ import {
   useFreeTrialState,
   useSpeechRecognition,
 } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
@@ -102,7 +102,7 @@ export const ChatInput = memo(({
     if (!statsData?.success || !statsData.data) {
       return false;
     }
-    const { plan } = statsData.data as any;
+    const { plan } = statsData.data;
     if (plan?.type !== PlanTypes.PAID) {
       return false;
     }

@@ -13,7 +13,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type RHFDatePickerProps<

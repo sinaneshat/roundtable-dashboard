@@ -22,9 +22,8 @@ import { EMAIL_DOMAIN_CONFIG, isAllowedEmailDomain, isRestrictedEnvironment, val
 function getAuthSecret(): string {
   // 1. Try Cloudflare Workers bindings
   try {
-    const cfEnv = workersEnv as unknown as Record<string, string | undefined>;
-    if (cfEnv.BETTER_AUTH_SECRET) {
-      return cfEnv.BETTER_AUTH_SECRET;
+    if (workersEnv.BETTER_AUTH_SECRET) {
+      return workersEnv.BETTER_AUTH_SECRET;
     }
   } catch {
     // Workers env not available - continue to fallback
@@ -47,11 +46,10 @@ function getAuthSecret(): string {
 function getGoogleOAuthCredentials(): { clientId: string; clientSecret: string } {
   // 1. Try Cloudflare Workers bindings
   try {
-    const cfEnv = workersEnv as unknown as Record<string, string | undefined>;
-    if (cfEnv.AUTH_GOOGLE_ID && cfEnv.AUTH_GOOGLE_SECRET) {
+    if (workersEnv.AUTH_GOOGLE_ID && workersEnv.AUTH_GOOGLE_SECRET) {
       return {
-        clientId: cfEnv.AUTH_GOOGLE_ID,
-        clientSecret: cfEnv.AUTH_GOOGLE_SECRET,
+        clientId: workersEnv.AUTH_GOOGLE_ID,
+        clientSecret: workersEnv.AUTH_GOOGLE_SECRET,
       };
     }
   } catch {

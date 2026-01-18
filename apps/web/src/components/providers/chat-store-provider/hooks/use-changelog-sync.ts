@@ -71,11 +71,12 @@ export function useChangelogSync({
       return;
     }
 
-    // Type the response data - roundChangelogData.data has { items: ChangelogItemCache[] } structure
-    // Cast through unknown since API types are more specific than cache types (e.g. literal union vs string)
+    // Extract items from successful response
+    // Single cast needed: API types are more specific than cache types (e.g., literal union vs string)
     // The data is validated by Zod in the cache merge function anyway
-    const responseData = roundChangelogData.data as unknown as { items: ChangelogItemCache[] } | undefined;
-    const newItems: ChangelogItemCache[] = responseData?.items ?? [];
+    const newItems: ChangelogItemCache[] = roundChangelogData.success && roundChangelogData.data?.items
+      ? (roundChangelogData.data.items as ChangelogItemCache[])
+      : [];
     rlog.changelog('items-received', `r${configChangeRoundNumber} count=${newItems.length} ids=[${newItems.map(i => i.id).join(',')}] rounds=[${newItems.map(i => i.roundNumber).join(',')}]`);
 
     const allItemsForCorrectRound = newItems.length > 0 && newItems.every(item => item.roundNumber === configChangeRoundNumber);

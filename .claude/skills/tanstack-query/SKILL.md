@@ -1,6 +1,6 @@
 ---
 name: tanstack-query
-description: Enforce TanStack Query (React Query) v5 best practices for data fetching, caching, mutations, and SSR/hydration with Next.js. Use when implementing useQuery, useMutation, prefetching, or server-side data fetching.
+description: Enforce TanStack Query (React Query) v5 best practices for data fetching, caching, mutations, and SSR/hydration with TanStack Start. Use when implementing useQuery, useMutation, prefetching, or server-side data fetching.
 allowed-tools: Read, Grep, Glob, Edit, Write
 ---
 
@@ -163,25 +163,38 @@ const mutation = useMutation({
 })
 ```
 
-## Next.js App Router SSR Patterns
+## TanStack Start SSR Patterns
 
-### Server Component Prefetching (Recommended)
+### Route Loader with Prefetching (Recommended)
 
 ```tsx
-// app/posts/page.tsx (Server Component)
+// src/routes/posts.tsx
+import { createFileRoute } from '@tanstack/react-router'
 import { dehydrate, HydrationBoundary, QueryClient } from '@tanstack/react-query'
-import { Posts } from './posts'
+import { Posts } from '@/components/posts'
+import { getPosts } from '@/services/api/posts'
 
-export default async function PostsPage() {
-  const queryClient = new QueryClient()
+export const Route = createFileRoute('/posts')({
+  loader: async () => {
+    const queryClient = new QueryClient()
 
-  await queryClient.prefetchQuery({
-    queryKey: ['posts'],
-    queryFn: getPosts,
-  })
+    await queryClient.prefetchQuery({
+      queryKey: ['posts'],
+      queryFn: getPosts,
+    })
+
+    return {
+      dehydratedState: dehydrate(queryClient),
+    }
+  },
+  component: PostsPage,
+})
+
+function PostsPage() {
+  const { dehydratedState } = Route.useLoaderData()
 
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
+    <HydrationBoundary state={dehydratedState}>
       <Posts />
     </HydrationBoundary>
   )
@@ -189,13 +202,12 @@ export default async function PostsPage() {
 ```
 
 ```tsx
-// app/posts/posts.tsx (Client Component)
-'use client'
-
+// src/components/posts.tsx
 import { useQuery } from '@tanstack/react-query'
+import { getPosts } from '@/services/api/posts'
 
 export function Posts() {
-  // Data is immediately available from prefetch
+  // Data is immediately available from loader prefetch
   const { data } = useQuery({
     queryKey: ['posts'],
     queryFn: getPosts,
@@ -205,46 +217,79 @@ export function Posts() {
 }
 ```
 
-### Streaming with Suspense (No await)
+### Server Functions for Mutations
 
 ```tsx
-// app/posts/page.tsx - Streaming pattern
-import { dehydrate, HydrationBoundary } from '@tanstack/react-query'
-import { getQueryClient } from './get-query-client'
-import Posts from './posts'
+// src/server/posts.ts
+import { createServerFn } from '@tanstack/start'
+import { z } from 'zod'
 
-export default function PostsPage() {
-  const queryClient = getQueryClient()
+export const createPost = createServerFn()
+  .validator(z.object({
+    title: z.string(),
+    content: z.string(),
+  }))
+  .handler(async ({ data }) => {
+    // Server-side mutation logic
+    const newPost = await db.posts.insert(data)
+    return newPost
+  })
+```
 
-  // No await - enables streaming
-  queryClient.prefetchQuery({
-    queryKey: ['posts'],
-    queryFn: getPosts,
+```tsx
+// src/components/create-post.tsx
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { createPost } from '@/server/posts'
+
+export function CreatePost() {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: createPost,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
+    },
   })
 
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <Posts />
-    </HydrationBoundary>
+    <button
+      onClick={() => mutation.mutate({ title: 'New Post', content: '...' })}
+      disabled={mutation.isPending}
+    >
+      {mutation.isPending ? 'Creating...' : 'Create Post'}
+    </button>
   )
 }
 ```
 
-### Singleton QueryClient for Server
+### Singleton QueryClient Pattern
 
 ```tsx
-// app/get-query-client.ts
+// src/lib/data/index.ts
 import { QueryClient } from '@tanstack/react-query'
-import { cache } from 'react'
 
-// Create singleton per request
-export const getQueryClient = cache(() => new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60 * 1000,
-    },
-  },
-}))
+let browserQueryClient: QueryClient | undefined = undefined
+
+export function getQueryClient() {
+  if (typeof window === 'undefined') {
+    // Server: always create new client
+    return new QueryClient({
+      defaultOptions: {
+        queries: { staleTime: 60 * 1000 },
+      },
+    })
+  } else {
+    // Browser: use singleton
+    if (!browserQueryClient) {
+      browserQueryClient = new QueryClient({
+        defaultOptions: {
+          queries: { staleTime: 60 * 1000 },
+        },
+      })
+    }
+    return browserQueryClient
+  }
+}
 ```
 
 ## Anti-Patterns to Avoid
@@ -291,21 +336,28 @@ const { data } = useQuery({
 })
 ```
 
-### 4. Not Using Prefetch with SSR
+### 4. Not Using Route Loaders for SSR
 
 ```tsx
 // BAD - client-side fetch causes loading flash
-export default function Page() {
-  return <Posts /> // useQuery inside fetches on client
-}
+export const Route = createFileRoute('/posts')({
+  component: () => <Posts />, // useQuery inside fetches on client
+})
 
-// GOOD - prefetch on server
-export default async function Page() {
-  const queryClient = new QueryClient()
-  await queryClient.prefetchQuery({ queryKey: ['posts'], queryFn: getPosts })
+// GOOD - prefetch in loader
+export const Route = createFileRoute('/posts')({
+  loader: async () => {
+    const queryClient = new QueryClient()
+    await queryClient.prefetchQuery({ queryKey: ['posts'], queryFn: getPosts })
+    return { dehydratedState: dehydrate(queryClient) }
+  },
+  component: PostsPage,
+})
 
+function PostsPage() {
+  const { dehydratedState } = Route.useLoaderData()
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
+    <HydrationBoundary state={dehydratedState}>
       <Posts />
     </HydrationBoundary>
   )

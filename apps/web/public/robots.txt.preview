@@ -1,0 +1,7 @@
+# Roundtable - Preview Environment
+# https://app-preview.roundtable.now
+
+User-agent: *
+Disallow: /
+
+# Preview/Development environment - no indexing

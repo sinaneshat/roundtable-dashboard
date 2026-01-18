@@ -591,7 +591,10 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
 
     // Messages array only has user message
     expect(state.messages).toHaveLength(1);
-    expect(getRoundNumber(state.messages[0]!.metadata)).toBe(0);
+    const firstMessage = state.messages[0];
+    if (!firstMessage)
+      throw new Error('Expected first message');
+    expect(getRoundNumber(firstMessage.metadata)).toBe(0);
 
     // But UI renders placeholders based on:
     // - streamingRoundNumber (which round is active)
@@ -694,10 +697,12 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
     const streamEvent = visibilityMarkers.find(m => m.event === 'first-stream-token');
 
     expect(placeholderEvent).toBeDefined();
+    if (!placeholderEvent)
+      throw new Error('Expected placeholder event');
     // Verify timing - if stream event exists, placeholder should have been visible before/at stream start
 
     const placeholderBeforeStream = streamEvent
-      ? placeholderEvent!.timestamp <= streamEvent.timestamp
+      ? placeholderEvent.timestamp <= streamEvent.timestamp
       : true; // No stream event to compare
     expect(placeholderBeforeStream).toBe(true);
   });

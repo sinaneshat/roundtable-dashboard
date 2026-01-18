@@ -23,7 +23,7 @@ import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes, U
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage } from '@/lib/testing';
-import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
+import type { ApiMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -72,7 +72,7 @@ function createParticipant(index: number, modelId = `model-${index}`): ChatParti
 }
 
 /** Creates a user message with deterministic ID */
-function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ChatMessage {
+function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ApiMessage {
   return createTestUserMessage({
     id: `${THREAD_ID}_r${roundNumber}_user`,
     content,
@@ -81,7 +81,7 @@ function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`)
 }
 
 /** Creates an optimistic user message (temporary ID) */
-function _createOptimisticUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ChatMessage {
+function _createOptimisticUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ApiMessage {
   return createTestUserMessage({
     id: `optimistic-${Date.now()}-${roundNumber}`,
     content,
@@ -96,7 +96,7 @@ function createAssistantMsg(
   participantIndex: number,
   content = `Response R${roundNumber}P${participantIndex}`,
   finishReason = FinishReasons.STOP,
-): ChatMessage {
+): ApiMessage {
   return createTestAssistantMessage({
     id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     content,
@@ -112,7 +112,7 @@ function createTempAssistantMsg(
   roundNumber: number,
   participantIndex: number,
   content = `Response R${roundNumber}P${participantIndex}`,
-): ChatMessage {
+): ApiMessage {
   return createTestAssistantMessage({
     id: `gen-${Math.random().toString(36).slice(2)}`,
     content,
@@ -124,7 +124,7 @@ function createTempAssistantMsg(
 }
 
 /** Creates a moderator message */
-function createModeratorMsg(roundNumber: number, content = `Summary R${roundNumber}`): ChatMessage {
+function createModeratorMsg(roundNumber: number, content = `Summary R${roundNumber}`): ApiMessage {
   return createTestModeratorMessage({
     id: `${THREAD_ID}_r${roundNumber}_moderator`,
     content,
@@ -160,10 +160,10 @@ function createPreSearch(
 // INVARIANT HELPERS
 // ============================================================================
 
-type MessageWithMetadata = ChatMessage & { metadata: { roundNumber: number; role?: string; isModerator?: boolean; participantIndex?: number } };
+type MessageWithMetadata = ApiMessage & { metadata: { roundNumber: number; role?: string; isModerator?: boolean; participantIndex?: number } };
 
 /** Validates all message flow invariants */
-function validateMessageInvariants(messages: ChatMessage[], expectedRounds: number, participantsPerRound: number) {
+function validateMessageInvariants(messages: ApiMessage[], expectedRounds: number, participantsPerRound: number) {
   const errors: string[] = [];
 
   for (let round = 0; round < expectedRounds; round++) {
@@ -245,7 +245,10 @@ describe('message Flow Invariants', () => {
       );
 
       expect(round0UserMsgs).toHaveLength(1);
-      expect(round0UserMsgs[0]!.id).toBe(`${THREAD_ID}_r0_user`);
+      const firstUserMsg = round0UserMsgs[0];
+      if (!firstUserMsg)
+        throw new Error('expected user message');
+      expect(firstUserMsg.id).toBe(`${THREAD_ID}_r0_user`);
     });
   });
 
@@ -345,7 +348,10 @@ describe('message Flow Invariants', () => {
 
       // Should have exactly 1 assistant message with deterministic ID
       expect(assistantMsgs).toHaveLength(1);
-      expect(assistantMsgs[0]!.id).toBe(`${THREAD_ID}_r0_p0`);
+      const firstAssistantMsg = assistantMsgs[0];
+      if (!firstAssistantMsg)
+        throw new Error('expected assistant message');
+      expect(firstAssistantMsg.id).toBe(`${THREAD_ID}_r0_p0`);
     });
   });
 });
@@ -627,7 +633,10 @@ describe('deduplication Algorithm', () => {
     const userMsgs = messages.filter(m => m.role === MessageRoles.USER);
 
     expect(userMsgs).toHaveLength(1);
-    expect(userMsgs[0]!.id).toBe(`${THREAD_ID}_r0_user`);
+    const firstUserMsg = userMsgs[0];
+    if (!firstUserMsg)
+      throw new Error('expected user message');
+    expect(firstUserMsg.id).toBe(`${THREAD_ID}_r0_user`);
   });
 });
 
@@ -641,7 +650,7 @@ describe('performance Baseline', () => {
     const participants = [createParticipant(0), createParticipant(1)];
     store.getState().initializeThread(createThread(), participants, []);
 
-    const messages: ChatMessage[] = [];
+    const messages: ApiMessage[] = [];
     for (let round = 0; round < 25; round++) {
       messages.push(createUserMsg(round));
       messages.push(createAssistantMsg(round, 0));

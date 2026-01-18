@@ -28,7 +28,8 @@ import {
   createTestUserMessage,
 } from '@/lib/testing';
 import { getRoundNumber } from '@/lib/utils';
-import type { StoredModeratorSummary } from '@/types/api';
+
+import type { StoredModeratorSummary } from '../store-schemas';
 
 // ============================================================================
 // TYPE ALIASES
@@ -88,7 +89,9 @@ function groupMessagesByRound(
       });
     }
 
-    const group = roundMap.get(roundNumber)!;
+    const group = roundMap.get(roundNumber);
+    if (!group)
+      throw new Error('expected round group');
 
     if (msg.role === MessageRoles.USER) {
       group.userMessage = msg;

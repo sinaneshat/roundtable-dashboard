@@ -32,7 +32,7 @@ import {
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { ChatParticipant } from '@/types/api';
+import type { ChatParticipant } from '@/services/api';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
@@ -382,10 +382,13 @@ describe('participant Removals Between Rounds', () => {
     });
 
     // Remove participant-1
-    const round1Participants = [
-      round0Participants[0]!,
-      round0Participants[2]!,
-    ];
+    const p0 = round0Participants[0];
+    const p2 = round0Participants[2];
+    if (!p0)
+      throw new Error('expected round0Participants[0] to exist');
+    if (!p2)
+      throw new Error('expected round0Participants[2] to exist');
+    const round1Participants = [p0, p2];
 
     const changes = detectParticipantChanges(round0Participants, round1Participants);
     expect(changes.filter(c => c.changeType === 'removed')).toHaveLength(1);
@@ -423,7 +426,10 @@ describe('participant Removals Between Rounds', () => {
       enableWebSearch: false,
     });
 
-    const round1Participants = [round0Participants[0]!];
+    const p0 = round0Participants[0];
+    if (!p0)
+      throw new Error('expected round0Participants[0] to exist');
+    const round1Participants = [p0];
 
     const changes = detectParticipantChanges(round0Participants, round1Participants);
     expect(changes.filter(c => c.changeType === 'removed')).toHaveLength(3);
@@ -459,7 +465,10 @@ describe('participant Removals Between Rounds', () => {
       enableWebSearch: false,
     });
 
-    const round1Participants = [round0Participants[1]!]; // Keep only claude
+    const p1 = round0Participants[1];
+    if (!p1)
+      throw new Error('expected round0Participants[1] to exist');
+    const round1Participants = [p1]; // Keep only claude
 
     const changes = detectParticipantChanges(round0Participants, round1Participants);
     expect(changes.filter(c => c.changeType === 'removed')).toHaveLength(2);
@@ -786,7 +795,9 @@ describe('mode Changes Between Rounds', () => {
     store.getState().setParticipants(participants);
 
     for (let i = 0; i < modes.length; i++) {
-      const mode = modes[i]!;
+      const mode = modes[i];
+      if (!mode)
+        throw new Error(`expected modes[${i}] to exist`);
       store.getState().setSelectedMode(mode);
       store.getState().setThread(createMockThread({ mode }));
 
@@ -906,7 +917,9 @@ describe('web Search Toggle Between Rounds', () => {
     store.getState().setParticipants(participants);
 
     for (let i = 0; i < toggleStates.length; i++) {
-      const enableWebSearch = toggleStates[i]!;
+      const enableWebSearch = toggleStates[i];
+      if (enableWebSearch === undefined)
+        throw new Error(`expected toggleStates[${i}] to exist`);
       store.getState().setEnableWebSearch(enableWebSearch);
       store.getState().setThread(createMockThread({ enableWebSearch }));
 
@@ -987,7 +1000,10 @@ describe('combined Changes (Multiple Types at Once)', () => {
       enableWebSearch: false,
     });
 
-    const round1Participants = [round0Participants[0]!];
+    const p0 = round0Participants[0];
+    if (!p0)
+      throw new Error('expected round0Participants[0] to exist');
+    const round1Participants = [p0];
 
     store.getState().setParticipants(round1Participants);
     store.getState().setEnableWebSearch(true);

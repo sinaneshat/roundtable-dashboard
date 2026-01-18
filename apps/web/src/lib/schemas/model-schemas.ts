@@ -13,7 +13,24 @@
 import { z } from 'zod';
 
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
-import { EnhancedModelSchema } from '@/types/api';
+import type { Model } from '@/services/api';
+
+/**
+ * ModelSchema - Custom Zod schema that accepts the RPC Model type
+ * Uses z.custom<Model>() to trust the RPC type without duplicating validation
+ */
+export const ModelSchema = z.custom<Model>(
+  (val): val is Model => {
+    return (
+      typeof val === 'object'
+      && val !== null
+      && 'id' in val
+      && 'name' in val
+      && 'provider' in val
+    );
+  },
+  { message: 'Invalid Model object' },
+);
 
 // ============================================================================
 // ORDERED MODEL SCHEMAS - UI MODEL SELECTION
@@ -28,7 +45,7 @@ import { EnhancedModelSchema } from '@/types/api';
  * - Model item display components
  * - useOrderedModels hook
  *
- * Combines EnhancedModelResponse from API with local participant config
+ * Combines Model from API with local participant config
  * and order information for UI rendering.
  *
  * @example
@@ -36,14 +53,14 @@ import { EnhancedModelSchema } from '@/types/api';
  * import { OrderedModelSchema } from '@/lib/schemas/model-schemas';
  *
  * const orderedModel = OrderedModelSchema.parse({
- *   model: enhancedModelResponse,
+ *   model: modelResponse,
  *   participant: participantConfig || null,
  *   order: 0
  * });
  * ```
  */
 export const OrderedModelSchema = z.object({
-  model: EnhancedModelSchema,
+  model: ModelSchema,
   participant: ParticipantConfigSchema.nullable(),
   order: z.number().int().nonnegative(),
 });

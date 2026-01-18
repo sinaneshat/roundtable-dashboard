@@ -237,9 +237,9 @@ async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage
     createdAt: now,
   });
 
-  if (hasPendingTierChange) {
-    const pendingTier = currentUsage.pendingTierChange!;
-    const pendingIsAnnual = currentUsage.pendingTierIsAnnual || false;
+  if (hasPendingTierChange && currentUsage.pendingTierChange) {
+    const pendingTier = currentUsage.pendingTierChange;
+    const pendingIsAnnual = currentUsage.pendingTierIsAnnual ?? false;
 
     const usageUpdate = db.update(tables.userChatUsage)
       .set({

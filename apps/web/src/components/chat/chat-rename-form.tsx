@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 const RenameFormSchema = z.object({

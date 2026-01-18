@@ -391,14 +391,20 @@ describe('round Regeneration - Errors Without structuredClone', () => {
 
     // These are still frozen references
     expect(Object.isFrozen(filteredMessagesNoClone[0])).toBe(true);
-    expect(simulateAiSdkStreamingPush(filteredMessagesNoClone[0]!)).toBe(false);
+    const noCloneMsg = filteredMessagesNoClone[0];
+    if (!noCloneMsg)
+      throw new Error('expected noCloneMsg');
+    expect(simulateAiSdkStreamingPush(noCloneMsg)).toBe(false);
 
     // WITH structuredClone (correct approach)
     const filteredMessagesWithClone = structuredClone(filterMessagesForRetry(messages, 0));
 
     // These are now mutable
     expect(Object.isFrozen(filteredMessagesWithClone[0])).toBe(false);
-    expect(simulateAiSdkStreamingPush(filteredMessagesWithClone[0]!)).toBe(true);
+    const cloneMsg = filteredMessagesWithClone[0];
+    if (!cloneMsg)
+      throw new Error('expected cloneMsg');
+    expect(simulateAiSdkStreamingPush(cloneMsg)).toBe(true);
   });
 });
 

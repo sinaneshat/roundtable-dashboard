@@ -296,4 +296,12 @@ export const invalidationPatterns = {
   afterUpload: () => [
     queryKeys.uploads.lists(),
   ],
+
+  // Leave thread - invalidate thread-specific caches when navigating away
+  // Used by navigation-reset.ts when user leaves a thread to start a new chat
+  leaveThread: (threadId: string) => [
+    queryKeys.threads.messages(threadId),
+    queryKeys.threads.preSearches(threadId),
+    queryKeys.threads.feedback(threadId),
+  ],
 } as const;

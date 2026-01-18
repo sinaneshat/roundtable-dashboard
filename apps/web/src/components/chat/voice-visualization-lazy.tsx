@@ -1,6 +1,6 @@
 import { Icons } from '@/components/icons';
-import { dynamic } from '@/lib/compat';
 import { cn } from '@/lib/ui/cn';
+import dynamic from '@/lib/utils/dynamic';
 
 type VoiceVisualizationProps = {
   isActive: boolean;

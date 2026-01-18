@@ -22,7 +22,7 @@ import { ChatModes, MessageStatuses } from '@roundtable/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockParticipant, createMockThread } from '@/lib/testing';
-import type { StoredThread } from '@/types/api';
+import type { StoredThread } from '@/services/api';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
@@ -288,7 +288,13 @@ describe('network Request Order Verification', () => {
 
     // Verify timestamps are monotonically increasing
     for (let i = 1; i < callOrder.length; i++) {
-      expect(callOrder[i]!.timestamp).toBeGreaterThan(callOrder[i - 1]!.timestamp);
+      const current = callOrder[i];
+      const previous = callOrder[i - 1];
+      if (!current)
+        throw new Error(`expected callOrder[${i}] to exist`);
+      if (!previous)
+        throw new Error(`expected callOrder[${i - 1}] to exist`);
+      expect(current.timestamp).toBeGreaterThan(previous.timestamp);
     }
 
     // Verify all services called exactly once

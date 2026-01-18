@@ -2,7 +2,7 @@
 
 **Zustand v5 Pattern Implementation**
 
-Following official Zustand v5 best practices for Next.js App Router.
+Following official Zustand v5 best practices for TanStack Start with SSR.
 
 ## Structure
 
@@ -114,7 +114,7 @@ function Component() {
 3. **Type Safety**: Full TypeScript inference throughout
 4. **Reusability**: Action hooks encapsulate complex logic for reuse across components
 5. **Testability**: Action hooks can be tested independently
-6. **Official Pattern**: Follows Zustand v5 and Next.js App Router best practices
+6. **Official Pattern**: Follows Zustand v5 and TanStack Start best practices
 
 ## Council Moderator Architecture
 

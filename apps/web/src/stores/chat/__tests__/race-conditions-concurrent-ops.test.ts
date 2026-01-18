@@ -28,7 +28,7 @@ import {
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import type { ChatThread, DbAssistantMessageMetadata } from '@/types/api';
+import type { ChatThread, DbAssistantMessageMetadata } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -979,13 +979,16 @@ describe('round Boundary Integrity', () => {
 
       // Add streaming message with correct round number
       const currentMessages = store.getState().messages;
+      if (streamingRoundNumber === null)
+        throw new Error('Expected streamingRoundNumber to be set');
+
       store.getState().setMessages([
         ...currentMessages,
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: streamingRoundNumber! }),
+        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: streamingRoundNumber }),
         createTestAssistantMessage({
           id: 'streaming-a1-0',
           content: 'Streaming...',
-          roundNumber: streamingRoundNumber!,
+          roundNumber: streamingRoundNumber,
           participantId: 'p0',
           participantIndex: 0,
           finishReason: FinishReasons.UNKNOWN,
@@ -1062,7 +1065,11 @@ describe('round Boundary Integrity', () => {
         if (!messagesByRound.has(round)) {
           messagesByRound.set(round, []);
         }
-        messagesByRound.get(round)!.push(m);
+        const roundMessages = messagesByRound.get(round);
+        if (!roundMessages)
+          throw new Error('Expected roundMessages to be set');
+
+        roundMessages.push(m);
       });
 
       // Round 0 should have exactly 2 messages
@@ -1071,7 +1078,11 @@ describe('round Boundary Integrity', () => {
       expect(messagesByRound.get(1)).toHaveLength(2);
 
       // Verify no cross-contamination
-      const round0Ids = messagesByRound.get(0)!.map(m => m.id);
+      const round0Messages = messagesByRound.get(0);
+      if (!round0Messages)
+        throw new Error('Expected round0Messages to be set');
+
+      const round0Ids = round0Messages.map(m => m.id);
       expect(round0Ids).toContain('u0');
       expect(round0Ids).toContain('a0-0');
       expect(round0Ids).not.toContain('u1');
@@ -1136,7 +1147,11 @@ describe('round Boundary Integrity', () => {
 
       // p0 should have exactly 1 message in round 1
       expect(p0InRound1).toHaveLength(1);
-      expect(p0InRound1[0]!.id).toBe('a1-p0');
+      const firstP0Message = p0InRound1[0];
+      if (!firstP0Message)
+        throw new Error('Expected firstP0Message to be set');
+
+      expect(firstP0Message.id).toBe('a1-p0');
     });
   });
 

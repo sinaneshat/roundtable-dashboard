@@ -16,23 +16,23 @@ import { createApiClient } from '@/lib/api/client';
 // ============================================================================
 
 type ListProjectsEndpoint = ApiClientType['projects']['$get'];
-export type ListProjectsResponse = InferResponseType<ListProjectsEndpoint>;
+export type ListProjectsResponse = InferResponseType<ListProjectsEndpoint, 200>;
 export type ListProjectsRequest = InferRequestType<ListProjectsEndpoint>;
 
 type CreateProjectEndpoint = ApiClientType['projects']['$post'];
-export type CreateProjectResponse = InferResponseType<CreateProjectEndpoint>;
+export type CreateProjectResponse = InferResponseType<CreateProjectEndpoint, 200>;
 export type CreateProjectRequest = InferRequestType<CreateProjectEndpoint>;
 
 type GetProjectEndpoint = ApiClientType['projects'][':id']['$get'];
-export type GetProjectResponse = InferResponseType<GetProjectEndpoint>;
+export type GetProjectResponse = InferResponseType<GetProjectEndpoint, 200>;
 export type GetProjectRequest = InferRequestType<GetProjectEndpoint>;
 
 type UpdateProjectEndpoint = ApiClientType['projects'][':id']['$patch'];
-export type UpdateProjectResponse = InferResponseType<UpdateProjectEndpoint>;
+export type UpdateProjectResponse = InferResponseType<UpdateProjectEndpoint, 200>;
 export type UpdateProjectRequest = InferRequestType<UpdateProjectEndpoint>;
 
 type DeleteProjectEndpoint = ApiClientType['projects'][':id']['$delete'];
-export type DeleteProjectResponse = InferResponseType<DeleteProjectEndpoint>;
+export type DeleteProjectResponse = InferResponseType<DeleteProjectEndpoint, 200>;
 export type DeleteProjectRequest = InferRequestType<DeleteProjectEndpoint>;
 
 // ============================================================================
@@ -40,23 +40,23 @@ export type DeleteProjectRequest = InferRequestType<DeleteProjectEndpoint>;
 // ============================================================================
 
 type ListProjectAttachmentsEndpoint = ApiClientType['projects'][':id']['attachments']['$get'];
-export type ListProjectAttachmentsResponse = InferResponseType<ListProjectAttachmentsEndpoint>;
+export type ListProjectAttachmentsResponse = InferResponseType<ListProjectAttachmentsEndpoint, 200>;
 export type ListProjectAttachmentsRequest = InferRequestType<ListProjectAttachmentsEndpoint>;
 
 type AddUploadToProjectEndpoint = ApiClientType['projects'][':id']['attachments']['$post'];
-export type AddUploadToProjectResponse = InferResponseType<AddUploadToProjectEndpoint>;
+export type AddUploadToProjectResponse = InferResponseType<AddUploadToProjectEndpoint, 200>;
 export type AddUploadToProjectRequest = InferRequestType<AddUploadToProjectEndpoint>;
 
 type GetProjectAttachmentEndpoint = ApiClientType['projects'][':id']['attachments'][':attachmentId']['$get'];
-export type GetProjectAttachmentResponse = InferResponseType<GetProjectAttachmentEndpoint>;
+export type GetProjectAttachmentResponse = InferResponseType<GetProjectAttachmentEndpoint, 200>;
 export type GetProjectAttachmentRequest = InferRequestType<GetProjectAttachmentEndpoint>;
 
 type UpdateProjectAttachmentEndpoint = ApiClientType['projects'][':id']['attachments'][':attachmentId']['$patch'];
-export type UpdateProjectAttachmentResponse = InferResponseType<UpdateProjectAttachmentEndpoint>;
+export type UpdateProjectAttachmentResponse = InferResponseType<UpdateProjectAttachmentEndpoint, 200>;
 export type UpdateProjectAttachmentRequest = InferRequestType<UpdateProjectAttachmentEndpoint>;
 
 type RemoveAttachmentFromProjectEndpoint = ApiClientType['projects'][':id']['attachments'][':attachmentId']['$delete'];
-export type RemoveAttachmentFromProjectResponse = InferResponseType<RemoveAttachmentFromProjectEndpoint>;
+export type RemoveAttachmentFromProjectResponse = InferResponseType<RemoveAttachmentFromProjectEndpoint, 200>;
 export type RemoveAttachmentFromProjectRequest = InferRequestType<RemoveAttachmentFromProjectEndpoint>;
 
 // ============================================================================
@@ -64,23 +64,23 @@ export type RemoveAttachmentFromProjectRequest = InferRequestType<RemoveAttachme
 // ============================================================================
 
 type ListProjectMemoriesEndpoint = ApiClientType['projects'][':id']['memories']['$get'];
-export type ListProjectMemoriesResponse = InferResponseType<ListProjectMemoriesEndpoint>;
+export type ListProjectMemoriesResponse = InferResponseType<ListProjectMemoriesEndpoint, 200>;
 export type ListProjectMemoriesRequest = InferRequestType<ListProjectMemoriesEndpoint>;
 
 type CreateProjectMemoryEndpoint = ApiClientType['projects'][':id']['memories']['$post'];
-export type CreateProjectMemoryResponse = InferResponseType<CreateProjectMemoryEndpoint>;
+export type CreateProjectMemoryResponse = InferResponseType<CreateProjectMemoryEndpoint, 200>;
 export type CreateProjectMemoryRequest = InferRequestType<CreateProjectMemoryEndpoint>;
 
 type GetProjectMemoryEndpoint = ApiClientType['projects'][':id']['memories'][':memoryId']['$get'];
-export type GetProjectMemoryResponse = InferResponseType<GetProjectMemoryEndpoint>;
+export type GetProjectMemoryResponse = InferResponseType<GetProjectMemoryEndpoint, 200>;
 export type GetProjectMemoryRequest = InferRequestType<GetProjectMemoryEndpoint>;
 
 type UpdateProjectMemoryEndpoint = ApiClientType['projects'][':id']['memories'][':memoryId']['$patch'];
-export type UpdateProjectMemoryResponse = InferResponseType<UpdateProjectMemoryEndpoint>;
+export type UpdateProjectMemoryResponse = InferResponseType<UpdateProjectMemoryEndpoint, 200>;
 export type UpdateProjectMemoryRequest = InferRequestType<UpdateProjectMemoryEndpoint>;
 
 type DeleteProjectMemoryEndpoint = ApiClientType['projects'][':id']['memories'][':memoryId']['$delete'];
-export type DeleteProjectMemoryResponse = InferResponseType<DeleteProjectMemoryEndpoint>;
+export type DeleteProjectMemoryResponse = InferResponseType<DeleteProjectMemoryEndpoint, 200>;
 export type DeleteProjectMemoryRequest = InferRequestType<DeleteProjectMemoryEndpoint>;
 
 // ============================================================================
@@ -88,7 +88,7 @@ export type DeleteProjectMemoryRequest = InferRequestType<DeleteProjectMemoryEnd
 // ============================================================================
 
 type GetProjectContextEndpoint = ApiClientType['projects'][':id']['context']['$get'];
-export type GetProjectContextResponse = InferResponseType<GetProjectContextEndpoint>;
+export type GetProjectContextResponse = InferResponseType<GetProjectContextEndpoint, 200>;
 export type GetProjectContextRequest = InferRequestType<GetProjectContextEndpoint>;
 
 // ============================================================================
@@ -99,12 +99,9 @@ export type GetProjectContextRequest = InferRequestType<GetProjectContextEndpoin
  * List projects with cursor pagination
  * Protected endpoint - requires authentication
  */
-export async function listProjectsService(args?: ListProjectsRequest) {
+export async function listProjectsService(data?: ListProjectsRequest) {
   const client = createApiClient();
-  const params: ListProjectsRequest = {
-    query: args?.query ?? {},
-  };
-  return parseResponse(client.projects.$get(params));
+  return parseResponse(client.projects.$get(data ?? { query: {} }));
 }
 
 /**
@@ -122,10 +119,7 @@ export async function createProjectService(data: CreateProjectRequest) {
  */
 export async function getProjectService(data: GetProjectRequest) {
   const client = createApiClient();
-  const params: GetProjectRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.projects[':id'].$get(params));
+  return parseResponse(client.projects[':id'].$get(data));
 }
 
 /**
@@ -134,11 +128,7 @@ export async function getProjectService(data: GetProjectRequest) {
  */
 export async function updateProjectService(data: UpdateProjectRequest) {
   const client = createApiClient();
-  const params: UpdateProjectRequest = {
-    param: data.param ?? { id: '' },
-    json: data.json ?? {},
-  };
-  return parseResponse(client.projects[':id'].$patch(params));
+  return parseResponse(client.projects[':id'].$patch(data));
 }
 
 /**
@@ -147,10 +137,7 @@ export async function updateProjectService(data: UpdateProjectRequest) {
  */
 export async function deleteProjectService(data: DeleteProjectRequest) {
   const client = createApiClient();
-  const params: DeleteProjectRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.projects[':id'].$delete(params));
+  return parseResponse(client.projects[':id'].$delete(data));
 }
 
 // ============================================================================
@@ -163,11 +150,7 @@ export async function deleteProjectService(data: DeleteProjectRequest) {
  */
 export async function listProjectAttachmentsService(data: ListProjectAttachmentsRequest) {
   const client = createApiClient();
-  const params: ListProjectAttachmentsRequest = {
-    param: data.param ?? { id: '' },
-    query: data.query ?? {},
-  };
-  return parseResponse(client.projects[':id'].attachments.$get(params));
+  return parseResponse(client.projects[':id'].attachments.$get(data));
 }
 
 /**
@@ -176,11 +159,7 @@ export async function listProjectAttachmentsService(data: ListProjectAttachments
  */
 export async function addUploadToProjectService(data: AddUploadToProjectRequest) {
   const client = createApiClient();
-  const params: AddUploadToProjectRequest = {
-    param: data.param ?? { id: '' },
-    json: data.json ?? { uploadId: '' },
-  };
-  return parseResponse(client.projects[':id'].attachments.$post(params));
+  return parseResponse(client.projects[':id'].attachments.$post(data));
 }
 
 /**
@@ -189,10 +168,7 @@ export async function addUploadToProjectService(data: AddUploadToProjectRequest)
  */
 export async function getProjectAttachmentService(data: GetProjectAttachmentRequest) {
   const client = createApiClient();
-  const params: GetProjectAttachmentRequest = {
-    param: data.param ?? { id: '', attachmentId: '' },
-  };
-  return parseResponse(client.projects[':id'].attachments[':attachmentId'].$get(params));
+  return parseResponse(client.projects[':id'].attachments[':attachmentId'].$get(data));
 }
 
 /**
@@ -201,11 +177,7 @@ export async function getProjectAttachmentService(data: GetProjectAttachmentRequ
  */
 export async function updateProjectAttachmentService(data: UpdateProjectAttachmentRequest) {
   const client = createApiClient();
-  const params: UpdateProjectAttachmentRequest = {
-    param: data.param ?? { id: '', attachmentId: '' },
-    json: data.json ?? {},
-  };
-  return parseResponse(client.projects[':id'].attachments[':attachmentId'].$patch(params));
+  return parseResponse(client.projects[':id'].attachments[':attachmentId'].$patch(data));
 }
 
 /**
@@ -214,10 +186,7 @@ export async function updateProjectAttachmentService(data: UpdateProjectAttachme
  */
 export async function removeAttachmentFromProjectService(data: RemoveAttachmentFromProjectRequest) {
   const client = createApiClient();
-  const params: RemoveAttachmentFromProjectRequest = {
-    param: data.param ?? { id: '', attachmentId: '' },
-  };
-  return parseResponse(client.projects[':id'].attachments[':attachmentId'].$delete(params));
+  return parseResponse(client.projects[':id'].attachments[':attachmentId'].$delete(data));
 }
 
 // ============================================================================
@@ -230,11 +199,7 @@ export async function removeAttachmentFromProjectService(data: RemoveAttachmentF
  */
 export async function listProjectMemoriesService(data: ListProjectMemoriesRequest) {
   const client = createApiClient();
-  const params: ListProjectMemoriesRequest = {
-    param: data.param ?? { id: '' },
-    query: data.query ?? {},
-  };
-  return parseResponse(client.projects[':id'].memories.$get(params));
+  return parseResponse(client.projects[':id'].memories.$get(data));
 }
 
 /**
@@ -243,11 +208,7 @@ export async function listProjectMemoriesService(data: ListProjectMemoriesReques
  */
 export async function createProjectMemoryService(data: CreateProjectMemoryRequest) {
   const client = createApiClient();
-  const params: CreateProjectMemoryRequest = {
-    param: data.param ?? { id: '' },
-    json: data.json ?? { content: '' },
-  };
-  return parseResponse(client.projects[':id'].memories.$post(params));
+  return parseResponse(client.projects[':id'].memories.$post(data));
 }
 
 /**
@@ -256,10 +217,7 @@ export async function createProjectMemoryService(data: CreateProjectMemoryReques
  */
 export async function getProjectMemoryService(data: GetProjectMemoryRequest) {
   const client = createApiClient();
-  const params: GetProjectMemoryRequest = {
-    param: data.param ?? { id: '', memoryId: '' },
-  };
-  return parseResponse(client.projects[':id'].memories[':memoryId'].$get(params));
+  return parseResponse(client.projects[':id'].memories[':memoryId'].$get(data));
 }
 
 /**
@@ -268,11 +226,7 @@ export async function getProjectMemoryService(data: GetProjectMemoryRequest) {
  */
 export async function updateProjectMemoryService(data: UpdateProjectMemoryRequest) {
   const client = createApiClient();
-  const params: UpdateProjectMemoryRequest = {
-    param: data.param ?? { id: '', memoryId: '' },
-    json: data.json ?? {},
-  };
-  return parseResponse(client.projects[':id'].memories[':memoryId'].$patch(params));
+  return parseResponse(client.projects[':id'].memories[':memoryId'].$patch(data));
 }
 
 /**
@@ -281,10 +235,7 @@ export async function updateProjectMemoryService(data: UpdateProjectMemoryReques
  */
 export async function deleteProjectMemoryService(data: DeleteProjectMemoryRequest) {
   const client = createApiClient();
-  const params: DeleteProjectMemoryRequest = {
-    param: data.param ?? { id: '', memoryId: '' },
-  };
-  return parseResponse(client.projects[':id'].memories[':memoryId'].$delete(params));
+  return parseResponse(client.projects[':id'].memories[':memoryId'].$delete(data));
 }
 
 // ============================================================================
@@ -297,8 +248,21 @@ export async function deleteProjectMemoryService(data: DeleteProjectMemoryReques
  */
 export async function getProjectContextService(data: GetProjectContextRequest) {
   const client = createApiClient();
-  const params: GetProjectContextRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.projects[':id'].context.$get(params));
+  return parseResponse(client.projects[':id'].context.$get(data));
 }
+
+// ============================================================================
+// Derived Query Types
+// ============================================================================
+
+/**
+ * Query parameters for listing project attachments
+ * Derived from ListProjectAttachmentsRequest
+ */
+export type ListProjectAttachmentsQuery = ListProjectAttachmentsRequest extends { query: infer Q } ? Q : never;
+
+/**
+ * Query parameters for listing project memories
+ * Derived from ListProjectMemoriesRequest
+ */
+export type ListProjectMemoriesQuery = ListProjectMemoriesRequest extends { query: infer Q } ? Q : never;

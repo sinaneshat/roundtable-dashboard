@@ -817,7 +817,11 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       // This prevents UNIQUE constraint violations when participant sent without id
       // but modelId already exists in thread (even if disabled)
       const currentByModelId = new Map(currentParticipants.map(p => [p.modelId, p]));
-      const newMap = new Map(body.participants.filter(p => p.id).map(p => [p.id!, p]));
+      const newMap = new Map(
+        body.participants
+          .filter((p): p is typeof p & { id: string } => Boolean(p.id))
+          .map(p => [p.id, p]),
+      );
       // Follow established pattern from createThreadHandler (lines 196-229)
       // Construct values inline with TypeScript type inference
       const participantsToInsert = [];
@@ -1662,8 +1666,8 @@ export const listPublicThreadSlugsHandler: RouteHandler<typeof listPublicThreadS
       });
 
     const slugs = publicThreads
-      .filter(thread => thread.slug)
-      .map(thread => ({ slug: thread.slug! }));
+      .filter((thread): thread is typeof thread & { slug: string } => Boolean(thread.slug))
+      .map(thread => ({ slug: thread.slug }));
 
     const response = Responses.ok(c, { slugs });
 

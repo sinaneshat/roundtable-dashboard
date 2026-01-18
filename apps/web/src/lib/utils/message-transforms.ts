@@ -33,28 +33,20 @@ import type { UIMessage } from 'ai';
 import type { ErrorMetadata } from '@/lib/schemas/error-schemas';
 import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
 import type { ParticipantContext } from '@/lib/schemas/participant-schemas';
-import type { ApiMessage } from '@/services/api';
-import type { ChatMessage, DbAssistantMessageMetadata, DbMessageMetadata, DbPreSearchMessageMetadata } from '@/types/api';
-import {
-  DbAssistantMessageMetadataSchema,
-  DbPreSearchMessageMetadataSchema,
-  UsageSchema,
-} from '@/types/api';
-
-/**
- * Message input type union - accepts both:
- * - ApiMessage: Inferred from backend Hono response (SINGLE SOURCE OF TRUTH)
- * - ChatMessage: Legacy frontend type stub (TODO: migrate to ApiMessage)
- *
- * This allows gradual migration while maintaining type safety.
- */
-export type MessageInputType = ApiMessage | ChatMessage;
+import type {
+  ApiMessage,
+  DbAssistantMessageMetadata,
+  DbMessageMetadata,
+  DbPreSearchMessageMetadata,
+} from '@/services/api';
+import { UsageSchema } from '@/services/api';
 
 import {
   buildAssistantMetadata,
   enrichMessageWithParticipant,
   getAssistantMetadata,
   getParticipantId,
+  getParticipantMetadata,
   getPreSearchMetadata,
   getRoundNumber,
   getUserMetadata,
@@ -62,6 +54,12 @@ import {
   isPreSearch,
   normalizeOpenRouterError,
 } from './metadata';
+
+/**
+ * Message input type - uses ApiMessage inferred from backend Hono response
+ * (SINGLE SOURCE OF TRUTH via RPC type inference)
+ */
+export type MessageInputType = ApiMessage;
 
 const UNKNOWN_FALLBACK = 'unknown' as const;
 
@@ -94,18 +92,14 @@ function isUIMessageRole(
 export function isPreSearchMessage(
   message: UIMessage,
 ): message is UIMessage & { metadata: DbPreSearchMessageMetadata } {
-  if (!message.metadata)
-    return false;
-  const validation = DbPreSearchMessageMetadataSchema.safeParse(
-    message.metadata,
-  );
-  return validation.success;
+  const metadata = getPreSearchMetadata(message.metadata);
+  return metadata !== null;
 }
 
 /**
  * Type guard: Check if UIMessage is participant message
  *
- * Uses Zod schema validation for runtime type safety.
+ * Uses type guard for runtime type safety.
  * Participant messages are assistant messages with full tracking metadata.
  */
 export function isParticipantMessage(
@@ -113,12 +107,8 @@ export function isParticipantMessage(
 ): message is UIMessage & { metadata: DbAssistantMessageMetadata } {
   if (!message.metadata || message.role !== MessageRoles.ASSISTANT)
     return false;
-  const validation = DbAssistantMessageMetadataSchema.safeParse(
-    message.metadata,
-  );
-  return (
-    validation.success && validation.data && 'participantId' in validation.data
-  );
+  const metadata = getParticipantMetadata(message.metadata);
+  return metadata !== null;
 }
 
 // ============================================================================
@@ -139,14 +129,12 @@ function normalizeMessagePartStates<T extends unknown[]>(parts: T): T {
 }
 
 /**
- * Convert a single backend ChatMessage to AI SDK UIMessage format
+ * Convert a single backend ApiMessage to AI SDK UIMessage format
  *
  * Transforms database message format into AI SDK's UIMessage structure.
  * Handles date serialization and metadata enrichment.
  *
- * Accepts MessageInputType which is a union of:
- * - ApiMessage: Inferred from backend Hono response (SINGLE SOURCE OF TRUTH)
- * - ChatMessage: Legacy frontend type stub
+ * Accepts MessageInputType (ApiMessage inferred from backend Hono response - SINGLE SOURCE OF TRUTH)
  */
 export function chatMessageToUIMessage(
   message: MessageInputType,
@@ -175,6 +163,8 @@ export function chatMessageToUIMessage(
         }
       : null;
 
+  // normalizeMessagePartStates preserves array type while normalizing part states
+  // Type assertion is safe: function returns same type as input (generic T)
   const normalizedParts = normalizeMessagePartStates(
     message.parts || [],
   ) as UIMessage['parts'];
@@ -188,16 +178,14 @@ export function chatMessageToUIMessage(
 }
 
 /**
- * Convert array of backend ChatMessages to AI SDK UIMessage format
+ * Convert array of backend ApiMessages to AI SDK UIMessage format
  *
  * Batch conversion with participant enrichment. Ensures all messages have
  * roundNumber in metadata to prevent display issues.
  *
- * Accepts MessageInputType[] which is a union of:
- * - ApiMessage[]: Inferred from backend Hono response (SINGLE SOURCE OF TRUTH)
- * - ChatMessage[]: Legacy frontend type stub
+ * Accepts MessageInputType[] (ApiMessage[] inferred from backend Hono response - SINGLE SOURCE OF TRUTH)
  *
- * @param messages - Array of MessageInputType objects
+ * @param messages - Array of ApiMessage objects from API response
  * @param participants - Optional participants for enrichment
  * @returns Array of UIMessages with complete metadata
  */

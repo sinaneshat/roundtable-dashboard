@@ -5,8 +5,8 @@ import { Icons } from '@/components/icons';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { PendingAttachment } from '@/hooks/utils';
 import { getFileIconName } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
 import { formatFileSize } from '@/lib/format';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type ChatInputAttachmentsProps = {

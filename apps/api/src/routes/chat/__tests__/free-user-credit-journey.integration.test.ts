@@ -288,9 +288,11 @@ describe('free User Credit Journey Integration', () => {
       const balance = db.getCreditBalance(freeUser.id);
 
       expect(balance).toBeDefined();
-      expect(balance!.balance).toBe(5000);
-      expect(balance!.planType).toBe(PlanTypes.FREE);
-      expect(balance!.reservedCredits).toBe(0);
+      if (!balance)
+        throw new Error('Balance not found');
+      expect(balance.balance).toBe(5000);
+      expect(balance.planType).toBe(PlanTypes.FREE);
+      expect(balance.reservedCredits).toBe(0);
     });
 
     it('signup credit grant is recorded in transactions', () => {
@@ -299,21 +301,28 @@ describe('free User Credit Journey Integration', () => {
       );
 
       expect(grantTx).toBeDefined();
-      expect(grantTx!.amount).toBe(5000);
-      expect(grantTx!.balanceAfter).toBe(5000);
+      if (!grantTx)
+        throw new Error('Grant transaction not found');
+      expect(grantTx.amount).toBe(5000);
+      expect(grantTx.balanceAfter).toBe(5000);
     });
   });
 
   describe('step 2: Thread Creation', () => {
     it('creating thread deducts 100 credits', () => {
-      const balanceBefore = db.getCreditBalance(freeUser.id)!.balance;
+      const balance = db.getCreditBalance(freeUser.id);
+      if (!balance)
+        throw new Error('Balance not found');
+      const balanceBefore = balance.balance;
 
       const thread = db.createThread(freeUser.id, 'Test Thread');
 
       expect(thread).not.toBeNull();
 
-      const balanceAfter = db.getCreditBalance(freeUser.id)!.balance;
-      expect(balanceAfter).toBe(balanceBefore - 100);
+      const balanceAfter = db.getCreditBalance(freeUser.id);
+      if (!balanceAfter)
+        throw new Error('Balance not found after thread creation');
+      expect(balanceAfter.balance).toBe(balanceBefore - 100);
     });
 
     it('thread creation is recorded in transactions', () => {
@@ -327,7 +336,9 @@ describe('free User Credit Journey Integration', () => {
       );
 
       expect(threadCreationTx).toBeDefined();
-      expect(threadCreationTx!.amount).toBe(-100);
+      if (!threadCreationTx)
+        throw new Error('Thread creation transaction not found');
+      expect(threadCreationTx.amount).toBe(-100);
     });
 
     it('free user cannot create second thread', () => {
@@ -339,8 +350,10 @@ describe('free User Credit Journey Integration', () => {
     });
 
     it('thread creation fails if insufficient credits', () => {
-      // Zero out credits
-      db.getCreditBalance(freeUser.id)!.balance = 50;
+      const balance = db.getCreditBalance(freeUser.id);
+      if (!balance)
+        throw new Error('Balance not found');
+      balance.balance = 50;
 
       const thread = db.createThread(freeUser.id, 'Test Thread');
       expect(thread).toBeNull();
@@ -351,29 +364,41 @@ describe('free User Credit Journey Integration', () => {
     it('user message does not deduct credits', () => {
       const thread = db.createThread(freeUser.id, 'Test Thread');
       expect(thread).not.toBeNull();
+      if (!thread)
+        throw new Error('Thread not created');
 
-      const balanceBefore = db.getCreditBalance(freeUser.id)!.balance;
+      const balanceBefore = db.getCreditBalance(freeUser.id);
+      if (!balanceBefore)
+        throw new Error('Balance not found');
 
-      db.addMessage(thread!.id, MessageRoles.USER, 'Hello world', 0);
+      db.addMessage(thread.id, MessageRoles.USER, 'Hello world', 0);
 
-      const balanceAfter = db.getCreditBalance(freeUser.id)!.balance;
-      expect(balanceAfter).toBe(balanceBefore);
+      const balanceAfter = db.getCreditBalance(freeUser.id);
+      if (!balanceAfter)
+        throw new Error('Balance not found after message');
+      expect(balanceAfter.balance).toBe(balanceBefore.balance);
     });
 
     it('assistant response deducts credits', () => {
       const thread = db.createThread(freeUser.id, 'Test Thread');
-      db.addMessage(thread!.id, MessageRoles.USER, 'Hello', 0);
+      if (!thread)
+        throw new Error('Thread not created');
+      db.addMessage(thread.id, MessageRoles.USER, 'Hello', 0);
 
-      const balanceBefore = db.getCreditBalance(freeUser.id)!.balance;
+      const balanceBefore = db.getCreditBalance(freeUser.id);
+      if (!balanceBefore)
+        throw new Error('Balance not found');
 
       // Simulate assistant response (would normally happen via streaming)
       const streamingCost = 250; // Example cost
-      db.deductCredits(freeUser.id, streamingCost, CreditActions.AI_RESPONSE, thread!.id);
+      db.deductCredits(freeUser.id, streamingCost, CreditActions.AI_RESPONSE, thread.id);
 
-      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Hi there!', 0, 'participant-1');
+      db.addMessage(thread.id, MessageRoles.ASSISTANT, 'Hi there!', 0, 'participant-1');
 
-      const balanceAfter = db.getCreditBalance(freeUser.id)!.balance;
-      expect(balanceAfter).toBe(balanceBefore - streamingCost);
+      const balanceAfter = db.getCreditBalance(freeUser.id);
+      if (!balanceAfter)
+        throw new Error('Balance not found after response');
+      expect(balanceAfter.balance).toBe(balanceBefore.balance - streamingCost);
     });
   });
 
@@ -381,59 +406,67 @@ describe('free User Credit Journey Integration', () => {
     it('round is complete when all participants respond', () => {
       const thread = db.createThread(freeUser.id, 'Test Thread');
       expect(thread).not.toBeNull();
+      if (!thread)
+        throw new Error('Thread not created');
 
       // Add 3 participants
       db.participants.push(
-        { id: 'p1', threadId: thread!.id, modelId: 'model-1', enabled: true },
-        { id: 'p2', threadId: thread!.id, modelId: 'model-2', enabled: true },
-        { id: 'p3', threadId: thread!.id, modelId: 'model-3', enabled: true },
+        { id: 'p1', threadId: thread.id, modelId: 'model-1', enabled: true },
+        { id: 'p2', threadId: thread.id, modelId: 'model-2', enabled: true },
+        { id: 'p3', threadId: thread.id, modelId: 'model-3', enabled: true },
       );
 
       // User message
-      db.addMessage(thread!.id, MessageRoles.USER, 'Question', 0);
+      db.addMessage(thread.id, MessageRoles.USER, 'Question', 0);
 
       // First two participants respond
-      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 1', 0, 'p1');
-      expect(db.checkRoundComplete(thread!.id, 0)).toBe(false);
+      db.addMessage(thread.id, MessageRoles.ASSISTANT, 'Response 1', 0, 'p1');
+      expect(db.checkRoundComplete(thread.id, 0)).toBe(false);
 
-      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 2', 0, 'p2');
-      expect(db.checkRoundComplete(thread!.id, 0)).toBe(false);
+      db.addMessage(thread.id, MessageRoles.ASSISTANT, 'Response 2', 0, 'p2');
+      expect(db.checkRoundComplete(thread.id, 0)).toBe(false);
 
       // Third participant responds
-      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 3', 0, 'p3');
-      expect(db.checkRoundComplete(thread!.id, 0)).toBe(true);
+      db.addMessage(thread.id, MessageRoles.ASSISTANT, 'Response 3', 0, 'p3');
+      expect(db.checkRoundComplete(thread.id, 0)).toBe(true);
     });
 
     it('zeroes credits after round 0 completion for free users', () => {
       const thread = db.createThread(freeUser.id, 'Test Thread');
+      if (!thread)
+        throw new Error('Thread not created');
       db.participants.push(
-        { id: 'p1', threadId: thread!.id, modelId: 'model-1', enabled: true },
-        { id: 'p2', threadId: thread!.id, modelId: 'model-2', enabled: true },
+        { id: 'p1', threadId: thread.id, modelId: 'model-1', enabled: true },
+        { id: 'p2', threadId: thread.id, modelId: 'model-2', enabled: true },
       );
 
-      db.addMessage(thread!.id, MessageRoles.USER, 'Question', 0);
+      db.addMessage(thread.id, MessageRoles.USER, 'Question', 0);
 
       // Participants respond with credit deductions
-      db.deductCredits(freeUser.id, 200, CreditActions.AI_RESPONSE, thread!.id);
-      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 1', 0, 'p1');
+      db.deductCredits(freeUser.id, 200, CreditActions.AI_RESPONSE, thread.id);
+      db.addMessage(thread.id, MessageRoles.ASSISTANT, 'Response 1', 0, 'p1');
 
-      db.deductCredits(freeUser.id, 200, CreditActions.AI_RESPONSE, thread!.id);
-      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 2', 0, 'p2');
+      db.deductCredits(freeUser.id, 200, CreditActions.AI_RESPONSE, thread.id);
+      db.addMessage(thread.id, MessageRoles.ASSISTANT, 'Response 2', 0, 'p2');
 
       // Round complete
-      const roundComplete = db.checkRoundComplete(thread!.id, 0);
+      const roundComplete = db.checkRoundComplete(thread.id, 0);
       expect(roundComplete).toBe(true);
 
       // Check balance before zeroing
-      const balanceBefore = db.getCreditBalance(freeUser.id)!.balance;
-      expect(balanceBefore).toBeGreaterThan(0);
+      const balanceBefore = db.getCreditBalance(freeUser.id);
+      if (!balanceBefore)
+        throw new Error('Balance not found');
+      expect(balanceBefore.balance).toBeGreaterThan(0);
 
       // Zero out credits
       db.zeroOutCredits(freeUser.id);
 
       // Check balance after
-      const balanceAfter = db.getCreditBalance(freeUser.id)!.balance;
-      expect(balanceAfter).toBe(0);
+      const balanceAfter = db.getCreditBalance(freeUser.id);
+      if (!balanceAfter)
+        throw new Error('Balance not found after zeroing');
+      expect(balanceAfter.balance).toBe(0);
 
       // Check free round marker
       expect(db.hasFreeRoundCompleteMarker(freeUser.id)).toBe(true);
@@ -452,7 +485,9 @@ describe('free User Credit Journey Integration', () => {
       );
 
       expect(marker).toBeDefined();
-      expect(marker!.balanceAfter).toBe(0);
+      if (!marker)
+        throw new Error('Marker transaction not found');
+      expect(marker.balanceAfter).toBe(0);
     });
 
     it('marker persists in transaction history', () => {
@@ -461,7 +496,10 @@ describe('free User Credit Journey Integration', () => {
       expect(db.hasFreeRoundCompleteMarker(freeUser.id)).toBe(true);
 
       // Marker should persist even after other transactions
-      db.creditBalances.find(cb => cb.userId === freeUser.id)!.balance = 100;
+      const balance = db.creditBalances.find(cb => cb.userId === freeUser.id);
+      if (!balance)
+        throw new Error('Balance not found');
+      balance.balance = 100;
       db.deductCredits(freeUser.id, 10, CreditActions.AI_RESPONSE);
 
       expect(db.hasFreeRoundCompleteMarker(freeUser.id)).toBe(true);
@@ -472,7 +510,10 @@ describe('free User Credit Journey Integration', () => {
     it('cannot send messages after free round complete', () => {
       db.zeroOutCredits(freeUser.id);
 
-      const canSend = db.getCreditBalance(freeUser.id)!.balance > 0
+      const balance = db.getCreditBalance(freeUser.id);
+      if (!balance)
+        throw new Error('Balance not found');
+      const canSend = balance.balance > 0
         && !db.hasFreeRoundCompleteMarker(freeUser.id);
 
       expect(canSend).toBe(false);
@@ -481,7 +522,9 @@ describe('free User Credit Journey Integration', () => {
     it('insufficient credits error message for free users', () => {
       db.zeroOutCredits(freeUser.id);
 
-      const balance = db.getCreditBalance(freeUser.id)!;
+      const balance = db.getCreditBalance(freeUser.id);
+      if (!balance)
+        throw new Error('Balance not found');
       const required = 100;
 
       const errorMessage = `Insufficient credits. Required: ${required}, Available: ${balance.balance}. `
@@ -503,21 +546,25 @@ describe('free User Credit Journey Integration', () => {
   describe('step 7: Thread Visibility', () => {
     it('thread remains accessible after credits exhausted', () => {
       const thread = db.createThread(freeUser.id, 'Test Thread');
+      if (!thread)
+        throw new Error('Thread not created');
       db.zeroOutCredits(freeUser.id);
 
       const userThreads = db.getUserThreads(freeUser.id);
       expect(userThreads).toHaveLength(1);
-      expect(userThreads[0].id).toBe(thread!.id);
+      expect(userThreads[0]?.id).toBe(thread.id);
     });
 
     it('messages remain visible after credits exhausted', () => {
       const thread = db.createThread(freeUser.id, 'Test Thread');
-      db.addMessage(thread!.id, MessageRoles.USER, 'Message 1', 0);
-      db.addMessage(thread!.id, MessageRoles.ASSISTANT, 'Response 1', 0, 'p1');
+      if (!thread)
+        throw new Error('Thread not created');
+      db.addMessage(thread.id, MessageRoles.USER, 'Message 1', 0);
+      db.addMessage(thread.id, MessageRoles.ASSISTANT, 'Response 1', 0, 'p1');
 
       db.zeroOutCredits(freeUser.id);
 
-      const messages = db.getThreadMessages(thread!.id);
+      const messages = db.getThreadMessages(thread.id);
       expect(messages).toHaveLength(2);
     });
   });
@@ -539,17 +586,30 @@ describe('free User Credit Journey Integration', () => {
       const threadCreationTx = db.transactions
         .filter(tx => tx.userId === freeUser.id && tx.action === CreditActions.THREAD_CREATION)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+      if (!threadCreationTx)
+        throw new Error('Thread creation transaction not found');
+
+      const balance = db.getCreditBalance(freeUser.id);
+      if (!balance)
+        throw new Error('Balance not found');
 
       // balanceAfter should be signup credits (5000) minus thread creation cost (100)
       expect(threadCreationTx.balanceAfter).toBe(4900);
-      expect(threadCreationTx.balanceAfter).toBe(db.getCreditBalance(freeUser.id)!.balance);
+      expect(threadCreationTx.balanceAfter).toBe(balance.balance);
     });
 
     it('version increments with each balance change', () => {
-      const initialVersion = db.getCreditBalance(freeUser.id)!.version;
+      const initialBalance = db.getCreditBalance(freeUser.id);
+      if (!initialBalance)
+        throw new Error('Balance not found');
+      const initialVersion = initialBalance.version;
 
       db.deductCredits(freeUser.id, 100, CreditActions.THREAD_CREATION);
-      const afterDeductVersion = db.getCreditBalance(freeUser.id)!.version;
+
+      const afterBalance = db.getCreditBalance(freeUser.id);
+      if (!afterBalance)
+        throw new Error('Balance not found after deduction');
+      const afterDeductVersion = afterBalance.version;
 
       expect(afterDeductVersion).toBe(initialVersion + 1);
     });
@@ -568,26 +628,34 @@ describe('free User Credit Journey Integration', () => {
     it('paid users bypass thread limit', () => {
       // Give paid user sufficient credits for multiple threads
       // Each thread costs 100 credits, so 10000 is enough for 100 threads
-      const balance = paidDb.getCreditBalance(paidUser.id)!;
+      const balance = paidDb.getCreditBalance(paidUser.id);
+      if (!balance)
+        throw new Error('Balance not found');
       balance.balance = 10000;
 
       const thread1 = paidDb.createThread(paidUser.id, 'Thread 1');
       expect(thread1).not.toBeNull();
 
       // Verify balance was deducted
-      let currentBalance = paidDb.getCreditBalance(paidUser.id)!.balance;
-      expect(currentBalance).toBe(9900); // 10000 - 100
+      let currentBalance = paidDb.getCreditBalance(paidUser.id);
+      if (!currentBalance)
+        throw new Error('Balance not found');
+      expect(currentBalance.balance).toBe(9900); // 10000 - 100
 
       const thread2 = paidDb.createThread(paidUser.id, 'Thread 2');
       expect(thread2).not.toBeNull();
 
-      currentBalance = paidDb.getCreditBalance(paidUser.id)!.balance;
-      expect(currentBalance).toBe(9800); // 9900 - 100
+      currentBalance = paidDb.getCreditBalance(paidUser.id);
+      if (!currentBalance)
+        throw new Error('Balance not found');
+      expect(currentBalance.balance).toBe(9800); // 9900 - 100
 
       const thread3 = paidDb.createThread(paidUser.id, 'Thread 3');
       expect(thread3).not.toBeNull();
 
-      currentBalance = paidDb.getCreditBalance(paidUser.id)!.balance;
+      currentBalance = paidDb.getCreditBalance(paidUser.id);
+      if (!currentBalance)
+        throw new Error('Balance not found');
       expect(currentBalance).toBe(9700); // 9800 - 100
 
       // Verify all three threads exist
@@ -596,23 +664,34 @@ describe('free User Credit Journey Integration', () => {
     });
 
     it('paid users not affected by free round marker', () => {
-      paidDb.getCreditBalance(paidUser.id)!.balance = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
+      const balance1 = paidDb.getCreditBalance(paidUser.id);
+      if (!balance1)
+        throw new Error('Balance not found');
+      balance1.balance = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       // Simulate free round complete (shouldn't happen for paid, but test the flag)
       paidDb.zeroOutCredits(paidUser.id);
 
       // Give back credits
-      paidDb.getCreditBalance(paidUser.id)!.balance = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
+      const balance2 = paidDb.getCreditBalance(paidUser.id);
+      if (!balance2)
+        throw new Error('Balance not found');
+      balance2.balance = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       // Paid user should still be able to use credits despite marker
-      const canUse = paidDb.getCreditBalance(paidUser.id)!.balance > 100;
+      const balance3 = paidDb.getCreditBalance(paidUser.id);
+      if (!balance3)
+        throw new Error('Balance not found');
+      const canUse = balance3.balance > 100;
       expect(canUse).toBe(true);
     });
   });
 
   describe('edge Cases', () => {
     it('concurrent credit deductions use version for optimistic locking', () => {
-      const balance = db.getCreditBalance(freeUser.id)!;
+      const balance = db.getCreditBalance(freeUser.id);
+      if (!balance)
+        throw new Error('Balance not found');
       const initialVersion = balance.version;
 
       // Simulate first deduction
@@ -627,9 +706,11 @@ describe('free User Credit Journey Integration', () => {
     it('deleted thread does not count against thread limit', () => {
       const thread = db.createThread(freeUser.id, 'Test Thread');
       expect(thread).not.toBeNull();
+      if (!thread)
+        throw new Error('Thread not created');
 
       // Delete thread
-      thread!.deletedAt = new Date();
+      thread.deletedAt = new Date();
 
       // Should be able to create another thread
       const thread2 = db.createThread(freeUser.id, 'Second Thread');

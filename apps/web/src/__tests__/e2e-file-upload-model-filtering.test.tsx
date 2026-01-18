@@ -23,13 +23,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import type { PendingAttachment } from '@/hooks/utils';
 import testMessages from '@/i18n/locales/en/common.json';
-import { NextIntlClientProvider } from '@/lib/compat';
+import { I18nProvider } from '@/lib/i18n';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { act, render, screen, userEvent } from '@/lib/testing';
 import { toastManager } from '@/lib/toast';
 import { filesHaveDocuments, filesHaveImages, getDetailedIncompatibleModelIds } from '@/lib/utils/file-capability';
+import type { ChatParticipant, ChatThread, Model } from '@/services/api';
 import { createChatStore } from '@/stores/chat/store';
-import type { ChatParticipant, ChatThread, Model } from '@/types/api';
 
 // ============================================================================
 // MOCKS
@@ -45,21 +45,23 @@ vi.mock('@/lib/toast', () => ({
   },
 }));
 
-// Mock i18n - use compat layer
-vi.mock('@/lib/compat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/compat')>();
+// No mock needed for i18n - TestWrapper provides I18nProvider with actual translations
+
+// Mock TanStack Router Link component to avoid RouterProvider requirement
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>();
   return {
     ...actual,
-    useTranslations: () => (key: string, params?: Record<string, unknown>) => {
-      if (params) {
-        let message = key;
-        Object.entries(params).forEach(([k, v]) => {
-          message = message.replace(`{${k}}`, String(v));
-        });
-        return message;
-      }
-      return key;
-    },
+    Link: ({ children, to, className, onClick, ...props }: {
+      children: ReactNode;
+      to: string;
+      className?: string;
+      onClick?: (e: React.MouseEvent) => void;
+    }) => (
+      <a href={to} className={className} onClick={onClick} {...props}>
+        {children}
+      </a>
+    ),
   };
 });
 
@@ -146,9 +148,9 @@ function TestWrapper({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <NextIntlClientProvider locale="en" messages={testMessages} timeZone="UTC">
+      <I18nProvider locale="en" messages={testMessages} timeZone="UTC">
         {children}
-      </NextIntlClientProvider>
+      </I18nProvider>
     </QueryClientProvider>
   );
 }
@@ -217,13 +219,13 @@ describe('e2E: File Upload Model Filtering Flow', () => {
 
       // Switch to Custom tab
       await act(async () => {
-        const customTab = screen.getByRole('tab', { name: /buildCustom/i });
+        const customTab = screen.getByRole('tab', { name: /build custom/i });
         await userEvent.click(customTab);
       });
 
       // Non-vision model should show badge
       expect(screen.getByText('Non-Vision Model')).toBeInTheDocument();
-      expect(screen.getByText('chat.models.noVision')).toBeInTheDocument();
+      expect(screen.getByText('No vision')).toBeInTheDocument();
     });
 
     it('should show "No PDF support" badge for models without file support when PDF is uploaded', async () => {
@@ -268,13 +270,13 @@ describe('e2E: File Upload Model Filtering Flow', () => {
 
       // Switch to Custom tab
       await act(async () => {
-        const customTab = screen.getByRole('tab', { name: /buildCustom/i });
+        const customTab = screen.getByRole('tab', { name: /build custom/i });
         await userEvent.click(customTab);
       });
 
       // Non-file model should show badge
       expect(screen.getByText('Non-File Model')).toBeInTheDocument();
-      expect(screen.getByText('chat.models.noFileSupport')).toBeInTheDocument();
+      expect(screen.getByText('No PDF support')).toBeInTheDocument();
     });
 
     it('should show both badges when image AND PDF are uploaded', async () => {
@@ -337,18 +339,18 @@ describe('e2E: File Upload Model Filtering Flow', () => {
 
       // Switch to Custom tab
       await act(async () => {
-        const customTab = screen.getByRole('tab', { name: /buildCustom/i });
+        const customTab = screen.getByRole('tab', { name: /build custom/i });
         await userEvent.click(customTab);
       });
 
       // Vision Only model should show file badge
       expect(screen.getByText('Vision Only Model')).toBeInTheDocument();
-      const fileBadges = screen.getAllByText('chat.models.noFileSupport');
+      const fileBadges = screen.getAllByText('No PDF support');
       expect(fileBadges.length).toBeGreaterThan(0);
 
       // File Only model should show vision badge
       expect(screen.getByText('File Only Model')).toBeInTheDocument();
-      const visionBadges = screen.getAllByText('chat.models.noVision');
+      const visionBadges = screen.getAllByText('No vision');
       expect(visionBadges.length).toBeGreaterThan(0);
     });
 
@@ -393,7 +395,7 @@ describe('e2E: File Upload Model Filtering Flow', () => {
 
       // Switch to Custom tab
       await act(async () => {
-        const customTab = screen.getByRole('tab', { name: /buildCustom/i });
+        const customTab = screen.getByRole('tab', { name: /build custom/i });
         await userEvent.click(customTab);
       });
 

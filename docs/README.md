@@ -24,17 +24,17 @@
    - **References**: `type-inference-patterns.md` for type safety
 
 3. **[frontend-patterns.md](./frontend-patterns.md)** - Frontend Implementation Guide
-   - Next.js 15 App Router patterns
+   - TanStack Start (React Router) patterns
    - Component architecture (shadcn/ui)
    - Data fetching (TanStack Query v5)
    - Container/screen patterns
-   - i18n patterns (next-intl)
+   - i18n patterns (custom implementation in `@/lib/compat`)
    - **References**: `type-inference-patterns.md` for type safety
 
 ### 📖 Supporting Documentation
 
 #### Testing
-- **[TESTING_SETUP.md](./TESTING_SETUP.md)** - Jest + React Testing Library setup
+- **[TESTING_SETUP.md](./TESTING_SETUP.md)** - Vitest + React Testing Library setup
 - **[TESTING_AUDIT.md](./TESTING_AUDIT.md)** - Testing audit and coverage analysis
 
 #### User Flows

@@ -1,7 +1,7 @@
 /**
  * Font Configuration for TanStack Start
  *
- * Using CSS @font-face with Google Fonts CDN instead of next/font.
+ * Using CSS @font-face with Google Fonts CDN.
  * Add the font import in the root HTML or CSS file.
  *
  * Add this to your CSS:

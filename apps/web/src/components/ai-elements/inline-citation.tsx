@@ -15,11 +15,11 @@ import {
   useCarousel,
 } from '@/components/ui/carousel';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useTranslations } from '@/lib/compat';
 import { formatFileSize } from '@/lib/format';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { AvailableSource } from '@/types/api';
+import type { AvailableSource } from '@/services/api';
 
 import { extractHostname, formatCitationIdForDisplay } from './citation-utils';
 

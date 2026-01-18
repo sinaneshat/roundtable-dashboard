@@ -1,5 +1,8 @@
 import 'server-only';
 
+import { PostHog } from 'posthog-node';
+import { z } from 'zod';
+
 /**
  * PostHog Server-Side Client
  *
@@ -34,8 +37,6 @@ import 'server-only';
  * Reference: https://posthog.com/docs/libraries/next-js
  * Pattern: src/lib/posthog-server.ts
  */
-import { PostHog } from 'posthog-node';
-import { z } from 'zod';
 
 // ============================================================================
 // Analytics Constants
@@ -159,7 +160,14 @@ export async function flushPostHog(): Promise<void> {
   }
 }
 
-type ExceptionProperties = Record<string, unknown>;
+type ExceptionProperties = {
+  source?: string;
+  endpoint?: string;
+  userId?: string;
+  errorCode?: string;
+  statusCode?: number;
+  [key: string]: unknown;
+};
 
 /**
  * Capture an exception server-side with optional user context

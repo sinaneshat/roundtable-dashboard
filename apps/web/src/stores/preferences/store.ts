@@ -1,10 +1,10 @@
 /**
- * Model Preferences Store - Zustand v5 Official Next.js Pattern
+ * Model Preferences Store - Zustand v5 Official TanStack Start Pattern
  *
  * ============================================================================
- * OFFICIAL ZUSTAND V5 + NEXT.JS PATTERN (from Context7 docs)
+ * OFFICIAL ZUSTAND V5 + TANSTACK START PATTERN (from Context7 docs)
  * ============================================================================
- * Source: https://github.com/pmndrs/zustand/blob/main/docs/guides/nextjs.md
+ * Source: https://github.com/pmndrs/zustand/blob/main/docs/guides/ssr-and-hydration.md
  *
  * PATTERN:
  * 1. Separate State and Actions types
@@ -257,13 +257,13 @@ export function parsePreferencesCookie(
 
 // ============================================================================
 // STORE FACTORY (Official Pattern)
-// Source: nextjs.md - "createCounterStore(initState)"
+// Source: ssr-and-hydration.md - "createStore(initState)"
 // ============================================================================
 
 /**
  * Factory function to create model preferences store
  *
- * Official Zustand v5 + Next.js pattern:
+ * Official Zustand v5 + TanStack Start SSR pattern:
  * - createStore from zustand/vanilla for SSR isolation
  * - Factory accepts initial state for server-side hydration
  * - skipHydration: true prevents automatic client hydration
@@ -492,7 +492,7 @@ export function createModelPreferencesStore(
           },
         },
       ),
-      { name: 'ModelPreferencesStore', enabled: process.env.NODE_ENV === 'development' },
+      { name: 'ModelPreferencesStore', enabled: import.meta.env.MODE === 'development' },
     ),
   );
 }

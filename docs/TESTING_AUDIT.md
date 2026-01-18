@@ -28,15 +28,15 @@ Successfully configured Jest and React Testing Library for the Roundtable Next.j
 
 ### 2. ✅ Configuration Files Created
 
-**`jest.config.ts`:**
-- Next.js integration via `next/jest`
+**`vitest.config.ts`:**
+- Vitest v4 configuration with Vite
 - JSDOM test environment
 - Custom module path mapping (`@/` alias)
-- Coverage configuration
+- Coverage configuration via v8 provider
 - ESM module transformation support
 - Test match patterns for `__tests__/` and `*.test.*` files
 
-**`jest.setup.ts`:**
+**`vitest.setup.ts`:**
 - Global `@testing-library/jest-dom` matchers
 - `window.matchMedia` mock
 - `IntersectionObserver` mock
@@ -216,12 +216,12 @@ project-root/
 
 ### ESM Module Support
 
-**Issue:** Some ESM-only modules (`next-intl`, `nuqs`, `use-intl`) cannot be easily transformed in Jest environment.
+**Issue:** Some ESM-only modules may require special configuration in the Vitest environment.
 
-**Current Solution:** Simplified `src/lib/testing/render.tsx` without full provider integration.
+**Current Solution:** Simplified `src/lib/testing/render.tsx` with provider integration using custom i18n hooks from `@/lib/compat`.
 
 **Future Enhancement:** When needed for complex component testing:
-1. Configure ESM transformation in `jest.config.ts`
+1. Configure ESM transformation in `vitest.config.ts`
 2. Uncomment provider code in `src/lib/testing/render.tsx`
 3. Add provider-specific props to `CustomRenderOptions`
 

@@ -20,6 +20,7 @@
  */
 
 import { UIMessageRoles } from '@roundtable/shared';
+import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
@@ -27,9 +28,8 @@ import {
   createTestAssistantMessage,
   createTestModeratorMessage,
   createTestUserMessage,
-  renderHook,
 } from '@/lib/testing';
-import type { ChatThreadChangelog, StoredPreSearch } from '@/types/api';
+import type { ChatThreadChangelog, StoredPreSearch } from '@/services/api';
 
 // ============================================================================
 // TEST HELPERS
@@ -129,10 +129,10 @@ describe('useThreadTimeline - Single Round Grouping', () => {
       const timeline = getTimeline({ messages, changelog: [] });
 
       const orderedMessages = timeline[0]?.data;
-      expect(orderedMessages![0]?.role).toBe(UIMessageRoles.USER);
-      expect(orderedMessages![1]?.metadata).toHaveProperty('participantIndex', 0);
-      expect(orderedMessages![2]?.metadata).toHaveProperty('participantIndex', 1);
-      expect(orderedMessages![3]?.metadata).toHaveProperty('isModerator', true);
+      expect(orderedMessages?.[0]?.role).toBe(UIMessageRoles.USER);
+      expect(orderedMessages?.[1]?.metadata).toHaveProperty('participantIndex', 0);
+      expect(orderedMessages?.[2]?.metadata).toHaveProperty('participantIndex', 1);
+      expect(orderedMessages?.[3]?.metadata).toHaveProperty('isModerator', true);
     });
 
     it('participants are sorted by participantIndex', () => {
@@ -164,9 +164,9 @@ describe('useThreadTimeline - Single Round Grouping', () => {
       const timeline = getTimeline({ messages, changelog: [] });
 
       const orderedMessages = timeline[0]?.data;
-      expect(orderedMessages![1]?.metadata).toHaveProperty('participantIndex', 0);
-      expect(orderedMessages![2]?.metadata).toHaveProperty('participantIndex', 1);
-      expect(orderedMessages![3]?.metadata).toHaveProperty('participantIndex', 2);
+      expect(orderedMessages?.[1]?.metadata).toHaveProperty('participantIndex', 0);
+      expect(orderedMessages?.[2]?.metadata).toHaveProperty('participantIndex', 1);
+      expect(orderedMessages?.[3]?.metadata).toHaveProperty('participantIndex', 2);
     });
 
     it('moderator always comes last after all participants', () => {
@@ -199,7 +199,7 @@ describe('useThreadTimeline - Single Round Grouping', () => {
       const timeline = getTimeline({ messages, changelog: [] });
 
       const orderedMessages = timeline[0]?.data;
-      const lastMessage = orderedMessages![orderedMessages!.length - 1];
+      const lastMessage = orderedMessages && orderedMessages.length > 0 ? orderedMessages[orderedMessages.length - 1] : undefined;
       expect(lastMessage?.metadata).toHaveProperty('isModerator', true);
     });
   });
@@ -372,10 +372,10 @@ describe('useThreadTimeline - Multi-Round Grouping', () => {
       expect(round1?.type).toBe('messages');
 
       const round1Messages = round1?.data;
-      expect(round1Messages![0]?.role).toBe(UIMessageRoles.USER);
-      expect(round1Messages![1]?.metadata).toHaveProperty('participantIndex', 0);
-      expect(round1Messages![2]?.metadata).toHaveProperty('participantIndex', 1);
-      expect(round1Messages![3]?.metadata).toHaveProperty('isModerator', true);
+      expect(round1Messages?.[0]?.role).toBe(UIMessageRoles.USER);
+      expect(round1Messages?.[1]?.metadata).toHaveProperty('participantIndex', 0);
+      expect(round1Messages?.[2]?.metadata).toHaveProperty('participantIndex', 1);
+      expect(round1Messages?.[3]?.metadata).toHaveProperty('isModerator', true);
     });
 
     it('handles 3 consecutive rounds with correct ordering', () => {
@@ -584,8 +584,8 @@ describe('useThreadTimeline - Edge Cases', () => {
       const timeline = getTimeline({ messages, changelog: [] });
 
       const orderedMessages = timeline[0]?.data;
-      expect(orderedMessages![0]?.role).toBe(UIMessageRoles.USER);
-      expect(orderedMessages![1]?.metadata).toHaveProperty('isModerator', true);
+      expect(orderedMessages?.[0]?.role).toBe(UIMessageRoles.USER);
+      expect(orderedMessages?.[1]?.metadata).toHaveProperty('isModerator', true);
     });
   });
 
@@ -619,9 +619,9 @@ describe('useThreadTimeline - Edge Cases', () => {
       const timeline = getTimeline({ messages, changelog: [] });
 
       const orderedMessages = timeline[0]?.data;
-      expect(orderedMessages![1]?.metadata).toHaveProperty('participantIndex', 0);
-      expect(orderedMessages![2]?.metadata).toHaveProperty('participantIndex', 2);
-      expect(orderedMessages![3]?.metadata).toHaveProperty('participantIndex', 5);
+      expect(orderedMessages?.[1]?.metadata).toHaveProperty('participantIndex', 0);
+      expect(orderedMessages?.[2]?.metadata).toHaveProperty('participantIndex', 2);
+      expect(orderedMessages?.[3]?.metadata).toHaveProperty('participantIndex', 5);
     });
 
     it('handles single participant correctly', () => {
@@ -829,12 +829,16 @@ describe('useThreadTimeline - Bug Regression Tests', () => {
       const timeline = getTimeline({ messages, changelog: [] });
 
       const orderedMessages = timeline[0]?.data;
-      const moderatorIndex = orderedMessages!.findIndex(
-        msg => msg.metadata && 'isModerator' in msg.metadata && msg.metadata.isModerator,
-      );
-      const lastParticipantIndex = orderedMessages!.findLastIndex(
-        msg => msg.metadata && 'participantIndex' in msg.metadata,
-      );
+      const moderatorIndex = orderedMessages
+        ? orderedMessages.findIndex(
+            msg => msg.metadata && 'isModerator' in msg.metadata && msg.metadata.isModerator,
+          )
+        : -1;
+      const lastParticipantIndex = orderedMessages
+        ? orderedMessages.findLastIndex(
+            msg => msg.metadata && 'participantIndex' in msg.metadata,
+          )
+        : -1;
 
       expect(moderatorIndex).toBeGreaterThan(lastParticipantIndex);
     });

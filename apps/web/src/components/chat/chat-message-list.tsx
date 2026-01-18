@@ -14,17 +14,16 @@ import { streamdownComponents } from '@/components/markdown/unified-markdown-com
 import { ScrollAwareParticipant, ScrollAwareUserMessage, ScrollFromTop } from '@/components/ui/motion';
 import { BRAND } from '@/constants';
 import { useModelLookup } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
-import type { ChatParticipantWithSettings } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 import { allParticipantsHaveVisibleContent, buildParticipantMessageMaps, getAvailableSources, getAvatarPropsFromModelId, getEnabledParticipants, getMessageMetadata, getMessageStatus, getModeratorMetadata, getParticipantMessageFromMaps, getRoundNumber, getUserMetadata, isModeratorMessage, isPreSearch as isPreSearchMessage, participantHasVisibleContent } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { AvailableSource, DbMessageMetadata, EnhancedModelResponse, StoredPreSearch } from '@/types/api';
-import { isAssistantMessageMetadata } from '@/types/api';
+import type { ApiParticipant, AvailableSource, DbMessageMetadata, Model, StoredPreSearch } from '@/services/api';
+import { isAssistantMessageMetadata } from '@/services/api';
 
-const EMPTY_PARTICIPANTS: ChatParticipantWithSettings[] = [];
+const EMPTY_PARTICIPANTS: ApiParticipant[] = [];
 const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];
 
 type ParticipantInfo = {
@@ -63,9 +62,9 @@ type MessageGroup
   };
 
 type ParticipantMessageWrapperProps = {
-  participant?: ChatParticipantWithSettings;
+  participant?: ApiParticipant;
   participantIndex: number;
-  model: EnhancedModelResponse | undefined;
+  model: Model | undefined;
   status: MessageStatus;
   parts: MessagePart[];
   isAccessible: boolean;
@@ -173,7 +172,7 @@ function AssistantGroupCard({
 }: {
   group: Extract<MessageGroup, { type: 'assistant-group' }>;
   groupIndex: number;
-  findModel: (modelId?: string) => EnhancedModelResponse | undefined;
+  findModel: (modelId?: string) => Model | undefined;
   demoMode: boolean;
   hideMetadata: boolean;
   t: (key: string) => string;
@@ -331,8 +330,8 @@ function getParticipantInfoForMessage({
   totalMessages: number;
   isGlobalStreaming: boolean;
   currentParticipantIndex: number;
-  participants: ChatParticipantWithSettings[];
-  currentStreamingParticipant: ChatParticipantWithSettings | null;
+  participants: ApiParticipant[];
+  currentStreamingParticipant: ApiParticipant | null;
   isModeratorStreaming?: boolean;
 }): {
   participantIndex: number;
@@ -405,11 +404,11 @@ type ChatMessageListProps = {
     name: string;
     image: string | null;
   } | null;
-  participants?: ChatParticipantWithSettings[];
+  participants?: ApiParticipant[];
   hideMetadata?: boolean;
   isLoading?: boolean;
   isStreaming?: boolean;
-  currentStreamingParticipant?: ChatParticipantWithSettings | null;
+  currentStreamingParticipant?: ApiParticipant | null;
   currentParticipantIndex?: number;
   userAvatar?: { src: string; name: string };
   threadId?: string | null; // Optional threadId for pre-search hydration
@@ -732,7 +731,7 @@ export const ChatMessageList = memo(
       const participantMaps = buildParticipantMessageMaps(streamingRoundMessages);
       const enabledParticipants = getEnabledParticipants(participants);
 
-      return allParticipantsHaveVisibleContent(participantMaps, enabledParticipants as any);
+      return allParticipantsHaveVisibleContent(participantMaps, enabledParticipants);
     }, [deduplicatedMessages, _streamingRoundNumber, participants]);
 
     const messageGroups = useMemo((): MessageGroup[] => {
@@ -876,7 +875,10 @@ export const ChatMessageList = memo(
       if (!messageGroupsByRound.has(roundNumber)) {
         messageGroupsByRound.set(roundNumber, []);
       }
-      messageGroupsByRound.get(roundNumber)!.push(group);
+      const roundGroups = messageGroupsByRound.get(roundNumber);
+      if (roundGroups) {
+        roundGroups.push(group);
+      }
     });
 
     return (
@@ -981,14 +983,14 @@ export const ChatMessageList = memo(
                 {/* CRITICAL FIX: Render PreSearchCard immediately after user message, before assistant messages */}
                 {/* ✅ mt-14 provides consistent spacing from user message content to PreSearchCard */}
                 {/* ✅ ScrollFromTop wraps card for scroll-triggered slide-down animation */}
-                {preSearch && (
+                {preSearch && _threadId && (
                   <ScrollFromTop
                     skipAnimation={skipEntranceAnimations}
                     className="mt-14"
                   >
                     <PreSearchCard
                       key={`pre-search-${roundNumber}`}
-                      threadId={_threadId!}
+                      threadId={_threadId}
                       preSearch={preSearch}
                       streamingRoundNumber={_streamingRoundNumber}
                       demoOpen={demoPreSearchOpen}
@@ -1148,8 +1150,8 @@ export const ChatMessageList = memo(
                         const isAccessible = demoMode || (model?.is_accessible_to_user ?? true);
 
                         // ✅ Use reusable utility for multi-strategy lookup
-                        const participantMessage = getParticipantMessageFromMaps(participantMaps, participant as any, participantIdx);
-                        const hasContent = participantHasVisibleContent(participantMaps, participant as any, participantIdx);
+                        const participantMessage = getParticipantMessageFromMaps(participantMaps, participant, participantIdx);
+                        const hasContent = participantHasVisibleContent(participantMaps, participant, participantIdx);
 
                         let status: MessageStatus;
                         let parts: MessagePart[] = [];
@@ -1490,7 +1492,7 @@ export const ChatMessageList = memo(
 
           const enabledParticipants = getEnabledParticipants(participants);
           const participantMaps = buildParticipantMessageMaps(roundParticipantMessages);
-          const allParticipantsHaveContent = allParticipantsHaveVisibleContent(participantMaps, enabledParticipants as any);
+          const allParticipantsHaveContent = allParticipantsHaveVisibleContent(participantMaps, enabledParticipants);
 
           // Show placeholder when:
           // 1. All participants have visible content (they render via messageGroups, not pending cards)

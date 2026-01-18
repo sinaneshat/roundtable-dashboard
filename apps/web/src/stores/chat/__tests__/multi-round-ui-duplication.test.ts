@@ -20,6 +20,7 @@
  */
 
 import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes, TimelineItemTypes } from '@roundtable/shared';
+import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
@@ -30,10 +31,9 @@ import {
   getMetadataRoundNumber,
   isMetadataModerator,
   isOptimisticMessage,
-  renderHook,
 } from '@/lib/testing';
 import { getParticipantModelIds } from '@/lib/utils';
-import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
+import type { ApiMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -79,7 +79,7 @@ function createParticipant(index: number, modelId = `model-${index}`): ChatParti
   } as ChatParticipant;
 }
 
-function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ChatMessage {
+function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ApiMessage {
   return createTestUserMessage({
     id: `thread-123_r${roundNumber}_user`,
     content,
@@ -91,7 +91,7 @@ function createAssistantMsg(
   roundNumber: number,
   participantIndex: number,
   content = `Response R${roundNumber}P${participantIndex}`,
-): ChatMessage {
+): ApiMessage {
   return createTestAssistantMessage({
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
     content,

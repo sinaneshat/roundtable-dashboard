@@ -7,6 +7,7 @@ import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getProducts } from '@/server/products';
+import { getSubscriptions } from '@/server/subscriptions';
 
 const siteUrl = 'https://roundtable.now';
 const pageTitle = 'Pricing & Plans - Roundtable';
@@ -25,17 +26,24 @@ function PricingLoadingSkeleton() {
 }
 
 export const Route = createFileRoute('/_protected/chat/pricing')({
-  // SSG: Prefetch products at build time for static generation
+  // SSR: Prefetch products and subscriptions for page load
   loader: async ({ context }) => {
     const { queryClient } = context;
 
-    // Prefetch products into TanStack Query cache
-    // This runs at build time for SSG and at request time for SSR
-    await queryClient.prefetchQuery({
-      queryKey: queryKeys.products.list(),
-      queryFn: () => getProducts(),
-      staleTime: STALE_TIMES.products,
-    });
+    // Prefetch both products and subscriptions in parallel
+    // Products are needed for pricing display, subscriptions for current plan badge
+    await Promise.all([
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.products.list(),
+        queryFn: () => getProducts(),
+        staleTime: STALE_TIMES.products,
+      }),
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.subscriptions.current(),
+        queryFn: () => getSubscriptions(),
+        staleTime: STALE_TIMES.subscriptions,
+      }),
+    ]);
 
     return {};
   },

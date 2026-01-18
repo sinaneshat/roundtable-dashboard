@@ -3,7 +3,7 @@ import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { act, createTestAssistantMessage, createTestUserMessage, renderHook, waitFor, waitForAsync } from '@/lib/testing';
-import type { ChatParticipant, ChatThread } from '@/types/api';
+import type { ChatParticipant, ChatThread } from '@/services/api';
 
 import { useIncompleteRoundResumption } from '../actions/incomplete-round-resumption';
 import type { ChatStore } from '../store-schemas';

@@ -2,11 +2,11 @@ import { ErrorCategories, ErrorTypes } from '@roundtable/shared';
 
 import { Icons } from '@/components/icons';
 import { useBoolean } from '@/hooks/utils';
-import { useTranslations } from '@/lib/compat';
+import { useTranslations } from '@/lib/i18n';
 import { getDisplayParticipantIndex } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
-import type { DbMessageMetadata } from '@/types/api';
-import { isAssistantMessageMetadata } from '@/types/api';
+import type { DbMessageMetadata } from '@/services/api';
+import { isAssistantMessageMetadata } from '@/services/api';
 
 type MessageErrorDetailsProps = {
   metadata: DbMessageMetadata | null | undefined;
@@ -34,7 +34,7 @@ export function MessageErrorDetails({
   const errorType: string = metadata.errorType || ErrorTypes.UNKNOWN;
   const model = metadata.model || t('chat.errors.unknownModel');
   const participantIndex = metadata.participantIndex;
-  const aborted = (metadata as any).aborted || false;
+  const aborted = metadata.aborted ?? false;
 
   const getErrorTitle = () => {
     if (aborted)
@@ -115,11 +115,11 @@ export function MessageErrorDetails({
               <span>{t('chat.errors.requestAborted')}</span>
             </div>
           )}
-          {(metadata as any).responseBody && process.env.NODE_ENV === 'development' && (
+          {metadata?.responseBody && import.meta.env.MODE === 'development' && (
             <div className="mt-2 pt-2 border-t border-destructive/20">
               <div className="font-medium mb-1">{t('chat.errors.responseFromProvider')}</div>
               <pre className="p-2 bg-destructive/5 rounded text-[10px] overflow-auto max-h-24 font-mono">
-                {(metadata as any).responseBody}
+                {metadata.responseBody}
               </pre>
             </div>
           )}
@@ -180,7 +180,7 @@ export function MessageErrorDetails({
               )}
             </div>
           )}
-          {process.env.NODE_ENV === 'development' && metadata && (
+          {import.meta.env.MODE === 'development' && metadata && (
             <details className="mt-2 pt-2 border-t border-destructive/20">
               <summary className="cursor-pointer font-medium text-destructive/60">{t('chat.errors.fullMetadata')}</summary>
               <pre className="mt-1 p-2 bg-destructive/5 rounded text-[10px] overflow-auto max-h-32 font-mono">

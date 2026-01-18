@@ -4,8 +4,8 @@ import { useSyncExternalStore } from 'react';
  * Custom hook that tracks the current pathname reactively, including changes
  * from `window.history.replaceState()` and `window.history.pushState()`.
  *
- * Unlike Next.js's `usePathname()`, this hook reacts to URL changes made via
- * the History API directly (not just Next.js navigation).
+ * This hook reacts to URL changes made via the History API directly,
+ * complementing TanStack Router's navigation hooks.
  *
  * @example
  * const pathname = useCurrentPathname();
@@ -57,9 +57,8 @@ function patchHistoryMethods() {
  * Notify all subscribers that the URL has changed
  *
  * ✅ BUG FIX: Defer notification to next microtask to avoid triggering
- * React state updates during useInsertionEffect. Next.js uses insertion
- * effects for some routing operations, and synchronous updates during
- * those cause the error: "useInsertionEffect must not schedule updates"
+ * React state updates during useInsertionEffect. Synchronous updates during
+ * insertion effects cause the error: "useInsertionEffect must not schedule updates"
  */
 function notifySubscribers() {
   queueMicrotask(() => {
@@ -100,8 +99,8 @@ function getServerSnapshot(): string {
  * Hook that returns the current pathname and reacts to all URL changes,
  * including those made via history.replaceState() and history.pushState().
  *
- * This solves the issue where Next.js's usePathname() doesn't update when
- * the URL is changed via the History API directly.
+ * Complements TanStack Router's useLocation() by also detecting
+ * URL changes made via the History API directly.
  */
 export function useCurrentPathname(): string {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

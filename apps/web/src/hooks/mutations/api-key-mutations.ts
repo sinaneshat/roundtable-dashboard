@@ -2,20 +2,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { shouldRetryMutation } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import type {
-  CreateApiKeyResponse,
-  DeleteApiKeyResponse,
-  ListApiKeysResponse,
-} from '@/services/api';
-import {
-  createApiKeyService,
-  deleteApiKeyService,
-} from '@/services/api';
+import type { ListApiKeysResponse } from '@/services/api';
+import { createApiKeyService, deleteApiKeyService } from '@/services/api';
+
+// Derive response types from service functions (avoids InferResponseType resolution issues)
+type CreateApiKeyResult = Awaited<ReturnType<typeof createApiKeyService>>;
+type DeleteApiKeyResult = Awaited<ReturnType<typeof deleteApiKeyService>>;
 
 export function useCreateApiKeyMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<CreateApiKeyResponse, Error, Parameters<typeof createApiKeyService>[0]>({
+  return useMutation<CreateApiKeyResult, Error, Parameters<typeof createApiKeyService>[0]>({
     mutationFn: createApiKeyService,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all });
@@ -30,7 +27,7 @@ export function useDeleteApiKeyMutation() {
 
   type Context = { previousApiKeys?: ListApiKeysResponse };
 
-  return useMutation<DeleteApiKeyResponse, Error, Parameters<typeof deleteApiKeyService>[0], Context>({
+  return useMutation<DeleteApiKeyResult, Error, Parameters<typeof deleteApiKeyService>[0], Context>({
     mutationFn: deleteApiKeyService,
     onMutate: async (data) => {
       const keyId = data.param?.keyId;

@@ -2,27 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { shouldRetryMutation } from '@/hooks/utils';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
-import type {
-  AddUploadToProjectRequest,
-  AddUploadToProjectResponse,
-  CreateProjectMemoryRequest,
-  CreateProjectMemoryResponse,
-  CreateProjectRequest,
-  CreateProjectResponse,
-  DeleteProjectMemoryRequest,
-  DeleteProjectMemoryResponse,
-  DeleteProjectRequest,
-  DeleteProjectResponse,
-  ListProjectsResponse,
-  RemoveAttachmentFromProjectRequest,
-  RemoveAttachmentFromProjectResponse,
-  UpdateProjectAttachmentRequest,
-  UpdateProjectAttachmentResponse,
-  UpdateProjectMemoryRequest,
-  UpdateProjectMemoryResponse,
-  UpdateProjectRequest,
-  UpdateProjectResponse,
-} from '@/services/api';
+import type { ListProjectsResponse } from '@/services/api';
 import {
   addUploadToProjectService,
   createProjectMemoryService,
@@ -35,10 +15,21 @@ import {
   updateProjectService,
 } from '@/services/api';
 
+// Derive response types from service functions (avoids InferResponseType resolution issues)
+type CreateProjectResult = Awaited<ReturnType<typeof createProjectService>>;
+type UpdateProjectResult = Awaited<ReturnType<typeof updateProjectService>>;
+type DeleteProjectResult = Awaited<ReturnType<typeof deleteProjectService>>;
+type AddUploadToProjectResult = Awaited<ReturnType<typeof addUploadToProjectService>>;
+type UpdateProjectAttachmentResult = Awaited<ReturnType<typeof updateProjectAttachmentService>>;
+type RemoveAttachmentFromProjectResult = Awaited<ReturnType<typeof removeAttachmentFromProjectService>>;
+type CreateProjectMemoryResult = Awaited<ReturnType<typeof createProjectMemoryService>>;
+type UpdateProjectMemoryResult = Awaited<ReturnType<typeof updateProjectMemoryService>>;
+type DeleteProjectMemoryResult = Awaited<ReturnType<typeof deleteProjectMemoryService>>;
+
 export function useCreateProjectMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<CreateProjectResponse, Error, CreateProjectRequest>({
+  return useMutation<CreateProjectResult, Error, Parameters<typeof createProjectService>[0]>({
     mutationFn: createProjectService,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
@@ -51,7 +42,7 @@ export function useCreateProjectMutation() {
 export function useUpdateProjectMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<UpdateProjectResponse, Error, UpdateProjectRequest>({
+  return useMutation<UpdateProjectResult, Error, Parameters<typeof updateProjectService>[0]>({
     mutationFn: updateProjectService,
     onSuccess: (response, variables) => {
       if (response.success && response.data) {
@@ -88,7 +79,7 @@ export function useUpdateProjectMutation() {
 export function useDeleteProjectMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<DeleteProjectResponse, Error, DeleteProjectRequest, { previousProjects?: ListProjectsResponse }>({
+  return useMutation<DeleteProjectResult, Error, Parameters<typeof deleteProjectService>[0], { previousProjects?: ListProjectsResponse }>({
     mutationFn: deleteProjectService,
     onMutate: async (data) => {
       const projectId = data.param?.id;
@@ -139,7 +130,7 @@ export function useDeleteProjectMutation() {
 export function useAddAttachmentToProjectMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<AddUploadToProjectResponse, Error, AddUploadToProjectRequest>({
+  return useMutation<AddUploadToProjectResult, Error, Parameters<typeof addUploadToProjectService>[0]>({
     mutationFn: addUploadToProjectService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
@@ -156,7 +147,7 @@ export function useAddAttachmentToProjectMutation() {
 export function useUpdateProjectAttachmentMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<UpdateProjectAttachmentResponse, Error, UpdateProjectAttachmentRequest>({
+  return useMutation<UpdateProjectAttachmentResult, Error, Parameters<typeof updateProjectAttachmentService>[0]>({
     mutationFn: updateProjectAttachmentService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
@@ -171,7 +162,7 @@ export function useUpdateProjectAttachmentMutation() {
 export function useRemoveAttachmentFromProjectMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<RemoveAttachmentFromProjectResponse, Error, RemoveAttachmentFromProjectRequest>({
+  return useMutation<RemoveAttachmentFromProjectResult, Error, Parameters<typeof removeAttachmentFromProjectService>[0]>({
     mutationFn: removeAttachmentFromProjectService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
@@ -188,7 +179,7 @@ export function useRemoveAttachmentFromProjectMutation() {
 export function useCreateProjectMemoryMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<CreateProjectMemoryResponse, Error, CreateProjectMemoryRequest>({
+  return useMutation<CreateProjectMemoryResult, Error, Parameters<typeof createProjectMemoryService>[0]>({
     mutationFn: createProjectMemoryService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
@@ -205,7 +196,7 @@ export function useCreateProjectMemoryMutation() {
 export function useUpdateProjectMemoryMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<UpdateProjectMemoryResponse, Error, UpdateProjectMemoryRequest>({
+  return useMutation<UpdateProjectMemoryResult, Error, Parameters<typeof updateProjectMemoryService>[0]>({
     mutationFn: updateProjectMemoryService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
@@ -220,7 +211,7 @@ export function useUpdateProjectMemoryMutation() {
 export function useDeleteProjectMemoryMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<DeleteProjectMemoryResponse, Error, DeleteProjectMemoryRequest>({
+  return useMutation<DeleteProjectMemoryResult, Error, Parameters<typeof deleteProjectMemoryService>[0]>({
     mutationFn: deleteProjectMemoryService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;

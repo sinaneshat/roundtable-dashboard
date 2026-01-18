@@ -1,10 +1,10 @@
 import type { StatusVariant } from '@roundtable/shared';
 import { StatusVariants } from '@roundtable/shared';
+import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Link } from '@/lib/compat';
 import { cn } from '@/lib/ui/cn';
 
 type StatusPageProps = {
@@ -94,7 +94,7 @@ export function StatusPageActions({
       {primaryHref
         ? (
             <Button asChild className={cn('w-full', BILLING_BUTTON_STYLES.primary)}>
-              <Link href={primaryHref}>
+              <Link to={primaryHref}>
                 {primaryLabel}
               </Link>
             </Button>
@@ -113,7 +113,7 @@ export function StatusPageActions({
                 size="sm"
                 className={cn('w-full', BILLING_BUTTON_STYLES.secondary)}
               >
-                <Link href={secondaryHref}>
+                <Link to={secondaryHref}>
                   {secondaryLabel}
                 </Link>
               </Button>

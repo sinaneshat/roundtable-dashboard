@@ -22,7 +22,7 @@ import {
   createTestUserMessage,
   getStoreState,
 } from '@/lib/testing';
-import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/types/api';
+import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import { createChatStore } from '../store';
 
@@ -137,7 +137,10 @@ describe('pipeline Phase Transitions', () => {
       state.addPreSearch(pendingPreSearch);
 
       // Pre-search is pending
-      expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.PENDING);
+      const preSearch0 = getStoreState(store).preSearches[0];
+      if (!preSearch0)
+        throw new Error('expected preSearch0');
+      expect(preSearch0.status).toBe(MessageStatuses.PENDING);
 
       // Streaming should not start yet (controlled by orchestrator)
       expect(getStoreState(store).isStreaming).toBe(false);
@@ -149,7 +152,10 @@ describe('pipeline Phase Transitions', () => {
       const streamingPreSearch = createMockPreSearch(0, MessageStatuses.STREAMING);
       state.addPreSearch(streamingPreSearch);
 
-      expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.STREAMING);
+      const preSearch0 = getStoreState(store).preSearches[0];
+      if (!preSearch0)
+        throw new Error('expected preSearch0');
+      expect(preSearch0.status).toBe(MessageStatuses.STREAMING);
     });
 
     it('pre-search complete allows participant streaming', () => {
@@ -158,8 +164,11 @@ describe('pipeline Phase Transitions', () => {
       const completePreSearch = createMockPreSearch(0, MessageStatuses.COMPLETE, true);
       state.addPreSearch(completePreSearch);
 
-      expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.COMPLETE);
-      expect(getStoreState(store).preSearches[0]!.searchData).toBeDefined();
+      const preSearch0 = getStoreState(store).preSearches[0];
+      if (!preSearch0)
+        throw new Error('expected preSearch0');
+      expect(preSearch0.status).toBe(MessageStatuses.COMPLETE);
+      expect(preSearch0.searchData).toBeDefined();
 
       // Now participant streaming can start
       state.setIsStreaming(true);
@@ -255,10 +264,15 @@ describe('pipeline Data Flow', () => {
     state.addPreSearch(preSearch);
 
     // Data is accessible
-    const storedPreSearch = getStoreState(store).preSearches[0]!;
+    const storedPreSearch = getStoreState(store).preSearches[0];
+    if (!storedPreSearch)
+      throw new Error('expected storedPreSearch');
     expect(storedPreSearch.searchData).toBeDefined();
-    expect(storedPreSearch.searchData!.results).toHaveLength(1);
-    expect(storedPreSearch.searchData!.summary).toBe('Search summary');
+    const searchData = storedPreSearch.searchData;
+    if (!searchData)
+      throw new Error('expected searchData');
+    expect(searchData.results).toHaveLength(1);
+    expect(searchData.summary).toBe('Search summary');
   });
 
   it('participant messages available for moderator generation', () => {
@@ -339,8 +353,14 @@ describe('multi-Round Pipeline', () => {
 
     // Verify independence
     expect(getStoreState(store).preSearches).toHaveLength(2);
-    expect(getStoreState(store).preSearches[0]!.roundNumber).toBe(0);
-    expect(getStoreState(store).preSearches[1]!.roundNumber).toBe(1);
+    const ps0 = getStoreState(store).preSearches[0];
+    if (!ps0)
+      throw new Error('expected ps0');
+    const ps1 = getStoreState(store).preSearches[1];
+    if (!ps1)
+      throw new Error('expected ps1');
+    expect(ps0.roundNumber).toBe(0);
+    expect(ps1.roundNumber).toBe(1);
     expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
     expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
   });
@@ -439,7 +459,10 @@ describe('complete Pipeline Journey', () => {
     // Pre-search starts streaming
     const pendingPreSearch = createMockPreSearch(0, MessageStatuses.PENDING);
     state.addPreSearch(pendingPreSearch);
-    expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.PENDING);
+    const pendingPs = getStoreState(store).preSearches[0];
+    if (!pendingPs)
+      throw new Error('expected pendingPs');
+    expect(pendingPs.status).toBe(MessageStatuses.PENDING);
 
     // Pre-search completes with data
     state.updatePreSearchData(0, {
@@ -458,8 +481,14 @@ describe('complete Pipeline Journey', () => {
       totalResults: 1,
       totalTime: 1200,
     });
-    expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.COMPLETE);
-    expect(getStoreState(store).preSearches[0]!.searchData!.summary).toContain('AI developments');
+    const completePs = getStoreState(store).preSearches[0];
+    if (!completePs)
+      throw new Error('expected completePs');
+    expect(completePs.status).toBe(MessageStatuses.COMPLETE);
+    const completePsData = completePs.searchData;
+    if (!completePsData)
+      throw new Error('expected completePsData');
+    expect(completePsData.summary).toContain('AI developments');
 
     // === PHASE 2: Participant Streaming ===
     state.setIsStreaming(true);
@@ -520,8 +549,11 @@ describe('complete Pipeline Journey', () => {
 
     // Pre-search complete with data
     expect(finalState.preSearches).toHaveLength(1);
-    expect(finalState.preSearches[0]!.status).toBe(MessageStatuses.COMPLETE);
-    expect(finalState.preSearches[0]!.searchData).toBeDefined();
+    const finalPs = finalState.preSearches[0];
+    if (!finalPs)
+      throw new Error('expected finalPs');
+    expect(finalPs.status).toBe(MessageStatuses.COMPLETE);
+    expect(finalPs.searchData).toBeDefined();
 
     // All messages present
     expect(finalState.messages).toHaveLength(3);
@@ -595,7 +627,10 @@ describe('pipeline Interruption Handling', () => {
 
     // User stops (simulated by not completing pre-search)
     // Pre-search stays in streaming state
-    expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.STREAMING);
+    const streamingPs = getStoreState(store).preSearches[0];
+    if (!streamingPs)
+      throw new Error('expected streamingPs');
+    expect(streamingPs.status).toBe(MessageStatuses.STREAMING);
 
     // Participant streaming can still be started (bypass pre-search)
     state.setIsStreaming(true);
