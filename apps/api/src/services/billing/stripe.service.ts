@@ -2,14 +2,31 @@
  * Stripe Service
  *
  * Handles all Stripe API interactions for billing operations.
+ *
+ * IMPORTANT: Stripe SDK is lazy-loaded to reduce worker startup CPU time.
+ * This is critical for Cloudflare Workers which have a 400ms startup limit.
  */
 
 import { z } from '@hono/zod-openapi';
 import { PriceTypes } from '@roundtable/shared/enums';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 
 import { createError } from '@/common/error-handling';
 import type { ApiEnv } from '@/types';
+
+// ============================================================================
+// LAZY STRIPE LOADING
+// ============================================================================
+
+// Cache the Stripe module to avoid repeated dynamic imports
+let StripeModule: typeof import('stripe').default | null = null;
+
+async function getStripeModule(): Promise<typeof import('stripe').default> {
+  if (!StripeModule) {
+    StripeModule = (await import('stripe')).default;
+  }
+  return StripeModule;
+}
 
 // ============================================================================
 // SCHEMAS
@@ -26,11 +43,17 @@ export type StripeServiceConfig = z.infer<typeof StripeServiceConfigSchema>;
 
 class StripeService {
   private stripe: Stripe | null = null;
+  private config: StripeServiceConfig | null = null;
   private webhookSecret: string | null = null;
   private portalConfigId: string | null = null;
+  private initPromise: Promise<void> | null = null;
 
+  /**
+   * Store config for lazy initialization.
+   * Actual Stripe client is created on first use.
+   */
   initialize(config: StripeServiceConfig): void {
-    if (this.stripe) {
+    if (this.config) {
       return;
     }
 
@@ -42,20 +65,59 @@ class StripeService {
       );
     }
 
-    this.stripe = new Stripe(config.secretKey, {
-      apiVersion: config.apiVersion || '2025-12-15.clover',
-      typescript: true,
-      httpClient: Stripe.createFetchHttpClient(),
-    });
-
+    this.config = config;
     this.webhookSecret = config.webhookSecret;
     this.portalConfigId = config.portalConfigId || null;
   }
 
+  /**
+   * Lazy-load Stripe client on first use
+   */
+  private async ensureClient(): Promise<Stripe> {
+    if (this.stripe) {
+      return this.stripe;
+    }
+
+    if (!this.config) {
+      throw createError.internal(
+        'Stripe service not initialized',
+        { errorType: 'configuration', service: 'stripe' },
+      );
+    }
+
+    // Capture config in local variable for closure (TypeScript narrowing)
+    const config = this.config;
+
+    // Use a promise to ensure only one initialization happens
+    if (!this.initPromise) {
+      this.initPromise = (async () => {
+        const StripeClass = await getStripeModule();
+        this.stripe = new StripeClass(config.secretKey, {
+          apiVersion: config.apiVersion || '2025-12-15.clover',
+          typescript: true,
+          httpClient: StripeClass.createFetchHttpClient(),
+        });
+      })();
+    }
+
+    await this.initPromise;
+
+    if (!this.stripe) {
+      throw createError.internal(
+        'Stripe client initialization failed',
+        { errorType: 'initialization', service: 'stripe' },
+      );
+    }
+    return this.stripe;
+  }
+
+  /**
+   * @deprecated Use ensureClient() instead for lazy loading
+   */
   getClient(): Stripe {
     if (!this.stripe) {
       throw createError.internal(
-        'Stripe service not initialized',
+        'Stripe service not initialized. Call ensureClient() first.',
         { errorType: 'configuration', service: 'stripe' },
       );
     }
@@ -73,7 +135,7 @@ class StripeService {
   }
 
   async listProducts(): Promise<Stripe.Product[]> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     const products = await stripe.products.list({
       active: true,
       expand: ['data.default_price'],
@@ -82,14 +144,14 @@ class StripeService {
   }
 
   async getProduct(productId: string): Promise<Stripe.Product> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     return await stripe.products.retrieve(productId, {
       expand: ['default_price'],
     });
   }
 
   async listPrices(productId: string): Promise<Stripe.Price[]> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     const prices = await stripe.prices.list({ product: productId, active: true });
     return prices.data;
   }
@@ -99,7 +161,7 @@ class StripeService {
     name?: string;
     metadata?: Record<string, string>;
   }): Promise<Stripe.Customer> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     return await stripe.customers.create({
       email: params.email,
       name: params.name,
@@ -108,7 +170,7 @@ class StripeService {
   }
 
   async getCustomer(customerId: string): Promise<Stripe.Customer> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     const customer = await stripe.customers.retrieve(customerId);
 
     if (customer.deleted) {
@@ -125,7 +187,7 @@ class StripeService {
     customerId: string,
     params: Stripe.CustomerUpdateParams,
   ): Promise<Stripe.Customer> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     return await stripe.customers.update(customerId, params);
   }
 
@@ -135,7 +197,7 @@ class StripeService {
     trialPeriodDays?: number;
     metadata?: Record<string, string>;
   }): Promise<Stripe.Subscription> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     return await stripe.subscriptions.create({
       customer: params.customerId,
       items: [{ price: params.priceId }],
@@ -148,14 +210,14 @@ class StripeService {
   }
 
   async getSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     return await stripe.subscriptions.retrieve(subscriptionId, {
       expand: ['latest_invoice', 'customer'],
     });
   }
 
   async listSubscriptions(customerId: string): Promise<Stripe.Subscription[]> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       expand: ['data.latest_invoice'],
@@ -167,7 +229,7 @@ class StripeService {
     subscriptionId: string,
     params: Stripe.SubscriptionUpdateParams,
   ): Promise<Stripe.Subscription> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     return await stripe.subscriptions.update(subscriptionId, params);
   }
 
@@ -175,7 +237,7 @@ class StripeService {
     subscriptionId: string,
     cancelAtPeriodEnd = true,
   ): Promise<Stripe.Subscription> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     return cancelAtPeriodEnd
       ? await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true })
       : await stripe.subscriptions.cancel(subscriptionId);
@@ -197,7 +259,7 @@ class StripeService {
     metadata?: Record<string, string>;
     mode?: 'subscription' | 'payment';
   }): Promise<Stripe.Checkout.Session> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
 
     let checkoutMode: 'subscription' | 'payment' = params.mode || 'subscription';
     if (!params.mode) {
@@ -221,8 +283,8 @@ class StripeService {
     return await stripe.checkout.sessions.create(sessionParams);
   }
 
-  constructWebhookEvent(payload: string, signature: string): Stripe.Event {
-    const stripe = this.getClient();
+  async constructWebhookEvent(payload: string, signature: string): Promise<Stripe.Event> {
+    const stripe = await this.ensureClient();
     const webhookSecret = this.getWebhookSecret();
 
     try {
@@ -239,7 +301,7 @@ class StripeService {
     customerId: string;
     returnUrl: string;
   }): Promise<Stripe.BillingPortal.Session> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     const sessionParams: Stripe.BillingPortal.SessionCreateParams = {
       customer: params.customerId,
       return_url: params.returnUrl,
@@ -253,14 +315,14 @@ class StripeService {
   }
 
   async getInvoice(invoiceId: string): Promise<Stripe.Invoice> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     return await stripe.invoices.retrieve(invoiceId, {
       expand: ['subscription', 'customer'],
     });
   }
 
   async listInvoices(customerId: string): Promise<Stripe.Invoice[]> {
-    const stripe = this.getClient();
+    const stripe = await this.ensureClient();
     const invoices = await stripe.invoices.list({ customer: customerId });
     return invoices.data;
   }

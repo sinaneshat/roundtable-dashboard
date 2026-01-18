@@ -20,7 +20,6 @@ import {
   SubscriptionTiers,
   ThreadStatuses,
 } from '@roundtable/shared/enums';
-import { convertToModelMessages, streamText, validateUIMessages } from 'ai';
 import { and, asc, desc, eq, like } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
@@ -108,6 +107,21 @@ import {
   UpdateParticipantInputSchema,
   UpdateProjectInputSchema,
 } from './schema';
+
+// ============================================================================
+// LAZY AI SDK LOADING
+// ============================================================================
+
+// Cache the AI SDK module to avoid repeated dynamic imports
+// This is critical for Cloudflare Workers which have a 400ms startup limit
+let aiSdkModule: typeof import('ai') | null = null;
+
+async function getAiSdk() {
+  if (!aiSdkModule) {
+    aiSdkModule = await import('ai');
+  }
+  return aiSdkModule;
+}
 
 // ============================================================================
 // Type Adapters
@@ -797,6 +811,9 @@ async function toolGenerateResponses(
   db: Awaited<ReturnType<typeof getDbAsync>>,
   env: ApiEnv['Bindings'],
 ): Promise<ToolCallResult> {
+  // ✅ LAZY LOAD AI SDK: Load at function invocation, not module startup
+  const { convertToModelMessages, streamText, validateUIMessages } = await getAiSdk();
+
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const participants = await db.query.chatParticipant.findMany({

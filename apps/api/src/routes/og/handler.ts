@@ -1,11 +1,10 @@
 /**
  * OG Image Handler
  *
- * Generates dynamic Open Graph images for chat threads using satori + sharp.
+ * Generates dynamic Open Graph images for chat threads using satori + @cf-wasm/resvg.
+ * Uses WASM-based image processing for Cloudflare Workers compatibility.
  * Returns PNG images with proper cache headers for CDN optimization.
  */
-
-import { Buffer } from 'node:buffer';
 
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { ChatMode } from '@roundtable/shared';
@@ -346,13 +345,20 @@ async function generateOgImage(params: {
 }
 
 /**
- * Convert SVG to PNG using sharp
+ * Convert SVG to PNG using @cf-wasm/resvg (Workers-compatible WASM)
+ * Sharp is not compatible with Cloudflare Workers due to native Node.js dependencies
  */
-async function svgToPng(svg: string): Promise<Buffer> {
-  const sharp = (await import('sharp')).default;
-  return sharp(Buffer.from(svg))
-    .png()
-    .toBuffer();
+async function svgToPng(svg: string): Promise<Uint8Array> {
+  // Lazy load resvg for code splitting
+  const { Resvg } = await import('@cf-wasm/resvg');
+  const resvg = new Resvg(svg, {
+    fitTo: {
+      mode: 'width',
+      value: OG_WIDTH,
+    },
+  });
+  const pngData = resvg.render();
+  return pngData.asPng();
 }
 
 /**
@@ -438,11 +444,13 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
         messageCount,
       });
 
-      // Convert to PNG
+      // Convert to PNG using Workers-compatible WASM
       const png = await svgToPng(svg);
 
-      // Return PNG with CDN cache headers (convert Buffer to Uint8Array for proper BodyInit compatibility)
-      return new Response(new Uint8Array(png), {
+      // Return PNG with CDN cache headers
+      // Create a fresh ArrayBuffer copy to satisfy TypeScript's strict typing
+      const pngBuffer = png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer;
+      return new Response(pngBuffer, {
         headers: {
           'Content-Type': 'image/png',
           'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
@@ -452,13 +460,19 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
     } catch (error) {
       console.error('[OG-IMAGE] Generation failed:', error);
 
-      // Return minimal 1x1 transparent PNG on error
-      const transparentPng = Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-        'base64',
-      );
+      // Return minimal 1x1 transparent PNG on error (base64 decoded using Web API)
+      const base64Png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const binaryString = atob(base64Png);
+      const transparentPng = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        transparentPng[i] = binaryString.charCodeAt(i);
+      }
 
-      return new Response(new Uint8Array(transparentPng), {
+      const errorBuffer = transparentPng.buffer.slice(
+        transparentPng.byteOffset,
+        transparentPng.byteOffset + transparentPng.byteLength,
+      ) as ArrayBuffer;
+      return new Response(errorBuffer, {
         headers: {
           'Content-Type': 'image/png',
           'Cache-Control': 'public, max-age=60',

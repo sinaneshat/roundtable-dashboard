@@ -13,7 +13,6 @@
 
 import type { RouteHandler } from '@hono/zod-openapi';
 import { MessagePartTypes, MessageRoles, PlanTypes, PollingStatuses, RoundExecutionPhases } from '@roundtable/shared/enums';
-import { streamText } from 'ai';
 import { asc, eq } from 'drizzle-orm';
 
 import { createError } from '@/common/error-handling';
@@ -62,6 +61,21 @@ import type { ModeratorPromptConfig, ParticipantResponse } from '../schema';
 import { RoundModeratorRequestSchema } from '../schema';
 
 // ============================================================================
+// LAZY AI SDK LOADING
+// ============================================================================
+
+// Cache the AI SDK module to avoid repeated dynamic imports
+// This is critical for Cloudflare Workers which have a 400ms startup limit
+let aiSdkModule: typeof import('ai') | null = null;
+
+async function getAiSdk() {
+  if (!aiSdkModule) {
+    aiSdkModule = await import('ai');
+  }
+  return aiSdkModule;
+}
+
+// ============================================================================
 // Constants
 // ============================================================================
 
@@ -97,11 +111,15 @@ type ModeratorGenerationConfig = {
  * ✅ SCHEMA-DRIVEN: Uses ModeratorPromptConfig for prompt data
  * ✅ TYPE-SAFE: All participant responses validated via ParticipantResponseSchema
  * ✅ PATTERN: Follows same streaming pattern as participant messages
+ * ✅ LAZY LOAD: AI SDK is lazy-loaded at invocation time
  */
-function generateCouncilModerator(
+async function generateCouncilModerator(
   config: ModeratorGenerationConfig,
   c: { env: ApiEnv['Bindings'] },
 ) {
+  // ✅ LAZY LOAD AI SDK: Load at invocation, not module startup
+  const { streamText } = await getAiSdk();
+
   const { roundNumber, mode, userQuestion, participantResponses, env, messageId, threadId, userId, sessionId, executionCtx } = config;
 
   const llmTraceId = generateTraceId();
@@ -637,7 +655,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
 
     // Generate and return streaming response
     // ✅ SINGLE SOURCE: Mode validated via ChatModeSchema in prompts.service.ts
-    return generateCouncilModerator(
+    return await generateCouncilModerator(
       {
         roundNumber: roundNum,
         mode: thread.mode,

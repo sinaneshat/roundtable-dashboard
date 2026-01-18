@@ -1,12 +1,26 @@
 import { z } from '@hono/zod-openapi';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import type { LanguageModelUsage, UIMessage } from 'ai';
-import { convertToModelMessages, generateText } from 'ai';
 
 import { createError } from '@/common/error-handling';
 import type { ErrorContext } from '@/core';
 import { DEFAULT_AI_PARAMS } from '@/services/billing';
 import type { ApiEnv } from '@/types';
+
+// ============================================================================
+// LAZY AI SDK LOADING
+// ============================================================================
+
+// Cache the AI SDK module to avoid repeated dynamic imports
+// This is critical for Cloudflare Workers which have a 400ms startup limit
+let aiSdkModule: typeof import('ai') | null = null;
+
+async function getAiSdk() {
+  if (!aiSdkModule) {
+    aiSdkModule = await import('ai');
+  }
+  return aiSdkModule;
+}
 
 function isValidOpenRouterModelId(modelId: string): boolean {
   return /^[\w-]+\/[\w.-]+$/.test(modelId);
@@ -91,6 +105,9 @@ class OpenRouterService {
     finishReason: string;
     usage: LanguageModelUsage;
   }> {
+    // ✅ LAZY LOAD AI SDK: Load at method invocation, not module startup
+    const { generateText, convertToModelMessages } = await getAiSdk();
+
     const client = this.getClient();
     this.validateModelId(params.modelId);
 

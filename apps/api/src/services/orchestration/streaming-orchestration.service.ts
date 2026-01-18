@@ -22,7 +22,6 @@ import {
   UIMessageRoles,
 } from '@roundtable/shared/enums';
 import type { ModelMessage, UIMessage } from 'ai';
-import { convertToModelMessages, validateUIMessages } from 'ai';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -69,6 +68,21 @@ import type {
 import type { TypedLogger } from '@/types/logger';
 import { LogHelpers } from '@/types/logger';
 import { isModelFilePartWithData } from '@/types/uploads';
+
+// ============================================================================
+// LAZY AI SDK LOADING
+// ============================================================================
+
+// Cache the AI SDK module to avoid repeated dynamic imports
+// This is critical for Cloudflare Workers which have a 400ms startup limit
+let aiSdkModule: typeof import('ai') | null = null;
+
+async function getAiSdk() {
+  if (!aiSdkModule) {
+    aiSdkModule = await import('ai');
+  }
+  return aiSdkModule;
+}
 
 type FileDataEntry = {
   data: Uint8Array;
@@ -1137,6 +1151,9 @@ function injectFileDataIntoModelMessages(
 export async function prepareValidatedMessages(
   params: PrepareValidatedMessagesParams,
 ): Promise<PrepareValidatedMessagesResult> {
+  // ✅ LAZY LOAD AI SDK: Load at function invocation, not module startup
+  const { convertToModelMessages, validateUIMessages } = await getAiSdk();
+
   const { previousDbMessages, newMessage, logger, r2Bucket, db, attachmentIds, baseUrl, userId, secret, threadId, memoryLimits } = params;
 
   // ✅ MEMORY SAFETY: Apply limits to attachment processing

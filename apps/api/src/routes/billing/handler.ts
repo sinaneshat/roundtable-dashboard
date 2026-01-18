@@ -785,7 +785,7 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
 
     try {
       const rawBody = await c.req.text();
-      const event = stripeService.constructWebhookEvent(rawBody, signature);
+      const event = await stripeService.constructWebhookEvent(rawBody, signature);
 
       // Check for existing event using batch.db for consistency
       const existingEvent = await batch.db.query.stripeWebhookEvent.findFirst({

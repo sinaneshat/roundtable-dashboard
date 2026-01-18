@@ -4,6 +4,7 @@ import { cloudflare } from '@cloudflare/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import viteReact from '@vitejs/plugin-react';
+import { visualizer } from 'rollup-plugin-visualizer';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -56,7 +57,15 @@ export default defineConfig({
       ],
     }),
     viteReact(),
-  ],
+    // Bundle analyzer - only runs during production builds with ANALYZE=true
+    process.env.ANALYZE === 'true'
+    && visualizer({
+      filename: 'stats.html',
+      open: true,
+      gzipSize: true,
+      brotliSize: true,
+    }),
+  ].filter(Boolean),
   // Proxy ALL /api/* requests to backend - frontend becomes the single origin
   // This avoids CORS issues and makes cookies work seamlessly
   server: {
@@ -94,6 +103,55 @@ export default defineConfig({
         'events',
         'buffer',
       ],
+      output: {
+        manualChunks: {
+          // Core React - critical for initial render
+          'react-vendor': ['react', 'react-dom'],
+          // TanStack ecosystem - routing and data fetching
+          'tanstack-vendor': ['@tanstack/react-router', '@tanstack/react-query', '@tanstack/react-start', '@tanstack/react-virtual'],
+          // Radix UI primitives - large set of UI components
+          'radix-vendor': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-popover',
+            '@radix-ui/react-toast',
+            '@radix-ui/react-tooltip',
+            '@radix-ui/react-select',
+            '@radix-ui/react-accordion',
+            '@radix-ui/react-alert-dialog',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-scroll-area',
+          ],
+          // Radix UI secondary - less frequently used components
+          'radix-secondary': [
+            '@radix-ui/react-avatar',
+            '@radix-ui/react-checkbox',
+            '@radix-ui/react-collapsible',
+            '@radix-ui/react-label',
+            '@radix-ui/react-progress',
+            '@radix-ui/react-radio-group',
+            '@radix-ui/react-separator',
+            '@radix-ui/react-slot',
+            '@radix-ui/react-switch',
+            '@radix-ui/react-toggle',
+            '@radix-ui/react-visually-hidden',
+          ],
+          // Animation libraries - can be lazy loaded
+          'animation-vendor': ['motion', 'embla-carousel-react'],
+          // Analytics - defer loading until after interaction
+          'analytics-vendor': ['posthog-js'],
+          // Forms - used in specific routes
+          'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
+          // Utilities - shared utilities
+          'utils-vendor': ['clsx', 'tailwind-merge', 'class-variance-authority', 'immer'],
+          // Content rendering - markdown and syntax highlighting
+          'content-vendor': ['react-markdown', 'shiki', 'streamdown'],
+          // Data utilities - date handling, search, etc.
+          'data-vendor': ['date-fns', 'fuse.js', 'chroma-js', 'randomcolor'],
+          // UI utilities - additional UI libraries
+          'ui-utilities': ['cmdk', 'react-day-picker', 'vaul', 'use-stick-to-bottom', '@unpic/react', 'nuqs'],
+        },
+      },
     },
   },
   define: {

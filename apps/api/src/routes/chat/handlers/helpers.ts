@@ -1,9 +1,23 @@
 import { MessageRoles, UIMessageRoles } from '@roundtable/shared/enums';
 import type { UIMessage } from 'ai';
-import { TypeValidationError, validateUIMessages } from 'ai';
 
 import { createError } from '@/common/error-handling';
 import type { ChatMessage } from '@/db/validation';
+
+// ============================================================================
+// LAZY AI SDK LOADING
+// ============================================================================
+
+// Cache the AI SDK module to avoid repeated dynamic imports
+// This is critical for Cloudflare Workers which have a 400ms startup limit
+let aiSdkModule: typeof import('ai') | null = null;
+
+async function getAiSdk() {
+  if (!aiSdkModule) {
+    aiSdkModule = await import('ai');
+  }
+  return aiSdkModule;
+}
 
 /**
  * Convert database chat messages to UI Message format
@@ -86,6 +100,9 @@ export async function chatMessagesToUIMessages(
   // - UIMessage allows optional metadata (metadata?: METADATA)
   // - Validation happens later in the streaming handler when metadata is present
   try {
+    // ✅ LAZY LOAD AI SDK: Load at function invocation, not module startup
+    const { validateUIMessages } = await getAiSdk();
+
     return await validateUIMessages({
       messages,
       // Don't validate metadata - allow messages with or without metadata
@@ -94,6 +111,8 @@ export async function chatMessagesToUIMessages(
   } catch (error) {
     // ✅ AI SDK V6 PATTERN: Handle TypeValidationError gracefully
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#validating-messages-from-database
+    // ✅ LAZY LOAD: TypeValidationError.isInstance is a static method - load dynamically
+    const { TypeValidationError } = await getAiSdk();
     if (TypeValidationError.isInstance(error)) {
       // Re-throw with more context for debugging
       throw createError.internal(

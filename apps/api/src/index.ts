@@ -442,55 +442,71 @@ app.use('*', async (c, next) => {
   return etag()(c, next);
 });
 
-// Session attachment - skip for public endpoints that don't need auth
-// ⚠️ PERFORMANCE: Session lookup is expensive (DB query) - skip for truly public routes
-// This avoids expensive database queries on every public request
+// Session attachment - optimized with prefix-based routing
+// ⚠️ PERFORMANCE: Session lookup is expensive (DB query) - only apply where truly needed
+//
+// Strategy:
+// 1. Most routes use createHandler with auth:'session' - they do their own session lookup
+// 2. Only apply attachSession to routes that need session in middleware (like /auth/me)
+// 3. Public routes and static assets get explicit null session
+//
+// This reduces path condition checks from 40+ to ~3-5 per request
+const publicPrefixes = ['/chat/public/', '/system/', '/webhooks/', '/_next/', '/static/'];
+const staticExtensions = ['.ico', '.png', '.jpg', '.svg'];
+const docPaths = ['/health', '/api/v1/health', '/doc', '/openapi.json', '/scalar', '/llms.txt'];
+
 app.use('*', async (c, next) => {
   const path = c.req.path;
-  const method = c.req.method;
 
-  // Skip session for routes where:
-  // 1. Truly public endpoints (never need auth)
-  // 2. Routes with handlers that do their own auth (avoid double session lookup)
-  //
-  // ⚠️ PERF: createHandler with auth:'session' already calls getSession()
-  // Running attachSession middleware first would cause DOUBLE DB lookup
-  if (
-    // Public endpoints - never need auth
-    path.startsWith('/chat/public/')
-    || path.startsWith('/system/')
-    || path === '/health'
-    || path === '/api/v1/health'
-    || path === '/doc'
-    || path === '/openapi.json'
-    || path === '/scalar'
-    || path === '/llms.txt'
-    || path.startsWith('/webhooks/')
-    || (path.startsWith('/billing/products') && method === 'GET')
-    || (path === '/models' && method === 'GET')
-    || path.startsWith('/_next/')
-    || path.startsWith('/static/')
-    || path.endsWith('.ico')
-    || path.endsWith('.png')
-    || path.endsWith('.jpg')
-    || path.endsWith('.svg')
-    // Routes with createHandler auth - handlers do their own session lookup
-    // These routes all use createHandler with auth:'session' which does its own getSession()
-    || path === '/chat'
-    || path.startsWith('/chat/threads/')
-    || path.startsWith('/chat/roles/')
-    || path.startsWith('/chat/presets/')
-    || path.startsWith('/usage/')
-    || path.startsWith('/uploads/')
-    || path.startsWith('/api-keys/')
-    || path.startsWith('/projects/')
-    || path.startsWith('/mcp/')
-    || path.startsWith('/billing/')
-  ) {
+  // Fast prefix check for public routes
+  if (publicPrefixes.some(prefix => path.startsWith(prefix))) {
     c.set('session', null);
     c.set('user', null);
     return next();
   }
+
+  // Fast suffix check for static assets
+  if (staticExtensions.some(ext => path.endsWith(ext))) {
+    c.set('session', null);
+    c.set('user', null);
+    return next();
+  }
+
+  // Fast exact match for doc paths
+  if (docPaths.includes(path)) {
+    c.set('session', null);
+    c.set('user', null);
+    return next();
+  }
+
+  // Public billing/models GET endpoints
+  if ((path.startsWith('/billing/products') || path === '/models') && c.req.method === 'GET') {
+    c.set('session', null);
+    c.set('user', null);
+    return next();
+  }
+
+  // Routes with createHandler auth - handlers do their own session lookup
+  // ⚠️ PERF: createHandler with auth:'session' already calls getSession()
+  // Running attachSession middleware first would cause DOUBLE DB lookup
+  const handlerAuthPrefixes = [
+    '/chat',
+    '/usage/',
+    '/uploads/',
+    '/api-keys/',
+    '/projects/',
+    '/mcp/',
+    '/billing/',
+    '/credits/',
+  ];
+
+  if (handlerAuthPrefixes.some(prefix => path.startsWith(prefix))) {
+    c.set('session', null);
+    c.set('user', null);
+    return next();
+  }
+
+  // Fallback: attach session for any other routes (minimal use)
   return attachSession(c, next);
 });
 
@@ -885,10 +901,11 @@ finalRoutes.use('/scalar', async (c, next) => {
   });
 });
 
-finalRoutes.get('/scalar', async (c) => {
+finalRoutes.get('/scalar', async (c, next) => {
   // Lazy load Scalar to reduce worker startup CPU time
-  const { Scalar } = await import('@scalar/hono-api-reference');
-  return Scalar({ url: '/api/v1/doc' })(c);
+  const { apiReference } = await import('@scalar/hono-api-reference');
+  const middleware = apiReference({ url: '/api/v1/doc' });
+  return middleware(c as Parameters<typeof middleware>[0], next);
 });
 
 // Health endpoints are now properly registered as OpenAPI routes above

@@ -1,41 +1,33 @@
 /**
- * Lazy-loaded syntax highlighter
- * Uses shiki/bundle/web for smaller bundle size (~1MB vs ~3.6MB)
- * Only loads languages on-demand
+ * Optimized syntax highlighter
+ * Bundles only commonly used languages (~2MB vs ~8MB with all languages)
+ * Languages are imported directly to ensure they're bundled upfront
  */
 
 import type { BundledLanguage, ShikiTransformer } from 'shiki';
 
-// Common languages to support (reduced set for smaller bundle)
-const SUPPORTED_LANGUAGES = new Set([
+const CORE_LANGUAGES = [
   'javascript',
   'typescript',
   'jsx',
   'tsx',
-  'python',
-  'java',
-  'go',
-  'rust',
-  'ruby',
-  'php',
-  'c',
-  'cpp',
-  'csharp',
-  'html',
-  'css',
-  'scss',
   'json',
-  'xml',
   'yaml',
+  'markdown',
   'bash',
   'shell',
+  'python',
+  'go',
+  'rust',
+  'html',
+  'css',
   'sql',
-  'dockerfile',
-  'markdown',
-  'swift',
-  'kotlin',
-  'graphql',
-]);
+  'diff',
+] as const;
+
+type CoreLanguage = typeof CORE_LANGUAGES[number];
+
+const SUPPORTED_LANGUAGES = new Set<string>(CORE_LANGUAGES);
 
 const lineNumberTransformer: ShikiTransformer = {
   name: 'line-numbers',
@@ -58,21 +50,75 @@ const lineNumberTransformer: ShikiTransformer = {
   },
 };
 
-function isSupportedLanguage(lang: string): lang is BundledLanguage {
+function isSupportedLanguage(lang: string): lang is CoreLanguage {
   return SUPPORTED_LANGUAGES.has(lang.toLowerCase());
 }
 
-// Cache the highlighter to avoid re-creating it
 let highlighterPromise: Promise<Awaited<ReturnType<typeof import('shiki')['createHighlighter']>>> | null = null;
 
 async function getHighlighter() {
   if (!highlighterPromise) {
-    highlighterPromise = import('shiki').then(async ({ createHighlighter }) => {
+    highlighterPromise = (async () => {
+      const [
+        { createHighlighter },
+        javascript,
+        typescript,
+        jsx,
+        tsx,
+        json,
+        yaml,
+        markdown,
+        bash,
+        shell,
+        python,
+        go,
+        rust,
+        html,
+        css,
+        sql,
+        diff,
+      ] = await Promise.all([
+        import('shiki'),
+        import('shiki/langs/javascript.mjs'),
+        import('shiki/langs/typescript.mjs'),
+        import('shiki/langs/jsx.mjs'),
+        import('shiki/langs/tsx.mjs'),
+        import('shiki/langs/json.mjs'),
+        import('shiki/langs/yaml.mjs'),
+        import('shiki/langs/markdown.mjs'),
+        import('shiki/langs/bash.mjs'),
+        import('shiki/langs/shell.mjs'),
+        import('shiki/langs/python.mjs'),
+        import('shiki/langs/go.mjs'),
+        import('shiki/langs/rust.mjs'),
+        import('shiki/langs/html.mjs'),
+        import('shiki/langs/css.mjs'),
+        import('shiki/langs/sql.mjs'),
+        import('shiki/langs/diff.mjs'),
+      ]);
+
       return createHighlighter({
         themes: ['one-light', 'one-dark-pro'],
-        langs: [], // Load languages on-demand
+        langs: [
+          javascript.default,
+          typescript.default,
+          jsx.default,
+          tsx.default,
+          json.default,
+          yaml.default,
+          markdown.default,
+          bash.default,
+          shell.default,
+          python.default,
+          go.default,
+          rust.default,
+          html.default,
+          css.default,
+          sql.default,
+          diff.default,
+        ],
       });
-    });
+    })();
   }
   return highlighterPromise;
 }
@@ -93,14 +139,6 @@ async function highlightCode(
   try {
     const highlighter = await getHighlighter();
     const lang = isSupportedLanguage(language) ? language : 'text';
-
-    // Load language on-demand if not already loaded
-    if (lang !== 'text') {
-      const loadedLangs = highlighter.getLoadedLanguages();
-      if (!loadedLangs.includes(lang)) {
-        await highlighter.loadLanguage(lang as BundledLanguage);
-      }
-    }
 
     const [light, dark] = await Promise.all([
       highlighter.codeToHtml(code, {

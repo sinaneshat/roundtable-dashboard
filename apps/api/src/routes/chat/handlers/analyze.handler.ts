@@ -25,7 +25,6 @@ import {
   ShortRoleNameSchema,
   SubscriptionTiers,
 } from '@roundtable/shared/enums';
-import { Output, streamText } from 'ai';
 import { streamSSE } from 'hono/streaming';
 import { ulid } from 'ulid';
 import { z } from 'zod';
@@ -51,6 +50,21 @@ import type { ApiEnv } from '@/types';
 import type { analyzePromptRoute } from '../route';
 import type { AnalyzePromptPayload, RecommendedParticipant } from '../schema';
 import { AnalyzePromptRequestSchema } from '../schema';
+
+// ============================================================================
+// LAZY AI SDK LOADING
+// ============================================================================
+
+// Cache the AI SDK module to avoid repeated dynamic imports
+// This is critical for Cloudflare Workers which have a 400ms startup limit
+let aiSdkModule: typeof import('ai') | null = null;
+
+async function getAiSdk() {
+  if (!aiSdkModule) {
+    aiSdkModule = await import('ai');
+  }
+  return aiSdkModule;
+}
 
 // ============================================================================
 // Constants
@@ -186,6 +200,9 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
     operationName: 'analyzePrompt',
   },
   async (c) => {
+    // ✅ LAZY LOAD AI SDK: Load at handler invocation, not module startup
+    const { Output, streamText } = await getAiSdk();
+
     const { user } = c.auth();
     const { prompt, hasImageFiles, hasDocumentFiles } = c.validated.body;
 

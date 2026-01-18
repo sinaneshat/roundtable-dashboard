@@ -18,6 +18,7 @@
 
 import type { Message, MessageBatch } from '@cloudflare/workers-types';
 
+import { calculateExponentialBackoff } from '@/lib/utils/queue-utils';
 import type { TitleGenerationQueueMessage } from '@/types/queues';
 
 // IMPORTANT: No static imports of title-generator.service here!
@@ -98,9 +99,10 @@ async function processQueueMessage(
       error,
     );
 
-    // Exponential backoff: 60s, 120s, 240s, max 300s
-    const retryDelaySeconds = Math.min(
-      BASE_RETRY_DELAY_SECONDS * 2 ** msg.attempts,
+    // Exponential backoff using shared utility
+    const retryDelaySeconds = calculateExponentialBackoff(
+      msg.attempts,
+      BASE_RETRY_DELAY_SECONDS,
       MAX_RETRY_DELAY_SECONDS,
     );
     msg.retry({ delaySeconds: retryDelaySeconds });

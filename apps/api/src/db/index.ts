@@ -278,6 +278,9 @@ export { schema };
 // Export KV binding getter for services that need direct KV access
 export { getKVBinding };
 
+// Export batch operations utilities
+export { executeBatch, prepareStatement } from './batch-operations';
+
 // Export batch-related types for TypeScript enforcement
 export type { BatchableOperation, BatchResults, D1BatchDatabase } from './d1-types';
 // Re-export all table definitions (barrel pattern)

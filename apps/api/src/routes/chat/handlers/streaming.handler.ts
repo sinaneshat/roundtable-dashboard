@@ -5,6 +5,9 @@
  * Refactored to use service layer for better maintainability
  *
  * This handler orchestrates multi-participant AI conversations with streaming responses.
+ *
+ * IMPORTANT: AI SDK is lazy-loaded to reduce worker startup CPU time.
+ * This is critical for Cloudflare Workers which have a 400ms startup limit.
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
@@ -18,13 +21,11 @@ import {
   RoundOrchestrationMessageTypes,
   UIMessageRoles,
 } from '@roundtable/shared/enums';
-import {
-  extractReasoningMiddleware,
-  RetryError,
-  smoothStream,
-  streamText,
-  wrapLanguageModel,
-} from 'ai';
+// ============================================================================
+// LAZY AI SDK LOADING
+// ============================================================================
+// Type-only import for type references (doesn't execute at module load)
+import type { wrapLanguageModel as WrapLanguageModelType } from 'ai';
 import { and, desc, eq } from 'drizzle-orm';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
@@ -128,6 +129,16 @@ import type { streamChatRoute } from '../route';
 import { StreamChatRequestSchema } from '../schema';
 import { chatMessagesToUIMessages } from './helpers';
 
+// Cache the AI SDK module to avoid repeated dynamic imports
+let aiSdkModule: typeof import('ai') | null = null;
+
+async function getAiSdk() {
+  if (!aiSdkModule) {
+    aiSdkModule = await import('ai');
+  }
+  return aiSdkModule;
+}
+
 // ============================================================================
 // Memory Safety Constants
 // ============================================================================
@@ -190,6 +201,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       operationName: 'streamChat',
     },
     async (c) => {
+      // ✅ LAZY LOAD AI SDK: Load AI SDK functions at handler invocation, not module startup
+      // This is critical for Cloudflare Workers which have a 400ms startup limit
+      const aiSdk = await getAiSdk();
+      const { extractReasoningMiddleware, RetryError, smoothStream, streamText, wrapLanguageModel } = aiSdk;
+
       // ✅ PERFORMANCE OPTIMIZATION: Capture executionCtx for non-blocking analytics
       // PostHog tracking will use this to run asynchronously via waitUntil()
       const executionCtx = c.executionCtx;
@@ -769,8 +785,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
        * @see AI SDK Middleware: https://sdk.vercel.ai/docs/ai-sdk-core/middleware
        * @see OpenRouter Provider Issue: Types don't align with latest AI SDK middleware
        */
-      function adaptModelForMiddleware<T>(model: T): Parameters<typeof wrapLanguageModel>[0]['model'] {
-        return model as Parameters<typeof wrapLanguageModel>[0]['model'];
+      function adaptModelForMiddleware<T>(model: T): Parameters<typeof WrapLanguageModelType>[0]['model'] {
+        return model as Parameters<typeof WrapLanguageModelType>[0]['model'];
       }
 
       const modelForStreaming = isDeepSeek

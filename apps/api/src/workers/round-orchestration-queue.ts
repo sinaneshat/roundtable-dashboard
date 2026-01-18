@@ -22,6 +22,7 @@ import { BETTER_AUTH_SESSION_COOKIE_NAME, MessagePartTypes, RoundOrchestrationMe
 
 import type { WebappEnv } from '@/lib/config/base-urls';
 import { BASE_URLS, isWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { calculateExponentialBackoff } from '@/lib/utils/queue-utils';
 import { RoundStatusSchema } from '@/routes/chat/schema';
 import type {
   CheckRoundCompletionQueueMessage,
@@ -341,9 +342,10 @@ async function processQueueMessage(
       error,
     );
 
-    // Exponential backoff: 60s, 120s, 240s, max 300s
-    const retryDelaySeconds = Math.min(
-      BASE_RETRY_DELAY_SECONDS * 2 ** msg.attempts,
+    // Exponential backoff using shared utility
+    const retryDelaySeconds = calculateExponentialBackoff(
+      msg.attempts,
+      BASE_RETRY_DELAY_SECONDS,
       MAX_RETRY_DELAY_SECONDS,
     );
 
