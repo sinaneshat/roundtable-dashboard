@@ -43,11 +43,26 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       // Theme
       { name: 'theme-color', content: '#000000' },
       { name: 'color-scheme', content: 'dark' },
+      // PWA
+      { name: 'application-name', content: siteName },
+      { name: 'apple-mobile-web-app-capable', content: 'yes' },
+      { name: 'apple-mobile-web-app-title', content: siteName },
+      { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+      { name: 'format-detection', content: 'telephone=no' },
+      { name: 'mobile-web-app-capable', content: 'yes' },
     ],
     links: [
+      // PWA Manifest
+      { rel: 'manifest', href: '/manifest.webmanifest' },
+      // Favicon - default for all browsers (without sizes for maximum compatibility)
+      { rel: 'icon', type: 'image/png', href: '/icons/icon-96x96.png' },
+      { rel: 'shortcut icon', type: 'image/png', href: '/icons/icon-96x96.png' },
+      // Sized icons for high-DPI displays and PWA
+      { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/icons/icon-72x72.png' },
       { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/icons/icon-96x96.png' },
       { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/icons/icon-192x192.png' },
-      { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      // Apple touch icon for iOS
+      { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
       { rel: 'canonical', href: siteUrl },
     ],
   }),

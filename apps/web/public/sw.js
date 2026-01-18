@@ -2,7 +2,6 @@
 
 /**
  * Service Worker for Roundtable PWA
- * Generated at build time: 2026-01-17T16:20:43.381Z
  *
  * Caching Strategies:
  * - Static assets (/_next/static/*): Cache-first, immutable (1 year)
@@ -13,8 +12,8 @@
  * This enables SPA-like navigation speed while keeping data fresh.
  */
 
-// Build-time generated version - changes on each deploy
-const CACHE_VERSION = '4785107f';
+// Cache version - update this on each deploy
+const CACHE_VERSION = 'v1';
 const STATIC_CACHE = `roundtable-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `roundtable-runtime-${CACHE_VERSION}`;
 const DOCUMENT_CACHE = `roundtable-docs-${CACHE_VERSION}`;
@@ -29,11 +28,13 @@ const PRECACHE_ASSETS = [
 ];
 
 // Install event - cache core assets
+// NOTE: Do NOT call skipWaiting() here - let user control when to update
+// This prevents unexpected page refreshes during active sessions
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then(cache => cache.addAll(PRECACHE_ASSETS))
-      .then(() => self.skipWaiting()), // Activate immediately
+      .then(cache => cache.addAll(PRECACHE_ASSETS)),
+    // No skipWaiting() - wait for user to trigger update via message
   );
 });
 
@@ -58,10 +59,8 @@ self.addEventListener('activate', (event) => {
 function isImmutableAsset(url) {
   const path = url.pathname;
   return (
-    // Next.js static bundles - includes build hash, immutable
-    path.startsWith('/_next/static/')
-    // Build chunks
-    || path.startsWith('/_next/chunks/')
+    // Vite/TanStack static bundles - includes content hash, immutable
+    path.startsWith('/assets/')
     // Font files
     || path.match(/\.(woff2?)$/)
     // Static directory
@@ -174,7 +173,7 @@ self.addEventListener('fetch', (event) => {
   // For data fetching, RSC payloads, etc.
   event.respondWith(
     fetch(request).then((response) => {
-      if (response.ok && request.url.includes('/_next/')) {
+      if (response.ok && request.url.includes('/assets/')) {
         const responseClone = response.clone();
         caches.open(RUNTIME_CACHE).then((cache) => {
           cache.put(request, responseClone);
