@@ -8,8 +8,6 @@
  * Never use createRoute directly in route handlers - always use OpenAPIHono apps.
  */
 
-import { Scalar } from '@scalar/hono-api-reference';
-import { createMarkdownFromOpenApi } from '@scalar/openapi-to-markdown';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { contextStorage } from 'hono/context-storage';
@@ -887,15 +885,19 @@ finalRoutes.use('/scalar', async (c, next) => {
   });
 });
 
-finalRoutes.get('/scalar', Scalar({
-  url: '/api/v1/doc',
-}));
+finalRoutes.get('/scalar', async (c) => {
+  // Lazy load Scalar to reduce worker startup CPU time
+  const { Scalar } = await import('@scalar/hono-api-reference');
+  return Scalar({ url: '/api/v1/doc' })(c);
+});
 
 // Health endpoints are now properly registered as OpenAPI routes above
 
 // LLM-friendly documentation
 finalRoutes.get('/llms.txt', async (c) => {
   try {
+    // Lazy load markdown generator to reduce worker startup CPU time
+    const { createMarkdownFromOpenApi } = await import('@scalar/openapi-to-markdown');
     const document = finalRoutes.getOpenAPI31Document({
       openapi: '3.1.0',
       info: {
