@@ -134,25 +134,32 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
  * Detect current environment (synchronous - for client-side and non-async contexts)
  *
  * Priority:
- * 1. process.env.VITE_WEBAPP_ENV (Vite loaded .env files in SSR)
- * 2. NODE_ENV detection (development = local, production = prod)
- * 3. Runtime detection via hostname (client-side only)
+ * 1. import.meta.env.VITE_WEBAPP_ENV (Vite build-time replacement - works on CF Workers)
+ * 2. process.env.VITE_WEBAPP_ENV (SSR fallback)
+ * 3. NODE_ENV detection (development = local, production = prod)
+ * 4. Runtime detection via hostname (client-side only)
  */
 export function getWebappEnv(): WebappEnv {
-  // 1. Check process.env (Vite loads .env files)
+  // 1. Check import.meta.env (Vite build-time replacement - works on Cloudflare Workers)
+  const viteEnv = import.meta.env?.VITE_WEBAPP_ENV;
+  if (viteEnv && isWebappEnv(viteEnv)) {
+    return viteEnv;
+  }
+
+  // 2. Check process.env (SSR fallback)
   const processEnv = process.env.VITE_WEBAPP_ENV;
   if (processEnv && isWebappEnv(processEnv)) {
     return processEnv;
   }
 
-  // 2. Server-side: use NODE_ENV
+  // 3. Server-side: use NODE_ENV
   if (typeof window === 'undefined') {
     return import.meta.env.MODE === 'development'
       ? WEBAPP_ENVS.LOCAL
       : WEBAPP_ENVS.PROD;
   }
 
-  // 3. Client-side: detect from hostname
+  // 4. Client-side: detect from hostname
   const hostname = window.location.hostname;
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return WEBAPP_ENVS.LOCAL;
