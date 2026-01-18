@@ -1,26 +1,7 @@
-# Roundtable - Collaborative AI Brainstorming Platform
-# https://roundtable.now
+# Roundtable - Preview Environment
+# https://app-preview.roundtable.now
 
 User-agent: *
+Disallow: /
 
-# Allow public pages
-Allow: /
-Allow: /auth/sign-in
-
-# Disallow protected and private content
-Disallow: /chat/
-Disallow: /settings/
-Disallow: /billing/
-Disallow: /auth/callback
-Disallow: /api/
-Disallow: /_build/
-
-# LLM-friendly metadata
-Allow: /llms.txt
-Allow: /.well-known/
-
-# Sitemap
-Sitemap: https://roundtable.now/sitemap.xml
-
-# Crawl-delay for respectful crawling
-Crawl-delay: 1
+# Preview/Development environment - no indexing
