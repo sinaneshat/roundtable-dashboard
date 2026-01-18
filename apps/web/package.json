@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "prebuild": "pnpm cf-typegen || true",
-    "build": "vite build",
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' vite build",
     "build:local": "./scripts/generate-robots.sh local && pnpm build",
     "build:preview": "./scripts/generate-robots.sh preview && pnpm build",
     "build:production": "./scripts/generate-robots.sh production && pnpm build",
