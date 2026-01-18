@@ -101,6 +101,7 @@
     "STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
     "AUTH_GOOGLE_ID": "815574816934-2chacenekb6gnis24lksiit84eddt3af.apps.googleusercontent.com",
     "BETTER_AUTH_URL": "http://localhost:8787",
+    "POSTHOG_HOST": "https://us.i.posthog.com",
     "NODE_ENV": "development"
   },
   "env": {
@@ -161,6 +162,7 @@
         "STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
         "AUTH_GOOGLE_ID": "815574816934-2chacenekb6gnis24lksiit84eddt3af.apps.googleusercontent.com",
         "BETTER_AUTH_URL": "https://api-preview.roundtable.now",
+        "POSTHOG_HOST": "https://us.i.posthog.com",
         "NODE_ENV": "production"
       }
     },
@@ -211,8 +213,17 @@
         "WEBAPP_ENV": "prod",
         "APP_NAME": "Roundtable API",
         "APP_VERSION": "1.0.0",
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w6",
         "R2_PUBLIC_URL": "https://api.roundtable.now/uploads",
+        "AWS_SES_REGION": "eu-north-1",
+        "FROM_EMAIL": "noreply@roundtable.now",
+        "SES_REPLY_TO_EMAIL": "support@roundtable.now",
+        "SES_VERIFIED_EMAIL": "noreply@roundtable.now",
+        "STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1STOnK52vWNZ3v8wteUMwNCy",
+        "STRIPE_PUBLISHABLE_KEY": "pk_live_51SPXN852vWNZ3v8w0JKMpuzcvZHMyvFLy0SRfadVpFXtIhfYwty1hNfmxSlyTFRfbTbpcOOKuPepnUUayr0Owy9v006fE9vdeS",
+        "AUTH_GOOGLE_ID": "815574816934-2chacenekb6gnis24lksiit84eddt3af.apps.googleusercontent.com",
         "BETTER_AUTH_URL": "https://api.roundtable.now",
+        "POSTHOG_HOST": "https://us.i.posthog.com",
         "NODE_ENV": "production"
       }
     }
