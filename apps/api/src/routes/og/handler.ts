@@ -10,7 +10,6 @@ import { Buffer } from 'node:buffer';
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { ChatMode } from '@roundtable/shared';
 import { and, eq } from 'drizzle-orm';
-import satori from 'satori';
 
 import { createHandler } from '@/core';
 import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
@@ -81,6 +80,9 @@ async function generateOgImage(params: {
 }) {
   const { title, mode, participantCount, messageCount } = params;
   const modeColor = mode ? getModeColor(mode) : OG_COLORS.primary;
+
+  // Lazy load satori to reduce worker startup CPU time
+  const satori = (await import('satori')).default;
 
   // Load Inter font
   const interFont = await getInterFont();
