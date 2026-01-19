@@ -5,7 +5,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { ModelCategorySchema, SubscriptionTierSchema } from '@roundtable/shared/enums';
+import { ModelCapabilityTagSchema, ModelCategorySchema, SubscriptionTierSchema } from '@roundtable/shared/enums';
 
 import { createApiResponseSchema } from '@/core/schemas';
 
@@ -130,6 +130,10 @@ export const BaseModelSchema = RawOpenRouterModelSchema.extend({
   supports_vision: z.boolean(),
   supports_file: z.boolean(), // ✅ Whether model supports file content types (PDFs) - derived from modality
   is_reasoning_model: z.boolean(),
+  tags: z.array(ModelCapabilityTagSchema).openapi({
+    description: 'User-facing capability filter tags (fast, vision, reasoning, pdf)',
+    example: ['vision', 'reasoning'],
+  }),
 });
 
 export type BaseModelResponse = z.infer<typeof BaseModelSchema>;

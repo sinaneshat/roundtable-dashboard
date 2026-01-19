@@ -1,5 +1,6 @@
 import type { ErrorBoundaryContext } from '@roundtable/shared';
 import { ErrorBoundaryContexts } from '@roundtable/shared';
+import posthog from 'posthog-js';
 import type { ErrorInfo, ReactNode } from 'react';
 import React, { Component } from 'react';
 
@@ -8,6 +9,19 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
+
+/**
+ * Check if PostHog is available for tracking
+ * Returns false in local environment or SSR context
+ */
+function isPostHogAvailable(): boolean {
+  // Skip in SSR context
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  // Skip in local environment (PostHog not initialized)
+  return getWebappEnv() !== WEBAPP_ENVS.LOCAL;
+}
 
 type UnifiedErrorBoundaryProps = {
   children: ReactNode;
@@ -163,15 +177,19 @@ export class UnifiedErrorBoundary extends Component<
   }
 
   trackError = (error: Error, errorInfo: ErrorInfo) => {
-    const errorData = {
-      message: error.message,
-      stack: error.stack,
+    // Only capture if PostHog is available (not in local env or SSR)
+    if (!isPostHogAvailable()) {
+      return;
+    }
+
+    posthog.capture('$exception', {
+      $exception_message: error.message,
+      $exception_stack_trace_raw: error.stack,
+      $exception_type: error.name,
+      $exception_source: 'react_error_boundary',
       context: this.state.context,
       componentStack: errorInfo.componentStack,
-      timestamp: new Date().toISOString(),
-    };
-
-    void errorData;
+    });
   };
 
   handleReset = () => {

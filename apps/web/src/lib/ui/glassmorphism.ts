@@ -189,3 +189,71 @@ export const dashboardGlass = {
     'border border-white/[0.12]',
   ),
 } as const;
+
+// ============================================================================
+// Navigation & Header Glass Effects
+// ============================================================================
+
+/**
+ * Glass header/navigation bar
+ * For fixed headers with blur effect behind content
+ */
+export const glassHeader = cn(
+  'backdrop-blur-xl',
+  'bg-background/80',
+  'border-b border-white/[0.08]',
+);
+
+/**
+ * Glass toast/notification styling
+ * For toast notifications with glass effect
+ */
+export const glassToast = cn(
+  'backdrop-blur-xl',
+  'bg-background/80',
+  'border border-white/20',
+  'shadow-lg',
+);
+
+/**
+ * Glass dialog overlay
+ * For modal/dialog backdrop with blur
+ */
+export const glassDialogOverlay = cn(
+  'backdrop-blur-lg',
+  'bg-black/60',
+);
+
+// ============================================================================
+// Button Glass Effects
+// ============================================================================
+
+/**
+ * Glass button styles for billing/CTA buttons
+ * Extracted from scattered implementations for consistency
+ */
+export const glassButton = {
+  // Primary action button - white background, black text
+  primary: cn(
+    'h-11 rounded-xl',
+    'bg-white text-black font-medium',
+    'hover:bg-white/90',
+    'transition-colors',
+  ),
+
+  // Secondary action button - glass effect with border
+  secondary: cn(
+    'h-11 rounded-xl',
+    'border-white/20 bg-white/10 text-foreground',
+    'hover:bg-white/15 hover:border-white/30',
+    'transition-colors',
+  ),
+
+  // Ghost glass button - minimal, transparent
+  ghost: cn(
+    'rounded-lg',
+    'bg-white/5',
+    'hover:bg-white/[0.07]',
+    'transition-colors',
+  ),
+} as const;

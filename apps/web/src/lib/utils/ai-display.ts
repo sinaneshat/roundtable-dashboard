@@ -4,7 +4,7 @@
  * UI-ONLY UTILITIES: Provider icons, avatars, display formatting
  */
 
-import { MessageRoles } from '@roundtable/shared';
+import { MessageRoles, PROVIDER_COLORS } from '@roundtable/shared';
 
 // ============================================================================
 // MODEL DISPLAY HELPERS
@@ -126,36 +126,36 @@ export function getModelIconInfo(modelId: string): {
 
 // ============================================================================
 // MODEL COLOR THEMING (Tailwind Color Classes)
+// Uses centralized PROVIDER_COLORS from @roundtable/shared
 // ============================================================================
 
 export function getModelColorClass(avatarSrc: string, isUser: boolean = false): string {
   if (isUser)
-    return 'blue-500';
+    return PROVIDER_COLORS.user;
 
   const lowerSrc = avatarSrc.toLowerCase();
 
-  if (lowerSrc.includes('claude') || lowerSrc.includes('anthropic'))
-    return 'orange-500';
-  if (lowerSrc.includes('gpt') || lowerSrc.includes('openai'))
-    return 'emerald-500';
-  if (lowerSrc.includes('gemini') || lowerSrc.includes('google'))
-    return 'purple-500';
-  if (lowerSrc.includes('llama') || lowerSrc.includes('meta'))
-    return 'blue-600';
-  if (lowerSrc.includes('mistral'))
-    return 'orange-600';
-  if (lowerSrc.includes('cohere'))
-    return 'violet-500';
-  if (lowerSrc.includes('deepseek'))
-    return 'cyan-500';
-  if (lowerSrc.includes('qwen'))
-    return 'red-500';
-  if (lowerSrc.includes('xai'))
-    return 'slate-400';
-  if (lowerSrc.includes('kimi') || lowerSrc.includes('moonshotai'))
-    return 'teal-500';
+  // Match provider keywords in avatar source path
+  const providerMatches: [string[], keyof typeof PROVIDER_COLORS][] = [
+    [['claude', 'anthropic'], 'anthropic'],
+    [['gpt', 'openai'], 'openai'],
+    [['gemini', 'google'], 'google'],
+    [['llama', 'meta'], 'meta'],
+    [['mistral'], 'mistral'],
+    [['cohere'], 'cohere'],
+    [['deepseek'], 'deepseek'],
+    [['qwen'], 'qwen'],
+    [['xai', 'grok'], 'xai'],
+    [['kimi', 'moonshotai'], 'moonshotai'],
+  ];
 
-  return 'muted-foreground';
+  for (const [keywords, providerKey] of providerMatches) {
+    if (keywords.some(keyword => lowerSrc.includes(keyword))) {
+      return PROVIDER_COLORS[providerKey];
+    }
+  }
+
+  return PROVIDER_COLORS.openrouter;
 }
 
 // ============================================================================

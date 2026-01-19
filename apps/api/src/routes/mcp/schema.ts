@@ -9,6 +9,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
+import { STRING_LIMITS } from '@roundtable/shared';
 import {
   CHAT_MODES,
   ChatModeSchema,
@@ -18,7 +19,6 @@ import {
   RoundFeedbackValueSchema,
 } from '@roundtable/shared/enums';
 
-import { STRING_LIMITS } from '@/constants/validation';
 import { APP_VERSION } from '@/constants/version';
 import { CoreSchemas, createApiResponseSchema } from '@/core/schemas';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';

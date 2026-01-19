@@ -117,6 +117,31 @@ export const ModelPresetCard = memo(({
               </span>
             </div>
           )}
+
+          {!isLocked && incompatibleModelIds && incompatibleModelIds.size > 0 && compatibleModelCount < preset.modelRoles.length && (
+            <div className={cn(
+              'flex items-center gap-1 px-2 py-0.5 rounded-full',
+              isFullyDisabled
+                ? 'bg-destructive/20'
+                : 'bg-yellow-500/20',
+            )}
+            >
+              <Icons.alertTriangle className={cn(
+                'size-3',
+                isFullyDisabled ? 'text-destructive' : 'text-yellow-400',
+              )}
+              />
+              <span className={cn(
+                'text-[10px] font-medium',
+                isFullyDisabled ? 'text-destructive' : 'text-yellow-400',
+              )}
+              >
+                {compatibleModelCount}
+                /
+                {preset.modelRoles.length}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -126,12 +151,15 @@ export const ModelPresetCard = memo(({
           if (!model)
             return null;
 
+          const isModelIncompatible = incompatibleModelIds?.has(modelRole.modelId) ?? false;
+
           return (
             <ModelAvatarWithRole
               key={modelRole.modelId}
               model={model}
               role={modelRole.role}
               size="base"
+              isIncompatible={isModelIncompatible}
             />
           );
         })}

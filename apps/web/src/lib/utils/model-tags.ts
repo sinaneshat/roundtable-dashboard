@@ -12,17 +12,26 @@ import type { Model } from '@/services/api';
 
 /**
  * Derive capability tags from model properties
- * Matches backend logic in models-config.service.ts deriveModelTags()
+ * ✅ NOW USES API-PROVIDED TAGS: Models now include pre-computed tags from backend
+ * Falls back to local derivation only if tags not present (backwards compatibility)
  */
 export function getModelTags(model: Model | undefined): ModelCapabilityTag[] {
   if (!model)
     return [];
 
+  // ✅ PREFER API-PROVIDED TAGS: Use pre-computed tags from backend if available
+  // Backend computes tags in models-config.service.ts deriveModelTags()
+  if (model.tags && Array.isArray(model.tags)) {
+    return model.tags as ModelCapabilityTag[];
+  }
+
+  // ✅ FALLBACK: Derive locally if API doesn't provide tags (backwards compatibility)
+  // This matches the backend logic in models-config.service.ts:84-105
   const tags: ModelCapabilityTag[] = [];
 
-  // Fast models: context length >= 128k and cheap pricing (< $3/M input tokens)
-  const inputPrice = Number.parseFloat(model.pricing.prompt);
-  if (model.context_length >= 128000 && inputPrice < 0.000003) {
+  // Fast: input price < $0.50/M (matches backend: inputPrice * 1_000_000 < 0.5)
+  const inputPrice = Number.parseFloat(model.pricing.prompt) * 1_000_000;
+  if (inputPrice < 0.5) {
     tags.push(ModelCapabilityTags.FAST);
   }
 

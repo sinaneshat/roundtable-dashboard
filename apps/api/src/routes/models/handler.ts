@@ -8,55 +8,45 @@
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
-import type { SubscriptionTier } from '@roundtable/shared/enums';
 import { SubscriptionTiers } from '@roundtable/shared/enums';
 
 import { createHandler, Responses } from '@/core';
-import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
-import type { ModelForPricing } from '@/services/billing';
-import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName } from '@/services/billing';
+import { enrichModelWithTierAccessGeneric, getMaxModelsForTier, getTierName } from '@/services/billing';
 import { getAllModels } from '@/services/models';
 import { getUserTier } from '@/services/usage';
 import type { ApiEnv } from '@/types';
 
 import type { listModelsRoute } from './route';
+import type { BaseModelResponse } from './schema';
 
 // ============================================================================
 // Helper Functions (DRY pattern)
 // ============================================================================
 
 /**
- * Convert HardcodedModel to ModelForPricing format
- * ✅ Following pattern from streaming.handler.ts
- * Extracts only fields needed for pricing calculations and tier access control
+ * Convert HardcodedModel to API response format
+ * ✅ Returns BaseModelResponse - Zod-inferred type from schema.ts
  */
-function toModelForPricing(model: ReturnType<typeof getAllModels>[number]): ModelForPricing {
+function toModelForApi(model: ReturnType<typeof getAllModels>[number]): BaseModelResponse {
   return {
     id: model.id,
     name: model.name,
+    description: model.description,
     pricing: model.pricing,
     context_length: model.context_length,
     pricing_display: model.pricing_display,
     created: model.created,
     provider: model.provider,
+    category: model.category,
     capabilities: model.capabilities,
-  };
-}
-
-/**
- * Enrich model with tier access information
- * ✅ DRY: Uses product-logic.service helpers for tier calculations
- */
-function enrichModelWithTierAccess(model: ModelForPricing, userTier: SubscriptionTier) {
-  const requiredTier = getRequiredTierForModel(model);
-  const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
-  const isAccessible = canAccessModelByPricing(userTier, model);
-
-  return {
-    ...model,
-    required_tier: requiredTier,
-    required_tier_name: requiredTierName,
-    is_accessible_to_user: isAccessible,
+    is_free: model.is_free,
+    supports_vision: model.supports_vision,
+    supports_file: model.supports_file,
+    is_reasoning_model: model.is_reasoning_model,
+    tags: model.tags,
+    architecture: model.architecture,
+    top_provider: model.top_provider,
+    per_request_limits: model.per_request_limits,
   };
 }
 
@@ -100,10 +90,10 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection
     // ============================================================================
-    // ✅ DRY: Uses enrichModelWithTierAccess helper
-    // Convert HardcodedModel to ModelForPricing format before enriching
+    // ✅ DRY: Uses generic enrichment helper that preserves full model type
+    // Convert HardcodedModel to API response format before enriching
     const modelsWithTierInfo = allModels.map(model =>
-      enrichModelWithTierAccess(toModelForPricing(model), userTier),
+      enrichModelWithTierAccessGeneric(toModelForApi(model), userTier),
     );
 
     // ============================================================================

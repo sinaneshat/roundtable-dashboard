@@ -82,6 +82,7 @@ export const BRAND = {
   // Social links
   social: {
     twitter: 'https://twitter.com/roundtablenow',
+    twitterHandle: '@roundtablenow',
     linkedin: 'https://linkedin.com/company/roundtable',
     github: 'https://github.com/roundtable',
   } as const,

@@ -22,12 +22,18 @@ export function useThreadPreSearchesQuery(
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchInterval: (query) => {
+      // ✅ Stop polling on error to prevent infinite error loops
+      if (query.state.status === 'error') {
+        return false;
+      }
       const items = query.state.data?.data?.items;
       const hasPendingPreSearch = items?.some(
         (ps: { status: string }) => ps.status === MessageStatuses.PENDING,
       );
       return hasPendingPreSearch ? POLLING_INTERVALS.preSearchPending : false;
     },
+    retry: false,
+    throwOnError: false,
     refetchIntervalInBackground: false,
   });
 

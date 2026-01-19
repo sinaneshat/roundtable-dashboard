@@ -37,8 +37,8 @@ export default function PostHogProvider({
       return;
     }
 
-    // Prevent re-initialization
-    if (initialized.current || posthog.__loaded) {
+    // Prevent re-initialization (use ref only - no internal property access)
+    if (initialized.current) {
       return;
     }
 
@@ -75,8 +75,8 @@ export default function PostHogProvider({
       },
       enable_recording_console_log: false,
 
-      // Scroll Tracking
-      scroll_root_selector: '#__next',
+      // Scroll Tracking - TanStack Start uses #root by default
+      scroll_root_selector: '#root',
 
       // Debug Mode - disabled in all environments to prevent console noise
       debug: false,

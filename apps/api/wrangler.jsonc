@@ -6,7 +6,7 @@
   "compatibility_date": "2024-12-30",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "minify": true,
-  "upload_source_maps": false,
+  "upload_source_maps": true,
   "rules": [
     {
       "type": "CompiledWasm",

@@ -782,7 +782,7 @@ export function ChatView({
           userTierInfo={{
             tier_name: userTierConfig.tier_name,
             max_models: userTierConfig.max_models,
-            current_tier: userTierConfig.tier as 'free' | 'pro',
+            current_tier: userTierConfig.tier,
             can_upgrade: userTierConfig.can_upgrade,
           }}
           visionIncompatibleModelIds={visionIncompatibleModelIds}

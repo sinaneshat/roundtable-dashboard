@@ -72,25 +72,52 @@ function getAuthSecret(): string {
 
 /**
  * Get Google OAuth credentials from Cloudflare Workers bindings or process.env.
+ *
+ * Returns credentials if available, or undefined if not configured.
+ * This allows magic link auth to work even without Google OAuth configured.
+ *
+ * @throws Error in production if credentials are incomplete (one but not both)
  */
-function getGoogleOAuthCredentials(): { clientId: string; clientSecret: string } {
+function getGoogleOAuthCredentials(): { clientId: string; clientSecret: string } | undefined {
+  let clientId: string | undefined;
+  let clientSecret: string | undefined;
+
   // 1. Try Cloudflare Workers bindings
   try {
-    if (workersEnv.AUTH_GOOGLE_ID && workersEnv.AUTH_GOOGLE_SECRET) {
-      return {
-        clientId: workersEnv.AUTH_GOOGLE_ID,
-        clientSecret: workersEnv.AUTH_GOOGLE_SECRET,
-      };
+    if (workersEnv.AUTH_GOOGLE_ID) {
+      clientId = workersEnv.AUTH_GOOGLE_ID;
+    }
+    if (workersEnv.AUTH_GOOGLE_SECRET) {
+      clientSecret = workersEnv.AUTH_GOOGLE_SECRET;
     }
   } catch {
     // Workers env not available - continue to fallback
   }
 
   // 2. Fall back to process.env
-  return {
-    clientId: process.env.AUTH_GOOGLE_ID || '',
-    clientSecret: process.env.AUTH_GOOGLE_SECRET || '',
-  };
+  clientId = clientId || process.env.AUTH_GOOGLE_ID;
+  clientSecret = clientSecret || process.env.AUTH_GOOGLE_SECRET;
+
+  // 3. Validate credentials - both must be present and non-empty strings
+  if (clientId && clientId.length > 0 && clientSecret && clientSecret.length > 0) {
+    return { clientId, clientSecret };
+  }
+
+  const hasClientId = Boolean(clientId && clientId.length > 0);
+  const hasClientSecret = Boolean(clientSecret && clientSecret.length > 0);
+
+  // Neither present - Google OAuth not configured (allowed - use magic link)
+  if (!hasClientId && !hasClientSecret) {
+    return undefined;
+  }
+
+  // One but not both - configuration error
+  throw new Error(
+    `[Auth] Incomplete Google OAuth configuration. `
+    + `AUTH_GOOGLE_ID: ${hasClientId ? 'set' : 'MISSING'}, `
+    + `AUTH_GOOGLE_SECRET: ${hasClientSecret ? 'set' : 'MISSING'}. `
+    + `Either set both or remove both.`,
+  );
 }
 
 /**
@@ -260,12 +287,14 @@ function createAuth() {
       requireEmailVerification: false,
     },
 
-    socialProviders: {
-      google: {
-        clientId: getGoogleOAuthCredentials().clientId,
-        clientSecret: getGoogleOAuthCredentials().clientSecret,
-      },
-    },
+    // ✅ Only enable Google OAuth if credentials are configured
+    // If not configured, only magic link authentication will be available
+    socialProviders: (() => {
+      const googleCreds = getGoogleOAuthCredentials();
+      return googleCreds
+        ? { google: { clientId: googleCreds.clientId, clientSecret: googleCreds.clientSecret } }
+        : {};
+    })(),
 
     plugins: [
       magicLink({

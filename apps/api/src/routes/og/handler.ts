@@ -18,8 +18,10 @@ import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
 import {
   getLogoBase64Sync,
   getModeIconBase64Sync,
+  getModelIconBase64Sync,
   getOGFontsSync,
 } from '@/lib/ui/og-assets.generated';
+import { OG_COLORS as SHARED_OG_COLORS } from '@/lib/ui/og-image-helpers';
 import type { ApiEnv } from '@/types';
 
 import type { ogImageRoute } from './route';
@@ -34,20 +36,8 @@ const BRAND = {
   tagline: 'Multiple AI Models, One Conversation',
 } as const;
 
-// OG image colors (matching roundtable.now)
-const OG_COLORS = {
-  background: '#0a0a0a',
-  backgroundGradientStart: '#0a0a0a',
-  backgroundGradientEnd: '#141414',
-  primary: '#2563eb',
-  textPrimary: '#ffffff',
-  textSecondary: '#a1a1aa',
-  glassBorder: 'rgba(255, 255, 255, 0.1)',
-  analyzing: '#8b5cf6',
-  brainstorming: '#f59e0b',
-  debating: '#ef4444',
-  solving: '#10b981',
-} as const;
+// Use centralized OG colors from og-image-helpers
+const OG_COLORS = SHARED_OG_COLORS;
 
 // Mode colors
 const MODE_COLORS = {
@@ -60,6 +50,9 @@ const MODE_COLORS = {
 function getModeColor(mode: ChatMode): string {
   return MODE_COLORS[mode] ?? OG_COLORS.primary;
 }
+
+// Maximum number of model icons to display
+const MAX_MODEL_ICONS = 5;
 
 /**
  * Get embedded fonts for satori (no network fetch required)
@@ -76,9 +69,16 @@ async function generateOgImage(params: {
   mode?: ChatMode;
   participantCount: number;
   messageCount: number;
+  participantModelIds?: string[];
 }) {
-  const { title, mode, participantCount, messageCount } = params;
+  const { title, mode, participantCount, messageCount, participantModelIds = [] } = params;
   const modeColor = mode ? getModeColor(mode) : OG_COLORS.primary;
+
+  // Get model icons for participants (limit to MAX_MODEL_ICONS)
+  const modelIcons = participantModelIds
+    .slice(0, MAX_MODEL_ICONS)
+    .map(modelId => getModelIconBase64Sync(modelId))
+    .filter(Boolean);
 
   // Lazy load satori to reduce worker startup CPU time
   const satori = (await import('satori')).default;
@@ -301,6 +301,58 @@ async function generateOgImage(params: {
                     ],
                   },
                 },
+
+                // Model icons row (only if we have icons)
+                modelIcons.length > 0 && {
+                  type: 'div',
+                  props: {
+                    style: {
+                      display: 'flex',
+                      alignItems: 'center',
+                      marginTop: '32px',
+                      gap: '8px',
+                    },
+                    children: [
+                      // Stacked model icons (overlapping style)
+                      {
+                        type: 'div',
+                        props: {
+                          style: {
+                            display: 'flex',
+                            alignItems: 'center',
+                          },
+                          children: modelIcons.map((iconBase64, index) => ({
+                            type: 'img',
+                            props: {
+                              src: iconBase64,
+                              width: 40,
+                              height: 40,
+                              style: {
+                                borderRadius: '50%',
+                                border: `2px solid ${OG_COLORS.background}`,
+                                marginLeft: index === 0 ? '0' : '-12px',
+                                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                              },
+                            },
+                          })),
+                        },
+                      },
+                      // "+N more" indicator if there are more participants
+                      participantCount > MAX_MODEL_ICONS && {
+                        type: 'div',
+                        props: {
+                          style: {
+                            fontSize: '16px',
+                            fontWeight: 500,
+                            color: OG_COLORS.textSecondary,
+                            marginLeft: '8px',
+                          },
+                          children: `+${participantCount - MAX_MODEL_ICONS} more`,
+                        },
+                      },
+                    ].filter(Boolean),
+                  },
+                },
               ].filter(Boolean),
             },
           },
@@ -372,6 +424,97 @@ async function svgToPng(svg: string): Promise<Uint8Array | null> {
 }
 
 /**
+ * Generate simple SVG for local development (no satori/WASM required)
+ * Mimics the production OG image layout using raw SVG
+ */
+function generateSimpleOgSvg(params: {
+  title: string;
+  mode?: ChatMode;
+  modeColor: string;
+  participantCount: number;
+  messageCount: number;
+  participantModelIds: string[];
+}): string {
+  const { title, mode, modeColor, participantCount, messageCount, participantModelIds } = params;
+
+  // Truncate title if too long
+  const displayTitle = title.length > 80 ? `${title.slice(0, 77)}...` : title;
+
+  // Get model icons for display (up to 5)
+  const modelIcons = participantModelIds
+    .slice(0, MAX_MODEL_ICONS)
+    .map(modelId => getModelIconBase64Sync(modelId))
+    .filter(Boolean);
+
+  // Build model icons SVG elements
+  const modelIconsElements = modelIcons.map((iconBase64, index) => `
+    <image
+      href="${iconBase64}"
+      x="${60 + index * 32}"
+      y="480"
+      width="40"
+      height="40"
+      clip-path="circle(20px at 20px 20px)"
+      style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));"
+    />
+  `).join('');
+
+  // Extra participants indicator
+  const extraParticipants = participantCount > MAX_MODEL_ICONS
+    ? `<text x="${60 + modelIcons.length * 32 + 16}" y="508" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="16">+${participantCount - MAX_MODEL_ICONS} more</text>`
+    : '';
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:${OG_COLORS.backgroundGradientStart}"/>
+      <stop offset="100%" style="stop-color:${OG_COLORS.backgroundGradientEnd}"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="100%" height="100%" fill="url(#bg-gradient)"/>
+
+  <!-- Header with brand -->
+  <text x="60" y="90" fill="${OG_COLORS.textPrimary}" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="600">${BRAND.name}</text>
+
+  <!-- Mode badge -->
+  ${mode
+    ? `
+  <text x="60" y="200" fill="${modeColor}" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="600" text-transform="capitalize">${mode.charAt(0).toUpperCase() + mode.slice(1)}</text>
+  `
+    : ''}
+
+  <!-- Title -->
+  <text x="60" y="${mode ? '280' : '240'}" fill="${OG_COLORS.textPrimary}" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700">
+    <tspan>${displayTitle}</tspan>
+  </text>
+
+  <!-- Stats -->
+  <text x="60" y="380" fill="${modeColor}" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700">${participantCount}</text>
+  <text x="60" y="410" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="500">${participantCount === 1 ? 'AI Model' : 'AI Models'}</text>
+
+  <text x="200" y="380" fill="${OG_COLORS.textPrimary}" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700">${messageCount}</text>
+  <text x="200" y="410" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="500">${messageCount === 1 ? 'Message' : 'Messages'}</text>
+
+  <!-- Model Icons (if available) -->
+  ${modelIconsElements}
+  ${extraParticipants}
+
+  <!-- Footer line -->
+  <line x1="60" y1="550" x2="1140" y2="550" stroke="${OG_COLORS.glassBorder}" stroke-width="2"/>
+
+  <!-- Tagline -->
+  <text x="60" y="590" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="500">${BRAND.tagline}</text>
+
+  <!-- Local dev indicator -->
+  <rect x="1000" y="20" width="180" height="30" rx="4" fill="${OG_COLORS.analyzing}" opacity="0.8"/>
+  <text x="1090" y="42" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle">LOCAL DEV</text>
+</svg>`;
+}
+
+/**
  * Fetch public thread data from database
  */
 async function getPublicThread(slug: string) {
@@ -395,7 +538,7 @@ async function getPublicThread(slug: string) {
       return null;
     }
 
-    // Fetch participants count
+    // Fetch participants with their model IDs
     const participants = await db
       .select()
       .from(chatParticipant)
@@ -410,6 +553,7 @@ async function getPublicThread(slug: string) {
     return {
       thread,
       participantCount: participants.length,
+      participantModelIds: participants.map(p => p.modelId),
       messageCount: messages.length,
     };
   } catch {
@@ -426,6 +570,9 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
     operationName: 'ogImage',
   },
   async (c) => {
+    // Check for local dev FIRST - satori uses WASM which doesn't work in local dev
+    const isLocalDev = c.env.WEBAPP_ENV === 'local';
+
     try {
       const query = c.req.query();
       const slug = query.slug;
@@ -434,6 +581,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
       let mode: ChatMode | undefined;
       let participantCount = 3;
       let messageCount = 10;
+      let participantModelIds: string[] = [];
 
       // Fetch thread data if slug provided
       if (slug) {
@@ -443,21 +591,22 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
           mode = threadData.thread.mode as ChatMode;
           participantCount = threadData.participantCount || participantCount;
           messageCount = threadData.messageCount || messageCount;
+          participantModelIds = threadData.participantModelIds || [];
         }
       }
 
-      // Generate OG image SVG
-      const svg = await generateOgImage({
-        title,
-        mode,
-        participantCount,
-        messageCount,
-      });
-
-      // Skip WASM in local dev where it's not supported
-      const isLocalDev = c.env.WEBAPP_ENV === 'local';
+      // Local dev: Generate simple SVG without satori (WASM not available)
       if (isLocalDev) {
-        return new Response(svg, {
+        const modeColor = mode ? MODE_COLORS[mode] : OG_COLORS.primary;
+        const simpleSvg = generateSimpleOgSvg({
+          title,
+          mode,
+          modeColor,
+          participantCount,
+          messageCount,
+          participantModelIds,
+        });
+        return new Response(simpleSvg, {
           headers: {
             'Content-Type': 'image/svg+xml',
             'Cache-Control': 'no-cache',
@@ -466,6 +615,15 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
           },
         });
       }
+
+      // Production: Generate OG image with satori
+      const svg = await generateOgImage({
+        title,
+        mode,
+        participantCount,
+        messageCount,
+        participantModelIds,
+      });
 
       // Production: convert to PNG
       const png = await svgToPng(svg);

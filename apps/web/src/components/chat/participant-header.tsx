@@ -2,7 +2,6 @@ import { memo } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTranslations } from '@/lib/i18n';
-import { cn, useImageColor } from '@/lib/ui';
 import { getRoleBadgeStyle } from '@/lib/utils';
 
 export type ParticipantHeaderProps = {
@@ -27,11 +26,10 @@ export const ParticipantHeader = memo(({
   hasError = false,
 }: ParticipantHeaderProps) => {
   const t = useTranslations();
-  const colorClass = useImageColor(avatarSrc);
 
   return (
     <div className="flex items-center gap-3 mb-6">
-      <Avatar className={cn('size-8', `drop-shadow-[0_0_12px_hsl(var(--${colorClass})/0.3)]`)}>
+      <Avatar className="size-8 drop-shadow-[0_0_12px_hsl(var(--muted-foreground)/0.3)]">
         <AvatarImage src={avatarSrc} alt={avatarName} className="object-contain p-0.5" />
         <AvatarFallback className="text-[8px] bg-muted">
           {avatarName?.slice(0, 2).toUpperCase()}

@@ -15,6 +15,7 @@ import {
   PlanTypes,
   SUBSCRIPTION_TIERS,
   SubscriptionTiers,
+  SubscriptionTierSchema,
 } from '@roundtable/shared/enums';
 import { z } from 'zod';
 
@@ -38,6 +39,7 @@ const _ModelForPricingSchema = z.object({
   provider: z.string().optional(),
   capabilities: z.object({
     vision: z.boolean(),
+    file: z.boolean(),
     reasoning: z.boolean(),
     streaming: z.boolean(),
     tools: z.boolean(),
@@ -359,12 +361,48 @@ export function canAccessModelByPricing(userTier: SubscriptionTier, model: Model
   return userTierIndex >= requiredTierIndex;
 }
 
+/**
+ * Tier access info for model lookup by ID
+ * ✅ Nullable required_tier_name for cases where model not found
+ */
 const _TierAccessInfoSchema = z.object({
   is_accessible_to_user: z.boolean(),
   required_tier_name: z.string().nullable(),
 });
 
 export type TierAccessInfo = z.infer<typeof _TierAccessInfoSchema>;
+
+/**
+ * Full tier access info with required_tier
+ * ✅ Used when enriching models (model always exists)
+ */
+const _FullTierAccessInfoSchema = z.object({
+  required_tier: SubscriptionTierSchema,
+  required_tier_name: z.string(),
+  is_accessible_to_user: z.boolean(),
+});
+
+export type FullTierAccessInfo = z.infer<typeof _FullTierAccessInfoSchema>;
+
+/**
+ * Enrich any model with tier access information
+ * ✅ Generic to preserve all input fields while adding tier info
+ */
+export function enrichModelWithTierAccessGeneric<T extends ModelForPricing>(
+  model: T,
+  userTier: SubscriptionTier,
+): T & FullTierAccessInfo {
+  const requiredTier = getRequiredTierForModel(model);
+  const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
+  const isAccessible = canAccessModelByPricing(userTier, model);
+
+  return {
+    ...model,
+    required_tier: requiredTier,
+    required_tier_name: requiredTierName,
+    is_accessible_to_user: isAccessible,
+  };
+}
 
 export function enrichWithTierAccess(
   modelId: string,

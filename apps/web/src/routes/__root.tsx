@@ -1,5 +1,6 @@
 import '../styles/globals.css';
 
+import { BRAND } from '@roundtable/shared';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
   createRootRouteWithContext,
@@ -9,6 +10,7 @@ import {
 } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
+import { StructuredData } from '@/components/seo';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import type { RouterContext } from '@/router';
 
@@ -16,8 +18,9 @@ import type { RouterContext } from '@/router';
  * Root route with QueryClient context
  * TanStack Start pattern: context flows from router to all routes
  */
-const siteName = 'Roundtable';
-const siteDescription = 'Collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.';
+const siteName = BRAND.name;
+const siteDescription = BRAND.description;
+const twitterHandle = BRAND.social.twitterHandle;
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => {
@@ -39,6 +42,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         { property: 'og:image:height', content: '630' },
         // Twitter Card
         { name: 'twitter:card', content: 'summary_large_image' },
+        { name: 'twitter:site', content: twitterHandle },
+        { name: 'twitter:creator', content: twitterHandle },
         { name: 'twitter:title', content: siteName },
         { name: 'twitter:description', content: siteDescription },
         { name: 'twitter:image', content: `${siteUrl}/static/og-image.png` },
@@ -85,6 +90,8 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { children: ReactNode }) {
+  const baseUrl = getAppBaseUrl();
+
   return (
     <html lang="en" className="dark">
       <head>
@@ -92,6 +99,20 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
         {children}
+        <StructuredData
+          type="WebApplication"
+          name={siteName}
+          description={siteDescription}
+          url={baseUrl}
+          baseUrl={baseUrl}
+          logo={`${baseUrl}/static/logo.svg`}
+          image={`${baseUrl}/static/og-image.png`}
+          sameAs={[
+            BRAND.social.twitter,
+            BRAND.social.linkedin,
+            BRAND.social.github,
+          ]}
+        />
         <Scripts />
       </body>
     </html>

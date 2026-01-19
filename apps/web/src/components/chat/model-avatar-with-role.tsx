@@ -12,12 +12,14 @@ type ModelAvatarWithRoleProps = {
   model: Model;
   role?: string | null;
   size?: AvatarSize;
+  isIncompatible?: boolean;
 };
 
 export function ModelAvatarWithRole({
   model,
   role,
   size = DEFAULT_AVATAR_SIZE,
+  isIncompatible = false,
 }: ModelAvatarWithRoleProps) {
   const shortRole = role ? getShortRoleName(role) : null;
   const roleColors = useMemo(() => getRoleColors(shortRole ?? ''), [shortRole]);
@@ -28,12 +30,18 @@ export function ModelAvatarWithRole({
   } as CSSProperties), [roleColors]);
 
   return (
-    <div className="flex flex-col items-center gap-1.5" style={cssVars}>
+    <div
+      className={cn(
+        'flex flex-col items-center gap-1.5',
+        isIncompatible && 'opacity-30',
+      )}
+      style={cssVars}
+    >
       <Avatar className={cn(sizeMetadata.container, 'bg-card')}>
         <AvatarImage
           src={getProviderIcon(model.provider)}
           alt={model.name}
-          className="object-contain p-1"
+          className={cn('object-contain p-1', isIncompatible && 'grayscale')}
         />
         <AvatarFallback className={cn(sizeMetadata.text, 'bg-card font-semibold')}>
           {model.name.slice(0, 2).toUpperCase()}
