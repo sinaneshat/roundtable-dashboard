@@ -4,16 +4,19 @@
  * These skeletons replace the ENTIRE route tree including layout during loading.
  * Each skeleton includes: SidebarProvider + Sidebar + SidebarInset + Content
  * Matches the actual ChatLayoutShell + content layout for seamless loading UX.
+ *
+ * Uses consolidated skeleton components for consistency with actual UI.
  */
 
 import { SidebarLoadingFallback } from '@/components/loading/sidebar-loading-fallback';
 import {
+  HeaderSkeleton,
+  LogoAreaSkeleton,
   QuickStartSkeleton,
   StickyInputSkeleton,
   ThreadMessagesSkeleton,
 } from '@/components/skeletons';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { Skeleton } from '@/components/ui/skeleton';
 
 /**
  * Full page skeleton for chat thread route
@@ -25,13 +28,8 @@ export function ChatThreadSkeleton() {
       <SidebarLoadingFallback count={10} />
 
       <SidebarInset className="flex flex-col relative">
-        {/* Header skeleton */}
-        <header className="sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2">
-          <div className="flex items-center gap-2 pt-4 px-5 md:px-6 lg:px-8 h-14 sm:h-16 w-full">
-            <Skeleton className="size-8 rounded-lg" />
-            <Skeleton className="h-5 w-48" />
-          </div>
-        </header>
+        {/* Header skeleton - uses shared HeaderSkeleton */}
+        <HeaderSkeleton variant="with-breadcrumb" />
 
         {/* Main content: Messages + Input */}
         <div className="flex-1 flex flex-col">
@@ -64,31 +62,45 @@ export function ChatOverviewSkeleton() {
       <SidebarLoadingFallback count={10} />
 
       <SidebarInset className="flex flex-col relative">
-        {/* Header skeleton */}
-        <header className="sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2">
-          <div className="flex items-center gap-2 pt-4 px-5 md:px-6 lg:px-8 h-14 sm:h-16 w-full">
-            <Skeleton className="size-8 rounded-lg" />
-            <Skeleton className="h-5 w-32" />
-          </div>
-        </header>
+        {/* Header skeleton - uses shared HeaderSkeleton */}
+        <HeaderSkeleton variant="simple" />
 
         {/* Main content: Welcome + Quick Start + Input */}
-        <div className="flex-1 flex flex-col items-center justify-center px-4">
-          <div className="w-full max-w-4xl space-y-8">
-            {/* Logo/Welcome area */}
-            <div className="text-center space-y-4">
-              <div className="size-16 rounded-2xl bg-accent animate-pulse mx-auto" />
-              <div className="h-8 w-64 rounded-xl bg-accent animate-pulse mx-auto" />
-              <div className="h-5 w-96 max-w-full rounded-lg bg-accent/70 animate-pulse mx-auto" />
-            </div>
+        <div className="flex-1 relative">
+          <div className="container max-w-4xl mx-auto px-5 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
+            <div className="w-full">
+              <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
+                {/* Logo area - uses shared LogoAreaSkeleton */}
+                <LogoAreaSkeleton size="large" showTitle showTagline />
 
-            {/* Quick start suggestions */}
-            <div className="rounded-2xl bg-card/50 overflow-hidden">
-              <QuickStartSkeleton count={4} />
-            </div>
+                {/* Quick start: w-full mt-6 sm:mt-8 */}
+                <div className="w-full mt-6 sm:mt-8">
+                  <div className="rounded-2xl bg-card/50 overflow-hidden border border-border/30">
+                    <QuickStartSkeleton count={4} />
+                  </div>
+                </div>
 
-            {/* Input area */}
-            <StickyInputSkeleton />
+                {/* Input area - uses shared StickyInputSkeleton content without sticky wrapper */}
+                <div className="w-full mt-14">
+                  <div className="rounded-2xl border border-border/50 shadow-lg bg-card overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
+                      <div className="h-5 w-24 bg-accent animate-pulse rounded-xl" />
+                      <div className="h-8 w-20 bg-accent animate-pulse rounded-full" />
+                    </div>
+                    <div className="p-4">
+                      <div className="h-12 w-full bg-accent animate-pulse rounded-xl" />
+                      <div className="flex items-center justify-between mt-3">
+                        <div className="flex items-center gap-2">
+                          <div className="size-6 bg-accent animate-pulse rounded" />
+                          <div className="size-6 bg-accent animate-pulse rounded" />
+                        </div>
+                        <div className="size-8 bg-accent animate-pulse rounded-full" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </SidebarInset>

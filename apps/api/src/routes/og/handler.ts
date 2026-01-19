@@ -446,31 +446,79 @@ function generateSimpleOgSvg(params: {
     .map(modelId => getModelIconBase64Sync(modelId))
     .filter(Boolean);
 
-  // Build model icons SVG elements
-  const modelIconsElements = modelIcons.map((iconBase64, index) => `
-    <image
-      href="${iconBase64}"
-      x="${60 + index * 32}"
-      y="480"
-      width="40"
-      height="40"
-      clip-path="circle(20px at 20px 20px)"
-      style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));"
-    />
+  // Icon dimensions
+  const iconSize = 48;
+  const iconSpacing = 36; // Overlapping spacing
+  const iconY = 460;
+  const glassWrapperPadding = 16;
+
+  // Calculate glass wrapper dimensions
+  const iconsWidth = modelIcons.length > 0 ? iconSize + (modelIcons.length - 1) * iconSpacing : 0;
+  const glassWrapperWidth = iconsWidth + glassWrapperPadding * 2;
+  const glassWrapperHeight = iconSize + glassWrapperPadding * 2;
+  const glassWrapperX = 60 - glassWrapperPadding;
+  const glassWrapperY = iconY - glassWrapperPadding;
+
+  // Build clip-path definitions for circular icons
+  const clipPathDefs = modelIcons.map((_, index) => `
+    <clipPath id="icon-clip-${index}">
+      <circle cx="${60 + index * iconSpacing + iconSize / 2}" cy="${iconY + iconSize / 2}" r="${iconSize / 2}"/>
+    </clipPath>
   `).join('');
 
+  // Build model icons SVG elements with proper circular clipping and borders
+  const modelIconsElements = modelIcons.map((iconBase64, index) => {
+    const x = 60 + index * iconSpacing;
+    return `
+    <!-- Icon ${index} background circle (border effect) -->
+    <circle cx="${x + iconSize / 2}" cy="${iconY + iconSize / 2}" r="${iconSize / 2 + 2}" fill="${OG_COLORS.background}"/>
+    <!-- Icon ${index} image -->
+    <image
+      href="${iconBase64}"
+      x="${x}"
+      y="${iconY}"
+      width="${iconSize}"
+      height="${iconSize}"
+      clip-path="url(#icon-clip-${index})"
+      preserveAspectRatio="xMidYMid slice"
+    />
+    <!-- Icon ${index} border ring -->
+    <circle cx="${x + iconSize / 2}" cy="${iconY + iconSize / 2}" r="${iconSize / 2}" fill="none" stroke="${OG_COLORS.glassBorder}" stroke-width="2"/>
+    `;
+  }).join('');
+
   // Extra participants indicator
+  const extraParticipantsX = 60 + modelIcons.length * iconSpacing + 16;
   const extraParticipants = participantCount > MAX_MODEL_ICONS
-    ? `<text x="${60 + modelIcons.length * 32 + 16}" y="508" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="16">+${participantCount - MAX_MODEL_ICONS} more</text>`
+    ? `<text x="${extraParticipantsX}" y="${iconY + iconSize / 2 + 6}" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="500">+${participantCount - MAX_MODEL_ICONS} more</text>`
+    : '';
+
+  // Glass wrapper for model icons (only if icons exist)
+  const glassWrapper = modelIcons.length > 0
+    ? `
+    <!-- Glass wrapper for model icons -->
+    <rect
+      x="${glassWrapperX}"
+      y="${glassWrapperY}"
+      width="${glassWrapperWidth + (participantCount > MAX_MODEL_ICONS ? 80 : 0)}"
+      height="${glassWrapperHeight}"
+      rx="32"
+      fill="${OG_COLORS.background}"
+      fill-opacity="0.4"
+      stroke="${OG_COLORS.glassBorder}"
+      stroke-width="1"
+    />
+  `
     : '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+<svg width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs>
     <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:${OG_COLORS.backgroundGradientStart}"/>
       <stop offset="100%" style="stop-color:${OG_COLORS.backgroundGradientEnd}"/>
     </linearGradient>
+    ${clipPathDefs}
   </defs>
 
   <!-- Background -->
@@ -498,7 +546,8 @@ function generateSimpleOgSvg(params: {
   <text x="200" y="380" fill="${OG_COLORS.textPrimary}" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700">${messageCount}</text>
   <text x="200" y="410" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="500">${messageCount === 1 ? 'Message' : 'Messages'}</text>
 
-  <!-- Model Icons (if available) -->
+  <!-- Glass wrapper and Model Icons -->
+  ${glassWrapper}
   ${modelIconsElements}
   ${extraParticipants}
 
@@ -507,10 +556,6 @@ function generateSimpleOgSvg(params: {
 
   <!-- Tagline -->
   <text x="60" y="590" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="500">${BRAND.tagline}</text>
-
-  <!-- Local dev indicator -->
-  <rect x="1000" y="20" width="180" height="30" rx="4" fill="${OG_COLORS.analyzing}" opacity="0.8"/>
-  <text x="1090" y="42" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" text-anchor="middle">LOCAL DEV</text>
 </svg>`;
 }
 

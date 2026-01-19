@@ -125,7 +125,20 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // verifyAndFetchFreshMessages() retries DB reads before SSR completes
   // No client-side fetch-fresh needed - proper SSR paint guaranteed
 
-  const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD && Boolean(thread?.id) && enableOrchestrator;
+  // ✅ PERF: Get streaming state to skip pre-search orchestrator during initial creation
+  const { streamingRoundNumber, createdThreadId } = useChatStore(useShallow(s => ({
+    streamingRoundNumber: s.streamingRoundNumber,
+    createdThreadId: s.createdThreadId,
+  })));
+
+  // ✅ PERF: Skip pre-search query during initial creation flow
+  // Pre-searches are created during streaming - no point fetching on first round
+  const isInitialCreationFlow = Boolean(createdThreadId) && streamingRoundNumber === 0;
+  const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD
+    && Boolean(thread?.id)
+    && enableOrchestrator
+    && !isInitialCreationFlow;
+
   getPreSearchOrchestrator({
     threadId: thread?.id || '',
     enabled: preSearchOrchestratorEnabled,

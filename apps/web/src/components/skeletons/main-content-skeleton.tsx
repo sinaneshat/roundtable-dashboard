@@ -3,6 +3,7 @@ import type { ComponentProps } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/ui/cn';
 
+import { LogoAreaSkeleton } from './logo-area-skeleton';
 import { QuickStartSkeleton } from './quick-start-skeleton';
 
 /**
@@ -10,6 +11,8 @@ import { QuickStartSkeleton } from './quick-start-skeleton';
  *
  * Matches ChatOverviewScreen initial UI layout EXACTLY for seamless transition.
  * Container max-w-4xl matches actual content for consistent width.
+ *
+ * Uses shared skeleton components for maximum reusability.
  */
 export function MainContentSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
@@ -19,18 +22,8 @@ export function MainContentSkeleton({ className, ...props }: ComponentProps<'div
         <div className="container max-w-4xl mx-auto px-5 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
           <div className="w-full">
             <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
-              {/* Logo: h-20 w-20 sm:h-24 sm:w-24 */}
-              <div className="relative h-20 w-20 sm:h-24 sm:w-24">
-                <Skeleton className="w-full h-full rounded-2xl" />
-              </div>
-
-              {/* Title + tagline */}
-              <div className="flex flex-col items-center gap-1.5">
-                {/* Title: text-3xl sm:text-4xl */}
-                <Skeleton className="h-9 sm:h-10 w-48 sm:w-56" />
-                {/* Tagline: text-sm sm:text-base max-w-2xl */}
-                <Skeleton className="h-5 sm:h-6 w-72 sm:w-96 max-w-full" />
-              </div>
+              {/* Logo area - uses shared LogoAreaSkeleton */}
+              <LogoAreaSkeleton size="large" showTitle showTagline />
 
               {/* Quick start: w-full mt-6 sm:mt-8 */}
               <div className="w-full mt-6 sm:mt-8">

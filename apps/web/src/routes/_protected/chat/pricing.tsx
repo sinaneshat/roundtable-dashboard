@@ -11,8 +11,8 @@ const pageTitle = 'Pricing & Plans - Roundtable';
 const pageDescription = 'Choose the perfect plan for your AI collaboration needs. Compare features, credits, and pricing for Roundtable - from free tier to enterprise.';
 
 /**
- * Pricing content skeleton - shown while PricingScreen loads
- * Renders inside the layout shell (sidebar handled by ChatLayoutShell)
+ * Pricing content skeleton - shown during route transitions
+ * Used as pendingComponent for route-level loading states
  */
 function PricingMainSkeleton() {
   return (
@@ -26,10 +26,12 @@ function PricingMainSkeleton() {
   );
 }
 
-// Dynamic import with ssr:false - shows skeleton during SSR and until component loads
+// ✅ SSR ENABLED: Pricing page renders on server with prefetched data
+// Data is prefetched in loader (productsQueryOptions, subscriptionsQueryOptions)
+// No ssr:false - component renders immediately with cached data, no skeleton flash
 const DynamicPricingScreen = dynamic(
   () => import('@/containers/screens/chat/billing/PricingScreen'),
-  { ssr: false, loading: () => <PricingMainSkeleton /> },
+  { loading: () => <PricingMainSkeleton /> },
 );
 
 export const Route = createFileRoute('/_protected/chat/pricing')({

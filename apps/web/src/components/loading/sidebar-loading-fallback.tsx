@@ -1,4 +1,5 @@
 import { SidebarThreadSkeletons } from '@/components/chat/chat-sidebar-skeleton';
+import { NavUserSkeleton } from '@/components/skeletons';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sidebar,
@@ -20,6 +21,10 @@ type SidebarLoadingFallbackProps = {
 /**
  * SSR-first sidebar loading skeleton - matches AppSidebar structure exactly.
  * NO 'use client' directive - renders during SSR immediately.
+ *
+ * Uses shared skeleton components for consistency:
+ * - NavUserSkeleton for footer user area
+ * - SidebarThreadSkeletons for thread list
  */
 export function SidebarLoadingFallback({
   count = 10,
@@ -90,19 +95,14 @@ export function SidebarLoadingFallback({
         </ScrollArea>
       </SidebarContent>
 
-      {/* Footer - NavUser only (matches chat-nav.tsx:371-377) */}
+      {/* Footer - NavUser (matches chat-nav.tsx:371-377) */}
       <SidebarFooter className="gap-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            {/* Matches NavUser SSR fallback (nav-user.tsx:163-185) */}
-            <div className="flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-lg px-4 py-2 h-11">
-              <Skeleton className="size-8 rounded-full shrink-0" />
-              <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                <Skeleton className="h-4 w-24 mb-1" />
-                <Skeleton className="h-3 w-32" />
-              </div>
-              <Skeleton className="size-4 ml-auto group-data-[collapsible=icon]:hidden" />
-            </div>
+            {/* Use consolidated NavUserSkeleton */}
+            <NavUserSkeleton className="group-data-[collapsible=icon]:hidden" />
+            {/* Collapsed state */}
+            <NavUserSkeleton collapsed className="hidden group-data-[collapsible=icon]:flex" />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

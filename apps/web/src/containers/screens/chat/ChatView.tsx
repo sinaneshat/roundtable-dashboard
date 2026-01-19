@@ -165,18 +165,27 @@ export function ChatView({
   const effectiveThreadId = serverThreadId || thread?.id || createdThreadId || '';
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
+  // ✅ PERF: Detect initial creation flow to skip unnecessary queries
+  // During initial creation (overview -> thread), changelog/feedback don't exist yet
+  // Only fetch these when viewing an established thread OR after first round completes
+  const isInitialCreationFlow = Boolean(createdThreadId) && streamingRoundNumber === 0;
+  const isFirstRoundStreaming = streamingRoundNumber === 0 && (isStreaming || isModeratorStreaming || waitingToStartStreaming);
+  const shouldSkipAuxiliaryQueries = isInitialCreationFlow || isFirstRoundStreaming;
+
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
   const { borderVariant: _borderVariant } = useFreeTrialState();
 
+  // ✅ PERF: Only fetch changelog/feedback for established threads (not during initial creation)
+  // These queries are not needed during the first round - data doesn't exist yet
   const { data: changelogResponse } = useThreadChangelogQuery(
     effectiveThreadId,
-    mode === ScreenModes.THREAD && Boolean(effectiveThreadId),
+    mode === ScreenModes.THREAD && Boolean(effectiveThreadId) && !shouldSkipAuxiliaryQueries,
   );
 
   const { data: feedbackData, isSuccess: feedbackSuccess } = useThreadFeedbackQuery(
     effectiveThreadId,
-    mode === ScreenModes.THREAD && Boolean(effectiveThreadId),
+    mode === ScreenModes.THREAD && Boolean(effectiveThreadId) && !shouldSkipAuxiliaryQueries,
   );
 
   const allEnabledModels = useMemo(() => {

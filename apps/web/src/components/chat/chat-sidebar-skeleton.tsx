@@ -1,3 +1,4 @@
+import { ThreadListItemSkeleton } from '@/components/skeletons';
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -5,9 +6,13 @@ import {
   SidebarMenuItem,
   SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
-import { cn } from '@/lib/ui/cn';
 
-const SIDEBAR_SKELETON_WIDTHS = ['70%', '55%', '85%', '45%', '65%', '78%', '52%', '62%', '48%', '73%', '58%', '80%', '42%', '67%', '54%'];
+/**
+ * SidebarThreadSkeletons - Thread list skeleton items for sidebar
+ *
+ * Re-exports ThreadListItemSkeleton with sidebar-specific styling.
+ * Used in SidebarLoadingFallback for consistent loading states.
+ */
 export function SidebarThreadSkeletons({
   count = 7,
   animated = false,
@@ -18,35 +23,19 @@ export function SidebarThreadSkeletons({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-3 px-2 pointer-events-none select-none',
-        className,
-      )}
-      aria-hidden="true"
-    >
-      {Array.from({ length: count }, (_, i) => {
-        const widthIndex = i % SIDEBAR_SKELETON_WIDTHS.length;
-        const opacity = i < 4 ? 1 : i < 5 ? 0.7 : i < 6 ? 0.5 : 0.3;
-
-        return (
-          <div
-            key={`thread-skeleton-${i}`}
-            className={cn(
-              'h-5 rounded-full bg-muted/40',
-              animated && 'animate-pulse',
-            )}
-            style={{
-              width: SIDEBAR_SKELETON_WIDTHS[widthIndex],
-              opacity,
-            }}
-          />
-        );
-      })}
-    </div>
+    <ThreadListItemSkeleton
+      count={count}
+      animated={animated}
+      className={className ?? 'px-2'}
+    />
   );
 }
 
+/**
+ * ChatSidebarSkeleton - Full sidebar content skeleton
+ *
+ * Matches the sidebar structure with optional favorites section.
+ */
 export function ChatSidebarSkeleton({
   count = 15,
   showFavorites = false,
@@ -87,6 +76,9 @@ export function ChatSidebarSkeleton({
   );
 }
 
+/**
+ * ChatSidebarPaginationSkeleton - Pagination area skeleton
+ */
 export function ChatSidebarPaginationSkeleton({ count = 20 }: { count?: number }) {
   return (
     <div className="px-2 my-2">

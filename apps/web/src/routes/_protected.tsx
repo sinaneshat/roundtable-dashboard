@@ -3,9 +3,8 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
 import { SidebarLoadingFallback } from '@/components/loading';
 import { ChatLayoutProviders, PreferencesStoreProvider } from '@/components/providers';
-import { QuickStartSkeleton, StickyInputSkeleton } from '@/components/skeletons';
+import { HeaderSkeleton, LogoAreaSkeleton, QuickStartSkeleton, StickyInputSkeleton } from '@/components/skeletons';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/auth/client';
 import {
   modelsQueryOptions,
@@ -25,31 +24,30 @@ function ProtectedLayoutSkeleton() {
     <SidebarProvider>
       <SidebarLoadingFallback count={10} />
       <SidebarInset className="flex flex-col relative">
-        {/* Header skeleton */}
-        <header className="sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2">
-          <div className="flex items-center gap-2 pt-4 px-5 md:px-6 lg:px-8 h-14 sm:h-16 w-full">
-            <Skeleton className="size-8 rounded-lg" />
-            <Skeleton className="h-5 w-28" />
-          </div>
-        </header>
+        {/* Header skeleton - uses shared HeaderSkeleton */}
+        <HeaderSkeleton variant="simple" />
 
         {/* Main content skeleton - matches ChatOverviewScreen layout */}
-        <div className="flex-1 flex flex-col items-center justify-center px-4">
-          <div className="w-full max-w-4xl space-y-8">
-            {/* Logo/Welcome area */}
-            <div className="text-center space-y-4">
-              <div className="size-16 rounded-2xl bg-accent animate-pulse mx-auto" />
-              <div className="h-8 w-64 rounded-xl bg-accent animate-pulse mx-auto" />
-              <div className="h-5 w-96 max-w-full rounded-lg bg-accent/70 animate-pulse mx-auto" />
-            </div>
+        <div className="flex-1 relative">
+          <div className="container max-w-4xl mx-auto px-5 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
+            <div className="w-full">
+              <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
+                {/* Logo area - uses shared LogoAreaSkeleton */}
+                <LogoAreaSkeleton size="large" showTitle showTagline />
 
-            {/* Quick start suggestions skeleton */}
-            <div className="rounded-2xl bg-card/50 overflow-hidden">
-              <QuickStartSkeleton count={4} />
-            </div>
+                {/* Quick start suggestions skeleton */}
+                <div className="w-full mt-6 sm:mt-8">
+                  <div className="rounded-2xl bg-card/50 overflow-hidden border border-border/30">
+                    <QuickStartSkeleton count={4} />
+                  </div>
+                </div>
 
-            {/* Input area skeleton */}
-            <StickyInputSkeleton />
+                {/* Input area skeleton */}
+                <div className="w-full mt-14">
+                  <StickyInputSkeleton className="relative" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </SidebarInset>
