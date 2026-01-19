@@ -15,7 +15,7 @@ import { eq, or } from 'drizzle-orm';
 
 import { createHandler } from '@/core';
 import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
-import { OG_COLORS as SHARED_OG_COLORS } from '@/lib/ui/og-image-helpers';
+import { OG_COLORS as SHARED_OG_COLORS } from '@/lib/ui/og-colors';
 import type { ApiEnv } from '@/types';
 
 import type { ogImageRoute } from './route';

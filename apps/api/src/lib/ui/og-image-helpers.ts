@@ -6,43 +6,53 @@
  *
  * NOTE: Common assets (logo, mode icons, provider icons) are embedded at build time.
  * See: scripts/generate-og-assets.ts
+ *
+ * IMPORTANT: OG_COLORS and utilities are in og-colors.ts to avoid importing
+ * the 449KB og-assets.generated.ts at module level.
  */
 
-import type { ChatMode } from '@roundtable/shared/enums';
-
-import { BRAND } from '@/constants';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
-import {
-  getLogoBase64Sync,
-  getModeIconBase64Sync,
-  getModelIconBase64Sync,
-  getUIIconBase64Sync,
-} from './og-assets.generated';
+// Re-export colors and utilities from og-colors.ts (no asset import)
+export { createGradient, getModeColor, OG_COLORS, truncateText } from './og-colors';
+
+// Lazy load asset functions to avoid 449KB module at startup
+type OGAssetsModule = typeof import('./og-assets.generated');
+let ogAssetsModule: OGAssetsModule | null = null;
+
+async function getOGAssets(): Promise<OGAssetsModule> {
+  if (!ogAssetsModule) {
+    ogAssetsModule = await import('./og-assets.generated');
+  }
+  return ogAssetsModule;
+}
 
 // ============================================================================
-// IMAGE HELPERS (use embedded assets when available, fallback to fetch)
+// IMAGE HELPERS (use lazy-loaded embedded assets)
 // ============================================================================
 
 /**
- * Get logo as base64 - uses embedded asset (instant, no network)
+ * Get logo as base64 - uses embedded asset (lazy loaded)
  */
 export async function getLogoBase64(): Promise<string> {
-  return getLogoBase64Sync();
+  const assets = await getOGAssets();
+  return assets.getLogoBase64Sync();
 }
 
 /**
- * Get mode icon as base64 - uses embedded asset (instant, no network)
+ * Get mode icon as base64 - uses embedded asset (lazy loaded)
  */
 export async function getModeIconBase64(mode: string): Promise<string> {
-  return getModeIconBase64Sync(mode);
+  const assets = await getOGAssets();
+  return assets.getModeIconBase64Sync(mode);
 }
 
 /**
- * Get UI icon as base64 - uses embedded asset (instant, no network)
+ * Get UI icon as base64 - uses embedded asset (lazy loaded)
  */
 export async function getUIIconBase64(iconName: string): Promise<string> {
-  return getUIIconBase64Sync(iconName);
+  const assets = await getOGAssets();
+  return assets.getUIIconBase64Sync(iconName);
 }
 
 /**
@@ -50,8 +60,9 @@ export async function getUIIconBase64(iconName: string): Promise<string> {
  * Falls back to fetch for uncommon models
  */
 export async function getModelIconBase64(modelId: string): Promise<string> {
+  const assets = await getOGAssets();
   // Try embedded asset first (covers common providers)
-  const embedded = getModelIconBase64Sync(modelId);
+  const embedded = assets.getModelIconBase64Sync(modelId);
   if (embedded)
     return embedded;
 
@@ -105,79 +116,4 @@ async function fetchImageBase64(relativePath: string): Promise<string> {
   } catch {
     return '';
   }
-}
-
-// ============================================================================
-// OG IMAGE COLORS
-// ============================================================================
-
-export const OG_COLORS = {
-  // Background
-  background: '#000000',
-  backgroundGradientStart: '#0a0a0a',
-  backgroundGradientEnd: '#1a1a1a',
-
-  // Brand colors
-  primary: BRAND.colors.primary,
-  secondary: BRAND.colors.secondary,
-
-  // Text colors
-  textPrimary: '#ffffff',
-  textSecondary: '#a1a1aa',
-  textMuted: '#71717a',
-
-  // Glass-morphism
-  glassBackground: 'rgba(24, 24, 27, 0.8)',
-  glassBorder: 'rgba(255, 255, 255, 0.1)',
-  glassHighlight: 'rgba(255, 255, 255, 0.05)',
-
-  // Mode-specific colors
-  analyzing: '#8b5cf6',
-  brainstorming: '#f59e0b',
-  debating: '#ef4444',
-  solving: '#10b981',
-
-  // Status colors
-  success: '#22c55e',
-  warning: '#f59e0b',
-  error: '#ef4444',
-  info: '#3b82f6',
-} as const;
-
-// ============================================================================
-// MODE COLOR MAPPING
-// ============================================================================
-
-const MODE_COLORS = {
-  analyzing: OG_COLORS.analyzing,
-  brainstorming: OG_COLORS.brainstorming,
-  debating: OG_COLORS.debating,
-  solving: OG_COLORS.solving,
-} as const satisfies Record<ChatMode, string>;
-
-export function getModeColor(mode: ChatMode): string {
-  return MODE_COLORS[mode] ?? OG_COLORS.primary;
-}
-
-// ============================================================================
-// STYLING UTILITIES
-// ============================================================================
-
-export function createGradient(
-  angle: number = 135,
-  start: string = OG_COLORS.backgroundGradientStart,
-  end: string = OG_COLORS.backgroundGradientEnd,
-): string {
-  return `linear-gradient(${angle}deg, ${start} 0%, ${end} 100%)`;
-}
-
-// ============================================================================
-// TEXT UTILITIES
-// ============================================================================
-
-export function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return `${text.slice(0, maxLength)}...`;
 }
