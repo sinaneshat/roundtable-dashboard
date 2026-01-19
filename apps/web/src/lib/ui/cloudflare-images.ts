@@ -37,17 +37,28 @@ type CloudflareImageOptions = {
 function buildOptionsString(options: CloudflareImageOptions): string {
   const parts: string[] = [];
 
-  if (options.width) parts.push(`width=${options.width}`);
-  if (options.height) parts.push(`height=${options.height}`);
-  if (options.fit) parts.push(`fit=${options.fit}`);
-  if (options.quality) parts.push(`quality=${options.quality}`);
-  if (options.format) parts.push(`format=${options.format}`);
-  if (options.blur) parts.push(`blur=${options.blur}`);
-  if (options.gravity) parts.push(`gravity=${options.gravity}`);
-  if (options.dpr) parts.push(`dpr=${options.dpr}`);
-  if (options.sharpen) parts.push(`sharpen=${options.sharpen}`);
-  if (options.brightness) parts.push(`brightness=${options.brightness}`);
-  if (options.contrast) parts.push(`contrast=${options.contrast}`);
+  if (options.width)
+    parts.push(`width=${options.width}`);
+  if (options.height)
+    parts.push(`height=${options.height}`);
+  if (options.fit)
+    parts.push(`fit=${options.fit}`);
+  if (options.quality)
+    parts.push(`quality=${options.quality}`);
+  if (options.format)
+    parts.push(`format=${options.format}`);
+  if (options.blur)
+    parts.push(`blur=${options.blur}`);
+  if (options.gravity)
+    parts.push(`gravity=${options.gravity}`);
+  if (options.dpr)
+    parts.push(`dpr=${options.dpr}`);
+  if (options.sharpen)
+    parts.push(`sharpen=${options.sharpen}`);
+  if (options.brightness)
+    parts.push(`brightness=${options.brightness}`);
+  if (options.contrast)
+    parts.push(`contrast=${options.contrast}`);
 
   return parts.join(',');
 }
@@ -108,7 +119,8 @@ export function transformCloudflareImage(
   options: CloudflareImageOptions,
 ): string {
   const optionsString = buildOptionsString(options);
-  if (!optionsString) return src;
+  if (!optionsString)
+    return src;
 
   // Handle relative URLs
   if (src.startsWith('/') && !src.startsWith('//')) {
@@ -153,9 +165,9 @@ export function isCloudflareEnvironment(): boolean {
 }
 
 export {
-  isTransformableUrl,
   type CloudflareFit,
   type CloudflareFormat,
   type CloudflareGravity,
   type CloudflareImageOptions,
+  isTransformableUrl,
 };

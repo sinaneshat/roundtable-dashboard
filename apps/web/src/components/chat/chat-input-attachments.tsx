@@ -1,8 +1,10 @@
 import { FileIconNames, getFileTypeColorClass, UploadStatuses } from '@roundtable/shared';
 import { AnimatePresence, motion } from 'motion/react';
+import { useState } from 'react';
 
 import { Icons } from '@/components/icons';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { PendingAttachment } from '@/hooks/utils';
 import { getFileIconName } from '@/hooks/utils';
 import { formatFileSize } from '@/lib/format';
@@ -54,6 +56,7 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
   const isUploading = status === UploadStatuses.UPLOADING;
   const isProcessing = isPending || isUploading;
   const isFailed = status === UploadStatuses.FAILED;
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
 
   // Truncate filename for display - show more characters now
   const displayName = file.name.length > 24
@@ -96,12 +99,22 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
             )
           : isImage && preview?.url
             ? (
-                <img
-                  src={preview.url}
-                  alt={file.name}
-                  className="object-cover size-full rounded-md"
-                  decoding="async"
-                />
+                <>
+                  {!isImageLoaded && (
+                    <Skeleton className="absolute inset-0 rounded-md" />
+                  )}
+                  <img
+                    src={preview.url}
+                    alt={file.name}
+                    className={cn(
+                      'object-cover size-full rounded-md transition-opacity duration-300',
+                      !isImageLoaded && 'opacity-0',
+                      isImageLoaded && 'opacity-100',
+                    )}
+                    decoding="async"
+                    onLoad={() => setIsImageLoaded(true)}
+                  />
+                </>
               )
             : (
                 <FileTypeIcon mimeType={file.type} />

@@ -1,6 +1,6 @@
 import type { ImageState } from '@roundtable/shared';
 import { DEFAULT_IMAGE_STATE, ImageStates } from '@roundtable/shared';
-import type { ReactNode } from 'react';
+import type { ImgHTMLAttributes, ReactNode } from 'react';
 import { useState } from 'react';
 
 import { cn } from '@/lib/ui/cn';
@@ -9,6 +9,73 @@ import type { ImageProps } from './image';
 import Image from './image';
 
 import { Skeleton } from './skeleton';
+
+/**
+ * BlurThumbnail - Lightweight image component for external URLs
+ *
+ * Uses native <img> with skeleton loading for external/arbitrary URLs
+ * where CDN optimization isn't available. Perfect for:
+ * - Web search result thumbnails
+ * - External favicons
+ * - User-provided images from unknown sources
+ */
+type BlurThumbnailProps = {
+  src: string;
+  alt: string;
+  containerClassName?: string;
+  onLoadSuccess?: () => void;
+  onLoadError?: () => void;
+} & Omit<ImgHTMLAttributes<HTMLImageElement>, 'onLoad' | 'onError'>;
+
+export function BlurThumbnail({
+  src,
+  alt,
+  className,
+  containerClassName,
+  onLoadSuccess,
+  onLoadError,
+  ...props
+}: BlurThumbnailProps) {
+  const [imageState, setImageState] = useState<ImageState>(DEFAULT_IMAGE_STATE);
+
+  const handleLoad = () => {
+    setImageState(ImageStates.LOADED);
+    onLoadSuccess?.();
+  };
+
+  const handleError = () => {
+    setImageState(ImageStates.ERROR);
+    onLoadError?.();
+  };
+
+  if (imageState === ImageStates.ERROR) {
+    return null;
+  }
+
+  return (
+    <div className={cn('relative overflow-hidden', containerClassName)}>
+      {imageState === ImageStates.LOADING && (
+        <Skeleton className="absolute inset-0 rounded-none" />
+      )}
+      <img
+        src={src}
+        alt={alt}
+        className={cn(
+          'w-full h-full object-cover transition-opacity duration-300',
+          imageState === ImageStates.LOADING && 'opacity-0',
+          imageState === ImageStates.LOADED && 'opacity-100',
+          className,
+        )}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onLoad={handleLoad}
+        onError={handleError}
+        {...props}
+      />
+    </div>
+  );
+}
 
 type SmartImageProps = {
   /** Custom fallback content when image fails to load */

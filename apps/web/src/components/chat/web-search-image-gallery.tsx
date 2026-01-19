@@ -109,13 +109,21 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
               className="group relative w-16 h-12 rounded-md overflow-hidden border border-border/30 bg-muted/20 hover:border-primary/40 hover:shadow-md transition-all duration-200"
               title={`${image.title} - ${cleanDomain}`}
             >
+              {!loadedImages.has(image.url) && (
+                <Skeleton className="absolute inset-0 rounded-none" />
+              )}
               <img
                 src={image.url}
                 alt={image.alt || image.title}
-                className="object-cover size-full group-hover:scale-105 transition-transform duration-200"
+                className={cn(
+                  'object-cover size-full group-hover:scale-105 transition-all duration-300',
+                  !loadedImages.has(image.url) && 'opacity-0',
+                  loadedImages.has(image.url) && 'opacity-100',
+                )}
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"
+                onLoad={() => handleImageLoad(image.url)}
                 onError={() => handleImageError(image.url)}
               />
 
