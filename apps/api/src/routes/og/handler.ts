@@ -15,16 +15,24 @@ import { eq, or } from 'drizzle-orm';
 
 import { createHandler } from '@/core';
 import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
-import {
-  getLogoBase64Sync,
-  getModeIconBase64Sync,
-  getModelIconBase64Sync,
-  getOGFontsSync,
-} from '@/lib/ui/og-assets.generated';
 import { OG_COLORS as SHARED_OG_COLORS } from '@/lib/ui/og-image-helpers';
 import type { ApiEnv } from '@/types';
 
 import type { ogImageRoute } from './route';
+
+// ============================================================================
+// LAZY OG ASSETS LOADING
+// ============================================================================
+// Type-only import for og-assets (460KB+ of base64 - must be lazy loaded)
+type OGAssetsModule = typeof import('@/lib/ui/og-assets.generated');
+let ogAssetsModule: OGAssetsModule | null = null;
+
+async function getOGAssets(): Promise<OGAssetsModule> {
+  if (!ogAssetsModule) {
+    ogAssetsModule = await import('@/lib/ui/og-assets.generated');
+  }
+  return ogAssetsModule;
+}
 
 // OG image dimensions (standard)
 const OG_WIDTH = 1200;
@@ -57,8 +65,9 @@ const MAX_MODEL_ICONS = 5;
 /**
  * Get embedded fonts for satori (no network fetch required)
  */
-function getEmbeddedFonts() {
-  return getOGFontsSync();
+async function getEmbeddedFonts() {
+  const assets = await getOGAssets();
+  return assets.getOGFontsSync();
 }
 
 /**
@@ -74,19 +83,22 @@ async function generateOgImage(params: {
   const { title, mode, participantCount, messageCount, participantModelIds = [] } = params;
   const modeColor = mode ? getModeColor(mode) : OG_COLORS.primary;
 
+  // Lazy load og-assets (460KB+ base64)
+  const assets = await getOGAssets();
+
   // Get model icons for participants (limit to MAX_MODEL_ICONS)
   const modelIcons = participantModelIds
     .slice(0, MAX_MODEL_ICONS)
-    .map(modelId => getModelIconBase64Sync(modelId))
+    .map(modelId => assets.getModelIconBase64Sync(modelId))
     .filter(Boolean);
 
   // Lazy load satori to reduce worker startup CPU time
   const satori = (await import('satori')).default;
 
   // Get embedded fonts and assets (no network required)
-  const fonts = getEmbeddedFonts();
-  const logoBase64 = getLogoBase64Sync();
-  const modeIconBase64 = mode ? getModeIconBase64Sync(mode) : null;
+  const fonts = await getEmbeddedFonts();
+  const logoBase64 = assets.getLogoBase64Sync();
+  const modeIconBase64 = mode ? assets.getModeIconBase64Sync(mode) : null;
 
   // Generate SVG using satori
   const svg = await satori(
@@ -494,21 +506,22 @@ function generateSimpleOgSvg(params: {
   participantCount: number;
   messageCount: number;
   participantModelIds: string[];
+  assets: OGAssetsModule;
 }): string {
-  const { title, mode, modeColor, participantCount, messageCount, participantModelIds } = params;
+  const { title, mode, modeColor, participantCount, messageCount, participantModelIds, assets } = params;
 
   // Truncate title if too long
   const displayTitle = title.length > 80 ? `${title.slice(0, 77)}...` : title;
 
-  // Get logo and mode icon
-  const logoBase64 = getLogoBase64Sync();
-  const modeIconBase64 = mode ? getModeIconBase64Sync(mode) : null;
+  // Get logo and mode icon from lazy-loaded assets
+  const logoBase64 = assets.getLogoBase64Sync();
+  const modeIconBase64 = mode ? assets.getModeIconBase64Sync(mode) : null;
 
   // Get model icons for display (up to 6 to match static design)
   const maxIcons = 6;
   const modelIcons = participantModelIds
     .slice(0, maxIcons)
-    .map(modelId => getModelIconBase64Sync(modelId))
+    .map(modelId => assets.getModelIconBase64Sync(modelId))
     .filter(Boolean);
 
   // Model icon container dimensions (separate glass containers, not overlapping)
@@ -776,6 +789,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
 
       // Local dev: Generate simple SVG without satori (WASM not available)
       if (isLocalDev) {
+        const assets = await getOGAssets();
         const modeColor = mode ? MODE_COLORS[mode] : OG_COLORS.primary;
         const simpleSvg = generateSimpleOgSvg({
           title,
@@ -784,6 +798,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
           participantCount,
           messageCount,
           participantModelIds,
+          assets,
         });
         return new Response(simpleSvg, {
           headers: {

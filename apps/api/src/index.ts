@@ -8,8 +8,9 @@
  * Never use createRoute directly in route handlers - always use OpenAPIHono apps.
  */
 
-import { Scalar } from '@scalar/hono-api-reference';
-import { createMarkdownFromOpenApi } from '@scalar/openapi-to-markdown';
+// @scalar imports are lazy-loaded to reduce worker startup CPU time
+// import { Scalar } from '@scalar/hono-api-reference';
+// import { createMarkdownFromOpenApi } from '@scalar/openapi-to-markdown';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { contextStorage } from 'hono/context-storage';
@@ -740,7 +741,13 @@ finalRoutes.use('/scalar', async (c, next) => {
   });
 });
 
-finalRoutes.get('/scalar', Scalar({ url: '/api/v1/doc' }));
+// Lazy load Scalar UI to reduce worker startup CPU time
+finalRoutes.get('/scalar', async (c) => {
+  const { Scalar } = await import('@scalar/hono-api-reference');
+  const handler = Scalar({ url: '/api/v1/doc' });
+  // @ts-expect-error - Scalar returns a middleware, call it with context
+  return handler(c, async () => {});
+});
 
 finalRoutes.get('/llms.txt', async (c) => {
   try {
@@ -751,6 +758,8 @@ finalRoutes.get('/llms.txt', async (c) => {
         version: APP_VERSION,
       },
     });
+    // Lazy load @scalar/openapi-to-markdown to reduce worker startup CPU time
+    const { createMarkdownFromOpenApi } = await import('@scalar/openapi-to-markdown');
     const markdown = await createMarkdownFromOpenApi(JSON.stringify(document));
     return c.text(markdown);
   } catch {
