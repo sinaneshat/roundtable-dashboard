@@ -2,12 +2,18 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
-import { ChatThreadSkeleton } from '@/components/loading';
-import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
+import { ThreadContentSkeleton } from '@/components/layouts/chat-layout-shell';
 import { useSession } from '@/lib/auth/client';
 import { threadBySlugQueryOptions } from '@/lib/data/query-options';
+import dynamic from '@/lib/utils/dynamic';
 import { getStreamResumptionState } from '@/server/thread';
 import type { GetThreadBySlugResponse, ThreadStreamResumptionState } from '@/services/api';
+
+// Dynamic import with ssr:false - shows skeleton during SSR and until component loads
+const ChatThreadScreen = dynamic(
+  () => import('@/containers/screens/chat/ChatThreadScreen'),
+  { ssr: false, loading: () => <ThreadContentSkeleton /> },
+);
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
   // Prefetch thread data and stream resumption state for SSR hydration
@@ -41,7 +47,6 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
 
     return { threadTitle, streamResumptionState };
   },
-  pendingComponent: ChatThreadSkeleton,
   // Dynamic title from loader data
   head: ({ loaderData }) => {
     const displayTitle = loaderData?.threadTitle

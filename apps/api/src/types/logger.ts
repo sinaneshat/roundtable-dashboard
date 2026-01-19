@@ -264,53 +264,67 @@ export function validateLogContext(context: unknown): LogContext | null {
 // TYPE-SAFE LOG CONTEXT FACTORIES
 // ============================================================================
 
-type RequestLogData = Omit<z.infer<typeof RequestLogContextSchema>, 'logType'>;
-type DatabaseLogData = Omit<z.infer<typeof DatabaseLogContextSchema>, 'logType'>;
-type AuthLogData = Omit<z.infer<typeof AuthLogContextSchema>, 'logType'>;
-type ValidationLogData = Omit<z.infer<typeof ValidationLogContextSchema>, 'logType'>;
-type PerformanceLogData = Omit<z.infer<typeof PerformanceLogContextSchema>, 'logType'>;
-type ApiLogData = Omit<z.infer<typeof ApiLogContextSchema>, 'logType'>;
-type OperationLogData = Omit<z.infer<typeof OperationLogContextSchema>, 'logType'>;
-type SystemLogData = Omit<z.infer<typeof SystemLogContextSchema>, 'logType'>;
-type EdgeCaseLogData = Omit<z.infer<typeof EdgeCaseLogContextSchema>, 'logType'>;
+// Export individual context schemas for direct use
+export { RequestLogContextSchema, DatabaseLogContextSchema, AuthLogContextSchema };
+export { ValidationLogContextSchema, PerformanceLogContextSchema, ApiLogContextSchema };
+export { OperationLogContextSchema, SystemLogContextSchema, EdgeCaseLogContextSchema };
 
+// Schema-specific inferred types for each log context
+export type RequestLogContext = z.infer<typeof RequestLogContextSchema>;
+export type DatabaseLogContext = z.infer<typeof DatabaseLogContextSchema>;
+export type AuthLogContext = z.infer<typeof AuthLogContextSchema>;
+export type ValidationLogContext = z.infer<typeof ValidationLogContextSchema>;
+export type PerformanceLogContext = z.infer<typeof PerformanceLogContextSchema>;
+export type ApiLogContext = z.infer<typeof ApiLogContextSchema>;
+export type OperationLogContext = z.infer<typeof OperationLogContextSchema>;
+export type SystemLogContext = z.infer<typeof SystemLogContextSchema>;
+export type EdgeCaseLogContext = z.infer<typeof EdgeCaseLogContextSchema>;
+
+// Input schemas without the discriminator field
+const RequestLogInputSchema = RequestLogContextSchema.omit({ logType: true });
+const DatabaseLogInputSchema = DatabaseLogContextSchema.omit({ logType: true });
+const AuthLogInputSchema = AuthLogContextSchema.omit({ logType: true });
+const ValidationLogInputSchema = ValidationLogContextSchema.omit({ logType: true });
+const PerformanceLogInputSchema = PerformanceLogContextSchema.omit({ logType: true });
+const ApiLogInputSchema = ApiLogContextSchema.omit({ logType: true });
+const OperationLogInputSchema = OperationLogContextSchema.omit({ logType: true });
+const SystemLogInputSchema = SystemLogContextSchema.omit({ logType: true });
+const EdgeCaseLogInputSchema = EdgeCaseLogContextSchema.omit({ logType: true });
+
+// Input types inferred from schemas
+type RequestLogInput = z.input<typeof RequestLogInputSchema>;
+type DatabaseLogInput = z.input<typeof DatabaseLogInputSchema>;
+type AuthLogInput = z.input<typeof AuthLogInputSchema>;
+type ValidationLogInput = z.input<typeof ValidationLogInputSchema>;
+type PerformanceLogInput = z.input<typeof PerformanceLogInputSchema>;
+type ApiLogInput = z.input<typeof ApiLogInputSchema>;
+type OperationLogInput = z.input<typeof OperationLogInputSchema>;
+type SystemLogInput = z.input<typeof SystemLogInputSchema>;
+type EdgeCaseLogInput = z.input<typeof EdgeCaseLogInputSchema>;
+
+/**
+ * Type-safe log context factory using Zod schemas
+ * Each helper validates input and returns a properly typed log context
+ */
 export const LogHelpers = {
-  request: (data: RequestLogData): LogContext => ({
-    logType: LogTypes.REQUEST,
-    ...data,
-  }),
-  database: (data: DatabaseLogData): LogContext => ({
-    logType: LogTypes.DATABASE,
-    ...data,
-  }),
-  auth: (data: AuthLogData): LogContext => ({
-    logType: LogTypes.AUTH,
-    ...data,
-  }),
-  validation: (data: ValidationLogData): LogContext => ({
-    logType: LogTypes.VALIDATION,
-    ...data,
-  }),
-  performance: (data: PerformanceLogData): LogContext => ({
-    logType: LogTypes.PERFORMANCE,
-    ...data,
-  }),
-  api: (data: ApiLogData): LogContext => ({
-    logType: LogTypes.API,
-    ...data,
-  }),
-  operation: (data: OperationLogData): LogContext => ({
-    logType: LogTypes.OPERATION,
-    ...data,
-  }),
-  system: (data: SystemLogData): LogContext => ({
-    logType: LogTypes.SYSTEM,
-    ...data,
-  }),
-  edgeCase: (data: EdgeCaseLogData): LogContext => ({
-    logType: LogTypes.EDGE_CASE,
-    ...data,
-  }),
+  request: (data: RequestLogInput) =>
+    RequestLogContextSchema.parse({ logType: LogTypes.REQUEST, ...data }),
+  database: (data: DatabaseLogInput) =>
+    DatabaseLogContextSchema.parse({ logType: LogTypes.DATABASE, ...data }),
+  auth: (data: AuthLogInput) =>
+    AuthLogContextSchema.parse({ logType: LogTypes.AUTH, ...data }),
+  validation: (data: ValidationLogInput) =>
+    ValidationLogContextSchema.parse({ logType: LogTypes.VALIDATION, ...data }),
+  performance: (data: PerformanceLogInput) =>
+    PerformanceLogContextSchema.parse({ logType: LogTypes.PERFORMANCE, ...data }),
+  api: (data: ApiLogInput) =>
+    ApiLogContextSchema.parse({ logType: LogTypes.API, ...data }),
+  operation: (data: OperationLogInput) =>
+    OperationLogContextSchema.parse({ logType: LogTypes.OPERATION, ...data }),
+  system: (data: SystemLogInput) =>
+    SystemLogContextSchema.parse({ logType: LogTypes.SYSTEM, ...data }),
+  edgeCase: (data: EdgeCaseLogInput) =>
+    EdgeCaseLogContextSchema.parse({ logType: LogTypes.EDGE_CASE, ...data }),
 };
 
 /**

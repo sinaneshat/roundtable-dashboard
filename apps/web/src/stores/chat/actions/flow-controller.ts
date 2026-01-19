@@ -57,7 +57,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
    * ✅ REACT BEST PRACTICE: Uses storeApi.getState() for imperative access
    * This reads current state at call time without causing dependency issues
    */
-  const prepopulateQueryCache = useCallback((threadId: string, currentSession: typeof session) => {
+  const prepopulateQueryCache = useCallback((threadId: string, slug: string, currentSession: typeof session) => {
     // ✅ REACT BEST PRACTICE: Read current state imperatively via getState()
     // This avoids infinite loops from adding state to dependency arrays
     const state = storeApi.getState();
@@ -69,59 +69,60 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     if (!thread)
       return;
 
-    // 1. Pre-populate thread detail (thread, participants, messages, user)
-    // Format matches getThreadBySlugService response
+    // Build the thread data object once for reuse
+    const threadData = {
+      success: true,
+      data: {
+        thread: {
+          ...thread,
+          createdAt: toISOString(thread.createdAt),
+          updatedAt: toISOString(thread.updatedAt),
+          lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
+        },
+        participants: currentParticipants.map(p => ({
+          ...p,
+          createdAt: toISOString(p.createdAt),
+          updatedAt: toISOString(p.updatedAt),
+        })),
+        // Messages from store - add createdAt for server format compatibility
+        // ✅ TYPE-SAFE: Use getCreatedAt utility instead of force casts
+        messages: currentMessages.map(m => ({
+          ...m,
+          createdAt: getCreatedAt(m) ?? new Date().toISOString(),
+        })),
+        user: {
+          name: currentSession?.user?.name || 'You',
+          image: currentSession?.user?.image || null,
+        },
+      },
+      meta: createPrefetchMeta(),
+    };
+
+    // 1. Pre-populate thread detail by ID
+    queryClient.setQueryData(queryKeys.threads.detail(threadId), threadData);
+
+    // 2. ✅ FIX: Also pre-populate bySlug cache - this is what $slug.tsx route uses
+    // Without this, navigation to /chat/{slug} causes unnecessary GET request
+    queryClient.setQueryData(queryKeys.threads.bySlug(slug), threadData);
+
+    // 3. Pre-populate pre-searches - ALWAYS set cache to prevent fetch
+    // ✅ FIX: Always pre-populate, even when empty, to prevent query from fetching
     queryClient.setQueryData(
-      queryKeys.threads.detail(threadId),
+      queryKeys.threads.preSearches(threadId),
       {
         success: true,
         data: {
-          thread: {
-            ...thread,
-            createdAt: toISOString(thread.createdAt),
-            updatedAt: toISOString(thread.updatedAt),
-            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
-          },
-          participants: currentParticipants.map(p => ({
-            ...p,
-            createdAt: toISOString(p.createdAt),
-            updatedAt: toISOString(p.updatedAt),
-          })),
-          // Messages from store - add createdAt for server format compatibility
-          // ✅ TYPE-SAFE: Use getCreatedAt utility instead of force casts
-          messages: currentMessages.map(m => ({
-            ...m,
-            createdAt: getCreatedAt(m) ?? new Date().toISOString(),
-          })),
-          user: {
-            name: currentSession?.user?.name || 'You',
-            image: currentSession?.user?.image || null,
-          },
+          items: currentPreSearches.length > 0
+            ? currentPreSearches.map(ps => ({
+                ...ps,
+                createdAt: toISOString(ps.createdAt),
+                completedAt: toISOStringOrNull(ps.completedAt),
+              }))
+            : [],
         },
         meta: createPrefetchMeta(),
       },
     );
-
-    // ✅ TEXT STREAMING: Moderator messages are now regular messages in chatMessage table
-    // Displayed inline via ChatMessageList - no separate pre-population needed
-
-    // 2. Pre-populate pre-searches (if web search enabled)
-    if (currentPreSearches.length > 0) {
-      queryClient.setQueryData(
-        queryKeys.threads.preSearches(threadId),
-        {
-          success: true,
-          data: {
-            items: currentPreSearches.map(ps => ({
-              ...ps,
-              createdAt: toISOString(ps.createdAt),
-              completedAt: toISOStringOrNull(ps.completedAt),
-            })),
-          },
-          meta: createPrefetchMeta(),
-        },
-      );
-    }
 
     // 4. Pre-populate empty changelog (we don't have this data yet, but prevents loading)
     queryClient.setQueryData(
@@ -393,7 +394,8 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       if (slug && threadId) {
         // ✅ PREFETCH DATA: Pre-populate TanStack Query cache for future navigation
         // This ensures data is available if user refreshes or navigates away and back
-        prepopulateQueryCache(threadId, session);
+        // ✅ FIX: Pass slug to pre-populate both detail(threadId) and bySlug(slug) caches
+        prepopulateQueryCache(threadId, slug, session);
       }
     }
   }, [

@@ -182,97 +182,106 @@ const completeConfigurationSchema = coreEnvironmentSchema
  * In Cloudflare Workers: Use cloudflare:workers env for runtime secrets
  * In local dev: Falls back to process.env
  */
+
 /**
- * Type-safe wrapper for environment variables from different sources
- * Provides uniform access to CloudflareEnv or process.env
+ * Get environment variable from CloudflareEnv or process.env
+ * Uses a getter function to avoid type mismatch between typed CloudflareEnv and Record-based process.env
  */
-type UnifiedEnvVars = Record<string, string | undefined>;
+function createEnvGetter(cfEnv: CloudflareEnv | null): (key: string) => string | undefined {
+  return (key: string): string | undefined => {
+    if (cfEnv !== null && key in cfEnv) {
+      const value = cfEnv[key as keyof CloudflareEnv];
+      return typeof value === 'string' ? value : undefined;
+    }
+    return process.env[key];
+  };
+}
 
 async function parseEnvironment() {
-  let runtimeEnv: UnifiedEnvVars = {};
-
+  // Try to import Cloudflare Workers env
+  let cfEnv: CloudflareEnv | null = null;
   try {
     const { env: workersEnv } = await import('cloudflare:workers');
-    // Type-safe conversion: CloudflareEnv and process.env both provide string key-value access
-    runtimeEnv = workersEnv as UnifiedEnvVars;
+    cfEnv = workersEnv;
   } catch {
-    // Local dev: cloudflare:workers not available, use process.env
-    runtimeEnv = process.env;
+    // Local dev: cloudflare:workers not available
   }
+
+  const getEnv = createEnvGetter(cfEnv);
 
   const env = {
     // Core environment variables
-    // Priority: Cloudflare Workers env (runtimeEnv) > process.env
-    NODE_ENV: runtimeEnv.NODE_ENV || process.env.NODE_ENV,
-    WEBAPP_ENV: runtimeEnv.WEBAPP_ENV || process.env.WEBAPP_ENV,
-    APP_URL: runtimeEnv.APP_URL || process.env.APP_URL,
-    API_URL: runtimeEnv.API_URL || process.env.API_URL,
-    APP_NAME: runtimeEnv.APP_NAME || process.env.APP_NAME,
-    APP_VERSION: runtimeEnv.APP_VERSION || process.env.APP_VERSION,
-    API_BASE_PATH: runtimeEnv.API_BASE_PATH,
-    API_VERSION: runtimeEnv.API_VERSION,
+    // Priority: Cloudflare Workers env > process.env
+    NODE_ENV: getEnv('NODE_ENV') || process.env.NODE_ENV,
+    WEBAPP_ENV: getEnv('WEBAPP_ENV') || process.env.WEBAPP_ENV,
+    APP_URL: getEnv('APP_URL') || process.env.APP_URL,
+    API_URL: getEnv('API_URL') || process.env.API_URL,
+    APP_NAME: getEnv('APP_NAME') || process.env.APP_NAME,
+    APP_VERSION: getEnv('APP_VERSION') || process.env.APP_VERSION,
+    API_BASE_PATH: getEnv('API_BASE_PATH'),
+    API_VERSION: getEnv('API_VERSION'),
 
     // Database (runtime secrets)
-    DATABASE_AUTH_TOKEN: runtimeEnv.DATABASE_AUTH_TOKEN,
-    LOCAL_DATABASE_PATH: runtimeEnv.LOCAL_DATABASE_PATH,
-    DATABASE_CONNECTION_LIMIT: runtimeEnv.DATABASE_CONNECTION_LIMIT,
-    DATABASE_TIMEOUT: runtimeEnv.DATABASE_TIMEOUT,
-    DATABASE_MIGRATION_DIR: runtimeEnv.DATABASE_MIGRATION_DIR,
-    DATABASE_SEED_DATA: runtimeEnv.DATABASE_SEED_DATA === 'true',
+    DATABASE_AUTH_TOKEN: getEnv('DATABASE_AUTH_TOKEN'),
+    LOCAL_DATABASE_PATH: getEnv('LOCAL_DATABASE_PATH'),
+    DATABASE_CONNECTION_LIMIT: getEnv('DATABASE_CONNECTION_LIMIT'),
+    DATABASE_TIMEOUT: getEnv('DATABASE_TIMEOUT'),
+    DATABASE_MIGRATION_DIR: getEnv('DATABASE_MIGRATION_DIR'),
+    DATABASE_SEED_DATA: getEnv('DATABASE_SEED_DATA') === 'true',
 
     // Authentication (runtime secrets)
-    BETTER_AUTH_SECRET: runtimeEnv.BETTER_AUTH_SECRET,
-    BETTER_AUTH_URL: runtimeEnv.BETTER_AUTH_URL,
-    SESSION_MAX_AGE: runtimeEnv.SESSION_MAX_AGE,
-    SESSION_COOKIE_NAME: runtimeEnv.SESSION_COOKIE_NAME,
-    CSRF_SECRET: runtimeEnv.CSRF_SECRET,
-    RATE_LIMIT_MAX: runtimeEnv.RATE_LIMIT_MAX,
-    RATE_LIMIT_WINDOW: runtimeEnv.RATE_LIMIT_WINDOW,
+    BETTER_AUTH_SECRET: getEnv('BETTER_AUTH_SECRET'),
+    BETTER_AUTH_URL: getEnv('BETTER_AUTH_URL'),
+    SESSION_MAX_AGE: getEnv('SESSION_MAX_AGE'),
+    SESSION_COOKIE_NAME: getEnv('SESSION_COOKIE_NAME'),
+    CSRF_SECRET: getEnv('CSRF_SECRET'),
+    RATE_LIMIT_MAX: getEnv('RATE_LIMIT_MAX'),
+    RATE_LIMIT_WINDOW: getEnv('RATE_LIMIT_WINDOW'),
 
     // Email (runtime secrets)
-    EMAIL_PROVIDER: runtimeEnv.EMAIL_PROVIDER,
-    RESEND_API_KEY: runtimeEnv.RESEND_API_KEY,
-    RESEND_FROM_EMAIL: runtimeEnv.RESEND_FROM_EMAIL,
-    SENDGRID_API_KEY: runtimeEnv.SENDGRID_API_KEY,
-    SENDGRID_FROM_EMAIL: runtimeEnv.SENDGRID_FROM_EMAIL,
-    SMTP_HOST: runtimeEnv.SMTP_HOST,
-    SMTP_PORT: runtimeEnv.SMTP_PORT,
-    SMTP_USER: runtimeEnv.SMTP_USER,
-    SMTP_PASS: runtimeEnv.SMTP_PASS,
-    SMTP_SECURE: runtimeEnv.SMTP_SECURE !== 'false',
-    EMAIL_ENABLED: runtimeEnv.EMAIL_ENABLED !== 'false',
-    EMAIL_QUEUE_ENABLED: runtimeEnv.EMAIL_QUEUE_ENABLED === 'true',
+    EMAIL_PROVIDER: getEnv('EMAIL_PROVIDER'),
+    RESEND_API_KEY: getEnv('RESEND_API_KEY'),
+    RESEND_FROM_EMAIL: getEnv('RESEND_FROM_EMAIL'),
+    SENDGRID_API_KEY: getEnv('SENDGRID_API_KEY'),
+    SENDGRID_FROM_EMAIL: getEnv('SENDGRID_FROM_EMAIL'),
+    SMTP_HOST: getEnv('SMTP_HOST'),
+    SMTP_PORT: getEnv('SMTP_PORT'),
+    SMTP_USER: getEnv('SMTP_USER'),
+    SMTP_PASS: getEnv('SMTP_PASS'),
+    SMTP_SECURE: getEnv('SMTP_SECURE') !== 'false',
+    EMAIL_ENABLED: getEnv('EMAIL_ENABLED') !== 'false',
+    EMAIL_QUEUE_ENABLED: getEnv('EMAIL_QUEUE_ENABLED') === 'true',
 
     // Storage (runtime secrets + *)
-    R2_ACCOUNT_ID: runtimeEnv.R2_ACCOUNT_ID,
-    R2_ACCESS_KEY_ID: runtimeEnv.R2_ACCESS_KEY_ID,
-    R2_SECRET_ACCESS_KEY: runtimeEnv.R2_SECRET_ACCESS_KEY,
-    R2_BUCKET_NAME: runtimeEnv.R2_BUCKET_NAME,
-    R2_PUBLIC_URL: runtimeEnv.R2_PUBLIC_URL || process.env.R2_PUBLIC_URL,
-    MAX_FILE_SIZE: runtimeEnv.MAX_FILE_SIZE,
-    MAX_IMAGE_SIZE: runtimeEnv.MAX_IMAGE_SIZE,
-    ALLOWED_FILE_TYPES: runtimeEnv.ALLOWED_FILE_TYPES,
-    USER_STORAGE_QUOTA: runtimeEnv.USER_STORAGE_QUOTA,
+    R2_ACCOUNT_ID: getEnv('R2_ACCOUNT_ID'),
+    R2_ACCESS_KEY_ID: getEnv('R2_ACCESS_KEY_ID'),
+    R2_SECRET_ACCESS_KEY: getEnv('R2_SECRET_ACCESS_KEY'),
+    R2_BUCKET_NAME: getEnv('R2_BUCKET_NAME'),
+    R2_PUBLIC_URL: getEnv('R2_PUBLIC_URL') || process.env.R2_PUBLIC_URL,
+    MAX_FILE_SIZE: getEnv('MAX_FILE_SIZE'),
+    MAX_IMAGE_SIZE: getEnv('MAX_IMAGE_SIZE'),
+    ALLOWED_FILE_TYPES: getEnv('ALLOWED_FILE_TYPES'),
+    USER_STORAGE_QUOTA: getEnv('USER_STORAGE_QUOTA'),
 
     // Monitoring (runtime secrets + *)
-    LOG_LEVEL: runtimeEnv.LOG_LEVEL,
-    LOG_FORMAT: runtimeEnv.LOG_FORMAT,
-    LOG_SENSITIVE_DATA: runtimeEnv.LOG_SENSITIVE_DATA === 'true',
-    ANALYTICS_ENABLED: runtimeEnv.ANALYTICS_ENABLED !== 'false',
-    GOOGLE_ANALYTICS_ID: runtimeEnv.GOOGLE_ANALYTICS_ID,
-    SENTRY_DSN: runtimeEnv.SENTRY_DSN,
-    SENTRY_ENVIRONMENT: runtimeEnv.SENTRY_ENVIRONMENT,
-    SENTRY_TRACES_SAMPLE_RATE: runtimeEnv.SENTRY_TRACES_SAMPLE_RATE,
-    PERFORMANCE_MONITORING: runtimeEnv.PERFORMANCE_MONITORING === 'true',
-    METRICS_ENDPOINT: runtimeEnv.METRICS_ENDPOINT,
+    LOG_LEVEL: getEnv('LOG_LEVEL'),
+    LOG_FORMAT: getEnv('LOG_FORMAT'),
+    LOG_SENSITIVE_DATA: getEnv('LOG_SENSITIVE_DATA') === 'true',
+    ANALYTICS_ENABLED: getEnv('ANALYTICS_ENABLED') !== 'false',
+    GOOGLE_ANALYTICS_ID: getEnv('GOOGLE_ANALYTICS_ID'),
+    SENTRY_DSN: getEnv('SENTRY_DSN'),
+    SENTRY_ENVIRONMENT: getEnv('SENTRY_ENVIRONMENT'),
+    SENTRY_TRACES_SAMPLE_RATE: getEnv('SENTRY_TRACES_SAMPLE_RATE'),
+    PERFORMANCE_MONITORING: getEnv('PERFORMANCE_MONITORING') === 'true',
+    METRICS_ENDPOINT: getEnv('METRICS_ENDPOINT'),
 
     // Development (runtime config)
-    ENABLE_QUERY_LOGGING: runtimeEnv.ENABLE_QUERY_LOGGING === 'true',
-    ENABLE_DEBUG_MODE: runtimeEnv.ENABLE_DEBUG_MODE === 'true',
-    STORYBOOK_ENABLED: runtimeEnv.STORYBOOK_ENABLED === 'true',
-    DEVTOOLS_ENABLED: runtimeEnv.DEVTOOLS_ENABLED === 'true',
-    FAST_REFRESH: runtimeEnv.FAST_REFRESH !== 'false',
-    TURBO_MODE: runtimeEnv.TURBO_MODE !== 'false',
+    ENABLE_QUERY_LOGGING: getEnv('ENABLE_QUERY_LOGGING') === 'true',
+    ENABLE_DEBUG_MODE: getEnv('ENABLE_DEBUG_MODE') === 'true',
+    STORYBOOK_ENABLED: getEnv('STORYBOOK_ENABLED') === 'true',
+    DEVTOOLS_ENABLED: getEnv('DEVTOOLS_ENABLED') === 'true',
+    FAST_REFRESH: getEnv('FAST_REFRESH') !== 'false',
+    TURBO_MODE: getEnv('TURBO_MODE') !== 'false',
   };
 
   const result = completeConfigurationSchema.safeParse(env);

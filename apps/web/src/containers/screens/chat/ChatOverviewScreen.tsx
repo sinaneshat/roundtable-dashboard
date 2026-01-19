@@ -18,7 +18,7 @@ import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu'
 import { QuickStartSkeleton } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
-import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
+import type { ModelSelectionModalProps } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import {
@@ -77,6 +77,11 @@ const ChatQuickStart = dynamic(
 
 const ChatDeleteDialog = dynamic(
   () => import('@/components/chat/chat-delete-dialog').then(m => ({ default: m.ChatDeleteDialog })),
+  { ssr: false },
+);
+
+const ModelSelectionModal = dynamic<ModelSelectionModalProps>(
+  () => import('@/components/chat/model-selection-modal').then(m => ({ default: m.ModelSelectionModal })),
   { ssr: false },
 );
 

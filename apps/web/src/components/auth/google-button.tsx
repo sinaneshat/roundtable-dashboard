@@ -1,3 +1,5 @@
+'use client';
+
 import type { ButtonProps } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { useBoolean } from '@/hooks/utils';

@@ -1,11 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { ChatOverviewSkeleton } from '@/components/loading';
-import ChatOverviewScreen from '@/containers/screens/chat/ChatOverviewScreen';
+import { MainContentSkeleton } from '@/components/layouts/chat-layout-shell';
+import dynamic from '@/lib/utils/dynamic';
+
+// Dynamic import with ssr:false - shows skeleton during SSR and until component loads
+const DynamicChatOverviewScreen = dynamic(
+  () => import('@/containers/screens/chat/ChatOverviewScreen'),
+  { ssr: false, loading: () => <MainContentSkeleton /> },
+);
 
 export const Route = createFileRoute('/_protected/chat/')({
-  component: ChatOverviewScreen,
-  pendingComponent: ChatOverviewSkeleton,
+  component: ChatOverviewRoute,
   // Protected routes should not be indexed
   head: () => ({
     meta: [
@@ -15,3 +20,7 @@ export const Route = createFileRoute('/_protected/chat/')({
     ],
   }),
 });
+
+function ChatOverviewRoute() {
+  return <DynamicChatOverviewScreen />;
+}

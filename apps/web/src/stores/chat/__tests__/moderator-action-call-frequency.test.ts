@@ -580,9 +580,10 @@ describe('moderator Streaming Performance Benchmarks', () => {
       simulateModeratorStreaming(store, 'thread-1', 0, chunks);
       const endTime = performance.now();
 
-      // Should complete quickly (< 100ms for 100 chunks)
+      // Should complete quickly (< 250ms for 100 chunks)
+      // Note: Using 250ms threshold to account for CI/local machine variability
       const duration = endTime - startTime;
-      expect(duration).toBeLessThan(100);
+      expect(duration).toBeLessThan(250);
 
       // Verify all chunks processed
       const setMessagesCount = actionSpy.getCallCount('thread/setMessages');

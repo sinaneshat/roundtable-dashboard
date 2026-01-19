@@ -27,8 +27,8 @@ export function useApiKeysQuery(enabled = true) {
     queryFn: () => listApiKeysService(),
     staleTime: STALE_TIMES.apiKeys, // 5 minutes - API keys don't change frequently
     gcTime: GC_TIMES.STANDARD, // 5 minutes
-    refetchOnMount: 'always', // Always refetch when modal opens to ensure fresh data
     refetchOnWindowFocus: false,
+    refetchOnMount: false, // Use staleTime to control freshness, invalidate on mutation
     enabled: isAuthenticated && enabled,
     retry: false,
     throwOnError: false,

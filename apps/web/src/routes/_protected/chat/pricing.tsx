@@ -3,17 +3,18 @@ import { createFileRoute } from '@tanstack/react-router';
 import { ChatPageHeader } from '@/components/chat/chat-header';
 import { ChatPage } from '@/components/chat/chat-states';
 import { PricingContentSkeleton } from '@/components/pricing/pricing-content-skeleton';
-import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
-import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
-import { getProducts } from '@/server/products';
-import { getSubscriptions } from '@/server/subscriptions';
+import { productsQueryOptions, subscriptionsQueryOptions } from '@/lib/data/query-options';
+import dynamic from '@/lib/utils/dynamic';
 
 const pageTitle = 'Pricing & Plans - Roundtable';
 const pageDescription = 'Choose the perfect plan for your AI collaboration needs. Compare features, credits, and pricing for Roundtable - from free tier to enterprise.';
 
-function PricingLoadingSkeleton() {
+/**
+ * Pricing content skeleton - shown while PricingScreen loads
+ * Renders inside the layout shell (sidebar handled by ChatLayoutShell)
+ */
+function PricingMainSkeleton() {
   return (
     <ChatPage>
       <ChatPageHeader
@@ -25,30 +26,27 @@ function PricingLoadingSkeleton() {
   );
 }
 
+// Dynamic import with ssr:false - shows skeleton during SSR and until component loads
+const DynamicPricingScreen = dynamic(
+  () => import('@/containers/screens/chat/billing/PricingScreen'),
+  { ssr: false, loading: () => <PricingMainSkeleton /> },
+);
+
 export const Route = createFileRoute('/_protected/chat/pricing')({
   // SSR: Prefetch products and subscriptions for page load
+  // Uses shared queryOptions to ensure SSR/client cache key consistency
   loader: async ({ context }) => {
     const { queryClient } = context;
 
-    // Prefetch both products and subscriptions in parallel
-    // Products are needed for pricing display, subscriptions for current plan badge
+    // Prefetch both products and subscriptions in parallel using shared queryOptions
     await Promise.all([
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.products.list(),
-        queryFn: () => getProducts(),
-        staleTime: STALE_TIMES.products,
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.subscriptions.current(),
-        queryFn: () => getSubscriptions(),
-        staleTime: STALE_TIMES.subscriptions,
-      }),
+      queryClient.prefetchQuery(productsQueryOptions),
+      queryClient.prefetchQuery(subscriptionsQueryOptions),
     ]);
 
     return {};
   },
-  component: PricingScreen,
-  pendingComponent: PricingLoadingSkeleton,
+  component: PricingRoute,
   headers: () => ({
     'Cache-Control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
   }),
@@ -79,3 +77,7 @@ export const Route = createFileRoute('/_protected/chat/pricing')({
     };
   },
 });
+
+function PricingRoute() {
+  return <DynamicPricingScreen />;
+}

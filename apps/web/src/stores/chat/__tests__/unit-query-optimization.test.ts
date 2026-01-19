@@ -618,8 +618,10 @@ describe('stale Time Configuration', () => {
     expect(STALE_TIMES.publicThreadDetail).toBe(24 * 3600 * 1000);
   });
 
-  it('should always fetch fresh subscription data after plan changes', () => {
-    expect(STALE_TIMES.subscriptions).toBe(0);
+  it('should use 60s staleTime for subscriptions (SSR hydration requires non-zero)', () => {
+    // IMPORTANT: 0 would cause immediate refetch after SSR hydration (flash/flicker)
+    // Fresh data after plan changes is handled by invalidation, not staleTime=0
+    expect(STALE_TIMES.subscriptions).toBe(60 * 1000);
   });
 });
 

@@ -13,10 +13,10 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { LIMITS } from '@/constants';
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
+import { threadBySlugQueryOptions } from '@/lib/data/query-options';
 import { POLLING_INTERVALS, STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getPublicThreadService,
-  getThreadBySlugService,
   getThreadService,
   getThreadSlugStatusService,
   listPublicThreadSlugsService,
@@ -130,6 +130,10 @@ export function usePublicThreadSlugsQuery(enabled?: boolean) {
  * Hook to fetch a thread by slug for authenticated user
  * Protected endpoint - requires authentication
  *
+ * IMPORTANT: Uses shared threadBySlugQueryOptions for SSR/client cache consistency.
+ * This ensures the same queryFn (server function) is used for both prefetch and client query,
+ * preventing hydration mismatches and duplicate fetches.
+ *
  * @param slug - Thread slug
  * @param enabled - Optional control over whether to fetch (default: based on slug and auth)
  */
@@ -137,11 +141,8 @@ export function useThreadBySlugQuery(slug: string, enabled?: boolean) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.threads.bySlug(slug),
-    queryFn: () => getThreadBySlugService({ param: { slug } }),
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds
+    ...threadBySlugQueryOptions(slug),
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!slug),
-    retry: false,
     throwOnError: false,
   });
 }

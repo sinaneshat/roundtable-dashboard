@@ -166,7 +166,6 @@ export const MODEL_IDS = [
   'google/gemini-3-pro-preview',
   'x-ai/grok-3',
   'x-ai/grok-4',
-  'x-ai/grok-4.1',
   'anthropic/claude-sonnet-4',
   'anthropic/claude-sonnet-4.5',
   'anthropic/claude-opus-4.5',

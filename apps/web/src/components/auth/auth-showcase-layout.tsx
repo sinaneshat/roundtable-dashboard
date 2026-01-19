@@ -1,9 +1,11 @@
+'use client';
+
 import { Logo } from '@/components/logo';
 import { Card } from '@/components/ui/card';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { useTranslations } from '@/lib/i18n';
 
-import { LiveChatDemo } from './live-chat-demo';
+import { LiveChatDemoLazy } from './live-chat-demo-lazy';
 
 type AuthShowcaseLayoutProps = {
   children: React.ReactNode;
@@ -51,7 +53,7 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
 
       <div className="relative hidden lg:flex lg:flex-col p-6 max-h-svh">
         <Card className="flex-1 min-h-0 overflow-hidden py-0 bg-card backdrop-blur-sm border-border/50">
-          <LiveChatDemo />
+          <LiveChatDemoLazy />
         </Card>
       </div>
     </div>

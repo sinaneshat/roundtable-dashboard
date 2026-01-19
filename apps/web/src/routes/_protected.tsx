@@ -4,7 +4,7 @@ import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
 import { SidebarLoadingFallback } from '@/components/loading';
 import { ChatLayoutProviders, PreferencesStoreProvider } from '@/components/providers';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { Skeleton } from '@/components/ui/skeleton';
+import { QuickStartSkeleton, Skeleton, StickyInputSkeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/auth/client';
 import {
   modelsQueryOptions,
@@ -22,17 +22,35 @@ import { getSession } from '@/server/auth';
 function ProtectedLayoutSkeleton() {
   return (
     <SidebarProvider>
-      <SidebarLoadingFallback count={10} showFavorites={false} />
+      <SidebarLoadingFallback count={10} />
       <SidebarInset className="flex flex-col relative">
-        {/* Minimal header skeleton */}
+        {/* Header skeleton */}
         <header className="sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2">
           <div className="flex items-center gap-2 pt-4 px-5 md:px-6 lg:px-8 h-14 sm:h-16 w-full">
             <Skeleton className="size-8 rounded-lg" />
             <Skeleton className="h-5 w-28" />
           </div>
         </header>
-        {/* Content area placeholder */}
-        <div className="flex-1" />
+
+        {/* Main content skeleton - matches ChatOverviewScreen layout */}
+        <div className="flex-1 flex flex-col items-center justify-center px-4">
+          <div className="w-full max-w-2xl space-y-8">
+            {/* Logo/Welcome area */}
+            <div className="text-center space-y-4">
+              <div className="size-16 rounded-2xl bg-accent animate-pulse mx-auto" />
+              <div className="h-8 w-64 rounded-xl bg-accent animate-pulse mx-auto" />
+              <div className="h-5 w-96 max-w-full rounded-lg bg-accent/70 animate-pulse mx-auto" />
+            </div>
+
+            {/* Quick start suggestions skeleton */}
+            <div className="rounded-2xl bg-card/50 overflow-hidden">
+              <QuickStartSkeleton count={4} />
+            </div>
+
+            {/* Input area skeleton */}
+            <StickyInputSkeleton />
+          </div>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

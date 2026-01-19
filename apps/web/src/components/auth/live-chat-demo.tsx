@@ -1,3 +1,5 @@
+'use client';
+
 /* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect -- Animation demo requires setState in intervals/timeouts */
 import { MessageRoles, ModelIds, MODERATOR_NAME } from '@roundtable/shared';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -181,8 +183,8 @@ export function LiveChatDemo() {
   }, [isMounted, activeIdx, runAnimation]);
 
   return (
-    <div className="h-full min-h-0 overflow-hidden">
-      <ScrollArea className="h-full">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <ScrollArea className="flex-1">
         <div className="w-full px-6 py-6 space-y-14">
           <UserMessage text={DEMO_USER_MESSAGE} />
 

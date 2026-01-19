@@ -16,6 +16,7 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
 import { getModels } from '@/server/models';
+import { getProducts } from '@/server/products';
 import { getSidebarThreads } from '@/server/sidebar-threads';
 import { getSubscriptions } from '@/server/subscriptions';
 import { getThreadBySlug } from '@/server/thread';
@@ -45,20 +46,40 @@ export const modelsQueryOptions = queryOptions({
 });
 
 /**
+ * Products query options
+ *
+ * Used by:
+ * - pricing.tsx loader (prefetchQuery)
+ * - useProductsQuery hook (useQuery)
+ *
+ * Server function getProducts() works both server-side and client-side:
+ * - Server: Runs directly
+ * - Client: Makes RPC call to server function
+ */
+export const productsQueryOptions = queryOptions({
+  queryKey: queryKeys.products.list(),
+  queryFn: () => getProducts(),
+  staleTime: STALE_TIMES.products,
+  refetchOnWindowFocus: false,
+  refetchOnMount: false,
+  retry: 1,
+});
+
+/**
  * Subscriptions query options
  *
  * Used by:
  * - _protected.tsx loader (ensureQueryData)
+ * - pricing.tsx loader (prefetchQuery)
  * - useSubscriptionQuery hook (useQuery)
  *
- * IMPORTANT: staleTime is set to 60s for hydration to work.
- * Without this, data is immediately stale and triggers refetch.
- * Manual invalidation handles subscription state changes.
+ * IMPORTANT: Uses STALE_TIMES.subscriptions for SSR/client consistency.
+ * Manual invalidation handles subscription state changes after plan updates.
  */
 export const subscriptionsQueryOptions = queryOptions({
   queryKey: queryKeys.subscriptions.current(),
   queryFn: () => getSubscriptions(),
-  staleTime: 60 * 1000, // 1 minute - prevent immediate refetch on hydration
+  staleTime: STALE_TIMES.subscriptions, // Use centralized stale time for consistency
   refetchOnWindowFocus: false,
   refetchOnMount: false,
   retry: 1,

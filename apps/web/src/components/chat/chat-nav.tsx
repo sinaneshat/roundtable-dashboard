@@ -82,6 +82,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
       previousSlug: thread.previousSlug ?? null,
       createdAt: typeof thread.createdAt === 'string' ? thread.createdAt : new Date(thread.createdAt).toISOString(),
       updatedAt: typeof thread.updatedAt === 'string' ? thread.updatedAt : new Date(thread.updatedAt).toISOString(),
+      messages: [],
       isFavorite: thread.isFavorite ?? false,
       isPublic: thread.isPublic ?? false,
     }));

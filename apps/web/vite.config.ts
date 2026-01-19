@@ -36,6 +36,9 @@ function crossPackageResolver(): Plugin {
   };
 }
 
+// Determine if production build (used by deploy scripts with --env production)
+const isProd = process.env.CF_PAGES_BRANCH === 'main' || process.env.VITE_WEBAPP_ENV === 'prod';
+
 export default defineConfig({
   plugins: [
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
@@ -94,6 +97,8 @@ export default defineConfig({
     noExternal: ['react', 'react-dom'],
   },
   build: {
+    // Source maps only for local/preview, not production
+    sourcemap: !isProd,
     rollupOptions: {
       external: [
         // Exclude Node.js built-ins that won't be available in Cloudflare Workers
@@ -157,4 +162,10 @@ export default defineConfig({
   define: {
     'process.env': {},
   },
+  // Strip console.* and debugger in production builds
+  esbuild: isProd
+    ? {
+        drop: ['console', 'debugger'],
+      }
+    : undefined,
 });

@@ -2,10 +2,13 @@
  * Dynamic Import Utility
  *
  * React.lazy wrapper with Suspense for code-splitting components.
+ * Supports SSR opt-out for client-only components.
  */
 
+'use client';
+
 import type { ComponentType, ReactNode } from 'react';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 type DynamicOptions = {
   loading?: () => ReactNode;
@@ -28,9 +31,10 @@ type DefaultExportModule<P> = { default: ComponentType<P> };
  * );
  *
  * @example
- * // With loading state
+ * // With loading state and SSR disabled
  * const DynamicComponent = dynamic(() => import('./MyComponent'), {
- *   loading: () => <p>Loading...</p>,
+ *   loading: () => <Skeleton />,
+ *   ssr: false, // Only load on client
  * });
  */
 export default function dynamic<P extends object>(
@@ -42,6 +46,16 @@ export default function dynamic<P extends object>(
 
   const DynamicComponent = (props: P) => {
     const fallback = options.loading?.() ?? null;
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+      setIsClient(true);
+    }, []);
+
+    // When ssr: false, show fallback during SSR and until client hydrates
+    if (options.ssr === false && !isClient) {
+      return <>{fallback}</>;
+    }
 
     return (
       <Suspense fallback={fallback}>

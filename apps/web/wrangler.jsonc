@@ -4,6 +4,7 @@
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
   "compatibility_date": "2025-01-15",
   "compatibility_flags": ["nodejs_compat"],
+  "upload_source_maps": true,
   "main": "@tanstack/react-start/server-entry",
   "assets": {
     "directory": "public",
@@ -30,6 +31,7 @@
   "env": {
     "preview": {
       "name": "roundtable-web-preview",
+      "upload_source_maps": true,
       "observability": {
         "enabled": true,
         "head_sampling_rate": 0.1
@@ -54,6 +56,7 @@
     },
     "production": {
       "name": "roundtable-web",
+      "upload_source_maps": false,
       "observability": {
         "enabled": true
       },

@@ -33,7 +33,7 @@ export const STALE_TIMES = {
   // Products & Billing
   // ============================================================================
   products: 24 * 3600 * 1000, // 24 hours - matches server unstable_cache duration
-  subscriptions: 0, // ⚠️ NO CACHE - subscription status must always be fresh after plan changes
+  subscriptions: 60 * 1000, // 1 minute - matches subscriptionsQueryOptions for SSR hydration
 
   // ============================================================================
   // AI Models (Aggressive caching: HTTP + KV + client cache)

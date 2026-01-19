@@ -22,7 +22,7 @@ export {
   useThreadsQuery,
 } from './chat/threads';
 export { useModelsQuery } from './models';
-export { useProductQuery, useProductsQuery } from './products';
+export { useProductsQuery } from './products';
 export {
   useProjectAttachmentsQuery,
   useProjectContextQuery,

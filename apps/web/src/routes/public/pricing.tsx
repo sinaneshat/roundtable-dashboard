@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
 import { PublicChatLayout } from '@/components/layouts/public-chat-layout';
+import { PricingContentSkeleton } from '@/components/pricing';
 import { PublicPricingScreen } from '@/containers/screens/chat/billing/PublicPricingScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
@@ -13,9 +14,18 @@ const pricingSearchSchema = z.object({
   priceId: z.string().optional(),
 });
 
+function PublicPricingLoadingSkeleton() {
+  return (
+    <PublicChatLayout>
+      <PricingContentSkeleton />
+    </PublicChatLayout>
+  );
+}
+
 export const Route = createFileRoute('/public/pricing')({
   validateSearch: pricingSearchSchema,
   component: PublicPricingPage,
+  pendingComponent: PublicPricingLoadingSkeleton,
   // Enable preloading for faster navigation
   preload: true,
   head: () => {

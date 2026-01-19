@@ -884,6 +884,161 @@ describe('query Deduplication', () => {
 });
 
 // ============================================================================
+// Test Suite: Thread Cache Pre-population - bySlug Key Fix
+// ============================================================================
+
+describe('thread Cache Pre-population - bySlug Key Fix', () => {
+  let queryClient: QueryClient;
+  let tracker: QueryBehaviorTracker;
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+      },
+    });
+    tracker = createQueryBehaviorTracker();
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    queryClient.clear();
+    consoleLogSpy.mockRestore();
+  });
+
+  it('should pre-populate BOTH detail(threadId) and bySlug(slug) caches', async () => {
+    const threadId = 'thread_123';
+    const slug = 'my-test-thread';
+    const detailKey = queryKeys.threads.detail(threadId);
+    const bySlugKey = queryKeys.threads.bySlug(slug);
+
+    // Simulate prepopulateQueryCache behavior (same data in both keys)
+    const threadData = {
+      success: true,
+      data: {
+        thread: { id: threadId, title: 'Test Thread', slug },
+        participants: [],
+        messages: [],
+        user: { name: 'Test User', image: null },
+      },
+      meta: { requestId: 'prefetch', timestamp: new Date().toISOString(), version: 'v1' },
+    };
+
+    // Pre-populate both caches (like flow-controller does)
+    queryClient.setQueryData(detailKey, threadData);
+    queryClient.setQueryData(bySlugKey, threadData);
+
+    // ASSERTIONS: Both caches should be populated
+    const detailData = queryClient.getQueryData(detailKey);
+    const bySlugData = queryClient.getQueryData(bySlugKey);
+
+    expect(detailData).toBeDefined();
+    expect(bySlugData).toBeDefined();
+    expect(detailData).toEqual(bySlugData); // Same data in both
+  });
+
+  it('should NOT fetch when navigating to /chat/{slug} if bySlug cache is pre-populated', async () => {
+    const threadId = 'thread_123';
+    const slug = 'my-test-thread';
+    const bySlugKey = queryKeys.threads.bySlug(slug);
+
+    // Pre-populate bySlug cache (like flow-controller does after AI title ready)
+    const threadData = {
+      success: true,
+      data: { thread: { id: threadId, title: 'Test Thread', slug }, participants: [], messages: [] },
+    };
+    queryClient.setQueryData(bySlugKey, threadData);
+
+    // Simulate $slug.tsx route loader accessing cache
+    const cachedData = queryClient.getQueryData(bySlugKey);
+    if (cachedData) {
+      tracker.recordFetch(bySlugKey, true); // Cache hit
+    } else {
+      tracker.recordFetch(bySlugKey, false); // Would fetch from server
+    }
+
+    // ASSERTIONS
+    expect(cachedData).toBeDefined();
+    expect(tracker.getCacheMissCount('slug')).toBe(0); // NO server fetch
+    expect(tracker.getCacheHitCount('slug')).toBe(1); // Used pre-populated cache
+  });
+
+  it('should verify bySlug query key is different from detail query key', () => {
+    const threadId = 'thread_123';
+    const slug = 'my-test-thread';
+
+    const detailKey = queryKeys.threads.detail(threadId);
+    const bySlugKey = queryKeys.threads.bySlug(slug);
+
+    // These must be different keys for correct cache isolation
+    expect(detailKey).not.toEqual(bySlugKey);
+    expect(detailKey).toEqual(['threads', 'detail', threadId]);
+    expect(bySlugKey).toEqual(['threads', 'slug', slug]);
+  });
+
+  it('should pre-populate empty pre-searches cache even when web search is disabled', async () => {
+    const threadId = 'thread_123';
+    const preSearchKey = queryKeys.threads.preSearches(threadId);
+
+    // Simulate prepopulateQueryCache with no pre-searches (web search disabled)
+    // ✅ FIX: Should always pre-populate, even when empty
+    const emptyPreSearchData = {
+      success: true,
+      data: { items: [] },
+      meta: { requestId: 'prefetch', timestamp: new Date().toISOString(), version: 'v1' },
+    };
+
+    queryClient.setQueryData(preSearchKey, emptyPreSearchData);
+
+    // ASSERTIONS: Cache should be populated with empty items
+    const cachedData = queryClient.getQueryData<typeof emptyPreSearchData>(preSearchKey);
+    expect(cachedData).toBeDefined();
+    expect(cachedData?.data?.items).toEqual([]);
+    expect(cachedData?.success).toBe(true);
+  });
+
+  it('should prevent unnecessary GET /thread/{slug} request on navigation', async () => {
+    const threadId = 'thread_123';
+    const slug = 'ai-generated-slug';
+    const bySlugKey = queryKeys.threads.bySlug(slug);
+
+    // Step 1: Pre-populate cache (flow-controller does this before navigation)
+    const threadData = {
+      success: true,
+      data: {
+        thread: { id: threadId, title: 'AI Generated Title', slug, isAiGeneratedTitle: true },
+        participants: [{ id: 'p1', modelId: 'gpt-4' }],
+        messages: [{ id: 'm1', content: 'Test message' }],
+      },
+    };
+    queryClient.setQueryData(bySlugKey, threadData);
+
+    // Step 2: Simulate route loader ensureQueryData (like $slug.tsx does)
+    // This should use cache, not fetch
+    const state = queryClient.getQueryState(bySlugKey);
+    const hasData = !!state?.data;
+
+    if (hasData) {
+      tracker.recordFetch(bySlugKey, true); // Cache hit - no fetch needed
+    } else {
+      tracker.recordFetch(bySlugKey, false); // Would trigger server fetch
+    }
+
+    // Step 3: Simulate useQuery (component level) - should also use cache
+    const componentData = queryClient.getQueryData(bySlugKey);
+    if (componentData) {
+      tracker.recordFetch(bySlugKey, true); // Cache hit
+    }
+
+    // ASSERTIONS
+    expect(tracker.getCacheMissCount('slug')).toBe(0); // NO server fetches
+    expect(tracker.getCacheHitCount('slug')).toBe(2); // Both loader and component used cache
+    expect(hasData).toBe(true);
+  });
+});
+
+// ============================================================================
 // Test Suite: Invalidation Patterns - Targeted, Not Broad
 // ============================================================================
 

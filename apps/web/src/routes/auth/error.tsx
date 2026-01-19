@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
+import { AuthLoadingSkeleton } from '@/components/loading';
 import AuthErrorScreen from '@/containers/screens/errors/AuthErrorScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
@@ -17,6 +18,7 @@ const authErrorSearchSchema = z.object({
 export const Route = createFileRoute('/auth/error')({
   validateSearch: authErrorSearchSchema,
   component: AuthErrorPage,
+  pendingComponent: AuthLoadingSkeleton,
   head: () => {
     const siteUrl = getAppBaseUrl();
     return {
