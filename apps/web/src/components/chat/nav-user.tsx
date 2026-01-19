@@ -27,6 +27,7 @@ import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls
 import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
 import dynamic from '@/lib/utils/dynamic';
+import { clearCachedSession } from '@/routes/_protected';
 import type { Subscription } from '@/types/billing';
 
 const CancelSubscriptionDialog = dynamic<CancelSubscriptionDialogProps>(
@@ -86,6 +87,8 @@ export function NavUser({ initialSession }: NavUserProps) {
     (sub: Subscription) => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
   const handleSignOut = async () => {
+    // Clear cached session before signing out to ensure fresh auth check on next login
+    clearCachedSession();
     await signOut({
       fetchOptions: {
         onSuccess: () => {
@@ -134,6 +137,8 @@ export function NavUser({ initialSession }: NavUserProps) {
       await deleteUser({
         callbackURL: `${appBaseUrl}/auth/sign-in`,
       });
+      // Clear cached session before signing out
+      clearCachedSession();
       await signOut({
         fetchOptions: {
           onSuccess: () => {

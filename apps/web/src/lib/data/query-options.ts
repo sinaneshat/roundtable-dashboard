@@ -18,6 +18,7 @@ import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { getModels } from '@/server/models';
 import { getSidebarThreads } from '@/server/sidebar-threads';
 import { getSubscriptions } from '@/server/subscriptions';
+import { getThreadBySlug } from '@/server/thread';
 import { getUsageStats } from '@/server/usage-stats';
 
 import { queryKeys } from './query-keys';
@@ -107,3 +108,29 @@ export const sidebarThreadsQueryOptions = infiniteQueryOptions({
   refetchOnWindowFocus: false,
   refetchOnMount: false,
 });
+
+/**
+ * Thread by slug query options factory
+ *
+ * Used by:
+ * - _protected/chat/$slug.tsx loader (ensureQueryData)
+ * - useThreadBySlugQuery hook (useQuery)
+ *
+ * Server function getThreadBySlug() works both server-side and client-side:
+ * - Server: Runs directly, forwards cookies
+ * - Client: Makes RPC call to server function
+ *
+ * IMPORTANT: Using server function ensures consistent behavior between
+ * SSR prefetch and client-side hydration. Direct API calls can cause
+ * hydration mismatches due to different cookie handling.
+ */
+export function threadBySlugQueryOptions(slug: string) {
+  return queryOptions({
+    queryKey: queryKeys.threads.bySlug(slug),
+    queryFn: () => getThreadBySlug({ data: slug }),
+    staleTime: STALE_TIMES.threadDetail,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: false,
+  });
+}

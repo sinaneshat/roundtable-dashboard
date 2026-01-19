@@ -20,7 +20,6 @@
  */
 
 import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes, TimelineItemTypes } from '@roundtable/shared';
-import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
@@ -31,6 +30,7 @@ import {
   getMetadataRoundNumber,
   isMetadataModerator,
   isOptimisticMessage,
+  renderHook,
 } from '@/lib/testing';
 import { getParticipantModelIds } from '@/lib/utils';
 import type { ApiMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';

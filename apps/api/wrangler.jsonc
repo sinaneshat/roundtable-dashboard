@@ -7,6 +7,13 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "minify": true,
   "upload_source_maps": false,
+  "rules": [
+    {
+      "type": "CompiledWasm",
+      "globs": ["**/*.wasm"],
+      "fallthrough": true
+    }
+  ],
   "dev": {
     "port": 8787
   },

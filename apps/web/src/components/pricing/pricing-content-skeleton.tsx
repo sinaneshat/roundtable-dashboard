@@ -4,9 +4,9 @@ export function PricingContentSkeleton() {
   return (
     <div className="w-full max-w-md mx-auto px-4 py-8">
       {/* Outer border wrapper - matches PricingCard */}
-      <div className="relative h-full rounded-2xl border-2 border-white/20 dark:border-white/10 p-2 md:rounded-3xl md:p-3 shadow-lg">
+      <div className="relative h-full rounded-2xl border-2 border-border/30 p-2 md:rounded-3xl md:p-3 shadow-lg">
         {/* Inner card - matches PricingCard inner container */}
-        <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-white/20 dark:border-white/10 bg-background/50 backdrop-blur-sm p-6 dark:shadow-[0px_0px_27px_0px_#2D2D2D]">
+        <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-border/30 bg-background/50 backdrop-blur-sm p-6 dark:shadow-[0px_0px_27px_0px_#2D2D2D]">
           <div className="relative flex flex-1 flex-col gap-6">
             {/* Plan name */}
             <div className="text-center">

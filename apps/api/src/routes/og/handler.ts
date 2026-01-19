@@ -4,6 +4,9 @@
  * Generates dynamic Open Graph images for chat threads using satori + @cf-wasm/resvg.
  * Uses WASM-based image processing for Cloudflare Workers compatibility.
  * Returns PNG images with proper cache headers for CDN optimization.
+ *
+ * Assets (logo, fonts, mode icons) are embedded at build time via og-assets.generated.ts
+ * to avoid network requests and ensure reliability.
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
@@ -12,6 +15,11 @@ import { and, eq } from 'drizzle-orm';
 
 import { createHandler } from '@/core';
 import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
+import {
+  getLogoBase64Sync,
+  getModeIconBase64Sync,
+  getOGFontsSync,
+} from '@/lib/ui/og-assets.generated';
 import type { ApiEnv } from '@/types';
 
 import type { ogImageRoute } from './route';
@@ -22,15 +30,15 @@ const OG_HEIGHT = 630;
 
 // Brand constants (subset needed for OG images)
 const BRAND = {
-  name: 'Roundtable',
+  name: 'Roundtable.now',
   tagline: 'Multiple AI Models, One Conversation',
 } as const;
 
-// OG image colors
+// OG image colors (matching roundtable.now)
 const OG_COLORS = {
-  background: '#000000',
+  background: '#0a0a0a',
   backgroundGradientStart: '#0a0a0a',
-  backgroundGradientEnd: '#1a1a1a',
+  backgroundGradientEnd: '#141414',
   primary: '#2563eb',
   textPrimary: '#ffffff',
   textSecondary: '#a1a1aa',
@@ -54,22 +62,14 @@ function getModeColor(mode: ChatMode): string {
 }
 
 /**
- * Fetch Inter font for satori
+ * Get embedded fonts for satori (no network fetch required)
  */
-async function getInterFont() {
-  try {
-    const response = await fetch('https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff');
-    if (!response.ok) {
-      throw new Error('Failed to fetch font');
-    }
-    return response.arrayBuffer();
-  } catch {
-    return null;
-  }
+function getEmbeddedFonts() {
+  return getOGFontsSync();
 }
 
 /**
- * Generate OG image SVG using satori
+ * Generate OG image SVG using satori with embedded assets
  */
 async function generateOgImage(params: {
   title: string;
@@ -83,8 +83,10 @@ async function generateOgImage(params: {
   // Lazy load satori to reduce worker startup CPU time
   const satori = (await import('satori')).default;
 
-  // Load Inter font
-  const interFont = await getInterFont();
+  // Get embedded fonts and assets (no network required)
+  const fonts = getEmbeddedFonts();
+  const logoBase64 = getLogoBase64Sync();
+  const modeIconBase64 = mode ? getModeIconBase64Sync(mode) : null;
 
   // Generate SVG using satori
   const svg = await satori(
@@ -100,11 +102,11 @@ async function generateOgImage(params: {
           backgroundColor: OG_COLORS.background,
           backgroundImage: `linear-gradient(135deg, ${OG_COLORS.backgroundGradientStart} 0%, ${OG_COLORS.backgroundGradientEnd} 100%)`,
           padding: '60px',
-          fontFamily: 'Inter, sans-serif',
+          fontFamily: 'Geist, Inter, sans-serif',
           position: 'relative',
         },
         children: [
-          // Header with brand
+          // Header with logo
           {
             type: 'div',
             props: {
@@ -112,21 +114,35 @@ async function generateOgImage(params: {
                 display: 'flex',
                 alignItems: 'center',
                 marginBottom: '40px',
+                gap: '16px',
               },
               children: [
+                // Logo image (circular to match roundtable.now)
+                logoBase64 && {
+                  type: 'img',
+                  props: {
+                    src: logoBase64,
+                    width: 56,
+                    height: 56,
+                    style: {
+                      borderRadius: '50%',
+                    },
+                  },
+                },
+                // Brand name
                 {
                   type: 'div',
                   props: {
                     style: {
-                      fontSize: '32px',
-                      fontWeight: 700,
+                      fontSize: '28px',
+                      fontWeight: 600,
                       color: OG_COLORS.textPrimary,
-                      letterSpacing: '-0.02em',
+                      letterSpacing: '-0.01em',
                     },
                     children: BRAND.name,
                   },
                 },
-              ],
+              ].filter(Boolean),
             },
           },
 
@@ -141,7 +157,7 @@ async function generateOgImage(params: {
                 justifyContent: 'center',
               },
               children: [
-                // Mode badge
+                // Mode badge with icon
                 mode && {
                   type: 'div',
                   props: {
@@ -149,8 +165,19 @@ async function generateOgImage(params: {
                       display: 'flex',
                       alignItems: 'center',
                       marginBottom: '24px',
+                      gap: '12px',
                     },
                     children: [
+                      // Mode icon
+                      modeIconBase64 && {
+                        type: 'img',
+                        props: {
+                          src: modeIconBase64,
+                          width: 28,
+                          height: 28,
+                        },
+                      },
+                      // Mode text
                       {
                         type: 'div',
                         props: {
@@ -163,7 +190,7 @@ async function generateOgImage(params: {
                           children: mode,
                         },
                       },
-                    ],
+                    ].filter(Boolean),
                   },
                 },
 
@@ -310,34 +337,7 @@ async function generateOgImage(params: {
     {
       width: OG_WIDTH,
       height: OG_HEIGHT,
-      fonts: interFont
-        ? [
-            {
-              name: 'Inter',
-              data: interFont,
-              weight: 400,
-              style: 'normal',
-            },
-            {
-              name: 'Inter',
-              data: interFont,
-              weight: 500,
-              style: 'normal',
-            },
-            {
-              name: 'Inter',
-              data: interFont,
-              weight: 600,
-              style: 'normal',
-            },
-            {
-              name: 'Inter',
-              data: interFont,
-              weight: 700,
-              style: 'normal',
-            },
-          ]
-        : [],
+      fonts,
     },
   );
 
@@ -347,18 +347,28 @@ async function generateOgImage(params: {
 /**
  * Convert SVG to PNG using @cf-wasm/resvg (Workers-compatible WASM)
  * Sharp is not compatible with Cloudflare Workers due to native Node.js dependencies
+ *
+ * IMPORTANT: Must use /workerd subpath for Cloudflare Workers compatibility
+ * @see https://github.com/fineshopdesign/cf-wasm/tree/main/packages/resvg#usage
+ *
+ * Returns null if WASM is not available (local dev) - caller should fall back to SVG
  */
-async function svgToPng(svg: string): Promise<Uint8Array> {
-  // Lazy load resvg for code splitting
-  const { Resvg } = await import('@cf-wasm/resvg');
-  const resvg = new Resvg(svg, {
-    fitTo: {
-      mode: 'width',
-      value: OG_WIDTH,
-    },
-  });
-  const pngData = resvg.render();
-  return pngData.asPng();
+async function svgToPng(svg: string): Promise<Uint8Array | null> {
+  try {
+    // Lazy load resvg - MUST use /workerd subpath for Workers
+    const { Resvg } = await import('@cf-wasm/resvg/workerd');
+    const resvg = new Resvg(svg, {
+      fitTo: {
+        mode: 'width',
+        value: OG_WIDTH,
+      },
+    });
+    const pngData = resvg.render();
+    return pngData.asPng();
+  } catch {
+    // WASM fails in local development - return null to trigger SVG fallback
+    return null;
+  }
 }
 
 /**
@@ -436,7 +446,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
         }
       }
 
-      // Generate OG image
+      // Generate OG image SVG
       const svg = await generateOgImage({
         title,
         mode,
@@ -444,13 +454,36 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
         messageCount,
       });
 
-      // Convert to PNG using Workers-compatible WASM
+      // Skip WASM in local dev where it's not supported
+      const isLocalDev = c.env.WEBAPP_ENV === 'local';
+      if (isLocalDev) {
+        return new Response(svg, {
+          headers: {
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'no-cache',
+            'X-OG-Generated': 'true',
+            'X-OG-Format': 'svg-local-dev',
+          },
+        });
+      }
+
+      // Production: convert to PNG
       const png = await svgToPng(svg);
 
+      // If PNG conversion failed, serve SVG as fallback
+      if (png === null) {
+        return new Response(svg, {
+          headers: {
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'no-cache',
+            'X-OG-Generated': 'true',
+            'X-OG-Format': 'svg-fallback',
+          },
+        });
+      }
+
       // Return PNG with CDN cache headers
-      // Create a fresh ArrayBuffer copy to satisfy TypeScript's strict typing
-      const pngBuffer = png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer;
-      return new Response(pngBuffer, {
+      return new Response(new Uint8Array(png).buffer, {
         headers: {
           'Content-Type': 'image/png',
           'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
@@ -458,25 +491,20 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
         },
       });
     } catch (error) {
-      console.error('[OG-IMAGE] Generation failed:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[OG-IMAGE] Generation failed:', errorMessage);
 
-      // Return minimal 1x1 transparent PNG on error (base64 decoded using Web API)
-      const base64Png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      const binaryString = atob(base64Png);
-      const transparentPng = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        transparentPng[i] = binaryString.charCodeAt(i);
-      }
+      // Return minimal 1x1 fully transparent PNG on error
+      const transparentPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg==';
+      const binaryString = atob(transparentPngBase64);
+      const transparentPng = Uint8Array.from(binaryString, char => char.charCodeAt(0));
 
-      const errorBuffer = transparentPng.buffer.slice(
-        transparentPng.byteOffset,
-        transparentPng.byteOffset + transparentPng.byteLength,
-      ) as ArrayBuffer;
-      return new Response(errorBuffer, {
+      return new Response(transparentPng.buffer, {
         headers: {
           'Content-Type': 'image/png',
-          'Cache-Control': 'public, max-age=60',
+          'Cache-Control': 'no-cache',
           'X-OG-Error': 'true',
+          'X-OG-Error-Message': encodeURIComponent(errorMessage.slice(0, 100)),
         },
       });
     }

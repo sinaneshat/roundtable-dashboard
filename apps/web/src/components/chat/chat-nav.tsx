@@ -27,7 +27,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { useTogglePublicMutation } from '@/hooks/mutations';
 import { useSidebarThreadsQuery, useThreadQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';

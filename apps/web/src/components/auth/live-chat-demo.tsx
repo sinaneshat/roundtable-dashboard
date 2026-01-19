@@ -6,7 +6,7 @@ import { Streamdown } from 'streamdown';
 import { ParticipantHeader } from '@/components/chat/participant-header';
 import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { TYPING_CHARS_PER_FRAME, TYPING_FRAME_INTERVAL } from '@/lib/ui/animations';
 import { cn } from '@/lib/ui/cn';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';

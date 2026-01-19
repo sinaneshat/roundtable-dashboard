@@ -566,6 +566,7 @@
     "shareDialog": {
       "copyLinkLabel": "Copy link",
       "generatingPreview": "Generating preview...",
+      "previewUnavailable": "Preview unavailable",
       "publicStatus": "Public"
     },
     "shareThread": "Share Thread",

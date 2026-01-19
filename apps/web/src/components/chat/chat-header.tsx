@@ -1,6 +1,6 @@
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
-import React from 'react';
+import { memo, useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { Icons } from '@/components/icons';
@@ -23,6 +23,7 @@ import { useThreadQuery } from '@/hooks/queries';
 import { useCurrentPathname } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
+import { useNavigationReset } from '@/stores/chat';
 
 import { ChatScrollButton } from './chat-scroll-button';
 import { ChatSection } from './chat-states';
@@ -66,11 +67,25 @@ function NavigationHeaderComponent({
     })),
   );
   const context = useThreadHeaderOptional();
+  const navigate = useNavigate();
+  const handleNavigationReset = useNavigationReset();
+
+  // Handle breadcrumb click to /chat - resets store before navigation
+  const handleBreadcrumbClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    handleNavigationReset();
+    navigate({ to: '/chat' });
+  }, [handleNavigationReset, navigate]);
 
   const isStaticRoute = pathname ? pathname in BREADCRUMB_MAP : false;
   const hasActiveThread = pathname === '/chat' && !showInitialUI && (createdThreadId || thread);
   const isOnThreadPage = pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute;
-  const { data: cachedThreadData } = useThreadQuery(storeThreadId ?? '', !!storeThreadId && isOnThreadPage);
+  // Skip fetching when we have thread data in the store from an active chat session
+  // !showInitialUI means we're in an active chat - data is already in the Zustand store
+  // This prevents unnecessary API calls when URL is replaced via history.replaceState()
+  const hasThreadInStore = !showInitialUI && !!thread;
+  const shouldFetchThread = !!storeThreadId && isOnThreadPage && !hasThreadInStore;
+  const { data: cachedThreadData } = useThreadQuery(storeThreadId ?? '', shouldFetchThread);
 
   const effectiveThreadTitle = cachedThreadData?.success
     ? cachedThreadData.data?.thread?.title
@@ -131,6 +146,7 @@ function NavigationHeaderComponent({
                   <BreadcrumbLink asChild>
                     <Link
                       to="/chat"
+                      onClick={handleBreadcrumbClick}
                       className="text-muted-foreground hover:text-foreground transition-colors text-base"
                     >
                       {BRAND.displayName}
@@ -162,7 +178,7 @@ function NavigationHeaderComponent({
     </header>
   );
 }
-export const NavigationHeader = React.memo(NavigationHeaderComponent);
+export const NavigationHeader = memo(NavigationHeaderComponent);
 function MinimalHeaderComponent({ className }: { className?: string } = {}) {
   const t = useTranslations();
   const sidebarContext = useSidebarOptional();
@@ -216,7 +232,7 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
     </header>
   );
 }
-export const MinimalHeader = React.memo(MinimalHeaderComponent);
+export const MinimalHeader = memo(MinimalHeaderComponent);
 type PageHeaderProps = {
   title: string;
   description?: string;

@@ -178,8 +178,11 @@ export async function getThreadRoundChangelogService(data: GetThreadRoundChangel
 // Service Functions - Stream Resumption
 // ============================================================================
 
-export async function getThreadStreamResumptionStateService(data: GetThreadStreamResumptionStateRequest) {
-  const client = createApiClient();
+export async function getThreadStreamResumptionStateService(
+  data: GetThreadStreamResumptionStateRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
   return parseResponse(client.chat.threads[':threadId']['stream-status'].$get(data));
 }
 
@@ -371,14 +374,11 @@ export {
 export type ParticipantMessageMetadata = DbAssistantMessageMetadata;
 
 // ============================================================================
-// Safe Parse Helper for Changelog (Compatibility)
+// API Message Types
 // ============================================================================
-// Removed: safeParseChangelogData() and ChangelogDataValidated type
-// Use DbChangelogData directly - API already validates changelog data
 
 /**
  * ApiMessageMetadata - RPC-inferred metadata type from API response
- * Kept for backwards compatibility with components using API-derived types
  */
 export type ApiMessageMetadata = NonNullable<ApiMessage['metadata']>;
 

@@ -199,6 +199,14 @@ export function ShareDialog({
                         aspectRatio="1200/630"
                         unoptimized
                         containerClassName="rounded-xl overflow-hidden"
+                        fallback={(
+                          <div className="absolute inset-0 flex items-center justify-center bg-muted/30 text-muted-foreground">
+                            <div className="flex flex-col items-center gap-2">
+                              <Icons.image className="size-8 opacity-50" />
+                              <span className="text-sm">{t('chat.shareDialog.previewUnavailable')}</span>
+                            </div>
+                          </div>
+                        )}
                       />
                     )}
               </div>

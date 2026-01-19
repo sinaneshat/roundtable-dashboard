@@ -48,13 +48,23 @@ type SpeechRecognitionWindow = {
   webkitAudioContext?: new () => AudioContext;
 };
 
+/**
+ * Type-safe access to vendor-prefixed Speech Recognition and Audio Context APIs
+ *
+ * Type assertion rationale:
+ * - SpeechRecognition/webkitSpeechRecognition are vendor-prefixed browser APIs
+ * - Not included in standard TypeScript lib.dom.d.ts Window interface
+ * - Custom SpeechRecognitionWindow type defines these optional experimental APIs
+ * - Runtime safety: All properties accessed are optional with fallback handling
+ * - Structural compatibility: Window object contains these properties in supporting browsers
+ */
 function getWindowSpeechAPIs(): SpeechRecognitionWindow {
   if (typeof window === 'undefined') {
     return {};
   }
-  // BROWSER API ACCESS: SpeechRecognition/webkitSpeechRecognition are vendor-prefixed
-  // browser APIs not in standard TypeScript Window type definitions.
-  const win = window as unknown as SpeechRecognitionWindow;
+
+  // Type-safe access to vendor-prefixed experimental Web APIs
+  const win = window as typeof window & SpeechRecognitionWindow;
   return {
     SpeechRecognition: win.SpeechRecognition,
     webkitSpeechRecognition: win.webkitSpeechRecognition,

@@ -1,19 +1,14 @@
 /**
- * Tests for header behavior when navigating between chat thread and other pages.
+ * Chat Header Navigation Tests
  *
- * BUG SCENARIO:
- * 1. User starts conversation on /chat overview
- * 2. URL is updated via window.history.replaceState to /chat/[slug]
- * 3. User navigates away to /chat/pricing
- * 4. Header still shows thread header instead of pricing page header
- *
- * ROOT CAUSE:
- * - hasActiveThread is derived from store state (showInitialUI, createdThreadId, thread)
- * - Store state persists when navigating to non-thread pages like /chat/pricing
- * - Header logic doesn't properly check for known static routes
+ * Verifies header behavior across navigation scenarios:
+ * - Static routes (/chat/pricing) show correct breadcrumbs
+ * - Thread pages show thread title in breadcrumb
+ * - Store state doesn't leak between route types
  */
 
 import type { ReactNode } from 'react';
+import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useCurrentPathname } from '@/hooks/utils';
@@ -37,6 +32,7 @@ vi.mock('@tanstack/react-router', () => ({
       },
     },
   })),
+  useNavigate: vi.fn(() => vi.fn()),
 }));
 
 // Mock useCurrentPathname hook (used for history API support alongside TanStack Router)
@@ -78,6 +74,11 @@ vi.mock('@/components/ui/sidebar', async (importOriginal) => {
   };
 });
 
+// Mock useNavigationReset from stores/chat
+vi.mock('@/stores/chat', () => ({
+  useNavigationReset: vi.fn(() => vi.fn()),
+}));
+
 // Mock useChatStore
 const mockStoreState = {
   showInitialUI: true,
@@ -97,7 +98,7 @@ vi.mock('@/components/providers', async (importOriginal) => {
   };
 });
 
-describe('chatHeaderSwitch - navigation bug', () => {
+describe('chatHeaderSwitch navigation behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset store state to defaults
@@ -148,11 +149,11 @@ describe('chatHeaderSwitch - navigation bug', () => {
     });
   });
 
-  describe('bUG: navigating away preserves thread header', () => {
+  describe('static route navigation with stale state', () => {
     it('should show pricing page header on /chat/pricing, NOT thread header', () => {
       vi.mocked(useCurrentPathname).mockReturnValue('/chat/pricing');
 
-      // BUG SCENARIO: Store still has thread state from previous page
+      // Store still has thread state from previous page
       mockStoreState.showInitialUI = false;
       mockStoreState.createdThreadId = 'thread-123';
       mockStoreState.thread = {
@@ -163,12 +164,9 @@ describe('chatHeaderSwitch - navigation bug', () => {
 
       render(<ChatHeaderSwitch />);
 
-      // Should show NavigationHeader
+      // Should show NavigationHeader for static route
       const nav = screen.getByRole('navigation');
       expect(nav).toBeInTheDocument();
-
-      // BUG: Currently shows "Previous Thread Title" instead of pricing page title
-      // This test documents the expected behavior (should fail until fixed)
     });
 
     it('breadcrumb should show "Pricing" on /chat/pricing, not thread title', () => {

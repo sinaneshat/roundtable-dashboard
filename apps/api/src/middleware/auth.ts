@@ -1,5 +1,4 @@
 import type { Context } from 'hono';
-import { csrf } from 'hono/csrf';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
@@ -7,7 +6,6 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { mapStatusCode } from '@/core';
 import { auth } from '@/lib/auth/server';
 import type { Session, User } from '@/lib/auth/types';
-import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
 import type { ApiEnv } from '@/types';
 
 /**
@@ -120,57 +118,4 @@ export const requireSession = createMiddleware<ApiEnv>(async (c, next) => {
     });
     throw new HTTPException(mapStatusCode(HttpStatusCodes.UNAUTHORIZED), { res, cause: e });
   }
-});
-
-/**
- * Optional session middleware - attaches session if present, continues if not
- * Use this for routes that support both authenticated and unauthenticated access
- * Handler logic can then check c.var.user to determine access level
- *
- * Example: Public threads (anyone can view if public, only owner can view if private)
- */
-export const requireOptionalSession = createMiddleware<ApiEnv>(async (c, next) => {
-  try {
-    // Use shared helper to authenticate session (same as attachSession)
-    await authenticateSession(c);
-  } catch {
-    // Log error but don't throw - allow unauthenticated requests to proceed
-    c.set('session', null);
-    c.set('user', null);
-  }
-  return next();
-});
-
-/**
- * Combined middleware for routes with mixed access patterns:
- * - Safe methods (GET, HEAD, OPTIONS): Optional session, no CSRF
- * - Mutation methods (POST, PATCH, PUT, DELETE): Required session + CSRF
- *
- * Use this for routes like /chat/threads/:id where:
- * - GET allows public access (handler checks if thread is public)
- * - PATCH/DELETE require authentication and CSRF protection
- */
-export const protectMutations = createMiddleware<ApiEnv>(async (c, next) => {
-  const method = c.req.method.toUpperCase();
-  const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
-
-  if (safeMethods.includes(method)) {
-    // Safe methods: optional session, no CSRF
-    return requireOptionalSession(c, next);
-  }
-
-  // Mutation methods: CSRF + required session (chain middlewares properly)
-  // Build CSRF middleware inline to avoid re-export
-  const allowedOrigins = getAllowedOriginsFromContext(c);
-  const csrfMiddleware = csrf({
-    origin: (origin) => {
-      if (!origin)
-        return true;
-      return allowedOrigins.includes(origin);
-    },
-  });
-
-  return csrfMiddleware(c, async () => {
-    await requireSession(c, next);
-  });
 });

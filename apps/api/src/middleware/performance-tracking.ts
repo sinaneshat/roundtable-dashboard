@@ -39,34 +39,6 @@ function isPerformanceTrackingEnabled(): boolean {
 }
 
 /**
- * Get current performance metrics from context
- */
-export function getCurrentPerformanceMetrics(c?: Context): PerformanceMetrics | null {
-  if (!c) {
-    return null;
-  }
-  return c.get('performanceMetrics') as PerformanceMetrics | null;
-}
-
-/**
- * Record a DB query timing (requires context)
- */
-export function recordDbQueryWithContext(c: Context, query: string, duration: number): void {
-  const metrics = c.get('performanceMetrics') as PerformanceMetrics | undefined;
-  if (!metrics) {
-    return;
-  }
-
-  metrics.dbQueries.push({
-    query: query.slice(0, 100),
-    duration,
-    timestamp: Date.now(),
-  });
-  metrics.dbQueryCount++;
-  metrics.dbTotalTime += duration;
-}
-
-/**
  * Performance tracking middleware
  * Sets up timing and extracts Cloudflare placement info
  * Stores metrics in request context (not global state) for concurrency safety
@@ -116,27 +88,6 @@ export async function performanceTracking(c: Context, next: Next): Promise<void 
       headers,
     });
   }
-}
-
-/**
- * Create a timed DB wrapper (context-aware version)
- * Wraps database calls to track their execution time
- */
-export function withDbTimingContext<T>(
-  c: Context,
-  queryName: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  const metrics = c.get('performanceMetrics') as PerformanceMetrics | undefined;
-  if (!isPerformanceTrackingEnabled() || !metrics) {
-    return fn();
-  }
-
-  const start = Date.now();
-  return fn().finally(() => {
-    const duration = Date.now() - start;
-    recordDbQueryWithContext(c, queryName, duration);
-  });
 }
 
 /**

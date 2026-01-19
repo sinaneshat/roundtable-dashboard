@@ -28,7 +28,7 @@ import {
 } from '@/components/providers';
 import Image from '@/components/ui/image';
 import { LogoGlow } from '@/components/ui/logo-glow';
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '@/constants';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
   useBoolean,
@@ -606,6 +606,7 @@ export default function ChatOverviewScreen() {
             thread={currentThread}
             slug={currentThread.slug}
             onDeleteClick={isDeleteDialogOpen.onTrue}
+            skipFetch // Data already in Zustand store - no need for API call
           />
         )
       : null,

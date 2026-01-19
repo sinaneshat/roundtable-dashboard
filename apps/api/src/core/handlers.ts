@@ -30,6 +30,15 @@ export type AuthenticatedContext = {
   requestId: string;
 };
 
+/**
+ * Type-safe extension for optional API key secrets not in CloudflareEnv
+ * These can be set via wrangler secret at runtime for cron jobs and external services
+ */
+type OptionalApiKeySecrets = {
+  CRON_SECRET?: string;
+  API_SECRET_KEY?: string;
+};
+
 // ============================================================================
 // CENTRALIZED ERROR HANDLING
 // ============================================================================
@@ -251,9 +260,9 @@ async function applyAuthentication<TEnv extends ApiEnv>(c: Context<TEnv>, authMo
 
       // In Cloudflare Workers: c.env contains bindings and secrets from wrangler
       // In local dev: c.env contains process.env values via Hono dev server
-      // Type assertion for optional secrets not in CloudflareEnv definition
-      const envApiKey = c.env as unknown as Record<string, string | undefined>;
-      const expectedApiKey = envApiKey.CRON_SECRET || envApiKey.API_SECRET_KEY;
+      // Type-safe access to optional secrets not in CloudflareEnv definition
+      const envWithSecrets = c.env as typeof c.env & OptionalApiKeySecrets;
+      const expectedApiKey = envWithSecrets.CRON_SECRET || envWithSecrets.API_SECRET_KEY;
 
       if (!apiKey || !expectedApiKey || apiKey !== expectedApiKey) {
         throw new HTTPException(HttpStatusCodes.UNAUTHORIZED, {

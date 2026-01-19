@@ -89,7 +89,7 @@ function ChatItem({
             >
               <Link
                 to={chatUrl}
-                preload={false}
+                preload="intent"
               >
                 <div
                   className="truncate overflow-hidden text-ellipsis whitespace-nowrap"

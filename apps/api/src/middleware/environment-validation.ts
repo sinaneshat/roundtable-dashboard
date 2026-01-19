@@ -6,26 +6,10 @@
  * and integration with existing error handling patterns.
  */
 
-import type { DatabaseConnectionStatus, HealthStatus, OAuthStatus } from '@roundtable/shared/enums';
-import { DatabaseConnectionStatuses, HealthStatuses, OAuthStatuses } from '@roundtable/shared/enums';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/common/error-handling';
-import { validateEnvironmentVariables } from '@/common/fetch-utilities';
-
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
-
-export type SafeEnvironmentSummary = {
-  NODE_ENV: string;
-  LOG_LEVEL: string;
-  ENVIRONMENT_VERIFIED: boolean;
-  DATABASE_CONNECTION_STATUS: DatabaseConnectionStatus;
-  OAUTH_STATUS: OAuthStatus;
-  TIMESTAMP: string;
-};
 
 // ============================================================================
 // ENVIRONMENT VARIABLE DEFINITIONS
@@ -185,7 +169,7 @@ export function validateEnvironmentConfiguration(env: CloudflareEnv): {
 
   // Validate boolean environment variables
   // MAINTENANCE is an optional runtime var that may be set via wrangler secret
-  const maintenance = (env as unknown as { MAINTENANCE?: string }).MAINTENANCE;
+  const maintenance = (env as CloudflareEnv & { MAINTENANCE?: string }).MAINTENANCE;
   if (maintenance !== undefined && typeof maintenance === 'string' && !['true', 'false'].includes(maintenance)) {
     warnings.push(`MAINTENANCE should be 'true' or 'false'`);
   }
@@ -272,77 +256,5 @@ export function createEnvironmentValidationMiddleware() {
     }
 
     return next();
-  };
-}
-
-/**
- * Validates specific environment variables required for a service
- * Can be used by individual services for targeted validation
- */
-export function validateServiceEnvironment(
-  env: CloudflareEnv,
-  required: readonly (keyof CloudflareEnv)[],
-  _serviceName: string,
-): void {
-  // Use the original env parameter directly since validateEnvironmentVariables expects CloudflareEnv
-  validateEnvironmentVariables(env, [...required]);
-}
-
-/**
- * Health check function that returns environment validation status
- * Can be used by health check endpoints
- * ✅ ENUM PATTERN: Uses HealthStatus type and HealthStatuses constants
- */
-export function getEnvironmentHealthStatus(env: CloudflareEnv): {
-  status: HealthStatus;
-  validation: ReturnType<typeof validateEnvironmentConfiguration>;
-} {
-  const validation = validateEnvironmentConfiguration(env);
-
-  let status: HealthStatus = HealthStatuses.HEALTHY;
-
-  if (validation.errors.length > 0 || validation.missingCritical.length > 0) {
-    status = HealthStatuses.UNHEALTHY;
-  } else if (validation.warnings.length > 0 || validation.missingOptional.length > 3) {
-    status = HealthStatuses.DEGRADED;
-  }
-
-  return { status, validation };
-}
-
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-/**
- * Creates a development-friendly environment configuration summary
- * Safe for logging (excludes sensitive values)
- * Using discriminated union pattern for maximum type safety (Context7 Pattern)
- */
-export function createEnvironmentSummary(env: CloudflareEnv): SafeEnvironmentSummary {
-  // Determine database connection status
-  let databaseStatus: DatabaseConnectionStatus = DatabaseConnectionStatuses.PENDING;
-  if (env.DB) {
-    databaseStatus = DatabaseConnectionStatuses.CONNECTED;
-  } else {
-    databaseStatus = DatabaseConnectionStatuses.DISCONNECTED;
-  }
-
-  // Determine OAuth status
-  let oauthStatus: OAuthStatus = OAuthStatuses.MISSING;
-  if (env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET) {
-    // Basic validation - check if they look like real OAuth credentials
-    const hasValidFormat = env.AUTH_GOOGLE_ID.includes('.apps.googleusercontent.com')
-      && env.AUTH_GOOGLE_SECRET.startsWith('GOCSPX-');
-    oauthStatus = hasValidFormat ? OAuthStatuses.CONFIGURED : OAuthStatuses.INVALID;
-  }
-
-  return {
-    NODE_ENV: env.NODE_ENV || 'development',
-    LOG_LEVEL: 'info',
-    ENVIRONMENT_VERIFIED: !!(env.DB && env.BETTER_AUTH_SECRET && env.BETTER_AUTH_URL),
-    DATABASE_CONNECTION_STATUS: databaseStatus,
-    OAUTH_STATUS: oauthStatus,
-    TIMESTAMP: new Date().toISOString(),
   };
 }

@@ -84,13 +84,14 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       expect(content).toMatch(/to=\{chatUrl\}/);
     });
 
-    it('should disable prefetch to prevent server overload', () => {
+    it('should enable intent-based preload for fast navigation', () => {
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // TanStack Router uses 'preload' instead of 'prefetch' - disabled to prevent server overload
-      expect(content).toMatch(/preload=\{false\}/);
-      // Should NOT have hover-based prefetch logic (caused production server overload)
+      // TanStack Router preload="intent" enables hover prefetching for instant navigation
+      // Combined with proper staleTime/gcTime config, this provides fast thread switching
+      expect(content).toMatch(/preload="intent"/);
+      // Should NOT have custom hover-based prefetch logic (Router handles this natively)
       expect(content).not.toMatch(/shouldPrefetch/);
       expect(content).not.toMatch(/setShouldPrefetch/);
       expect(content).not.toMatch(/onMouseEnter.*prefetch/);

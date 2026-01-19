@@ -182,13 +182,19 @@ const completeConfigurationSchema = coreEnvironmentSchema
  * In Cloudflare Workers: Use cloudflare:workers env for runtime secrets
  * In local dev: Falls back to process.env
  */
+/**
+ * Type-safe wrapper for environment variables from different sources
+ * Provides uniform access to CloudflareEnv or process.env
+ */
+type UnifiedEnvVars = Record<string, string | undefined>;
+
 async function parseEnvironment() {
-  let runtimeEnv: Record<string, string | undefined> = {};
+  let runtimeEnv: UnifiedEnvVars = {};
 
   try {
     const { env: workersEnv } = await import('cloudflare:workers');
-    // Cast to Record for uniform access
-    runtimeEnv = (workersEnv as unknown as Record<string, string | undefined>) || {};
+    // Type-safe conversion: CloudflareEnv and process.env both provide string key-value access
+    runtimeEnv = workersEnv as UnifiedEnvVars;
   } catch {
     // Local dev: cloudflare:workers not available, use process.env
     runtimeEnv = process.env;

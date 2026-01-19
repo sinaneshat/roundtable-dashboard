@@ -19,6 +19,7 @@ export default antfu(
       '.claude/**/*',
       '.turbo/**/*',
       'scripts/**/*',
+      '**/scripts/**/*',
       '**/routeTree.gen.ts',
       '**/dist/**/*',
       '**/.output/**/*',

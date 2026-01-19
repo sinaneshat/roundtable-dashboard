@@ -1,31 +1,45 @@
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
 import { ChatThreadSkeleton } from '@/components/loading';
 import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
-import { useThreadBySlugQuery } from '@/hooks/queries';
 import { useSession } from '@/lib/auth/client';
-import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadBySlug } from '@/server/thread';
-import type { GetThreadBySlugResponse } from '@/services/api';
+import { threadBySlugQueryOptions } from '@/lib/data/query-options';
+import { getStreamResumptionState } from '@/server/thread';
+import type { GetThreadBySlugResponse, ThreadStreamResumptionState } from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
-  // Prefetch thread data into QueryClient cache for SSR hydration
+  // Prefetch thread data and stream resumption state for SSR hydration
+  // Uses shared queryOptions to ensure consistent caching between server and client
   loader: async ({ params, context }) => {
     const { queryClient } = context;
+    const options = threadBySlugQueryOptions(params.slug);
 
-    // Prefetch into TanStack Query cache - component will use same queryKey
-    // Server function handles cookie forwarding via getRequest()
-    await queryClient.prefetchQuery({
-      queryKey: queryKeys.threads.bySlug(params.slug),
-      queryFn: () => getThreadBySlug({ data: params.slug }),
-      staleTime: STALE_TIMES.threadDetail,
-    });
+    // ensureQueryData returns cached data or fetches if not available
+    // Using shared queryOptions guarantees same config in loader and hooks
+    await queryClient.ensureQueryData(options);
 
-    // Return minimal loader data for head() - actual data comes from QueryClient
-    const cachedData = queryClient.getQueryData<GetThreadBySlugResponse>(queryKeys.threads.bySlug(params.slug));
-    return { threadTitle: cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null };
+    // Get thread ID from cached data for stream status fetch
+    const cachedData = queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey);
+    const threadId = cachedData?.success && cachedData.data?.thread?.id;
+    const threadTitle = cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null;
+
+    // Fetch stream resumption state in parallel if thread exists
+    // This pre-fills the store with active stream info to prevent content flash
+    let streamResumptionState: ThreadStreamResumptionState | null = null;
+    if (threadId) {
+      try {
+        const streamStatus = await getStreamResumptionState({ data: threadId });
+        if (streamStatus.success && streamStatus.data) {
+          streamResumptionState = streamStatus.data;
+        }
+      } catch {
+        // Stream status fetch is optional - continue without it
+      }
+    }
+
+    return { threadTitle, streamResumptionState };
   },
   pendingComponent: ChatThreadSkeleton,
   // Dynamic title from loader data
@@ -46,9 +60,11 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
 function ChatThreadRoute() {
   const { slug } = Route.useParams();
   const { data: session } = useSession();
+  const loaderData = Route.useLoaderData();
 
-  // Use query hook - data is already in cache from loader prefetch
-  const { data: queryData, isError, error } = useThreadBySlugQuery(slug);
+  // Use shared query options - data is already in cache from loader prefetch
+  // Using same queryOptions as loader ensures no hydration mismatch or refetch
+  const { data: queryData, isError, error, isPending } = useQuery(threadBySlugQueryOptions(slug));
 
   const threadData = queryData?.success ? queryData.data : null;
 
@@ -57,6 +73,14 @@ function ChatThreadRoute() {
     name: session?.user?.name || 'You',
     image: session?.user?.image || null,
   }), [session?.user?.id, session?.user?.name, session?.user?.image]);
+
+  // ✅ FIX: Don't show error while loading - route's pendingComponent handles loading
+  // Only show error when query has completed (not pending) and there's no data
+  if (isPending) {
+    // Route's pendingComponent (ChatThreadSkeleton) should handle this,
+    // but return null as fallback to prevent "not found" flash
+    return null;
+  }
 
   if (isError || !threadData) {
     return (
@@ -80,6 +104,7 @@ function ChatThreadRoute() {
       initialMessages={messages}
       slug={slug}
       user={user}
+      streamResumptionState={loaderData.streamResumptionState}
     />
   );
 }

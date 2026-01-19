@@ -1,21 +1,8 @@
 /**
  * Chat Flow Controller
  *
- * Centralized navigation and flow control logic
- * Uses flow state machine output to determine navigation actions
- *
- * SINGLE SOURCE OF TRUTH for flow control decisions
- * Consolidates navigation logic from overview-actions.ts
- *
- * RESPONSIBILITIES:
- * - Slug polling and URL updates
- * - Navigation to thread detail page
- * - Moderator completion detection
- * - Timeout fallbacks for stuck states
- * - Pre-populating TanStack Query cache before navigation (eliminates loading.tsx)
- *
- * Location: /src/stores/chat/actions/flow-controller.ts
- * Used by: ChatOverviewScreen (and potentially ChatThreadScreen)
+ * Handles slug polling, URL updates, navigation to thread detail,
+ * moderator completion detection, and query cache pre-population.
  */
 
 import { ScreenModes } from '@roundtable/shared';
@@ -26,37 +13,23 @@ import { useShallow } from 'zustand/react/shallow';
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { useThreadSlugStatusQuery } from '@/hooks/queries';
 import { useSession } from '@/lib/auth/client';
-import { queryKeys } from '@/lib/data/query-keys';
+import { isListOrSidebarQuery, queryKeys } from '@/lib/data/query-keys';
 import { createEmptyListCache, createPrefetchMeta, getCreatedAt, toISOString, toISOStringOrNull } from '@/lib/utils';
 
 import { getModeratorMessageForRound } from '../utils/participant-completion-gate';
-import { validateInfiniteQueryCache } from './types';
+import { validateInfiniteQueryCache, validateSlugStatusResponse } from './types';
 
 export type UseFlowControllerOptions = {
-  /** Whether controller is enabled (typically true for overview screen) */
   enabled?: boolean;
 };
 
-/**
- * Flow controller hook
- *
- * Manages navigation flow based on state machine outputs
- * Handles slug polling, URL updates, and navigation to thread detail
- *
- * @example
- * // In ChatOverviewScreen
- * useFlowController({ enabled: !showInitialUI })
- */
 export function useFlowController(options: UseFlowControllerOptions = {}) {
   const { enabled = true } = options;
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
-  // ✅ REACT BEST PRACTICE: Use store API for imperative access inside effects
-  // This avoids infinite loops from dependency arrays while accessing current state
+  // Use store API for imperative access inside effects (avoids dependency loops)
   const storeApi = useChatStoreApi();
-
-  // State selectors - only subscribe to what triggers re-renders
   const streamingState = useChatStore(useShallow(s => ({
     showInitialUI: s.showInitialUI,
     isStreaming: s.isStreaming,
@@ -174,6 +147,11 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   const hasUpdatedThreadRef = useRef(false);
   const hasNavigatedRef = useRef(false);
 
+  // ✅ POLLING FIX: Track which threadId we're actively polling for
+  // This ref ensures polling continues even if screenMode or other reactive state changes
+  // Without this, state changes could disable the query between fetch intervals, stopping polling
+  const activePollingThreadIdRef = useRef<string | null>(null);
+
   // Disable controller if screen mode changed (navigated away)
   const isActive = enabled && streamingState.screenMode === ScreenModes.OVERVIEW;
 
@@ -183,6 +161,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       // ✅ FIX: Reset refs immediately (synchronous) before deferred state update
       hasUpdatedThreadRef.current = false;
       hasNavigatedRef.current = false;
+      activePollingThreadIdRef.current = null;
       startTransition(() => {
         setHasNavigated(false);
         setHasUpdatedThread(false);
@@ -215,11 +194,37 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   // SLUG POLLING & URL UPDATES
   // ============================================================================
 
-  // Start polling when chat started and haven't detected AI title yet
-  const shouldPoll = isActive
+  // ✅ POLLING FIX: Use ref-based tracking for continuous polling
+  // Problem: Reactive state changes (screenMode, etc.) could disable the query between fetches
+  // Solution: Once we START polling, continue until AI title is ready (tracked by ref)
+  //
+  // Activation: When all conditions are met, set the ref to start polling
+  // Continuation: Ref keeps query enabled even if reactive conditions change
+  // Termination: Ref is cleared when AI title is ready (hasUpdatedThread)
+
+  // Check initial conditions for starting polling
+  const shouldStartPolling = isActive
     && !streamingState.showInitialUI
     && !!threadState.createdThreadId
     && !hasUpdatedThread;
+
+  // ✅ POLLING FIX: Track active polling via ref
+  // Once polling starts, don't let reactive state changes stop it
+  useEffect(() => {
+    // Start polling when conditions are met
+    if (shouldStartPolling && activePollingThreadIdRef.current !== threadState.createdThreadId) {
+      activePollingThreadIdRef.current = threadState.createdThreadId;
+    }
+    // Stop polling when AI title is ready
+    if (hasUpdatedThread) {
+      activePollingThreadIdRef.current = null;
+    }
+  }, [shouldStartPolling, threadState.createdThreadId, hasUpdatedThread]);
+
+  // ✅ POLLING FIX: Use ref for query enabled state
+  // This ensures the query stays enabled between fetches even if reactive state changes
+  // The actual threadId for the query comes from createdThreadId (which is stable)
+  const shouldPoll = !!activePollingThreadIdRef.current || shouldStartPolling;
 
   const slugStatusQuery = useThreadSlugStatusQuery(
     threadState.createdThreadId,
@@ -234,51 +239,38 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     if (!isActive)
       return;
 
-    const slugData = slugStatusQuery.data?.success && slugStatusQuery.data.data ? slugStatusQuery.data.data : null;
+    // Use Zod validation for type-safe data extraction
+    const slugData = validateSlugStatusResponse(slugStatusQuery.data);
 
     // Track timeout for cleanup
     let invalidationTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
-    // ✅ FIX: Check REF not state - ref updates synchronously, state via startTransition is deferred
-    if (
-      slugData
-      && typeof slugData === 'object'
-      && slugData !== null
-      && 'isAiGeneratedTitle' in slugData
-      && slugData.isAiGeneratedTitle
-      && !hasUpdatedThreadRef.current
-    ) {
-      // ✅ FIX: Set ref IMMEDIATELY to prevent re-entry before startTransition propagates
+    // Process when AI title is ready and we haven't already handled it
+    if (slugData?.isAiGeneratedTitle && !hasUpdatedThreadRef.current) {
+      // Set ref IMMEDIATELY to prevent re-entry before startTransition propagates
       hasUpdatedThreadRef.current = true;
 
       startTransition(() => {
-        if ('slug' in slugData && typeof slugData.slug === 'string') {
-          setAiGeneratedSlug(slugData.slug);
-          setHasUpdatedThread(true);
-        }
+        setAiGeneratedSlug(slugData.slug);
+        setHasUpdatedThread(true);
       });
 
       // Update thread in store
       const currentThread = threadState.currentThread;
-      if (currentThread && 'title' in slugData && 'slug' in slugData) {
+      if (currentThread) {
         const updatedThread = {
           ...currentThread,
           isAiGeneratedTitle: true,
-          title: typeof slugData.title === 'string' ? slugData.title : currentThread.title,
-          slug: typeof slugData.slug === 'string' ? slugData.slug : currentThread.slug,
+          title: slugData.title,
+          slug: slugData.slug,
         };
         threadState.setThread(updatedThread);
 
-        // ✅ IMMEDIATE SIDEBAR UPDATE: Optimistically update sidebar with AI-generated title
-        // This provides instant feedback without waiting for invalidation refetch
+        // Optimistically update sidebar with AI-generated title
         queryClient.setQueriesData(
           {
             queryKey: queryKeys.threads.all,
-            predicate: (query) => {
-              // Update both list and sidebar infinite queries
-              const key = query.queryKey[1];
-              return query.queryKey.length >= 2 && (key === 'list' || key === 'sidebar');
-            },
+            predicate: isListOrSidebarQuery,
           },
           (old: unknown) => {
             const parsedQuery = validateInfiniteQueryCache(old);
@@ -299,8 +291,8 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
                   return {
                     ...thread,
-                    title: 'title' in slugData && typeof slugData.title === 'string' ? slugData.title : thread.title,
-                    slug: 'slug' in slugData && typeof slugData.slug === 'string' ? slugData.slug : thread.slug,
+                    title: slugData.title,
+                    slug: slugData.slug,
                     isAiGeneratedTitle: true,
                   };
                 });
@@ -318,10 +310,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         );
       }
 
-      // ✅ FIX: Delayed invalidation to avoid race condition
-      // Don't invalidate immediately - the server might not have the updated title yet.
-      // The optimistic update above provides instant UI feedback.
-      // After 3s delay, invalidate to ensure server data syncs (title gen takes 1-3s)
+      // Delayed invalidation to avoid race condition (server may not have updated title yet)
       invalidationTimeoutId = setTimeout(() => {
         queryClient.invalidateQueries({
           queryKey: queryKeys.threads.all,
@@ -329,18 +318,13 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       }, 3000);
 
       // Replace URL in background without navigation
-      // NOTE: We no longer call router.push() after this - the user stays on
-      // the overview screen which already shows thread content. This avoids
-      // the loading.tsx skeleton that would show during server render.
-      if ('slug' in slugData && typeof slugData.slug === 'string') {
-        queueMicrotask(() => {
-          window.history.replaceState(
-            window.history.state,
-            '',
-            `/chat/${slugData.slug}`,
-          );
-        });
-      }
+      queueMicrotask(() => {
+        window.history.replaceState(
+          window.history.state,
+          '',
+          `/chat/${slugData.slug}`,
+        );
+      });
     }
 
     // Cleanup timeout on unmount or dependency change

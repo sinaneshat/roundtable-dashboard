@@ -11,6 +11,8 @@
  * - CDN-aware optimization
  */
 
+import type { ImagePlaceholderType } from '@roundtable/shared/enums';
+import { ImagePlaceholderTypes } from '@roundtable/shared/enums';
 import type { ImageProps as UnpicImageProps } from '@unpic/react';
 import { Image as UnpicImage } from '@unpic/react';
 import type { CSSProperties, ImgHTMLAttributes } from 'react';
@@ -26,7 +28,7 @@ type ImageProps = {
   fill?: boolean;
   priority?: boolean;
   quality?: number;
-  placeholder?: 'blur' | 'empty';
+  placeholder?: ImagePlaceholderType;
   blurDataURL?: string;
   /** Skip @unpic optimization - use native img */
   unoptimized?: boolean;
@@ -86,7 +88,7 @@ export default function Image({
     : {};
 
   // Blur placeholder background
-  const blurStyle: CSSProperties = placeholder === 'blur' && !isLoaded
+  const blurStyle: CSSProperties = placeholder === ImagePlaceholderTypes.BLUR && !isLoaded
     ? {
         backgroundImage: `url(${blurDataURL || BLUR_PLACEHOLDER})`,
         backgroundSize: 'cover',
@@ -121,7 +123,7 @@ export default function Image({
 
   // Combined wrapper styles for blur effect and custom styles
   const wrapperStyle: CSSProperties = {
-    ...(placeholder === 'blur' ? blurStyle : {}),
+    ...(placeholder === ImagePlaceholderTypes.BLUR ? blurStyle : {}),
     ...style,
   };
 
@@ -129,8 +131,8 @@ export default function Image({
   const imageClassName = cn(
     className,
     fill && 'absolute top-0 left-0 w-full h-full object-cover',
-    placeholder === 'blur' && 'transition-opacity duration-300 ease-in-out',
-    placeholder === 'blur' && !isLoaded && 'opacity-0',
+    placeholder === ImagePlaceholderTypes.BLUR && 'transition-opacity duration-300 ease-in-out',
+    placeholder === ImagePlaceholderTypes.BLUR && !isLoaded && 'opacity-0',
   );
 
   // Render different variants based on fill mode to satisfy @unpic discriminated union types

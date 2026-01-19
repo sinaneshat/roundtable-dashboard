@@ -17,7 +17,6 @@
  */
 
 import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, UIMessageRoles } from '@roundtable/shared';
-import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
@@ -25,6 +24,7 @@ import {
   createTestAssistantMessage,
   createTestModeratorMessage,
   createTestUserMessage,
+  renderHook,
 } from '@/lib/testing';
 import { getParticipantIndex, getRoundNumber } from '@/lib/utils';
 import type { ApiMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch } from '@/services/api';

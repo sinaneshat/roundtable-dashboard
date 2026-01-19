@@ -322,6 +322,47 @@ export const POSTHOG_LOG_LEVEL_VALUES: Record<PosthogLogLevel, number> = {
 } as const;
 
 // ============================================================================
+// REQUEST LOG LEVEL (Request Logger Middleware)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const REQUEST_LOG_LEVELS = ['minimal', 'standard', 'verbose'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_REQUEST_LOG_LEVEL: RequestLogLevel = 'standard';
+
+// 3. ZOD SCHEMA
+export const RequestLogLevelSchema = z.enum(REQUEST_LOG_LEVELS).openapi({
+  description: 'Request logging verbosity level for middleware',
+  example: 'standard',
+});
+
+// 4. TYPESCRIPT TYPE
+export type RequestLogLevel = z.infer<typeof RequestLogLevelSchema>;
+
+// 5. CONSTANT OBJECT
+export const RequestLogLevels = {
+  MINIMAL: 'minimal' as const,
+  STANDARD: 'standard' as const,
+  VERBOSE: 'verbose' as const,
+} as const;
+
+// 6. VALIDATION HELPER
+export function isValidRequestLogLevel(value: unknown): value is RequestLogLevel {
+  return RequestLogLevelSchema.safeParse(value).success;
+}
+
+// 7. ENVIRONMENT MAPPING
+export const REQUEST_LOG_LEVEL_BY_ENV: Record<string, RequestLogLevel> = {
+  prod: RequestLogLevels.MINIMAL,
+  production: RequestLogLevels.MINIMAL,
+  preview: RequestLogLevels.STANDARD,
+  local: RequestLogLevels.VERBOSE,
+  development: RequestLogLevels.VERBOSE,
+  test: RequestLogLevels.MINIMAL,
+} as const;
+
+// ============================================================================
 // DEBUG DATA (Dev Logger)
 // ============================================================================
 

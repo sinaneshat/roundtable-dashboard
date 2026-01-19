@@ -280,7 +280,8 @@ export const LoggerDataSchema = z.discriminatedUnion('logType', [
     component: z.string(),
     action: z.string(),
     result: z.string().optional(),
-    details: z.unknown().optional(),
+    // System logs can contain arbitrary diagnostic data - use record for JSON-serializable values
+    details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
   }),
 ]).optional().openapi({
   example: {
@@ -454,7 +455,8 @@ export const ApiErrorResponseSchema = z.object({
   error: z.object({
     code: z.string(),
     message: z.string(),
-    details: z.unknown().optional(),
+    // Error details - JSON-serializable values for additional context
+    details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.string())])).optional(),
     context: ErrorContextSchema,
     validation: z.array(z.object({
       field: z.string(),
@@ -623,8 +625,16 @@ export const CommonFieldSchemas = {
   /**
    * JSON metadata field - use specific schemas when possible
    * Only use for truly dynamic data that cannot be typed
+   * Accepts JSON-serializable values (strings, numbers, booleans, null, nested objects)
    */
-  metadata: () => z.unknown().nullable().optional().openapi({
+  metadata: () => z.record(z.string(), z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(z.string()),
+    z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  ])).nullable().optional().openapi({
     description: 'Custom metadata (prefer specific schemas)',
     example: { key: 'value' },
   }),
@@ -869,7 +879,8 @@ export const HealthDependencySchema = z.object({
     description: 'Response time in milliseconds',
     example: 45,
   }),
-  details: z.unknown().optional().openapi({
+  // Health details - JSON-serializable diagnostic data
+  details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional().openapi({
     description: 'Additional health details',
     example: { version: APP_VERSION },
   }),
@@ -998,7 +1009,8 @@ export type ApiResponse<T> = {
   error: {
     code: string;
     message: string;
-    details?: unknown;
+    // Error details - JSON-serializable values for additional context
+    details?: Record<string, string | number | boolean | null | string[]>;
     context?: ErrorContext;
     validation?: ValidationError[];
   };

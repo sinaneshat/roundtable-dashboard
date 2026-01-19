@@ -246,3 +246,39 @@ export function validateChangelogListCache(data: unknown): ChangelogListCache | 
 
   return result.data;
 }
+
+// ============================================================================
+// Thread Slug Status Cache Validation
+// ============================================================================
+
+export const ThreadSlugStatusPayloadSchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  isAiGeneratedTitle: z.boolean(),
+});
+
+export type ThreadSlugStatusPayload = z.infer<typeof ThreadSlugStatusPayloadSchema>;
+
+export const ThreadSlugStatusResponseSchema = z.object({
+  success: z.literal(true),
+  data: ThreadSlugStatusPayloadSchema,
+});
+
+export type ThreadSlugStatusResponse = z.infer<typeof ThreadSlugStatusResponseSchema>;
+
+/**
+ * Validate and extract slug status data from query response
+ * @returns Validated payload data or null if validation fails
+ */
+export function validateSlugStatusResponse(data: unknown): ThreadSlugStatusPayload | null {
+  if (data === undefined || data === null) {
+    return null;
+  }
+
+  const result = ThreadSlugStatusResponseSchema.safeParse(data);
+  if (!result.success) {
+    return null;
+  }
+
+  return result.data.data;
+}

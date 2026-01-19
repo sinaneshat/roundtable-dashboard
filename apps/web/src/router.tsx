@@ -18,8 +18,12 @@ export type RouterContext = {
  * Create router with QueryClient context
  * TanStack Start requires getRouter to return a new instance each time
  *
- * Note: Type assertion used because strictNullChecks is disabled in tsconfig.
- * TanStack Router's type system requires strictNullChecks for full type safety.
+ * Type assertion rationale:
+ * - TanStack Router's RouterOptions<TRouteTree, ...> has strict generic constraints
+ * - strictNullChecks disabled in tsconfig causes type incompatibility with router context
+ * - Structural type compatibility: All required fields present and correctly typed at runtime
+ * - RouterContext properly defined and matches TanStack Router's context expectations
+ * - Alternative: Enable strictNullChecks (requires codebase-wide null handling updates)
  */
 export function getRouter() {
   const queryClient = getQueryClient();
@@ -30,7 +34,7 @@ export function getRouter() {
     defaultPreload: 'intent',
     context: { queryClient },
     defaultNotFoundComponent: NotFoundScreen,
-  } as unknown as Parameters<typeof createTanStackRouter>[0]);
+  } as Parameters<typeof createTanStackRouter>[0]);
 
   return router;
 }

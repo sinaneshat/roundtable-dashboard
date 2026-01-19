@@ -184,4 +184,6 @@ export const GC_TIMES = {
 export const POLLING_INTERVALS = {
   /** Poll for pre-search status changes (PENDING -> STREAMING transition) */
   preSearchPending: 500,
+  /** Poll for AI-generated title/slug status during thread creation */
+  slugStatus: 2_000,
 } as const;

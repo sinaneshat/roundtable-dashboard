@@ -178,16 +178,16 @@ export function QuickStartSkeleton({ className }: { className?: string }) {
             key={index}
             className={cn(
               'w-full px-4 py-3',
-              index !== 2 && 'border-b border-white/[0.06]',
+              index !== 2 && 'border-b border-border/50',
             )}
           >
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-3">
-              <Skeleton className="h-5 w-3/4 bg-white/10" />
+              <Skeleton className="h-5 w-3/4" />
               <div className="flex items-center gap-2.5 shrink-0">
-                <Skeleton className="h-6 w-16 rounded-2xl bg-white/10" />
+                <Skeleton className="h-6 w-16 rounded-2xl" />
                 <div className="flex -space-x-2">
                   {[0, 1, 2].map(i => (
-                    <Skeleton key={i} className="size-6 rounded-full bg-white/10" />
+                    <Skeleton key={i} className="size-6 rounded-full" />
                   ))}
                 </div>
               </div>

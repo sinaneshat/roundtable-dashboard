@@ -142,12 +142,12 @@ function UserMessageSkeleton({ className, ...props }: ComponentProps<'div'>) {
     <div className={cn('mb-4 flex justify-end', className)} {...props}>
       <div className="max-w-[80%]">
         <div className="flex items-center gap-3 py-2 mb-2 flex-row-reverse">
-          <Skeleton className="size-8 rounded-full bg-white/15" />
-          <Skeleton className="h-5 w-24 bg-white/20" />
+          <Skeleton className="size-8 rounded-full" />
+          <Skeleton className="h-5 w-24" />
         </div>
         <div className="space-y-2">
-          <Skeleton className="h-4 w-full bg-white/15" />
-          <Skeleton className="h-4 w-3/4 bg-white/15" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
         </div>
       </div>
     </div>
@@ -159,16 +159,16 @@ function AssistantMessageSkeleton({ className, ...props }: ComponentProps<'div'>
     <div className={cn('mb-4 flex justify-start', className)} {...props}>
       <div className="max-w-[85%]">
         <div className="flex items-center gap-3 py-2 mb-2">
-          <Skeleton className="size-8 rounded-full bg-white/15" />
+          <Skeleton className="size-8 rounded-full" />
           <div className="flex items-center gap-2">
-            <Skeleton className="h-5 w-32 bg-white/20" />
-            <Skeleton className="h-4 w-20 bg-white/15" />
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-4 w-20" />
           </div>
         </div>
         <div className="space-y-2">
-          <Skeleton className="h-4 w-full bg-white/10" />
-          <Skeleton className="h-4 w-full bg-white/10" />
-          <Skeleton className="h-4 w-5/6 bg-white/10" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
         </div>
       </div>
     </div>
@@ -178,20 +178,20 @@ function AssistantMessageSkeleton({ className, ...props }: ComponentProps<'div'>
 function ModeratorCardSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div className={cn('mt-6', className)} {...props}>
-      <div className="rounded-2xl bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-white/5">
+      <div className="rounded-2xl bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-border/50">
         <div className="flex items-center gap-2">
-          <Skeleton className="size-4 rounded bg-white/15" />
-          <Skeleton className="h-4 w-32 bg-white/15" />
-          <Skeleton className="h-6 w-20 rounded-full bg-white/10" />
+          <Skeleton className="size-4 rounded" />
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-6 w-20 rounded-full" />
         </div>
         <div className="space-y-2">
-          <Skeleton className="h-4 w-24 bg-white/15" />
+          <Skeleton className="h-4 w-24" />
           <div className="space-y-1.5">
             {Array.from({ length: 2 }, (_, i) => (
               <div key={i} className="flex items-center gap-2">
-                <Skeleton className="h-3 w-6 bg-white/10" />
-                <Skeleton className="h-3 w-full bg-white/10" />
-                <Skeleton className="h-3 w-12 bg-white/10" />
+                <Skeleton className="h-3 w-6" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-12" />
               </div>
             ))}
           </div>
@@ -213,13 +213,13 @@ function StickyInputSkeleton({ className, ...props }: ComponentProps<'div'>) {
     >
       <div className="w-full max-w-4xl mx-auto px-5 md:px-6">
         <div className="rounded-2xl bg-card border shadow-lg p-4">
-          <Skeleton className="h-12 w-full bg-white/10 rounded-xl" />
+          <Skeleton className="h-12 w-full rounded-xl" />
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-2">
-              <Skeleton className="size-6 rounded bg-white/10" />
-              <Skeleton className="size-6 rounded bg-white/10" />
+              <Skeleton className="size-6 rounded" />
+              <Skeleton className="size-6 rounded" />
             </div>
-            <Skeleton className="size-8 rounded-full bg-white/15" />
+            <Skeleton className="size-8 rounded-full" />
           </div>
         </div>
       </div>
@@ -265,20 +265,20 @@ function PresetCardSkeleton({ className, ...props }: ComponentProps<'div'>) {
       {...props}
     >
       <div className="flex items-start justify-between gap-2">
-        <Skeleton className="h-5 w-32 bg-white/15" />
-        <Skeleton className="h-5 w-16 rounded-full bg-white/10" />
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-5 w-16 rounded-full" />
       </div>
       <div className="flex items-start gap-4">
         {Array.from({ length: 3 }, (_, i) => (
           <div key={i} className="flex flex-col items-center gap-1">
-            <Skeleton className="size-8 rounded-full bg-white/15" />
-            <Skeleton className="h-3 w-10 bg-white/10" />
+            <Skeleton className="size-8 rounded-full" />
+            <Skeleton className="h-3 w-10" />
           </div>
         ))}
       </div>
       <div className="space-y-1.5">
-        <Skeleton className="h-3 w-full bg-white/10" />
-        <Skeleton className="h-3 w-3/4 bg-white/10" />
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-3/4" />
       </div>
     </div>
   );
@@ -294,19 +294,19 @@ function QuickStartSkeleton({ count = 3, className, ...props }: QuickStartSkelet
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
-          className={cn('px-4 py-3', i < count - 1 && 'border-b border-white/[0.06]')}
+          className={cn('px-4 py-3', i < count - 1 && 'border-b border-border/50')}
         >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
-            <Skeleton className="h-4 sm:h-5 w-full sm:w-3/4 bg-white/15" />
+            <Skeleton className="h-4 sm:h-5 w-full sm:w-3/4" />
             <div className="flex items-center gap-2 shrink-0">
-              <Skeleton className="h-6 w-16 rounded-2xl bg-white/10" />
+              <Skeleton className="h-6 w-16 rounded-2xl" />
               <div className="flex items-center">
                 <div className="flex -space-x-2">
-                  <Skeleton className="size-6 rounded-full bg-white/15 relative z-[3]" />
-                  <Skeleton className="size-6 rounded-full bg-white/15 relative z-[2]" />
-                  <Skeleton className="size-6 rounded-full bg-white/15 relative z-[1]" />
+                  <Skeleton className="size-6 rounded-full relative z-[3]" />
+                  <Skeleton className="size-6 rounded-full relative z-[2]" />
+                  <Skeleton className="size-6 rounded-full relative z-[1]" />
                 </div>
-                <Skeleton className="size-6 rounded-full bg-white/30 ms-2" />
+                <Skeleton className="size-6 rounded-full ms-2" />
               </div>
             </div>
           </div>

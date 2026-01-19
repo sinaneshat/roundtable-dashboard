@@ -13,7 +13,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { LIMITS } from '@/constants';
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
+import { POLLING_INTERVALS, STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getPublicThreadService,
   getThreadBySlugService,
@@ -150,36 +150,46 @@ export function useThreadBySlugQuery(slug: string, enabled?: boolean) {
  * Hook to poll thread slug status during AI title generation
  * Protected endpoint - requires authentication
  *
- * Polls every 3 seconds to check if isAiGeneratedTitle flag is set.
+ * Polls every 2 seconds to check if isAiGeneratedTitle flag is set.
  * Used during first round streaming on overview screen to enable URL replacement without page reload.
  *
  * @param threadId - Thread ID
- * @param enabled - Control whether polling should be active (default: true if threadId exists)
+ * @param shouldPoll - Control whether polling should be active (passed to refetchInterval)
  */
 export function useThreadSlugStatusQuery(
   threadId: string | null,
-  enabled: boolean = true,
+  shouldPoll: boolean = true,
 ) {
   const { isAuthenticated } = useAuthCheck();
+  // Keep query enabled as long as we have a valid threadId - polling controlled by refetchInterval
+  const queryEnabled = isAuthenticated && !!threadId;
 
   return useQuery({
     queryKey: queryKeys.threads.slugStatus(threadId || 'null'),
-    queryFn: () => {
+    queryFn: async () => {
       if (!threadId) {
         throw new Error('Thread ID is required');
       }
       return getThreadSlugStatusService({ param: { id: threadId } });
     },
     staleTime: 0, // Always fresh - we're polling for updates
-    refetchInterval: isAuthenticated && enabled && threadId
-      ? () => {
-          if (typeof document !== 'undefined' && document.hidden) {
-            return false;
-          }
-          return 10 * 1000;
-        }
-      : false,
-    enabled: isAuthenticated && enabled && !!threadId,
+    // Polling control via refetchInterval (not enabled) to prevent interruption
+    // The shouldPoll param checked here instead of enabled prop ensures continuous polling
+    refetchInterval: (query) => {
+      // Stop polling if shouldPoll is false (external control)
+      if (!shouldPoll) {
+        return false;
+      }
+      // Stop polling once AI title is generated
+      const data = query.state.data;
+      if (data?.success && data.data?.isAiGeneratedTitle) {
+        return false;
+      }
+      return POLLING_INTERVALS.slugStatus;
+    },
+    // Let TanStack Query handle background tab pausing natively
+    refetchIntervalInBackground: false,
+    enabled: queryEnabled,
     retry: false,
     throwOnError: false,
   });

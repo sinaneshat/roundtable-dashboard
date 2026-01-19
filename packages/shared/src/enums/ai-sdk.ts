@@ -14,17 +14,22 @@ import { z } from '@hono/zod-openapi';
 // AI SDK STATUS (AI SDK v6 useChat hook status values)
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const AI_SDK_STATUSES = ['ready', 'submitted', 'streaming', 'error'] as const;
 
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_AI_SDK_STATUS: AiSdkStatus = 'ready';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const AiSdkStatusSchema = z.enum(AI_SDK_STATUSES).openapi({
   description: 'AI SDK v6 ChatStatus values - matches AI SDK exactly',
   example: 'streaming',
 });
 
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type AiSdkStatus = z.infer<typeof AiSdkStatusSchema>;
 
-export const DEFAULT_AI_SDK_STATUS: AiSdkStatus = 'ready';
-
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const AiSdkStatuses = {
   READY: 'ready' as const,
   SUBMITTED: 'submitted' as const,
@@ -47,6 +52,7 @@ export const AiSdkStatuses = {
 // - Application adds: 'unknown' (interrupted stream) | 'failed' (application-level failure)
 //
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const FINISH_REASONS = [
   'stop',
   'length',
@@ -58,15 +64,19 @@ export const FINISH_REASONS = [
   'unknown', // ⚠️ APPLICATION-LEVEL: indicates interrupted stream, NOT an AI SDK return value
 ] as const;
 
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_FINISH_REASON: FinishReason = 'stop';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const FinishReasonSchema = z.enum(FINISH_REASONS).openapi({
   description: 'AI SDK finish reason indicating how/why completion ended',
   example: 'stop',
 });
 
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type FinishReason = z.infer<typeof FinishReasonSchema>;
 
-export const DEFAULT_FINISH_REASON: FinishReason = 'stop';
-
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const FinishReasons = {
   STOP: 'stop' as const,
   LENGTH: 'length' as const,
@@ -93,17 +103,22 @@ export function isCompletionFinishReason(
 // UI MESSAGE ROLE (AI SDK v6 - only 'user', 'assistant', 'system')
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const UI_MESSAGE_ROLES = ['user', 'assistant', 'system'] as const;
 
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_UI_MESSAGE_ROLE: UIMessageRole = 'user';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const UIMessageRoleSchema = z.enum(UI_MESSAGE_ROLES).openapi({
   description: 'AI SDK UIMessage role (user, assistant, or system)',
   example: 'assistant',
 });
 
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type UIMessageRole = z.infer<typeof UIMessageRoleSchema>;
 
-export const DEFAULT_UI_MESSAGE_ROLE: UIMessageRole = 'user';
-
+// 5️⃣ CONSTANT OBJECT - For usage in code
 export const UIMessageRoles = {
   USER: 'user' as const,
   ASSISTANT: 'assistant' as const,

@@ -9,11 +9,11 @@
  */
 
 import { ChatModes, MessageRoles, MessageStatuses } from '@roundtable/shared';
-import { renderHook } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
+import { renderHook } from '@/lib/testing';
 import { getRoundNumber } from '@/lib/utils';
 import type { ChatParticipant, ChatThread } from '@/services/api';
 

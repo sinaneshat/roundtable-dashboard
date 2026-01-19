@@ -31,9 +31,11 @@ type ChatThreadActionsProps = {
   slug: string;
   onDeleteClick?: () => void;
   isPublicMode?: boolean;
+  /** Skip fetching thread data - use when data is already available (e.g., from Zustand store) */
+  skipFetch?: boolean;
 };
 
-export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = false }: ChatThreadActionsProps) {
+export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = false, skipFetch = false }: ChatThreadActionsProps) {
   const t = useTranslations();
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const toggleFavoriteMutation = useToggleFavoriteMutation();
@@ -42,7 +44,8 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
 
-  const { data: cachedThreadData } = useThreadQuery(thread.id, !isPublicMode);
+  // Skip query when data is already available (overview screen with active chat)
+  const { data: cachedThreadData } = useThreadQuery(thread.id, !isPublicMode && !skipFetch);
 
   const threadIsPublic = cachedThreadData?.success && cachedThreadData.data && typeof cachedThreadData.data === 'object' && 'thread' in cachedThreadData.data && cachedThreadData.data.thread && typeof cachedThreadData.data.thread === 'object' && 'isPublic' in cachedThreadData.data.thread
     ? (cachedThreadData.data.thread as { isPublic?: boolean }).isPublic

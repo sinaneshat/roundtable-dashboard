@@ -18,11 +18,10 @@ import {
   MessageRoles,
   MessageStatuses,
 } from '@roundtable/shared';
-import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
-import { createMockStoredPreSearch, createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
+import { createMockStoredPreSearch, createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
 import type { ChatParticipant, ChatThread, DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/services/api';
 
 import type { ChatStoreApi } from '../store';

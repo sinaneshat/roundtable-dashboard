@@ -1549,3 +1549,32 @@ export const CopyIconVariants = {
 export function isValidCopyIconVariant(value: unknown): value is CopyIconVariant {
   return CopyIconVariantSchema.safeParse(value).success;
 }
+
+// ============================================================================
+// IMAGE PLACEHOLDER TYPE (for Image component loading strategy)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const IMAGE_PLACEHOLDER_TYPES = ['blur', 'empty'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_IMAGE_PLACEHOLDER_TYPE: ImagePlaceholderType = 'empty';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const ImagePlaceholderTypeSchema = z.enum(IMAGE_PLACEHOLDER_TYPES).openapi({
+  description: 'Image placeholder display strategy during loading',
+  example: 'blur',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type ImagePlaceholderType = z.infer<typeof ImagePlaceholderTypeSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const ImagePlaceholderTypes = {
+  BLUR: 'blur' as const,
+  EMPTY: 'empty' as const,
+} as const;
+
+export function isValidImagePlaceholderType(value: unknown): value is ImagePlaceholderType {
+  return ImagePlaceholderTypeSchema.safeParse(value).success;
+}

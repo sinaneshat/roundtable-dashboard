@@ -305,3 +305,30 @@ export const invalidationPatterns = {
     queryKeys.threads.feedback(threadId),
   ],
 } as const;
+
+// ============================================================================
+// Query Key Segments - Enum for type-safe key segment checks
+// ============================================================================
+
+/**
+ * Query key segment values used in infinite query predicates
+ * Use these instead of hardcoded string literals
+ */
+export const QueryKeySegments = {
+  LIST: 'list',
+  SIDEBAR: 'sidebar',
+  DETAIL: 'detail',
+} as const;
+
+export type QueryKeySegment = typeof QueryKeySegments[keyof typeof QueryKeySegments];
+
+/**
+ * Predicate for checking if a query is a list or sidebar infinite query
+ * Used for cache updates in flow-controller and form-actions
+ */
+export function isListOrSidebarQuery(query: { queryKey: readonly unknown[] }): boolean {
+  if (query.queryKey.length < 2)
+    return false;
+  const key = query.queryKey[1];
+  return key === QueryKeySegments.LIST || key === QueryKeySegments.SIDEBAR;
+}

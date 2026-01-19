@@ -12,6 +12,8 @@
  * @see https://developers.cloudflare.com/workers/observability/logs/workers-logs/
  */
 
+import type { RequestLogLevel } from '@roundtable/shared/enums';
+import { REQUEST_LOG_LEVEL_BY_ENV, RequestLogLevels } from '@roundtable/shared/enums';
 import type { Context, Next } from 'hono';
 
 import type { ApiEnv } from '@/types';
@@ -20,23 +22,12 @@ import type { ApiEnv } from '@/types';
 // CONFIGURATION
 // ============================================================================
 
-type LogLevel = 'minimal' | 'standard' | 'verbose';
-
 /**
  * Get log level based on environment
  */
-function getLogLevel(): LogLevel {
+function getLogLevel(): RequestLogLevel {
   const env = process.env.WEBAPP_ENV || process.env.NODE_ENV || 'development';
-
-  switch (env) {
-    case 'prod':
-    case 'production':
-      return 'minimal'; // Essential logs only
-    case 'preview':
-      return 'standard'; // Standard logs with some details
-    default:
-      return 'verbose'; // Full verbose logging
-  }
+  return REQUEST_LOG_LEVEL_BY_ENV[env] ?? RequestLogLevels.VERBOSE;
 }
 
 /**
@@ -44,7 +35,7 @@ function getLogLevel(): LogLevel {
  */
 function isVerboseLogging(): boolean {
   const level = getLogLevel();
-  return level === 'verbose' || level === 'standard';
+  return level === RequestLogLevels.VERBOSE || level === RequestLogLevels.STANDARD;
 }
 
 // ============================================================================
@@ -132,40 +123,4 @@ export async function requestLogger(c: Context<ApiEnv>, next: Next): Promise<voi
     // eslint-disable-next-line no-console
     console.log(logEntry);
   }
-}
-
-/**
- * Auth request logger - specialized for /api/auth/* routes
- * Provides additional context for authentication debugging
- */
-export async function authRequestLogger(c: Context<ApiEnv>, next: Next): Promise<void | Response> {
-  const startTime = Date.now();
-  const path = c.req.path;
-
-  // Only log auth endpoints
-  if (!path.startsWith('/api/auth')) {
-    return next();
-  }
-
-  await next();
-
-  const duration = Date.now() - startTime;
-
-  // Build auth-specific log entry
-  const logEntry = {
-    log_type: 'auth_request',
-    timestamp: new Date().toISOString(),
-    method: c.req.method,
-    path: c.req.path,
-    status: c.res?.status || 0,
-    duration_ms: duration,
-    request_id: c.req.header('cf-ray'),
-    // Auth-specific context
-    has_cookie: !!c.req.header('cookie'),
-    has_authorization: !!c.req.header('authorization'),
-    origin: c.req.header('origin'),
-  };
-
-  // eslint-disable-next-line no-console
-  console.log(logEntry);
 }

@@ -22,16 +22,15 @@ type PublicChatThreadScreenProps = {
 export default function PublicChatThreadScreen({ slug, initialData }: PublicChatThreadScreenProps) {
   const t = useTranslations();
 
-  // SSR HYDRATION: Use initialData from props first, fallback to React Query
-  const { data: threadData, isPending } = usePublicThreadQuery(slug);
+  // SSR HYDRATION: Data is prefetched in route loader, available immediately via React Query cache
+  // The route's pendingComponent (PublicChatSkeleton) handles loading states
+  // We rely on React Query's cache having data from the loader's prefetchQuery
+  const { data: threadData } = usePublicThreadQuery(slug);
   const queryResponse = threadData?.success ? threadData.data : null;
 
-  // Prefer SSR props, fallback to React Query data
+  // Prefer SSR props (passed from route), fallback to React Query cached data
   const threadResponse = initialData || queryResponse;
   const thread = threadResponse?.thread || null;
-
-  // Only show pending if we have no data at all (neither SSR nor React Query)
-  const isActuallyPending = isPending && !initialData;
 
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
   const changelog = useMemo(() => threadResponse?.changelog || [], [threadResponse]);
@@ -50,59 +49,16 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
     preSearches,
   });
 
-  // Data is ready when we have SSR props or React Query data
-  const isStoreReady = !isActuallyPending && messages.length > 0;
+  // Data is ready when we have messages from SSR or React Query cache
+  const isStoreReady = messages.length > 0;
 
   useChatScroll({
     messages,
     enableNearBottomDetection: true,
   });
 
-  // Show loading skeleton only when truly pending (no SSR data AND no React Query data)
-  if (isActuallyPending) {
-    // Use the skeleton component inline since we're already inside the screen component
-    return (
-      <div className="flex flex-col min-h-dvh relative">
-        <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-16">
-          {/* Header skeleton */}
-          <div className="mb-8 space-y-4">
-            <div className="h-8 w-3/4 max-w-md rounded-md bg-muted/50 animate-pulse" />
-            <div className="flex items-center gap-3">
-              <div className="size-8 rounded-full bg-muted/50 animate-pulse" />
-              <div className="h-4 w-32 rounded bg-muted/50 animate-pulse" />
-            </div>
-          </div>
-
-          {/* Message skeletons */}
-          <div className="space-y-6">
-            {/* User message */}
-            <div className="flex justify-end">
-              <div className="max-w-[80%] space-y-2">
-                <div className="h-16 w-64 rounded-2xl bg-muted/50 animate-pulse" />
-              </div>
-            </div>
-
-            {/* AI responses */}
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex gap-3">
-                <div className="size-8 rounded-full shrink-0 bg-muted/50 animate-pulse" />
-                <div className="flex-1 space-y-3">
-                  <div className="h-4 w-24 rounded bg-muted/50 animate-pulse" />
-                  <div className="space-y-2">
-                    <div className="h-4 w-full rounded bg-muted/50 animate-pulse" />
-                    <div className="h-4 w-5/6 rounded bg-muted/50 animate-pulse" />
-                    <div className="h-4 w-3/4 rounded bg-muted/50 animate-pulse" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Error cases are handled by the server page (redirects to sign-in)
+  // No inline skeleton needed - route's pendingComponent handles loading
+  // If we reach here without thread data, show error state (not loading)
   if (!thread) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
@@ -184,7 +140,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
                   />
 
                   <div className="mt-8 mb-8">
-                    <div className="relative rounded-2xl border-2 border-white/20 dark:border-white/10 p-2 shadow-lg">
+                    <div className="relative rounded-2xl border-2 border-border/30 p-2 shadow-lg">
                       <GlowingEffect
                         blur={0}
                         borderWidth={2}
@@ -194,7 +150,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
                         proximity={64}
                         inactiveZone={0.01}
                       />
-                      <div className="relative rounded-xl border border-white/20 dark:border-white/10 bg-background/50 backdrop-blur-sm p-8 dark:shadow-[0px_0px_27px_0px_#2D2D2D] text-center">
+                      <div className="relative rounded-xl border border-border/30 bg-background/50 backdrop-blur-sm p-8 dark:shadow-[0px_0px_27px_0px_#2D2D2D] text-center">
                         <Icons.sparkles className="size-6 text-primary mx-auto mb-4" />
                         <h3 className="text-lg font-semibold mb-2">
                           {t('chat.public.ctaHeadline')}

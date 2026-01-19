@@ -389,9 +389,12 @@ export async function createApp() {
     return timeout(30000)(c, next);
   });
 
-  // Body limit
+  // Body limit - default 5MB, uploads get 100MB
+  // Note: Routes are mounted at /api/v1, so path check must include prefix
   app.use('*', async (c, next) => {
-    if (c.req.path.startsWith('/uploads')) {
+    const path = c.req.path;
+    // Skip default limit for upload paths (use 100MB limit below)
+    if (path.includes('/uploads')) {
       return next();
     }
     return bodyLimit({
@@ -400,10 +403,17 @@ export async function createApp() {
     })(c, next);
   });
 
-  app.use('/uploads', bodyLimit({
-    maxSize: 100 * 1024 * 1024,
-    onError: c => c.text('Payload Too Large - max 100MB for uploads', 413),
-  }));
+  // 100MB limit for file uploads (matches MAX_SINGLE_UPLOAD_SIZE constant)
+  app.use('*', async (c, next) => {
+    const path = c.req.path;
+    if (!path.includes('/uploads')) {
+      return next();
+    }
+    return bodyLimit({
+      maxSize: 100 * 1024 * 1024,
+      onError: c => c.text('Payload Too Large - max 100MB for uploads', 413),
+    })(c, next);
+  });
 
   // CORS
   app.use('*', async (c, next) => {

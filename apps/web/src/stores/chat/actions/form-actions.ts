@@ -12,7 +12,7 @@ import {
   useUpdateThreadMutation,
 } from '@/hooks/mutations';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
-import { queryKeys } from '@/lib/data/query-keys';
+import { isListOrSidebarQuery, queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
@@ -159,10 +159,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       queryClient.setQueriesData(
         {
           queryKey: queryKeys.threads.all,
-          predicate: (query) => {
-            const key = query.queryKey[1];
-            return query.queryKey.length >= 2 && (key === 'list' || key === 'sidebar');
-          },
+          predicate: isListOrSidebarQuery,
         },
         (old: unknown) => {
           const parsedQuery = validateInfiniteQueryCache(old);
@@ -229,7 +226,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         actions.setNextParticipantToTrigger({ index: 0, participantId: firstParticipant.id });
       }
     } catch (error) {
-      console.error('[handleCreateThread] Error creating thread:', error);
       showApiErrorToast('Error creating thread', error);
       actions.setShowInitialUI(true);
     } finally {
@@ -404,8 +400,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       actions.setIsPatchInProgress(false);
     } catch (error) {
-      console.error('[handleUpdateThreadAndSend] Error updating thread:', error);
-
       actions.setMessages(currentMessages => currentMessages.filter(m => m.id !== optimisticMessage.id));
 
       actions.setWaitingToStartStreaming(false);

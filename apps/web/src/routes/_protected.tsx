@@ -38,17 +38,41 @@ function ProtectedLayoutSkeleton() {
   );
 }
 
+// ✅ OPTIMIZATION: Cache session on client to avoid server roundtrips during navigation
+// The session is validated on initial page load; subsequent navigations reuse cached session
+// Cookie validity is still enforced by the browser/Better Auth
+let cachedClientSession: Awaited<ReturnType<typeof getSession>> = null;
+
+/** Clear the cached session (call on sign out) */
+export function clearCachedSession() {
+  cachedClientSession = null;
+}
+
 export const Route = createFileRoute('/_protected')({
   // Server-side auth check - TanStack Start pattern
-  // beforeLoad runs on server before loader, perfect for auth guards
+  // beforeLoad runs on both server (SSR) and client (navigation)
   beforeLoad: async ({ location }) => {
+    // ✅ Client-side optimization: reuse cached session to avoid server function call
+    // This prevents redundant getSession() server calls on every client navigation
+    // Session validity is still ensured by cookie expiry and Better Auth
+    if (typeof window !== 'undefined' && cachedClientSession) {
+      return { session: cachedClientSession };
+    }
+
     const session = await getSession();
 
     if (!session) {
+      // Clear cache on logout/session expiry
+      cachedClientSession = null;
       throw redirect({
         to: '/auth/sign-in',
         search: { redirect: location.href },
       });
+    }
+
+    // Cache on client for subsequent navigations
+    if (typeof window !== 'undefined') {
+      cachedClientSession = session;
     }
 
     // Pass session through context for child routes

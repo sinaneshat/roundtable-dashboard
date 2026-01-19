@@ -125,7 +125,11 @@ export async function authenticatedFetch(
   init: RequestInit & { searchParams?: Record<string, string> },
 ): Promise<Response> {
   const baseUrl = getApiBaseUrl();
-  const url = new URL(`${baseUrl}${path}`);
+  const isRelativeUrl = baseUrl.startsWith('/');
+  const fullBaseUrl = isRelativeUrl && typeof window !== 'undefined'
+    ? `${window.location.origin}${baseUrl}`
+    : baseUrl;
+  const url = new URL(`${fullBaseUrl}${path}`);
 
   // Add search params if provided
   if (init.searchParams) {
