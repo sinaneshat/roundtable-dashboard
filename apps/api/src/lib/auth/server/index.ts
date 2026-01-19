@@ -11,6 +11,36 @@ import { getApiServerOrigin, getAppBaseUrl } from '@/lib/config/base-urls';
 import { EMAIL_DOMAIN_CONFIG, isAllowedEmailDomain, isRestrictedEnvironment, validateEmailDomain } from '../utils';
 
 /**
+ * Check if running in production mode (NODE_ENV === 'production')
+ * Priority: Cloudflare Workers env > process.env
+ */
+function isProductionMode(): boolean {
+  try {
+    if (workersEnv.NODE_ENV) {
+      return workersEnv.NODE_ENV === 'production';
+    }
+  } catch {
+    // Workers env not available
+  }
+  return isProductionMode();
+}
+
+/**
+ * Check if running in development mode (NODE_ENV === 'development')
+ * Priority: Cloudflare Workers env > process.env
+ */
+function isDevelopmentMode(): boolean {
+  try {
+    if (workersEnv.NODE_ENV) {
+      return workersEnv.NODE_ENV === 'development';
+    }
+  } catch {
+    // Workers env not available
+  }
+  return isDevelopmentMode();
+}
+
+/**
  * Get auth secret from Cloudflare Workers bindings or process.env.
  *
  * Priority:
@@ -94,6 +124,29 @@ function createAuthAdapter() {
 }
 
 /**
+ * Get Better Auth base URL from Cloudflare Workers env or process.env.
+ * Priority: Cloudflare Workers env > process.env > fallback to API origin
+ */
+function getBetterAuthUrl(): string {
+  // 1. Try Cloudflare Workers bindings (production/preview)
+  try {
+    if (workersEnv.BETTER_AUTH_URL) {
+      return workersEnv.BETTER_AUTH_URL;
+    }
+  } catch {
+    // Workers env not available - continue to fallback
+  }
+
+  // 2. Fall back to process.env (local dev)
+  if (process.env.BETTER_AUTH_URL) {
+    return process.env.BETTER_AUTH_URL;
+  }
+
+  // 3. Derive from API server origin
+  return getApiServerOrigin();
+}
+
+/**
  * Create Better Auth instance with runtime configuration.
  *
  * This function creates the auth instance when called, allowing
@@ -102,7 +155,7 @@ function createAuthAdapter() {
 function createAuth() {
   return betterAuth({
     secret: getAuthSecret(),
-    baseURL: process.env.BETTER_AUTH_URL || `${getApiServerOrigin()}/api/auth`,
+    baseURL: getBetterAuthUrl(),
     database: createAuthAdapter(),
 
     // Email domain restriction for local and preview environments
@@ -157,13 +210,13 @@ function createAuth() {
       },
       // Use secure cookies only in production (HTTPS)
       // Localhost/development requires non-secure cookies for HTTP
-      useSecureCookies: process.env.NODE_ENV === 'production',
+      useSecureCookies: isProductionMode(),
       // Cookie configuration for cross-origin (TanStack Start: web on 5173, API on 8787)
       // SameSite=Lax for OAuth redirects (works without Secure flag)
       // In production with HTTPS, we use 'none' for cross-origin requests
       defaultCookieAttributes: {
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        secure: process.env.NODE_ENV === 'production',
+        sameSite: isProductionMode() ? 'none' : 'lax',
+        secure: isProductionMode(),
         path: '/', // Ensure cookies are sent for all paths
       },
       database: {
@@ -174,7 +227,7 @@ function createAuth() {
     // Trusted origins (TanStack Start: web on 5173, API on 8787)
     trustedOrigins: [
       getAppBaseUrl(),
-      ...(process.env.NODE_ENV === 'development'
+      ...(isDevelopmentMode()
         ? [
             'http://localhost:5173',
             'http://localhost:5174',

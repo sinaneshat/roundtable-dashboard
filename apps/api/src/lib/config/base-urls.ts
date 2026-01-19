@@ -16,6 +16,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
+import { env as workersEnv } from 'cloudflare:workers';
 import type { Context } from 'hono';
 
 import type { ApiEnv } from '@/types';
@@ -181,17 +182,28 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
  * or use getWebappEnvFromContext(c) in Hono middleware.
  *
  * Priority:
- * 1. process.env.WEBAPP_ENV (local dev/.env files)
- * 2. NODE_ENV detection (development = local, production = prod)
+ * 1. cloudflare:workers env.WEBAPP_ENV (Cloudflare Workers runtime)
+ * 2. process.env.WEBAPP_ENV (local dev/.env files)
+ * 3. NODE_ENV detection (development = local, production = prod)
  */
 export function getWebappEnv(): WebappEnv {
-  // 1. Check process.env
+  // 1. Try Cloudflare Workers env (production/preview)
+  try {
+    const cfEnv = workersEnv?.WEBAPP_ENV;
+    if (cfEnv && isWebappEnv(cfEnv)) {
+      return cfEnv;
+    }
+  } catch {
+    // Workers env not available (local dev without wrangler)
+  }
+
+  // 2. Check process.env (local dev)
   const processEnv = process.env.WEBAPP_ENV;
   if (processEnv && isWebappEnv(processEnv)) {
     return processEnv;
   }
 
-  // 2. Fall back to NODE_ENV detection
+  // 3. Fall back to NODE_ENV detection
   return process.env.NODE_ENV === 'development'
     ? WEBAPP_ENVS.LOCAL
     : WEBAPP_ENVS.PROD;

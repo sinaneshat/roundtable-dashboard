@@ -195,13 +195,14 @@ async function parseEnvironment() {
   }
 
   const env = {
-    // Core environment variables (* are build-time inlined, process.env is acceptable)
-    NODE_ENV: process.env.NODE_ENV,
-    WEBAPP_ENV: process.env.WEBAPP_ENV,
-    APP_URL: process.env.APP_URL,
-    API_URL: process.env.API_URL,
-    APP_NAME: process.env.APP_NAME,
-    APP_VERSION: process.env.APP_VERSION,
+    // Core environment variables
+    // Priority: Cloudflare Workers env (runtimeEnv) > process.env
+    NODE_ENV: runtimeEnv.NODE_ENV || process.env.NODE_ENV,
+    WEBAPP_ENV: runtimeEnv.WEBAPP_ENV || process.env.WEBAPP_ENV,
+    APP_URL: runtimeEnv.APP_URL || process.env.APP_URL,
+    API_URL: runtimeEnv.API_URL || process.env.API_URL,
+    APP_NAME: runtimeEnv.APP_NAME || process.env.APP_NAME,
+    APP_VERSION: runtimeEnv.APP_VERSION || process.env.APP_VERSION,
     API_BASE_PATH: runtimeEnv.API_BASE_PATH,
     API_VERSION: runtimeEnv.API_VERSION,
 
@@ -241,7 +242,7 @@ async function parseEnvironment() {
     R2_ACCESS_KEY_ID: runtimeEnv.R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY: runtimeEnv.R2_SECRET_ACCESS_KEY,
     R2_BUCKET_NAME: runtimeEnv.R2_BUCKET_NAME,
-    R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
+    R2_PUBLIC_URL: runtimeEnv.R2_PUBLIC_URL || process.env.R2_PUBLIC_URL,
     MAX_FILE_SIZE: runtimeEnv.MAX_FILE_SIZE,
     MAX_IMAGE_SIZE: runtimeEnv.MAX_IMAGE_SIZE,
     ALLOWED_FILE_TYPES: runtimeEnv.ALLOWED_FILE_TYPES,
