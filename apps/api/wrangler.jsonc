@@ -6,7 +6,7 @@
   "compatibility_date": "2024-12-30",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "minify": true,
-  "upload_source_maps": true, // local dev - source maps enabled
+  "upload_source_maps": false, // source maps add 40MB+ to upload, disabled
   "rules": [
     {
       "type": "CompiledWasm",
@@ -116,7 +116,7 @@
   "env": {
     "preview": {
       "name": "roundtable-api-preview",
-      "upload_source_maps": true,
+      "upload_source_maps": false,
       "placement": { "mode": "smart" },
       "observability": { "enabled": true, "head_sampling_rate": 0.1 },
       "limits": { "cpu_ms": 300000 },
