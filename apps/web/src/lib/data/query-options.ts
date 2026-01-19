@@ -19,7 +19,7 @@ import { getModels } from '@/server/models';
 import { getProducts } from '@/server/products';
 import { getSidebarThreads } from '@/server/sidebar-threads';
 import { getSubscriptions } from '@/server/subscriptions';
-import { getThreadBySlug, getThreadChangelog, getThreadFeedback } from '@/server/thread';
+import { getStreamResumptionState, getThreadBySlug, getThreadChangelog, getThreadFeedback } from '@/server/thread';
 import { getUsageStats } from '@/server/usage-stats';
 
 import { queryKeys } from './query-keys';
@@ -200,6 +200,32 @@ export function threadFeedbackQueryOptions(threadId: string) {
     queryKey: queryKeys.threads.feedback(threadId),
     queryFn: () => getThreadFeedback({ data: threadId }),
     staleTime: STALE_TIMES.threadFeedback, // Infinity
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: false,
+  });
+}
+
+/**
+ * Stream resumption state query options factory
+ *
+ * Used by:
+ * - _protected/chat/$slug.tsx loader (ensureQueryData)
+ *
+ * Provides SSR hydration for stream resumption state, enabling:
+ * - Proper dehydration/hydration of stream state
+ * - Prefetching on link hover (defaultPreload: 'intent')
+ * - Cache reuse on back navigation
+ *
+ * staleTime: 0 - Always refetch to get latest stream state
+ * gcTime: SHORT - Stream state is ephemeral, cleared after use
+ */
+export function streamResumptionQueryOptions(threadId: string) {
+  return queryOptions({
+    queryKey: queryKeys.threads.streamResumption(threadId),
+    queryFn: () => getStreamResumptionState({ data: threadId }),
+    staleTime: 0, // Always fetch fresh - stream state changes
+    gcTime: GC_TIMES.SHORT, // 1 min - ephemeral data
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     retry: false,

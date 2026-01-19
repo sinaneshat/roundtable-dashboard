@@ -1,4 +1,4 @@
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
@@ -6,12 +6,12 @@ import { ThreadContentSkeleton } from '@/components/skeletons';
 import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { useSession } from '@/lib/auth/client';
 import {
+  streamResumptionQueryOptions,
   threadBySlugQueryOptions,
   threadChangelogQueryOptions,
   threadFeedbackQueryOptions,
 } from '@/lib/data/query-options';
-import { getStreamResumptionState } from '@/server/thread';
-import type { GetThreadBySlugResponse, ThreadStreamResumptionState } from '@/services/api';
+import type { GetThreadBySlugResponse } from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
   // NOTE: No route-level staleTime - TanStack Query manages data freshness
@@ -33,29 +33,22 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     const threadTitle = cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null;
 
     // Prefetch auxiliary data in parallel - ensureQueryData handles freshness checks
-    let streamResumptionState: ThreadStreamResumptionState | null = null;
+    // All queries use shared queryOptions for proper SSR dehydration/hydration
     if (threadId) {
+      const streamOptions = streamResumptionQueryOptions(threadId);
       const changelogOptions = threadChangelogQueryOptions(threadId);
       const feedbackOptions = threadFeedbackQueryOptions(threadId);
 
       // Parallel prefetch - all queries run concurrently
+      // Each uses ensureQueryData for proper cache integration and SSR hydration
       await Promise.all([
-        // Stream resumption state (non-query, direct fetch)
-        getStreamResumptionState({ data: threadId })
-          .then((streamStatus) => {
-            if (streamStatus.success && streamStatus.data) {
-              streamResumptionState = streamStatus.data;
-            }
-          })
-          .catch(() => { /* Stream status is optional */ }),
-        // Changelog - uses shared queryOptions for SSR hydration
+        queryClient.ensureQueryData(streamOptions).catch(() => { /* Stream status is optional */ }),
         queryClient.ensureQueryData(changelogOptions).catch(() => { /* Changelog is optional */ }),
-        // Feedback - uses shared queryOptions for SSR hydration
         queryClient.ensureQueryData(feedbackOptions).catch(() => { /* Feedback is optional */ }),
       ]);
     }
 
-    return { threadTitle, streamResumptionState };
+    return { threadTitle, threadId };
   },
   // Dynamic title from loader data
   head: ({ loaderData }) => {
@@ -87,7 +80,15 @@ function ChatThreadRoute() {
   // - Errors are caught by route errorComponent
   const { data: queryData } = useSuspenseQuery(threadBySlugQueryOptions(slug));
 
+  // Stream resumption state - prefetched in loader, now hydrated via query cache
+  // Uses useQuery (not suspense) since stream state is optional
+  const { data: streamData } = useQuery({
+    ...streamResumptionQueryOptions(loaderData.threadId ?? ''),
+    enabled: !!loaderData.threadId,
+  });
+
   const threadData = queryData?.success ? queryData.data : null;
+  const streamResumptionState = streamData?.success ? streamData.data : null;
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',
@@ -118,7 +119,7 @@ function ChatThreadRoute() {
       initialMessages={messages}
       slug={slug}
       user={user}
-      streamResumptionState={loaderData.streamResumptionState}
+      streamResumptionState={streamResumptionState}
     />
   );
 }

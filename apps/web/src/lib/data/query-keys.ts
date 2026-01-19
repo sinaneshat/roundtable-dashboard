@@ -86,6 +86,7 @@ export const queryKeys = {
       QueryKeyFactory.action('threads', 'changelog', id, 'round', String(roundNumber)),
     preSearches: (id: string) => QueryKeyFactory.action('threads', 'pre-searches', id),
     feedback: (id: string) => QueryKeyFactory.action('threads', 'feedback', id),
+    streamResumption: (id: string) => QueryKeyFactory.action('threads', 'stream-resumption', id),
   },
 
   // Chat Custom Roles
