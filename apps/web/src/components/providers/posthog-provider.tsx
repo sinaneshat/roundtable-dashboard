@@ -1,7 +1,6 @@
-import posthog from 'posthog-js';
-import { PostHogProvider as PHProvider } from 'posthog-js/react';
+import type { PostHog } from 'posthog-js';
 import type { ReactNode } from 'react';
-import { Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 
 import { PageViewTracker } from './pageview-tracker';
 import { PostHogIdentifyUser } from './posthog-identify-user';
@@ -13,14 +12,18 @@ type PostHogProviderProps = {
   environment?: string;
 };
 
+// Lazy load the PostHog React provider
+const PHProvider = lazy(() =>
+  import('posthog-js/react').then(mod => ({ default: mod.PostHogProvider })),
+);
+
 /**
  * PostHog Provider - TanStack Start Pattern for Cloudflare Workers
  *
  * @see https://posthog.com/docs/libraries/react
  *
  * NOTE: Environment variables are passed as props from the root layout to ensure
- * they are available during SSR. We use useEffect initialization with a ref to
- * ensure single initialization.
+ * they are available during SSR. PostHog is lazy-loaded to reduce initial bundle size.
  */
 
 export default function PostHogProvider({
@@ -30,6 +33,7 @@ export default function PostHogProvider({
   environment,
 }: PostHogProviderProps) {
   const initialized = useRef(false);
+  const [posthogClient, setPosthogClient] = useState<PostHog | null>(null);
 
   useEffect(() => {
     // Skip in local environment or if missing config
@@ -44,42 +48,47 @@ export default function PostHogProvider({
 
     initialized.current = true;
 
-    posthog.init(apiKey, {
-      // Use direct PostHog URL for TanStack Start on Cloudflare
-      api_host: apiHost,
-      ui_host: 'https://us.posthog.com',
+    // Lazy load PostHog to reduce initial bundle size
+    import('posthog-js').then((mod) => {
+      const posthog = mod.default;
+      posthog.init(apiKey, {
+        // Use direct PostHog URL for TanStack Start on Cloudflare
+        api_host: apiHost,
+        ui_host: 'https://us.posthog.com',
 
-      // Pageview Tracking
-      capture_pageview: 'history_change',
-      capture_pageleave: 'if_capture_pageview',
+        // Pageview Tracking
+        capture_pageview: 'history_change',
+        capture_pageleave: 'if_capture_pageview',
 
-      // User Identification
-      person_profiles: 'identified_only',
+        // User Identification
+        person_profiles: 'identified_only',
 
-      // Autocapture Features
-      autocapture: true,
-      capture_dead_clicks: true,
-      capture_heatmaps: true,
+        // Autocapture Features
+        autocapture: true,
+        capture_dead_clicks: true,
+        capture_heatmaps: true,
 
-      // Exception Tracking
-      capture_exceptions: true,
+        // Exception Tracking
+        capture_exceptions: true,
 
-      // Session Recording with Privacy Protection
-      disable_session_recording: false,
-      session_recording: {
-        maskAllInputs: true,
-        maskTextSelector: '[data-private], .ph-mask',
-        blockClass: 'ph-no-capture',
-        blockSelector: '[data-ph-no-capture]',
-        recordCrossOriginIframes: false,
-      },
-      enable_recording_console_log: false,
+        // Session Recording with Privacy Protection
+        disable_session_recording: false,
+        session_recording: {
+          maskAllInputs: true,
+          maskTextSelector: '[data-private], .ph-mask',
+          blockClass: 'ph-no-capture',
+          blockSelector: '[data-ph-no-capture]',
+          recordCrossOriginIframes: false,
+        },
+        enable_recording_console_log: false,
 
-      // Scroll Tracking - TanStack Start uses #root by default
-      scroll_root_selector: '#root',
+        // Scroll Tracking - TanStack Start uses #root by default
+        scroll_root_selector: '#root',
 
-      // Debug Mode - disabled in all environments to prevent console noise
-      debug: false,
+        // Debug Mode - disabled in all environments to prevent console noise
+        debug: false,
+      });
+      setPosthogClient(posthog);
     });
   }, [apiKey, apiHost, environment]);
 
@@ -88,13 +97,20 @@ export default function PostHogProvider({
     return <>{children}</>;
   }
 
+  // Render children immediately, wrap with provider once PostHog is loaded
+  if (!posthogClient) {
+    return <>{children}</>;
+  }
+
   return (
-    <PHProvider client={posthog}>
-      <PostHogIdentifyUser />
-      <Suspense fallback={null}>
-        <PageViewTracker />
-      </Suspense>
-      {children}
-    </PHProvider>
+    <Suspense fallback={children}>
+      <PHProvider client={posthogClient}>
+        <PostHogIdentifyUser />
+        <Suspense fallback={null}>
+          <PageViewTracker />
+        </Suspense>
+        {children}
+      </PHProvider>
+    </Suspense>
   );
 }

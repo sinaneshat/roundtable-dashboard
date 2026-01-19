@@ -8,7 +8,6 @@ import {
   Outlet,
   Scripts,
 } from '@tanstack/react-router';
-import posthog from 'posthog-js';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
@@ -105,11 +104,14 @@ function isPostHogAvailable(): boolean {
 
 /**
  * Track error to PostHog for monitoring and debugging
+ * Uses dynamic import to avoid loading PostHog in critical path
  */
-function trackErrorToPostHog(error: Error, context: { url: string; userAgent: string }) {
+async function trackErrorToPostHog(error: Error, context: { url: string; userAgent: string }) {
   if (!isPostHogAvailable())
     return;
 
+  // Lazy load PostHog only when needed for error tracking
+  const posthog = (await import('posthog-js')).default;
   posthog.capture('$exception', {
     $exception_message: error.message,
     $exception_stack_trace_raw: error.stack,
